@@ -118,7 +118,7 @@ describe("@litsx/compiler", () => {
     assert.match(result.metadata.litsxWarnings[0].message, /migration wrapper only/);
   }, 20000);
 
-  it("appends custom Babel plugins after the native preset pipeline", () => {
+  it("runs outputPlugins after the native preset pipeline", () => {
     const source = [
       "export const Counter = ({ label }) => {",
       "  return <button>{label}</button>;",
@@ -137,10 +137,45 @@ describe("@litsx/compiler", () => {
 
     const result = transformLitsxSync(source, {
       filename: "/virtual/Counter.jsx",
-      babelPlugins: [renameClassPlugin],
+      outputPlugins: [renameClassPlugin],
     });
 
     assert.match(result.code, /class CounterAfterNative extends LitElement/);
+  }, 20000);
+
+  it("runs authoringPlugins before the native preset pipeline", () => {
+    const source = [
+      "export const Counter = ({ label }) => {",
+      "  return <x-rename-tag>{label}</x-rename-tag>;",
+      "};",
+    ].join("\n");
+
+    const renameIntrinsicPlugin = () => ({
+      visitor: {
+        JSXIdentifier(path) {
+          if (
+            path.node.name === "x-rename-tag" &&
+            path.parent?.type === "JSXOpeningElement"
+          ) {
+            path.node.name = "button";
+          }
+          if (
+            path.node.name === "x-rename-tag" &&
+            path.parent?.type === "JSXClosingElement"
+          ) {
+            path.node.name = "button";
+          }
+        },
+      },
+    });
+
+    const result = transformLitsxSync(source, {
+      filename: "/virtual/Counter.jsx",
+      authoringPlugins: [renameIntrinsicPlugin],
+    });
+
+    assert.match(result.code, /html`<button>\$\{this\.label\}<\/button>`/);
+    assert.doesNotMatch(result.code, /x-rename-tag/);
   }, 20000);
 
   it("can skip final template lowering while preserving native class lowering", () => {

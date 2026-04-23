@@ -1,0 +1,18 @@
+.VPNavBar sup,
+.VPSidebar sup,
+.VPDoc sup,
+.VPHome sup {
+  font-size: 0.62em;
+  line-height: 0;
+  vertical-align: 0.45em;
+}
+
+.VPNavBar .title sup,
+.VPSidebarItem sup,
+.VPDoc h1 sup,
+.VPDoc h2 sup,
+.VPDoc h3 sup,
+.VPHero .name sup,
+.VPHero .text sup {
+  margin-left: 0.04em;
+}

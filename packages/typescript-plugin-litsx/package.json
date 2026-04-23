@@ -1,0 +1,46 @@
+{
+  "name": "@litsx/typescript-plugin",
+  "version": "1.0.0",
+  "description": "TypeScript language-service support for Litsx JSX syntax",
+  "author": "Litsx Team",
+  "homepage": "https://github.com/litsx/litsx/tree/main/packages/typescript-plugin-litsx",
+  "bugs": {
+    "url": "https://github.com/litsx/litsx/issues"
+  },
+  "license": "Apache-2.0",
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": [
+    "typescript",
+    "tsserver",
+    "jsx",
+    "lit",
+    "litsx"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/litsx/litsx.git",
+    "directory": "packages/typescript-plugin-litsx"
+  },
+  "type": "module",
+  "main": "./src/index.js",
+  "bin": {
+    "litsx-tsc": "./src/typecheck.js"
+  },
+  "exports": {
+    ".": "./src/index.js",
+    "./virtual-source": "./src/virtual-source.js",
+    "./typecheck": "./src/typecheck.js"
+  },
+  "files": [
+    "src",
+    "README.md"
+  ],
+  "peerDependencies": {
+    "typescript": ">=5"
+  },
+  "scripts": {
+    "build": "node -e 'process.exit(0)'"
+  }
+}

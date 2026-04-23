@@ -1,0 +1,1 @@
+import "@litsx/playground/worker";

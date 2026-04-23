@@ -38,6 +38,8 @@ You can wire those pieces together manually, but this package exists so callers 
 
 If you do want to wire Babel directly, `@litsx/babel-preset-litsx` is the canonical source of truth for the native LitSX plugin order.
 
+For advanced integrations that need to share LitSX virtualization and authored-input preparation without using the full compiler facade, `@litsx/compiler` also exports low-level helpers such as `prepareLitsxAuthoredInput(...)` and `ensureLitsxParserPlugins(...)`.
+
 ## Basic Usage
 
 ```js
@@ -129,11 +131,17 @@ const result = await transformLitsx(source, {
 });
 ```
 
-### `babelPlugins?: unknown[]`
+### `authoringPlugins?: unknown[]`
+
+Additional Babel plugins applied after LitSX virtualization/parsing and before the built-in LitSX lowering pipeline.
+
+Use this when you need to introduce extra authored syntax or conventions on top of LitSX source without patching the core preset ordering.
+
+### `outputPlugins?: unknown[]`
 
 Additional Babel plugins appended after the default LitSX pipeline.
 
-Use this for bounded, consumer-specific post-processing. Do not use it to replace the core LitSX transforms.
+Use this for bounded, consumer-specific post-processing on already-lowered output. Do not use it to replace the core LitSX transforms.
 
 ## Output Contract
 

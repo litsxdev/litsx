@@ -1,0 +1,19 @@
+Litsx includes third-party code and adaptations from the following project:
+
+- packages/light-dom-registry/src/index.js
+  Portions of this file are adapted from code by The Polymer Project Authors.
+  Original licensing notice:
+
+    Copyright (c) 2020 The Polymer Project Authors. All rights reserved.
+    This code may only be used under the BSD style license found at
+    http://polymer.github.io/LICENSE.txt
+    The complete set of authors may be found at
+    http://polymer.github.io/AUTHORS.txt
+    The complete set of contributors may be found at
+    http://polymer.github.io/CONTRIBUTORS.txt
+    Code distributed by Google as part of the polymer project is also
+    subject to an additional IP rights grant found at
+    http://polymer.github.io/PATENTS.txt
+
+This notice is provided for attribution and does not modify the licensing
+terms of this repository.

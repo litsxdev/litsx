@@ -9,6 +9,10 @@
     ".": {
       "types": "./src/index.d.ts",
       "default": "./src/index.js"
+    },
+    "./authored-input": {
+      "types": "./src/authored-input.d.ts",
+      "default": "./src/authored-input.js"
     }
   },
   "files": [

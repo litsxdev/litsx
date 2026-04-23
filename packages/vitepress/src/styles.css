@@ -1,0 +1,88 @@
+.docs-version-select {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: 0.95rem;
+}
+
+.docs-version-select__label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  font-family: var(--vp-font-family-base);
+  color: var(--vp-c-text-2);
+}
+
+.docs-version-select__control {
+  padding: 0.45rem 2rem 0.45rem 0.65rem;
+  border: 1px solid var(--vp-c-border);
+  border-radius: 0.65rem;
+  appearance: none;
+  -webkit-appearance: none;
+  background-color: var(--vp-c-bg-alt);
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--vp-c-text-3) 50%),
+    linear-gradient(135deg, var(--vp-c-text-3) 50%, transparent 50%);
+  background-position:
+    calc(100% - 0.95rem) 50%,
+    calc(100% - 0.65rem) 50%;
+  background-size: 0.35rem 0.35rem, 0.35rem 0.35rem;
+  background-repeat: no-repeat;
+  color: var(--vp-c-text-1);
+  font-family: var(--vp-font-family-base);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.2;
+  cursor: pointer;
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--vp-c-default-1) 12%, transparent);
+}
+
+.docs-version-select__control:hover {
+  border-color: var(--vp-c-text-3);
+  background-color: var(--vp-c-bg-soft);
+}
+
+.docs-version-select__control:focus {
+  outline: none;
+  border-color: var(--vp-c-brand-1);
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--vp-c-brand-1) 18%, transparent),
+    0 1px 0 color-mix(in srgb, var(--vp-c-default-1) 12%, transparent);
+}
+
+.docs-version-banner {
+  width: 100%;
+  border-bottom: 1px solid var(--vp-c-divider);
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--vp-c-warning-1) 10%, transparent), transparent),
+    var(--vp-c-bg-soft);
+}
+
+.docs-version-banner__inner {
+  margin: 0 auto;
+  padding: 0.85rem 1.5rem;
+  max-width: 1440px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.docs-version-banner__text {
+  color: var(--vp-c-text-1);
+  font-size: 0.95rem;
+}
+
+.docs-version-banner__link {
+  color: var(--vp-c-brand-1);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+@media (max-width: 768px) {
+  .docs-version-banner__inner {
+    padding: 0.85rem 1rem;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

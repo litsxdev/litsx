@@ -4,7 +4,9 @@ export type TransformLitsxOptions = {
   sourceMaps?: boolean;
   jsxTemplate?: boolean;
   jsxTemplateOptions?: object;
-  babelPlugins?: unknown[];
+  authoringPlugins?: unknown[];
+  outputPlugins?: unknown[];
+  requireJsx?: boolean;
 };
 
 export type TransformLitsxResult = {
@@ -12,6 +14,31 @@ export type TransformLitsxResult = {
   map: object | null;
   metadata: Record<string, unknown>;
 };
+
+export type PreparedLitsxAuthoredInput = {
+  filename?: string;
+  virtualization: {
+    code?: string;
+    map?: object | null;
+  } | null;
+  inputAst: object;
+  authoredWarnings: unknown[];
+};
+
+export function ensureLitsxParserPlugins(
+  filename?: string,
+  parserPlugins?: string[],
+  options?: { requireJsx?: boolean }
+): string[];
+
+export function prepareLitsxAuthoredInput(
+  source: string,
+  options?: TransformLitsxOptions,
+  runtime?: {
+    parse: (...args: unknown[]) => object;
+    transformFromAstSync: (...args: unknown[]) => { ast?: object } | null | undefined;
+  }
+): PreparedLitsxAuthoredInput;
 
 export function transformLitsx(
   source: string,
