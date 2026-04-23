@@ -1,0 +1,56 @@
+{
+  "name": "@litsx/babel-preset-react-compat",
+  "version": "0.1.0",
+  "description": "Canonical React compatibility pipeline for migrating React-authored source onto LitSX",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "keywords": [
+    "babel-preset",
+    "react",
+    "litsx",
+    "migration"
+  ],
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/litsx/litsx/tree/main/packages/babel-preset-react-compat",
+  "bugs": {
+    "url": "https://github.com/litsx/litsx/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/litsx/litsx.git",
+    "directory": "packages/babel-preset-react-compat"
+  },
+  "peerDependencies": {
+    "@babel/core": ">=7"
+  },
+  "dependencies": {
+    "@babel/helper-plugin-utils": "^7.26.5",
+    "@babel/plugin-syntax-jsx": "^7.26.5",
+    "@litsx/babel-plugin-litsx-proptypes": "^0.1.0",
+    "@litsx/babel-plugin-shared-hooks": "^0.1.0",
+    "@litsx/babel-plugin-transform-jsx-html-template": "^0.1.0",
+    "@litsx/babel-plugin-transform-litsx-scoped-elements": "^0.1.0",
+    "@litsx/babel-preset-litsx": "^0.1.0"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.26.5"
+  },
+  "scripts": {
+    "build": "../../node_modules/.bin/tsup src/index.js --format esm,cjs --out-dir dist --clean --external @babel/core --external @babel/types --external @babel/generator --external @babel/helper-plugin-utils --external @babel/plugin-syntax-jsx --external lit --external react --external typescript",
+    "prepack": "yarn build"
+  }
+}

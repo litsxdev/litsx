@@ -1,0 +1,142 @@
+import assert from "assert";
+import babelCore from "@babel/core";
+import parser from "../packages/babel-parser-litsx/src/index.mjs";
+import { beforeAll } from 'vitest';
+import { interopDefault } from "./helpers/interop-default.js";
+
+const { transformFromAstSync } = babelCore;
+let plugin;
+let templatePlugin;
+
+beforeAll(async () => {
+  const [reactEventsMod, templateMod] = await Promise.all([
+    import("../packages/babel-preset-react-compat/src/internal/react-events.js"),
+    import("../packages/babel-plugin-transform-jsx-html-template/src/index.js"),
+  ]);
+  plugin = interopDefault(reactEventsMod);
+  templatePlugin = interopDefault(templateMod);
+});
+
+describe("react compat internal events", () => {
+  it("converts React onClick into @click", () => {
+    const source = `const view = <button onClick={handleClick}></button>;`;
+    const ast = parser.parse(source, { sourceType: "module" });
+
+    const { code } = transformFromAstSync(ast, source, {
+      configFile: false,
+      babelrc: false,
+      plugins: [plugin],
+    });
+
+    assert.match(code, /@click=\{handleClick\}/);
+  });
+
+  it("wraps capture listeners with capture metadata", () => {
+    const source = `const view = <button onPointerDownCapture={handlePointer}></button>;`;
+    const ast = parser.parse(source, { sourceType: "module" });
+
+    const { code } = transformFromAstSync(ast, source, {
+      configFile: false,
+      babelrc: false,
+      plugins: [plugin],
+    });
+
+    assert.match(
+      code,
+      /@pointerdown=\{\{\s*handleEvent: handlePointer,\s*capture: true\s*\}\}/
+    );
+  });
+
+  it("respects lowercaseEventNames option", () => {
+    const source = `const view = <button onPointerDown={handler}></button>;`;
+    const ast = parser.parse(source, { sourceType: "module" });
+
+    const { code } = transformFromAstSync(ast, source, {
+      configFile: false,
+      babelrc: false,
+      plugins: [[plugin, { lowercaseEventNames: false }]],
+    });
+
+    assert.match(code, /@PointerDown=\{handler\}/);
+  });
+
+  it("converts boolean React event attributes without values", () => {
+    const source = `const view = <button onClick></button>`;
+    const ast = parser.parse(source, { sourceType: "module" });
+
+    const { code } = transformFromAstSync(ast, source, {
+      configFile: false,
+      babelrc: false,
+      plugins: [plugin],
+    });
+
+    assert.match(code, /@click=\{true\}/);
+  });
+
+  it("throws when React-style event attributes have no target name", () => {
+    const source = `const view = <button onCapture={handler}></button>`;
+    const ast = parser.parse(source, { sourceType: "module" });
+
+    assert.throws(() => {
+      transformFromAstSync(ast, source, {
+        configFile: false,
+        babelrc: false,
+        plugins: [plugin],
+      });
+    }, /React-style event attribute "onCapture" is missing a target name/);
+  });
+
+  it("converts template literals produced by the JSX-to-Lit transform", () => {
+    const source = `const view = <button onClick={handleClick}></button>;`;
+    const ast = parser.parse(source, { sourceType: "module" });
+
+    const { code } = transformFromAstSync(ast, source, {
+      configFile: false,
+      babelrc: false,
+      plugins: [templatePlugin, plugin],
+    });
+
+    assert.match(code, /@click=\$\{handleClick\}/);
+  });
+
+  it("updates capture metadata when the listener is already an object", () => {
+    const source = `const view = <button onFocusCapture={{ handleEvent: handleFocus, capture: false }}></button>;`;
+    const ast = parser.parse(source, { sourceType: "module" });
+
+    const { code } = transformFromAstSync(ast, source, {
+      configFile: false,
+      babelrc: false,
+      plugins: [plugin],
+    });
+
+    assert.match(code, /@focusin=\{\{\s*handleEvent: handleFocus,\s*capture: true\s*\}\}/);
+  });
+
+  it("supports string literal values", () => {
+    const stringSource = `const text = <button onClick="tap"></button>;`;
+    const stringAst = parser.parse(stringSource, { sourceType: "module" });
+    const { code: stringCode } = transformFromAstSync(stringAst, stringSource, {
+      configFile: false,
+      babelrc: false,
+      plugins: [plugin],
+    });
+
+    assert.match(stringCode, /@click=\{"tap"\}/);
+  });
+
+  it("rewrites capture listeners inside tagged templates", () => {
+    const source = `const view = <button onFocusCapture={handleFocus}></button>;`;
+    const ast = parser.parse(source, { sourceType: "module" });
+
+    const { code } = transformFromAstSync(ast, source, {
+      configFile: false,
+      babelrc: false,
+      plugins: [templatePlugin, plugin],
+    });
+
+    assert.match(
+      code,
+      /@focusin=\$\{\{\s*handleEvent: handleFocus,\s*capture: true\s*\}\}/
+    );
+  });
+});

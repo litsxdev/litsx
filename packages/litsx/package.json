@@ -20,6 +20,10 @@
     },
     "./runtime-infrastructure": {
       "default": "./src/runtime-infrastructure/index.js"
+    },
+    "./context": {
+      "types": "./src/context.d.ts",
+      "default": "./src/context.js"
     }
   },
   "files": [
@@ -49,6 +53,7 @@
     "lit": ">=3"
   },
   "dependencies": {
+    "@lit/context": "^1.1.6",
     "@litsx/light-dom-registry": "workspace:^",
     "@open-wc/scoped-elements": "^3.0.6"
   },

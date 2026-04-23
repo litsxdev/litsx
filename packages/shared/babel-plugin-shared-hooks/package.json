@@ -1,0 +1,44 @@
+{
+  "name": "@litsx/babel-plugin-shared-hooks",
+  "version": "0.1.0",
+  "description": "Shared hook transform utilities used by the Litsx Babel plugin family",
+  "type": "module",
+  "main": "./src/index.js",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "files": [
+    "src"
+  ],
+  "keywords": [
+    "babel-plugin",
+    "litsx",
+    "shared",
+    "hooks"
+  ],
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/litsx/litsx/tree/main/packages/shared/babel-plugin-shared-hooks",
+  "bugs": {
+    "url": "https://github.com/litsx/litsx/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/litsx/litsx.git",
+    "directory": "packages/shared/babel-plugin-shared-hooks"
+  },
+  "peerDependencies": {
+    "@babel/core": ">=7"
+  },
+  "dependencies": {
+    "@babel/helper-plugin-utils": "^7.26.5"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.26.5"
+  },
+  "scripts": {
+    "build": "node -e 'process.exit(0)'"
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "name": "@litsx/prop-types",
+  "version": "0.0.0",
+  "description": "Runtime helper support for React propTypes compatibility in LitSX",
+  "type": "module",
+  "main": "./src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./runtime": "./src/runtime.js"
+  },
+  "files": [
+    "src"
+  ],
+  "keywords": [
+    "lit",
+    "prop-types",
+    "lithelement"
+  ],
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/litsx/litsx/tree/main/packages/prop-types",
+  "bugs": {
+    "url": "https://github.com/litsx/litsx/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/litsx/litsx.git",
+    "directory": "packages/prop-types"
+  },
+  "scripts": {
+    "build": "node -e 'process.exit(0)'"
+  }
+}
