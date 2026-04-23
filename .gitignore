@@ -90,6 +90,9 @@ out
 # Nuxt.js build / generate output
 .nuxt
 dist
+packages/*/dist/
+packages/react/*/dist/
+packages/shared/*/dist/
 
 # Gatsby files
 .cache/
@@ -128,3 +131,8 @@ dist
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
+
+node-v20.19.5-darwin-arm64*
+
+# VitePress website artifacts
+website/docs/.vitepress/cache/

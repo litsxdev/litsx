@@ -1,0 +1,50 @@
+{
+  "name": "@litsx/babel-plugin-transform-litsx-scoped-elements",
+  "version": "0.1.0",
+  "description": "Transforms LitElement classes to include scoped elements metadata",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "type": "module",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "keywords": [
+    "babel-plugin",
+    "lit",
+    "scoped-elements"
+  ],
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/litsx/litsx/tree/main/packages/babel-plugin-transform-litsx-scoped-elements",
+  "bugs": {
+    "url": "https://github.com/litsx/litsx/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/litsx/litsx.git",
+    "directory": "packages/babel-plugin-transform-litsx-scoped-elements"
+  },
+  "peerDependencies": {
+    "@babel/core": ">=7"
+  },
+  "dependencies": {
+    "@babel/plugin-syntax-jsx": "^7.26.5",
+    "@litsx/babel-plugin-shared-hooks": "^0.1.0"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.26.5"
+  },
+  "scripts": {
+    "build": "../../node_modules/.bin/tsup src/index.js --format esm,cjs --out-dir dist --clean --external @babel/core --external @babel/types --external @babel/generator --external @babel/helper-plugin-utils --external @babel/plugin-syntax-jsx --external lit --external react --external typescript",
+    "prepack": "yarn build"
+  }
+}

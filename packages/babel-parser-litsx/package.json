@@ -1,0 +1,60 @@
+{
+  "name": "@litsx/babel-parser",
+  "version": "7.26.5-litsx.0",
+  "description": "Babel parser adapter for Litsx-authored JSX",
+  "author": "LitX Team",
+  "homepage": "https://github.com/litsx/litsx/tree/main/packages/babel-parser-litsx",
+  "bugs": {
+    "url": "https://github.com/litsx/litsx/issues"
+  },
+  "license": "Apache-2.0",
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": [
+    "babel",
+    "javascript",
+    "parser",
+    "tc39",
+    "ecmascript",
+    "@babel/parser"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/litsx/litsx.git",
+    "directory": "packages/babel-parser-litsx"
+  },
+  "main": "./src/index.mjs",
+  "exports": {
+    ".": "./src/index.mjs",
+    "./bin/*": "./bin/*"
+  },
+  "types": "./typings/babel-parser.d.ts",
+  "files": [
+    "bin",
+    "src",
+    "typings/babel-parser.d.ts"
+  ],
+  "engines": {
+    "node": ">=6.0.0"
+  },
+  "# dependencies": "This package doesn't actually have runtime dependencies. @babel/types is only needed for type definitions.",
+  "dependencies": {
+    "@babel/parser": "^7.26.5",
+    "@babel/types": "^7.26.5",
+    "@litsx/jsx-authoring": "workspace:^"
+  },
+  "devDependencies": {
+    "@babel/code-frame": "^7.26.2",
+    "@babel/helper-check-duplicate-nodes": "^7.25.9",
+    "@babel/helper-fixtures": "^7.26.0",
+    "@babel/helper-string-parser": "^7.25.9",
+    "@babel/helper-validator-identifier": "^7.25.9",
+    "charcodes": "^0.2.0"
+  },
+  "bin": "./bin/babel-parser.mjs",
+  "type": "module",
+  "scripts": {
+    "build": "node -e 'process.exit(0)'"
+  }
+}

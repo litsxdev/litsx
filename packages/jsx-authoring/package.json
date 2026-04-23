@@ -1,0 +1,34 @@
+{
+  "name": "@litsx/jsx-authoring",
+  "version": "0.0.0",
+  "description": "Shared authored JSX language utilities for Lit sx",
+  "author": "LitX Team",
+  "homepage": "https://github.com/litsx/litsx/tree/main/packages/jsx-authoring",
+  "bugs": {
+    "url": "https://github.com/litsx/litsx/issues"
+  },
+  "license": "Apache-2.0",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/litsx/litsx.git",
+    "directory": "packages/jsx-authoring"
+  },
+  "type": "module",
+  "main": "./src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./parser": "./src/parser.js"
+  },
+  "dependencies": {
+    "magic-string": "^0.30.21"
+  },
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "build": "node -e 'process.exit(0)'"
+  }
+}

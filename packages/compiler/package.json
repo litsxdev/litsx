@@ -1,0 +1,48 @@
+{
+  "name": "@litsx/compiler",
+  "version": "0.1.0",
+  "description": "Build-facing LitSX compilation facade with correct parser and sourcemap handling",
+  "type": "module",
+  "main": "./src/index.js",
+  "types": "./src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "default": "./src/index.js"
+    }
+  },
+  "files": [
+    "src",
+    "README.md"
+  ],
+  "keywords": [
+    "litsx",
+    "compiler",
+    "babel",
+    "vite",
+    "jsx"
+  ],
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/litsx/litsx/tree/main/packages/compiler",
+  "bugs": {
+    "url": "https://github.com/litsx/litsx/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/litsx/litsx.git",
+    "directory": "packages/compiler"
+  },
+  "dependencies": {
+    "@babel/core": "^7.26.5",
+    "@babel/parser": "^7.26.5",
+    "@litsx/babel-plugin-transform-jsx-html-template": "workspace:^",
+    "@litsx/babel-preset-litsx": "workspace:^",
+    "@litsx/jsx-authoring": "workspace:^"
+  },
+  "scripts": {
+    "build": "node -e 'process.exit(0)'"
+  }
+}

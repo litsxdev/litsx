@@ -1,0 +1,39 @@
+{
+  "name": "create-litsx-app",
+  "version": "0.1.0",
+  "description": "Scaffold a Litsx project with the recommended editor and build setup",
+  "type": "module",
+  "bin": "./bin/create-litsx-app.js",
+  "main": "./src/index.js",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "files": [
+    "bin",
+    "src",
+    "README.md"
+  ],
+  "keywords": [
+    "litsx",
+    "scaffold",
+    "vite",
+    "lit",
+    "jsx"
+  ],
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/litsx/litsx/tree/main/packages/create-litsx-app",
+  "bugs": {
+    "url": "https://github.com/litsx/litsx/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/litsx/litsx.git",
+    "directory": "packages/create-litsx-app"
+  },
+  "scripts": {
+    "build": "node -e 'process.exit(0)'"
+  }
+}

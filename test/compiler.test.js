@@ -1,0 +1,162 @@
+import assert from "assert";
+import babelCore from "@babel/core";
+import { TraceMap, originalPositionFor } from "@jridgewell/trace-mapping";
+import { describe, it } from "vitest";
+
+import {
+  transformLitsx,
+  transformLitsxSync,
+} from "../packages/compiler/src/index.js";
+
+const { types: t } = babelCore;
+
+function positionFromIndex(text, index) {
+  let line = 1;
+  let column = 0;
+
+  for (let cursor = 0; cursor < index; cursor += 1) {
+    if (text[cursor] === "\n") {
+      line += 1;
+      column = 0;
+      continue;
+    }
+
+    column += 1;
+  }
+
+  return { line, column };
+}
+
+function findPosition(text, needle) {
+  const index = text.indexOf(needle);
+  assert.notStrictEqual(index, -1, `expected to find "${needle}"`);
+  return positionFromIndex(text, index);
+}
+
+describe("@litsx/compiler", () => {
+  it("compiles authored LitSX source and returns metadata", () => {
+    const source = [
+      "export const Counter = ({ label = 'Save' }) => {",
+      "  return <button class=\"cta\" @click={save}>{label}</button>;",
+      "};",
+    ].join("\n");
+
+    const result = transformLitsxSync(source, {
+      filename: "/virtual/Counter.jsx",
+    });
+
+    assert.match(result.code, /html`/);
+    assert.match(result.code, /@click=\$\{save\}/);
+    assert.strictEqual(result.map, null);
+    assert.ok(result.metadata);
+    assert.ok(Array.isArray(result.metadata.litsxTemplateAttributeMappings));
+  }, 20000);
+
+  it("keeps lit-style attributes aligned in the final sourcemap", async () => {
+    const source = [
+      "export function Counter(){",
+      "  return <button @click={save} .value={name} ?disabled={busy}>Hi</button>;",
+      "}",
+    ].join("\n");
+
+    const result = await transformLitsx(source, {
+      filename: "/virtual/Counter.tsx",
+      sourceMaps: true,
+    });
+
+    assert.ok(result.map, "expected compiler to emit a sourcemap");
+    const traceMap = new TraceMap(result.map);
+    const checks = [
+      ["@click", "@click"],
+      [".value", ".value"],
+      ["?disabled", "?disabled"],
+    ];
+
+    for (const [generatedNeedle, originalNeedle] of checks) {
+      const generated = findPosition(result.code, generatedNeedle);
+      const expected = findPosition(source, originalNeedle);
+      const actual = originalPositionFor(traceMap, generated);
+
+      assert.strictEqual(actual.source, "/virtual/Counter.tsx");
+      assert.strictEqual(actual.line, expected.line);
+      assert.strictEqual(actual.column, expected.column);
+    }
+  }, 20000);
+
+  it("surfaces metadata warnings when native className is authored", () => {
+    const source = [
+      "export const Counter = () => {",
+      "  return <button className=\"cta\">Save</button>;",
+      "};",
+    ].join("\n");
+
+    const result = transformLitsxSync(source, {
+      filename: "/virtual/Counter.jsx",
+    });
+
+    assert.ok(Array.isArray(result.metadata.litsxWarnings));
+    assert.strictEqual(result.metadata.litsxWarnings.length, 1);
+    assert.strictEqual(result.metadata.litsxWarnings[0].code, "LITSX_NATIVE_CLASSNAME");
+    assert.match(result.metadata.litsxWarnings[0].message, /is not native LitSX syntax/);
+  }, 20000);
+
+  it("surfaces metadata warnings when React memo wrappers are lowered away", () => {
+    const source = [
+      "import { memo } from 'react';",
+      "const Counter = memo(({ label }) => {",
+      "  return <button>{label}</button>;",
+      "});",
+    ].join("\n");
+
+    const result = transformLitsxSync(source, {
+      filename: "/virtual/Counter.jsx",
+    });
+
+    assert.ok(Array.isArray(result.metadata.litsxWarnings));
+    assert.strictEqual(result.metadata.litsxWarnings.length, 1);
+    assert.strictEqual(result.metadata.litsxWarnings[0].code, "LITSX_REACT_MEMO_STRIPPED");
+    assert.match(result.metadata.litsxWarnings[0].message, /migration wrapper only/);
+  }, 20000);
+
+  it("appends custom Babel plugins after the native preset pipeline", () => {
+    const source = [
+      "export const Counter = ({ label }) => {",
+      "  return <button>{label}</button>;",
+      "};",
+    ].join("\n");
+
+    const renameClassPlugin = () => ({
+      visitor: {
+        ClassDeclaration(path) {
+          if (path.node.id?.name === "Counter") {
+            path.node.id = t.identifier("CounterAfterNative");
+          }
+        },
+      },
+    });
+
+    const result = transformLitsxSync(source, {
+      filename: "/virtual/Counter.jsx",
+      babelPlugins: [renameClassPlugin],
+    });
+
+    assert.match(result.code, /class CounterAfterNative extends LitElement/);
+  }, 20000);
+
+  it("can skip final template lowering while preserving native class lowering", () => {
+    const source = [
+      "export const Counter = ({ label }) => {",
+      "  return <button @click={save}>{label}</button>;",
+      "};",
+    ].join("\n");
+
+    const result = transformLitsxSync(source, {
+      filename: "/virtual/Counter.jsx",
+      jsxTemplate: false,
+    });
+
+    assert.match(result.code, /class Counter extends LitElement/);
+    assert.match(result.code, /return <button @click=\{save\}>\{this\.label\}<\/button>;/);
+    assert.doesNotMatch(result.code, /html`/);
+  }, 20000);
+});

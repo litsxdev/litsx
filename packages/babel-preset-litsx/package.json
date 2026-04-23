@@ -1,0 +1,46 @@
+{
+  "name": "@litsx/babel-preset-litsx",
+  "version": "0.1.0",
+  "description": "Canonical native Babel preset for LitSX-authored source",
+  "type": "module",
+  "main": "./src/index.js",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "files": [
+    "src",
+    "README.md"
+  ],
+  "keywords": [
+    "babel-preset",
+    "litsx",
+    "babel",
+    "lit"
+  ],
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/litsx/litsx/tree/main/packages/babel-preset-litsx",
+  "bugs": {
+    "url": "https://github.com/litsx/litsx/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/litsx/litsx.git",
+    "directory": "packages/babel-preset-litsx"
+  },
+  "peerDependencies": {
+    "@babel/core": ">=7"
+  },
+  "dependencies": {
+    "@babel/helper-plugin-utils": "^7.26.5",
+    "@babel/plugin-syntax-jsx": "^7.26.5",
+    "@litsx/babel-plugin-shared-hooks": "workspace:^",
+    "@litsx/babel-plugin-transform-jsx-html-template": "workspace:^",
+    "@litsx/babel-plugin-transform-litsx-scoped-elements": "workspace:^"
+  },
+  "scripts": {
+    "build": "node -e 'process.exit(0)'"
+  }
+}

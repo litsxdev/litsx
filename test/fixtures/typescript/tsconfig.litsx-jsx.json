@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "noEmit": true,
+    "allowJs": false,
+    "jsx": "react-jsx",
+    "jsxImportSource": "litsx",
+    "types": [],
+    "skipLibCheck": true
+  },
+  "include": [
+    "./litsx-jsx-runtime.tsx",
+    "./litsx-jsx-runtime-errors.tsx",
+    "./litsx-static-hoists.tsx",
+    "./litsx-styling.ts",
+    "./litsx-styling-errors.ts"
+  ]
+}

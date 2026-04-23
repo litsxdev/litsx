@@ -1,0 +1,58 @@
+{
+  "name": "litsx",
+  "version": "1.0.0",
+  "description": "Native Litsx runtime primitives, JSX runtime entrypoints, and web component utilities",
+  "type": "module",
+  "main": "src/index.js",
+  "types": "./src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "default": "./src/index.js"
+    },
+    "./jsx-runtime": {
+      "types": "./src/jsx-runtime.d.ts",
+      "default": "./src/jsx-runtime.js"
+    },
+    "./jsx-dev-runtime": {
+      "types": "./src/jsx-dev-runtime.d.ts",
+      "default": "./src/jsx-dev-runtime.js"
+    },
+    "./runtime-infrastructure": {
+      "default": "./src/runtime-infrastructure/index.js"
+    }
+  },
+  "files": [
+    "src",
+    "README.md"
+  ],
+  "keywords": [
+    "litsx",
+    "lit",
+    "jsx",
+    "web-components"
+  ],
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/litsx/litsx/tree/main/packages/litsx",
+  "bugs": {
+    "url": "https://github.com/litsx/litsx/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/litsx/litsx.git",
+    "directory": "packages/litsx"
+  },
+  "peerDependencies": {
+    "lit": ">=3"
+  },
+  "dependencies": {
+    "@litsx/light-dom-registry": "workspace:^",
+    "@open-wc/scoped-elements": "^3.0.6"
+  },
+  "devDependencies": {
+    "lit": "^3.2.1"
+  }
+}
