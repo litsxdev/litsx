@@ -73,6 +73,39 @@ describe("react compat internal events", () => {
     assert.match(code, /@click=\{true\}/);
   });
 
+  it("rewrites aliased DOM event names that need compatibility remapping", () => {
+    const source = `const view = <button onDoubleClick={onDbl} onBlur={onBlur}></button>;`;
+    const ast = parser.parse(source, { sourceType: "module" });
+
+    const { code } = transformFromAstSync(ast, source, {
+      configFile: false,
+      babelrc: false,
+      plugins: [plugin],
+    });
+
+    assert.match(code, /@dblclick=\{onDbl\}/);
+    assert.match(
+      code,
+      /@focusout=\{\{\s*handleEvent: onBlur,\s*capture: true\s*\}\}/
+    );
+  });
+
+  it("applies alias capture metadata even without an authored Capture suffix", () => {
+    const source = `const view = <input onFocus={onFocus}></input>;`;
+    const ast = parser.parse(source, { sourceType: "module" });
+
+    const { code } = transformFromAstSync(ast, source, {
+      configFile: false,
+      babelrc: false,
+      plugins: [plugin],
+    });
+
+    assert.match(
+      code,
+      /@focusin=\{\{\s*handleEvent: onFocus,\s*capture: true\s*\}\}/
+    );
+  });
+
   it("throws when React-style event attributes have no target name", () => {
     const source = `const view = <button onCapture={handler}></button>`;
     const ast = parser.parse(source, { sourceType: "module" });
@@ -124,6 +157,20 @@ describe("react compat internal events", () => {
     assert.match(stringCode, /@click=\{"tap"\}/);
   });
 
+  it("keeps alias candidates untouched when lowercase normalization is disabled", () => {
+    const source = `const view = <button onDoubleClick={handler}></button>;`;
+    const ast = parser.parse(source, { sourceType: "module" });
+
+    const { code } = transformFromAstSync(ast, source, {
+      configFile: false,
+      babelrc: false,
+      plugins: [[plugin, { lowercaseEventNames: false }]],
+    });
+
+    assert.match(code, /@DoubleClick=\{handler\}/);
+    assert.doesNotMatch(code, /@dblclick/);
+  });
+
   it("rewrites capture listeners inside tagged templates", () => {
     const source = `const view = <button onFocusCapture={handleFocus}></button>;`;
     const ast = parser.parse(source, { sourceType: "module" });
@@ -138,5 +185,50 @@ describe("react compat internal events", () => {
       code,
       /@focusin=\$\{\{\s*handleEvent: handleFocus,\s*capture: true\s*\}\}/
     );
+  });
+
+  it("rewrites aliased event names inside tagged templates", () => {
+    const source = `const view = <button onDoubleClick={onDbl} onBlur={onBlur}></button>;`;
+    const ast = parser.parse(source, { sourceType: "module" });
+
+    const { code } = transformFromAstSync(ast, source, {
+      configFile: false,
+      babelrc: false,
+      plugins: [templatePlugin, plugin],
+    });
+
+    assert.match(code, /@dblclick=\$\{onDbl\}/);
+    assert.match(
+      code,
+      /@focusout=\$\{\{\s*handleEvent: onBlur,\s*capture: true\s*\}\}/
+    );
+  });
+
+  it("leaves non-React template event names untouched", () => {
+    const source = "const view = html`<button onclick=${handleClick}></button>`;";
+    const ast = parser.parse(source, { sourceType: "module" });
+
+    const { code } = transformFromAstSync(ast, source, {
+      configFile: false,
+      babelrc: false,
+      plugins: [plugin],
+    });
+
+    assert.match(code, /onclick=\$\{handleClick\}/);
+    assert.doesNotMatch(code, /@click/);
+  });
+
+  it("leaves namespaced JSX attributes untouched", () => {
+    const source = `const view = <button svg:onClick={handler}></button>;`;
+    const ast = parser.parse(source, { sourceType: "module", plugins: ["jsx"] });
+
+    const { code } = transformFromAstSync(ast, source, {
+      configFile: false,
+      babelrc: false,
+      plugins: [plugin],
+    });
+
+    assert.match(code, /svg:onClick=\{handler\}/);
+    assert.doesNotMatch(code, /@click/);
   });
 });

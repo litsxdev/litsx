@@ -146,4 +146,46 @@ describe("react context compat runtime", () => {
       /does not allow changing context/
     );
   });
+
+  it("rejects invalid contexts and invalid renderContext children", () => {
+    const host = {
+      addController() {},
+      requestUpdate() {},
+    };
+
+    assert.throws(
+      () => useContext(host, {}),
+      /requires a context created by createContext/
+    );
+    assert.throws(
+      () => renderContext({}, createContext("light"), "not-a-function"),
+      /requires a function child/
+    );
+  });
+
+  it("allows a null context before initialization but rejects clearing it after provider creation", () => {
+    ensureProviderElement();
+    const ThemeContext = createContext("light");
+    const provider = document.createElement("litsx-context-provider");
+
+    provider.context = null;
+    assert.strictEqual(provider.context, null);
+
+    provider.context = ThemeContext;
+    assert.throws(
+      () => {
+        provider.context = null;
+      },
+      /requires a context created by createContext/
+    );
+  });
+
+  it("tolerates being connected before a context is assigned", () => {
+    const provider = new LitsxContextProviderElement();
+
+    assert.doesNotThrow(() => {
+      provider.connectedCallback();
+      provider.disconnectedCallback();
+    });
+  });
 });

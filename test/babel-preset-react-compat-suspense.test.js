@@ -153,6 +153,100 @@ describe("@litsx/babel-preset-react-compat suspense boundaries", () => {
     );
   });
 
+  it("handles namespace React.Suspense and React.SuspenseList forms", () => {
+    const source = [
+      "import * as React from 'react';",
+      "",
+      "export const Screen = () => {",
+      "  return (",
+      "    <React.SuspenseList revealOrder='forwards'>",
+      "      <React.Suspense fallback={<span>loading</span>}>",
+      "        <div>ready</div>",
+      "      </React.Suspense>",
+      "    </React.SuspenseList>",
+      "  );",
+      "};",
+    ].join("\n");
+
+    const code = run(source);
+
+    assert.match(
+      code,
+      /import \{[^}]*SuspenseList[^}]*SuspenseBoundary[^}]*\} from ["']litsx["']|import \{[^}]*SuspenseBoundary[^}]*SuspenseList[^}]*\} from ["']litsx["']/
+    );
+    assert.match(code, /<suspense-list revealOrder=['"]forwards['"]>/);
+    assert.match(code, /<suspense-boundary/);
+    assert.doesNotMatch(code, /<React\.Suspense/);
+    assert.doesNotMatch(code, /<React\.SuspenseList/);
+  });
+
+  it("emits null renderers when suspense has no fallback or content", () => {
+    const source = [
+      "import { Suspense } from 'react';",
+      "",
+      "export const Screen = () => {",
+      "  return <Suspense />;",
+      "};",
+    ].join("\n");
+
+    const code = run(source);
+
+    assert.match(code, /<suspense-boundary/);
+    assert.match(code, /\.fallbackRenderer=\{\(\)\s*=>\s*null\}/);
+    assert.match(code, /\.contentRenderer=\{\(\)\s*=>\s*null\}/);
+  });
+
+  it("preserves fragment children inside the suspense content renderer", () => {
+    const source = [
+      "import { Suspense } from 'react';",
+      "",
+      "export const Screen = () => {",
+      "  return (",
+      "    <Suspense fallback={<span>loading</span>}>",
+      "      <>",
+      "        <div>alpha</div>",
+      "        <div>beta</div>",
+      "      </>",
+      "    </Suspense>",
+      "  );",
+      "};",
+    ].join("\n");
+
+    const code = run(source);
+
+    assert.match(code, /\.contentRenderer=\{\(\)\s*=>\s*<>\s*<div>alpha<\/div>\s*<div>beta<\/div>\s*<\/>\}/s);
+  });
+
+  it("moves only matching ensureLazyElement calls into suspense content renderers", () => {
+    const source = [
+      "import { ensureLazyElement } from 'litsx';",
+      "import { Suspense } from 'react';",
+      "",
+      "const AlphaPanel = () => null;",
+      "const BetaPanel = () => null;",
+      "",
+      "export const Screen = () => {",
+      "  ensureLazyElement(this, 'alpha-panel', AlphaPanel);",
+      "  ensureLazyElement(this, 'beta-panel', BetaPanel);",
+      "  return (",
+      "    <section>",
+      "      <Suspense fallback={<span>loading</span>}>",
+      "        <alpha-panel />",
+      "      </Suspense>",
+      "    </section>",
+      "  );",
+      "};",
+    ].join("\n");
+
+    const code = run(source);
+
+    assert.match(
+      code,
+      /\.contentRenderer=\{\(\)\s*=>\s*\{[\s\S]*ensureLazyElement\(this,\s*'alpha-panel',\s*AlphaPanel\);[\s\S]*return <alpha-panel \/>;[\s\S]*\}\}/s
+    );
+    assert.match(code, /ensureLazyElement\(this,\s*'beta-panel',\s*BetaPanel\);/);
+  });
+
   it("does not introduce boundary-key or list-key attributes in the component model", () => {
     const source = [
       "import { Suspense, SuspenseList } from 'react';",

@@ -147,6 +147,20 @@ describe("@litsx/light-dom-registry", () => {
     assert.equal(host.registry, null);
   });
 
+  it("does not clear unrelated public registry handles on disconnect", () => {
+    const host = document.createElement("section");
+    const registry = connectLightDomRegistry(host, {});
+    const publicRegistry = {
+      get() {},
+    };
+
+    host.registry = publicRegistry;
+    disconnectLightDomRegistry(host);
+
+    assert.strictEqual(host.registry, publicRegistry);
+    assert.strictEqual(host[Symbol.for("litsx.lightDomRegistry.hostRegistry")] ?? registry, registry);
+  });
+
   it("upgrades pending elements once a registry definition is added and replays observed attributes", async () => {
     const tagName = nextTag();
     const host = document.createElement("section");
@@ -433,6 +447,48 @@ describe("@litsx/light-dom-registry", () => {
     assert.throws(() => {
       new UnregisteredElement();
     }, /Illegal constructor/);
+
+    host.remove();
+  });
+
+  it("propagates scoped creation context through insertAdjacentHTML", () => {
+    const tagName = nextTag();
+    const host = document.createElement("section");
+    const container = document.createElement("div");
+
+    class InsertedElement extends HTMLElement {
+      connectedCallback() {
+        this.connected = true;
+      }
+    }
+
+    connectLightDomRegistry(host, {
+      [tagName]: InsertedElement,
+    });
+    host.appendChild(container);
+    document.body.appendChild(host);
+
+    container.insertAdjacentHTML("beforeend", `<${tagName}></${tagName}>`);
+
+    const element = container.querySelector(tagName);
+    assert(element);
+    assert.strictEqual(Object.getPrototypeOf(element), InsertedElement.prototype);
+    assert.equal(element.connected, true);
+
+    host.remove();
+  });
+
+  it("ignores adopted and disconnect callbacks on unresolved stand-ins", () => {
+    const tagName = nextTag();
+    const standIn = ensureLightDomProxy(tagName);
+    const host = document.createElement("section");
+    host.innerHTML = `<${tagName}></${tagName}>`;
+    document.body.appendChild(host);
+
+    const element = host.firstElementChild;
+
+    assert.doesNotThrow(() => standIn.prototype.adoptedCallback.call(element, "doc"));
+    assert.doesNotThrow(() => standIn.prototype.disconnectedCallback.call(element));
 
     host.remove();
   });

@@ -44,6 +44,16 @@ describe("litsx runtime infrastructure", () => {
         active: { type: Boolean },
       },
     );
+    assert.strictEqual(MixedOnce.__litsxResolveStaticValue("ok"), "ok");
+    const fallbackBase = { count: { type: Number } };
+    assert.strictEqual(MixedOnce.__litsxMergeProperties(fallbackBase, null), fallbackBase);
+    assert.deepStrictEqual(
+      MixedOnce.__litsxMergeProperties(
+        { count: { type: Number, reflect: false } },
+        { count: new Date(0) },
+      ),
+      { count: new Date(0) },
+    );
   });
 
   it("maps scoped elements and manages light-dom styles without duplicating the style tag", () => {
@@ -92,6 +102,70 @@ describe("litsx runtime infrastructure", () => {
     host.remove();
   });
 
+  it("skips light-dom style injection when there are no usable styles", () => {
+    const hostTag = nextTag("litsx-runtime-empty-styles");
+
+    class Base extends HTMLElement {
+      static elementStyles = [null, "", { toString: () => "" }];
+
+      update() {
+        this.updated = true;
+      }
+    }
+
+    const LightHost = LightDomMixin(Base);
+    const host = defineTestElement(hostTag, LightHost);
+    document.body.appendChild(host);
+
+    host.update();
+
+    assert.strictEqual(
+      host.querySelector("style[data-litsx-light-dom-style]"),
+      null
+    );
+
+    host.remove();
+  });
+
+  it("supports stylesheet and string-like style sources in light DOM", () => {
+    const hostTag = nextTag("litsx-runtime-sheet-host");
+    const originalSheet = globalThis.CSSStyleSheet;
+
+    class FakeSheet {
+      constructor() {
+        this.cssRules = [{ cssText: "button { color: green; }" }];
+      }
+    }
+
+    globalThis.CSSStyleSheet = FakeSheet;
+
+    class Base extends HTMLElement {
+      static elementStyles = [
+        new FakeSheet(),
+        { toString: () => ".badge { display: inline-flex; }" },
+      ];
+
+      update() {}
+    }
+
+    try {
+      const LightHost = LightDomMixin(Base);
+      const host = defineTestElement(hostTag, LightHost);
+      document.body.appendChild(host);
+
+      host.update();
+
+      const style = host.querySelector("style[data-litsx-light-dom-style]");
+      assert(style);
+      assert.match(style.textContent, /color: green/);
+      assert.match(style.textContent, /display: inline-flex/);
+
+      host.remove();
+    } finally {
+      globalThis.CSSStyleSheet = originalSheet;
+    }
+  });
+
   it("connects and disconnects light-dom element registries through the mixin lifecycle", () => {
     const childTag = nextTag("litsx-runtime-child");
     const hostTag = nextTag("litsx-runtime-elements-host");
@@ -126,5 +200,14 @@ describe("litsx runtime infrastructure", () => {
     host.disconnectedCallback();
     assert.equal(host.disconnected, true);
     assert.equal(host.registry, null);
+  });
+
+  it("dedupes repeated light-dom element mixin applications", () => {
+    class Base extends HTMLElement {}
+
+    const MixedOnce = LightDomElementsMixin(Base);
+    const MixedTwice = LightDomElementsMixin(MixedOnce);
+
+    assert.strictEqual(MixedTwice, MixedOnce);
   });
 });

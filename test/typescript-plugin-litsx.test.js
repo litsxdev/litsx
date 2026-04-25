@@ -1,4 +1,5 @@
 import assert from "assert";
+import * as babelParser from "@babel/parser";
 import fs from "fs";
 import os from "os";
 import path from "path";
@@ -85,6 +86,26 @@ describe("@litsx/typescript-plugin", () => {
     assert.strictEqual(diagnostics.length, 1);
     assert.strictEqual(diagnostics[0].code, 91007);
     assert.match(diagnostics[0].messageText, /must appear as a top-level statement in the component body/);
+  });
+
+  it("does not report authored diagnostics for top-level static hoists", () => {
+    const source = `
+      function Card() {
+        ^styles(\`:host { display: block; }\`);
+        ^shadowRootOptions({ mode: "open" });
+        return <div>ready</div>;
+      }
+    `;
+
+    const diagnostics = collectLitsxAuthoredDiagnostics(source, {
+      DiagnosticCategory: {
+        Error: 1,
+      },
+    }, {
+      plugins: ["typescript"],
+    });
+
+    assert.deepStrictEqual(diagnostics, []);
   });
 
   it("does not remap removed mixin sentinels", () => {
@@ -236,6 +257,19 @@ describe("@litsx/typescript-plugin", () => {
       }),
       [],
     );
+    assert.deepStrictEqual(
+      inferLitsxAttributeCompletionContext("< @cli", "< @cli".length),
+      null,
+    );
+    assert.deepStrictEqual(getLitsxAttributeCompletionNames(null), []);
+    assert.deepStrictEqual(
+      getLitsxAttributeCompletionNames({
+        tagName: "demo-card",
+        prefix: "@",
+        partialName: "po",
+      }),
+      ["@pointerdown", "@pointerup"],
+    );
   });
 
   it("maps spans between authored and virtualized sources", () => {
@@ -286,6 +320,43 @@ describe("@litsx/typescript-plugin", () => {
     assert.equal(remapToolingTextSpanToOriginal(null, result), null);
   });
 
+  it("maps authored positions through tooling virtual sources without a preamble length", () => {
+    const source = '<button @click={handleClick}>{label}</button>';
+    const virtualization = createVirtualLitsxJsxSource(source);
+    const eventStart = source.indexOf("@click");
+
+    assert.strictEqual(
+      mapOriginalPositionToToolingVirtual(eventStart, virtualization),
+      mapOriginalPositionToVirtual(eventStart, virtualization.replacements),
+    );
+  });
+
+  it("remaps tooling spans when start and length are omitted", () => {
+    const source = `
+      function Card() {
+        ^styles(\`:host { display: block; }\`);
+        return <button @click={handleClick}>{label}</button>;
+      }
+    `;
+    const result = createToolingVirtualLitsxSource(source, {
+      plugins: ["typescript"],
+    });
+
+    assert.deepStrictEqual(
+      remapToolingTextSpanToOriginal({}, result),
+      { start: 0, length: 0 },
+    );
+  });
+
+  it("remaps tooling spans without a preamble length", () => {
+    const virtualization = createVirtualLitsxJsxSource('<button @click={handleClick} />');
+
+    assert.deepStrictEqual(
+      remapToolingTextSpanToOriginal({}, virtualization),
+      { start: 0, length: 0 },
+    );
+  });
+
   it("returns no authored diagnostics for parse failures", () => {
     const parseFailureDiagnostics = collectLitsxAuthoredDiagnostics(
       "<button @click={></button>",
@@ -300,6 +371,107 @@ describe("@litsx/typescript-plugin", () => {
     );
 
     assert.deepStrictEqual(parseFailureDiagnostics, []);
+  });
+
+  it("handles parser ASTs rooted at the program node and hoists with callee fallback spans", () => {
+    const parseSpy = vi.spyOn(babelParser, "parse").mockReturnValue({
+      type: "Program",
+      body: [
+        {
+          type: "FunctionDeclaration",
+          body: {
+            type: "BlockStatement",
+            body: [
+              {
+                type: "IfStatement",
+                consequent: {
+                  type: "BlockStatement",
+                  body: [
+                    {
+                      type: "ExpressionStatement",
+                      expression: {
+                        type: "CallExpression",
+                        start: 3,
+                        end: 15,
+                        callee: {
+                          type: "Identifier",
+                          name: "__litsx_static_styles",
+                        },
+                      },
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        },
+      ],
+    });
+
+    try {
+      const diagnostics = collectLitsxAuthoredDiagnostics("function Card() {}", {
+        DiagnosticCategory: {
+          Error: 1,
+        },
+      }, {
+        plugins: ["typescript"],
+      });
+
+      assert.strictEqual(diagnostics.length, 1);
+      assert.strictEqual(diagnostics[0].code, 91007);
+    } finally {
+      parseSpy.mockRestore();
+    }
+  });
+
+  it("falls back to zero when hoist call spans omit both callee and node positions", () => {
+    const parseSpy = vi.spyOn(babelParser, "parse").mockReturnValue({
+      type: "Program",
+      body: [
+        {
+          type: "FunctionDeclaration",
+          body: {
+            type: "BlockStatement",
+            body: [
+              {
+                type: "IfStatement",
+                consequent: {
+                  type: "BlockStatement",
+                  body: [
+                    {
+                      type: "ExpressionStatement",
+                      expression: {
+                        type: "CallExpression",
+                        callee: {
+                          type: "Identifier",
+                          name: "__litsx_static_styles",
+                        },
+                      },
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        },
+      ],
+    });
+
+    try {
+      const diagnostics = collectLitsxAuthoredDiagnostics("function Card() {}", {
+        DiagnosticCategory: {
+          Error: 1,
+        },
+      }, {
+        plugins: ["typescript"],
+      });
+
+      assert.strictEqual(diagnostics.length, 1);
+      assert.strictEqual(diagnostics[0].code, 91007);
+      assert.strictEqual(diagnostics[0].start, 0);
+    } finally {
+      parseSpy.mockRestore();
+    }
   });
 
   it("does not warn about className on non-native component tags", () => {
@@ -317,6 +489,267 @@ describe("@litsx/typescript-plugin", () => {
     );
 
     assert.deepStrictEqual(diagnostics, []);
+  });
+
+  it("does not warn about className on member-expression component tags", () => {
+    const memberDiagnostics = collectLitsxAuthoredDiagnostics(
+      "<UI.Button className=\"cta\" />",
+      {
+        DiagnosticCategory: {
+          Warning: 0,
+          Error: 1,
+        },
+      },
+      {
+        plugins: ["typescript"],
+      },
+    );
+    assert.deepStrictEqual(memberDiagnostics, []);
+  });
+
+  it("warns about className on namespaced intrinsic tags", () => {
+    const diagnostics = collectLitsxAuthoredDiagnostics(
+      "<svg:path className=\"cta\" />",
+      {
+        DiagnosticCategory: {
+          Warning: 0,
+          Error: 1,
+        },
+      },
+      {
+        plugins: ["typescript"],
+      },
+    );
+
+    assert.strictEqual(diagnostics.length, 1);
+    assert.strictEqual(diagnostics[0].code, 91008);
+  });
+
+  it("falls back to attribute spans when JSX attribute names omit start and end positions", () => {
+    const parseSpy = vi.spyOn(babelParser, "parse").mockReturnValue({
+      type: "File",
+      program: {
+        type: "Program",
+        body: [
+          {
+            type: "ExpressionStatement",
+            expression: {
+              type: "JSXElement",
+              openingElement: {
+                type: "JSXOpeningElement",
+                name: {
+                  type: "JSXIdentifier",
+                  name: "button",
+                },
+                attributes: [
+                  {
+                    type: "JSXAttribute",
+                    start: 8,
+                    end: 17,
+                    name: {
+                      type: "JSXIdentifier",
+                      name: "className",
+                    },
+                    value: {
+                      type: "StringLiteral",
+                      value: "cta",
+                    },
+                  },
+                ],
+              },
+            },
+          },
+        ],
+      },
+    });
+
+    try {
+      const diagnostics = collectLitsxAuthoredDiagnostics("<button className=\"cta\" />", {
+        DiagnosticCategory: {
+          Warning: 0,
+          Error: 1,
+        },
+      }, {
+        plugins: ["typescript"],
+      });
+
+      assert.strictEqual(diagnostics.length, 1);
+      assert.strictEqual(diagnostics[0].code, 91008);
+      assert.strictEqual(typeof diagnostics[0].start, "number");
+      assert.strictEqual(typeof diagnostics[0].length, "number");
+    } finally {
+      parseSpy.mockRestore();
+    }
+  });
+
+  it("falls back to zero when JSX attributes omit all authored span positions", () => {
+    const parseSpy = vi.spyOn(babelParser, "parse").mockReturnValue({
+      type: "File",
+      program: {
+        type: "Program",
+        body: [
+          {
+            type: "ExpressionStatement",
+            expression: {
+              type: "JSXElement",
+              openingElement: {
+                type: "JSXOpeningElement",
+                name: {
+                  type: "JSXIdentifier",
+                  name: "button",
+                },
+                attributes: [
+                  {
+                    type: "JSXAttribute",
+                    name: {
+                      type: "JSXIdentifier",
+                      name: "className",
+                    },
+                    value: {
+                      type: "StringLiteral",
+                      value: "cta",
+                    },
+                  },
+                ],
+              },
+            },
+          },
+        ],
+      },
+    });
+
+    try {
+      const diagnostics = collectLitsxAuthoredDiagnostics("<button className=\"cta\" />", {
+        DiagnosticCategory: {
+          Warning: 0,
+          Error: 1,
+        },
+      }, {
+        plugins: ["typescript"],
+      });
+
+      assert.strictEqual(diagnostics.length, 1);
+      assert.strictEqual(diagnostics[0].code, 91008);
+      assert.strictEqual(diagnostics[0].start, 0);
+      assert.strictEqual(diagnostics[0].length, 0);
+    } finally {
+      parseSpy.mockRestore();
+    }
+  });
+
+  it("tolerates member-expression JSX tags without a property name", () => {
+    const parseSpy = vi.spyOn(babelParser, "parse").mockReturnValue({
+      type: "File",
+      program: {
+        type: "Program",
+        body: [
+          {
+            type: "ExpressionStatement",
+            expression: {
+              type: "JSXElement",
+              openingElement: {
+                type: "JSXOpeningElement",
+                name: {
+                  type: "JSXMemberExpression",
+                  object: {
+                    type: "JSXIdentifier",
+                    name: "UI",
+                  },
+                  property: null,
+                },
+                attributes: [
+                  {
+                    type: "JSXAttribute",
+                    start: 4,
+                    end: 13,
+                    name: {
+                      type: "JSXIdentifier",
+                      name: "className",
+                    },
+                    value: {
+                      type: "StringLiteral",
+                      value: "cta",
+                    },
+                  },
+                ],
+              },
+            },
+          },
+        ],
+      },
+    });
+
+    try {
+      const diagnostics = collectLitsxAuthoredDiagnostics("<UI.Button className=\"cta\" />", {
+        DiagnosticCategory: {
+          Warning: 0,
+          Error: 1,
+        },
+      }, {
+        plugins: ["typescript"],
+      });
+
+      assert.deepStrictEqual(diagnostics, []);
+    } finally {
+      parseSpy.mockRestore();
+    }
+  });
+
+  it("reports authored diagnostics for mocked empty JSX expressions", () => {
+    const parseSpy = vi.spyOn(babelParser, "parse").mockReturnValue({
+      type: "File",
+      program: {
+        type: "Program",
+        body: [
+          {
+            type: "ExpressionStatement",
+            expression: {
+              type: "JSXElement",
+              openingElement: {
+                type: "JSXOpeningElement",
+                name: {
+                  type: "JSXIdentifier",
+                  name: "button",
+                },
+                attributes: [
+                  {
+                    type: "JSXAttribute",
+                    start: 8,
+                    end: 14,
+                    name: {
+                      type: "JSXIdentifier",
+                      name: "__litsx_event_click",
+                    },
+                    value: {
+                      type: "JSXExpressionContainer",
+                      expression: {
+                        type: "JSXEmptyExpression",
+                      },
+                    },
+                  },
+                ],
+              },
+            },
+          },
+        ],
+      },
+    });
+
+    try {
+      const diagnostics = collectLitsxAuthoredDiagnostics("<button @click={} />", {
+        DiagnosticCategory: {
+          Warning: 0,
+          Error: 1,
+        },
+      }, {
+        plugins: ["typescript"],
+      });
+
+      assert.strictEqual(diagnostics.length, 1);
+      assert.strictEqual(diagnostics[0].code, 91003);
+    } finally {
+      parseSpy.mockRestore();
+    }
   });
 
   it("exports a standard tsserver plugin factory", () => {
@@ -401,7 +834,7 @@ describe("@litsx/typescript-plugin", () => {
       process.stderr.write = originalWrite;
       fs.rmSync(tempDir, { recursive: true, force: true });
     }
-  });
+  }, 20_000);
 
   it("reports missing tsconfig files through the CLI entrypoint", () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-typecheck-missing-config-"));
@@ -547,7 +980,7 @@ describe("@litsx/typescript-plugin", () => {
       process.stderr.write = originalWrite;
       fs.rmSync(tempDir, { recursive: true, force: true });
     }
-  });
+  }, 20_000);
 
   it("remaps synthetic virtualized diagnostics and preserves non-virtual related information in the CLI entrypoint", () => {
     return (async () => {
@@ -990,6 +1423,142 @@ describe("@litsx/typescript-plugin", () => {
     );
   });
 
+  it("normalizes undefined diagnostics to an empty array for virtualized files", () => {
+    const source = `const view = <button @click={handleClick} />;`;
+    const snapshots = new Map([["/virtual/example.tsx", source]]);
+    const pluginModule = plugin({
+      typescript: {
+        ScriptSnapshot: {
+          fromString(value) {
+            return {
+              getLength() {
+                return value.length;
+              },
+              getText(start, end) {
+                return value.slice(start, end);
+              },
+            };
+          },
+        },
+      },
+    });
+
+    const wrapped = pluginModule.create({
+      languageServiceHost: {
+        getScriptSnapshot(fileName) {
+          const text = snapshots.get(fileName);
+          if (text == null) {
+            return undefined;
+          }
+
+          return {
+            getLength() {
+              return text.length;
+            },
+            getText(start, end) {
+              return text.slice(start, end);
+            },
+          };
+        },
+      },
+      languageService: {
+        getSyntacticDiagnostics() {
+          return undefined;
+        },
+        getSemanticDiagnostics() {
+          return undefined;
+        },
+        getSuggestionDiagnostics() {
+          return undefined;
+        },
+        getQuickInfoAtPosition() {
+          return undefined;
+        },
+        getCompletionsAtPosition() {
+          return null;
+        },
+      },
+    });
+
+    assert.deepStrictEqual(wrapped.getSyntacticDiagnostics("/virtual/example.tsx"), []);
+    assert.deepStrictEqual(wrapped.getSemanticDiagnostics("/virtual/example.tsx"), []);
+    assert.deepStrictEqual(wrapped.getSuggestionDiagnostics("/virtual/example.tsx"), []);
+  });
+
+  it("preserves diagnostic start and length when they are not numeric", () => {
+    const source = `const view = <button @click={handleClick} />;`;
+    const snapshots = new Map([["/virtual/example.tsx", source]]);
+    const originalDiagnostic = {
+      start: undefined,
+      length: undefined,
+      messageText: "plain diagnostic",
+      category: 1,
+      code: 1003,
+    };
+    const pluginModule = plugin({
+      typescript: {
+        ScriptSnapshot: {
+          fromString(value) {
+            return {
+              getLength() {
+                return value.length;
+              },
+              getText(start, end) {
+                return value.slice(start, end);
+              },
+            };
+          },
+        },
+      },
+    });
+
+    const wrapped = pluginModule.create({
+      languageServiceHost: {
+        getScriptSnapshot(fileName) {
+          const text = snapshots.get(fileName);
+          if (text == null) {
+            return undefined;
+          }
+
+          return {
+            getLength() {
+              return text.length;
+            },
+            getText(start, end) {
+              return text.slice(start, end);
+            },
+          };
+        },
+      },
+      languageService: {
+        getSyntacticDiagnostics() {
+          return [originalDiagnostic];
+        },
+        getSemanticDiagnostics() {
+          return [];
+        },
+        getSuggestionDiagnostics() {
+          return [];
+        },
+        getQuickInfoAtPosition() {
+          return undefined;
+        },
+        getCompletionsAtPosition() {
+          return null;
+        },
+      },
+    });
+
+    assert.strictEqual(
+      wrapped.getSyntacticDiagnostics("/virtual/example.tsx")[0].start,
+      undefined,
+    );
+    assert.strictEqual(
+      wrapped.getSyntacticDiagnostics("/virtual/example.tsx")[0].length,
+      undefined,
+    );
+  });
+
   it("passes through quick info and completions when no virtualization exists", () => {
     const pluginModule = plugin({
       typescript: {
@@ -1051,6 +1620,69 @@ describe("@litsx/typescript-plugin", () => {
 
     assert.strictEqual(wrapped.getQuickInfoAtPosition("/virtual/plain.ts", 2), info);
     assert.deepStrictEqual(wrapped.getCompletionsAtPosition("/virtual/plain.ts", 2), completions);
+  });
+
+  it("returns null completions when virtualization exists but there is no context or source completion result", () => {
+    const source = "<button @click={handleClick} />";
+    const snapshots = new Map([["/virtual/null-completions.tsx", source]]);
+    const pluginModule = plugin({
+      typescript: {
+        ScriptSnapshot: {
+          fromString(value) {
+            return {
+              getLength() {
+                return value.length;
+              },
+              getText(start, end) {
+                return value.slice(start, end);
+              },
+            };
+          },
+        },
+      },
+    });
+
+    const wrapped = pluginModule.create({
+      languageServiceHost: {
+        getScriptSnapshot(fileName) {
+          const text = snapshots.get(fileName);
+          if (text == null) {
+            return undefined;
+          }
+
+          return {
+            getLength() {
+              return text.length;
+            },
+            getText(start, end) {
+              return text.slice(start, end);
+            },
+          };
+        },
+      },
+      languageService: {
+        getSyntacticDiagnostics() {
+          return [];
+        },
+        getSemanticDiagnostics() {
+          return [];
+        },
+        getSuggestionDiagnostics() {
+          return [];
+        },
+        getQuickInfoAtPosition() {
+          return undefined;
+        },
+        getCompletionsAtPosition() {
+          return null;
+        },
+      },
+    });
+
+    assert.strictEqual(
+      wrapped.getCompletionsAtPosition("/virtual/null-completions.tsx", source.length),
+      null,
+    );
   });
 
   it("adds contextual completions for authored lit prefixes", () => {
@@ -1640,6 +2272,82 @@ describe("@litsx/typescript-plugin", () => {
     }
   });
 
+  it("returns no external files when the project cannot enumerate file names", () => {
+    const pluginModule = plugin({
+      typescript: {
+        ScriptSnapshot: {
+          fromString(value) {
+            return value;
+          },
+        },
+      },
+    });
+
+    assert.deepStrictEqual(pluginModule.getExternalFiles({}), []);
+  });
+
+  it("leaves relevant files unvirtualized when they do not use LitSX-authored syntax", () => {
+    const source = `const view = <button onClick={handleClick} />;`;
+    const snapshots = new Map([["/virtual/plain-react.tsx", source]]);
+    const pluginModule = plugin({
+      typescript: {
+        ScriptSnapshot: {
+          fromString(value) {
+            return {
+              getLength() {
+                return value.length;
+              },
+              getText(start, end) {
+                return value.slice(start, end);
+              },
+            };
+          },
+        },
+      },
+    });
+    const languageServiceHost = {
+      getScriptSnapshot(fileName) {
+        const text = snapshots.get(fileName);
+        if (text == null) {
+          return undefined;
+        }
+
+        return {
+          getLength() {
+            return text.length;
+          },
+          getText(start, end) {
+            return text.slice(start, end);
+          },
+        };
+      },
+    };
+
+    pluginModule.create({
+      languageServiceHost,
+      languageService: {
+        getSyntacticDiagnostics() {
+          return [];
+        },
+        getSemanticDiagnostics() {
+          return [];
+        },
+        getSuggestionDiagnostics() {
+          return [];
+        },
+        getQuickInfoAtPosition() {
+          return undefined;
+        },
+        getCompletionsAtPosition() {
+          return null;
+        },
+      },
+    });
+
+    const snapshot = languageServiceHost.getScriptSnapshot("/virtual/plain-react.tsx");
+    assert.strictEqual(snapshot.getText(0, snapshot.getLength()), source);
+  });
+
   it("virtualizes snapshots for TSX files after wrapping the language service host", () => {
     const source = `const view = <button @click={handleClick} />;`;
     const snapshots = new Map([["/virtual/example.tsx", source]]);
@@ -1699,6 +2407,68 @@ describe("@litsx/typescript-plugin", () => {
     });
 
     const snapshot = languageServiceHost.getScriptSnapshot("/virtual/example.tsx");
+    assert.match(snapshot.getText(0, snapshot.getLength()), /__litsx_event_click/);
+  });
+
+  it("virtualizes snapshots for JSX files without enabling TypeScript-only parser plugins", () => {
+    const source = `const view = <button @click={handleClick} />;`;
+    const snapshots = new Map([["/virtual/example.jsx", source]]);
+    const pluginModule = plugin({
+      typescript: {
+        ScriptSnapshot: {
+          fromString(value) {
+            return {
+              getLength() {
+                return value.length;
+              },
+              getText(start, end) {
+                return value.slice(start, end);
+              },
+            };
+          },
+        },
+      },
+    });
+    const languageServiceHost = {
+      getScriptSnapshot(fileName) {
+        const text = snapshots.get(fileName);
+        if (text == null) {
+          return undefined;
+        }
+
+        return {
+          getLength() {
+            return text.length;
+          },
+          getText(start, end) {
+            return text.slice(start, end);
+          },
+        };
+      },
+    };
+
+    pluginModule.create({
+      languageServiceHost,
+      languageService: {
+        getSyntacticDiagnostics() {
+          return [];
+        },
+        getSemanticDiagnostics() {
+          return [];
+        },
+        getSuggestionDiagnostics() {
+          return [];
+        },
+        getQuickInfoAtPosition() {
+          return undefined;
+        },
+        getCompletionsAtPosition() {
+          return null;
+        },
+      },
+    });
+
+    const snapshot = languageServiceHost.getScriptSnapshot("/virtual/example.jsx");
     assert.match(snapshot.getText(0, snapshot.getLength()), /__litsx_event_click/);
   });
 

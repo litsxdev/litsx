@@ -434,4 +434,152 @@ describe("react compat internal hooks", () => {
       /return \(\) => startTransition\(this, \(\) => this\.requestUpdate\(\)\);/
     );
   });
+
+  it("extends an existing litsx runtime import instead of adding a second one", () => {
+    const source = [
+      "import { LitElement } from 'lit';",
+      "import { useMemoValue } from 'litsx';",
+      "import { useEffect } from 'react';",
+      "",
+      "class ExistingRuntimeImport extends LitElement {",
+      "  render() {",
+      "    useEffect(() => this.requestUpdate(), []);",
+      "    return useMemoValue;",
+      "  }",
+      "}",
+    ].join("\n");
+
+    const code = run(source);
+
+    assert.match(
+      code,
+      /import \{ useMemoValue, prepareEffects, useAfterUpdate \} from ['"]litsx['"];|import \{ useMemoValue, useAfterUpdate, prepareEffects \} from ['"]litsx['"];|import \{ prepareEffects, useAfterUpdate, useMemoValue \} from ['"]litsx['"];|import \{ prepareEffects, useMemoValue, useAfterUpdate \} from ['"]litsx['"];|import \{ useAfterUpdate, prepareEffects, useMemoValue \} from ['"]litsx['"];|import \{ useAfterUpdate, useMemoValue, prepareEffects \} from ['"]litsx['"];/
+    );
+    assert.strictEqual((code.match(/from ['"]litsx['"];/g) || []).length, 1);
+  });
+
+  it("does not duplicate prepareEffects when it is already present", () => {
+    const source = [
+      "import { LitElement } from 'lit';",
+      "import { useMemo } from 'react';",
+      "",
+      "class PreparedAlready extends LitElement {",
+      "  render() {",
+      "    prepareEffects(this);",
+      "    return useMemo(() => this.value, [this.value]);",
+      "  }",
+      "}",
+    ].join("\n");
+
+    const code = run(source);
+
+    assert.strictEqual((code.match(/prepareEffects\(this\);/g) || []).length, 1);
+    assert.match(code, /return useMemoValue\(this, \(\) => this\.value, \[this\.value\]\);/);
+  });
+
+  it("rewrites local custom hooks and injects the host parameter once", () => {
+    const source = [
+      "import { LitElement } from 'lit';",
+      "import { useMemo } from 'react';",
+      "",
+      "function useFancyCache(factory) {",
+      "  return useMemo(factory, []);",
+      "}",
+      "",
+      "class FancyCacheExample extends LitElement {",
+      "  render() {",
+      "    return useFancyCache(() => this.value);",
+      "  }",
+      "}",
+    ].join("\n");
+
+    const code = run(source);
+
+    assert.match(code, /function useFancyCache\(_host, factory\) \{/);
+    assert.match(code, /return useMemoValue\(_host, factory, \[\]\);/);
+    assert.match(code, /return useFancyCache\(this, \(\) => this\.value\);/);
+  });
+
+  it("preserves existing host-like parameters in local custom hooks", () => {
+    const source = [
+      "import { LitElement } from 'lit';",
+      "import { useMemo } from 'react';",
+      "",
+      "function useFancyCache(host, factory) {",
+      "  return useMemo(factory, []);",
+      "}",
+      "",
+      "class FancyCacheExample extends LitElement {",
+      "  render() {",
+      "    return useFancyCache(() => this.value);",
+      "  }",
+      "}",
+    ].join("\n");
+
+    const code = run(source);
+
+    assert.doesNotMatch(code, /function useFancyCache\(_host,/);
+    assert.match(code, /function useFancyCache\(host, factory\) \{/);
+    assert.match(code, /return useMemoValue\(host, factory, \[\]\);/);
+    assert.match(code, /return useFancyCache\(this, \(\) => this\.value\);/);
+  });
+
+  it("rewrites imported custom hooks from named and namespace imports", () => {
+    const source = [
+      "import { LitElement } from 'lit';",
+      "import { useRemoteThing } from './hooks';",
+      "import * as remoteHooks from './more-hooks';",
+      "",
+      "class ImportedHooksExample extends LitElement {",
+      "  render() {",
+      "    const first = useRemoteThing(this.value);",
+      "    const second = remoteHooks.useNamespacedThing(this.other);",
+      "    return `${first}:${second}`;",
+      "  }",
+      "}",
+    ].join("\n");
+
+    const code = run(source);
+
+    assert.match(code, /const first = useRemoteThing\(this, this\.value\);/);
+    assert.match(code, /const second = remoteHooks\.useNamespacedThing\(this, this\.other\);/);
+  });
+
+  it("rewrites compat useContext imports from litsx/context", () => {
+    const source = [
+      "import { LitElement } from 'lit';",
+      "import { useContext } from 'litsx/context';",
+      "",
+      "class ContextConsumer extends LitElement {",
+      "  render() {",
+      "    return useContext(ThemeContext);",
+      "  }",
+      "}",
+    ].join("\n");
+
+    const code = run(source);
+
+    assert.match(code, /return useContext\(this, ThemeContext\);/);
+    assert.match(code, /import \{ prepareEffects \} from "litsx";/);
+  });
+
+  it("leaves unsupported dependency arrays untouched", () => {
+    const source = [
+      "import { LitElement } from 'lit';",
+      "import { useMemo } from 'react';",
+      "",
+      "class UnsupportedDeps extends LitElement {",
+      "  render() {",
+      "    return useMemo(() => this.value, [this.value, ...extraDeps]);",
+      "  }",
+      "}",
+    ].join("\n");
+
+    const code = run(source);
+
+    assert.match(code, /return useMemo\(\(\) => this\.value, \[this\.value, \.\.\.extraDeps\]\);/);
+    assert.doesNotMatch(code, /useMemoValue/);
+    assert.doesNotMatch(code, /prepareEffects\(this\);/);
+    assert.match(code, /from 'react';|from "react";/);
+  });
 });

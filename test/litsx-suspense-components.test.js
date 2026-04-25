@@ -1,5 +1,5 @@
 import assert from "assert";
-import { describe, it } from "vitest";
+import { afterEach, describe, it } from "vitest";
 import { nothing } from "lit";
 import {
   SuspenseBoundary,
@@ -46,6 +46,14 @@ function templateSource(templateResult) {
     ? templateResult.strings.join("")
     : "";
 }
+
+const originalQueueMicrotask = globalThis.queueMicrotask;
+const originalGetComputedStyle = globalThis.getComputedStyle;
+
+afterEach(() => {
+  globalThis.queueMicrotask = originalQueueMicrotask;
+  globalThis.getComputedStyle = originalGetComputedStyle;
+});
 
 describe("litsx suspense components", () => {
   it("re-exports suspense boundary and list elements from the runtime index", () => {
@@ -667,5 +675,200 @@ describe("litsx suspense components", () => {
 
     boundary.handleEvent({ type: "transitionend" });
     assert.strictEqual(boundary.phase, "content");
+  });
+
+  it("schedules async errors for non-thenable throws and renders nothing", () => {
+    const queued = [];
+    globalThis.queueMicrotask = (callback) => {
+      queued.push(callback);
+    };
+
+    const boundary = new TestSuspenseBoundaryElement();
+    const error = new Error("boom");
+    boundary.contentRenderer = () => {
+      throw error;
+    };
+
+    const rendered = boundary.render();
+
+    assert.strictEqual(rendered, nothing);
+    assert.strictEqual(queued.length, 1);
+    assert.throws(() => queued[0](), /boom/);
+  });
+
+  it("reports rejected pending promises through the suspense list and async error channel", async () => {
+    const deferred = createDeferred();
+    const queued = [];
+    let errored = 0;
+    globalThis.queueMicrotask = (callback) => {
+      queued.push(callback);
+    };
+
+    const boundary = new TestSuspenseBoundaryElement();
+    boundary._suspenseList = {
+      getFallbackDisposition() {
+        return "show";
+      },
+      notifyBoundaryPending() {},
+      notifyBoundaryResolved() {},
+      notifyBoundaryErrored() {
+        errored += 1;
+      },
+    };
+    boundary.contentRenderer = () => {
+      throw deferred.promise;
+    };
+    boundary.fallbackRenderer = () => "loading";
+
+    boundary.render();
+    deferred.reject(new Error("nope"));
+    await deferred.promise.catch(() => {});
+    await Promise.resolve();
+
+    assert.strictEqual(boundary.pending, false);
+    assert.strictEqual(errored, 1);
+    assert.strictEqual(queued.length, 1);
+    assert.throws(() => queued[0](), /nope/);
+  });
+
+  it("deduplicates identical pending promises", () => {
+    const boundary = new TestSuspenseBoundaryElement();
+    const promise = Promise.resolve();
+    let updates = 0;
+    boundary.requestUpdate = () => {
+      updates += 1;
+    };
+
+    boundary.attachPendingPromise(promise);
+    boundary.attachPendingPromise(promise);
+
+    assert.strictEqual(boundary._pendingPromise, promise);
+    assert.strictEqual(updates, 0);
+  });
+
+  it("ignores stale promise resolutions after a newer suspension replaces them", async () => {
+    const first = createDeferred();
+    const second = createDeferred();
+    const boundary = new TestSuspenseBoundaryElement();
+    let updates = 0;
+    boundary.requestUpdate = () => {
+      updates += 1;
+    };
+
+    boundary.attachPendingPromise(first.promise);
+    boundary.attachPendingPromise(second.promise);
+
+    first.resolve();
+    await first.promise;
+    await Promise.resolve();
+
+    assert.strictEqual(boundary._pendingPromise, second.promise);
+    assert.strictEqual(updates, 0);
+
+    second.resolve();
+    await second.promise;
+    await Promise.resolve();
+
+    assert.strictEqual(boundary._pendingPromise, null);
+    assert.strictEqual(updates, 1);
+  });
+
+  it("completes reveal only for matching tokens and ignores unrelated events", () => {
+    const boundary = new MotionSuspenseBoundaryElement();
+    boundary._isRevealing = true;
+    boundary._revealToken = 4;
+    boundary._revealTimeout = 123;
+    const cleared = [];
+    const originalClearTimeout = globalThis.clearTimeout;
+    globalThis.clearTimeout = (value) => {
+      cleared.push(value);
+    };
+
+    try {
+      boundary.handleEvent({ type: "click" });
+      assert.strictEqual(boundary.phase, "content");
+      assert.strictEqual(boundary._isRevealing, true);
+
+      boundary.completeReveal(2);
+      assert.strictEqual(boundary._isRevealing, true);
+
+      boundary.handleEvent({ type: "animationend" });
+      assert.strictEqual(boundary._isRevealing, false);
+      assert.strictEqual(boundary._revealTimeout, null);
+      assert.deepStrictEqual(cleared, [123]);
+    } finally {
+      globalThis.clearTimeout = originalClearTimeout;
+    }
+  });
+
+  it("computes reveal motion timings from animation and transition lists", () => {
+    const boundary = new TestSuspenseBoundaryElement();
+    globalThis.getComputedStyle = () => ({
+      animationDuration: "120ms, 0.2s",
+      animationDelay: "30ms",
+      transitionDuration: "0.1s",
+      transitionDelay: "25ms, invalid",
+    });
+
+    assert.strictEqual(boundary.getMaxAnimationTime(globalThis.getComputedStyle()), 230);
+    assert.strictEqual(boundary.getMaxTransitionTime(globalThis.getComputedStyle()), 125);
+    assert.strictEqual(boundary.getRevealMotionTimeout(), 280);
+    assert.strictEqual(boundary.hasActiveRevealMotion(), true);
+    assert.deepStrictEqual(boundary.parseTimeList(""), [0]);
+    assert.deepStrictEqual(boundary.parseTimeList("bad, 0.5s, 12ms"), [0, 500, 12]);
+  });
+
+  it("falls back to default reveal timing when computed styles are unavailable", () => {
+    globalThis.getComputedStyle = undefined;
+    const boundary = new TestSuspenseBoundaryElement();
+
+    assert.strictEqual(boundary.hasActiveRevealMotion(), false);
+    assert.strictEqual(boundary.getRevealMotionTimeout(), 32);
+  });
+
+  it("avoids duplicate suspense-list notifications for the same state snapshot", () => {
+    const notifications = [];
+    const boundary = new TestSuspenseBoundaryElement();
+    boundary._suspenseList = {
+      notifyBoundaryPending(target) {
+        notifications.push(["pending", target]);
+      },
+      notifyBoundaryResolved(target) {
+        notifications.push(["resolved", target]);
+      },
+      notifyBoundaryErrored(target) {
+        notifications.push(["errored", target]);
+      },
+    };
+
+    boundary.pending = true;
+    boundary.notifyListState();
+    boundary.notifyListState();
+    boundary.pending = false;
+    boundary.resolved = true;
+    boundary.showing = "content";
+    boundary.notifyListState();
+    boundary.notifyListErrored();
+    boundary.notifyListErrored();
+
+    assert.deepStrictEqual(
+      notifications.map(([type]) => type),
+      ["pending", "resolved", "errored"]
+    );
+  });
+
+  it("gracefully ignores missing or invalid suspense lists during attachment and detachment", () => {
+    const boundary = new TestSuspenseBoundaryElement();
+
+    boundary.attachToSuspenseList();
+    assert.strictEqual(boundary._suspenseList, null);
+
+    boundary.closest = () => ({});
+    boundary.attachToSuspenseList();
+    assert.strictEqual(boundary._suspenseList, null);
+
+    boundary._suspenseList = {};
+    boundary.detachFromSuspenseList();
+    assert.strictEqual(boundary._suspenseList, null);
   });
 });

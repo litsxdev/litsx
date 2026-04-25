@@ -1,0 +1,526 @@
+import assert from "assert";
+import babelTraverse from "@babel/traverse";
+import * as t from "@babel/types";
+import parser from "../packages/babel-parser-litsx/src/index.mjs";
+import {
+  assertStaticHoistsStayTopLevel,
+  processStaticHoists,
+  setStaticHoistsBabelTypes,
+} from "../packages/babel-preset-litsx/src/internal/transform-litsx-static-hoists.js";
+import { setPropertyBabelTypes } from "../packages/babel-preset-litsx/src/internal/transform-litsx-properties.js";
+
+const traverse = babelTraverse.default || babelTraverse;
+
+function getFunctionContext(source, plugins = []) {
+  const ast = parser.parse(source, { sourceType: "module", plugins });
+  let programPath;
+  let functionPath;
+
+  traverse(ast, {
+    Program(path) {
+      programPath = path;
+    },
+    FunctionDeclaration(path) {
+      if (!functionPath) {
+        functionPath = path;
+      }
+    },
+  });
+
+  return { ast, programPath, functionPath };
+}
+
+function createStaticSymbolFactory() {
+  const seen = new Map();
+  return (programPath, name) => {
+    const existing = seen.get(name);
+    if (existing) {
+      return { symbolId: existing.symbolId, declaration: null };
+    }
+
+    const symbolId = programPath.scope.generateUidIdentifier(`litsx_static_${name}`);
+    const declaration = t.variableDeclaration("const", [
+      t.variableDeclarator(
+        t.cloneNode(symbolId),
+        t.callExpression(t.identifier("Symbol"), [t.stringLiteral(`litsx.static.${name}`)])
+      ),
+    ]);
+
+    const value = { symbolId, declaration };
+    seen.set(name, value);
+    return value;
+  };
+}
+
+setStaticHoistsBabelTypes(t);
+setPropertyBabelTypes(t);
+
+describe("native static hoists internals", () => {
+  it("collects hoisted members, merges legacy static props, and marks css requirements", () => {
+    const source = `
+      const gap = "12px";
+
+      function Card() {
+        staticProps({
+          legacy: { attribute: false },
+          count: Number,
+        });
+
+        staticStyles(":host { color: red; }");
+
+        ^properties({
+          title: String,
+          count: { reflect: true },
+          payload: { type: Object, attribute: false },
+        });
+
+        ^styles(\`
+          :host {
+            gap: \${gap};
+          }
+        \`);
+
+        ^shadowRootOptions({ delegatesFocus: true });
+
+        ^expose({
+          ping() {
+            return "pong";
+          },
+          compute: (value) => value + 1,
+        });
+
+        return <div>ready</div>;
+      }
+    `;
+
+    const { programPath, functionPath } = getFunctionContext(source);
+    const renderStatements = [...functionPath.node.body.body];
+    const propertiesStatic = [
+      t.objectProperty(
+        t.identifier("initial"),
+        t.objectExpression([t.objectProperty(t.identifier("type"), t.identifier("String"))])
+      ),
+    ];
+    const classMembers = [];
+
+    const result = processStaticHoists({
+      functionPath,
+      node: functionPath.node,
+      renderStatements,
+      programPath,
+      propertiesStatic,
+      classMembers,
+      options: {},
+      getOrCreateModuleStaticHoistSymbol: createStaticSymbolFactory(),
+    });
+
+    assert.strictEqual(result.lightDomRequested, false);
+    assert.strictEqual(result.needsStaticHoistsMixin, true);
+    assert.strictEqual(result.needsCss, true);
+    assert.strictEqual(result.needsUnsafeCss, true);
+    assert.strictEqual(result.hoistSymbolDeclarations.length, 3);
+    assert.strictEqual(classMembers.length, 0);
+    assert.strictEqual(renderStatements.length, 1);
+
+    const propertyNames = propertiesStatic
+      .filter((node) => t.isObjectProperty(node))
+      .map((node) => (t.isIdentifier(node.key) ? node.key.name : node.key.value))
+      .sort();
+    assert.deepStrictEqual(propertyNames, ["count", "initial", "legacy"]);
+
+    const memberNames = result.hoistMembers.map((member) => member.key.name).sort();
+    assert.deepStrictEqual(memberNames, [
+      "compute",
+      "ping",
+      "properties",
+      "shadowRootOptions",
+      "styles",
+    ]);
+
+    const propertiesGetter = result.hoistMembers.find((member) => member.key.name === "properties");
+    const stylesGetter = result.hoistMembers.find((member) => member.key.name === "styles");
+    const shadowRootOptionsGetter = result.hoistMembers.find(
+      (member) => member.key.name === "shadowRootOptions"
+    );
+    const pingMethod = result.hoistMembers.find((member) => member.key.name === "ping");
+    const computeMethod = result.hoistMembers.find((member) => member.key.name === "compute");
+
+    assert.ok(propertiesGetter);
+    assert.ok(stylesGetter);
+    assert.ok(shadowRootOptionsGetter);
+    assert.ok(pingMethod);
+    assert.ok(computeMethod);
+    assert.strictEqual(propertiesGetter.kind, "get");
+    assert.strictEqual(stylesGetter.kind, "get");
+    assert.strictEqual(shadowRootOptionsGetter.kind, "get");
+    assert.strictEqual(pingMethod.static, true);
+    assert.strictEqual(computeMethod.static, true);
+    assert.strictEqual(computeMethod.async, false);
+    assert.strictEqual(computeMethod.generator, false);
+  });
+
+  it("accepts top-level hoists and rejects nested ones", () => {
+    const okSource = `
+      function Card() {
+        ^styles(":host { display: block; }");
+        return <div>ok</div>;
+      }
+    `;
+
+    const { functionPath: okFunctionPath } = getFunctionContext(okSource);
+    assert.doesNotThrow(() => {
+      assertStaticHoistsStayTopLevel(okFunctionPath);
+    });
+
+    const badSource = `
+      function Card() {
+        if (ready) {
+          ^styles(":host { display: block; }");
+        }
+
+        return <div>bad</div>;
+      }
+    `;
+
+    const { functionPath: badFunctionPath } = getFunctionContext(badSource);
+    assert.throws(() => {
+      assertStaticHoistsStayTopLevel(badFunctionPath);
+    });
+  });
+
+  it("rejects dynamic hoists and invalid expose payloads", () => {
+    const dynamicStylesSource = `
+      function Card() {
+        ^styles(() => ":host { display: block; }");
+        return <div>ready</div>;
+      }
+    `;
+
+    const { programPath: stylesProgramPath, functionPath: stylesFunctionPath } =
+      getFunctionContext(dynamicStylesSource);
+
+    assert.throws(() => {
+      processStaticHoists({
+        functionPath: stylesFunctionPath,
+        node: stylesFunctionPath.node,
+        renderStatements: [...stylesFunctionPath.node.body.body],
+        programPath: stylesProgramPath,
+        propertiesStatic: [],
+        classMembers: [],
+        options: {},
+        getOrCreateModuleStaticHoistSymbol: createStaticSymbolFactory(),
+      });
+    }, /\^styles\(\.\.\.\) only accepts static values/);
+
+    const badExposeSource = `
+      function Card() {
+        ^expose({
+          ...helpers,
+        });
+        return <div>ready</div>;
+      }
+    `;
+
+    const { programPath: exposeProgramPath, functionPath: exposeFunctionPath } =
+      getFunctionContext(badExposeSource);
+
+    assert.throws(() => {
+      processStaticHoists({
+        functionPath: exposeFunctionPath,
+        node: exposeFunctionPath.node,
+        renderStatements: [...exposeFunctionPath.node.body.body],
+        programPath: exposeProgramPath,
+        propertiesStatic: [],
+        classMembers: [],
+        options: {},
+        getOrCreateModuleStaticHoistSymbol: createStaticSymbolFactory(),
+      });
+    }, /\^expose\(\.\.\.\) does not accept spread elements\./);
+
+    const invalidPropertyOverrideSource = `
+      function Card() {
+        staticProps({
+          bad: dynamicValue,
+        });
+        return <div>ready</div>;
+      }
+    `;
+
+    const { programPath: propertyProgramPath, functionPath: propertyFunctionPath } =
+      getFunctionContext(invalidPropertyOverrideSource);
+
+    assert.throws(() => {
+      processStaticHoists({
+        functionPath: propertyFunctionPath,
+        node: propertyFunctionPath.node,
+        renderStatements: [...propertyFunctionPath.node.body.body],
+        programPath: propertyProgramPath,
+        propertiesStatic: [],
+        classMembers: [],
+        options: {},
+        getOrCreateModuleStaticHoistSymbol: createStaticSymbolFactory(),
+      });
+    }, /\^properties\(\.\.\.\) values must be Lit property option objects or constructor references\./);
+
+    const invalidPropertiesHoistSource = `
+      function Card() {
+        ^properties(() => ({
+          title: String,
+        }));
+        return <div>ready</div>;
+      }
+    `;
+
+    const { programPath: hoistedPropertiesProgramPath, functionPath: hoistedPropertiesFunctionPath } =
+      getFunctionContext(invalidPropertiesHoistSource);
+
+    assert.throws(() => {
+      processStaticHoists({
+        functionPath: hoistedPropertiesFunctionPath,
+        node: hoistedPropertiesFunctionPath.node,
+        renderStatements: [...hoistedPropertiesFunctionPath.node.body.body],
+        programPath: hoistedPropertiesProgramPath,
+        propertiesStatic: [],
+        classMembers: [],
+        options: {},
+        getOrCreateModuleStaticHoistSymbol: createStaticSymbolFactory(),
+      });
+    }, /\^properties\(\.\.\.\) only accepts an object literal/);
+  });
+
+  it("rejects combining light DOM with shadowRootOptions hoists", () => {
+    const source = `
+      function Card() {
+        ^lightDom();
+        ^shadowRootOptions({ delegatesFocus: true });
+        return <div>ready</div>;
+      }
+    `;
+
+    const { programPath, functionPath } = getFunctionContext(source);
+
+    assert.throws(() => {
+      processStaticHoists({
+        functionPath,
+        node: functionPath.node,
+        renderStatements: [...functionPath.node.body.body],
+        programPath,
+        propertiesStatic: [],
+        classMembers: [],
+        options: {},
+        getOrCreateModuleStaticHoistSymbol: createStaticSymbolFactory(),
+      });
+    }, /\^lightDom\(\) cannot be combined with \^shadowRootOptions\(\.\.\.\)\./);
+  });
+
+  it("creates direct static class members for legacy hoists and respects default light DOM mode", () => {
+    const source = `
+      const baseStyles = ":host { color: red; }";
+
+      function Card() {
+        staticProps({
+          title: String,
+        });
+
+        staticStyles(baseStyles);
+
+        return <div>ready</div>;
+      }
+    `;
+
+    const { programPath, functionPath } = getFunctionContext(source);
+    const classMembers = [];
+
+    const result = processStaticHoists({
+      functionPath,
+      node: functionPath.node,
+      renderStatements: [...functionPath.node.body.body],
+      programPath,
+      propertiesStatic: [],
+      classMembers,
+      options: { defaultDomMode: "light" },
+      getOrCreateModuleStaticHoistSymbol: createStaticSymbolFactory(),
+    });
+
+    assert.strictEqual(result.lightDomRequested, true);
+    assert.strictEqual(result.needsStaticHoistsMixin, false);
+    assert.strictEqual(result.hoistMembers.length, 0);
+    assert.strictEqual(result.hoistSymbolDeclarations.length, 0);
+    assert.strictEqual(result.needsCss, true);
+    assert.strictEqual(result.needsUnsafeCss, true);
+    assert.strictEqual(classMembers.length, 2);
+    assert.deepStrictEqual(
+      classMembers.map((member) => member.key.name),
+      ["properties", "styles"]
+    );
+  });
+
+  it("resolves generic hoists and merges legacy styles and properties into hoisted getters", () => {
+    const source = `
+      const baseStyles = ":host { color: red; }";
+
+      function Card() {
+        staticProps({
+          count: Number,
+        });
+        staticStyles(baseStyles);
+        ^properties({
+          title: String,
+        });
+        ^styles(":host { display: block; }");
+        ^shadowRootOptions({ delegatesFocus: true });
+        return <div>ready</div>;
+      }
+    `;
+
+    const { programPath, functionPath } = getFunctionContext(source);
+    const result = processStaticHoists({
+      functionPath,
+      node: functionPath.node,
+      renderStatements: [...functionPath.node.body.body],
+      programPath,
+      propertiesStatic: [],
+      classMembers: [],
+      options: {},
+      getOrCreateModuleStaticHoistSymbol: createStaticSymbolFactory(),
+    });
+
+    assert.strictEqual(result.needsStaticHoistsMixin, true);
+    assert.strictEqual(result.hoistMembers.length, 3);
+
+    const propertiesGetter = result.hoistMembers.find((member) => member.key.name === "properties");
+    const stylesGetter = result.hoistMembers.find((member) => member.key.name === "styles");
+    const shadowGetter = result.hoistMembers.find((member) => member.key.name === "shadowRootOptions");
+
+    assert.ok(propertiesGetter);
+    assert.ok(stylesGetter);
+    assert.ok(shadowGetter);
+
+    const propertiesResolver = propertiesGetter.body.body[0].argument.arguments[1].body;
+    assert.strictEqual(propertiesResolver.callee.property.name, "__litsxMergeProperties");
+    assert.strictEqual(propertiesResolver.arguments[0].properties.length, 1);
+    assert.strictEqual(propertiesResolver.arguments[1].callee.property.name, "__litsxResolveStaticValue");
+
+    const stylesResolver = stylesGetter.body.body[0].argument.arguments[1].body;
+    assert.strictEqual(stylesResolver.operator, "||");
+    assert.strictEqual(stylesResolver.left.callee.property.name, "__litsxResolveStaticValue");
+    assert.strictEqual(stylesResolver.right.type, "TaggedTemplateExpression");
+    assert.strictEqual(stylesResolver.right.tag.name, "css");
+
+    const shadowResolver = shadowGetter.body.body[0].argument.arguments[1].body;
+    assert.strictEqual(shadowResolver.callee.property.name, "__litsxResolveStaticValue");
+  });
+
+  it("rejects invalid lightDom, generic hoist, and expose method forms", () => {
+    const lightDomSource = `
+      function Card() {
+        ^lightDom("bad");
+        return <div>ready</div>;
+      }
+    `;
+    const { programPath: lightDomProgramPath, functionPath: lightDomFunctionPath } =
+      getFunctionContext(lightDomSource);
+    assert.throws(() => {
+      processStaticHoists({
+        functionPath: lightDomFunctionPath,
+        node: lightDomFunctionPath.node,
+        renderStatements: [...lightDomFunctionPath.node.body.body],
+        programPath: lightDomProgramPath,
+        propertiesStatic: [],
+        classMembers: [],
+        options: {},
+        getOrCreateModuleStaticHoistSymbol: createStaticSymbolFactory(),
+      });
+    }, /\^lightDom\(\) does not accept arguments\./);
+
+    const genericAritySource = `
+      function Card() {
+        ^shadowRootOptions({ mode: "open" }, { delegatesFocus: true });
+        return <div>ready</div>;
+      }
+    `;
+    const { programPath: genericProgramPath, functionPath: genericFunctionPath } =
+      getFunctionContext(genericAritySource);
+    assert.throws(() => {
+      processStaticHoists({
+        functionPath: genericFunctionPath,
+        node: genericFunctionPath.node,
+        renderStatements: [...genericFunctionPath.node.body.body],
+        programPath: genericProgramPath,
+        propertiesStatic: [],
+        classMembers: [],
+        options: {},
+        getOrCreateModuleStaticHoistSymbol: createStaticSymbolFactory(),
+      });
+    }, /\^shadowRootOptions\(\.\.\.\) expects exactly one argument\./);
+
+    const genericDynamicSource = `
+      function Card() {
+        ^shadowRootOptions(factory());
+        return <div>ready</div>;
+      }
+    `;
+    const { programPath: genericDynamicProgramPath, functionPath: genericDynamicFunctionPath } =
+      getFunctionContext(genericDynamicSource);
+    assert.throws(() => {
+      processStaticHoists({
+        functionPath: genericDynamicFunctionPath,
+        node: genericDynamicFunctionPath.node,
+        renderStatements: [...genericDynamicFunctionPath.node.body.body],
+        programPath: genericDynamicProgramPath,
+        propertiesStatic: [],
+        classMembers: [],
+        options: {},
+        getOrCreateModuleStaticHoistSymbol: createStaticSymbolFactory(),
+      });
+    }, /\^shadowRootOptions\(\.\.\.\) only accepts a direct static value\./);
+
+    const exposeGetterSource = `
+      function Card() {
+        ^expose({
+          get value() {
+            return 1;
+          },
+        });
+        return <div>ready</div>;
+      }
+    `;
+    const { programPath: exposeGetterProgramPath, functionPath: exposeGetterFunctionPath } =
+      getFunctionContext(exposeGetterSource);
+    assert.throws(() => {
+      processStaticHoists({
+        functionPath: exposeGetterFunctionPath,
+        node: exposeGetterFunctionPath.node,
+        renderStatements: [...exposeGetterFunctionPath.node.body.body],
+        programPath: exposeGetterProgramPath,
+        propertiesStatic: [],
+        classMembers: [],
+        options: {},
+        getOrCreateModuleStaticHoistSymbol: createStaticSymbolFactory(),
+      });
+    }, /\^expose\(\.\.\.\) only accepts plain methods\./);
+
+    const exposeValueSource = `
+      function Card() {
+        ^expose({
+          value: 1,
+        });
+        return <div>ready</div>;
+      }
+    `;
+    const { programPath: exposeValueProgramPath, functionPath: exposeValueFunctionPath } =
+      getFunctionContext(exposeValueSource);
+    assert.throws(() => {
+      processStaticHoists({
+        functionPath: exposeValueFunctionPath,
+        node: exposeValueFunctionPath.node,
+        renderStatements: [...exposeValueFunctionPath.node.body.body],
+        programPath: exposeValueProgramPath,
+        propertiesStatic: [],
+        classMembers: [],
+        options: {},
+        getOrCreateModuleStaticHoistSymbol: createStaticSymbolFactory(),
+      });
+    }, /\^expose\(\.\.\.\) values must be functions\./);
+  });
+});

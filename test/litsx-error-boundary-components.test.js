@@ -81,4 +81,17 @@ describe("litsx error boundary components", () => {
 
     assert.deepStrictEqual(calls, ["boom"]);
   });
+
+  it("falls back to lit nothing when renderers are not functions", () => {
+    const boundary = new TestErrorBoundaryElement();
+
+    boundary.fallbackRenderer = "not-a-function";
+    const fallback = boundary.renderFallback();
+    assert.match(templateSource(fallback), /part="fallback"/);
+
+    boundary.contentRenderer = "not-a-function";
+    const content = boundary.render();
+    assert.strictEqual(boundary.failed, false);
+    assert.match(templateSource(content), /part="content"/);
+  });
 });

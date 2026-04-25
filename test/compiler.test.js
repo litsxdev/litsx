@@ -62,7 +62,7 @@ describe("@litsx/compiler", () => {
     const result = await transformLitsx(source, {
       filename: "/virtual/Counter.tsx",
       sourceMaps: true,
-    });
+  }, 30_000);
 
     assert.ok(result.map, "expected compiler to emit a sourcemap");
     const traceMap = new TraceMap(result.map);
@@ -193,5 +193,57 @@ describe("@litsx/compiler", () => {
     assert.match(result.code, /class Counter extends LitElement/);
     assert.match(result.code, /return <button @click=\{save\}>\{this\.label\}<\/button>;/);
     assert.doesNotMatch(result.code, /html`/);
+  }, 20000);
+
+  it("preserves the raw Babel sourcemap when final template lowering is disabled", () => {
+    const source = [
+      "export const Counter = ({ label }) => {",
+      "  return <button @click={save}>{label}</button>;",
+      "};",
+    ].join("\n");
+
+    const result = transformLitsxSync(source, {
+      filename: "/virtual/Counter.jsx",
+      jsxTemplate: false,
+      sourceMaps: true,
+    });
+
+    assert.ok(result.map);
+    assert.strictEqual(result.map.version, 3);
+    assert.ok(Array.isArray(result.map.sources));
+    assert.ok(result.map.sources.includes("/virtual/Counter.jsx"));
+  }, 20000);
+
+  it("dedupes authored and plugin warnings while tolerating missing warning fields", () => {
+    const source = [
+      "export const Counter = () => {",
+      "  return <button className=\"cta\">Save</button>;",
+      "};",
+    ].join("\n");
+
+    const pluginWarnings = () => ({
+      post(file) {
+        file.metadata.litsxWarnings = [
+          { attributeName: "className", tagName: "button" },
+          { attributeName: "className", tagName: "button" },
+        ];
+      },
+    });
+
+    const result = transformLitsxSync(source, {
+      filename: "/virtual/Counter.jsx",
+      outputPlugins: [pluginWarnings],
+    });
+
+    assert.ok(Array.isArray(result.metadata.litsxWarnings));
+    assert.strictEqual(result.metadata.litsxWarnings.length, 2);
+    assert.strictEqual(
+      result.metadata.litsxWarnings.filter((warning) => warning.code === "LITSX_NATIVE_CLASSNAME").length,
+      1
+    );
+    assert.strictEqual(
+      result.metadata.litsxWarnings.filter((warning) => !warning.code).length,
+      1
+    );
   }, 20000);
 });

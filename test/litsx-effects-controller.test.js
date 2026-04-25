@@ -1,6 +1,7 @@
 import { beforeAll, afterAll } from 'vitest';
 import assert from "assert";
 import {
+  EffectsController,
   ensureLazyElement,
   prepareEffects,
   useMemoValue,
@@ -18,11 +19,14 @@ import {
   usePrevious,
   useStableCallback,
   useStyle,
+  useReducedState,
+  useState,
   useControlledState,
   useAsyncState,
   useOptimistic,
   useCallbackRef,
   useExpose,
+  useExternalStore,
 } from "../packages/litsx/src/index.js";
 
 class TestHost extends EventTarget {
@@ -219,6 +223,20 @@ describe("litsx effects controller", () => {
     assert.strictEqual(events[1].cancelable, true);
   });
 
+  it("keeps the emit helper stable across renders", () => {
+    const host = new TestHost();
+
+    prepareEffects(host);
+    const firstEmit = useEmit(host);
+    update(host);
+
+    prepareEffects(host);
+    const secondEmit = useEmit(host);
+    update(host);
+
+    assert.strictEqual(firstEmit, secondEmit);
+  });
+
   it("returns the previous render value", () => {
     const host = new TestHost();
 
@@ -252,6 +270,129 @@ describe("litsx effects controller", () => {
 
     assert.strictEqual(first, 0);
     assert.strictEqual(second, 2);
+  });
+
+  it("memoizes derived values until dependencies change", () => {
+    const host = new TestHost();
+    let memoRuns = 0;
+    let uncachedRuns = 0;
+
+    prepareEffects(host);
+    const firstMemo = useMemoValue(host, () => {
+      memoRuns += 1;
+      return { value: "alpha" };
+    }, ["alpha"]);
+    const firstUncached = useMemoValue(host, () => {
+      uncachedRuns += 1;
+      return "first";
+    });
+    update(host);
+
+    prepareEffects(host);
+    const secondMemo = useMemoValue(host, () => {
+      memoRuns += 1;
+      return { value: "beta" };
+    }, ["alpha"]);
+    const secondUncached = useMemoValue(host, () => {
+      uncachedRuns += 1;
+      return "second";
+    });
+    update(host);
+
+    prepareEffects(host);
+    const thirdMemo = useMemoValue(host, () => {
+      memoRuns += 1;
+      return { value: "gamma" };
+    }, ["gamma"]);
+    update(host);
+
+    assert.strictEqual(memoRuns, 2);
+    assert.strictEqual(uncachedRuns, 2);
+    assert.strictEqual(firstMemo, secondMemo);
+    assert.notStrictEqual(secondMemo, thirdMemo);
+    assert.strictEqual(firstUncached, "first");
+    assert.strictEqual(secondUncached, "second");
+  });
+
+  it("keeps stable callbacks until dependencies change", () => {
+    const host = new TestHost();
+
+    prepareEffects(host);
+    const first = useStableCallback(host, () => "alpha", ["same"]);
+    update(host);
+
+    prepareEffects(host);
+    const second = useStableCallback(host, () => "beta", ["same"]);
+    update(host);
+
+    prepareEffects(host);
+    const third = useStableCallback(host, () => "gamma", ["changed"]);
+    update(host);
+
+    assert.strictEqual(first, second);
+    assert.notStrictEqual(second, third);
+    assert.strictEqual(second(), "alpha");
+    assert.strictEqual(third(), "gamma");
+  });
+
+  it("manages reducer state with optional initialization", () => {
+    const host = new TestHost();
+    const reducer = (state, action) => {
+      if (action.type === "noop") {
+        return state;
+      }
+      if (action.type === "add") {
+        return state + action.value;
+      }
+      return action.value;
+    };
+
+    prepareEffects(host);
+    const [firstValue, dispatch] = useReducedState(host, reducer, 2, (value) => value * 2);
+    update(host);
+
+    assert.strictEqual(firstValue, 4);
+    assert.strictEqual(host.updates, 0);
+
+    dispatch({ type: "noop" });
+    assert.strictEqual(host.updates, 0);
+
+    dispatch({ type: "add", value: 3 });
+    assert.strictEqual(host.updates, 1);
+
+    prepareEffects(host);
+    const [secondValue] = useReducedState(host, reducer, 2, (value) => value * 100);
+    update(host);
+
+    assert.strictEqual(secondValue, 7);
+  });
+
+  it("initializes useState lazily only once and supports updater functions", () => {
+    const host = new TestHost();
+    let initializations = 0;
+
+    prepareEffects(host);
+    let [value, setValue] = useState(host, () => {
+      initializations += 1;
+      return 2;
+    });
+    update(host);
+
+    assert.strictEqual(value, 2);
+    assert.strictEqual(initializations, 1);
+
+    setValue((previous) => previous + 3);
+    update(host);
+
+    prepareEffects(host);
+    [value] = useState(host, () => {
+      initializations += 1;
+      return 99;
+    });
+    update(host);
+
+    assert.strictEqual(value, 5);
+    assert.strictEqual(initializations, 1);
   });
 
   it("manages uncontrolled state and notifies on change", () => {
@@ -334,6 +475,33 @@ describe("litsx effects controller", () => {
     });
 
     assert.strictEqual(value, 3);
+  });
+
+  it("skips controlled-state notifications when the resolved value does not change", () => {
+    const host = new TestHost();
+    const changes = [];
+
+    prepareEffects(host);
+    let [value, setValue] = useControlledState(host, {
+      value: 2,
+      defaultValue: 1,
+      onChange: (next) => changes.push(next),
+    });
+    assert.strictEqual(value, 2);
+
+    setValue((current) => current);
+    setValue(2);
+    update(host);
+
+    prepareEffects(host);
+    [value] = useControlledState(host, {
+      value: 2,
+      defaultValue: 1,
+      onChange: (next) => changes.push(next),
+    });
+
+    assert.strictEqual(value, 2);
+    assert.deepStrictEqual(changes, []);
   });
 
   it("resolves synchronous useAsyncState runs and clears pending", async () => {
@@ -599,6 +767,25 @@ describe("litsx effects controller", () => {
     assert.deepStrictEqual(baseItems, ["server"]);
   });
 
+  it("ignores optimistic resets when no optimistic updates are queued", () => {
+    const host = new TestHost();
+
+    prepareEffects(host);
+    const [optimisticItems, , resetOptimistic] = useOptimistic(
+      host,
+      ["base"],
+      (currentItems, optimisticItem) => [...currentItems, optimisticItem]
+    );
+
+    assert.deepStrictEqual(optimisticItems, ["base"]);
+    assert.strictEqual(host.updates, 0);
+
+    resetOptimistic();
+    update(host);
+
+    assert.strictEqual(host.updates, 0);
+  });
+
   it("re-runs effects when dependency values change", () => {
     const host = new TestHost();
     let runs = 0;
@@ -658,6 +845,95 @@ describe("litsx effects controller", () => {
     host.controllers.forEach((controller) => controller.hostDisconnected());
 
     assert.deepStrictEqual(cleanups, ["cleanup"]);
+  });
+
+  it("forwards adopted callbacks to the original host callback without double-wrapping", () => {
+    const adoptedArgs = [];
+    const host = new TestHost();
+    let originalCalls = 0;
+    host.adoptedCallback = (...args) => {
+      originalCalls += 1;
+      adoptedArgs.push(["original", ...args]);
+    };
+
+    const first = new EffectsController(host);
+    const second = new EffectsController(host);
+
+    first.hostAdopted = (...args) => adoptedArgs.push(["first", ...args]);
+    second.hostAdopted = (...args) => adoptedArgs.push(["second", ...args]);
+
+    host.adoptedCallback("doc");
+
+    assert.strictEqual(originalCalls, 1);
+    assert.deepStrictEqual(adoptedArgs, [
+      ["original", "doc"],
+      ["first", "doc"],
+      ["second", "doc"],
+    ]);
+  });
+
+  it("cleans up removed connected hooks when fewer hooks are registered on a later render", () => {
+    const host = new TestHost();
+    const calls = [];
+
+    prepareEffects(host);
+    useOnConnect(host, () => () => calls.push("first-cleanup"), ["a"]);
+    useOnConnect(host, () => () => calls.push("second-cleanup"), ["b"]);
+    update(host);
+
+    prepareEffects(host);
+    useOnConnect(host, () => () => calls.push("first-next-cleanup"), ["a"]);
+    update(host);
+
+    assert.deepStrictEqual(calls, ["second-cleanup"]);
+  });
+
+  it("accepts option-only host content calls and trims the resulting text", () => {
+    const host = new TestHost();
+    host.textContent = "  hello world  ";
+    host.childNodes = [{
+      nodeType: 3,
+      textContent: "  hello world  ",
+    }];
+
+    prepareEffects(host);
+    const content = useHostContent({ trim: true });
+    update(host);
+
+    assert.strictEqual(content.text, "hello world");
+    assert.strictEqual(content.hasContent, true);
+  });
+
+  it("validates useCallbackRef getters and ignores non-function callbacks", () => {
+    const host = new TestHost();
+
+    assert.throws(() => {
+      useCallbackRef(host, null, () => {});
+    }, /getter function/);
+
+    prepareEffects(host);
+    assert.doesNotThrow(() => {
+      useCallbackRef(host, () => null, null);
+    });
+    update(host);
+  });
+
+  it("exposes imperative handles and clears callback refs on disconnect", () => {
+    const host = new TestHost();
+    const values = [];
+    const ref = (value) => {
+      values.push(value);
+    };
+
+    prepareEffects(host);
+    useExpose(host, ref, () => ({ focus: () => "ok" }));
+    update(host);
+
+    assert.strictEqual(typeof values[0].focus, "function");
+
+    host.disconnect();
+
+    assert.strictEqual(values.at(-1), null);
   });
 
   it("cleans up removed hooks and resets flags on disconnect", () => {
@@ -804,6 +1080,23 @@ describe("litsx effects controller", () => {
     const current = useHost(null);
 
     assert.strictEqual(current, host);
+  });
+
+  it("keeps mutable refs stable across renders", () => {
+    const host = new TestHost();
+
+    prepareEffects(host);
+    const firstRef = useRef(host, "alpha");
+    update(host);
+
+    firstRef.current = "beta";
+
+    prepareEffects(host);
+    const secondRef = useRef(host, "gamma");
+    update(host);
+
+    assert.strictEqual(firstRef, secondRef);
+    assert.strictEqual(secondRef.current, "beta");
   });
 
   it("keeps DOM targets when using callback refs without an imperative override", () => {
@@ -1008,6 +1301,251 @@ describe("litsx effects controller", () => {
     assert.strictEqual(host.registry.get("fancy-button"), FancyButtonElement);
     assert.strictEqual(loads, 1);
     assert.strictEqual(host.updates, 1);
+  });
+
+  it("returns null for lazy elements when the host has no usable registry", () => {
+    class FancyButtonElement {}
+
+    assert.strictEqual(ensureLazyElement({}, "fancy-button", FancyButtonElement), null);
+    assert.strictEqual(ensureLazyElement(null, "fancy-button", FancyButtonElement), null);
+  });
+
+  it("validates lazy element tags and loader values", async () => {
+    const host = new TestHost();
+    const unhandled = [];
+    const onUnhandledRejection = (error) => {
+      unhandled.push(error);
+    };
+    process.on("unhandledRejection", onUnhandledRejection);
+
+    try {
+      assert.throws(
+        () => ensureLazyElement(host, "", () => Promise.resolve(null)),
+        /non-empty tag name/
+      );
+      assert.throws(
+        () => ensureLazyElement(host, "fancy-button", 123),
+        /loader, constructor, or nullish value/
+      );
+
+      const invalidLoader = () => Promise.resolve({});
+      assert.strictEqual(ensureLazyElement(host, "fancy-button", invalidLoader), null);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      assert.throws(
+        () => ensureLazyElement(host, "fancy-button", invalidLoader),
+        /custom element constructor/
+      );
+    } finally {
+      process.off("unhandledRejection", onUnhandledRejection);
+    }
+  });
+
+  it("validates host-dependent runtime helpers when no active host is available", () => {
+    const host = new TestHost();
+    assert.throws(() => useExternalStore(host, null, () => 1), /subscribe function/);
+    assert.throws(() => useExternalStore(host, () => () => {}, null), /getSnapshot function/);
+  });
+
+  it("applies and removes host styles for direct and computed values", () => {
+    const host = new TestHost();
+
+    prepareEffects(host);
+    useStyle(host, "--accent", "red");
+    useStyle(host, "--gap", () => 12, [12]);
+    update(host);
+
+    assert.strictEqual(host.styleAssignments.get("--accent"), "red");
+    assert.strictEqual(host.styleAssignments.get("--gap"), "12");
+
+    prepareEffects(host);
+    useStyle(host, "--accent", null);
+    useStyle(host, "--gap", () => false, [false]);
+    update(host);
+
+    assert.strictEqual(host.styleAssignments.has("--accent"), false);
+    assert.strictEqual(host.styleAssignments.has("--gap"), false);
+  });
+
+  it("skips style writes when the host has no style object", () => {
+    const host = new TestHost();
+    delete host.style;
+
+    prepareEffects(host);
+    useStyle(host, "--accent", "red");
+
+    assert.doesNotThrow(() => update(host));
+    assert.strictEqual(host.updates, 0);
+  });
+
+  it("returns empty slot state and text snapshots when host content is missing", () => {
+    const host = new TestHost();
+    host.childNodes = [];
+    host.textContent = "";
+
+    prepareEffects(host);
+    const defaultSlot = useSlot(host);
+    const namedSlot = useSlot(host, "actions");
+    const text = useTextContent(host, { trim: true });
+    update(host);
+
+    assert.deepStrictEqual(defaultSlot, []);
+    assert.deepStrictEqual(namedSlot, []);
+    assert.strictEqual(text, "");
+  });
+
+  it("reuses existing scoped element registrations and accepts nullish lazy values", () => {
+    const host = new TestHost();
+    class FancyButtonElement {}
+
+    host.registry.define("fancy-button", FancyButtonElement);
+
+    assert.strictEqual(
+      ensureLazyElement(host, "fancy-button", class OtherElement {}),
+      FancyButtonElement
+    );
+    assert.strictEqual(ensureLazyElement(host, "empty-state", null), null);
+    assert.strictEqual(ensureLazyElement(host, "empty-state", undefined), null);
+  });
+
+  it("uses getServerSnapshot in external stores and cleans up previous subscriptions when inputs change", () => {
+    const host = new TestHost();
+    const subscriptions = [];
+    const unsubscriptions = [];
+    let snapshot = "alpha";
+    host.isConnected = false;
+
+    const subscribeA = (listener) => {
+      subscriptions.push("A");
+      listener();
+      return () => unsubscriptions.push("A");
+    };
+    const subscribeB = () => {
+      subscriptions.push("B");
+      return () => unsubscriptions.push("B");
+    };
+
+    prepareEffects(host);
+    let value = useExternalStore(
+      host,
+      subscribeA,
+      () => snapshot,
+      () => "server-alpha"
+    );
+    update(host);
+    assert.strictEqual(value, "server-alpha");
+    assert.deepStrictEqual(subscriptions, ["A"]);
+
+    host.isConnected = true;
+    snapshot = "beta";
+    prepareEffects(host);
+    value = useExternalStore(
+      host,
+      subscribeB,
+      () => snapshot,
+      () => "server-beta"
+    );
+    update(host);
+
+    assert.strictEqual(value, "server-beta");
+    assert.deepStrictEqual(subscriptions, ["A", "B"]);
+    assert.deepStrictEqual(unsubscriptions, ["A"]);
+  });
+
+  it("rethrows rejected lazy loaders on the next render attempt", async () => {
+    const host = new TestHost();
+    const failure = new Error("lazy failed");
+    const unhandled = [];
+    const onUnhandledRejection = (error) => {
+      unhandled.push(error);
+    };
+    process.on("unhandledRejection", onUnhandledRejection);
+    const loader = () => Promise.reject(failure);
+
+    try {
+      assert.strictEqual(ensureLazyElement(host, "fancy-button", loader), null);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      assert.throws(() => ensureLazyElement(host, "fancy-button", loader), /lazy failed/);
+      assert.strictEqual(host.updates, 1);
+    } finally {
+      process.off("unhandledRejection", onUnhandledRejection);
+    }
+  });
+
+  it("validates useExternalStore arguments", () => {
+    const host = new TestHost();
+
+    assert.throws(
+      () => useExternalStore(host, null, () => "value"),
+      /subscribe function/
+    );
+    assert.throws(
+      () => useExternalStore(host, () => () => {}, null),
+      /getSnapshot function/
+    );
+  });
+
+  it("uses server snapshots during render and unsubscribes removed external stores", () => {
+    const host = new TestHost();
+    const restoreWindow = globalThis.window;
+    delete globalThis.window;
+
+    let current = "client";
+    let subscribes = 0;
+    let unsubscribes = 0;
+    let listener = null;
+    const subscribe = (next) => {
+      subscribes += 1;
+      listener = next;
+      return () => {
+        unsubscribes += 1;
+        listener = null;
+      };
+    };
+
+    try {
+      prepareEffects(host);
+      const first = useExternalStore(
+        host,
+        subscribe,
+        () => current,
+        () => "server"
+      );
+      assert.strictEqual(first, "server");
+      update(host);
+      assert.strictEqual(subscribes, 1);
+
+      globalThis.window = {};
+      current = "updated";
+      listener();
+      assert.strictEqual(host.updates, 1);
+
+      prepareEffects(host);
+      update(host);
+      assert.strictEqual(unsubscribes, 1);
+    } finally {
+      globalThis.window = restoreWindow;
+    }
+  });
+
+  it("keeps external store subscriptions null when subscribe returns no cleanup", () => {
+    const host = new TestHost();
+    let subscriptions = 0;
+    let current = "alpha";
+
+    const subscribe = (listener) => {
+      subscriptions += 1;
+      listener();
+      return "not-a-cleanup";
+    };
+
+    prepareEffects(host);
+    const value = useExternalStore(host, subscribe, () => current);
+    update(host);
+
+    assert.strictEqual(value, "alpha");
+    assert.strictEqual(subscriptions, 1);
+    assert.strictEqual(host.controllers[0].externalStores[0].unsubscribe, null);
   });
 
   it("applies dynamic host style properties after commit", () => {

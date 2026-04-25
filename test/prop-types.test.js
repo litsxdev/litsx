@@ -2,6 +2,7 @@ import assert from "assert";
 import PropTypes from "../packages/prop-types/src/index.js";
 import {
   arrayOf,
+  custom,
   exact,
   instanceOf,
   objectOf,
@@ -270,6 +271,116 @@ describe("prop-types drop-in", () => {
 
     const topLevelRequired = required();
     assert.throws(() => topLevelRequired.hasChanged(undefined, null), /required value/);
+  });
+
+  it("covers null conversions and optional validator branches in runtime helpers", () => {
+    const nullableNumber = oneOfType([Number, { nope: true }]);
+    assert.strictEqual(nullableNumber.converter.fromAttribute(null, Number), null);
+    assert.strictEqual(nullableNumber.hasChanged(null, null), false);
+
+    const unknownArray = arrayOf({ unsupported: true });
+    assert.strictEqual(unknownArray.hasChanged(["a", 1, true], null), true);
+    assert.strictEqual(unknownArray.converter.toAttribute(["a", 1], Array), JSON.stringify(["a", 1]));
+
+    const unknownObject = objectOf({ unsupported: true });
+    assert.strictEqual(unknownObject.hasChanged({ a: 1, b: "two" }, null), true);
+    assert.strictEqual(
+      unknownObject.converter.toAttribute({ ok: true }, Object),
+      JSON.stringify({ ok: true })
+    );
+
+    const looseShape = shape({
+      title: String,
+      ignored: { unsupported: true },
+    });
+    assert.strictEqual(looseShape.hasChanged({ title: "ok", extra: true }, null), true);
+    assert.strictEqual(looseShape.hasChanged(null, null), false);
+
+    const strictShape = exact({
+      title: String,
+      ignored: { unsupported: true },
+    });
+    assert.strictEqual(strictShape.hasChanged({ title: "ok" }, null), true);
+    assert.throws(
+      () => strictShape.hasChanged(Object.create(null), null),
+      /Expected Object/
+    );
+  });
+
+  it("covers primitive validators and required/custom failure branches", () => {
+    const booleans = oneOf([true, false]);
+    assert.strictEqual(booleans.converter.fromAttribute("", Boolean), true);
+    assert.strictEqual(booleans.converter.toAttribute(false, Boolean), null);
+
+    const dates = oneOfType([Date]);
+    const now = new Date();
+    assert.strictEqual(dates.hasChanged(now, null), true);
+    assert.throws(() => dates.hasChanged({}, null), /Date/);
+
+    const arrays = arrayOf(String);
+    assert.strictEqual(arrays.hasChanged(null, null), false);
+    assert.throws(() => arrays.hasChanged("nope", null), /Expected Array/);
+
+    const dictionaries = objectOf(Number);
+    assert.strictEqual(dictionaries.hasChanged(null, null), false);
+    assert.throws(() => dictionaries.hasChanged("bad", null), /Expected Object/);
+
+    assert.throws(
+      () => required({ unsupported: true })[Symbol.for("litsx.propTypes.runtime.validator")].validate("x"),
+      /Unsupported prop-types validator/
+    );
+    assert.throws(() => custom("nope"), /validator function/);
+    assert.strictEqual(custom((value) => assert.strictEqual(value, "ok")).hasChanged("ok", null), true);
+  });
+
+  it("covers runtime converter branches and human-readable type labels", () => {
+    const booleans = oneOfType([Boolean]);
+    assert.strictEqual(booleans.converter.fromAttribute("", Boolean), true);
+    assert.strictEqual(booleans.converter.toAttribute(true, Boolean), "");
+    assert.strictEqual(booleans.converter.toAttribute(false, Boolean), null);
+
+    const numbers = oneOfType([Number]);
+    assert.strictEqual(numbers.converter.fromAttribute("12", Number), 12);
+    assert.strictEqual(numbers.converter.fromAttribute(null, Number), null);
+    assert.strictEqual(numbers.converter.toAttribute(12, Number), 12);
+
+    const objects = oneOfType([Object]);
+    assert.deepStrictEqual(objects.converter.fromAttribute('{"ok":true}', Object), { ok: true });
+    assert.strictEqual(objects.converter.toAttribute({ ok: true }, Object), JSON.stringify({ ok: true }));
+    assert.strictEqual(objects.converter.toAttribute(null, Object), null);
+
+    const arrays = oneOfType([Array]);
+    assert.deepStrictEqual(arrays.converter.fromAttribute('["a",1]', Array), ["a", 1]);
+    assert.strictEqual(arrays.converter.toAttribute(["a", 1], Array), JSON.stringify(["a", 1]));
+
+    const byCtor = instanceOf(class ProjectRecord {});
+    assert.throws(() => byCtor.hasChanged({}, null), /ProjectRecord/);
+
+    const anonymousValidator = custom((value) => {
+      if (value !== "ok") {
+        throw new TypeError("bad");
+      }
+    });
+    assert.throws(() => anonymousValidator.hasChanged("nope", null), /bad/);
+  });
+
+  it("covers primitive validator factories through oneOfType and required wrappers", () => {
+    assert.throws(
+      () => required(Boolean)[Symbol.for("litsx.propTypes.runtime.validator")].validate("yes"),
+      /Boolean/
+    );
+
+    const arrayUnion = oneOfType([Array]);
+    assert.strictEqual(arrayUnion.hasChanged(["ok"], null), true);
+    assert.throws(() => arrayUnion.hasChanged("bad", null), /Array/);
+
+    const objectUnion = oneOfType([Object]);
+    assert.strictEqual(objectUnion.hasChanged({ ok: true }, null), true);
+    assert.throws(() => objectUnion.hasChanged("bad", null), /Object/);
+
+    const ctorUnion = oneOfType([Date, class ProjectRecord {}]);
+    assert.strictEqual(ctorUnion.hasChanged(new Date(), null), true);
+    assert.throws(() => ctorUnion.hasChanged("bad", null), /ProjectRecord|Date/);
   });
 
 });

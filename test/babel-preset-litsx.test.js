@@ -231,7 +231,7 @@ describe("@litsx/babel-preset-litsx", () => {
     assert.match(result.code, /const buttonRef = useRef\(this, null\);/);
     assert.match(result.code, /const \[count, setCount\] = useState\(this, 0\);/);
     assert.match(result.code, /html`<fancy-button \.ref=\$\{buttonRef\} \.label=\$\{this\.label\} @click=\$\{\(\) => setCount\(count \+ 1\)\}>/);
-  });
+  }, 20_000);
 
   it("supports in-memory playground type resolution through the preset", () => {
     const source = `

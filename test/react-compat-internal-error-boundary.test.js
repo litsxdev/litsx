@@ -77,4 +77,79 @@ describe("react compat internal error boundary", () => {
       /keyed\(this\.route,\s*<ErrorBoundary[\s\S]*\.fallbackRenderer=\{error => error\.message\}[\s\S]*\.contentRenderer=\{\(\) => <Outlet \/>\}[\s\S]*<\/ErrorBoundary>\s*\)/s
     );
   });
+
+  it("supports namespace and default imports from react-error-boundary sources", () => {
+    const source = [
+      "import ReactErrorBoundary from 'react-error-boundary';",
+      "import * as ErrorBoundaryNS from '@litsx/react-error-boundary';",
+      "",
+      "export function Example() {",
+      "  return (",
+      "    <>",
+      "      <ReactErrorBoundary.ErrorBoundary fallback='Oops'>",
+      "        <div>alpha</div>",
+      "      </ReactErrorBoundary.ErrorBoundary>",
+      "      <ErrorBoundaryNS.ErrorBoundary>",
+      "        <>",
+      "          <div>beta</div>",
+      "          <div>gamma</div>",
+      "        </>",
+      "      </ErrorBoundaryNS.ErrorBoundary>",
+      "    </>",
+      "  );",
+      "}",
+    ].join("\n");
+
+    const code = run(source);
+
+    const boundaryMatches = code.match(/<ErrorBoundary/g) || [];
+    assert.strictEqual(boundaryMatches.length, 2);
+    assert.match(code, /\.fallbackRenderer=\{\(\) => 'Oops'\}/);
+    assert.match(code, /\.fallbackRenderer=\{\(\) => null\}/);
+    assert.match(code, /\.contentRenderer=\{\(\) => <div>alpha<\/div>\}/);
+    assert.match(
+      code,
+      /\.contentRenderer=\{\(\) => <>\s*<div>beta<\/div>\s*<div>gamma<\/div>\s*<\/>\}/s
+    );
+    assert.doesNotMatch(code, /ReactErrorBoundary\.ErrorBoundary/);
+    assert.doesNotMatch(code, /ErrorBoundaryNS\.ErrorBoundary/);
+  });
+
+  it("keeps unrelated react imports while removing the lowered ErrorBoundary specifier", () => {
+    const source = [
+      "import React, { ErrorBoundary, useEffect } from 'react';",
+      "",
+      "export function Example() {",
+      "  useEffect(() => {});",
+      "  return <ErrorBoundary fallback={404}><div>ready</div></ErrorBoundary>;",
+      "}",
+    ].join("\n");
+
+    const code = run(source);
+
+    assert.match(code, /import React, \{ useEffect \} from 'react';|import React, \{\s*useEffect\s*\} from "react";/);
+    assert.match(code, /import \{ ErrorBoundary \} from "litsx";/);
+    assert.match(code, /\.fallbackRenderer=\{\(\) => 404\}/);
+    assert.doesNotMatch(code, /import .*ErrorBoundary.* from 'react'/);
+  });
+
+  it("wraps keyed boundaries in expression containers inside fragments", () => {
+    const source = [
+      "import { ErrorBoundary } from 'react';",
+      "",
+      "export function Example() {",
+      "  return (",
+      "    <>",
+      "      <ErrorBoundary key='route-a'>",
+      "        {null}",
+      "      </ErrorBoundary>",
+      "    </>",
+      "  );",
+      "}",
+    ].join("\n");
+
+    const code = run(source);
+
+    assert.match(code, /<>\s*\{keyed\('route-a',\s*<ErrorBoundary[\s\S]*\.contentRenderer=\{\(\) => null\}[\s\S]*<\/ErrorBoundary>\)\}\s*<\/>/s);
+  });
 });

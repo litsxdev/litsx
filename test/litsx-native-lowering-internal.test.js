@@ -63,6 +63,46 @@ describe("@litsx/babel-preset-litsx native lowering internals", () => {
     assert.match(code, /<(?:search-field|SearchField) ref=\{this\.ref\} \/>/);
   });
 
+  it("detects native ref props through defaulted destructuring and string keys", () => {
+    const source = [
+      "const SearchPanel = ({ title, 'ref': forwardedRef } = {}) => {",
+      "  return <input ref={forwardedRef} aria-label={title} />;",
+      "};",
+    ].join("\n");
+
+    const { code } = transformWithNativePreset(source);
+
+    assert.match(code, /class SearchPanel extends LitElement/);
+    assert.match(code, /prepareEffects\(this\);/);
+    assert.match(code, /useCallbackRef\(this, \(\) => this,/);
+    assert.match(code, /return <input ref=\{forwardedRef\} aria-label=\{title\} \/>;/);
+  });
+
+  it("detects native ref props through identifier props access and skips non-standard tags", () => {
+    const source = [
+      "const SearchPanel = (props) => {",
+      "  return (",
+      "    <section>",
+      "      <WidgetBox ref={props.ref} />",
+      "      <input ref={props.ref} />",
+      "    </section>",
+      "  );",
+      "};",
+    ].join("\n");
+
+    const { code } = transformWithNativePreset(source);
+
+    assert.match(code, /class SearchPanel extends (?:ShadowDomElementsMixin\(LitElement\)|LitElement)/);
+    assert.match(
+      code,
+      /static properties = \{[\s\S]*ref: \{[\s\S]*type: String[\s\S]*attribute: false/s
+    );
+    assert.match(code, /<WidgetBox ref=\{this\.ref\} \/>/);
+    assert.match(code, /<input data-ref="_refElement" \/>/);
+    const useCallbackRefMatches = code.match(/useCallbackRef\(this, \(\) => this\.renderRoot\?\./g) || [];
+    assert.strictEqual(useCallbackRefMatches.length, 1);
+  });
+
 });
 
 describe("@litsx/babel-preset-litsx native authored coverage", () => {

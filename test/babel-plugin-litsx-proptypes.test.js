@@ -155,4 +155,174 @@ describe("@litsx/babel-plugin-litsx-proptypes", function () {
       });
     }, /Custom propTypes validators are not supported yet/);
   });
+
+  it("supports namespace imports, string keys, objectOf, and instanceOf helpers", () => {
+    const source = `
+      import * as PropTypes from "prop-types";
+
+      export default function Card({ title, createdAt, model, flags, "cta-label": ctaLabel, 1: priority }) {
+        return <article>{title}{createdAt}{String(model)}{String(flags)}{ctaLabel}{priority}</article>;
+      }
+
+      Card.propTypes = {
+        title: PropTypes.string,
+        createdAt: PropTypes.instanceOf(Date),
+        model: PropTypes.instanceOf(Model),
+        flags: PropTypes.objectOf(PropTypes.bool),
+        "cta-label": PropTypes.string,
+        1: PropTypes.number,
+      };
+    `;
+
+    const code = run(source);
+
+    assert.match(code, /import \{[^}]*objectOf[^}]*instanceOf[^}]*\} from "@litsx\/prop-types\/runtime"|import \{[^}]*instanceOf[^}]*objectOf[^}]*\} from "@litsx\/prop-types\/runtime"/);
+    assert.match(code, /createdAt: \{\s*type: Date\s*\}/);
+    assert.match(code, /model: \{\s*type: Model,\s*\.\.\.[A-Za-z0-9_]+\(Model\)\s*\}/);
+    assert.match(code, /flags: \{\s*type: Object,\s*attribute: false,\s*\.\.\.[A-Za-z0-9_]+\(Boolean\)\s*\}/);
+    assert.match(code, /"cta-label": \{\s*type: String\s*\}/);
+    assert.match(code, /"1": \{\s*type: Number\s*\}/);
+  });
+
+  it("supports boolean aliases and required runtime helpers on collection validators", () => {
+    const source = `
+      import PropTypes from "prop-types";
+
+      export function Card(props) {
+        return <article>{String(props.flags)}{String(props.model)}{String(props.ready)}</article>;
+      }
+
+      Card.propTypes = {
+        ready: PropTypes.boolean.isRequired,
+        flags: PropTypes.objectOf(PropTypes.bool).isRequired,
+        model: PropTypes.instanceOf(Model).isRequired,
+      };
+    `;
+
+    const code = run(source);
+
+    assert.match(code, /import \{[^}]*required[^}]*objectOf[^}]*instanceOf[^}]*\} from "@litsx\/prop-types\/runtime"|import \{[^}]*instanceOf[^}]*objectOf[^}]*required[^}]*\} from "@litsx\/prop-types\/runtime"/);
+    assert.match(code, /ready: \{\s*type: Boolean,\s*\.\.\.[A-Za-z0-9_]+\(\)\s*\}/);
+    assert.match(code, /flags: \{\s*type: Object,\s*attribute: false,\s*\.\.\.[A-Za-z0-9_]+\(Boolean\),\s*\.\.\.[A-Za-z0-9_]+\(\)\s*\}/);
+    assert.match(code, /model: \{\s*type: Model,\s*\.\.\.[A-Za-z0-9_]+\(Model\),\s*\.\.\.[A-Za-z0-9_]+\(\)\s*\}/);
+  });
+
+  it("keeps the prop-types import when the authored code still references it elsewhere", () => {
+    const source = `
+      import PropTypes from "prop-types";
+
+      export function Card(props) {
+        return <article data-kind={typeof PropTypes}>{props.title}</article>;
+      }
+
+      Card.propTypes = {
+        title: PropTypes.string,
+      };
+    `;
+
+    const code = run(source);
+
+    assert.match(code, /import PropTypes from "prop-types";/);
+    assert.match(code, /__litsx_static_properties\(\{\s*title: \{\s*type: String\s*\}\s*\}\);/);
+  });
+
+  it("supports expression-bodied arrow components by converting the body before injecting hoists", () => {
+    const source = `
+      import PropTypes from "prop-types";
+
+      const Panel = ({ title }) => <article>{title}</article>;
+      Panel.propTypes = {
+        title: PropTypes.string,
+      };
+    `;
+
+    const code = run(source);
+
+    assert.match(code, /const Panel = \(\{\s*title\s*\}\) => \{\s*__litsx_static_properties\(\{\s*title: \{\s*type: String\s*\}\s*\}\);/s);
+    assert.match(code, /return <article>\{title\}<\/article>;/);
+  });
+
+  it("rejects unsupported prop-types helpers and non-plain shape members", () => {
+    const unsupportedHelperSource = `
+      import PropTypes from "prop-types";
+
+      export function Card(props) {
+        return <article>{props.title}</article>;
+      }
+
+      Card.propTypes = {
+        title: PropTypes.unknownHelper("x"),
+      };
+    `;
+
+    const invalidShapeSource = `
+      import PropTypes from "prop-types";
+
+      export function Card(props) {
+        return <article>{props.title}</article>;
+      }
+
+      Card.propTypes = {
+        title: PropTypes.shape({
+          ...extra,
+        }),
+      };
+    `;
+
+    const invalidStaticKeySource = `
+      import PropTypes from "prop-types";
+
+      export function Card(props) {
+        return <article>{props.title}</article>;
+      }
+
+      Card.propTypes = {
+        title: PropTypes.shape({
+          [dynamic()]: PropTypes.string,
+        }),
+      };
+    `;
+
+    const missingInstanceSource = `
+      import PropTypes from "prop-types";
+
+      export function Card(props) {
+        return <article>{props.title}</article>;
+      }
+
+      Card.propTypes = {
+        title: PropTypes.instanceOf(),
+      };
+    `;
+
+    assert.throws(() => run(unsupportedHelperSource), /Unsupported React prop-types helper/);
+    assert.throws(() => run(invalidShapeSource), /only accepts plain object members/);
+    assert.throws(() => run(invalidStaticKeySource), /only accepts static property names/);
+    assert.throws(() => run(missingInstanceSource), /expects a constructor/);
+  });
+
+  it("merges explicit hoist spreads and extra authored properties with generated descriptors", () => {
+    const source = `
+      import PropTypes from "prop-types";
+
+      export function SearchCard(props) {
+        ^properties({
+          ...sharedProperties,
+          subtitle: { reflect: true },
+          title: { reflect: true },
+        });
+
+        return <article>{props.title}</article>;
+      }
+
+      SearchCard.propTypes = {
+        title: PropTypes.string,
+        onSelect: PropTypes.func,
+      };
+    `;
+
+    const code = run(source);
+
+    assert.match(code, /__litsx_static_properties\(\{\s*title: \{\s*\.\.\.\{\s*type: String\s*\},\s*reflect: true\s*\},\s*onSelect: \{\s*type: Object,\s*attribute: false\s*\},\s*\.\.\.sharedProperties,\s*subtitle: \{\s*reflect: true\s*\}\s*\}\)/s);
+  });
 });

@@ -62,4 +62,37 @@ describe("react compat internal attributes", () => {
     assert.match(code, /html`<button class="cta" @click=\$\{handleClick\}><\/button>`/);
     assert.doesNotMatch(code, /className=/);
   });
+
+  it("handles bare className attributes in JSX", () => {
+    const source = `const view = <button className></button>;`;
+    const ast = parser.parse(source, { sourceType: "module" });
+
+    const { code } = transformFromAstSync(ast, source, {
+      configFile: false,
+      babelrc: false,
+      plugins: [plugin],
+    });
+
+    assert.match(code, /<button class><\/button>/);
+    assert.doesNotMatch(code, /className/);
+  });
+
+  it("only rewrites className tokens that are actual HTML attributes in templates", () => {
+    const source = [
+      "import { html } from 'lit';",
+      "const view = html`<button className=\"cta\" data-label=\"className=keep\" className =\"secondary\"></button>`;",
+    ].join("\n");
+    const ast = parser.parse(source, { sourceType: "module" });
+
+    const { code } = transformFromAstSync(ast, source, {
+      configFile: false,
+      babelrc: false,
+      plugins: [plugin],
+    });
+
+    assert.match(code, /class="cta"/);
+    assert.match(code, /class ="secondary"/);
+    assert.match(code, /data-label="className=keep"/);
+    assert.doesNotMatch(code, /className="/);
+  });
 });

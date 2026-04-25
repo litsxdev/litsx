@@ -32,6 +32,13 @@ describe("litsx jsx runtime", () => {
     assert.strictEqual(devNode.__self, "self");
   });
 
+  it("defaults JSX props to an empty object when none are provided", () => {
+    const node = jsx("div", null, undefined);
+
+    assert.deepStrictEqual(node.props, {});
+    assert.strictEqual(node.key, null);
+  });
+
   it("publishes jsx runtime entrypoints and type declarations", () => {
     assert.ok(packageJson.exports["./jsx-runtime"]);
     assert.ok(packageJson.exports["./jsx-dev-runtime"]);

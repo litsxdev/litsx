@@ -113,4 +113,76 @@ describe("react compat internal dom attributes", () => {
     assert.match(code, /\.value=\$\{query\}/);
     assert.match(code, /onInput="\$\{handleQueryChange\}"/);
   });
+
+  it("preserves custom/component tags and only rewrites supported native inputs", () => {
+    const source = `
+      const view = (
+        <>
+          <Panel htmlFor="search" onChange={handlePanelChange} value={query} />
+          <input type={"checkbox"} onChange={handleToggle} />
+          <textarea onChange={handleEdit} />
+        </>
+      );
+    `;
+    const ast = parser.parse(source, { sourceType: "module" });
+
+    const { code } = transformFromAstSync(ast, source, {
+      configFile: false,
+      babelrc: false,
+      plugins: [plugin],
+    });
+
+    assert.match(code, /<Panel htmlFor="search" onChange=\{handlePanelChange\} value=\{query\} \/>/);
+    assert.match(code, /<input type=\{"checkbox"\} onChange=\{handleToggle\} \/>/);
+    assert.match(code, /<textarea onInput=\{handleEdit\} \/>/);
+  });
+
+  it("covers default value and checked edge cases in JSX", () => {
+    const source = `
+      const view = (
+        <>
+          <input defaultValue={fallback} />
+          <textarea defaultValue={content} />
+          <select value={selectedId} defaultValue={fallbackId} />
+          <input ?checked={checked} defaultChecked={initiallyChecked} />
+        </>
+      );
+    `;
+    const ast = parser.parse(source, { sourceType: "module", plugins: ["jsx"] });
+
+    const { code } = transformFromAstSync(ast, source, {
+      configFile: false,
+      babelrc: false,
+      plugins: [plugin],
+    });
+
+    assert.match(code, /<input value=\{fallback\} \/>/);
+    assert.match(code, /<textarea value=\{content\} \/>/);
+    assert.match(code, /<select \.value=\{selectedId\} \/>/);
+    assert.doesNotMatch(code, /defaultValue=\{fallbackId\}/);
+    assert.doesNotMatch(code, /defaultChecked=\{initiallyChecked\}/);
+  });
+
+  it("rewrites template literals for additional native DOM semantics", () => {
+    const source = `
+      const views = [
+        <textarea defaultValue={content} onChange={handleEdit} />,
+        <input type={"checkbox"} defaultChecked={checked} onChange={handleToggle} />,
+        <option selected={active}>A</option>,
+        <input defaultValue={fallback} />
+      ];
+    `;
+    const ast = parser.parse(source, { sourceType: "module" });
+
+    const { code } = transformFromAstSync(ast, source, {
+      configFile: false,
+      babelrc: false,
+      plugins: [templatePlugin, plugin],
+    });
+
+    assert.match(code, /<textarea \.value="\$\{content\}" onInput="\$\{handleEdit\}"><\/textarea>/);
+    assert.match(code, /<input type="\$\{"checkbox"\}" \?checked=\$\{checked\} onChange="\$\{handleToggle\}">/);
+    assert.match(code, /<option \?selected=\$\{active\}>A<\/option>/);
+    assert.match(code, /<input \.value="\$\{fallback\}">/);
+  });
 });

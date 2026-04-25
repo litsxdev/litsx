@@ -128,4 +128,55 @@ describe("litsx effects controller transitions", () => {
 
     vi.useRealTimers();
   });
+
+  it("finalizes sync startTransition callbacks on a microtask and propagates thrown errors", async () => {
+    const host = new TestHost();
+
+    prepareEffects(host);
+    let [isPending, start] = useTransition(host);
+    assert.strictEqual(isPending, false);
+
+    const returned = start(() => "done");
+    assert.strictEqual(returned, "done");
+    assert.strictEqual(host.updates, 1);
+
+    prepareEffects(host);
+    [isPending] = useTransition(host);
+    assert.strictEqual(isPending, true);
+
+    await Promise.resolve();
+
+    prepareEffects(host);
+    [isPending, start] = useTransition(host);
+    assert.strictEqual(isPending, false);
+
+    assert.throws(() => start(() => {
+      throw new Error("boom");
+    }), /boom/);
+  });
+
+  it("reports deferred flush errors through the host before rethrowing", () => {
+    vi.useFakeTimers();
+    const reported = [];
+    const host = new TestHost();
+    host.reportError = (error) => {
+      reported.push(error.message);
+    };
+    host.requestUpdate = () => {
+      throw new Error("flush failed");
+    };
+
+    prepareEffects(host);
+    useDeferredValue(host, "A");
+
+    prepareEffects(host);
+    useDeferredValue(host, "B", { timeout: 5 });
+
+    vi.advanceTimersByTime(5);
+
+    assert.throws(() => update(host), /flush failed/);
+    assert.deepStrictEqual(reported, ["flush failed"]);
+
+    vi.useRealTimers();
+  });
 });
