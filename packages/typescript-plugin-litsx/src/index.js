@@ -11,7 +11,28 @@ import {
   remapVirtualText,
   remapToolingTextSpanToOriginal,
 } from "./virtual-source.js";
-export { runLitsxTypecheck } from "./typecheck.js";
+export { createLitsxTypecheckSession, runLitsxTypecheck } from "./typecheck.js";
+
+const PROFILE_ENABLED = process.env.LITSX_PROFILE === "1";
+const EXTERNAL_FILES_CACHE = new WeakMap();
+
+function profilePhase(namespace, name, callback) {
+  if (!PROFILE_ENABLED) {
+    return callback();
+  }
+
+  const start = performance.now();
+  try {
+    return callback();
+  } finally {
+    globalThis.__litsxProfileEvents ??= [];
+    globalThis.__litsxProfileEvents.push({
+      namespace,
+      name,
+      durationMs: performance.now() - start,
+    });
+  }
+}
 
 function isRelevantFile(fileName) {
   return /\.(jsx|tsx)$/.test(fileName);
@@ -32,6 +53,43 @@ function remapDisplayParts(parts) {
   }));
 }
 
+function remapNumericTextSpan(start, length, virtualization) {
+  if (typeof start !== "number") {
+    return null;
+  }
+
+  return remapToolingTextSpanToOriginal(
+    { start, length: length ?? 0 },
+    virtualization,
+  );
+}
+
+function remapRelatedInformation(info, getVirtualization, fallbackVirtualization) {
+  const virtualization = info.file?.fileName
+    ? getVirtualization(info.file.fileName) ?? fallbackVirtualization
+    : fallbackVirtualization;
+
+  if (!virtualization) {
+    return info;
+  }
+
+  const remappedStartLength = remapNumericTextSpan(info.start, info.length, virtualization);
+  const remappedSpan = info.span
+    ? remapToolingTextSpanToOriginal(info.span, virtualization)
+    : info.span;
+
+  return {
+    ...info,
+    ...(remappedStartLength
+      ? {
+        start: remappedStartLength.start,
+        length: remappedStartLength.length,
+      }
+      : {}),
+    span: remappedSpan,
+  };
+}
+
 function wrapDiagnostics(method, getVirtualization) {
   return (fileName) => {
     const diagnostics = method(fileName) ?? [];
@@ -41,40 +99,39 @@ function wrapDiagnostics(method, getVirtualization) {
       return diagnostics;
     }
 
-    return diagnostics.map((diagnostic) => ({
-      ...diagnostic,
-      start:
-        typeof diagnostic.start === "number"
-          ? remapToolingTextSpanToOriginal(
-              { start: diagnostic.start, length: diagnostic.length ?? 0 },
-              virtualization,
-            ).start
-          : diagnostic.start,
-      length:
-        typeof diagnostic.start === "number"
-          ? remapToolingTextSpanToOriginal(
-              { start: diagnostic.start, length: diagnostic.length ?? 0 },
-              virtualization,
-            ).length
-          : diagnostic.length,
-      relatedInformation: diagnostic.relatedInformation?.map((info) => ({
-        ...info,
-        span: remapToolingTextSpanToOriginal(info.span, virtualization),
-      })),
-    }));
+    return diagnostics.map((diagnostic) => {
+      const remappedSpan = remapNumericTextSpan(
+        diagnostic.start,
+        diagnostic.length,
+        virtualization,
+      );
+
+      return {
+        ...diagnostic,
+        ...(remappedSpan
+          ? remappedSpan
+          : {
+            start: diagnostic.start,
+            length: diagnostic.length,
+          }),
+        relatedInformation: diagnostic.relatedInformation?.map((info) => (
+          remapRelatedInformation(info, getVirtualization, virtualization)
+        )),
+      };
+    });
   };
 }
 
-function wrapSemanticDiagnostics(method, getVirtualization) {
+function wrapSemanticDiagnostics(method, getVirtualization, getAuthoredDiagnostics) {
   return (fileName) => {
     const diagnostics = wrapDiagnostics(method, getVirtualization)(fileName);
-    const virtualization = getVirtualization(fileName);
+    const authoredDiagnostics = getAuthoredDiagnostics(fileName);
 
-    if (!virtualization?.authoredDiagnostics?.length) {
+    if (!authoredDiagnostics?.length) {
       return diagnostics;
     }
 
-    return [...diagnostics, ...virtualization.authoredDiagnostics];
+    return [...diagnostics, ...authoredDiagnostics];
   };
 }
 
@@ -122,11 +179,12 @@ function wrapCompletions(method, getVirtualization) {
       (entry) => !decodeVirtualAttributeName(entry.name),
     );
     const mergedEntries = [...contextualEntries];
+    const seenNames = new Set(contextualEntries.map((entry) => entry.name));
 
     for (const entry of filteredEntries) {
-      if (!mergedEntries.some((candidate) => candidate.name === entry.name)) {
-        mergedEntries.push(entry);
-      }
+      if (seenNames.has(entry.name)) continue;
+      seenNames.add(entry.name);
+      mergedEntries.push(entry);
     }
 
     if (!completions && mergedEntries.length === 0) {
@@ -158,71 +216,121 @@ export default function init(modules) {
         return fileName.endsWith(".tsx") ? ["typescript"] : [];
       }
 
-      function buildVirtualization(fileName) {
+      function getCachedRecord(fileName) {
+        return virtualizations.get(fileName) ?? null;
+      }
+
+      function clearRecord(fileName) {
+        virtualizations.delete(fileName);
+      }
+
+      function getOrBuildVirtualizationRecord(fileName) {
         const snapshot = originalGetScriptSnapshot(fileName);
 
         if (!snapshot || !isRelevantFile(fileName)) {
-          virtualizations.delete(fileName);
+          clearRecord(fileName);
           return {
             snapshot,
-            virtualization: null,
+            record: null,
+          };
+        }
+
+        const cachedRecord = getCachedRecord(fileName);
+        if (cachedRecord?.snapshot === snapshot) {
+          return {
+            snapshot,
+            record: cachedRecord,
           };
         }
 
         const sourceText = readSnapshotText(snapshot);
+        if (cachedRecord?.sourceText === sourceText) {
+          cachedRecord.snapshot = snapshot;
+          return {
+            snapshot,
+            record: cachedRecord,
+          };
+        }
 
         if (!looksLikeLitsxJsx(sourceText)) {
-          virtualizations.delete(fileName);
+          clearRecord(fileName);
           return {
             snapshot,
-            virtualization: null,
+            record: null,
           };
         }
 
-        const virtualization = createToolingVirtualLitsxSource(sourceText, {
-          plugins: getPluginsForFile(fileName),
-        });
+        const parserPlugins = getPluginsForFile(fileName);
+        const virtualization = profilePhase(
+          "typescript-plugin",
+          "tooling-virtualization",
+          () => createToolingVirtualLitsxSource(sourceText, {
+            plugins: parserPlugins,
+          }),
+        );
 
         if (virtualization.code === sourceText) {
-          virtualizations.delete(fileName);
+          clearRecord(fileName);
           return {
             snapshot,
-            virtualization: null,
+            record: null,
           };
         }
 
-        const authoredDiagnostics = collectLitsxAuthoredDiagnostics(sourceText, ts, {
-          plugins: getPluginsForFile(fileName),
-        });
-
-        virtualizations.set(fileName, {
+        const record = {
           ...virtualization,
-          authoredDiagnostics,
           sourceText,
-        });
+          parserPlugins,
+          snapshot,
+          virtualizedSnapshot: null,
+          authoredDiagnostics: null,
+          authoredDiagnosticsReady: false,
+        };
+
+        virtualizations.set(fileName, record);
 
         return {
           snapshot,
-          virtualization: {
-            ...virtualization,
-            authoredDiagnostics,
-            sourceText,
-          },
+          record,
         };
       }
 
       function getVirtualization(fileName) {
-        return virtualizations.get(fileName) ?? buildVirtualization(fileName).virtualization;
+        return getOrBuildVirtualizationRecord(fileName).record;
+      }
+
+      function getAuthoredDiagnostics(fileName) {
+        const record = getVirtualization(fileName);
+        if (!record) {
+          return null;
+        }
+
+        if (!record.authoredDiagnosticsReady) {
+          record.authoredDiagnostics = profilePhase(
+            "typescript-plugin",
+            "authored-diagnostics",
+            () => collectLitsxAuthoredDiagnostics(record.sourceText, ts, {
+              plugins: record.parserPlugins,
+            }),
+          );
+          record.authoredDiagnosticsReady = true;
+        }
+
+        return record.authoredDiagnostics;
       }
 
       host.getScriptSnapshot = (fileName) => {
-        const { snapshot, virtualization } = buildVirtualization(fileName);
+        const { snapshot, record } = getOrBuildVirtualizationRecord(fileName);
 
-        if (!virtualization) {
+        if (!record) {
           return snapshot;
         }
 
-        return createSnapshot(ts, virtualization.code);
+        if (!record.virtualizedSnapshot) {
+          record.virtualizedSnapshot = createSnapshot(ts, record.code);
+        }
+
+        return record.virtualizedSnapshot;
       };
 
       const languageService = info.languageService;
@@ -236,6 +344,7 @@ export default function init(modules) {
         getSemanticDiagnostics: wrapSemanticDiagnostics(
           languageService.getSemanticDiagnostics.bind(languageService),
           getVirtualization,
+          getAuthoredDiagnostics,
         ),
         getSuggestionDiagnostics: wrapDiagnostics(
           languageService.getSuggestionDiagnostics.bind(languageService),
@@ -254,7 +363,14 @@ export default function init(modules) {
 
     getExternalFiles(project) {
       const fileNames = project.getFileNames?.() ?? [];
-      return fileNames.filter((fileName) => {
+      const projectVersion = project.getProjectVersion?.() ?? "";
+      const cacheKey = `${projectVersion}:${fileNames.join("\0")}`;
+      const cached = EXTERNAL_FILES_CACHE.get(project);
+      if (cached?.cacheKey === cacheKey) {
+        return cached.result;
+      }
+
+      const result = fileNames.filter((fileName) => {
         if (!isRelevantFile(fileName) || !fs.existsSync(fileName)) {
           return false;
         }
@@ -262,6 +378,8 @@ export default function init(modules) {
         const sourceText = fs.readFileSync(fileName, "utf8");
         return looksLikeLitsxJsx(sourceText);
       });
+      EXTERNAL_FILES_CACHE.set(project, { cacheKey, result });
+      return result;
     },
   };
 }

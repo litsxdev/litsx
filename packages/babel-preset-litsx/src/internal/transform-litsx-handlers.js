@@ -1,5 +1,3 @@
-import { createNoopStagePlugin } from "./noop-stage-plugin.js";
-
 let t;
 
 export function setHandlersBabelTypes(types) {
@@ -220,5 +218,3 @@ export function createHandlerClassMember({ name, params, body, async, generator 
 
   return method;
 }
-
-export default createNoopStagePlugin("transform-litsx-handlers");

@@ -5,6 +5,7 @@ import os from "os";
 import path from "path";
 import ts from "typescript";
 import { describe, it, vi } from "vitest";
+import * as virtualSourceModule from "../packages/typescript-plugin-litsx/src/virtual-source.js";
 
 import plugin, {
   collectLitsxAuthoredDiagnostics,
@@ -21,6 +22,27 @@ import plugin, {
   remapToolingTextSpanToOriginal,
   runLitsxTypecheck,
 } from "../packages/typescript-plugin-litsx/src/index.js";
+
+async function withMockedTypeScript(mockFactory, callback) {
+  const actualTs = await vi.importActual("typescript");
+
+  vi.resetModules();
+  vi.doMock("typescript", () => {
+    const mockedTs = mockFactory(actualTs.default, actualTs);
+    return {
+      ...mockedTs,
+      default: mockedTs,
+    };
+  });
+
+  try {
+    const typecheckModule = await import("../packages/typescript-plugin-litsx/src/typecheck.js");
+    return await callback(typecheckModule, actualTs.default, actualTs);
+  } finally {
+    vi.doUnmock("typescript");
+    vi.resetModules();
+  }
+}
 
 describe("@litsx/typescript-plugin", () => {
   it("reports authored diagnostics for invalid lit bindings", () => {
@@ -886,17 +908,20 @@ describe("@litsx/typescript-plugin", () => {
     return (async () => {
       const originalWrite = process.stderr.write;
       let writes = 0;
-      const actualTs = await vi.importActual("typescript");
 
-      vi.resetModules();
-      vi.doMock("typescript", () => {
-        const mockedTs = {
-          ...actualTs.default,
+      process.stderr.write = () => {
+        writes += 1;
+        return true;
+      };
+
+      try {
+        await withMockedTypeScript((tsModule) => ({
+          ...tsModule,
           parseCommandLine() {
             return {
               errors: [
                 {
-                  category: actualTs.default.DiagnosticCategory.Error,
+                  category: tsModule.DiagnosticCategory.Error,
                   code: 9999,
                   messageText: "synthetic cli error",
                 },
@@ -908,29 +933,12 @@ describe("@litsx/typescript-plugin", () => {
           formatDiagnosticsWithColorAndContext() {
             return "";
           },
-        };
-
-        return {
-          ...mockedTs,
-          default: mockedTs,
-        };
-      });
-
-      process.stderr.write = () => {
-        writes += 1;
-        return true;
-      };
-
-      try {
-        const { runLitsxTypecheck: mockedRunLitsxTypecheck } = await import(
-          "../packages/typescript-plugin-litsx/src/typecheck.js"
-        );
-        assert.equal(mockedRunLitsxTypecheck(["--synthetic"]), 1);
+        }), ({ runLitsxTypecheck: mockedRunLitsxTypecheck }) => {
+          assert.equal(mockedRunLitsxTypecheck(["--synthetic"]), 1);
+        });
         assert.equal(writes, 0);
       } finally {
         process.stderr.write = originalWrite;
-        vi.doUnmock("typescript");
-        vi.resetModules();
       }
     })();
   });
@@ -1036,12 +1044,18 @@ describe("@litsx/typescript-plugin", () => {
                 if (fileName === otherFile) return "export const other = 1;";
                 return undefined;
               },
+              useCaseSensitiveFileNames() {
+                return false;
+              },
               getSourceFile(fileName) {
                 return {
                   originalFileName: fileName,
                 };
               },
             };
+          },
+          createIncrementalCompilerHost(options) {
+            return mockedTs.createCompilerHost(options);
           },
           createSourceFile(fileName, sourceText) {
             return {
@@ -1053,10 +1067,18 @@ describe("@litsx/typescript-plugin", () => {
             assert.equal(host.readFile("/virtual/missing.ts"), undefined);
             assert.deepStrictEqual(host.getSourceFile("/virtual/missing.ts", actualTs.default.ScriptTarget.Latest), {
               originalFileName: "/virtual/missing.ts",
+              version: "",
             });
             const created = host.getSourceFile(jsxFile, actualTs.default.ScriptTarget.Latest);
             assert.ok(created.text.includes("__litsx_event_click"));
             return { mocked: true };
+          },
+          createIncrementalProgram(args) {
+            return {
+              getProgram() {
+                return mockedTs.createProgram(args);
+              },
+            };
           },
           getPreEmitDiagnostics() {
             const virtualized = createToolingVirtualLitsxSource(virtualSource);
@@ -1147,6 +1169,309 @@ describe("@litsx/typescript-plugin", () => {
         vi.doUnmock("typescript");
         vi.resetModules();
       }
+    })();
+  });
+
+  it("reuses virtualized text within a single CLI typecheck run", () => {
+    return (async () => {
+      const jsxFile = path.join(os.tmpdir(), "virtualized-cache-example.jsx");
+      const virtualSource = `
+        const handleClick = () => {};
+        export const view = <button @click={handleClick}>Save</button>;
+      `;
+      const actualTs = await vi.importActual("typescript");
+
+      vi.resetModules();
+      const toolingVirtualSourceModule = await import(
+        "../packages/typescript-plugin-litsx/src/virtual-source.js"
+      );
+      const virtualizationSpy = vi.spyOn(
+        toolingVirtualSourceModule,
+        "createToolingVirtualLitsxSource",
+      );
+      vi.doMock("typescript", () => {
+        const mockedTs = {
+          ...actualTs.default,
+          parseCommandLine() {
+            return {
+              errors: [],
+              options: {},
+              fileNames: [],
+            };
+          },
+          findConfigFile() {
+            return "/virtual/tsconfig.json";
+          },
+          readConfigFile() {
+            return {
+              config: {
+                compilerOptions: {},
+              },
+            };
+          },
+          parseJsonConfigFileContent() {
+            return {
+              errors: [],
+              options: {
+                noEmit: true,
+              },
+              fileNames: [jsxFile],
+              projectReferences: undefined,
+            };
+          },
+          createCompilerHost() {
+            return {
+              readFile(fileName) {
+                if (fileName === jsxFile) return virtualSource;
+                return undefined;
+              },
+              useCaseSensitiveFileNames() {
+                return false;
+              },
+              getSourceFile(fileName) {
+                return {
+                  originalFileName: fileName,
+                };
+              },
+            };
+          },
+          createIncrementalCompilerHost(options) {
+            return mockedTs.createCompilerHost(options);
+          },
+          createSourceFile(fileName, sourceText) {
+            return {
+              fileName,
+              text: sourceText,
+            };
+          },
+          createProgram({ host }) {
+            host.readFile(jsxFile);
+            host.getSourceFile(jsxFile, actualTs.default.ScriptTarget.Latest);
+            return { mocked: true };
+          },
+          createIncrementalProgram(args) {
+            return {
+              getProgram() {
+                return mockedTs.createProgram(args);
+              },
+            };
+          },
+          getPreEmitDiagnostics() {
+            return [];
+          },
+        };
+
+        return {
+          ...mockedTs,
+          default: mockedTs,
+        };
+      });
+      try {
+        const { runLitsxTypecheck: mockedRunLitsxTypecheck } = await import(
+          "../packages/typescript-plugin-litsx/src/typecheck.js"
+        );
+        assert.equal(mockedRunLitsxTypecheck([]), 0);
+        assert.strictEqual(virtualizationSpy.mock.calls.length, 1);
+      } finally {
+        virtualizationSpy.mockRestore();
+        vi.doUnmock("typescript");
+        vi.resetModules();
+      }
+    })();
+  });
+
+  it("reuses the previous incremental builder program across repeated CLI typecheck runs", () => {
+    return (async () => {
+      const jsxFile = path.join(os.tmpdir(), "virtualized-incremental-cache-example.jsx");
+      const virtualSource = `
+        const handleClick = () => {};
+        export const view = <button @click={handleClick}>Save</button>;
+      `;
+      let previousOldProgram = Symbol("unset");
+      let createProgramCalls = 0;
+      let createIncrementalProgramCalls = 0;
+
+      await withMockedTypeScript((tsModule) => {
+        const mockedTs = {
+          ...tsModule,
+          parseCommandLine() {
+            return {
+              errors: [],
+              options: {},
+              fileNames: [],
+            };
+          },
+          findConfigFile() {
+            return "/virtual/tsconfig.json";
+          },
+          readConfigFile() {
+            return {
+              config: {
+                compilerOptions: {},
+              },
+            };
+          },
+          sys: {
+            ...tsModule.sys,
+            readFile(fileName) {
+              if (fileName === "/virtual/tsconfig.json") {
+                return JSON.stringify({ compilerOptions: {} });
+              }
+              if (fileName === jsxFile) return virtualSource;
+              return tsModule.sys.readFile(fileName);
+            },
+            fileExists(fileName) {
+              if (fileName === "/virtual/tsconfig.json" || fileName === jsxFile) {
+                return true;
+              }
+              return tsModule.sys.fileExists(fileName);
+            },
+            getModifiedTime(fileName) {
+              if (fileName === "/virtual/tsconfig.json") {
+                return new Date(1);
+              }
+              return tsModule.sys.getModifiedTime?.(fileName);
+            },
+          },
+          parseJsonConfigFileContent() {
+            return {
+              errors: [],
+              options: {
+                noEmit: true,
+              },
+              fileNames: [jsxFile],
+              projectReferences: undefined,
+              projectPath: "/virtual/tsconfig.json",
+              projectVersion: "1",
+            };
+          },
+          createCompilerHost() {
+            return {
+              readFile(fileName) {
+                if (fileName === jsxFile) return virtualSource;
+                return undefined;
+              },
+              useCaseSensitiveFileNames() {
+                return false;
+              },
+              getSourceFile(fileName) {
+                return {
+                  originalFileName: fileName,
+                };
+              },
+            };
+          },
+          createIncrementalCompilerHost(options) {
+            return mockedTs.createCompilerHost(options);
+          },
+          createSourceFile(fileName, sourceText) {
+            return {
+              fileName,
+              text: sourceText,
+            };
+          },
+          createProgram({ host }) {
+            createProgramCalls += 1;
+            host.readFile(jsxFile);
+            host.getSourceFile(jsxFile, tsModule.ScriptTarget.Latest);
+            return { mocked: true };
+          },
+          createIncrementalProgram(args) {
+            createIncrementalProgramCalls += 1;
+            previousOldProgram = args.oldProgram ?? null;
+            return {
+              getProgram() {
+                return mockedTs.createProgram(args);
+              },
+            };
+          },
+          getPreEmitDiagnostics() {
+            return [];
+          },
+        };
+
+        return mockedTs;
+      }, ({ runLitsxTypecheck: mockedRunLitsxTypecheck }) => {
+        assert.equal(mockedRunLitsxTypecheck([]), 0);
+        assert.strictEqual(previousOldProgram.description, "unset");
+        assert.strictEqual(createProgramCalls, 1);
+        assert.strictEqual(createIncrementalProgramCalls, 0);
+        assert.equal(mockedRunLitsxTypecheck([]), 0);
+        assert.notStrictEqual(previousOldProgram, null);
+        assert.strictEqual(createProgramCalls, 2);
+        assert.strictEqual(createIncrementalProgramCalls, 1);
+      });
+    })();
+  });
+
+  it("reuses the same typecheck session across parsed-command-line refreshes for the same project", () => {
+    return (async () => {
+      let configVersion = 1;
+
+      await withMockedTypeScript((tsModule) => {
+        const mockedTs = {
+          ...tsModule,
+          parseCommandLine() {
+            return {
+              errors: [],
+              options: {},
+              fileNames: [],
+            };
+          },
+          findConfigFile() {
+            return "/virtual/tsconfig.json";
+          },
+          readConfigFile() {
+            return {
+              config: {
+                compilerOptions: {},
+              },
+            };
+          },
+          sys: {
+            ...tsModule.sys,
+            readFile(fileName) {
+              if (fileName === "/virtual/tsconfig.json") {
+                return JSON.stringify({ compilerOptions: {} });
+              }
+              return tsModule.sys.readFile(fileName);
+            },
+            fileExists(fileName) {
+              if (fileName === "/virtual/tsconfig.json") {
+                return true;
+              }
+              return tsModule.sys.fileExists(fileName);
+            },
+            getModifiedTime(fileName) {
+              if (fileName === "/virtual/tsconfig.json") {
+                return new Date(configVersion);
+              }
+              return tsModule.sys.getModifiedTime?.(fileName);
+            },
+          },
+          parseJsonConfigFileContent() {
+            return {
+              errors: [],
+              options: {
+                noEmit: true,
+              },
+              fileNames: [],
+              projectReferences: undefined,
+              projectPath: "/virtual/tsconfig.json",
+              projectVersion: String(configVersion),
+            };
+          },
+        };
+
+        return mockedTs;
+      }, ({ createLitsxTypecheckSession }) => {
+        const firstSession = createLitsxTypecheckSession([]);
+        configVersion = 2;
+        const secondSession = createLitsxTypecheckSession([]);
+
+        assert.strictEqual(secondSession, firstSession);
+        assert.strictEqual(secondSession.parsedCommandLine.projectVersion, "2");
+      });
     })();
   });
 
@@ -1683,6 +2008,156 @@ describe("@litsx/typescript-plugin", () => {
       wrapped.getCompletionsAtPosition("/virtual/null-completions.tsx", source.length),
       null,
     );
+  });
+
+  it("reuses cached virtualization and computes authored diagnostics lazily", () => {
+    const source = "<button @click={handleClick} />";
+    const fileName = "/virtual/cached.tsx";
+    const snapshots = new Map([[fileName, source]]);
+    const virtualizationSpy = vi.spyOn(virtualSourceModule, "createToolingVirtualLitsxSource");
+    const authoredDiagnosticsSpy = vi.spyOn(virtualSourceModule, "collectLitsxAuthoredDiagnostics");
+    const pluginModule = plugin({
+      typescript: {
+        ScriptSnapshot: {
+          fromString(value) {
+            return {
+              getLength() {
+                return value.length;
+              },
+              getText(start, end) {
+                return value.slice(start, end);
+              },
+            };
+          },
+        },
+      },
+    });
+    const languageServiceHost = {
+      getScriptSnapshot(requestedFileName) {
+        const text = snapshots.get(requestedFileName);
+        if (text == null) {
+          return undefined;
+        }
+
+        return {
+          getLength() {
+            return text.length;
+          },
+          getText(start, end) {
+            return text.slice(start, end);
+          },
+        };
+      },
+    };
+
+    try {
+      const wrapped = pluginModule.create({
+        languageServiceHost,
+        languageService: {
+          getSyntacticDiagnostics() {
+            return [];
+          },
+          getSemanticDiagnostics() {
+            return [];
+          },
+          getSuggestionDiagnostics() {
+            return [];
+          },
+          getQuickInfoAtPosition() {
+            return undefined;
+          },
+          getCompletionsAtPosition() {
+            return null;
+          },
+        },
+      });
+
+      languageServiceHost.getScriptSnapshot(fileName);
+      languageServiceHost.getScriptSnapshot(fileName);
+      wrapped.getQuickInfoAtPosition(fileName, source.indexOf("@click"));
+      wrapped.getCompletionsAtPosition(fileName, source.indexOf("@click"));
+      wrapped.getSyntacticDiagnostics(fileName);
+
+      assert.strictEqual(virtualizationSpy.mock.calls.length, 1);
+      assert.strictEqual(authoredDiagnosticsSpy.mock.calls.length, 0);
+
+      wrapped.getSemanticDiagnostics(fileName);
+      wrapped.getSemanticDiagnostics(fileName);
+
+      assert.strictEqual(virtualizationSpy.mock.calls.length, 1);
+      assert.strictEqual(authoredDiagnosticsSpy.mock.calls.length, 1);
+    } finally {
+      virtualizationSpy.mockRestore();
+      authoredDiagnosticsSpy.mockRestore();
+    }
+  });
+
+  it("invalidates cached virtualization when snapshot text changes", () => {
+    const fileName = "/virtual/changing.tsx";
+    let source = "<button @click={handleClick} />";
+    const virtualizationSpy = vi.spyOn(virtualSourceModule, "createToolingVirtualLitsxSource");
+    const pluginModule = plugin({
+      typescript: {
+        ScriptSnapshot: {
+          fromString(value) {
+            return {
+              getLength() {
+                return value.length;
+              },
+              getText(start, end) {
+                return value.slice(start, end);
+              },
+            };
+          },
+        },
+      },
+    });
+
+    try {
+      const wrapped = pluginModule.create({
+        languageServiceHost: {
+          getScriptSnapshot(requestedFileName) {
+            if (requestedFileName !== fileName) {
+              return undefined;
+            }
+
+            return {
+              getLength() {
+                return source.length;
+              },
+              getText(start, end) {
+                return source.slice(start, end);
+              },
+            };
+          },
+        },
+        languageService: {
+          getSyntacticDiagnostics() {
+            return [];
+          },
+          getSemanticDiagnostics() {
+            return [];
+          },
+          getSuggestionDiagnostics() {
+            return [];
+          },
+          getQuickInfoAtPosition() {
+            return undefined;
+          },
+          getCompletionsAtPosition() {
+            return null;
+          },
+        },
+      });
+
+      wrapped.getSyntacticDiagnostics(fileName);
+      source = "<button .value={name} />";
+      wrapped.getSyntacticDiagnostics(fileName);
+
+      assert.strictEqual(virtualizationSpy.mock.calls.length, 2);
+    } finally {
+      virtualizationSpy.mockRestore();
+    }
   });
 
   it("adds contextual completions for authored lit prefixes", () => {
@@ -2284,6 +2759,41 @@ describe("@litsx/typescript-plugin", () => {
     });
 
     assert.deepStrictEqual(pluginModule.getExternalFiles({}), []);
+  });
+
+  it("reuses cached external files while the project version is unchanged", () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-plugin-external-files-cache-"));
+    const jsxFile = path.join(tempDir, "view.jsx");
+    fs.writeFileSync(jsxFile, "const view = <button @click={save} />;");
+    const readSpy = vi.spyOn(fs, "readFileSync");
+
+    try {
+      const pluginModule = plugin({
+        typescript: {
+          ScriptSnapshot: {
+            fromString(value) {
+              return value;
+            },
+          },
+        },
+      });
+
+      const project = {
+        getProjectVersion() {
+          return "1";
+        },
+        getFileNames() {
+          return [jsxFile];
+        },
+      };
+
+      assert.deepStrictEqual(pluginModule.getExternalFiles(project), [jsxFile]);
+      assert.deepStrictEqual(pluginModule.getExternalFiles(project), [jsxFile]);
+      assert.strictEqual(readSpy.mock.calls.filter(([fileName]) => fileName === jsxFile).length, 1);
+    } finally {
+      readSpy.mockRestore();
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
   });
 
   it("leaves relevant files unvirtualized when they do not use LitSX-authored syntax", () => {

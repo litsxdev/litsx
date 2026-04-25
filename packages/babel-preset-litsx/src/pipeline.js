@@ -3,16 +3,19 @@ import transformLitsxScopedElements from "../../babel-plugin-transform-litsx-sco
 import transformLitsxDomRefs from "./internal/transform-litsx-dom-refs.js";
 import transformLitsxHooks from "./internal/transform-litsx-hooks.js";
 import transformLitsxComponents from "./internal/transform-litsx-components.js";
-import transformLitsxProperties from "./internal/transform-litsx-properties.js";
-import transformLitsxStaticHoists from "./internal/transform-litsx-static-hoists.js";
-import transformLitsxHandlers from "./internal/transform-litsx-handlers.js";
 
 const NATIVE_TRANSFORM_OPTION_KEYS = [
   "defaultDomMode",
   "typeResolutionMode",
   "inMemoryFiles",
+  "typescriptSession",
   "suppressNativeClassNameWarning",
 ];
+
+const HOOK_FEATURE_PATTERN = /\b(?:useOnConnect|useAfterUpdate|useOnCommit|useMemoValue|useStableCallback|useEvent|useEmit|usePrevious|useReducedState|useState|useControlledState|useAsyncState|useOptimistic|useExpose|useExternalStore|useHost|useHostContent|useSlot|useTextContent|useTransition|useDeferredValue|useStyle|useRef|useCallbackRef)\b/;
+const REF_FEATURE_PATTERN = /\buseRef\b|\bref\s*=/;
+const SCOPED_ELEMENTS_PATTERN = /<\s*(?:[A-Z][\w.]*(?=[\s/>])|[a-z][\w]*-[\w-]*(?=[\s/>]))/;
+const LIGHT_DOM_PATTERN = /\^lightDom\b/;
 
 export function normalizeTransformLitsxOptions(options = {}) {
   const transformLitsxOptions = {
@@ -28,16 +31,44 @@ export function normalizeTransformLitsxOptions(options = {}) {
   return transformLitsxOptions;
 }
 
-export function createLitsxPresetPlugins(options = {}) {
+export function detectLitsxSourceFeatures(source, options = {}) {
+  const text = typeof source === "string" ? source : "";
+  const transformOptions = normalizeTransformLitsxOptions(options);
+
+  return {
+    hooks: HOOK_FEATURE_PATTERN.test(text),
+    domRefs: REF_FEATURE_PATTERN.test(text),
+    scopedElements:
+      transformOptions.defaultDomMode === "light" ||
+      LIGHT_DOM_PATTERN.test(text) ||
+      SCOPED_ELEMENTS_PATTERN.test(text),
+  };
+}
+
+function shouldIncludeFeaturePlugin(sourceFeatures, key) {
+  if (!sourceFeatures) {
+    return true;
+  }
+
+  return sourceFeatures[key] === true;
+}
+
+export function createLitsxPresetPlugins(options = {}, sourceFeatures = null) {
   const plugins = [
     [transformLitsxComponents, normalizeTransformLitsxOptions(options)],
-    [transformLitsxHooks, options.transformLitsxHooks || {}],
-    [transformLitsxDomRefs, options.transformLitsxDomRefs || {}],
-    [transformLitsxProperties, options.transformLitsxProperties || {}],
-    [transformLitsxStaticHoists, options.transformLitsxStaticHoists || {}],
-    [transformLitsxHandlers, options.transformLitsxHandlers || {}],
-    [transformLitsxScopedElements, options.transformLitsxScopedElements || {}],
   ];
+
+  if (shouldIncludeFeaturePlugin(sourceFeatures, "hooks")) {
+    plugins.push([transformLitsxHooks, options.transformLitsxHooks || {}]);
+  }
+
+  if (shouldIncludeFeaturePlugin(sourceFeatures, "domRefs")) {
+    plugins.push([transformLitsxDomRefs, options.transformLitsxDomRefs || {}]);
+  }
+
+  if (shouldIncludeFeaturePlugin(sourceFeatures, "scopedElements")) {
+    plugins.push([transformLitsxScopedElements, options.transformLitsxScopedElements || {}]);
+  }
 
   if (options.jsxTemplate !== false) {
     if (options.jsxTemplateOptions && Object.keys(options.jsxTemplateOptions).length > 0) {
@@ -55,12 +86,5 @@ export {
   createTransformFunctionToClassPlugin as createTransformLitsxComponentsPlugin,
 } from "./internal/transform-litsx-components.js";
 export {
-  default as transformLitsxProperties,
   setTypescriptModule,
 } from "./internal/transform-litsx-properties.js";
-export {
-  default as transformLitsxStaticHoists,
-} from "./internal/transform-litsx-static-hoists.js";
-export {
-  default as transformLitsxHandlers,
-} from "./internal/transform-litsx-handlers.js";

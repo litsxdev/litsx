@@ -1,9 +1,16 @@
 import assert from "assert";
 import babelCore from "@babel/core";
+import fs from "fs";
 import { TraceMap, originalPositionFor } from "@jridgewell/trace-mapping";
-import { describe, it } from "vitest";
+import os from "os";
+import path from "path";
+import { describe, it, vi } from "vitest";
+import * as jsxTemplateModule from "../packages/babel-plugin-transform-jsx-html-template/src/index.js";
+import * as presetModule from "../packages/babel-preset-litsx/src/index.js";
+import { createLitsxTypecheckSession } from "../packages/typescript-plugin-litsx/src/typecheck.js";
 
 import {
+  createLitsxCompilationSession,
   transformLitsx,
   transformLitsxSync,
 } from "../packages/compiler/src/index.js";
@@ -62,7 +69,7 @@ describe("@litsx/compiler", () => {
     const result = await transformLitsx(source, {
       filename: "/virtual/Counter.tsx",
       sourceMaps: true,
-  }, 30_000);
+    });
 
     assert.ok(result.map, "expected compiler to emit a sourcemap");
     const traceMap = new TraceMap(result.map);
@@ -81,7 +88,61 @@ describe("@litsx/compiler", () => {
       assert.strictEqual(actual.line, expected.line);
       assert.strictEqual(actual.column, expected.column);
     }
-  }, 20000);
+  }, 30_000);
+
+  it("can consume a shared TypeScript project session from typecheck for native typed compilation", () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-shared-ts-session-"));
+    const tsconfigPath = path.join(tempDir, "tsconfig.json");
+    const typesPath = path.join(tempDir, "types.ts");
+    const filePath = path.join(tempDir, "card.tsx");
+    const source = [
+      "import type { CardProps } from './types';",
+      "export function Card({ title, active }: CardProps) {",
+      "  return <article>{title}{active ? 'on' : 'off'}</article>;",
+      "}",
+    ].join("\n");
+
+    fs.writeFileSync(
+      tsconfigPath,
+      JSON.stringify({
+        compilerOptions: {
+          jsx: "preserve",
+          noEmit: true,
+        },
+        include: ["card.tsx", "types.ts"],
+      }),
+    );
+    fs.writeFileSync(
+      typesPath,
+      [
+        "export type CardProps = {",
+        "  title: string;",
+        "  active: boolean;",
+        "};",
+      ].join("\n"),
+    );
+    fs.writeFileSync(filePath, source);
+
+    try {
+      const sharedSession = createLitsxTypecheckSession(["--project", tsconfigPath]);
+
+      const withSharedSession = transformLitsxSync(source, {
+        filename: filePath,
+        jsxTemplate: false,
+        typescriptSession: sharedSession.projectSession,
+      });
+      const standalone = transformLitsxSync(source, {
+        filename: filePath,
+        jsxTemplate: false,
+      });
+
+      assert.strictEqual(withSharedSession.code, standalone.code);
+      assert.match(withSharedSession.code, /title: \{\s*type: String\s*\}/);
+      assert.match(withSharedSession.code, /active: \{\s*type: Boolean\s*\}/);
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  }, 20_000);
 
   it("surfaces metadata warnings when native className is authored", () => {
     const source = [
@@ -246,4 +307,113 @@ describe("@litsx/compiler", () => {
       1
     );
   }, 20000);
+
+  it("reuses memoized preset plugins for repeated compiler calls with the same options object", () => {
+    const source = [
+      "export const Counter = ({ label }) => {",
+      "  return <button>{label}</button>;",
+      "};",
+    ].join("\n");
+    const options = {
+      filename: "/virtual/Counter.jsx",
+      jsxTemplate: false,
+    };
+    const presetSpy = vi.spyOn(presetModule, "createLitsxPresetPlugins");
+
+    try {
+      transformLitsxSync(source, options);
+      transformLitsxSync(source, options);
+
+      assert.strictEqual(presetSpy.mock.calls.length, 1);
+    } finally {
+      presetSpy.mockRestore();
+    }
+  }, 20_000);
+
+  it("provides a reusable compilation session facade", async () => {
+    const session = createLitsxCompilationSession({
+      transformOptions: {
+        jsxTemplate: false,
+      },
+    });
+    const source = [
+      "export const Counter = ({ label }) => {",
+      "  return <button>{label}</button>;",
+      "};",
+    ].join("\n");
+
+    try {
+      const first = session.transformSync(source, {
+        filename: "/virtual/Counter.jsx",
+      });
+      const second = await session.transform(source, {
+        filename: "/virtual/Counter.jsx",
+      });
+
+      assert.strictEqual(first.code, second.code);
+      assert.equal(typeof session.getTypecheckSession, "function");
+
+      session.invalidate(["/virtual/Counter.jsx"]);
+
+      const third = session.transformSync(source, {
+        filename: "/virtual/Counter.jsx",
+      });
+      assert.strictEqual(third.code, first.code);
+    } finally {
+      session.dispose();
+    }
+  }, 20_000);
+
+  it("memoizes preset plugins per feature set for the same options object", () => {
+    const plainSource = [
+      "export const Counter = ({ label }) => {",
+      "  return <button>{label}</button>;",
+      "};",
+    ].join("\n");
+    const featureSource = [
+      "import FancyButton from './FancyButton.js';",
+      "import { useRef, useState } from 'litsx';",
+      "export function Counter({ label }) {",
+      "  const ref = useRef(null);",
+      "  const [count] = useState(0);",
+      "  return <FancyButton ref={ref}>{label}{count}</FancyButton>;",
+      "}",
+    ].join("\n");
+    const options = {
+      filename: "/virtual/Counter.jsx",
+      jsxTemplate: false,
+    };
+    const presetSpy = vi.spyOn(presetModule, "createLitsxPresetPlugins");
+
+    try {
+      transformLitsxSync(plainSource, options);
+      transformLitsxSync(featureSource, options);
+      transformLitsxSync(featureSource, options);
+
+      assert.strictEqual(presetSpy.mock.calls.length, 2);
+    } finally {
+      presetSpy.mockRestore();
+    }
+  }, 20_000);
+
+  it("skips template sourcemap patching when no template attribute mappings are emitted", () => {
+    const source = [
+      "export const Counter = () => {",
+      "  return <button>Save</button>;",
+      "};",
+    ].join("\n");
+    const patchSpy = vi.spyOn(jsxTemplateModule, "patchLitAttributeSourcemap");
+
+    try {
+      const result = transformLitsxSync(source, {
+        filename: "/virtual/Counter.jsx",
+        sourceMaps: true,
+      });
+
+      assert.ok(result.map);
+      assert.strictEqual(patchSpy.mock.calls.length, 0);
+    } finally {
+      patchSpy.mockRestore();
+    }
+  }, 20_000);
 });

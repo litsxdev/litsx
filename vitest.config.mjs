@@ -3,13 +3,19 @@ import babel from 'vite-plugin-babel';
 import TransformReporter from './test/helpers/reporter/vitest-transform-reporter.js';
 import { LOG_TRANSFORM_MARKER } from './test/helpers/reporter/log-transform.js';
 
+const TRANSFORM_REPORTER_ENABLED = process.env.LITSX_VITEST_TRANSFORMS === '1';
+
 export default defineConfig({
   test: {
     environment: 'node',
     include: ['test/**/*.test.js'],
     globals: true,
-    setupFiles: ['./test/helpers/reporter/setup-auto-log-transforms.js'],
-    reporters: [new TransformReporter()],
+    setupFiles: TRANSFORM_REPORTER_ENABLED
+      ? ['./test/helpers/reporter/setup-auto-log-transforms.js']
+      : [],
+    reporters: TRANSFORM_REPORTER_ENABLED
+      ? [new TransformReporter()]
+      : ['default'],
     coverage: {
       reporter: ['text', 'html'],
       include: ['packages/*/src/**', 'packages/react/*/src/**', 'packages/shared/*/src/**'],
@@ -24,7 +30,11 @@ export default defineConfig({
       ],
     },
     onConsoleLog(log) {
-      if (typeof log === 'string' && log.trim().startsWith(LOG_TRANSFORM_MARKER)) {
+      if (
+        TRANSFORM_REPORTER_ENABLED &&
+        typeof log === 'string' &&
+        log.trim().startsWith(LOG_TRANSFORM_MARKER)
+      ) {
         return false;
       }
     },

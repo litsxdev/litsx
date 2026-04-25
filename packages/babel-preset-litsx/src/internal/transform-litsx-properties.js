@@ -1,6 +1,10 @@
 import { createRequire } from "module";
-
-import { createNoopStagePlugin } from "./noop-stage-plugin.js";
+import {
+  createInMemoryTsSession,
+  getOrCreateStandaloneTsSession,
+  normalizeFilePath,
+  dirname,
+} from "../../../shared/typescript-session/src/index.js";
 
 let ts;
 let t;
@@ -93,20 +97,6 @@ export function setPropertyBabelTypes(types) {
   t = types;
 }
 
-function normalizeFilePath(value) {
-  if (!value) return "";
-  return String(value).replace(/\\/g, "/").replace(/\/+/g, "/");
-}
-
-function dirname(filePath) {
-  const normalized = normalizeFilePath(filePath);
-  const lastSlash = normalized.lastIndexOf("/");
-  if (lastSlash <= 0) {
-    return "/";
-  }
-  return normalized.slice(0, lastSlash);
-}
-
 function normalizeInMemoryFiles(files = {}) {
   const normalizedFiles = new Map();
   Object.entries({
@@ -127,11 +117,24 @@ function hashSource(text) {
   return (hash >>> 0).toString(16);
 }
 
-function getTypeResolverCacheKey(filename, source, mode = TYPE_RESOLUTION_MODES.AUTO) {
+function getTypeResolverCacheKey(
+  filename,
+  source,
+  mode = TYPE_RESOLUTION_MODES.AUTO,
+  sessionKey = "",
+) {
   const normalizedFilename = filename
     ? normalizeFilePath(filename)
     : VIRTUAL_SOURCE_FILENAME;
-  return `${mode}:${normalizedFilename}:${hashSource(source)}`;
+  return `${mode}:${sessionKey}:${normalizedFilename}:${hashSource(source)}`;
+}
+
+function getTypeResolutionSessionKey(filename, compilerOptions, sessionKey = "") {
+  return JSON.stringify({
+    directory: dirname(filename),
+    compilerOptions,
+    sessionKey,
+  });
 }
 
 function rememberTypeResolver(cacheKey, resolver) {
@@ -145,6 +148,43 @@ function rememberTypeResolver(cacheKey, resolver) {
   return resolver;
 }
 
+function createSpanNodeLookup(sourceFile) {
+  const baseCache = new Map();
+  const predicateCache = new WeakMap();
+
+  function getCacheKey(start, end) {
+    return `${start}:${end}`;
+  }
+
+  function lookup(start, end, predicate) {
+    const cacheKey = getCacheKey(start, end);
+    if (!predicate) {
+      if (baseCache.has(cacheKey)) {
+        return baseCache.get(cacheKey);
+      }
+      const resolved = findTsNodeAtSpan(sourceFile, start, end, null);
+      baseCache.set(cacheKey, resolved);
+      return resolved;
+    }
+
+    let cache = predicateCache.get(predicate);
+    if (!cache) {
+      cache = new Map();
+      predicateCache.set(predicate, cache);
+    }
+
+    if (cache.has(cacheKey)) {
+      return cache.get(cacheKey);
+    }
+
+    const resolved = findTsNodeAtSpan(sourceFile, start, end, predicate);
+    cache.set(cacheKey, resolved);
+    return resolved;
+  }
+
+  return lookup;
+}
+
 export function createTypeResolver(filename, source, options = {}) {
   if (!source) {
     return null;
@@ -152,17 +192,28 @@ export function createTypeResolver(filename, source, options = {}) {
 
   ensureTypescriptModule();
 
+  const providedTypescriptSession =
+    options?.typescriptSession?.projectSession || options?.typescriptSession || null;
   const typeResolutionMode =
     options?.typeResolutionMode === TYPE_RESOLUTION_MODES.IN_MEMORY
       ? TYPE_RESOLUTION_MODES.IN_MEMORY
       : TYPE_RESOLUTION_MODES.AUTO;
 
-  const cacheKey = getTypeResolverCacheKey(filename, source, typeResolutionMode);
-  const cached = TYPE_RESOLVER_CACHE.get(cacheKey);
-  if (cached) {
-    TYPE_RESOLVER_CACHE.delete(cacheKey);
-    TYPE_RESOLVER_CACHE.set(cacheKey, cached);
-    return cached;
+  const cacheKey = providedTypescriptSession
+    ? null
+    : getTypeResolverCacheKey(
+        filename,
+        source,
+        typeResolutionMode,
+        "",
+      );
+  if (cacheKey) {
+    const cached = TYPE_RESOLVER_CACHE.get(cacheKey);
+    if (cached) {
+      TYPE_RESOLVER_CACHE.delete(cacheKey);
+      TYPE_RESOLVER_CACHE.set(cacheKey, cached);
+      return cached;
+    }
   }
 
   const shouldUseInMemoryResolution = typeResolutionMode === TYPE_RESOLUTION_MODES.IN_MEMORY;
@@ -190,53 +241,27 @@ export function createTypeResolver(filename, source, options = {}) {
       source,
       compilerOptions,
       cacheKey,
-      options?.inMemoryFiles
+      options?.inMemoryFiles,
+      providedTypescriptSession,
     );
   }
 
-  const host = ts.createCompilerHost(compilerOptions, true);
-  const originalReadFile = host.readFile.bind(host);
-  const originalFileExists = host.fileExists.bind(host);
-  const originalGetSourceFile = host.getSourceFile.bind(host);
-
-  host.readFile = (filePath) => {
-    const resolvedPath = normalizeFilePath(filePath);
-    if (resolvedPath === normalizedFilename) {
-      return source;
-    }
-    return originalReadFile(filePath);
-  };
-
-  host.fileExists = (filePath) => {
-    const resolvedPath = normalizeFilePath(filePath);
-    if (resolvedPath === normalizedFilename) {
-      return true;
-    }
-    return originalFileExists(filePath);
-  };
-
-  host.getSourceFile = (filePath, languageVersion, onError, shouldCreateNewSourceFile) => {
-    const resolvedPath = normalizeFilePath(filePath);
-    if (resolvedPath === normalizedFilename) {
-      return ts.createSourceFile(filePath, source, languageVersion, true);
-    }
-    return originalGetSourceFile(filePath, languageVersion, onError, shouldCreateNewSourceFile);
-  };
-
   try {
-    const program = ts.createProgram([normalizedFilename], compilerOptions, host);
-    const sourceFile = program.getSourceFile(normalizedFilename);
-    if (!sourceFile) return null;
-    const checker = program.getTypeChecker();
+    const sharedSession =
+      providedTypescriptSession ||
+      getOrCreateStandaloneTsSession(
+        getTypeResolutionSessionKey(normalizedFilename, compilerOptions),
+        {
+          typescript: ts,
+          compilerOptions,
+        },
+      );
 
-    return rememberTypeResolver(cacheKey, {
-      filename: normalizedFilename,
-      sourceFile,
-      checker,
-      getNodeAtSpan(start, end, predicate) {
-        return findTsNodeAtSpan(sourceFile, start, end, predicate);
-      },
-    });
+    return createResolvedTypeResolver(
+      cacheKey ? rememberTypeResolver : (_, resolver) => resolver,
+      cacheKey,
+      sharedSession.getTypeResolver(normalizedFilename, source),
+    );
   } catch {
     return null;
   }
@@ -247,10 +272,10 @@ function createInMemoryTypeResolver(
   source,
   compilerOptions,
   cacheKey,
-  inMemoryFiles = {}
+  inMemoryFiles = {},
+  providedSession = null,
 ) {
   const sourceFilename = normalizeFilePath(filename || VIRTUAL_SOURCE_FILENAME);
-  const sourceDir = dirname(sourceFilename);
   const files = normalizeInMemoryFiles(inMemoryFiles);
   files.set(sourceFilename, source);
 
@@ -259,65 +284,44 @@ function createInMemoryTypeResolver(
     noLib: true,
   };
 
-  const host = {
-    getSourceFile(filePath, languageVersion) {
-      const normalizedPath = normalizeFilePath(filePath);
-      const fileSource = files.get(normalizedPath);
-      if (fileSource == null) return undefined;
-      return ts.createSourceFile(normalizedPath, fileSource, languageVersion, true);
-    },
-    readFile(filePath) {
-      return files.get(normalizeFilePath(filePath));
-    },
-    fileExists(filePath) {
-      return files.has(normalizeFilePath(filePath));
-    },
-    writeFile() {},
-    getDefaultLibFileName() {
-      return VIRTUAL_LIB_FILENAME;
-    },
-    getCurrentDirectory() {
-      return sourceDir;
-    },
-    getDirectories() {
-      return [];
-    },
-    directoryExists(dirPath) {
-      const normalizedPath = normalizeFilePath(dirPath);
-      return normalizedPath === sourceDir || normalizedPath === dirname(VIRTUAL_LIB_FILENAME);
-    },
-    getCanonicalFileName(filePath) {
-      return normalizeFilePath(filePath);
-    },
-    useCaseSensitiveFileNames() {
-      return true;
-    },
-    getNewLine() {
-      return "\n";
-    },
-  };
-
   try {
-    const program = ts.createProgram(
-      [sourceFilename, VIRTUAL_LIB_FILENAME],
-      inMemoryCompilerOptions,
-      host
-    );
-    const sourceFile = program.getSourceFile(sourceFilename);
-    if (!sourceFile) return null;
-    const checker = program.getTypeChecker();
-
-    return rememberTypeResolver(cacheKey, {
-      filename: sourceFilename,
-      sourceFile,
-      checker,
-      getNodeAtSpan(start, end, predicate) {
-        return findTsNodeAtSpan(sourceFile, start, end, predicate);
-      },
+    const session = providedSession || createInMemoryTsSession({
+      typescript: ts,
+      compilerOptions: inMemoryCompilerOptions,
+      files: Object.fromEntries(files),
+      sourceFilename,
+      defaultLibFileName: VIRTUAL_LIB_FILENAME,
+      rootNames: [sourceFilename, VIRTUAL_LIB_FILENAME],
     });
+
+    return createResolvedTypeResolver(
+      cacheKey ? rememberTypeResolver : (_, resolver) => resolver,
+      cacheKey,
+      session.getTypeResolver(sourceFilename, source),
+    );
   } catch {
     return null;
   }
+}
+
+function createResolvedTypeResolver(remember, cacheKey, resolved) {
+  if (!resolved?.sourceFile || !resolved?.checker) {
+    return null;
+  }
+
+  return remember(cacheKey, {
+    filename: resolved.filename,
+    sourceFile: resolved.sourceFile,
+    checker: resolved.checker,
+    checkerTypeCache: new Map(),
+    checkerPropertyMapCache: new Map(),
+    checkerTypeConfigCache:
+      resolved.getSemanticCache?.("checkerTypeConfigCache", () => new WeakMap()) ?? new WeakMap(),
+    checkerTypeConfigInProgress: new WeakSet(),
+    checkerPropertyMapByTypeCache:
+      resolved.getSemanticCache?.("checkerPropertyMapByTypeCache", () => new WeakMap()) ?? new WeakMap(),
+    getNodeAtSpan: createSpanNodeLookup(resolved.sourceFile),
+  });
 }
 
 function findTsNodeAtSpan(sourceFile, start, end, predicate) {
@@ -443,16 +447,30 @@ function mapLiteralTypeToLit(tsType) {
   return null;
 }
 
-function mapCheckerTypeToPropertyConfig(type, checker, seen = new Set()) {
+function mapCheckerTypeToPropertyConfig(type, checker, cacheState = null, seen = new Set()) {
   if (!type) return createPropertyConfig(t.identifier("Object"));
 
   const nonNullable = checker.getNonNullableType
     ? checker.getNonNullableType(type)
     : type;
+  const typeConfigCache = cacheState?.cache;
+  const inProgress = cacheState?.inProgress;
+
+  if (typeConfigCache?.has(nonNullable)) {
+    return typeConfigCache.get(nonNullable);
+  }
+
+  if (inProgress?.has(nonNullable)) {
+    return createPropertyConfig(t.identifier("Object"));
+  }
+
+  inProgress?.add(nonNullable);
+
+  let resolvedConfig;
 
   if (nonNullable.isUnion?.()) {
     const configs = nonNullable.types.map((item) =>
-      mapCheckerTypeToPropertyConfig(item, checker, seen)
+      mapCheckerTypeToPropertyConfig(item, checker, cacheState, seen)
     );
     const uniqueTypes = [...new Set(
       configs
@@ -461,18 +479,17 @@ function mapCheckerTypeToPropertyConfig(type, checker, seen = new Set()) {
     )];
     const attributeFalse = configs.every((config) => config?.attribute === false);
     if (uniqueTypes.length === 1) {
-      return createPropertyConfig(t.identifier(uniqueTypes[0]), {
+      resolvedConfig = createPropertyConfig(t.identifier(uniqueTypes[0]), {
+        attribute: attributeFalse ? false : undefined,
+      });
+    } else {
+      resolvedConfig = createPropertyConfig(t.identifier("Object"), {
         attribute: attributeFalse ? false : undefined,
       });
     }
-    return createPropertyConfig(t.identifier("Object"), {
-      attribute: attributeFalse ? false : undefined,
-    });
-  }
-
-  if (nonNullable.isIntersection?.()) {
+  } else if (nonNullable.isIntersection?.()) {
     const configs = nonNullable.types.map((item) =>
-      mapCheckerTypeToPropertyConfig(item, checker, seen)
+      mapCheckerTypeToPropertyConfig(item, checker, cacheState, seen)
     );
     const primitiveNames = ["String", "Number", "Boolean", "Array", "Date"];
     const uniqueTypes = [...new Set(
@@ -483,77 +500,112 @@ function mapCheckerTypeToPropertyConfig(type, checker, seen = new Set()) {
     const preferredPrimitive = primitiveNames.find((name) => uniqueTypes.includes(name));
     const attributeFalse = configs.every((config) => config?.attribute === false);
     if (preferredPrimitive) {
-      return createPropertyConfig(t.identifier(preferredPrimitive), {
+      resolvedConfig = createPropertyConfig(t.identifier(preferredPrimitive), {
+        attribute: attributeFalse ? false : undefined,
+      });
+    } else if (uniqueTypes.length === 1) {
+      resolvedConfig = createPropertyConfig(t.identifier(uniqueTypes[0]), {
+        attribute: attributeFalse ? false : undefined,
+      });
+    } else {
+      resolvedConfig = createPropertyConfig(t.identifier("Object"), {
         attribute: attributeFalse ? false : undefined,
       });
     }
-    if (uniqueTypes.length === 1) {
-      return createPropertyConfig(t.identifier(uniqueTypes[0]), {
-        attribute: attributeFalse ? false : undefined,
-      });
+  } else {
+    const callSignatures = checker.getSignaturesOfType(nonNullable, ts.SignatureKind.Call);
+    if (callSignatures.length) {
+      resolvedConfig = createPropertyConfig(t.identifier("Object"), { attribute: false });
+    } else if (nonNullable.flags & (ts.TypeFlags.String | ts.TypeFlags.StringLike)) {
+      resolvedConfig = createPropertyConfig(t.identifier("String"));
+    } else if (nonNullable.flags & (ts.TypeFlags.Number | ts.TypeFlags.NumberLike)) {
+      resolvedConfig = createPropertyConfig(t.identifier("Number"));
+    } else if (nonNullable.flags & (ts.TypeFlags.Boolean | ts.TypeFlags.BooleanLike)) {
+      resolvedConfig = createPropertyConfig(t.identifier("Boolean"));
+    } else if (nonNullable.flags & ts.TypeFlags.BigIntLike) {
+      resolvedConfig = createPropertyConfig(t.identifier("Object"));
+    } else if (checker.isArrayType?.(nonNullable) || checker.isTupleType?.(nonNullable)) {
+      resolvedConfig = createPropertyConfig(t.identifier("Array"));
+    } else {
+      const symbol = nonNullable.getSymbol?.();
+      const symbolName = symbol?.getName?.();
+      if (symbolName === "Date") {
+        resolvedConfig = createPropertyConfig(t.identifier("Date"));
+      } else {
+        if (symbol && !seen.has(symbol)) {
+          seen.add(symbol);
+        }
+        resolvedConfig = createPropertyConfig(t.identifier("Object"));
+      }
     }
-    return createPropertyConfig(t.identifier("Object"), {
-      attribute: attributeFalse ? false : undefined,
-    });
   }
 
-  const callSignatures = checker.getSignaturesOfType(nonNullable, ts.SignatureKind.Call);
-  if (callSignatures.length) {
-    return createPropertyConfig(t.identifier("Object"), { attribute: false });
-  }
+  inProgress?.delete(nonNullable);
+  typeConfigCache?.set(nonNullable, resolvedConfig);
+  return resolvedConfig;
+}
 
-  if (nonNullable.flags & (ts.TypeFlags.String | ts.TypeFlags.StringLike)) {
-    return createPropertyConfig(t.identifier("String"));
+function getBabelNodeSpanCacheKey(node) {
+  if (typeof node?.start !== "number" || typeof node?.end !== "number") {
+    return null;
   }
-  if (nonNullable.flags & (ts.TypeFlags.Number | ts.TypeFlags.NumberLike)) {
-    return createPropertyConfig(t.identifier("Number"));
-  }
-  if (nonNullable.flags & (ts.TypeFlags.Boolean | ts.TypeFlags.BooleanLike)) {
-    return createPropertyConfig(t.identifier("Boolean"));
-  }
-  if (nonNullable.flags & ts.TypeFlags.BigIntLike) {
-    return createPropertyConfig(t.identifier("Object"));
-  }
-
-  if (checker.isArrayType?.(nonNullable) || checker.isTupleType?.(nonNullable)) {
-    return createPropertyConfig(t.identifier("Array"));
-  }
-
-  const symbol = nonNullable.getSymbol?.();
-  const symbolName = symbol?.getName?.();
-  if (symbolName === "Date") {
-    return createPropertyConfig(t.identifier("Date"));
-  }
-
-  if (symbol && !seen.has(symbol)) {
-    seen.add(symbol);
-  }
-
-  return createPropertyConfig(t.identifier("Object"));
+  return `${node.start}:${node.end}`;
 }
 
 function getCheckerTypeForBabelNode(node, typeResolver) {
-  if (!typeResolver || typeof node?.start !== "number" || typeof node?.end !== "number") {
+  const cacheKey = getBabelNodeSpanCacheKey(node);
+  if (!typeResolver || !cacheKey) {
     return null;
   }
 
+  const typeCache = typeResolver.checkerTypeCache;
+  if (typeCache?.has(cacheKey)) {
+    return typeCache.get(cacheKey);
+  }
+
   const tsNode = typeResolver.getNodeAtSpan(node.start, node.end);
-  if (!tsNode) return null;
+  if (!tsNode) {
+    typeCache?.set(cacheKey, null);
+    return null;
+  }
 
   try {
-    return typeResolver.checker.getTypeAtLocation(tsNode);
+    const resolvedType = typeResolver.checker.getTypeAtLocation(tsNode);
+    typeCache?.set(cacheKey, resolvedType);
+    return resolvedType;
   } catch {
+    typeCache?.set(cacheKey, null);
     return null;
   }
 }
 
 function getCheckerPropertyMapForPattern(node, typeResolver) {
+  const cacheKey = getBabelNodeSpanCacheKey(node);
+  if (!typeResolver || !cacheKey) {
+    return null;
+  }
+
+  const propertyMapCache = typeResolver.checkerPropertyMapCache;
+  if (propertyMapCache?.has(cacheKey)) {
+    return propertyMapCache.get(cacheKey);
+  }
+
   const type = getCheckerTypeForBabelNode(node, typeResolver);
-  if (!type) return null;
+  if (!type) {
+    propertyMapCache?.set(cacheKey, null);
+    return null;
+  }
   const checker = typeResolver.checker;
   const nonNullable = checker.getNonNullableType
     ? checker.getNonNullableType(type)
     : type;
+  const propertyMapByTypeCache = typeResolver.checkerPropertyMapByTypeCache;
+
+  if (propertyMapByTypeCache?.has(nonNullable)) {
+    const cachedPropertyMap = propertyMapByTypeCache.get(nonNullable);
+    propertyMapCache?.set(cacheKey, cachedPropertyMap);
+    return cachedPropertyMap;
+  }
 
   if (
     checker.isArrayType?.(nonNullable) ||
@@ -565,13 +617,19 @@ function getCheckerPropertyMapForPattern(node, typeResolver) {
       ts.TypeFlags.BigIntLike
     ))
   ) {
+    propertyMapCache?.set(cacheKey, null);
     return null;
   }
 
   if (checker.getSignaturesOfType(nonNullable, ts.SignatureKind.Call).length) {
+    propertyMapCache?.set(cacheKey, null);
     return null;
   }
 
+  const typeConfigCacheState = {
+    cache: typeResolver.checkerTypeConfigCache,
+    inProgress: typeResolver.checkerTypeConfigInProgress,
+  };
   const propertyMap = new Map();
   for (const symbol of checker.getPropertiesOfType(nonNullable)) {
     const valueDeclaration = symbol.valueDeclaration || symbol.declarations?.[0];
@@ -579,11 +637,14 @@ function getCheckerPropertyMapForPattern(node, typeResolver) {
     const symbolType = checker.getTypeOfSymbolAtLocation(symbol, valueDeclaration);
     propertyMap.set(
       symbol.getName(),
-      mapCheckerTypeToPropertyConfig(symbolType, checker)
+      mapCheckerTypeToPropertyConfig(symbolType, checker, typeConfigCacheState)
     );
   }
 
-  return propertyMap.size ? propertyMap : null;
+  const resolvedPropertyMap = propertyMap.size ? propertyMap : null;
+  propertyMapByTypeCache?.set(nonNullable, resolvedPropertyMap);
+  propertyMapCache?.set(cacheKey, resolvedPropertyMap);
+  return resolvedPropertyMap;
 }
 
 function findTypeDeclaration(programPath, name) {
@@ -1130,7 +1191,10 @@ export function extractProperties(functionPath, programPath, options = {}) {
       let propertyConfig = createPropertyConfig(t.identifier("String"));
       const checkerType = getCheckerTypeForBabelNode(param, typeResolver);
       if (checkerType) {
-        propertyConfig = mapCheckerTypeToPropertyConfig(checkerType, typeResolver.checker);
+        propertyConfig = mapCheckerTypeToPropertyConfig(checkerType, typeResolver.checker, {
+          cache: typeResolver.checkerTypeConfigCache,
+          inProgress: typeResolver.checkerTypeConfigInProgress,
+        });
       } else if (param.typeAnnotation) {
         propertyConfig = mapTsTypeToLit(param.typeAnnotation.typeAnnotation, programPath);
       }
@@ -1179,5 +1243,3 @@ export function extractProperties(functionPath, programPath, options = {}) {
 
   return { properties, propertyNames, bindings, defaults, nestedInitializers };
 }
-
-export default createNoopStagePlugin("transform-litsx-properties");

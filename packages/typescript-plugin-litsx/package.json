@@ -37,6 +37,9 @@
     "src",
     "README.md"
   ],
+  "dependencies": {
+    "@litsx/typescript-session": "workspace:^"
+  },
   "peerDependencies": {
     "typescript": ">=5"
   },

@@ -13,6 +13,7 @@ const { transformFromAstSync } = babelCore;
 
 let nativePreset;
 let createLitsxPresetPlugins;
+let detectLitsxSourceFeatures;
 
 beforeAll(async () => {
   const [presetMod] = await Promise.all([
@@ -21,6 +22,7 @@ beforeAll(async () => {
 
   nativePreset = interopDefault(presetMod);
   createLitsxPresetPlugins = presetMod.createLitsxPresetPlugins;
+  detectLitsxSourceFeatures = presetMod.detectLitsxSourceFeatures;
 });
 
 describe("@litsx/babel-preset-litsx", () => {
@@ -62,6 +64,44 @@ describe("@litsx/babel-preset-litsx", () => {
     });
 
     assert.strictEqual(presetResult.code, pluginResult.code);
+  });
+
+  it("detects source features so the compiler can skip unnecessary native plugin passes", () => {
+    const plainSource = [
+      "export const Greeting = ({ label }) => {",
+      "  return <button>{label}</button>;",
+      "};",
+    ].join("\n");
+    const featureSource = [
+      "import FancyButton from './FancyButton.js';",
+      "import { useRef, useState } from 'litsx';",
+      "export function Greeting({ label }) {",
+      "  const ref = useRef(null);",
+      "  const [count] = useState(0);",
+      "  return <FancyButton ref={ref}>{label}{count}</FancyButton>;",
+      "}",
+    ].join("\n");
+
+    assert.deepStrictEqual(detectLitsxSourceFeatures(plainSource, {}), {
+      hooks: false,
+      domRefs: false,
+      scopedElements: false,
+    });
+
+    assert.deepStrictEqual(detectLitsxSourceFeatures(featureSource, {}), {
+      hooks: true,
+      domRefs: true,
+      scopedElements: true,
+    });
+
+    assert.strictEqual(
+      createLitsxPresetPlugins({}, detectLitsxSourceFeatures(plainSource, {})).length,
+      2,
+    );
+    assert.strictEqual(
+      createLitsxPresetPlugins({}, detectLitsxSourceFeatures(featureSource, {})).length,
+      5,
+    );
   });
 
   it("can disable final template lowering", () => {

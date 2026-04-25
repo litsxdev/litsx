@@ -44,7 +44,8 @@
     "@babel/parser": "^7.26.5",
     "@litsx/babel-plugin-transform-jsx-html-template": "workspace:^",
     "@litsx/babel-preset-litsx": "workspace:^",
-    "@litsx/jsx-authoring": "workspace:^"
+    "@litsx/jsx-authoring": "workspace:^",
+    "@litsx/typescript-session": "workspace:^"
   },
   "scripts": {
     "build": "node -e 'process.exit(0)'"

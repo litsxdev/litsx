@@ -16,13 +16,14 @@ export default function transformFunctionToClassPlugin(api) {
     visitor: {
       Program: {
         exit(programPath) {
+          const availableMap = buildAvailableMap(programPath);
           programPath.get("body").forEach((nodePath) => {
             const classPath = resolveTopLevelClassPath(nodePath);
             if (!classPath) return;
             if (!isLitElementSuperClass(classPath.node.superClass, t)) return;
             if (classPath.node._elementsTransformed) return;
 
-            const transformed = transformClass(classPath, programPath);
+            const transformed = transformClass(classPath, programPath, availableMap);
             if (transformed) {
               classPath.node._elementsTransformed = true;
             }
@@ -48,7 +49,7 @@ function resolveTopLevelClassPath(nodePath) {
   return null;
 }
 
-function transformClass(classPath, programPath) {
+function transformClass(classPath, programPath, availableMap) {
   const { node } = classPath;
   const precomputedCandidates = new Set(node._litsxElementCandidates || []);
   const needsElementsRegistry = Boolean(node._needsElementsRegistry);
@@ -57,23 +58,17 @@ function transformClass(classPath, programPath) {
   delete node._needsElementsRegistry;
   delete node._litsxLightDom;
 
-  let returnStatement;
-  classPath.traverse({
-    ReturnStatement(returnPath) {
-      if (t.isJSXElement(returnPath.node.argument)) {
-        returnStatement = returnPath.node;
-      }
-    },
-  });
-
-  const detectedElements = detectElementsFromClass(classPath, programPath, precomputedCandidates);
+  const {
+    elements: detectedElements,
+    hasRenderableTemplate,
+  } = detectElementsFromClass(classPath, availableMap, precomputedCandidates);
   const needsElements = detectedElements.length > 0;
 
   const elementsStatic = createClassProperty("elements", detectedElements);
   const needsElementsMixin = Boolean(elementsStatic) || needsElementsRegistry;
   const needsLightDomBaseMixin = lightDomRequested && !needsElementsMixin;
 
-  if (!returnStatement && !needsElements && !needsElementsRegistry && !needsLightDomBaseMixin) {
+  if (!hasRenderableTemplate && !needsElements && !needsElementsRegistry && !needsLightDomBaseMixin) {
     return false;
   }
 
@@ -212,7 +207,7 @@ function hasNamedImport(programPath, moduleName, importName) {
   });
 }
 
-function detectElementsFromClass(classPath, programPath, precomputedCandidates) {
+function buildAvailableMap(programPath) {
   const availableMap = new Map();
 
   programPath.get("body").forEach((nodePath) => {
@@ -239,10 +234,20 @@ function detectElementsFromClass(classPath, programPath, precomputedCandidates) 
     });
   });
 
-  if (availableMap.size === 0) return [];
+  return availableMap;
+}
+
+function detectElementsFromClass(classPath, availableMap, precomputedCandidates) {
+  if (availableMap.size === 0) {
+    return {
+      elements: [],
+      hasRenderableTemplate: false,
+    };
+  }
 
   const used = new Map();
   const nameToTag = new Map();
+  let hasRenderableTemplate = false;
 
   precomputedCandidates.forEach((candidate) => {
     if (!availableMap.has(candidate)) return;
@@ -256,6 +261,7 @@ function detectElementsFromClass(classPath, programPath, precomputedCandidates) 
 
   classPath.traverse({
     JSXOpeningElement(path) {
+      hasRenderableTemplate = true;
       const nameNode = path.get("name");
       if (!nameNode.isJSXIdentifier()) return;
       const originalName = nameNode.node.__scopedOriginal || nameNode.node.name;
@@ -272,6 +278,7 @@ function detectElementsFromClass(classPath, programPath, precomputedCandidates) 
       });
     },
     JSXClosingElement(path) {
+      hasRenderableTemplate = true;
       const nameNode = path.get("name");
       if (!nameNode.isJSXIdentifier()) return;
       const originalName = nameNode.node.__scopedOriginal || nameNode.node.name;
@@ -281,6 +288,7 @@ function detectElementsFromClass(classPath, programPath, precomputedCandidates) 
     },
     TaggedTemplateExpression(path) {
       if (!t.isIdentifier(path.node.tag, { name: "html" })) return;
+      hasRenderableTemplate = true;
 
       const quasi = path.node.quasi;
 
@@ -299,7 +307,10 @@ function detectElementsFromClass(classPath, programPath, precomputedCandidates) 
     },
   });
 
-  return Array.from(used.values());
+  return {
+    elements: Array.from(used.values()),
+    hasRenderableTemplate,
+  };
 }
 
 function replaceInTemplate(quasi, originalName, kebabName) {

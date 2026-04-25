@@ -5,9 +5,6 @@ import { normalizeTransformLitsxOptions } from "../../babel-preset-litsx/src/pip
 import transformLitsxDomRefs from "../../babel-preset-litsx/src/internal/transform-litsx-dom-refs.js";
 import transformLitsxHooks from "../../babel-preset-litsx/src/internal/transform-litsx-hooks.js";
 import transformLitsxComponents from "../../babel-preset-litsx/src/internal/transform-litsx-components.js";
-import transformLitsxProperties from "../../babel-preset-litsx/src/internal/transform-litsx-properties.js";
-import transformLitsxStaticHoists from "../../babel-preset-litsx/src/internal/transform-litsx-static-hoists.js";
-import transformLitsxHandlers from "../../babel-preset-litsx/src/internal/transform-litsx-handlers.js";
 import reactAttributes from "./internal/react-attributes.js";
 import reactDomAttributes from "./internal/react-dom-attributes.js";
 import reactHooks from "./internal/react-hooks.js";
@@ -52,9 +49,6 @@ export function createReactCompatPresetPlugins(options = {}) {
     ],
     [transformLitsxHooks, options.transformLitsxHooks || {}],
     [transformLitsxDomRefs, options.transformLitsxDomRefs || {}],
-    [transformLitsxProperties, options.transformLitsxProperties || {}],
-    [transformLitsxStaticHoists, options.transformLitsxStaticHoists || {}],
-    [transformLitsxHandlers, options.transformLitsxHandlers || {}],
     [reactHooks, options.reactHooks || {}],
     [reactUseState, { allowReactAttributes: true, ...(options.reactUseState || {}) }],
     [reactUseRef, options.reactUseRef || {}],

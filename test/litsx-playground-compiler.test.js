@@ -698,6 +698,7 @@ describe("@litsx/playground compiler", () => {
 
     assert.strictEqual(firstResult.code, "const playgroundOutput = 1;");
     assert.strictEqual(secondResult.code, "const playgroundOutput = 1;");
+    assert.strictEqual(Babel.transformFromAst.mock.calls.length, 1);
     assert.deepStrictEqual(parserPluginCalls[0], ["typescript", "jsx"]);
     assert.strictEqual(Babel.registerPreset.mock.calls.length, 2);
     assert.strictEqual(Babel.registerPlugin.mock.calls.length, 1);

@@ -78,11 +78,13 @@ export function createTransformFunctionToClassPlugin(defaultPluginOptions = {}) 
         this.__litsxNeedsCallbackRef = false;
         this.__litsxWarnings = [];
         this.__litsxResolvedPluginOptions = resolvedPluginOptions;
-        this.__litsxTypeResolver = createTypeResolver(
-          this.file?.opts?.filename,
-          this.file?.code,
-          resolvedPluginOptions
-        );
+        this.__litsxTypeResolver = fileLikelyNeedsTypeResolver(this)
+          ? createTypeResolver(
+              this.file?.opts?.filename,
+              this.file?.code,
+              resolvedPluginOptions
+            )
+          : undefined;
       },
       post() {
         if (!this.file) return;
@@ -149,7 +151,7 @@ export function createTransformFunctionToClassPlugin(defaultPluginOptions = {}) 
               varPath.node.id.name,
               {
                 ...resolvedPluginOptions,
-                typeResolver: this.__litsxTypeResolver,
+                typeResolver: getTypeResolverForFunction(initPath, this),
                 warn: (warning) => {
                   this.__litsxWarnings.push(warning);
                 },
@@ -183,7 +185,7 @@ export function createTransformFunctionToClassPlugin(defaultPluginOptions = {}) 
               undefined,
               {
                 ...resolvedPluginOptions,
-                typeResolver: this.__litsxTypeResolver,
+                typeResolver: getTypeResolverForFunction(funcPath, this),
                 warn: (warning) => {
                   this.__litsxWarnings.push(warning);
                 },
@@ -261,6 +263,92 @@ function isInsideFunctionOrClass(path) {
   return path.findParent(
     (p) => p.isFunctionDeclaration() || p.isFunctionExpression() || p.isArrowFunctionExpression() || p.isClassDeclaration()
   );
+}
+
+function getOrCreateTypeResolver(state) {
+  if (state.__litsxTypeResolver !== undefined) {
+    return state.__litsxTypeResolver;
+  }
+
+  state.__litsxTypeResolver = createTypeResolver(
+    state.file?.opts?.filename,
+    state.file?.code,
+    state.__litsxResolvedPluginOptions
+  );
+  return state.__litsxTypeResolver;
+}
+
+function fileLikelyNeedsTypeResolver(state) {
+  const filename = state?.file?.opts?.filename || "";
+  if (/\.(?:[cm]?ts|tsx)$/i.test(filename)) {
+    return true;
+  }
+
+  const source = state?.file?.code || "";
+  return /\b(?:type|interface|enum)\b/.test(source);
+}
+
+function functionNeedsTypeResolver(functionPath, state) {
+  const params = functionPath.get("params");
+  if (!Array.isArray(params) || params.length === 0) {
+    return false;
+  }
+
+  if (fileLikelyNeedsTypeResolver(state)) {
+    return true;
+  }
+
+  return params.some((paramPath) => containsTypeResolutionSyntax(paramPath));
+}
+
+function containsTypeResolutionSyntax(path) {
+  if (!path?.node) {
+    return false;
+  }
+
+  if (
+    path.isIdentifier?.() ||
+    path.isObjectPattern?.() ||
+    path.isArrayPattern?.() ||
+    path.isAssignmentPattern?.()
+  ) {
+    if (path.node.typeAnnotation) {
+      return true;
+    }
+  }
+
+  if (path.isAssignmentPattern?.()) {
+    return containsTypeResolutionSyntax(path.get("left"));
+  }
+
+  if (path.isObjectPattern?.()) {
+    return path.get("properties").some((propertyPath) => {
+      if (propertyPath.isRestElement()) {
+        return containsTypeResolutionSyntax(propertyPath.get("argument"));
+      }
+      if (propertyPath.isObjectProperty()) {
+        return containsTypeResolutionSyntax(propertyPath.get("value"));
+      }
+      return false;
+    });
+  }
+
+  if (path.isArrayPattern?.()) {
+    return path.get("elements").some((elementPath) => {
+      if (!elementPath?.node) return false;
+      return containsTypeResolutionSyntax(elementPath);
+    });
+  }
+
+  return false;
+}
+
+function getTypeResolverForFunction(functionPath, state) {
+  if (!functionNeedsTypeResolver(functionPath, state)) {
+    return null;
+  }
+
+  return getOrCreateTypeResolver(state);
 }
 
 function transformFunction(functionPath, programPath, className, options = {}) {

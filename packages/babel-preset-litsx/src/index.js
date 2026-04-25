@@ -1,6 +1,6 @@
 import { createLitsxPresetPlugins } from "./pipeline.js";
 
-export { createLitsxPresetPlugins } from "./pipeline.js";
+export { createLitsxPresetPlugins, detectLitsxSourceFeatures } from "./pipeline.js";
 export {
   createTransformLitsxComponentsPlugin,
   setTypescriptModule,

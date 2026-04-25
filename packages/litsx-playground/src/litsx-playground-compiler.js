@@ -13,6 +13,9 @@ let compilerRuntimePromise;
 let injectedCompilerRuntime = null;
 
 let pluginsRegistered = false;
+let compileCache = new Map();
+let compileCacheReferenceIds = new WeakMap();
+let nextCompileCacheReferenceId = 1;
 
 function normalizeModule(moduleValue) {
   return moduleValue?.default ?? moduleValue;
@@ -22,6 +25,9 @@ export function setLitsxPlaygroundCompilerRuntime(runtime) {
   injectedCompilerRuntime = runtime || null;
   compilerRuntimePromise = null;
   pluginsRegistered = false;
+  compileCache = new Map();
+  compileCacheReferenceIds = new WeakMap();
+  nextCompileCacheReferenceId = 1;
 }
 
 async function loadCompilerRuntime() {
@@ -95,6 +101,55 @@ function ensureRegisteredPlugins(Babel, runtimePlugins, runtimePresets) {
   pluginsRegistered = true;
 }
 
+function getReferenceCacheId(value) {
+  if (!value || (typeof value !== "object" && typeof value !== "function")) {
+    return value;
+  }
+
+  if (!compileCacheReferenceIds.has(value)) {
+    compileCacheReferenceIds.set(value, nextCompileCacheReferenceId++);
+  }
+
+  return compileCacheReferenceIds.get(value);
+}
+
+function serializeCompileOption(value) {
+  if (value == null) {
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((item) => serializeCompileOption(item));
+  }
+
+  const valueType = typeof value;
+  if (valueType === "function") {
+    return { __fn: getReferenceCacheId(value) };
+  }
+
+  if (valueType !== "object") {
+    return value;
+  }
+
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype === Object.prototype || prototype === null) {
+    const result = {};
+    for (const key of Object.keys(value).sort()) {
+      result[key] = serializeCompileOption(value[key]);
+    }
+    return result;
+  }
+
+  return { __ref: getReferenceCacheId(value) };
+}
+
+function createCompileCacheKey(source, options) {
+  return JSON.stringify({
+    source,
+    options: serializeCompileOption(options),
+  });
+}
+
 function formatEmittedModule(Babel, code, filename) {
   if (!code) return "";
 
@@ -121,6 +176,11 @@ function formatEmittedModule(Babel, code, filename) {
 }
 
 export async function compileLitsxPlayground(source, options = {}) {
+  const cacheKey = createCompileCacheKey(source, options);
+  if (compileCache.has(cacheKey)) {
+    return compileCache.get(cacheKey);
+  }
+
   const {
     Babel,
     parser,
@@ -232,10 +292,13 @@ export async function compileLitsxPlayground(source, options = {}) {
     });
   }
 
-  return {
+  const result = {
     code: formatEmittedModule(Babel, finalResult?.code || "", filename),
     metadata: firstPass?.metadata || {},
   };
+
+  compileCache.set(cacheKey, result);
+  return result;
 }
 
 export function preloadLitsxPlaygroundCompiler() {

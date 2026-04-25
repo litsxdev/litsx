@@ -1,4 +1,4 @@
-import { transformLitsx } from "../../compiler/src/index.js";
+import { createLitsxCompilationSession } from "../../compiler/src/index.js";
 
 function shouldTransform(id, include) {
   if (typeof include === "function") {
@@ -17,6 +17,17 @@ export function litsx(options = {}) {
     include,
     ...compilerOptions
   } = options;
+  let session = null;
+
+  function getSession() {
+    if (!session) {
+      session = createLitsxCompilationSession({
+        projectPath: compilerOptions.projectPath,
+        transformOptions: compilerOptions,
+      });
+    }
+    return session;
+  }
 
   return {
     name: "litsx",
@@ -26,7 +37,7 @@ export function litsx(options = {}) {
         return null;
       }
 
-      const result = await transformLitsx(code, {
+      const result = await getSession().transform(code, {
         ...compilerOptions,
         filename: id,
       });
@@ -35,6 +46,13 @@ export function litsx(options = {}) {
         code: result.code,
         map: result.map,
       };
+    },
+    handleHotUpdate(ctx) {
+      session?.invalidate?.([ctx.file]);
+    },
+    buildEnd() {
+      session?.dispose?.();
+      session = null;
     },
   };
 }

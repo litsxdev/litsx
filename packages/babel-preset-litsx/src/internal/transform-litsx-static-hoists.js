@@ -1,4 +1,3 @@
-import { createNoopStagePlugin } from "./noop-stage-plugin.js";
 import {
   createPropertyConfig,
   createPropertyValue,
@@ -753,5 +752,3 @@ export function processStaticHoists({
       ),
   };
 }
-
-export default createNoopStagePlugin("transform-litsx-static-hoists");

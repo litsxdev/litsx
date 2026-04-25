@@ -9,6 +9,14 @@ export type TransformLitsxOptions = {
   requireJsx?: boolean;
 };
 
+export type LitsxCompilationSession = {
+  transform(source: string, options?: TransformLitsxOptions): Promise<TransformLitsxResult>;
+  transformSync(source: string, options?: TransformLitsxOptions): TransformLitsxResult;
+  getTypecheckSession(rawArgs?: string[]): unknown;
+  invalidate(files?: string[] | null): void;
+  dispose(): void;
+};
+
 export type TransformLitsxResult = {
   code: string;
   map: object | null;
@@ -49,3 +57,8 @@ export function transformLitsxSync(
   source: string,
   options?: TransformLitsxOptions
 ): TransformLitsxResult;
+
+export function createLitsxCompilationSession(options?: {
+  projectPath?: string;
+  transformOptions?: TransformLitsxOptions;
+}): LitsxCompilationSession;

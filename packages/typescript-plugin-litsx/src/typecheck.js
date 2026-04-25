@@ -2,6 +2,7 @@
 import { fileURLToPath } from "url";
 import path from "path";
 import ts from "typescript";
+import { getOrCreateProjectTsSession } from "../../shared/typescript-session/src/index.js";
 
 import {
   createToolingVirtualLitsxSource,
@@ -9,6 +10,30 @@ import {
   remapToolingTextSpanToOriginal,
   remapVirtualText,
 } from "./virtual-source.js";
+
+const PROFILE_ENABLED = process.env.LITSX_PROFILE === "1";
+const PARSED_COMMAND_LINE_CACHE = new Map();
+const TYPECHECK_SESSION_BY_PROJECT = new Map();
+const TYPECHECK_SESSION_CACHE_LIMIT = 20;
+const FORMAT_HOST = createFormatHost();
+
+function profilePhase(namespace, name, callback) {
+  if (!PROFILE_ENABLED) {
+    return callback();
+  }
+
+  const start = performance.now();
+  try {
+    return callback();
+  } finally {
+    globalThis.__litsxProfileEvents ??= [];
+    globalThis.__litsxProfileEvents.push({
+      namespace,
+      name,
+      durationMs: performance.now() - start,
+    });
+  }
+}
 
 function isRelevantFile(fileName) {
   return /\.(jsx|tsx)$/.test(fileName);
@@ -18,72 +43,128 @@ function getPluginsForFile(fileName) {
   return fileName.endsWith(".tsx") ? ["typescript"] : [];
 }
 
+function trimCacheToLimit(cache, limit) {
+  while (cache.size > limit) {
+    const oldestKey = cache.keys().next().value;
+    if (oldestKey == null) break;
+    cache.delete(oldestKey);
+  }
+}
+
+function getFileVersion(filePath) {
+  try {
+    const stats = ts.sys.getModifiedTime?.(filePath);
+    if (stats instanceof Date) {
+      return String(stats.getTime());
+    }
+  } catch {}
+
+  try {
+    const content = ts.sys.readFile(filePath);
+    return typeof content === "string" ? String(content.length) : null;
+  } catch {
+    return null;
+  }
+}
+
+function createNormalizedArgKey(rawArgs) {
+  return rawArgs.join("\0");
+}
+
+function createSessionKey(projectPath, rawArgs) {
+  return `${projectPath || "<no-project>"}:${createNormalizedArgKey(rawArgs)}`;
+}
+
 function createVirtualizationState() {
   const cache = new Map();
+  const sourceFileCache = new Map();
 
   function normalizeFileName(fileName) {
     return path.resolve(fileName);
   }
 
-  function buildVirtualization(fileName, sourceText) {
+  function get(fileName) {
+    return cache.get(normalizeFileName(fileName)) ?? null;
+  }
+
+  function clear(fileName) {
+    const normalizedFileName = normalizeFileName(fileName);
+    cache.delete(normalizedFileName);
+    sourceFileCache.delete(normalizedFileName);
+  }
+
+  function buildVirtualizationRecord(fileName, sourceText) {
+    const normalizedFileName = normalizeFileName(fileName);
+    const cachedRecord = cache.get(normalizedFileName) ?? null;
+
+    if (cachedRecord?.sourceText === sourceText) {
+      return cachedRecord;
+    }
+
     if (!isRelevantFile(fileName) || !looksLikeLitsxJsx(sourceText)) {
-      cache.delete(normalizeFileName(fileName));
+      clear(fileName);
       return null;
     }
 
-    const virtualization = createToolingVirtualLitsxSource(sourceText, {
-      plugins: getPluginsForFile(fileName),
-    });
+    const parserPlugins = getPluginsForFile(fileName);
+    const virtualization = profilePhase(
+      "typescript-typecheck",
+      "tooling-virtualization",
+      () => createToolingVirtualLitsxSource(sourceText, {
+        plugins: parserPlugins,
+      }),
+    );
 
     if (virtualization.code === sourceText) {
-      cache.delete(normalizeFileName(fileName));
+      clear(fileName);
       return null;
     }
 
     const record = {
       ...virtualization,
       sourceText,
+      parserPlugins,
+      virtualizedText: virtualization.code,
     };
-    cache.set(normalizeFileName(fileName), record);
+    cache.set(normalizedFileName, record);
     return record;
   }
 
   return {
-    get(fileName) {
-      return cache.get(normalizeFileName(fileName)) ?? null;
+    get,
+    getOrBuild(fileName, sourceText) {
+      return buildVirtualizationRecord(fileName, sourceText);
     },
-    buildVirtualizedText(fileName, sourceText) {
-      const virtualization = buildVirtualization(fileName, sourceText);
-      return virtualization?.code ?? sourceText;
+    getVirtualizedText(fileName, sourceText) {
+      const virtualization = buildVirtualizationRecord(fileName, sourceText);
+      return virtualization?.virtualizedText ?? sourceText;
+    },
+    getOrCreateSourceFile(fileName, sourceText, languageVersion, scriptKind) {
+      const normalizedFileName = normalizeFileName(fileName);
+      const virtualizedText = this.getVirtualizedText(fileName, sourceText);
+      const cacheKey = `${String(languageVersion)}:${String(scriptKind ?? "")}:${sourceText}`;
+      let fileCache = sourceFileCache.get(normalizedFileName);
+      if (!fileCache) {
+        fileCache = new Map();
+        sourceFileCache.set(normalizedFileName, fileCache);
+      }
+
+      const cachedSourceFile = fileCache.get(cacheKey);
+      if (cachedSourceFile) {
+        return cachedSourceFile;
+      }
+
+      const sourceFile = ts.createSourceFile(
+        fileName,
+        virtualizedText,
+        languageVersion,
+        true,
+        scriptKind,
+      );
+      fileCache.set(cacheKey, sourceFile);
+      return sourceFile;
     },
   };
-}
-
-function createVirtualizedCompilerHost(parsedCommandLine, virtualizationState) {
-  const host = ts.createCompilerHost(parsedCommandLine.options);
-  const originalReadFile = host.readFile.bind(host);
-  const originalGetSourceFile = host.getSourceFile.bind(host);
-
-  host.readFile = (fileName) => {
-    const sourceText = originalReadFile(fileName);
-    if (typeof sourceText !== "string") {
-      return sourceText;
-    }
-
-    return virtualizationState.buildVirtualizedText(fileName, sourceText);
-  };
-
-  host.getSourceFile = (fileName, languageVersion, onError, shouldCreateNewSourceFile) => {
-    const sourceText = originalReadFile(fileName);
-    if (typeof sourceText !== "string") {
-      return originalGetSourceFile(fileName, languageVersion, onError, shouldCreateNewSourceFile);
-    }
-
-    const virtualizedText = virtualizationState.buildVirtualizedText(fileName, sourceText);
-    return ts.createSourceFile(fileName, virtualizedText, languageVersion, true);
-  };
-
-  return host;
 }
 
 function remapMessageText(messageText) {
@@ -213,44 +294,121 @@ function resolveParsedCommandLine(rawArgs) {
     ...ts.sys,
     onUnRecoverableConfigFileDiagnostic() {},
   };
+  const projectVersion = getFileVersion(projectPath) ?? "unknown";
+  const cacheKey = `${projectPath}:${projectVersion}:${createNormalizedArgKey(rawArgs)}`;
+  const cached = PARSED_COMMAND_LINE_CACHE.get(cacheKey);
+  if (cached) {
+    PARSED_COMMAND_LINE_CACHE.delete(cacheKey);
+    PARSED_COMMAND_LINE_CACHE.set(cacheKey, cached);
+    return cached;
+  }
 
-  return ts.parseJsonConfigFileContent(
-    configFile.config,
-    configHost,
-    path.dirname(projectPath),
-    parsedCommandLine.options,
+  const resolved = {
+    ...ts.parseJsonConfigFileContent(
+      configFile.config,
+      configHost,
+      path.dirname(projectPath),
+      parsedCommandLine.options,
+      projectPath,
+    ),
     projectPath,
-  );
+    projectVersion,
+    __litsxSessionKey: createSessionKey(projectPath, rawArgs),
+  };
+
+  PARSED_COMMAND_LINE_CACHE.set(cacheKey, resolved);
+  trimCacheToLimit(PARSED_COMMAND_LINE_CACHE, TYPECHECK_SESSION_CACHE_LIMIT);
+  return resolved;
 }
 
-export function runLitsxTypecheck(rawArgs = process.argv.slice(2)) {
+function createTypecheckSession(parsedCommandLine, projectSession = null) {
+  const virtualizationState = createVirtualizationState();
+  return {
+    parsedCommandLine,
+    sessionKey: parsedCommandLine.__litsxSessionKey,
+    virtualizationState,
+    projectSession: projectSession || getOrCreateProjectTsSession(parsedCommandLine.__litsxSessionKey, {
+      typescript: ts,
+      parsedCommandLine,
+    }),
+  };
+}
+
+function getTypecheckSession(parsedCommandLine, projectSession = null) {
+  const sessionKey =
+    parsedCommandLine.__litsxSessionKey ||
+    createSessionKey(parsedCommandLine.projectPath, []);
+  const cached = TYPECHECK_SESSION_BY_PROJECT.get(sessionKey);
+  if (cached) {
+    cached.parsedCommandLine = parsedCommandLine;
+    if (projectSession) {
+      cached.projectSession = projectSession;
+    }
+    cached.projectSession.refresh({
+      parsedCommandLine,
+    });
+    TYPECHECK_SESSION_BY_PROJECT.delete(sessionKey);
+    TYPECHECK_SESSION_BY_PROJECT.set(sessionKey, cached);
+    return cached;
+  }
+
+  const session = createTypecheckSession(parsedCommandLine, projectSession);
+  TYPECHECK_SESSION_BY_PROJECT.set(sessionKey, session);
+  trimCacheToLimit(TYPECHECK_SESSION_BY_PROJECT, TYPECHECK_SESSION_CACHE_LIMIT);
+  return session;
+}
+
+export function createLitsxTypecheckSession(rawArgs = process.argv.slice(2), options = {}) {
   const parsedCommandLine = resolveParsedCommandLine(rawArgs);
-  const formatHost = createFormatHost();
+  return getTypecheckSession(parsedCommandLine, options.projectSession);
+}
+
+function runTypecheckSession(session) {
+  const parsedCommandLine = session.parsedCommandLine;
 
   if (parsedCommandLine.errors?.length) {
-    const output = ts.formatDiagnosticsWithColorAndContext(parsedCommandLine.errors, formatHost);
+    const output = ts.formatDiagnosticsWithColorAndContext(parsedCommandLine.errors, FORMAT_HOST);
     if (output) {
       process.stderr.write(output);
     }
     return 1;
   }
 
-  const virtualizationState = createVirtualizationState();
-  const host = createVirtualizedCompilerHost(parsedCommandLine, virtualizationState);
-
-  const program = ts.createProgram({
-    rootNames: parsedCommandLine.fileNames,
-    options: parsedCommandLine.options,
-    projectReferences: parsedCommandLine.projectReferences,
-    host,
+  const virtualizationState = session.virtualizationState;
+  session.projectSession.refresh({
+    parsedCommandLine,
   });
+  for (const fileName of parsedCommandLine.fileNames) {
+    const sourceText = session.projectSession.readFile?.(fileName) ?? ts.sys.readFile(fileName);
+    if (typeof sourceText !== "string") {
+      session.projectSession.clearOverlayFile(fileName);
+      continue;
+    }
 
-  const diagnostics = ts
-    .getPreEmitDiagnostics(program)
+    const virtualizedText = virtualizationState.getVirtualizedText(fileName, sourceText);
+    if (virtualizedText === sourceText) {
+      session.projectSession.clearOverlayFile(fileName);
+      continue;
+    }
+
+    session.projectSession.setOverlayFile(fileName, virtualizedText);
+  }
+
+  const program = profilePhase(
+    "typescript-typecheck",
+    "create-program",
+    () => session.projectSession.getProgram(),
+  );
+
+  const diagnostics = profilePhase(
+    "typescript-typecheck",
+    "diagnostics",
+    () => ts.getPreEmitDiagnostics(program),
+  )
     .map((diagnostic) => remapDiagnostic(diagnostic, virtualizationState));
 
   if (diagnostics.length > 0) {
-    const output = ts.formatDiagnosticsWithColorAndContext(diagnostics, formatHost);
+    const output = ts.formatDiagnosticsWithColorAndContext(diagnostics, FORMAT_HOST);
     if (output) {
       process.stderr.write(output);
     }
@@ -258,6 +416,13 @@ export function runLitsxTypecheck(rawArgs = process.argv.slice(2)) {
   }
 
   return 0;
+}
+
+export function runLitsxTypecheck(rawArgs = process.argv.slice(2)) {
+  const session = Array.isArray(rawArgs)
+    ? createLitsxTypecheckSession(rawArgs)
+    : rawArgs;
+  return runTypecheckSession(session);
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {

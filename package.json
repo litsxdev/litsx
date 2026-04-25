@@ -38,6 +38,7 @@
     "playground:build": "rollup --config packages/litsx-playground/rollup.config.mjs",
     "playground:runtime": "yarn playground:build",
     "test": "vitest run",
+    "test:transforms": "LITSX_VITEST_TRANSFORMS=1 vitest run",
     "bench:transform-litsx": "node scripts/bench/transform-litsx.mjs",
     "coverage": "vitest run --coverage",
     "docs:framework": "node scripts/docs/build-framework-docs.mjs",

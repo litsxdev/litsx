@@ -1,0 +1,21 @@
+{
+  "name": "@litsx/typescript-session",
+  "version": "0.1.0",
+  "description": "Internal shared TypeScript session utilities for LitSX compiler and tooling",
+  "type": "module",
+  "main": "./src/index.js",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "files": [
+    "src"
+  ],
+  "license": "Apache-2.0",
+  "private": true,
+  "peerDependencies": {
+    "typescript": ">=5"
+  },
+  "scripts": {
+    "build": "node -e 'process.exit(0)'"
+  }
+}

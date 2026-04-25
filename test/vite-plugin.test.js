@@ -1,7 +1,8 @@
 import assert from "assert";
-import { describe, it } from "vitest";
+import { describe, it, vi } from "vitest";
 
 import { litsx } from "../packages/vite-plugin/src/index.js";
+import * as compilerModule from "../packages/compiler/src/index.js";
 
 describe("@litsx/vite-plugin", () => {
   it("transforms jsx and returns code with a sourcemap", async () => {
@@ -66,4 +67,43 @@ describe("@litsx/vite-plugin", () => {
     assert.ok(transformed.map);
     assert.strictEqual(ignored, null);
   }, 30000);
+
+  it("reuses a compilation session across transforms and invalidates on hot updates", async () => {
+    const invalidate = vi.fn();
+    const dispose = vi.fn();
+    const transform = vi.fn(async (code, options) => ({
+      code: `${options.filename}:${code}`,
+      map: null,
+      metadata: {},
+    }));
+    const session = {
+      transform,
+      transformSync: vi.fn(),
+      getTypecheckSession: vi.fn(),
+      invalidate,
+      dispose,
+    };
+    const sessionSpy = vi
+      .spyOn(compilerModule, "createLitsxCompilationSession")
+      .mockReturnValue(session);
+
+    try {
+      const plugin = litsx();
+      const first = await plugin.transform("export const one = 1;", "/virtual/one.jsx");
+      const second = await plugin.transform("export const two = 2;", "/virtual/two.jsx");
+
+      assert.ok(first);
+      assert.ok(second);
+      assert.strictEqual(sessionSpy.mock.calls.length, 1);
+      assert.strictEqual(transform.mock.calls.length, 2);
+
+      plugin.handleHotUpdate({ file: "/virtual/one.jsx" });
+      assert.deepStrictEqual(invalidate.mock.calls[0][0], ["/virtual/one.jsx"]);
+
+      plugin.buildEnd();
+      assert.strictEqual(dispose.mock.calls.length, 1);
+    } finally {
+      sessionSpy.mockRestore();
+    }
+  });
 });
