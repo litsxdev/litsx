@@ -16,3 +16,11 @@
 .VPHero .text sup {
   margin-left: 0.04em;
 }
+
+:root {
+  --vp-nav-logo-height: 34px;
+}
+
+.VPNavBarTitle .logo {
+  width: auto;
+}

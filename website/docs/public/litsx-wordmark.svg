@@ -1,0 +1,53 @@
+<svg width="210" height="64" viewBox="0 0 210 64" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Litsx">
+  <defs>
+    <linearGradient id="flameGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ff8a00"/>
+      <stop offset="50%" stop-color="#ff3d77"/>
+      <stop offset="100%" stop-color="#6a5cff"/>
+    </linearGradient>
+    <linearGradient id="middleFlameGradient" x1="15%" y1="5%" x2="90%" y2="100%">
+      <stop offset="0%" stop-color="#ffd166"/>
+      <stop offset="55%" stop-color="#ff6b6b"/>
+      <stop offset="100%" stop-color="#9b5cff"/>
+    </linearGradient>
+    <style>
+      .litsx-wordmark-text {
+        fill: #1a1a1a;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        .litsx-wordmark-text {
+          fill: #f3f4f6;
+        }
+      }
+    </style>
+  </defs>
+  <g transform="translate(2,8) scale(0.7)">
+    <path
+      d="M32 4 C38 14, 46 20, 46 34 C46 48, 38 58, 28 58 C18 58, 12 50, 12 40 C12 28, 20 20, 28 14 C30 10, 31 7, 32 4Z"
+      fill="url(#flameGradient)"
+    />
+    <path
+      d="M33 12 C37 19, 42 25, 42 35 C42 46, 35 54, 28 54 C21 54, 16 47, 16 39 C16 30, 23 24, 28 19 C31 16, 32 14, 33 12Z"
+      fill="url(#middleFlameGradient)"
+      opacity="0.72"
+    />
+    <path
+      d="M32 20 C35 25, 38 30, 38 36 C38 44, 33 50, 28 50 C24 50, 21 46, 21 40 C21 33, 25 28, 29 24 C31 22, 31.5 21, 32 20Z"
+      fill="white"
+      fill-opacity="0.22"
+    />
+  </g>
+  <text
+    class="litsx-wordmark-text"
+    x="44"
+    y="42"
+    font-family="Montserrat, sans-serif"
+    font-weight="700"
+    font-size="32"
+    letter-spacing="-0.5"
+  >
+    Lit
+    <tspan dx="-4" dy="-12" font-size="18">sx</tspan>
+  </text>
+</svg>

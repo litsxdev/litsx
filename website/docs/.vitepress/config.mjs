@@ -25,6 +25,8 @@ export default defineConfig({
   },
   cleanUrls: true,
   themeConfig: {
+    logo: "/litsx-wordmark.svg",
+    siteTitle: false,
     nav: [
       { text: "Why Lit<sup>sx</sup>", link: "/guides/why-litsx" },
       { text: "Guide", link: "/getting-started" },
