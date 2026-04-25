@@ -177,6 +177,166 @@ export class Screen extends ShadowDomElementsMixin(LitElement) {
 }
 ```
 
+### Handles namespace React.Suspense and React.SuspenseList forms
+
+#### Interpretation
+
+This case captures supported authored syntax and the emitted code path used to preserve that behavior.
+
+#### Authored Input
+
+```jsx
+import * as React from 'react';
+
+export const Screen = () => {
+  return (
+    <React.SuspenseList revealOrder='forwards'>
+      <React.Suspense fallback={<span>loading</span>}>
+        <div>ready</div>
+      </React.Suspense>
+    </React.SuspenseList>
+  );
+};
+```
+
+#### Generated Output
+
+```js
+import { ShadowDomElementsMixin } from "litsx/runtime-infrastructure";
+import { ErrorBoundary, SuspenseBoundary, SuspenseList } from "litsx";
+import { LitElement, html } from "lit";
+export class Screen extends ShadowDomElementsMixin(LitElement) {
+  render() {
+    return html`<suspense-list revealOrder="forwards"><suspense-boundary .fallbackRenderer=${() => html`<span>loading</span>`} .contentRenderer=${() => html`<div>ready</div>`}></suspense-boundary></suspense-list>`;
+  }
+  static elements = {
+    "suspense-boundary": SuspenseBoundary,
+    "suspense-list": SuspenseList
+  };
+}
+```
+
+### Emits null renderers when suspense has no fallback or content
+
+#### Interpretation
+
+This case records the authored input and the generated output as a living transform contract.
+
+#### Authored Input
+
+```jsx
+import { Suspense } from 'react';
+
+export const Screen = () => {
+  return <Suspense />;
+};
+```
+
+#### Generated Output
+
+```js
+import { ShadowDomElementsMixin } from "litsx/runtime-infrastructure";
+import { ErrorBoundary, SuspenseBoundary } from "litsx";
+import { LitElement, html } from "lit";
+export class Screen extends ShadowDomElementsMixin(LitElement) {
+  render() {
+    return html`<suspense-boundary .fallbackRenderer=${() => null} .contentRenderer=${() => null}></suspense-boundary>`;
+  }
+  static elements = {
+    "suspense-boundary": SuspenseBoundary
+  };
+}
+```
+
+### Preserves fragment children inside the suspense content renderer
+
+#### Interpretation
+
+This case records the authored input and the generated output as a living transform contract.
+
+#### Authored Input
+
+```jsx
+import { Suspense } from 'react';
+
+export const Screen = () => {
+  return (
+    <Suspense fallback={<span>loading</span>}>
+      <>
+        <div>alpha</div>
+        <div>beta</div>
+      </>
+    </Suspense>
+  );
+};
+```
+
+#### Generated Output
+
+```js
+import { ShadowDomElementsMixin } from "litsx/runtime-infrastructure";
+import { ErrorBoundary, SuspenseBoundary } from "litsx";
+import { LitElement, html } from "lit";
+export class Screen extends ShadowDomElementsMixin(LitElement) {
+  render() {
+    return html`<suspense-boundary .fallbackRenderer=${() => html`<span>loading</span>`} .contentRenderer=${() => html`<div>alpha</div><div>beta</div>`}></suspense-boundary>`;
+  }
+  static elements = {
+    "suspense-boundary": SuspenseBoundary
+  };
+}
+```
+
+### Moves only matching ensureLazyElement calls into suspense content renderers
+
+#### Interpretation
+
+This case records the authored input and the generated output as a living transform contract.
+
+#### Authored Input
+
+```jsx
+import { ensureLazyElement } from 'litsx';
+import { Suspense } from 'react';
+
+const AlphaPanel = () => null;
+const BetaPanel = () => null;
+
+export const Screen = () => {
+  ensureLazyElement(this, 'alpha-panel', AlphaPanel);
+  ensureLazyElement(this, 'beta-panel', BetaPanel);
+  return (
+    <section>
+      <Suspense fallback={<span>loading</span>}>
+        <alpha-panel />
+      </Suspense>
+    </section>
+  );
+};
+```
+
+#### Generated Output
+
+```js
+import { ShadowDomElementsMixin } from "litsx/runtime-infrastructure";
+import { LitElement, html } from "lit";
+import { ensureLazyElement, ErrorBoundary, SuspenseBoundary } from 'litsx';
+const AlphaPanel = () => null;
+const BetaPanel = () => null;
+export class Screen extends ShadowDomElementsMixin(LitElement) {
+  render() {
+    ensureLazyElement(this, 'beta-panel', BetaPanel);
+    return html`<section><suspense-boundary .fallbackRenderer=${() => html`<span>loading</span>`} .contentRenderer=${() => {
+      ensureLazyElement(this, 'alpha-panel', AlphaPanel);
+      return html`<alpha-panel></alpha-panel>`;
+    }}></suspense-boundary></section>`;
+  }
+  static elements = {
+    "suspense-boundary": SuspenseBoundary
+  };
+}
+```
+
 ### Does not introduce boundary-key or list-key attributes in the component model
 
 #### Interpretation

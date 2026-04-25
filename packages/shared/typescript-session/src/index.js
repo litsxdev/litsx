@@ -1,4 +1,4 @@
-import fs from "fs";
+import { createRequire } from "module";
 
 const PROJECT_SESSION_CACHE = new Map();
 const STANDALONE_SESSION_CACHE = new Map();
@@ -6,6 +6,29 @@ const SESSION_CACHE_LIMIT = 50;
 const DISK_SOURCE_TEXT_CACHE = new Map();
 const DISK_SOURCE_FILE_CACHE = new Map();
 const DISK_FILE_CACHE_LIMIT = 500;
+const nodeRequire = (() => {
+  try {
+    return createRequire(import.meta.url);
+  } catch {
+    return null;
+  }
+})();
+let nodeFs = null;
+
+function getNodeFs() {
+  if (nodeFs) {
+    return nodeFs;
+  }
+  if (!nodeRequire) {
+    return null;
+  }
+  try {
+    nodeFs = nodeRequire("fs");
+    return nodeFs;
+  } catch {
+    return null;
+  }
+}
 
 function trimCacheToLimit(cache, limit) {
   while (cache.size > limit) {
@@ -30,10 +53,18 @@ function dirname(filePath) {
 }
 
 function defaultReadFile(filePath) {
+  const fs = getNodeFs();
+  if (!fs) {
+    throw new Error("Disk-backed TypeScript sessions require Node fs access.");
+  }
   return fs.readFileSync(filePath, "utf8");
 }
 
 function getDiskFileVersion(filePath) {
+  const fs = getNodeFs();
+  if (!fs) {
+    return null;
+  }
   try {
     const stats = fs.statSync(filePath);
     return `${stats.mtimeMs}:${stats.size}`;

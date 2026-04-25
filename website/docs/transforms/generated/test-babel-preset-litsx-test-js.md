@@ -80,6 +80,73 @@ export class Greeting extends ShadowDomElementsMixin(LitElement) {
 }
 ```
 
+### Detects source features so the compiler can skip unnecessary native plugin passes
+
+#### Interpretation
+
+This case records the authored input and the generated output as a living transform contract.
+
+#### Plain Source
+
+```jsx
+export const Greeting = ({ label }) => {
+  return <button>{label}</button>;
+};
+```
+
+#### Generated Output
+
+```js
+import { LitElement, html } from "lit";
+export class Greeting extends LitElement {
+  static properties = {
+    label: {
+      type: String
+    }
+  };
+  render() {
+    return html`<button>${this.label}</button>`;
+  }
+}
+```
+
+#### Feature Source
+
+```jsx
+import FancyButton from './FancyButton.js';
+import { useRef, useState } from 'litsx';
+export function Greeting({ label }) {
+  const ref = useRef(null);
+  const [count] = useState(0);
+  return <FancyButton ref={ref}>{label}{count}</FancyButton>;
+}
+```
+
+#### Generated Output
+
+```js
+import { ShadowDomElementsMixin } from "litsx/runtime-infrastructure";
+import { LitElement, html } from "lit";
+import FancyButton from './FancyButton.js';
+import { useRef, useState, prepareEffects } from 'litsx';
+export class Greeting extends ShadowDomElementsMixin(LitElement) {
+  static properties = {
+    label: {
+      type: String
+    }
+  };
+  static elements = {
+    "fancy-button": FancyButton
+  };
+  render() {
+    prepareEffects(this);
+    const ref = useRef(this, null);
+    const [count] = useState(this, 0);
+    return html`<fancy-button .ref=${ref}>${this.label}${count}</fancy-button>`;
+  }
+}
+```
+
 ### Can disable final template lowering
 
 #### Interpretation

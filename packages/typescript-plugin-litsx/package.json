@@ -26,7 +26,7 @@
   "type": "module",
   "main": "./src/index.js",
   "bin": {
-    "litsx-tsc": "./src/typecheck.js"
+    "litsx-tsc": "./bin/litsx-tsc.js"
   },
   "exports": {
     ".": "./src/index.js",
@@ -34,6 +34,7 @@
     "./typecheck": "./src/typecheck.js"
   },
   "files": [
+    "bin",
     "src",
     "README.md"
   ],
