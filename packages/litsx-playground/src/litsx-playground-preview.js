@@ -60,7 +60,33 @@ export function currentEmittedOutput(
 }
 
 export function createFallbackPreviewDocument(message) {
-  return `<!doctype html><html><body style="margin:0;padding:16px;font-family:system-ui;background:#ffffff;color:#b42318;">${
+  return `<!doctype html><html><head><meta name="color-scheme" content="light dark"><style>
+  :root {
+    color-scheme: light dark;
+    --litsx-preview-bg: #ffffff;
+    --litsx-preview-fg: #213547;
+    --litsx-preview-error: #b42318;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --litsx-preview-bg: #17171a;
+      --litsx-preview-fg: #f3f4f6;
+      --litsx-preview-error: #ff8a80;
+    }
+  }
+  html, body {
+    margin: 0;
+    padding: 0;
+    min-height: 100%;
+    background: var(--litsx-preview-bg);
+    color: var(--litsx-preview-fg);
+    font-family: system-ui;
+  }
+  body {
+    padding: 16px;
+    box-sizing: border-box;
+  }
+  </style></head><body style="color:var(--litsx-preview-error);">${
     message || "Compiling..."
   }</body></html>`;
 }
@@ -78,6 +104,7 @@ export function buildPreviewDocument(
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
     <script type="importmap">
       {
         "imports": {
@@ -101,12 +128,27 @@ export function buildPreviewDocument(
       }
     <\/script>
     <style>
+      :root {
+        color-scheme: light dark;
+        --litsx-preview-bg: #ffffff;
+        --litsx-preview-fg: #213547;
+        --litsx-preview-error: #b42318;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --litsx-preview-bg: #17171a;
+          --litsx-preview-fg: #f3f4f6;
+          --litsx-preview-error: #ff8a80;
+        }
+      }
+
       html, body {
         margin: 0;
         padding: 0;
         min-height: 100%;
-        background: #ffffff;
-        color: #213547;
+        background: var(--litsx-preview-bg);
+        color: var(--litsx-preview-fg);
         font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
       }
       body {
@@ -130,7 +172,7 @@ export function buildPreviewDocument(
         const pre = document.createElement("pre");
         pre.style.margin = "0";
         pre.style.whiteSpace = "pre-wrap";
-        pre.style.color = "#b42318";
+        pre.style.color = "var(--litsx-preview-error)";
         pre.textContent = message;
         mount.appendChild(pre);
         window.parent.postMessage(

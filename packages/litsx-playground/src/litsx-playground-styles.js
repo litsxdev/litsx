@@ -5,6 +5,17 @@ export const playgroundStyles = `
     --litsx-playground-preview-height: 1px;
     --litsx-playground-preview-width: 20rem;
     --litsx-playground-editor-min-height: 18rem;
+    --litsx-editor-bg: var(--vp-code-block-bg);
+    --litsx-editor-fg: var(--vp-c-text-1);
+    --litsx-editor-muted: var(--vp-c-text-3);
+    --litsx-editor-line: color-mix(in srgb, var(--vp-c-bg-elv) 42%, transparent);
+    --litsx-editor-selection: color-mix(in srgb, var(--vp-c-brand-soft) 80%, transparent);
+    --litsx-editor-caret: var(--vp-c-brand-1);
+    --litsx-editor-keyword: var(--vp-c-brand-1);
+    --litsx-editor-type: var(--vp-c-green-1);
+    --litsx-editor-number: var(--vp-c-yellow-1);
+    --litsx-editor-string: var(--vp-c-green-2);
+    --litsx-editor-operator: var(--vp-c-text-2);
   }
 
   .litsx-playground {
@@ -140,14 +151,14 @@ export const playgroundStyles = `
   }
 
   .litsx-playground__segment:hover {
-    background: color-mix(in srgb, var(--vp-c-bg) 88%, transparent);
-    color: var(--vp-c-text-1);
+    background: var(--vp-c-brand-3);
+    color: var(--vp-button-brand-text, var(--vp-c-bg));
   }
 
   .litsx-playground__segment.is-active {
-    background: var(--vp-c-text-1);
-    color: var(--vp-c-bg);
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vp-c-text-1) 82%, transparent);
+    background: var(--vp-c-brand-1);
+    color: var(--vp-button-brand-text, var(--vp-c-bg));
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vp-c-brand-1) 82%, transparent);
   }
 
   .litsx-playground__subsection {
@@ -195,9 +206,9 @@ export const playgroundStyles = `
   }
 
   .litsx-playground__action:hover {
-    background: var(--vp-c-bg-soft);
-    color: var(--vp-c-text-1);
-    border-color: var(--vp-c-brand-2);
+    background: var(--vp-c-brand-3);
+    color: var(--vp-button-brand-text, var(--vp-c-bg));
+    border-color: var(--vp-c-brand-3);
   }
 
   .litsx-playground__action:disabled {
@@ -252,22 +263,22 @@ export const playgroundStyles = `
   }
 
   .litsx-playground__action--icon:hover {
-    background: color-mix(in srgb, var(--vp-c-bg) 88%, transparent);
-    color: var(--vp-c-text-1);
-    border-color: var(--vp-c-divider);
+    background: var(--vp-c-brand-3);
+    color: var(--vp-button-brand-text, var(--vp-c-bg));
+    border-color: var(--vp-c-brand-3);
   }
 
   .litsx-playground__action--chrome:hover {
-    background: color-mix(in srgb, var(--vp-c-bg) 88%, transparent);
-    color: var(--vp-c-text-1);
-    border-color: var(--vp-c-divider);
+    background: var(--vp-c-brand-3);
+    color: var(--vp-button-brand-text, var(--vp-c-bg));
+    border-color: var(--vp-c-brand-3);
   }
 
   .litsx-playground__action--icon.is-active {
-    background: var(--vp-c-text-1);
-    color: var(--vp-c-bg);
-    border-color: var(--vp-c-text-1);
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vp-c-text-1) 82%, transparent);
+    background: var(--vp-c-brand-1);
+    color: var(--vp-button-brand-text, var(--vp-c-bg));
+    border-color: var(--vp-c-brand-1);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vp-c-brand-1) 82%, transparent);
   }
 
   .litsx-playground__editor-panel,
@@ -275,7 +286,7 @@ export const playgroundStyles = `
     width: 100%;
     margin: 0;
     border: 0;
-    background: transparent;
+    background: var(--litsx-editor-bg);
     box-sizing: border-box;
   }
 
@@ -318,7 +329,7 @@ export const playgroundStyles = `
 
   .litsx-playground__editor-panel .cm-editor,
   .litsx-playground__output .cm-editor {
-    background: transparent;
+    background: var(--litsx-editor-bg);
   }
 
   .litsx-playground__editor-panel .cm-scroller,

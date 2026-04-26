@@ -19,44 +19,44 @@ import {
 
 export const litsxSourceTheme = EditorView.theme({
   ".tok-keyword, .tok-keyword *": {
-    color: "var(--vp-c-brand-1)",
+    color: "var(--litsx-editor-keyword)",
   },
   ".tok-atom, .tok-atom *": {
-    color: "var(--vp-c-brand-1)",
+    color: "var(--litsx-editor-keyword)",
   },
   ".tok-bool, .tok-bool *": {
-    color: "var(--vp-c-brand-1)",
+    color: "var(--litsx-editor-keyword)",
   },
   ".tok-propertyName, .tok-propertyName *": {
-    color: "var(--vp-c-text-1)",
+    color: "var(--litsx-editor-fg)",
   },
   ".tok-typeName, .tok-typeName *": {
-    color: "var(--vp-c-green-1)",
+    color: "var(--litsx-editor-type)",
   },
   ".tok-className, .tok-className *": {
-    color: "var(--vp-c-green-1)",
+    color: "var(--litsx-editor-type)",
   },
   ".tok-number, .tok-number *": {
-    color: "var(--vp-c-yellow-1)",
+    color: "var(--litsx-editor-number)",
   },
   ".tok-string, .tok-string *": {
-    color: "var(--vp-c-green-2)",
+    color: "var(--litsx-editor-string)",
   },
   ".tok-variableName, .tok-variableName *": {
-    color: "var(--vp-c-text-1)",
+    color: "var(--litsx-editor-fg)",
   },
   ".tok-operator, .tok-operator *": {
-    color: "var(--vp-c-text-2)",
+    color: "var(--litsx-editor-operator)",
   },
   ".tok-punctuation, .tok-punctuation *": {
-    color: "var(--vp-c-text-2)",
+    color: "var(--litsx-editor-operator)",
   },
   ".cm-litsx-lit-attr-prefix, .cm-litsx-lit-attr-prefix *, .tok-propertyName .cm-litsx-lit-attr-prefix, .tok-propertyName .cm-litsx-lit-attr-prefix *": {
-    color: "var(--vp-c-brand-1)",
+    color: "var(--litsx-editor-keyword)",
     fontWeight: "600",
   },
   ".cm-litsx-lit-attr-name, .cm-litsx-lit-attr-name *, .tok-propertyName .cm-litsx-lit-attr-name, .tok-propertyName .cm-litsx-lit-attr-name *": {
-    color: "var(--vp-c-text-1)",
+    color: "var(--litsx-editor-fg)",
   },
   ".cm-diagnostic.cm-diagnostic-error": {
     borderBottom: "2px wavy color-mix(in srgb, var(--vp-c-danger-1) 82%, transparent)",
