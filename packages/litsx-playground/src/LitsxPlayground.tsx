@@ -1,6 +1,7 @@
 import {
   useAfterUpdate,
   useHostContent,
+  useHost,
   useOnConnect,
   useRef,
   useState,
@@ -56,6 +57,35 @@ function toggleFullscreenWithTransition(
   setIsFullscreen((value) => !value);
 }
 
+async function toggleHostFullscreen(
+  host: Element | null | undefined,
+  setIsFullscreen: (value: boolean | ((value: boolean) => boolean)) => void
+) {
+  if (typeof document === "undefined") {
+    toggleFullscreenWithTransition(setIsFullscreen);
+    return;
+  }
+
+  const fullscreenHost = document.fullscreenElement;
+  if (fullscreenHost && host && fullscreenHost === host) {
+    if (typeof document.exitFullscreen === "function") {
+      await document.exitFullscreen();
+      return;
+    }
+  }
+
+  if (host && typeof host.requestFullscreen === "function") {
+    try {
+      await host.requestFullscreen();
+      return;
+    } catch {
+      // Fall back to the local overlay when fullscreen is unavailable or rejected.
+    }
+  }
+
+  toggleFullscreenWithTransition(setIsFullscreen);
+}
+
 export function LitsxPlayground({
   source: sourceProp,
   exportName,
@@ -67,6 +97,7 @@ export function LitsxPlayground({
 }: LitsxPlaygroundProps) {
   // ^styles(...) attaches stylesheet metadata to the component type.
   ^styles(playgroundStyles);
+  const host = useHost();
 
   // useHostContent() turns projected light DOM content into reactive component input.
   const hostContent = useHostContent({ trim: true });
@@ -115,29 +146,21 @@ export function LitsxPlayground({
   }
 
   useOnConnect(() => {
-    if (!isFullscreen || typeof document === "undefined") {
+    if (typeof document === "undefined") {
       return;
     }
 
-    const previousBodyOverflow = document.body.style.overflow;
-    const previousHtmlOverflow = document.documentElement.style.overflow;
-    document.body.style.overflow = "hidden";
-    document.documentElement.style.overflow = "hidden";
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setIsFullscreen(false);
-      }
+    const handleFullscreenChange = () => {
+      const active = document.fullscreenElement === host;
+      setIsFullscreen((value) => (value === active ? value : active));
     };
 
-    window.addEventListener("keydown", handleKeyDown);
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
 
     return () => {
-      window.removeEventListener("keydown", handleKeyDown);
-      document.body.style.overflow = previousBodyOverflow;
-      document.documentElement.style.overflow = previousHtmlOverflow;
+      document.removeEventListener("fullscreenchange", handleFullscreenChange);
     };
-  }, [isFullscreen]);
+  }, [host]);
 
   useAfterUpdate(() => {
     if (previousFullscreenRef.current === null) {
@@ -298,7 +321,7 @@ export function LitsxPlayground({
               aria-pressed={isFullscreen ? "true" : "false"}
               aria-label={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
               title={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
-              @click={() => toggleFullscreenWithTransition(setIsFullscreen)}
+              @click={() => toggleHostFullscreen(host, setIsFullscreen)}
             >
               ⛶
             </button>

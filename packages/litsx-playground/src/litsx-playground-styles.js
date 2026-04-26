@@ -18,6 +18,14 @@ export const playgroundStyles = `
     --litsx-editor-operator: var(--vp-c-text-2);
   }
 
+  :host(:fullscreen) {
+    margin: 0;
+    width: 100vw;
+    height: 100vh;
+    max-width: none;
+    max-height: none;
+  }
+
   .litsx-playground {
     display: grid;
     gap: 1rem;
@@ -68,6 +76,14 @@ export const playgroundStyles = `
     backdrop-filter: blur(10px);
   }
 
+  :host(:fullscreen) .litsx-playground.is-fullscreen {
+    position: relative;
+    inset: auto;
+    z-index: auto;
+    width: 100%;
+    height: 100%;
+  }
+
   .litsx-playground.is-fullscreen .litsx-playground__panel {
     display: grid;
     grid-template-rows: auto minmax(0, 1fr);
@@ -75,6 +91,11 @@ export const playgroundStyles = `
     height: 100vh;
     border-radius: 0;
     box-shadow: 0 28px 80px rgba(0, 0, 0, 0.26);
+  }
+
+  :host(:fullscreen) .litsx-playground.is-fullscreen .litsx-playground__panel {
+    width: 100%;
+    height: 100%;
   }
 
   .litsx-playground__toolbar,
