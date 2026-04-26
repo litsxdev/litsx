@@ -12,6 +12,20 @@ const workspaceRoot = path.resolve(docsConfigDir, "../../..");
 export default defineConfig({
   title: "Litsx",
   description: "Lit<sup>sx</sup> is a JSX-first framework for authoring Lit-based web components, with native primitives, tooling, and optional React migration support.",
+  head: [
+    ["link", { rel: "icon", href: "/flame_32.png", type: "image/png", sizes: "32x32" }],
+    ["link", { rel: "icon", href: "/flame_16.png", type: "image/png", sizes: "16x16" }],
+    ["link", { rel: "apple-touch-icon", href: "/flame_256.png" }],
+    ["link", { rel: "preconnect", href: "https://fonts.googleapis.com" }],
+    ["link", { rel: "preconnect", href: "https://fonts.gstatic.com", crossorigin: "" }],
+    [
+      "link",
+      {
+        rel: "stylesheet",
+        href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Montserrat:wght@700;800&display=swap",
+      },
+    ],
+  ],
   vite: {
     plugins: litsxVitePress({ workspaceRoot }),
   },
@@ -25,7 +39,7 @@ export default defineConfig({
   },
   cleanUrls: true,
   themeConfig: {
-    logo: "/litsx-wordmark.svg",
+    logo: "/title.svg",
     siteTitle: false,
     nav: [
       { text: "Why Lit<sup>sx</sup>", link: "/guides/why-litsx" },
