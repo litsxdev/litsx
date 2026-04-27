@@ -120,6 +120,7 @@ The plugin also ships multiple presets:
 and flat-config equivalents:
 
 - `configs["recommended-flat"]`
+- `configs["recommended-lint-flat"]`
 - `configs["recommended-react-migration-flat"]`
 - `configs["strict-flat"]`
 

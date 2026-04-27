@@ -12,8 +12,14 @@ import requireTopLevelHoistsFirst from "./rules/require-top-level-hoists-first.j
 import staticHoistsTopLevel from "./rules/static-hoists-top-level.js";
 import { createLitsxProcessor } from "./processor.js";
 
-const litsxProcessor = createLitsxProcessor();
-const recommendedRules = {
+const litsxProcessor = createLitsxProcessor({
+  includeAuthoredDiagnostics: true,
+});
+const editorLitsxProcessor = createLitsxProcessor({
+  includeAuthoredDiagnostics: false,
+});
+const recommendedRules = {};
+const recommendedLintRules = {
   "@litsx/no-native-classname": "warn",
   "@litsx/no-invalid-binding-value": "error",
   "@litsx/no-unknown-binding": "warn",
@@ -22,11 +28,11 @@ const recommendedRules = {
   "@litsx/no-react-memo": "warn",
 };
 const recommendedReactMigrationRules = {
-  ...recommendedRules,
+  ...recommendedLintRules,
   "@litsx/no-react-compat-surface": "warn",
 };
 const strictRules = {
-  ...recommendedRules,
+  ...recommendedLintRules,
   "@litsx/prefer-destructured-props": "warn",
   "@litsx/no-opaque-prop-metadata-inference": "warn",
   "@litsx/require-top-level-hoists-first": "warn",
@@ -62,6 +68,7 @@ const plugin = {
   },
   processors: {
     litsx: litsxProcessor,
+    "litsx-editor": editorLitsxProcessor,
   },
   rules: {
     "no-duplicate-static-hoist": noDuplicateStaticHoist,
@@ -84,7 +91,7 @@ plugin.configs.recommended = {
   overrides: [
     {
       files,
-      processor: "@litsx/litsx",
+      processor: "@litsx/litsx-editor",
       parser: "@babel/eslint-parser",
       parserOptions: legacyParserOptions,
       rules: recommendedRules,
@@ -124,7 +131,7 @@ plugin.configs["recommended-flat"] = {
   plugins: {
     "@litsx": plugin,
   },
-  processor: "@litsx/litsx",
+  processor: "@litsx/litsx-editor",
   languageOptions: flatLanguageOptions,
   rules: recommendedRules,
 };
@@ -138,6 +145,30 @@ plugin.configs["recommended-react-migration-flat"] = {
   processor: "@litsx/litsx",
   languageOptions: flatLanguageOptions,
   rules: recommendedReactMigrationRules,
+};
+
+plugin.configs["recommended-lint"] = {
+  plugins: ["@litsx"],
+  overrides: [
+    {
+      files,
+      processor: "@litsx/litsx",
+      parser: "@babel/eslint-parser",
+      parserOptions: legacyParserOptions,
+      rules: recommendedLintRules,
+    },
+  ],
+};
+
+plugin.configs["recommended-lint-flat"] = {
+  name: "@litsx/recommended-lint-flat",
+  files,
+  plugins: {
+    "@litsx": plugin,
+  },
+  processor: "@litsx/litsx",
+  languageOptions: flatLanguageOptions,
+  rules: recommendedLintRules,
 };
 
 plugin.configs["strict-flat"] = {

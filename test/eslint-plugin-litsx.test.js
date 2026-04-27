@@ -39,6 +39,7 @@ function offsetToLineColumn(offset, lineStarts) {
 describe("@litsx/eslint-plugin", () => {
   it("exports the processor, rules, and configs", () => {
     assert.ok(plugin.processors.litsx);
+    assert.ok(plugin.processors["litsx-editor"]);
     assert.ok(plugin.rules["no-native-classname"]);
     assert.ok(plugin.rules["no-duplicate-static-hoist"]);
     assert.ok(plugin.rules["no-react-compat-surface"]);
@@ -47,9 +48,11 @@ describe("@litsx/eslint-plugin", () => {
     assert.ok(plugin.rules["require-top-level-hoists-first"]);
     assert.ok(plugin.rules["no-unknown-static-hoist"]);
     assert.ok(plugin.configs.recommended);
+    assert.ok(plugin.configs["recommended-lint"]);
     assert.ok(plugin.configs["recommended-react-migration"]);
     assert.ok(plugin.configs.strict);
     assert.ok(plugin.configs["recommended-flat"]);
+    assert.ok(plugin.configs["recommended-lint-flat"]);
     assert.ok(plugin.configs["recommended-react-migration-flat"]);
     assert.ok(plugin.configs["strict-flat"]);
     assert.equal(typeof createLitsxProcessor, "function");
@@ -109,11 +112,40 @@ describe("@litsx/eslint-plugin", () => {
     assert.match(authoredMessage.message, /must use an expression/);
   });
 
-  it("runs with flat config and reports LitSX rule ids", async () => {
+  it("recommended flat config stays quiet by default", async () => {
     const eslint = new FlatESLint({
       cwd: process.cwd(),
       overrideConfigFile: true,
       overrideConfig: [plugin.configs["recommended-flat"]],
+    });
+
+    const [result] = await eslint.lintText(
+      'import { memo } from "react";\nconst Button = memo(() => <button @click="handleClick" className="cta" />);',
+      { filePath: "example.tsx" },
+    );
+
+    assert.deepStrictEqual(result.messages, []);
+  });
+
+  it("can suppress baseline authored diagnostics in the editor processor", () => {
+    const processor = createLitsxProcessor({
+      includeAuthoredDiagnostics: false,
+    });
+    processor.preprocess(
+      'const view = <button @click="handleClick">{label}</button>;',
+      "/virtual/example.jsx",
+    );
+
+    const messages = processor.postprocess([[]], "/virtual/example.jsx");
+
+    assert.deepStrictEqual(messages, []);
+  });
+
+  it("runs with recommended lint flat config and reports LitSX rule ids", async () => {
+    const eslint = new FlatESLint({
+      cwd: process.cwd(),
+      overrideConfigFile: true,
+      overrideConfig: [plugin.configs["recommended-lint-flat"]],
     });
 
     const [result] = await eslint.lintText(
@@ -134,7 +166,7 @@ describe("@litsx/eslint-plugin", () => {
       cwd: process.cwd(),
       fix: true,
       overrideConfigFile: true,
-      overrideConfig: [plugin.configs["recommended-flat"]],
+      overrideConfig: [plugin.configs["recommended-lint-flat"]],
     });
 
     const [result] = await eslint.lintText(
@@ -152,7 +184,7 @@ describe("@litsx/eslint-plugin", () => {
       plugins: {
         "@litsx": plugin,
       },
-      overrideConfig: plugin.configs.recommended,
+      overrideConfig: plugin.configs["recommended-lint"],
     });
 
     const [result] = await eslint.lintText(
@@ -168,7 +200,7 @@ describe("@litsx/eslint-plugin", () => {
     const eslint = new FlatESLint({
       cwd: process.cwd(),
       overrideConfigFile: true,
-      overrideConfig: [plugin.configs["recommended-flat"]],
+      overrideConfig: [plugin.configs["recommended-lint-flat"]],
     });
 
     const [result] = await eslint.lintText(
@@ -228,9 +260,9 @@ describe("@litsx/eslint-plugin", () => {
       overrideConfigFile: true,
       overrideConfig: [
         {
-          ...plugin.configs["recommended-flat"],
+          ...plugin.configs["recommended-lint-flat"],
           rules: {
-            ...plugin.configs["recommended-flat"].rules,
+            ...plugin.configs["recommended-lint-flat"].rules,
             "@litsx/no-unknown-static-hoist": "warn",
           },
         },

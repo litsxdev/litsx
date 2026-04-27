@@ -2,7 +2,11 @@ import { convertIssueToLintMessage } from "./messages.js";
 import { createMessageDedupKey, remapLintMessage } from "./remap.js";
 import { createLintState, setLintState, takeLintState } from "./state.js";
 
-export function createLitsxProcessor() {
+export function createLitsxProcessor(options = {}) {
+  const {
+    includeAuthoredDiagnostics = true,
+  } = options;
+
   return {
     supportsAutofix: true,
     preprocess(text, filename) {
@@ -25,11 +29,13 @@ export function createLitsxProcessor() {
         deduped.set(createMessageDedupKey(message), message);
       }
 
-      for (const issue of state.authoredIssues) {
-        const message = convertIssueToLintMessage(issue, state);
-        const key = createMessageDedupKey(message);
-        if (!deduped.has(key)) {
-          deduped.set(key, message);
+      if (includeAuthoredDiagnostics) {
+        for (const issue of state.authoredIssues) {
+          const message = convertIssueToLintMessage(issue, state);
+          const key = createMessageDedupKey(message);
+          if (!deduped.has(key)) {
+            deduped.set(key, message);
+          }
         }
       }
 
