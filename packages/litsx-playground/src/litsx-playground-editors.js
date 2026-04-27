@@ -5,8 +5,8 @@ import { javascript } from "@codemirror/lang-javascript";
 import { tags as t } from "@lezer/highlight";
 import { basicSetup } from "codemirror";
 import {
+  createDefaultHoistFoldEffects,
   litsxSourceHighlighting,
-  litsxSourceParseStabilizer,
   litsxSourceSupport,
   litsxSourceTheme,
 } from "./litsx-source-language.js";
@@ -104,7 +104,6 @@ export function createSourceEditorState(doc, onChange) {
     extensions: [
       basicSetup,
       litsxSourceSupport().extension,
-      litsxSourceParseStabilizer,
       litsxSourceHighlighting,
       editorSyntaxHighlighting,
       sourceEditorTheme,
@@ -116,6 +115,15 @@ export function createSourceEditorState(doc, onChange) {
       }),
     ],
   });
+}
+
+export function foldSourceEditorHoists(view) {
+  if (!view) return;
+
+  const effects = createDefaultHoistFoldEffects(view.state);
+  if (effects.length === 0) return;
+
+  view.dispatch({ effects });
 }
 
 export function createEmittedEditorState(doc) {

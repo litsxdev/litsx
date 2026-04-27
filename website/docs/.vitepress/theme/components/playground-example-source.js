@@ -218,21 +218,19 @@ export const jsxAuthoringExampleSource = `
 import { useState } from "litsx";
 
 type ComposerProps = {
-  label: string;
+  name: string;
 };
 
-export function Composer({ label = "Draft" }: ComposerProps) {
-  const [text, setText] = useState("Ship the Lit-first JSX playground");
-  const [pinned, setPinned] = useState(true);
+export function Composer({ name = "world" }: ComposerProps) {
+  const [count, setCount] = useState(0);
 
   ^styles(\`
     :host {
       display: block;
       font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
-      color: #e2e8f0;
+      color: #e5e7eb;
     }
 
-    input,
     button {
       font: inherit;
     }
@@ -244,64 +242,30 @@ export function Composer({ label = "Draft" }: ComposerProps) {
     }
 
     .card {
-      width: min(100%, 26rem);
+      width: min(100%, 24rem);
       padding: 1rem;
-      border-radius: 1.1rem;
+      border-radius: 1rem;
       background:
         radial-gradient(circle at top left, rgba(255, 255, 255, 0.08), transparent 40%),
-        linear-gradient(160deg, #172033, #0f172a);
+        linear-gradient(160deg, #141d2e, #0f172a);
       box-shadow: 0 18px 40px rgba(15, 23, 42, 0.24);
     }
 
-    .eyebrow {
-      font-size: 0.72rem;
-      text-transform: uppercase;
-      letter-spacing: 0.12em;
-      color: rgba(226, 232, 240, 0.62);
-    }
-
     .title {
-      margin: 0.35rem 0 0;
-      font-size: 1.35rem;
+      margin: 0;
+      font-size: 1.5rem;
       font-weight: 700;
+      line-height: 1.1;
     }
 
-    .field {
-      margin-top: 0.95rem;
-      display: grid;
-      gap: 0.5rem;
-    }
-
-    .input {
-      width: 100%;
-      min-width: 0;
-      padding: 0.72rem 0.85rem;
-      border: 1px solid rgba(148, 163, 184, 0.28);
-      border-radius: 0.85rem;
-      background: rgba(15, 23, 42, 0.52);
-      color: inherit;
+    .accent {
+      color: #ff9f84;
     }
 
     .row {
-      margin-top: 0.85rem;
+      margin-top: 1rem;
       display: flex;
       align-items: center;
-      justify-content: space-between;
-      gap: 1rem;
-    }
-
-    .toggle {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.55rem;
-      font-size: 0.92rem;
-      color: rgba(226, 232, 240, 0.88);
-    }
-
-    .checkbox {
-      width: 1rem;
-      height: 1rem;
-      accent-color: #fb7185;
     }
 
     .button {
@@ -309,7 +273,7 @@ export function Composer({ label = "Draft" }: ComposerProps) {
       border: 0;
       border-radius: 999px;
       padding: 0.55rem 0.9rem;
-      background: #fb7185;
+      background: #ff8666;
       color: white;
       cursor: pointer;
       font-weight: 600;
@@ -322,23 +286,6 @@ export function Composer({ label = "Draft" }: ComposerProps) {
       background: rgba(148, 163, 184, 0.12);
     }
 
-    .badge {
-      display: inline-flex;
-      align-items: center;
-      margin-bottom: 0.55rem;
-      padding: 0.25rem 0.55rem;
-      border-radius: 999px;
-      background: rgba(251, 113, 133, 0.16);
-      color: #fecdd3;
-      font-size: 0.76rem;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-    }
-
-    .badge[hidden] {
-      display: none;
-    }
-
     .body {
       margin: 0;
       line-height: 1.45;
@@ -348,37 +295,20 @@ export function Composer({ label = "Draft" }: ComposerProps) {
 
   return (
     <section class="card">
-      <div class="eyebrow">{label}</div>
-      <h2 class="title">Lit-first authored JSX</h2>
-
-      <label class="field">
-        <span>Message</span>
-        <input
-          class="input"
-          .value={text}
-          @input={(event) => setText(event.currentTarget.value)}
-        />
-      </label>
+      <h2 class="title">
+        Hello, <span class="accent">{name}</span>.
+      </h2>
 
       <div class="row">
-        <label class="toggle">
-          <input
-            class="checkbox"
-            type="checkbox"
-            ?checked={pinned}
-            @change={(event) => setPinned(event.currentTarget.checked)}
-          />
-          Pin message
-        </label>
-
-        <button class="button" @click={() => setText("Bindings stay close to plain JavaScript.")}>
-          Reset copy
+        <button class="button" @click={() => setCount((value) => value + 1)}>
+          Click me
         </button>
       </div>
 
       <div class="preview">
-        <div class="badge" hidden={!pinned}>Pinned</div>
-        <p class="body">{text}</p>
+        <p class="body">
+          You clicked <strong>{count}</strong> time{count === 1 ? "" : "s"}.
+        </p>
       </div>
     </section>
   );

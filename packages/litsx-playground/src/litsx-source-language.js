@@ -2,8 +2,8 @@ import { Decoration, EditorView, ViewPlugin } from "@codemirror/view";
 import { cssLanguage } from "@codemirror/lang-css";
 import { javascript, javascriptLanguage } from "@codemirror/lang-javascript";
 import {
+  foldEffect,
   foldService,
-  forceParsing,
   Language,
   LanguageSupport,
   syntaxTree,
@@ -11,11 +11,7 @@ import {
 import { linter } from "@codemirror/lint";
 import { highlightTree, classHighlighter } from "@lezer/highlight";
 import { Parser } from "@lezer/common";
-import {
-  createVirtualLitsxJsxSource,
-  mapOriginalPositionToVirtual,
-  mapVirtualPositionToOriginal,
-} from "../../jsx-authoring/src/index.js";
+import { createVirtualLitsxJsxSource, mapVirtualPositionToOriginal } from "../../jsx-authoring/src/index.js";
 
 export const litsxSourceTheme = EditorView.theme({
   ".tok-keyword, .tok-keyword *": {
@@ -88,6 +84,12 @@ class LitsxVirtualizedParser extends Parser {
 const litsxEditorParser = new LitsxVirtualizedParser(
   javascriptTsxSupport.language.parser
 );
+
+const EMBEDDED_CSS_CALL_NAMES = new Set([
+  "staticStyles",
+  "__litsx_static_styles",
+  "$styles",
+]);
 
 const litsxSourceLanguage = new Language(
   javascriptLanguage.data,
@@ -218,55 +220,15 @@ function createMark(from, to, className) {
   }).range(from, to);
 }
 
-function intersectsRange(from, to, start, end) {
-  return from < end && to > start;
-}
-
-function collectVirtualAttributeHighlightDecorations(virtualSource, ranges) {
-  const replacementVirtualRanges = virtualSource.replacements.map((replacement) => ({
-    ...replacement,
-    virtualStart: mapOriginalPositionToVirtual(
-      replacement.start,
-      virtualSource.replacements
-    ),
-    virtualEnd: mapOriginalPositionToVirtual(
-      replacement.end,
-      virtualSource.replacements
-    ),
-  }));
-
-  if (replacementVirtualRanges.length === 0) {
-    return;
-  }
-
-  const tree = litsxEditorParser.parse(virtualSource.code);
-
-  highlightTree(tree, classHighlighter, (from, to, classes) => {
-    for (const replacement of replacementVirtualRanges) {
-      if (!intersectsRange(from, to, replacement.virtualStart, replacement.virtualEnd)) {
-        continue;
-      }
-
-      const originalFrom = mapVirtualPositionToOriginal(from, virtualSource.replacements);
-      const originalTo = mapVirtualPositionToOriginal(to, virtualSource.replacements);
-      const decoration = createMark(originalFrom, originalTo, classes);
-
-      if (decoration) {
-        ranges.push(decoration);
-      }
-      break;
-    }
-  });
-}
-
-function collectCssTemplateRanges(virtualSource) {
+function collectEmbeddedCssRanges(virtualSource) {
   const tree = litsxEditorParser.parse(virtualSource.code);
   const ranges = [];
 
-  function pushTemplateSegments(template) {
-    let segmentStart = template.from + 1;
+  function pushTemplateSegments(templateNode) {
+    // Preserve CSS-only spans inside template literals while skipping JS interpolations.
+    let segmentStart = templateNode.from + 1;
 
-    for (let child = template.firstChild; child; child = child.nextSibling) {
+    for (let child = templateNode.firstChild; child; child = child.nextSibling) {
       if (child.type.name === "Interpolation") {
         if (child.from > segmentStart) {
           ranges.push({ from: segmentStart, to: child.from });
@@ -275,8 +237,8 @@ function collectCssTemplateRanges(virtualSource) {
       }
     }
 
-    if (segmentStart < template.to - 1) {
-      ranges.push({ from: segmentStart, to: template.to - 1 });
+    if (segmentStart < templateNode.to - 1) {
+      ranges.push({ from: segmentStart, to: templateNode.to - 1 });
     }
   }
 
@@ -304,7 +266,7 @@ function collectCssTemplateRanges(virtualSource) {
           : null;
 
       if (
-        (calleeName === "staticStyles" || calleeName === "__litsx_static_styles" || calleeName === "$styles") &&
+        EMBEDDED_CSS_CALL_NAMES.has(calleeName) &&
         firstArg?.type.name === "TemplateString"
       ) {
         pushTemplateSegments(firstArg);
@@ -320,8 +282,8 @@ function collectCssTemplateRanges(virtualSource) {
   return ranges;
 }
 
-function collectCssHighlightDecorations(virtualSource, ranges) {
-  const cssRanges = collectCssTemplateRanges(virtualSource);
+function collectEmbeddedCssHighlightDecorations(virtualSource, ranges) {
+  const cssRanges = collectEmbeddedCssRanges(virtualSource);
 
   for (const range of cssRanges) {
     const cssText = virtualSource.code.slice(range.from, range.to);
@@ -380,8 +342,7 @@ function buildLitsxSourceDecorations(view) {
     );
   }
 
-  collectVirtualAttributeHighlightDecorations(virtualSource, ranges);
-  collectCssHighlightDecorations(virtualSource, ranges);
+  collectEmbeddedCssHighlightDecorations(virtualSource, ranges);
 
   return Decoration.set(ranges, true);
 }
@@ -403,44 +364,24 @@ export const litsxSourceHighlighting = ViewPlugin.fromClass(
   }
 );
 
-export const litsxSourceParseStabilizer = ViewPlugin.fromClass(
-  class {
-    constructor(view) {
-      this.view = view;
-      this.timeoutId = null;
-      this.scheduleParse();
-    }
-
-    update(update) {
-      if (update.docChanged || update.viewportChanged) {
-        this.view = update.view;
-        this.scheduleParse();
-      }
-    }
-
-    destroy() {
-      if (this.timeoutId !== null) {
-        clearTimeout(this.timeoutId);
-        this.timeoutId = null;
-      }
-    }
-
-    scheduleParse() {
-      if (this.timeoutId !== null) {
-        clearTimeout(this.timeoutId);
-      }
-
-      this.timeoutId = setTimeout(() => {
-        this.timeoutId = null;
-        forceParsing(this.view, this.view.state.doc.length, 100);
-      }, 0);
-    }
-  }
-);
-
 export const litsxSourceHoistFolding = foldService.of((state, lineStart) =>
   findHoistFoldRange(state, lineStart)
 );
+
+export function createDefaultHoistFoldEffects(state) {
+  const effects = [];
+
+  for (let lineNumber = 1; lineNumber <= state.doc.lines; lineNumber += 1) {
+    const line = state.doc.line(lineNumber);
+    const range = findHoistFoldRange(state, line.from);
+
+    if (range) {
+      effects.push(foldEffect.of(range));
+    }
+  }
+
+  return effects;
+}
 
 function buildLitsxSyntaxDiagnostics(view) {
   const diagnostics = [];

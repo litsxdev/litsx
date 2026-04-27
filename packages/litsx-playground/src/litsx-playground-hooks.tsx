@@ -3,6 +3,7 @@ import { useAfterUpdate, useOnConnect, useRef } from "litsx";
 import {
   createEmittedEditorState,
   createSourceEditorState,
+  foldSourceEditorHoists,
   setEditorDocument,
 } from "./litsx-playground-editors.js";
 import { readPreviewMessage } from "./litsx-playground-preview.js";
@@ -205,6 +206,7 @@ export function usePlaygroundEditorsAndWorker({
       }),
       parent: sourceEditorHost,
     });
+    foldSourceEditorHoists(sourceEditorView.current);
 
     emittedEditorView.current = new EditorView({
       state: createEmittedEditorState(emittedOutput),
