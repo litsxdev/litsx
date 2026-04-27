@@ -2671,6 +2671,163 @@ describe("@litsx/typescript-plugin", () => {
     assert.match(details.documentation[0].text, /LitSX event listener binding for <button>/);
   });
 
+  it("remaps definition, references, and rename spans back to authored positions", () => {
+    const source = `
+      const handleClick = () => {};
+      const view = <button @click={handleClick} />;
+    `;
+    const virtualSource = createToolingVirtualLitsxSource(source);
+    const virtualEventStart = virtualSource.code.indexOf("__litsx_event_click");
+    const originalEventStart = source.indexOf("@click");
+    const snapshots = new Map([["/virtual/navigation.tsx", source]]);
+
+    const pluginModule = plugin({
+      typescript: {
+        ScriptSnapshot: {
+          fromString(value) {
+            return {
+              getLength() {
+                return value.length;
+              },
+              getText(start, end) {
+                return value.slice(start, end);
+              },
+            };
+          },
+        },
+      },
+    });
+
+    const wrapped = pluginModule.create({
+      languageServiceHost: {
+        getScriptSnapshot(fileName) {
+          const text = snapshots.get(fileName);
+          if (text == null) {
+            return undefined;
+          }
+
+          return {
+            getLength() {
+              return text.length;
+            },
+            getText(start, end) {
+              return text.slice(start, end);
+            },
+          };
+        },
+      },
+      languageService: {
+        getSyntacticDiagnostics() {
+          return [];
+        },
+        getSemanticDiagnostics() {
+          return [];
+        },
+        getSuggestionDiagnostics() {
+          return [];
+        },
+        getQuickInfoAtPosition() {
+          return undefined;
+        },
+        getCompletionsAtPosition() {
+          return null;
+        },
+        getDefinitionAtPosition() {
+          return [
+            {
+              fileName: "/virtual/navigation.tsx",
+              textSpan: {
+                start: virtualEventStart,
+                length: "__litsx_event_click".length,
+              },
+              contextSpan: {
+                start: virtualEventStart,
+                length: "__litsx_event_click".length,
+              },
+            },
+          ];
+        },
+        getDefinitionAndBoundSpan() {
+          return {
+            textSpan: {
+              start: virtualEventStart,
+              length: "__litsx_event_click".length,
+            },
+            definitions: [
+              {
+                fileName: "/virtual/navigation.tsx",
+                textSpan: {
+                  start: virtualEventStart,
+                  length: "__litsx_event_click".length,
+                },
+                originalTextSpan: {
+                  start: virtualEventStart,
+                  length: "__litsx_event_click".length,
+                },
+              },
+            ],
+          };
+        },
+        getReferencesAtPosition() {
+          return [
+            {
+              fileName: "/virtual/navigation.tsx",
+              textSpan: {
+                start: virtualEventStart,
+                length: "__litsx_event_click".length,
+              },
+            },
+          ];
+        },
+        getRenameInfo() {
+          return {
+            canRename: true,
+            displayName: "@click",
+            fullDisplayName: "@click",
+            kind: "property",
+            kindModifiers: "",
+            triggerSpan: {
+              start: virtualEventStart,
+              length: "__litsx_event_click".length,
+            },
+          };
+        },
+        findRenameLocations() {
+          return [
+            {
+              fileName: "/virtual/navigation.tsx",
+              textSpan: {
+                start: virtualEventStart,
+                length: "__litsx_event_click".length,
+              },
+              contextSpan: {
+                start: virtualEventStart,
+                length: "__litsx_event_click".length,
+              },
+            },
+          ];
+        },
+      },
+    });
+
+    const definitions = wrapped.getDefinitionAtPosition("/virtual/navigation.tsx", originalEventStart);
+    const definitionAndBoundSpan = wrapped.getDefinitionAndBoundSpan("/virtual/navigation.tsx", originalEventStart);
+    const references = wrapped.getReferencesAtPosition("/virtual/navigation.tsx", originalEventStart);
+    const renameInfo = wrapped.getRenameInfo("/virtual/navigation.tsx", originalEventStart);
+    const renameLocations = wrapped.findRenameLocations("/virtual/navigation.tsx", originalEventStart, false, false, false);
+
+    assert.strictEqual(definitions[0].textSpan.start, originalEventStart);
+    assert.strictEqual(definitions[0].textSpan.length, "@click".length);
+    assert.strictEqual(definitions[0].contextSpan.start, originalEventStart);
+    assert.strictEqual(definitionAndBoundSpan.textSpan.start, originalEventStart);
+    assert.strictEqual(definitionAndBoundSpan.definitions[0].textSpan.start, originalEventStart);
+    assert.strictEqual(definitionAndBoundSpan.definitions[0].originalTextSpan.start, originalEventStart);
+    assert.strictEqual(references[0].textSpan.start, originalEventStart);
+    assert.strictEqual(renameInfo.triggerSpan.start, originalEventStart);
+    assert.strictEqual(renameLocations[0].textSpan.start, originalEventStart);
+    assert.strictEqual(renameLocations[0].contextSpan.start, originalEventStart);
+  });
+
   it("merges authored lit diagnostics into semantic diagnostics", () => {
     const source = '<button @click="handler" />';
     const snapshots = new Map([["/virtual/semantic.tsx", source]]);

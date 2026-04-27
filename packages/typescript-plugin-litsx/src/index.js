@@ -65,6 +65,40 @@ function remapNumericTextSpan(start, length, virtualization) {
   );
 }
 
+function remapTextSpanField(record, fieldName, virtualization) {
+  const span = record?.[fieldName];
+  if (!span) {
+    return record;
+  }
+
+  return {
+    ...record,
+    [fieldName]: remapToolingTextSpanToOriginal(span, virtualization),
+  };
+}
+
+function remapFileSpanRecord(record, getVirtualization) {
+  const virtualization = record?.fileName
+    ? getVirtualization(record.fileName)
+    : null;
+
+  if (!virtualization) {
+    return record;
+  }
+
+  let remapped = {
+    ...record,
+    textSpan: record.textSpan
+      ? remapToolingTextSpanToOriginal(record.textSpan, virtualization)
+      : record.textSpan,
+  };
+
+  remapped = remapTextSpanField(remapped, "contextSpan", virtualization);
+  remapped = remapTextSpanField(remapped, "originalTextSpan", virtualization);
+
+  return remapped;
+}
+
 function remapRelatedInformation(info, getVirtualization, fallbackVirtualization) {
   const virtualization = info.file?.fileName
     ? getVirtualization(info.file.fileName) ?? fallbackVirtualization
@@ -133,6 +167,95 @@ function wrapSemanticDiagnostics(method, getVirtualization, getAuthoredDiagnosti
     }
 
     return [...diagnostics, ...authoredDiagnostics];
+  };
+}
+
+function wrapDefinitionAtPosition(method, getVirtualization) {
+  return (fileName, position) => {
+    const virtualization = getVirtualization(fileName);
+    const mappedPosition = virtualization
+      ? mapOriginalPositionToToolingVirtual(position, virtualization)
+      : position;
+    const definitions = method?.(fileName, mappedPosition);
+
+    if (!definitions?.length) {
+      return definitions;
+    }
+
+    return definitions.map((definition) => remapFileSpanRecord(definition, getVirtualization));
+  };
+}
+
+function wrapDefinitionAndBoundSpan(method, getVirtualization) {
+  return (fileName, position) => {
+    const virtualization = getVirtualization(fileName);
+    const mappedPosition = virtualization
+      ? mapOriginalPositionToToolingVirtual(position, virtualization)
+      : position;
+    const result = method?.(fileName, mappedPosition);
+
+    if (!result) {
+      return result;
+    }
+
+    return {
+      ...result,
+      textSpan: virtualization && result.textSpan
+        ? remapToolingTextSpanToOriginal(result.textSpan, virtualization)
+        : result.textSpan,
+      definitions: result.definitions?.map((definition) => remapFileSpanRecord(definition, getVirtualization)),
+    };
+  };
+}
+
+function wrapReferences(method, getVirtualization) {
+  return (fileName, position) => {
+    const virtualization = getVirtualization(fileName);
+    const mappedPosition = virtualization
+      ? mapOriginalPositionToToolingVirtual(position, virtualization)
+      : position;
+    const references = method?.(fileName, mappedPosition);
+
+    if (!references?.length) {
+      return references;
+    }
+
+    return references.map((reference) => remapFileSpanRecord(reference, getVirtualization));
+  };
+}
+
+function wrapRenameInfo(method, getVirtualization) {
+  return (fileName, position, ...rest) => {
+    const virtualization = getVirtualization(fileName);
+    const mappedPosition = virtualization
+      ? mapOriginalPositionToToolingVirtual(position, virtualization)
+      : position;
+    const info = method?.(fileName, mappedPosition, ...rest);
+
+    if (!info || !virtualization || !info.triggerSpan) {
+      return info;
+    }
+
+    return {
+      ...info,
+      triggerSpan: remapToolingTextSpanToOriginal(info.triggerSpan, virtualization),
+    };
+  };
+}
+
+function wrapRenameLocations(method, getVirtualization) {
+  return (fileName, position, ...rest) => {
+    const virtualization = getVirtualization(fileName);
+    const mappedPosition = virtualization
+      ? mapOriginalPositionToToolingVirtual(position, virtualization)
+      : position;
+    const locations = method?.(fileName, mappedPosition, ...rest);
+
+    if (!locations?.length) {
+      return locations;
+    }
+
+    return locations.map((location) => remapFileSpanRecord(location, getVirtualization));
   };
 }
 
@@ -498,6 +621,26 @@ export default function init(modules) {
         ),
         getCompletionEntryDetails: wrapCompletionEntryDetails(
           languageService.getCompletionEntryDetails?.bind(languageService),
+          getVirtualization,
+        ),
+        getDefinitionAtPosition: wrapDefinitionAtPosition(
+          languageService.getDefinitionAtPosition?.bind(languageService),
+          getVirtualization,
+        ),
+        getDefinitionAndBoundSpan: wrapDefinitionAndBoundSpan(
+          languageService.getDefinitionAndBoundSpan?.bind(languageService),
+          getVirtualization,
+        ),
+        getReferencesAtPosition: wrapReferences(
+          languageService.getReferencesAtPosition?.bind(languageService),
+          getVirtualization,
+        ),
+        getRenameInfo: wrapRenameInfo(
+          languageService.getRenameInfo?.bind(languageService),
+          getVirtualization,
+        ),
+        findRenameLocations: wrapRenameLocations(
+          languageService.findRenameLocations?.bind(languageService),
           getVirtualization,
         ),
       };
