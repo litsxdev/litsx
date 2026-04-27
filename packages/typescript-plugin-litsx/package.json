@@ -30,6 +30,7 @@
   },
   "exports": {
     ".": "./src/index.js",
+    "./authored-semantics": "./src/authored-semantics.js",
     "./virtual-source": "./src/virtual-source.js",
     "./typecheck": "./src/typecheck.js"
   },

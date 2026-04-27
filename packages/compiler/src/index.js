@@ -16,6 +16,7 @@ import {
   ensureLitsxParserPlugins,
   prepareLitsxAuthoredInput,
 } from "./authored-input.js";
+import { mergeLitsxWarnings } from "./warnings.js";
 export {
   ensureLitsxParserPlugins,
   prepareLitsxAuthoredInput,
@@ -235,30 +236,6 @@ export function createLitsxCompilationSession(sessionOptions = {}) {
   return session;
 }
 
-function mergeWarnings(existingWarnings = [], additionalWarnings = []) {
-  const merged = [];
-  const seen = new Set();
-
-  for (const warning of [...existingWarnings, ...additionalWarnings]) {
-    const key = [
-      warning?.code ?? "",
-      warning?.attributeName ?? "",
-      warning?.tagName ?? "",
-      warning?.line ?? "",
-      warning?.column ?? "",
-    ].join(":");
-
-    if (seen.has(key)) {
-      continue;
-    }
-
-    seen.add(key);
-    merged.push(warning);
-  }
-
-  return merged;
-}
-
 export function createLitsxTransformConfig(source, options = {}) {
   const profile = PROFILE_ENABLED ? [] : null;
   const compilationSession = options.__litsxCompilationSession || null;
@@ -335,7 +312,11 @@ function finalizeTransformResult(result, options, authoredWarnings = [], profile
   const metadata = {
     ...(result.metadata || {}),
   };
-  const mergedWarnings = mergeWarnings(metadata.litsxWarnings || [], authoredWarnings);
+  const mergedWarnings = mergeLitsxWarnings(
+    metadata.litsxWarnings || [],
+    authoredWarnings,
+    { filename: options.filename }
+  );
   if (mergedWarnings.length > 0) {
     metadata.litsxWarnings = mergedWarnings;
   }

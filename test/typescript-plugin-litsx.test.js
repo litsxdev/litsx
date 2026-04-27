@@ -13,6 +13,7 @@ import plugin, {
   createVirtualLitsxJsxSource,
   decodeVirtualAttributeName,
   getLitsxAttributeCompletionNames,
+  inferLitsxAttributeInfoAtPosition,
   inferLitsxAttributeCompletionContext,
   looksLikeLitsxJsx,
   mapOriginalPositionToVirtual,
@@ -178,7 +179,26 @@ describe("@litsx/typescript-plugin", () => {
     assert.strictEqual(diagnostics.length, 1);
     assert.strictEqual(diagnostics[0].category, 0);
     assert.strictEqual(diagnostics[0].code, 91004);
-    assert.match(diagnostics[0].messageText, /known Litsx property set for <input>/);
+    assert.match(diagnostics[0].messageText, /known LitSX property set for <input>/);
+  });
+
+  it("suggests the closest known property binding when the authored name is near a valid one", () => {
+    const diagnostics = collectLitsxAuthoredDiagnostics(
+      '<input .valeu={value} />',
+      {
+        DiagnosticCategory: {
+          Warning: 0,
+          Error: 1,
+        },
+      },
+      {
+        plugins: ["typescript"],
+      },
+    );
+
+    assert.strictEqual(diagnostics.length, 1);
+    assert.strictEqual(diagnostics[0].code, 91004);
+    assert.match(diagnostics[0].messageText, /Did you mean "\.value"\?/);
   });
 
   it("warns when a boolean binding is unknown for a known tag", () => {
@@ -198,7 +218,26 @@ describe("@litsx/typescript-plugin", () => {
     assert.strictEqual(diagnostics.length, 1);
     assert.strictEqual(diagnostics[0].category, 0);
     assert.strictEqual(diagnostics[0].code, 91005);
-    assert.match(diagnostics[0].messageText, /known Litsx boolean attribute set for <input>/);
+    assert.match(diagnostics[0].messageText, /known LitSX boolean attribute set for <input>/);
+  });
+
+  it("suggests the closest known boolean binding when the authored name is near a valid one", () => {
+    const diagnostics = collectLitsxAuthoredDiagnostics(
+      '<input ?disbled={flag} />',
+      {
+        DiagnosticCategory: {
+          Warning: 0,
+          Error: 1,
+        },
+      },
+      {
+        plugins: ["typescript"],
+      },
+    );
+
+    assert.strictEqual(diagnostics.length, 1);
+    assert.strictEqual(diagnostics[0].code, 91005);
+    assert.match(diagnostics[0].messageText, /Did you mean "\?disabled"\?/);
   });
 
   it("warns when a listener binding is unknown for a known tag", () => {
@@ -218,7 +257,26 @@ describe("@litsx/typescript-plugin", () => {
     assert.strictEqual(diagnostics.length, 1);
     assert.strictEqual(diagnostics[0].category, 0);
     assert.strictEqual(diagnostics[0].code, 91006);
-    assert.match(diagnostics[0].messageText, /known Litsx event set for <button>/);
+    assert.match(diagnostics[0].messageText, /known LitSX event set for <button>/);
+  });
+
+  it("suggests the closest known listener binding when the authored name is near a valid one", () => {
+    const diagnostics = collectLitsxAuthoredDiagnostics(
+      '<button @clcik={handleClick} />',
+      {
+        DiagnosticCategory: {
+          Warning: 0,
+          Error: 1,
+        },
+      },
+      {
+        plugins: ["typescript"],
+      },
+    );
+
+    assert.strictEqual(diagnostics.length, 1);
+    assert.strictEqual(diagnostics[0].code, 91006);
+    assert.match(diagnostics[0].messageText, /Did you mean "@click"\?/);
   });
 
   it("can detect and decode virtualized attribute names", () => {
@@ -256,6 +314,44 @@ describe("@litsx/typescript-plugin", () => {
     assert.deepStrictEqual(getLitsxAttributeCompletionNames(eventContext), ["@click"]);
     assert.deepStrictEqual(getLitsxAttributeCompletionNames(propContext), [".value", ".valueAsNumber"]);
     assert.deepStrictEqual(getLitsxAttributeCompletionNames(boolContext), ["?hidden"]);
+  });
+
+  it("infers authored attribute info for hover positions inside LitSX attribute names", () => {
+    const source = "<button @click={fn} .value={value} ?disabled={busy} />";
+
+    assert.deepStrictEqual(
+      inferLitsxAttributeInfoAtPosition(source, source.indexOf("@click") + 2),
+      {
+        tagName: "button",
+        prefix: "@",
+        localName: "click",
+        name: "@click",
+        start: source.indexOf("@click"),
+        length: "@click".length,
+      },
+    );
+    assert.deepStrictEqual(
+      inferLitsxAttributeInfoAtPosition(source, source.indexOf(".value") + 2),
+      {
+        tagName: "button",
+        prefix: ".",
+        localName: "value",
+        name: ".value",
+        start: source.indexOf(".value"),
+        length: ".value".length,
+      },
+    );
+    assert.deepStrictEqual(
+      inferLitsxAttributeInfoAtPosition(source, source.indexOf("?disabled") + 2),
+      {
+        tagName: "button",
+        prefix: "?",
+        localName: "disabled",
+        name: "?disabled",
+        start: source.indexOf("?disabled"),
+        length: "?disabled".length,
+      },
+    );
   });
 
   it("falls back to generic completions for unknown tags and ignores unsupported cursor positions", () => {
@@ -379,7 +475,7 @@ describe("@litsx/typescript-plugin", () => {
     );
   });
 
-  it("returns no authored diagnostics for parse failures", () => {
+  it("reports authored syntax diagnostics for parse failures", () => {
     const parseFailureDiagnostics = collectLitsxAuthoredDiagnostics(
       "<button @click={></button>",
       {
@@ -392,7 +488,9 @@ describe("@litsx/typescript-plugin", () => {
       },
     );
 
-    assert.deepStrictEqual(parseFailureDiagnostics, []);
+    assert.strictEqual(parseFailureDiagnostics.length, 1);
+    assert.strictEqual(parseFailureDiagnostics[0].code, 91000);
+    assert.match(parseFailureDiagnostics[0].messageText, /LitSX syntax could not be parsed/);
   });
 
   it("handles parser ASTs rooted at the program node and hoists with callee fallback spans", () => {
@@ -1947,6 +2045,74 @@ describe("@litsx/typescript-plugin", () => {
     assert.deepStrictEqual(wrapped.getCompletionsAtPosition("/virtual/plain.ts", 2), completions);
   });
 
+  it("provides synthetic quick info for authored LitSX attributes when TypeScript returns nothing", () => {
+    const source = "<button @click={handleClick} />";
+    const snapshots = new Map([["/virtual/hover.tsx", source]]);
+    const pluginModule = plugin({
+      typescript: {
+        ScriptSnapshot: {
+          fromString(value) {
+            return {
+              getLength() {
+                return value.length;
+              },
+              getText(start, end) {
+                return value.slice(start, end);
+              },
+            };
+          },
+        },
+      },
+    });
+
+    const wrapped = pluginModule.create({
+      languageServiceHost: {
+        getScriptSnapshot(fileName) {
+          const text = snapshots.get(fileName);
+          if (text == null) {
+            return undefined;
+          }
+
+          return {
+            getLength() {
+              return text.length;
+            },
+            getText(start, end) {
+              return text.slice(start, end);
+            },
+          };
+        },
+      },
+      languageService: {
+        getSyntacticDiagnostics() {
+          return [];
+        },
+        getSemanticDiagnostics() {
+          return [];
+        },
+        getSuggestionDiagnostics() {
+          return [];
+        },
+        getQuickInfoAtPosition() {
+          return undefined;
+        },
+        getCompletionsAtPosition() {
+          return null;
+        },
+      },
+    });
+
+    const quickInfo = wrapped.getQuickInfoAtPosition("/virtual/hover.tsx", source.indexOf("@click") + 2);
+
+    assert.ok(quickInfo);
+    assert.deepStrictEqual(quickInfo.textSpan, {
+      start: source.indexOf("@click"),
+      length: "@click".length,
+    });
+    assert.strictEqual(quickInfo.displayParts[0].text, "@click");
+    assert.match(quickInfo.documentation[0].text, /LitSX event listener binding for <button>/);
+  });
+
   it("returns null completions when virtualization exists but there is no context or source completion result", () => {
     const source = "<button @click={handleClick} />";
     const snapshots = new Map([["/virtual/null-completions.tsx", source]]);
@@ -2224,6 +2390,7 @@ describe("@litsx/typescript-plugin", () => {
       completions.entries.map((entry) => entry.name),
       [".value", ".valueAsNumber"],
     );
+    assert.ok(completions.entries.every((entry) => entry.source === "LitSX"));
   });
 
   it("merges contextual completions ahead of existing non-virtual entries without duplication", () => {
@@ -2427,6 +2594,81 @@ describe("@litsx/typescript-plugin", () => {
       completions.entries.map((entry) => entry.name),
       ["@click"],
     );
+    assert.strictEqual(completions.entries[0].kind, "memberVariableElement");
+  });
+
+  it("provides completion entry details for contextual LitSX attribute completions", () => {
+    const source = "<button @cl />";
+    const snapshots = new Map([["/virtual/details.tsx", source]]);
+
+    const pluginModule = plugin({
+      typescript: {
+        ScriptSnapshot: {
+          fromString(value) {
+            return {
+              getLength() {
+                return value.length;
+              },
+              getText(start, end) {
+                return value.slice(start, end);
+              },
+            };
+          },
+        },
+      },
+    });
+
+    const wrapped = pluginModule.create({
+      languageServiceHost: {
+        getScriptSnapshot(fileName) {
+          const text = snapshots.get(fileName);
+          if (text == null) {
+            return undefined;
+          }
+
+          return {
+            getLength() {
+              return text.length;
+            },
+            getText(start, end) {
+              return text.slice(start, end);
+            },
+          };
+        },
+      },
+      languageService: {
+        getSyntacticDiagnostics() {
+          return [];
+        },
+        getSemanticDiagnostics() {
+          return [];
+        },
+        getSuggestionDiagnostics() {
+          return [];
+        },
+        getQuickInfoAtPosition() {
+          return undefined;
+        },
+        getCompletionsAtPosition() {
+          return null;
+        },
+        getCompletionEntryDetails() {
+          return undefined;
+        },
+      },
+    });
+
+    const details = wrapped.getCompletionEntryDetails(
+      "/virtual/details.tsx",
+      source.indexOf("@cl") + 3,
+      "@click",
+    );
+
+    assert.ok(details);
+    assert.strictEqual(details.name, "@click");
+    assert.strictEqual(details.kind, "memberVariableElement");
+    assert.strictEqual(details.displayParts[0].text, "@click");
+    assert.match(details.documentation[0].text, /LitSX event listener binding for <button>/);
   });
 
   it("merges authored lit diagnostics into semantic diagnostics", () => {

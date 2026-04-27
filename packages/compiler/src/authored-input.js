@@ -3,6 +3,7 @@ import {
   getLitsxVirtualizationMetadata,
   parseWithLitsxVirtualization,
 } from "../../jsx-authoring/src/parser.js";
+import { mergeLitsxWarnings } from "./warnings.js";
 
 function isNativeIntrinsicJsxName(nameNode) {
   return nameNode?.type === "JSXIdentifier" && /^[a-z]/.test(nameNode.name);
@@ -140,30 +141,6 @@ function collectReactMemoWarnings(ast) {
   return warnings;
 }
 
-function mergeWarnings(existingWarnings = [], additionalWarnings = []) {
-  const merged = [];
-  const seen = new Set();
-
-  for (const warning of [...existingWarnings, ...additionalWarnings]) {
-    const key = [
-      warning?.code ?? "",
-      warning?.attributeName ?? "",
-      warning?.tagName ?? "",
-      warning?.line ?? "",
-      warning?.column ?? "",
-    ].join(":");
-
-    if (seen.has(key)) {
-      continue;
-    }
-
-    seen.add(key);
-    merged.push(warning);
-  }
-
-  return merged;
-}
-
 function normalizeParserPlugins(filename, parserPlugins = []) {
   if (Array.isArray(parserPlugins) && parserPlugins.length > 0) {
     return parserPlugins;
@@ -218,9 +195,10 @@ export function prepareLitsxAuthoredInput(
     litsxSourceMap: sourceMaps,
   });
   const virtualization = getLitsxVirtualizationMetadata(virtualizedAst);
-  const authoredWarnings = mergeWarnings(
+  const authoredWarnings = mergeLitsxWarnings(
     collectNativeClassNameWarnings(virtualizedAst),
-    collectReactMemoWarnings(virtualizedAst)
+    collectReactMemoWarnings(virtualizedAst),
+    { filename }
   );
   const authoringPlugins = normalizePluginList(options.authoringPlugins);
 

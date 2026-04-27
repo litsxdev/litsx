@@ -158,6 +158,7 @@ describe("@litsx/compiler", () => {
     assert.ok(Array.isArray(result.metadata.litsxWarnings));
     assert.strictEqual(result.metadata.litsxWarnings.length, 1);
     assert.strictEqual(result.metadata.litsxWarnings[0].code, "LITSX_NATIVE_CLASSNAME");
+    assert.strictEqual(result.metadata.litsxWarnings[0].filename, "/virtual/Counter.jsx");
     assert.match(result.metadata.litsxWarnings[0].message, /is not native LitSX syntax/);
   }, 20000);
 
@@ -303,9 +304,10 @@ describe("@litsx/compiler", () => {
       1
     );
     assert.strictEqual(
-      result.metadata.litsxWarnings.filter((warning) => !warning.code).length,
+      result.metadata.litsxWarnings.filter((warning) => warning.code === null).length,
       1
     );
+    assert.ok(result.metadata.litsxWarnings.every((warning) => warning.filename === "/virtual/Counter.jsx"));
   }, 20000);
 
   it("reuses memoized preset plugins for repeated compiler calls with the same options object", () => {

@@ -5,6 +5,7 @@ import {
   createToolingVirtualLitsxSource,
   decodeVirtualAttributeName,
   getLitsxAttributeCompletionNames,
+  inferLitsxAttributeInfoAtPosition,
   inferLitsxAttributeCompletionContext,
   looksLikeLitsxJsx,
   mapOriginalPositionToToolingVirtual,
@@ -143,8 +144,49 @@ function wrapQuickInfo(method, getVirtualization) {
       : position;
     const info = method(fileName, mappedPosition);
 
-    if (!info || !virtualization) {
+    if (!virtualization) {
       return info;
+    }
+
+    if (!info) {
+      const attributeInfo = inferLitsxAttributeInfoAtPosition(virtualization.sourceText, position);
+      if (!attributeInfo) {
+        return info;
+      }
+
+      let kindLabel = "binding";
+      let detail = "LitSX binding";
+
+      if (attributeInfo.prefix === "@") {
+        kindLabel = "event";
+        detail = "LitSX event listener binding";
+      } else if (attributeInfo.prefix === ".") {
+        kindLabel = "property";
+        detail = "LitSX property binding";
+      } else if (attributeInfo.prefix === "?") {
+        kindLabel = "boolean";
+        detail = "LitSX boolean attribute binding";
+      }
+
+      return {
+        kind: "property",
+        kindModifiers: "",
+        textSpan: {
+          start: attributeInfo.start,
+          length: attributeInfo.length,
+        },
+        displayParts: [
+          { text: attributeInfo.name, kind: "propertyName" },
+          { text: ": ", kind: "punctuation" },
+          { text: kindLabel, kind: "keyword" },
+        ],
+        documentation: [
+          {
+            text: `${detail} for <${attributeInfo.tagName}>.`,
+            kind: "text",
+          },
+        ],
+      };
     }
 
     return {
@@ -156,6 +198,62 @@ function wrapQuickInfo(method, getVirtualization) {
   };
 }
 
+function getLitsxCompletionMetadata(name) {
+  if (typeof name !== "string" || name.length < 2) {
+    return null;
+  }
+
+  if (name.startsWith("@")) {
+    return {
+      kind: "memberVariableElement",
+      kindLabel: "event",
+      detail: "LitSX event listener binding",
+    };
+  }
+
+  if (name.startsWith(".")) {
+    return {
+      kind: "property",
+      kindLabel: "property",
+      detail: "LitSX property binding",
+    };
+  }
+
+  if (name.startsWith("?")) {
+    return {
+      kind: "property",
+      kindLabel: "boolean",
+      detail: "LitSX boolean attribute binding",
+    };
+  }
+
+  return null;
+}
+
+function createContextualCompletionEntries(virtualization, position) {
+  if (!virtualization) {
+    return [];
+  }
+
+  return getLitsxAttributeCompletionNames(
+    inferLitsxAttributeCompletionContext(virtualization.sourceText, position),
+  ).map((name, index) => {
+    const metadata = getLitsxCompletionMetadata(name);
+
+    return {
+      name,
+      kind: metadata?.kind ?? "property",
+      kindModifiers: "",
+      sortText: `0${index}`,
+      insertText: name,
+      source: "LitSX",
+      data: {
+        __litsxContextualCompletion: true,
+      },
+    };
+  });
+}
+
 function wrapCompletions(method, getVirtualization) {
   return (fileName, position, options, formattingSettings) => {
     const virtualization = getVirtualization(fileName);
@@ -163,17 +261,7 @@ function wrapCompletions(method, getVirtualization) {
       ? mapOriginalPositionToToolingVirtual(position, virtualization)
       : position;
     const completions = method(fileName, mappedPosition, options, formattingSettings);
-    const contextualEntries = virtualization
-      ? getLitsxAttributeCompletionNames(
-          inferLitsxAttributeCompletionContext(virtualization.sourceText, position),
-        ).map((name, index) => ({
-          name,
-          kind: "property",
-          kindModifiers: "",
-          sortText: `0${index}`,
-          insertText: name,
-        }))
-      : [];
+    const contextualEntries = createContextualCompletionEntries(virtualization, position);
 
     const filteredEntries = (completions?.entries ?? []).filter(
       (entry) => !decodeVirtualAttributeName(entry.name),
@@ -194,6 +282,56 @@ function wrapCompletions(method, getVirtualization) {
     return {
       ...(completions ?? {}),
       entries: mergedEntries,
+    };
+  };
+}
+
+function wrapCompletionEntryDetails(method, getVirtualization) {
+  return (fileName, position, entryName, ...rest) => {
+    const virtualization = getVirtualization(fileName);
+    const metadata = getLitsxCompletionMetadata(entryName);
+
+    if (virtualization && metadata) {
+      const context = inferLitsxAttributeCompletionContext(virtualization.sourceText, position);
+      if (context && getLitsxAttributeCompletionNames(context).includes(entryName)) {
+        return {
+          name: entryName,
+          kind: metadata.kind,
+          kindModifiers: "",
+          displayParts: [
+            { text: entryName, kind: "propertyName" },
+            { text: ": ", kind: "punctuation" },
+            { text: metadata.kindLabel, kind: "keyword" },
+          ],
+          documentation: [
+            {
+              text: `${metadata.detail} for <${context.tagName}>.`,
+              kind: "text",
+            },
+          ],
+          tags: [],
+          codeActions: [],
+        };
+      }
+    }
+
+    if (typeof method !== "function") {
+      return undefined;
+    }
+
+    const mappedPosition = virtualization
+      ? mapOriginalPositionToToolingVirtual(position, virtualization)
+      : position;
+    const details = method(fileName, mappedPosition, entryName, ...rest);
+
+    if (!details || !virtualization) {
+      return details;
+    }
+
+    return {
+      ...details,
+      displayParts: remapDisplayParts(details.displayParts),
+      documentation: remapDisplayParts(details.documentation),
     };
   };
 }
@@ -358,6 +496,10 @@ export default function init(modules) {
           languageService.getCompletionsAtPosition.bind(languageService),
           getVirtualization,
         ),
+        getCompletionEntryDetails: wrapCompletionEntryDetails(
+          languageService.getCompletionEntryDetails?.bind(languageService),
+          getVirtualization,
+        ),
       };
     },
 
@@ -390,6 +532,7 @@ export {
   createToolingVirtualLitsxSource,
   decodeVirtualAttributeName,
   getLitsxAttributeCompletionNames,
+  inferLitsxAttributeInfoAtPosition,
   inferLitsxAttributeCompletionContext,
   looksLikeLitsxJsx,
   mapOriginalPositionToVirtual,

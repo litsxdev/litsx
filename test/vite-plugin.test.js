@@ -106,4 +106,173 @@ describe("@litsx/vite-plugin", () => {
       sessionSpy.mockRestore();
     }
   });
+
+  it("surfaces LitSX compiler warnings through the Vite plugin context", async () => {
+    const transform = vi.fn(async () => ({
+      code: "export const value = 1;",
+      map: null,
+      metadata: {
+        litsxWarnings: [
+          {
+            code: "LITSX_NATIVE_CLASSNAME",
+            line: 3,
+            column: 14,
+            message: "className is not native LitSX syntax.",
+          },
+        ],
+      },
+    }));
+    const session = {
+      transform,
+      transformSync: vi.fn(),
+      getTypecheckSession: vi.fn(),
+      invalidate: vi.fn(),
+      dispose: vi.fn(),
+    };
+    const sessionSpy = vi
+      .spyOn(compilerModule, "createLitsxCompilationSession")
+      .mockReturnValue(session);
+    const warn = vi.fn();
+
+    try {
+      const plugin = litsx();
+      const result = await plugin.transform.call(
+        { warn },
+        "export const value = 1;",
+        "/virtual/example.jsx"
+      );
+
+      assert.ok(result);
+      assert.strictEqual(warn.mock.calls.length, 1);
+      assert.match(
+        warn.mock.calls[0][0],
+        /\[LITSX_NATIVE_CLASSNAME\] \/virtual\/example\.jsx:3:14 className is not native LitSX syntax\./
+      );
+    } finally {
+      sessionSpy.mockRestore();
+    }
+  });
+
+  it("dedupes repeated LitSX warnings within the same plugin session", async () => {
+    const transform = vi.fn(async () => ({
+      code: "export const value = 1;",
+      map: null,
+      metadata: {
+        litsxWarnings: [
+          {
+            code: "LITSX_NATIVE_CLASSNAME",
+            line: 3,
+            column: 14,
+            message: "className is not native LitSX syntax.",
+          },
+        ],
+      },
+    }));
+    const session = {
+      transform,
+      transformSync: vi.fn(),
+      getTypecheckSession: vi.fn(),
+      invalidate: vi.fn(),
+      dispose: vi.fn(),
+    };
+    const sessionSpy = vi
+      .spyOn(compilerModule, "createLitsxCompilationSession")
+      .mockReturnValue(session);
+    const warn = vi.fn();
+
+    try {
+      const plugin = litsx();
+
+      await plugin.transform.call({ warn }, "export const one = 1;", "/virtual/example.jsx");
+      await plugin.transform.call({ warn }, "export const two = 2;", "/virtual/example.jsx");
+
+      assert.strictEqual(warn.mock.calls.length, 1);
+    } finally {
+      sessionSpy.mockRestore();
+    }
+  });
+
+  it("surfaces compiler failures through the Vite plugin error channel with location context", async () => {
+    const compilerError = Object.assign(new SyntaxError("Unexpected token (1:31)"), {
+      code: "BABEL_PARSER_SYNTAX_ERROR",
+      loc: { line: 1, column: 31 },
+    });
+    const transform = vi.fn(async () => {
+      throw compilerError;
+    });
+    const session = {
+      transform,
+      transformSync: vi.fn(),
+      getTypecheckSession: vi.fn(),
+      invalidate: vi.fn(),
+      dispose: vi.fn(),
+    };
+    const sessionSpy = vi
+      .spyOn(compilerModule, "createLitsxCompilationSession")
+      .mockReturnValue(session);
+    const error = vi.fn((value) => value);
+
+    try {
+      const plugin = litsx();
+      const result = await plugin.transform.call(
+        { error },
+        "export const Broken = () => <button @click=>Hi</button>;",
+        "/virtual/Broken.jsx"
+      );
+
+      assert.strictEqual(error.mock.calls.length, 1);
+      assert.strictEqual(result, error.mock.calls[0][0]);
+      assert.match(result.message, /LitSX compilation failed in \/virtual\/Broken\.jsx/);
+      assert.strictEqual(result.plugin, "litsx");
+      assert.deepStrictEqual(result.loc, {
+        file: "/virtual/Broken.jsx",
+        line: 1,
+        column: 31,
+      });
+      assert.match(result.frame, /1 \| export const Broken =/);
+    } finally {
+      sessionSpy.mockRestore();
+    }
+  });
+
+  it("rethrows enriched compiler failures when no Vite error channel is available", async () => {
+    const compilerError = Object.assign(new SyntaxError("Unexpected token (1:31)"), {
+      code: "BABEL_PARSER_SYNTAX_ERROR",
+      loc: { line: 1, column: 31 },
+    });
+    const transform = vi.fn(async () => {
+      throw compilerError;
+    });
+    const session = {
+      transform,
+      transformSync: vi.fn(),
+      getTypecheckSession: vi.fn(),
+      invalidate: vi.fn(),
+      dispose: vi.fn(),
+    };
+    const sessionSpy = vi
+      .spyOn(compilerModule, "createLitsxCompilationSession")
+      .mockReturnValue(session);
+
+    try {
+      const plugin = litsx();
+
+      await assert.rejects(
+        () => plugin.transform("export const Broken = () => <button @click=>Hi</button>;", "/virtual/Broken.jsx"),
+        (error) => {
+          assert.match(error.message, /LitSX compilation failed in \/virtual\/Broken\.jsx/);
+          assert.strictEqual(error.plugin, "litsx");
+          assert.strictEqual(error.code, "BABEL_PARSER_SYNTAX_ERROR");
+          assert.deepStrictEqual(error.loc, {
+            file: "/virtual/Broken.jsx",
+            line: 1,
+            column: 31,
+          });
+          return true;
+        }
+      );
+    } finally {
+      sessionSpy.mockRestore();
+    }
+  });
 });
