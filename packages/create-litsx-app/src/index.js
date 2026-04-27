@@ -1,6 +1,13 @@
 import fs from "fs";
 import path from "path";
 
+const LOCAL_WORKSPACE_PACKAGE_NAMES = [
+  "litsx",
+  "@litsx/eslint-plugin",
+  "@litsx/typescript-plugin",
+  "@litsx/vite-plugin",
+];
+
 export function inferPackageManager(userAgent = "") {
   if (typeof userAgent !== "string" || userAgent.length === 0) {
     return "npm";
@@ -33,6 +40,21 @@ export function createNextStepCommands(targetDir, packageManager = "npm") {
     `${runCommand} lint`,
     `${runCommand} typecheck`,
   ];
+}
+
+export function applyLocalWorkspaceOverrides(packageJson) {
+  for (const dependencyField of ["dependencies", "devDependencies"]) {
+    const dependencies = packageJson[dependencyField];
+    if (!dependencies) continue;
+
+    for (const packageName of LOCAL_WORKSPACE_PACKAGE_NAMES) {
+      if (packageName in dependencies) {
+        dependencies[packageName] = "workspace:^";
+      }
+    }
+  }
+
+  return packageJson;
 }
 
 function toPackageName(input) {
@@ -157,6 +179,10 @@ function createBaseFiles(packageName, className, includeStorybook) {
   files.set("package.json", "");
   files.set("jsconfig.json", `{
   "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "allowJs": true,
+    "checkJs": true,
     "jsx": "react-jsx",
     "jsxImportSource": "litsx",
     "plugins": [
@@ -194,6 +220,11 @@ export default [
   litsx.configs["recommended-flat"],
 ];
 `);
+  files.set(".vscode/settings.json", `{
+  "js/ts.tsdk.path": "node_modules/typescript/lib",
+  "typescript.tsserver.useSeparateSyntaxServer": false
+}
+`);
   files.set("src/main.js", `import { ${className} } from "./${packageName}.jsx";
 import "./styles/tokens.css";
 
@@ -211,8 +242,6 @@ function createAppProfileFiles(packageName, className) {
   files.set(`src/${packageName}.jsx`, `import { useState } from "litsx";
 
 export const ${className} = ({ title = "Hello LitSX" }) => {
-  const [count, setCount] = useState(0);
-
   ^styles(\`
     :host {
       display: block;
@@ -249,6 +278,8 @@ export const ${className} = ({ title = "Hello LitSX" }) => {
       cursor: pointer;
     }
   \`);
+
+  const [count, setCount] = useState(0);
 
   return (
     <main class="shell">
@@ -736,6 +767,9 @@ export function renderProjectFiles(targetDir, options = {}) {
   const packageName = toPackageName(path.basename(targetDir));
   const className = toClassName(packageName);
   const packageJson = createPackageJson(packageName, template, { visualTests });
+  if (options.localWorkspacePackages) {
+    applyLocalWorkspaceOverrides(packageJson);
+  }
   const files = template === "app"
     ? createAppProfileFiles(packageName, className)
     : template === "component"

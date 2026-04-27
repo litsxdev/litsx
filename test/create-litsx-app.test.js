@@ -5,6 +5,7 @@ import path from "path";
 import { afterEach, describe, it } from "vitest";
 
 import {
+  applyLocalWorkspaceOverrides,
   createNextStepCommands,
   createProject,
   inferPackageManager,
@@ -31,6 +32,7 @@ describe("create-litsx-app", () => {
     const packageJson = JSON.parse(result.files.get("package.json"));
     const jsconfig = result.files.get("jsconfig.json");
     const eslintConfig = result.files.get("eslint.config.js");
+    const vscodeSettings = result.files.get(".vscode/settings.json");
     const viteConfig = result.files.get("vite.config.js");
     const storybookMain = result.files.get(".storybook/main.js");
     const storybookPreview = result.files.get(".storybook/preview.js");
@@ -51,9 +53,15 @@ describe("create-litsx-app", () => {
     assert.ok(packageJson.devDependencies.storybook);
     assert.ok(packageJson.scripts.storybook);
     assert.ok(packageJson.scripts["build-storybook"]);
+    assert.match(jsconfig, /"module": "ESNext"/);
+    assert.match(jsconfig, /"moduleResolution": "Bundler"/);
+    assert.match(jsconfig, /"allowJs": true/);
+    assert.match(jsconfig, /"checkJs": true/);
     assert.match(jsconfig, /"jsxImportSource": "litsx"/);
     assert.match(eslintConfig, /@litsx\/eslint-plugin/);
     assert.match(eslintConfig, /recommended-flat/);
+    assert.match(vscodeSettings, /"js\/ts\.tsdk\.path": "node_modules\/typescript\/lib"/);
+    assert.match(vscodeSettings, /"typescript\.tsserver\.useSeparateSyntaxServer": false/);
     assert.match(jsconfig, /"name": "@litsx\/typescript-plugin"/);
     assert.doesNotMatch(JSON.stringify(packageJson.devDependencies), /@litsx\/babel-parser/);
     assert.match(viteConfig, /@litsx\/vite-plugin/);
@@ -81,6 +89,8 @@ describe("create-litsx-app", () => {
     const appSource = result.files.get("src/my-litsx-app.jsx");
     const readme = result.files.get("README.md");
     const eslintConfig = result.files.get("eslint.config.js");
+    const jsconfig = result.files.get("jsconfig.json");
+    const vscodeSettings = result.files.get(".vscode/settings.json");
 
     assert.strictEqual(result.template, "app");
     assert.strictEqual(result.visualTests, false);
@@ -99,6 +109,8 @@ describe("create-litsx-app", () => {
     assert.match(readme, /npm run lint/);
     assert.match(readme, /npm run typecheck/);
     assert.match(eslintConfig, /recommended-flat/);
+    assert.match(jsconfig, /"moduleResolution": "Bundler"/);
+    assert.match(vscodeSettings, /"typescript\.tsserver\.useSeparateSyntaxServer": false/);
   });
 
   it("renders the component profile with library structure but without storybook", () => {
@@ -211,5 +223,29 @@ describe("create-litsx-app", () => {
       "yarn lint",
       "yarn typecheck",
     ]);
+  });
+
+  it("can rewrite scaffold dependencies to local workspace ranges for smoke testing", () => {
+    const packageJson = {
+      dependencies: {
+        litsx: "^1.0.0",
+        lit: "^3.2.1",
+      },
+      devDependencies: {
+        "@litsx/eslint-plugin": "^0.1.0",
+        "@litsx/typescript-plugin": "^1.0.0",
+        "@litsx/vite-plugin": "^0.1.0",
+        vite: "^7.1.0",
+      },
+    };
+
+    applyLocalWorkspaceOverrides(packageJson);
+
+    assert.strictEqual(packageJson.dependencies.litsx, "workspace:^");
+    assert.strictEqual(packageJson.dependencies.lit, "^3.2.1");
+    assert.strictEqual(packageJson.devDependencies["@litsx/eslint-plugin"], "workspace:^");
+    assert.strictEqual(packageJson.devDependencies["@litsx/typescript-plugin"], "workspace:^");
+    assert.strictEqual(packageJson.devDependencies["@litsx/vite-plugin"], "workspace:^");
+    assert.strictEqual(packageJson.devDependencies.vite, "^7.1.0");
   });
 });

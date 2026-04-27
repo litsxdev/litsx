@@ -77,6 +77,41 @@ const SINGLETON_STATIC_HOISTS = new Set([
   "lightDom",
 ]);
 
+const STATIC_HOIST_DOCUMENTATION_BY_NAME = {
+  "^styles": "LitSX static style hoist. Declare component-scoped styles before render-time statements.",
+  "^properties": "LitSX static properties hoist. Declare reactive property metadata before render-time statements.",
+  "^shadowRootOptions": "LitSX static shadow root options hoist. Declare shadow root configuration before render-time statements.",
+  "^lightDom": "LitSX static light DOM hoist. Declare light DOM rendering before render-time statements.",
+};
+
+function scanStaticHoistParens(sourceText, start) {
+  let depth = 0;
+  let index = start;
+
+  while (index < sourceText.length) {
+    const char = sourceText[index];
+
+    if (char === "(") {
+      depth += 1;
+      index += 1;
+      continue;
+    }
+
+    if (char === ")") {
+      depth -= 1;
+      index += 1;
+      if (depth <= 0) {
+        return index;
+      }
+      continue;
+    }
+
+    index += 1;
+  }
+
+  return index;
+}
+
 function levenshteinDistance(left, right) {
   if (left === right) return 0;
   if (left.length === 0) return right.length;
@@ -129,6 +164,71 @@ function findClosestAttributeSuggestion(prefix, localName, candidates = []) {
 
   const maxDistance = Math.max(2, Math.floor(localName.length / 3));
   return bestDistance <= maxDistance ? bestCandidate : null;
+}
+
+export function inferLitsxStaticHoistInfoAtPosition(sourceText, position) {
+  if (typeof sourceText !== "string" || typeof position !== "number") {
+    return null;
+  }
+
+  let caretIndex = sourceText.lastIndexOf("^", position);
+  while (caretIndex >= 0) {
+    const nextChar = sourceText[caretIndex + 1];
+    if (!/[A-Za-z$_]/.test(nextChar || "")) {
+      caretIndex = sourceText.lastIndexOf("^", caretIndex - 1);
+      continue;
+    }
+
+    let previousIndex = caretIndex - 1;
+    while (previousIndex >= 0 && /[ \t\r\n]/.test(sourceText[previousIndex])) {
+      previousIndex -= 1;
+    }
+
+    if (previousIndex >= 0) {
+      const previousChar = sourceText[previousIndex];
+      if (previousChar !== ";" && previousChar !== "{" && previousChar !== "}") {
+        caretIndex = sourceText.lastIndexOf("^", caretIndex - 1);
+        continue;
+      }
+    }
+
+    let index = caretIndex + 1;
+    while (index < sourceText.length && /[A-Za-z0-9$_]/.test(sourceText[index])) {
+      index += 1;
+    }
+
+    if (index === caretIndex + 1) {
+      caretIndex = sourceText.lastIndexOf("^", caretIndex - 1);
+      continue;
+    }
+
+    const name = sourceText.slice(caretIndex, index);
+    let next = index;
+    while (next < sourceText.length && /[ \t\r\n]/.test(sourceText[next])) {
+      next += 1;
+    }
+
+    if (sourceText[next] !== "(") {
+      caretIndex = sourceText.lastIndexOf("^", caretIndex - 1);
+      continue;
+    }
+
+    const end = scanStaticHoistParens(sourceText, next);
+    if (position < caretIndex || position > end) {
+      caretIndex = sourceText.lastIndexOf("^", caretIndex - 1);
+      continue;
+    }
+
+    return {
+      name,
+      start: caretIndex,
+      length: name.length,
+      documentation: STATIC_HOIST_DOCUMENTATION_BY_NAME[name]
+        ?? `LitSX static hoist ${name}(...). Declare it before render-time statements in the component body.`,
+    };
+  }
+
+  return null;
 }
 
 function walk(node, visitor) {
@@ -631,10 +731,14 @@ export function inferLitsxAttributeCompletionContext(sourceText, position) {
   }
 
   const [, prefix, partialName] = attrMatch;
+  const matchText = attrMatch[0];
+  const attrStart = lastOpen + 1 + openingSegment.length - matchText.length + matchText.lastIndexOf(prefix);
   return {
     tagName: tagMatch[1],
     prefix,
     partialName,
+    start: attrStart,
+    length: prefix.length + partialName.length,
   };
 }
 

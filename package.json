@@ -50,7 +50,11 @@
     "docs:build-content": "node scripts/docs/build-site-content.mjs",
     "docs:dev": "yarn playground:build && yarn docs:build-content && vitepress dev website/docs",
     "docs:build": "yarn playground:build && yarn docs:build-content && vitepress build website/docs",
-    "docs:preview": "vitepress preview website/docs"
+    "docs:preview": "vitepress preview website/docs",
+    "dx:smoke:create": "node scripts/dev/create-dx-smoke-app.mjs",
+    "dx:smoke:dev": "yarn workspace dx-smoke-app dev",
+    "dx:smoke:lint": "yarn workspace dx-smoke-app lint",
+    "dx:smoke:typecheck": "yarn workspace dx-smoke-app typecheck"
   },
   "author": "",
   "license": "Apache-2.0",

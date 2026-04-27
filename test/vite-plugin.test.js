@@ -1,4 +1,7 @@
 import assert from "assert";
+import fs from "fs";
+import os from "os";
+import path from "path";
 import { describe, it, vi } from "vitest";
 
 import { litsx } from "../packages/vite-plugin/src/index.js";
@@ -40,6 +43,57 @@ describe("@litsx/vite-plugin", () => {
     assert.match(transformed.code, /html`/);
     assert.strictEqual(ignored, null);
   }, 30000);
+
+  it("adds an optimizeDeps esbuild plugin that compiles LitSX-authored jsx during dependency scanning", async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-vite-optimize-deps-"));
+    const sourcePath = path.join(tempDir, "Counter.jsx");
+    fs.writeFileSync(
+      sourcePath,
+      'export const Counter = () => { ^styles(`:host { display: block; }`); return <button @click={save}>Hi</button>; };',
+      "utf8",
+    );
+
+    const transformSync = vi.fn(() => ({
+      code: "export const value = 1;",
+      map: null,
+      metadata: {},
+    }));
+    const session = {
+      transform: vi.fn(async () => ({ code: "", map: null, metadata: {} })),
+      transformSync,
+      getTypecheckSession: vi.fn(),
+      invalidate: vi.fn(),
+      dispose: vi.fn(),
+    };
+    const sessionSpy = vi
+      .spyOn(compilerModule, "createLitsxCompilationSession")
+      .mockReturnValue(session);
+    const plugin = litsx();
+    const config = plugin.config({ optimizeDeps: { esbuildOptions: { plugins: [] } } });
+    const scanPlugin = config.optimizeDeps.esbuildOptions.plugins.at(-1);
+    const onLoad = vi.fn();
+
+    try {
+      scanPlugin.setup({
+        onLoad,
+      });
+
+      assert.strictEqual(scanPlugin.name, "litsx-optimize-deps");
+      assert.strictEqual(onLoad.mock.calls.length, 1);
+
+      const [, handler] = onLoad.mock.calls[0];
+      const result = await handler({ path: sourcePath });
+
+      assert.ok(result);
+      assert.strictEqual(result.loader, "js");
+      assert.strictEqual(result.contents, "export const value = 1;");
+      assert.strictEqual(transformSync.mock.calls.length, 1);
+      assert.strictEqual(transformSync.mock.calls[0][1].filename, sourcePath);
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+      sessionSpy.mockRestore();
+    }
+  });
 
   it("supports the docs theme include filter used by VitePress", async () => {
     const plugin = litsx({

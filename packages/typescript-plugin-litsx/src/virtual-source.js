@@ -2,6 +2,7 @@ import {
   collectLitsxAuthoredIssues,
   createVirtualLitsxJsxSource,
   decodeVirtualAttributeName,
+  inferLitsxStaticHoistInfoAtPosition,
   getLitsxAttributeCompletionNames,
   inferLitsxAttributeCompletionContext,
   inferLitsxAttributeInfoAtPosition,
@@ -15,6 +16,7 @@ import {
 export function createToolingVirtualLitsxSource(sourceText, options = {}) {
   const virtualization = createVirtualLitsxJsxSource(sourceText, options);
   const hoistNames = new Set();
+  const usesTypeScriptSyntax = options.plugins?.includes("typescript");
 
   for (const match of virtualization.code.matchAll(STATIC_HOIST_CALL_RE)) {
     hoistNames.add(match[1]);
@@ -34,9 +36,17 @@ export function createToolingVirtualLitsxSource(sourceText, options = {}) {
     ...Array.from(hoistNames)
       .sort()
       .map((name) => (
-        name === "__litsx_static_lightDom"
-          ? "declare function __litsx_static_lightDom(): void;\n"
-          : `declare function ${name}<T = unknown>(value: T): T;\n`
+        usesTypeScriptSyntax
+          ? (
+            name === "__litsx_static_lightDom"
+              ? "declare function __litsx_static_lightDom(): void;\n"
+              : `declare function ${name}<T = unknown>(value: T): T;\n`
+          )
+          : (
+            name === "__litsx_static_lightDom"
+              ? "function __litsx_static_lightDom() {}\n"
+              : `function ${name}(value) { return value; }\n`
+          )
       ))
   );
 
@@ -88,6 +98,7 @@ export {
   collectLitsxAuthoredIssues,
   createVirtualLitsxJsxSource,
   decodeVirtualAttributeName,
+  inferLitsxStaticHoistInfoAtPosition,
   getLitsxAttributeCompletionNames,
   inferLitsxAttributeCompletionContext,
   inferLitsxAttributeInfoAtPosition,

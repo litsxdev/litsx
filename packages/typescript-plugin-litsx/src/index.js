@@ -6,6 +6,7 @@ import {
   decodeVirtualAttributeName,
   getLitsxAttributeCompletionNames,
   inferLitsxAttributeInfoAtPosition,
+  inferLitsxStaticHoistInfoAtPosition,
   inferLitsxAttributeCompletionContext,
   looksLikeLitsxJsx,
   mapOriginalPositionToToolingVirtual,
@@ -166,7 +167,74 @@ function wrapSemanticDiagnostics(method, getVirtualization, getAuthoredDiagnosti
       return diagnostics;
     }
 
-    return [...diagnostics, ...authoredDiagnostics];
+    const warningCategory = 0;
+    const authoredErrors = authoredDiagnostics.filter(
+      (diagnostic) => diagnostic.category !== warningCategory,
+    );
+
+    if (authoredErrors.length === 0) {
+      return diagnostics;
+    }
+
+    return [...diagnostics, ...authoredErrors];
+  };
+}
+
+function wrapSyntacticDiagnostics(method, getVirtualization, getAuthoredDiagnostics, ts) {
+  return (fileName) => {
+    const diagnostics = wrapDiagnostics(method, getVirtualization)(fileName);
+    const virtualization = getVirtualization(fileName);
+
+    if (!/\.[cm]?[jt]sx$/.test(fileName) || !virtualization) {
+      return diagnostics;
+    }
+
+    const authoredDiagnostics = getAuthoredDiagnostics(fileName);
+    if (!authoredDiagnostics?.length) {
+      return fileName.endsWith(".jsx") ? [] : diagnostics;
+    }
+
+    // TypeScript's JSX parser does not understand LitSX-authored syntax in
+    // plain .jsx files, so its raw syntactic diagnostics are mostly parser
+    // cascades. Replace them wholesale with authored diagnostics instead.
+    if (fileName.endsWith(".jsx")) {
+      const seen = new Set();
+      return authoredDiagnostics.filter((diagnostic) => {
+        const key = `${diagnostic.code}:${diagnostic.start}:${diagnostic.length}`;
+        if (seen.has(key)) {
+          return false;
+        }
+        seen.add(key);
+        return true;
+      });
+    }
+
+    const warningCategory = ts?.DiagnosticCategory?.Warning ?? 0;
+    const authoredWarnings = authoredDiagnostics.filter(
+      (diagnostic) => diagnostic.category === warningCategory,
+    );
+
+    if (authoredWarnings.length === 0) {
+      return diagnostics;
+    }
+
+    const seen = new Set(
+      diagnostics.map(
+        (diagnostic) => `${diagnostic.code}:${diagnostic.start}:${diagnostic.length}`,
+      ),
+    );
+
+    return [
+      ...diagnostics,
+      ...authoredWarnings.filter((diagnostic) => {
+        const key = `${diagnostic.code}:${diagnostic.start}:${diagnostic.length}`;
+        if (seen.has(key)) {
+          return false;
+        }
+        seen.add(key);
+        return true;
+      }),
+    ];
   };
 }
 
@@ -271,7 +339,37 @@ function wrapQuickInfo(method, getVirtualization) {
       return info;
     }
 
+    function createHoistQuickInfo(hoistInfo, fallbackSpan = null) {
+      return {
+        kind: "function",
+        kindModifiers: "",
+        textSpan: hoistInfo
+          ? {
+            start: hoistInfo.start,
+            length: hoistInfo.length,
+          }
+          : fallbackSpan,
+        displayParts: [
+          { text: hoistInfo?.name ?? "^hoist", kind: "functionName" },
+          { text: "(...)", kind: "punctuation" },
+          { text: ": ", kind: "punctuation" },
+          { text: "static hoist", kind: "keyword" },
+        ],
+        documentation: [
+          {
+            text: hoistInfo?.documentation ?? "LitSX static hoist.",
+            kind: "text",
+          },
+        ],
+      };
+    }
+
     if (!info) {
+      const hoistInfo = inferLitsxStaticHoistInfoAtPosition(virtualization.sourceText, position);
+      if (hoistInfo) {
+        return createHoistQuickInfo(hoistInfo);
+      }
+
       const attributeInfo = inferLitsxAttributeInfoAtPosition(virtualization.sourceText, position);
       if (!attributeInfo) {
         return info;
@@ -312,10 +410,30 @@ function wrapQuickInfo(method, getVirtualization) {
       };
     }
 
+    const hoistInfo = inferLitsxStaticHoistInfoAtPosition(virtualization.sourceText, position);
+    if (hoistInfo) {
+      return createHoistQuickInfo(hoistInfo);
+    }
+
+    const remappedDisplayParts = remapDisplayParts(info.displayParts);
+    const hoistDisplayName = remappedDisplayParts?.[0]?.text;
+    if (typeof hoistDisplayName === "string" && hoistDisplayName.startsWith("^")) {
+      const remappedSpan = remapToolingTextSpanToOriginal(info.textSpan, virtualization);
+      return createHoistQuickInfo(
+        {
+          name: hoistDisplayName,
+          start: remappedSpan.start,
+          length: hoistDisplayName.length,
+          documentation: `LitSX static hoist ${hoistDisplayName}(...). Declare it before render-time statements in the component body.`,
+        },
+        remappedSpan,
+      );
+    }
+
     return {
       ...info,
       textSpan: remapToolingTextSpanToOriginal(info.textSpan, virtualization),
-      displayParts: remapDisplayParts(info.displayParts),
+      displayParts: remappedDisplayParts,
       documentation: remapDisplayParts(info.documentation),
     };
   };
@@ -358,9 +476,9 @@ function createContextualCompletionEntries(virtualization, position) {
     return [];
   }
 
-  return getLitsxAttributeCompletionNames(
-    inferLitsxAttributeCompletionContext(virtualization.sourceText, position),
-  ).map((name, index) => {
+  const context = inferLitsxAttributeCompletionContext(virtualization.sourceText, position);
+
+  return getLitsxAttributeCompletionNames(context).map((name, index) => {
     const metadata = getLitsxCompletionMetadata(name);
 
     return {
@@ -369,6 +487,12 @@ function createContextualCompletionEntries(virtualization, position) {
       kindModifiers: "",
       sortText: `0${index}`,
       insertText: name,
+      replacementSpan: context
+        ? {
+          start: context.start,
+          length: context.length,
+        }
+        : undefined,
       source: "LitSX",
       data: {
         __litsxContextualCompletion: true,
@@ -598,9 +722,11 @@ export default function init(modules) {
 
       return {
         ...languageService,
-        getSyntacticDiagnostics: wrapDiagnostics(
+        getSyntacticDiagnostics: wrapSyntacticDiagnostics(
           languageService.getSyntacticDiagnostics.bind(languageService),
           getVirtualization,
+          getAuthoredDiagnostics,
+          ts,
         ),
         getSemanticDiagnostics: wrapSemanticDiagnostics(
           languageService.getSemanticDiagnostics.bind(languageService),

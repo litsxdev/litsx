@@ -151,6 +151,22 @@ describe("@litsx/typescript-plugin", () => {
     assert.match(result.toolingPreamble, /declare function __litsx_static_lightDom\(\): void;/);
   });
 
+  it("uses JS-safe tooling stubs for static hoists in jsx files", () => {
+    const source = `
+      function Card() {
+        ^styles(\`:host { display: block; }\`);
+        ^lightDom();
+        return <div />;
+      }
+    `;
+
+    const result = createToolingVirtualLitsxSource(source);
+
+    assert.match(result.toolingPreamble, /function __litsx_static_lightDom\(\) \{\}/);
+    assert.match(result.toolingPreamble, /function __litsx_static_styles\(value\) \{ return value; \}/);
+    assert.doesNotMatch(result.toolingPreamble, /declare function/);
+  });
+
   it("leaves tooling virtual source untouched when no static hoists are present", () => {
     const source = `const view = <button @click={handleClick}>{label}</button>;`;
     const result = createToolingVirtualLitsxSource(source, {
@@ -300,16 +316,22 @@ describe("@litsx/typescript-plugin", () => {
       tagName: "button",
       prefix: "@",
       partialName: "cli",
+      start: "<button ".length,
+      length: "@cli".length,
     });
     assert.deepStrictEqual(propContext, {
       tagName: "input",
       prefix: ".",
       partialName: "va",
+      start: "<input ".length,
+      length: ".va".length,
     });
     assert.deepStrictEqual(boolContext, {
       tagName: "suspense-list",
       prefix: "?",
       partialName: "hi",
+      start: "<suspense-list ".length,
+      length: "?hi".length,
     });
     assert.deepStrictEqual(getLitsxAttributeCompletionNames(eventContext), ["@click"]);
     assert.deepStrictEqual(getLitsxAttributeCompletionNames(propContext), [".value", ".valueAsNumber"]);
@@ -364,6 +386,8 @@ describe("@litsx/typescript-plugin", () => {
         tagName: "demo-card",
         prefix: ".",
         partialName: "va",
+        start: 0,
+        length: 3,
       }),
       [".value"],
     );
@@ -372,6 +396,8 @@ describe("@litsx/typescript-plugin", () => {
         tagName: "demo-card",
         prefix: "#",
         partialName: "x",
+        start: 0,
+        length: 2,
       }),
       [],
     );
@@ -941,6 +967,47 @@ describe("@litsx/typescript-plugin", () => {
         const value = 1;
         const busy = false;
         const view = <button @click={handleClick} .value={value} ?disabled={busy}>Save</button>;
+      `,
+    );
+
+    process.stderr.write = () => true;
+
+    try {
+      process.chdir(tempDir);
+      assert.equal(runLitsxTypecheck([]), 0);
+    } finally {
+      process.chdir(originalCwd);
+      process.stderr.write = originalWrite;
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  }, 20_000);
+
+  it("typechecks jsx projects that use static hoists", () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-typecheck-hoists-"));
+    const tsconfigPath = path.join(tempDir, "tsconfig.json");
+    const filePath = path.join(tempDir, "index.jsx");
+    const originalCwd = process.cwd();
+    const originalWrite = process.stderr.write;
+
+    fs.writeFileSync(
+      tsconfigPath,
+      JSON.stringify({
+        compilerOptions: {
+          jsx: "preserve",
+          allowJs: true,
+          checkJs: true,
+          noEmit: true,
+        },
+        include: ["index.jsx"],
+      }),
+    );
+    fs.writeFileSync(
+      filePath,
+      `
+        export const Card = ({ title = "Smoke" }) => {
+          ^styles(\`:host { display: block; }\`);
+          return <button>{title}</button>;
+        };
       `,
     );
 
@@ -2113,6 +2180,85 @@ describe("@litsx/typescript-plugin", () => {
     assert.match(quickInfo.documentation[0].text, /LitSX event listener binding for <button>/);
   });
 
+  it("provides synthetic quick info for static hoists without exposing tooling stubs", () => {
+    const source = `
+      export const Card = () => {
+        ^styles(\`:host { display: block; }\`);
+        return <div />;
+      };
+    `;
+    const snapshots = new Map([["/virtual/hoist-hover.tsx", source]]);
+    const pluginModule = plugin({
+      typescript: {
+        ScriptSnapshot: {
+          fromString(value) {
+            return {
+              getLength() {
+                return value.length;
+              },
+              getText(start, end) {
+                return value.slice(start, end);
+              },
+            };
+          },
+        },
+      },
+    });
+
+    const wrapped = pluginModule.create({
+      languageServiceHost: {
+        getScriptSnapshot(fileName) {
+          const text = snapshots.get(fileName);
+          if (text == null) {
+            return undefined;
+          }
+
+          return {
+            getLength() {
+              return text.length;
+            },
+            getText(start, end) {
+              return text.slice(start, end);
+            },
+          };
+        },
+      },
+      languageService: {
+        getSyntacticDiagnostics() {
+          return [];
+        },
+        getSemanticDiagnostics() {
+          return [];
+        },
+        getSuggestionDiagnostics() {
+          return [];
+        },
+        getQuickInfoAtPosition() {
+          return {
+            kind: "function",
+            kindModifiers: "",
+            textSpan: { start: 0, length: 10 },
+            displayParts: [{ text: "__litsx_static_styles", kind: "functionName" }],
+            documentation: [{ text: "tooling stub", kind: "text" }],
+          };
+        },
+        getCompletionsAtPosition() {
+          return null;
+        },
+      },
+    });
+
+    const quickInfo = wrapped.getQuickInfoAtPosition("/virtual/hoist-hover.tsx", source.indexOf("^styles") + 2);
+
+    assert.ok(quickInfo);
+    assert.deepStrictEqual(quickInfo.textSpan, {
+      start: source.indexOf("^styles"),
+      length: "^styles".length,
+    });
+    assert.strictEqual(quickInfo.displayParts[0].text, "^styles");
+    assert.match(quickInfo.documentation[0].text, /static style hoist/i);
+  });
+
   it("returns null completions when virtualization exists but there is no context or source completion result", () => {
     const source = "<button @click={handleClick} />";
     const snapshots = new Map([["/virtual/null-completions.tsx", source]]);
@@ -2245,7 +2391,7 @@ describe("@litsx/typescript-plugin", () => {
       wrapped.getSyntacticDiagnostics(fileName);
 
       assert.strictEqual(virtualizationSpy.mock.calls.length, 1);
-      assert.strictEqual(authoredDiagnosticsSpy.mock.calls.length, 0);
+      assert.strictEqual(authoredDiagnosticsSpy.mock.calls.length, 1);
 
       wrapped.getSemanticDiagnostics(fileName);
       wrapped.getSemanticDiagnostics(fileName);
@@ -2595,6 +2741,10 @@ describe("@litsx/typescript-plugin", () => {
       ["@click"],
     );
     assert.strictEqual(completions.entries[0].kind, "memberVariableElement");
+    assert.deepStrictEqual(completions.entries[0].replacementSpan, {
+      start: source.indexOf("@cl"),
+      length: "@cl".length,
+    });
   });
 
   it("provides completion entry details for contextual LitSX attribute completions", () => {
@@ -2897,7 +3047,7 @@ describe("@litsx/typescript-plugin", () => {
     assert.strictEqual(diagnostics[0].start, source.indexOf("@click"));
   });
 
-  it("surfaces known-tag property warnings through semantic diagnostics", () => {
+  it("surfaces known-tag property warnings through syntactic diagnostics", () => {
     const source = '<input .unknownProp={value} />';
     const snapshots = new Map([["/virtual/warn.tsx", source]]);
 
@@ -2959,7 +3109,7 @@ describe("@litsx/typescript-plugin", () => {
       },
     });
 
-    const diagnostics = wrapped.getSemanticDiagnostics("/virtual/warn.tsx");
+    const diagnostics = wrapped.getSyntacticDiagnostics("/virtual/warn.tsx");
 
     assert.strictEqual(diagnostics.length, 1);
     assert.strictEqual(diagnostics[0].category, 0);
@@ -2967,7 +3117,7 @@ describe("@litsx/typescript-plugin", () => {
     assert.match(diagnostics[0].messageText, /<input>/);
   });
 
-  it("surfaces known-tag boolean warnings through semantic diagnostics", () => {
+  it("surfaces known-tag boolean warnings through syntactic diagnostics", () => {
     const source = "<input ?hidden={flag} />";
     const snapshots = new Map([["/virtual/bool-warn.tsx", source]]);
 
@@ -3029,7 +3179,7 @@ describe("@litsx/typescript-plugin", () => {
       },
     });
 
-    const diagnostics = wrapped.getSemanticDiagnostics("/virtual/bool-warn.tsx");
+    const diagnostics = wrapped.getSyntacticDiagnostics("/virtual/bool-warn.tsx");
 
     assert.strictEqual(diagnostics.length, 1);
     assert.strictEqual(diagnostics[0].category, 0);
@@ -3037,7 +3187,7 @@ describe("@litsx/typescript-plugin", () => {
     assert.match(diagnostics[0].messageText, /<input>/);
   });
 
-  it("surfaces known-tag listener warnings through semantic diagnostics", () => {
+  it("surfaces known-tag listener warnings through syntactic diagnostics", () => {
     const source = "<button @submit={handleSubmit} />";
     const snapshots = new Map([["/virtual/event-warn.tsx", source]]);
 
@@ -3099,12 +3249,267 @@ describe("@litsx/typescript-plugin", () => {
       },
     });
 
-    const diagnostics = wrapped.getSemanticDiagnostics("/virtual/event-warn.tsx");
+    const diagnostics = wrapped.getSyntacticDiagnostics("/virtual/event-warn.tsx");
 
     assert.strictEqual(diagnostics.length, 1);
     assert.strictEqual(diagnostics[0].category, 0);
     assert.strictEqual(diagnostics[0].code, 91006);
     assert.match(diagnostics[0].messageText, /<button>/);
+  });
+
+  it("surfaces authored warning diagnostics through syntactic diagnostics in jsx files", () => {
+    const source = `
+      const view = (
+        <main>
+          <input .valuee={count} />
+          <button @clcik={() => save()} />
+          <button ?disbled={busy} />
+        </main>
+      );
+    `;
+    const snapshots = new Map([["/virtual/warn.jsx", source]]);
+
+    const pluginModule = plugin({
+      typescript: {
+        DiagnosticCategory: {
+          Warning: 0,
+          Error: 1,
+        },
+        ScriptSnapshot: {
+          fromString(value) {
+            return {
+              getLength() {
+                return value.length;
+              },
+              getText(start, end) {
+                return value.slice(start, end);
+              },
+            };
+          },
+        },
+      },
+    });
+
+    const wrapped = pluginModule.create({
+      languageServiceHost: {
+        getScriptSnapshot(fileName) {
+          const text = snapshots.get(fileName);
+          if (text == null) {
+            return undefined;
+          }
+
+          return {
+            getLength() {
+              return text.length;
+            },
+            getText(start, end) {
+              return text.slice(start, end);
+            },
+          };
+        },
+      },
+      languageService: {
+        getSyntacticDiagnostics() {
+          return [];
+        },
+        getSemanticDiagnostics() {
+          return [];
+        },
+        getSuggestionDiagnostics() {
+          return [];
+        },
+        getQuickInfoAtPosition() {
+          return undefined;
+        },
+        getCompletionsAtPosition() {
+          return null;
+        },
+      },
+    });
+
+    const syntaxDiagnostics = wrapped.getSyntacticDiagnostics("/virtual/warn.jsx");
+    const semanticDiagnostics = wrapped.getSemanticDiagnostics("/virtual/warn.jsx");
+
+    assert.deepStrictEqual(
+      syntaxDiagnostics.map((diagnostic) => diagnostic.code).sort(),
+      [91004, 91005, 91006],
+    );
+    assert.ok(syntaxDiagnostics.every((diagnostic) => diagnostic.category === 0));
+    assert.deepStrictEqual(semanticDiagnostics, []);
+  });
+
+  it("replaces raw jsx parser cascades with authored diagnostics in jsx files", () => {
+    const source = `
+      const view = (
+        <main>
+          <input .valuee={count} />
+          <button @clcik={() => save()} />
+          <button ?disbled={busy} />
+        </main>
+      );
+    `;
+    const snapshots = new Map([["/virtual/warn.jsx", source]]);
+
+    const pluginModule = plugin({
+      typescript: {
+        DiagnosticCategory: {
+          Warning: 0,
+          Error: 1,
+        },
+        ScriptSnapshot: {
+          fromString(value) {
+            return {
+              getLength() {
+                return value.length;
+              },
+              getText(start, end) {
+                return value.slice(start, end);
+              },
+            };
+          },
+        },
+      },
+    });
+
+    const wrapped = pluginModule.create({
+      languageServiceHost: {
+        getScriptSnapshot(fileName) {
+          const text = snapshots.get(fileName);
+          if (text == null) {
+            return undefined;
+          }
+
+          return {
+            getLength() {
+              return text.length;
+            },
+            getText(start, end) {
+              return text.slice(start, end);
+            },
+          };
+        },
+      },
+      languageService: {
+        getSyntacticDiagnostics() {
+          return [
+            {
+              code: 2657,
+              category: 1,
+              start: source.indexOf("<main>"),
+              length: "<main>".length,
+              messageText: "JSX expressions must have one parent element.",
+            },
+            {
+              code: 1003,
+              category: 1,
+              start: source.indexOf("@clcik"),
+              length: 1,
+              messageText: "Identifier expected.",
+            },
+          ];
+        },
+        getSemanticDiagnostics() {
+          return [];
+        },
+        getSuggestionDiagnostics() {
+          return [];
+        },
+        getQuickInfoAtPosition() {
+          return undefined;
+        },
+        getCompletionsAtPosition() {
+          return null;
+        },
+      },
+    });
+
+    const diagnostics = wrapped.getSyntacticDiagnostics("/virtual/warn.jsx");
+
+    assert.deepStrictEqual(
+      diagnostics.map((diagnostic) => diagnostic.code).sort(),
+      [91004, 91005, 91006],
+    );
+  });
+
+  it("surfaces authored warning diagnostics through syntactic diagnostics in tsx files", () => {
+    const source = `
+      const view = (
+        <main>
+          <input .valuee={count} />
+          <button @clcik={() => save()} />
+          <button ?disbled={busy} />
+        </main>
+      );
+    `;
+    const snapshots = new Map([["/virtual/warn.tsx", source]]);
+
+    const pluginModule = plugin({
+      typescript: {
+        DiagnosticCategory: {
+          Warning: 0,
+          Error: 1,
+        },
+        ScriptSnapshot: {
+          fromString(value) {
+            return {
+              getLength() {
+                return value.length;
+              },
+              getText(start, end) {
+                return value.slice(start, end);
+              },
+            };
+          },
+        },
+      },
+    });
+
+    const wrapped = pluginModule.create({
+      languageServiceHost: {
+        getScriptSnapshot(fileName) {
+          const text = snapshots.get(fileName);
+          if (text == null) {
+            return undefined;
+          }
+
+          return {
+            getLength() {
+              return text.length;
+            },
+            getText(start, end) {
+              return text.slice(start, end);
+            },
+          };
+        },
+      },
+      languageService: {
+        getSyntacticDiagnostics() {
+          return [];
+        },
+        getSemanticDiagnostics() {
+          return [];
+        },
+        getSuggestionDiagnostics() {
+          return [];
+        },
+        getQuickInfoAtPosition() {
+          return undefined;
+        },
+        getCompletionsAtPosition() {
+          return null;
+        },
+      },
+    });
+
+    const syntaxDiagnostics = wrapped.getSyntacticDiagnostics("/virtual/warn.tsx");
+    const semanticDiagnostics = wrapped.getSemanticDiagnostics("/virtual/warn.tsx");
+
+    assert.deepStrictEqual(
+      syntaxDiagnostics.map((diagnostic) => diagnostic.code).sort(),
+      [91004, 91005, 91006],
+    );
+    assert.ok(syntaxDiagnostics.every((diagnostic) => diagnostic.category === 0));
+    assert.deepStrictEqual(semanticDiagnostics, []);
   });
 
   it("remaps internal virtual names in quick-info text fragments", () => {

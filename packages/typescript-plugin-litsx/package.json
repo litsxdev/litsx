@@ -24,28 +24,46 @@
     "directory": "packages/typescript-plugin-litsx"
   },
   "type": "module",
-  "main": "./src/index.js",
+  "main": "./tsserver-plugin.cjs",
+  "module": "./dist/index.js",
   "bin": {
     "litsx-tsc": "./bin/litsx-tsc.js"
   },
   "exports": {
-    ".": "./src/index.js",
-    "./authored-semantics": "./src/authored-semantics.js",
-    "./virtual-source": "./src/virtual-source.js",
-    "./typecheck": "./src/typecheck.js"
+    ".": {
+      "require": "./tsserver-plugin.cjs",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./authored-semantics": {
+      "require": "./dist/authored-semantics.cjs",
+      "import": "./dist/authored-semantics.js",
+      "default": "./dist/authored-semantics.js"
+    },
+    "./virtual-source": {
+      "require": "./dist/virtual-source.cjs",
+      "import": "./dist/virtual-source.js",
+      "default": "./dist/virtual-source.js"
+    },
+    "./typecheck": {
+      "require": "./dist/typecheck.cjs",
+      "import": "./dist/typecheck.js",
+      "default": "./dist/typecheck.js"
+    }
   },
   "files": [
     "bin",
-    "src",
+    "dist",
+    "tsserver-plugin.cjs",
     "README.md"
   ],
   "dependencies": {
-    "@litsx/typescript-session": "workspace:^"
+    "@babel/parser": "^7.28.5"
   },
   "peerDependencies": {
     "typescript": ">=5"
   },
   "scripts": {
-    "build": "node -e 'process.exit(0)'"
+    "build": "../../node_modules/.bin/rollup --config rollup.config.mjs"
   }
 }

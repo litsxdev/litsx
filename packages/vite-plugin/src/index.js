@@ -1,3 +1,4 @@
+import fs from "fs/promises";
 import { createLitsxCompilationSession } from "../../compiler/src/index.js";
 
 function shouldTransform(id, include) {
@@ -104,9 +105,48 @@ export function litsx(options = {}) {
     return session;
   }
 
+  function createOptimizeDepsEsbuildPlugin() {
+    return {
+      name: "litsx-optimize-deps",
+      setup(build) {
+        build.onLoad({ filter: /\.[jt]sx$/ }, async ({ path: filePath }) => {
+          if (!shouldTransform(filePath, include)) {
+            return null;
+          }
+
+          const source = await fs.readFile(filePath, "utf8");
+          const result = getSession().transformSync(source, {
+            ...compilerOptions,
+            filename: filePath,
+            sourceMaps: false,
+          });
+
+          return {
+            contents: result.code,
+            loader: "js",
+          };
+        });
+      },
+    };
+  }
+
   return {
     name: "litsx",
     enforce: "pre",
+    config(userConfig) {
+      const esbuildOptions = userConfig.optimizeDeps?.esbuildOptions ?? {};
+      const existingPlugins = esbuildOptions.plugins ?? [];
+
+      return {
+        optimizeDeps: {
+          ...userConfig.optimizeDeps,
+          esbuildOptions: {
+            ...esbuildOptions,
+            plugins: [...existingPlugins, createOptimizeDepsEsbuildPlugin()],
+          },
+        },
+      };
+    },
     async transform(code, id) {
       if (!shouldTransform(id, include)) {
         return null;
