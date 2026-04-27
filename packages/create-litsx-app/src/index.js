@@ -1,6 +1,40 @@
 import fs from "fs";
 import path from "path";
 
+export function inferPackageManager(userAgent = "") {
+  if (typeof userAgent !== "string" || userAgent.length === 0) {
+    return "npm";
+  }
+
+  if (userAgent.startsWith("pnpm/")) {
+    return "pnpm";
+  }
+
+  if (userAgent.startsWith("yarn/")) {
+    return "yarn";
+  }
+
+  return "npm";
+}
+
+export function createNextStepCommands(targetDir, packageManager = "npm") {
+  const installCommand = packageManager === "yarn"
+    ? "yarn"
+    : `${packageManager} install`;
+
+  const runCommand = packageManager === "yarn"
+    ? "yarn"
+    : `${packageManager} run`;
+
+  return [
+    `cd ${targetDir}`,
+    installCommand,
+    `${runCommand} dev`,
+    `${runCommand} lint`,
+    `${runCommand} typecheck`,
+  ];
+}
+
 function toPackageName(input) {
   return input
     .trim()
@@ -26,6 +60,7 @@ function createBasePackageJson(packageName) {
     scripts: {
       dev: "vite",
       build: "vite build",
+      lint: "eslint .",
       typecheck: "litsx-tsc -p jsconfig.json --noEmit",
       preview: "vite preview",
     },
@@ -35,8 +70,10 @@ function createBasePackageJson(packageName) {
       "litsx": "^1.0.0",
     },
     devDependencies: {
+      "@litsx/eslint-plugin": "^0.1.0",
       "@litsx/typescript-plugin": "^1.0.0",
       "@litsx/vite-plugin": "^0.1.0",
+      "eslint": "^9.0.0",
       "typescript": "^5.9.3",
       "vite": "^7.1.0"
     }
@@ -151,6 +188,12 @@ export default defineConfig({
   plugins: [litsx()],
 });
 `);
+  files.set("eslint.config.js", `import litsx from "@litsx/eslint-plugin";
+
+export default [
+  litsx.configs["recommended-flat"],
+];
+`);
   files.set("src/main.js", `import { ${className} } from "./${packageName}.jsx";
 import "./styles/tokens.css";
 
@@ -165,22 +208,57 @@ document.querySelector("#app").innerHTML = "<app-root></app-root>";
 function createAppProfileFiles(packageName, className) {
   const files = createBaseFiles(packageName, className, false);
 
-  files.set(`src/${packageName}.jsx`, `import { SuspenseBoundary } from "litsx";
+  files.set(`src/${packageName}.jsx`, `import { useState } from "litsx";
 
-export const ${className} = ({ title = "Litsx App" }) => {
+export const ${className} = ({ title = "Hello LitSX" }) => {
+  const [count, setCount] = useState(0);
+
+  ^styles(\`
+    :host {
+      display: block;
+    }
+
+    .shell {
+      max-width: 840px;
+      margin: 0 auto;
+      padding: 48px 24px 96px;
+    }
+
+    .title {
+      margin: 0;
+      font-size: clamp(2.25rem, 4vw, 3.25rem);
+      line-height: 1;
+      letter-spacing: -0.04em;
+    }
+
+    .lede {
+      margin: 16px 0 0;
+      max-width: 34rem;
+      color: #4b5563;
+      font-size: 1.05rem;
+    }
+
+    .cta {
+      margin-top: 24px;
+      border: 0;
+      border-radius: 999px;
+      padding: 12px 18px;
+      background: #1f2937;
+      color: white;
+      font: inherit;
+      cursor: pointer;
+    }
+  \`);
+
   return (
     <main class="shell">
-      <header>
-        <h1>{title}</h1>
-      </header>
-
-      <SuspenseBoundary
-        fallback={<p>Loading…</p>}
-        contentRenderer={() => <p>Boundary ready.</p>}
-      />
-
-      <button class="cta" @click={() => console.log("hello from litsx")}>
-        Click me
+      <h1 class="title">{title}</h1>
+      <p class="lede">
+        Edit <code>src/${packageName}.jsx</code> and click the button to confirm
+        authored LitSX is running.
+      </p>
+      <button class="cta" @click={() => setCount((value) => value + 1)}>
+        Count: {count}
       </button>
     </main>
   );
@@ -200,32 +278,31 @@ body {
   background: linear-gradient(180deg, #fcf8f2 0%, #f1e7d8 100%);
   color: var(--color-text);
 }
-
-.shell {
-  max-width: 840px;
-  margin: 0 auto;
-  padding: 48px 24px 96px;
-}
-
-.cta {
-  border: 0;
-  border-radius: 999px;
-  padding: 12px 18px;
-  background: var(--color-accent);
-  color: white;
-  font: inherit;
-  cursor: pointer;
-}
 `);
   files.set("README.md", `# ${packageName}
 
 Generated with \`create-litsx-app --template app\`.
 
+## First Run
+
+1. \`npm install\`
+2. \`npm run dev\`
+3. Open the local Vite URL and edit \`src/${packageName}.jsx\`
+
 ## Scripts
 
 - \`npm run dev\`
 - \`npm run build\`
+- \`npm run lint\`
+- \`npm run typecheck\`
 - \`npm run preview\`
+
+## What This Template Shows
+
+- authored LitSX JSX
+- \`@click\` event binding
+- local state with \`useState(...)\`
+- component-owned styling with \`^styles(...)\`
 `);
 
   return files;
@@ -358,12 +435,14 @@ Generated with \`create-litsx-app --template component\`.
 
 - \`npm run dev\`
 - \`npm run build\`
+- \`npm run lint\`
 - \`npm run preview\`
 
 ## Included
 
 - Litsx + Lit runtime
 - Official \`@litsx/vite-plugin\` integration for authored LitSX source
+- Official \`@litsx/eslint-plugin\` linting preset
 - A starter component-library structure under \`src/components\`
 - Shared tokens CSS for design-system work without Storybook overhead
 `);
@@ -607,6 +686,7 @@ Generated with \`create-litsx-app --template design-system\`.
 
 - \`npm run dev\`
 - \`npm run build\`
+- \`npm run lint\`
 - \`npm run preview\`
 - \`npm run storybook\`
 - \`npm run build-storybook\`
@@ -615,6 +695,7 @@ Generated with \`create-litsx-app --template design-system\`.
 
 - Litsx + Lit runtime
 - Official \`@litsx/vite-plugin\` integration for authored LitSX source
+- Official \`@litsx/eslint-plugin\` linting preset
 - Storybook for web components with MDX docs
 - A starter design-system component and story
 `);

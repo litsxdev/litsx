@@ -8,6 +8,23 @@ create-litsx-app my-components --template component
 create-litsx-app my-design-system --template design-system --visual-tests
 ```
 
+If you want the shortest path to a running project, start with `--template app`:
+
+```sh
+create-litsx-app my-app --template app
+cd my-app
+npm install
+npm run dev
+```
+
+That scaffold keeps the first contact intentionally small:
+
+- one authored Lit<sup>sx</sup> component
+- one `@click` binding
+- one `useState(...)`
+- one `^styles(...)`
+- one `eslint.config.js` already wired to the official Lit<sup>sx</sup> preset
+
 ## The Default Model
 
 By default, think in native Lit<sup>sx</sup> terms:

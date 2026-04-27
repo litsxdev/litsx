@@ -4,7 +4,12 @@ import os from "os";
 import path from "path";
 import { afterEach, describe, it } from "vitest";
 
-import { createProject, renderProjectFiles } from "../packages/create-litsx-app/src/index.js";
+import {
+  createNextStepCommands,
+  createProject,
+  inferPackageManager,
+  renderProjectFiles,
+} from "../packages/create-litsx-app/src/index.js";
 
 const tempDirs = [];
 
@@ -25,6 +30,7 @@ describe("create-litsx-app", () => {
 
     const packageJson = JSON.parse(result.files.get("package.json"));
     const jsconfig = result.files.get("jsconfig.json");
+    const eslintConfig = result.files.get("eslint.config.js");
     const viteConfig = result.files.get("vite.config.js");
     const storybookMain = result.files.get(".storybook/main.js");
     const storybookPreview = result.files.get(".storybook/preview.js");
@@ -36,6 +42,9 @@ describe("create-litsx-app", () => {
     assert.ok(packageJson.dependencies.lit);
     assert.ok(packageJson.devDependencies["@litsx/typescript-plugin"]);
     assert.ok(packageJson.devDependencies["@litsx/vite-plugin"]);
+    assert.ok(packageJson.devDependencies["@litsx/eslint-plugin"]);
+    assert.ok(packageJson.devDependencies.eslint);
+    assert.strictEqual(packageJson.scripts.lint, "eslint .");
     assert.strictEqual(packageJson.scripts.typecheck, "litsx-tsc -p jsconfig.json --noEmit");
     assert.ok(packageJson.devDependencies["@storybook/web-components-vite"]);
     assert.ok(packageJson.devDependencies["@storybook/addon-docs"]);
@@ -43,6 +52,8 @@ describe("create-litsx-app", () => {
     assert.ok(packageJson.scripts.storybook);
     assert.ok(packageJson.scripts["build-storybook"]);
     assert.match(jsconfig, /"jsxImportSource": "litsx"/);
+    assert.match(eslintConfig, /@litsx\/eslint-plugin/);
+    assert.match(eslintConfig, /recommended-flat/);
     assert.match(jsconfig, /"name": "@litsx\/typescript-plugin"/);
     assert.doesNotMatch(JSON.stringify(packageJson.devDependencies), /@litsx\/babel-parser/);
     assert.match(viteConfig, /@litsx\/vite-plugin/);
@@ -68,15 +79,26 @@ describe("create-litsx-app", () => {
     const result = renderProjectFiles("/tmp/my-litsx-app", { template: "app" });
     const packageJson = JSON.parse(result.files.get("package.json"));
     const appSource = result.files.get("src/my-litsx-app.jsx");
+    const readme = result.files.get("README.md");
+    const eslintConfig = result.files.get("eslint.config.js");
 
     assert.strictEqual(result.template, "app");
     assert.strictEqual(result.visualTests, false);
     assert.ok(!packageJson.scripts.storybook);
     assert.ok(!packageJson.devDependencies.storybook);
+    assert.strictEqual(packageJson.scripts.lint, "eslint .");
     assert.ok(!result.files.has(".storybook/main.js"));
     assert.ok(!result.files.has("src/stories/status-pill.stories.jsx"));
-    assert.match(appSource, /Litsx App/);
+    assert.match(appSource, /Hello LitSX/);
+    assert.match(appSource, /useState/);
+    assert.match(appSource, /\^styles\(/);
+    assert.match(appSource, /Count: \{count\}/);
+    assert.doesNotMatch(appSource, /SuspenseBoundary/);
     assert.doesNotMatch(appSource, /ButtonCard/);
+    assert.match(readme, /First Run/);
+    assert.match(readme, /npm run lint/);
+    assert.match(readme, /npm run typecheck/);
+    assert.match(eslintConfig, /recommended-flat/);
   });
 
   it("renders the component profile with library structure but without storybook", () => {
@@ -89,6 +111,7 @@ describe("create-litsx-app", () => {
     assert.strictEqual(result.visualTests, false);
     assert.ok(!packageJson.scripts.storybook);
     assert.ok(!packageJson.devDependencies.storybook);
+    assert.strictEqual(packageJson.scripts.lint, "eslint .");
     assert.ok(result.files.has("src/components/status-pill.jsx"));
     assert.ok(result.files.has("src/components/button-card.jsx"));
     assert.ok(!result.files.has(".storybook/main.js"));
@@ -96,6 +119,7 @@ describe("create-litsx-app", () => {
     assert.match(componentSource, /ButtonCard/);
     assert.match(componentSource, /StatusPill/);
     assert.match(readme, /component-library structure/);
+    assert.match(readme, /eslint-plugin/);
   });
 
   it("adds visual testing assets when requested", () => {
@@ -126,6 +150,7 @@ describe("create-litsx-app", () => {
 
     assert.ok(fs.existsSync(path.join(targetDir, "package.json")));
     assert.ok(fs.existsSync(path.join(targetDir, "jsconfig.json")));
+    assert.ok(fs.existsSync(path.join(targetDir, "eslint.config.js")));
     assert.ok(fs.existsSync(path.join(targetDir, "vite.config.js")));
     assert.ok(!fs.existsSync(path.join(targetDir, "tools", "litsx-vite-plugin.js")));
     assert.ok(fs.existsSync(path.join(targetDir, ".storybook", "main.js")));
@@ -155,5 +180,36 @@ describe("create-litsx-app", () => {
     assert.throws(() => {
       renderProjectFiles("/tmp/unknown-template", { template: "docs" });
     }, /Unknown template/);
+  });
+
+  it("infers the invoking package manager from npm user agent", () => {
+    assert.strictEqual(inferPackageManager("pnpm/10.0.0 npm/? node/v22.0.0 darwin x64"), "pnpm");
+    assert.strictEqual(inferPackageManager("yarn/1.22.22 npm/? node/v22.0.0 darwin x64"), "yarn");
+    assert.strictEqual(inferPackageManager("npm/10.9.0 node/v22.0.0 darwin x64"), "npm");
+    assert.strictEqual(inferPackageManager(""), "npm");
+  });
+
+  it("creates package-manager-aware next-step commands", () => {
+    assert.deepStrictEqual(createNextStepCommands("my-app", "npm"), [
+      "cd my-app",
+      "npm install",
+      "npm run dev",
+      "npm run lint",
+      "npm run typecheck",
+    ]);
+    assert.deepStrictEqual(createNextStepCommands("my-app", "pnpm"), [
+      "cd my-app",
+      "pnpm install",
+      "pnpm run dev",
+      "pnpm run lint",
+      "pnpm run typecheck",
+    ]);
+    assert.deepStrictEqual(createNextStepCommands("my-app", "yarn"), [
+      "cd my-app",
+      "yarn",
+      "yarn dev",
+      "yarn lint",
+      "yarn typecheck",
+    ]);
   });
 });

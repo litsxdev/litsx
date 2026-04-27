@@ -19,6 +19,26 @@ pnpm create litsx-app my-app
 yarn create litsx-app my-app
 ```
 
+## Shortest Path
+
+If you just want the fastest route to a running LitSX app, start with the `app`
+template:
+
+```bash
+npx create-litsx-app my-app --template app
+cd my-app
+npm install
+npm run dev
+```
+
+That path gives you the smallest scaffold with:
+
+- authored LitSX JSX
+- `@click` event binding
+- local state with `useState(...)`
+- component-owned styling with `^styles(...)`
+- `eslint.config.js` wired to `@litsx/eslint-plugin`
+
 ## What It Generates
 
 The scaffold includes:
@@ -26,8 +46,11 @@ The scaffold includes:
 - `vite`
 - `litsx`
 - `@litsx/vite-plugin`
+- `@litsx/eslint-plugin`
 - `@litsx/typescript-plugin`
+- `eslint.config.js` with `recommended-flat`
 - `jsconfig.json` configured with `jsxImportSource: "litsx"`
+- `npm run lint` wired to `eslint .`
 - `npm run typecheck` wired to `litsx-tsc -p jsconfig.json --noEmit`
 
 Depending on the selected template, it can also include:
