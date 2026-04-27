@@ -1,0 +1,73 @@
+# `@litsx/eslint-plugin`
+
+Official ESLint support for LitSX-authored syntax.
+
+This v1 is **processor-first**:
+
+- LitSX-authored source is virtualized before ESLint parses it
+- ESLint findings are remapped back to original authored positions
+- LitSX-specific semantic rules run with normal ESLint `ruleId`s
+
+It does **not** ship a dedicated LitSX parser yet.
+
+## Installation
+
+```sh
+npm install -D eslint @litsx/eslint-plugin
+```
+
+## Flat Config
+
+```js
+import litsx from "@litsx/eslint-plugin";
+
+export default [
+  litsx.configs["recommended-flat"],
+];
+```
+
+Other shipped flat presets:
+
+- `litsx.configs["recommended-react-migration-flat"]`
+- `litsx.configs["strict-flat"]`
+
+## Legacy Config
+
+```json
+{
+  "extends": ["plugin:@litsx/recommended"]
+}
+```
+
+Other shipped legacy presets:
+
+- `plugin:@litsx/recommended-react-migration`
+- `plugin:@litsx/strict`
+
+## Included Rules
+
+- `@litsx/no-native-classname`
+- `@litsx/no-invalid-binding-value`
+- `@litsx/no-unknown-binding`
+- `@litsx/static-hoists-top-level`
+- `@litsx/no-duplicate-static-hoist`
+- `@litsx/no-react-memo`
+- `@litsx/no-react-compat-surface`
+- `@litsx/prefer-destructured-props`
+- `@litsx/no-opaque-prop-metadata-inference`
+- `@litsx/require-top-level-hoists-first`
+- `@litsx/no-unknown-static-hoist`
+
+## Autofix
+
+The v1 plugin only autofixes safe, unambiguous cases.
+
+Today that means:
+
+- `className` -> `class` on native LitSX intrinsic elements
+
+## Notes
+
+- The plugin is designed to work with LitSX-authored forms such as `@click`, `.value`, `?disabled`, and `^styles(...)`.
+- Processor mode means lint messages are reported on the original source even though ESLint parses a virtualized version internally.
+- Prettier support is still a separate gap; this package only covers linting.

@@ -1,0 +1,48 @@
+{
+  "name": "@litsx/eslint-plugin",
+  "version": "0.1.0",
+  "description": "Official ESLint processor support for LitSX-authored syntax",
+  "type": "module",
+  "main": "./src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./processor": "./src/processor.js"
+  },
+  "files": [
+    "src",
+    "README.md"
+  ],
+  "keywords": [
+    "eslint",
+    "litsx",
+    "lit",
+    "jsx"
+  ],
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/litsx/litsx/tree/main/packages/eslint-plugin-litsx",
+  "bugs": {
+    "url": "https://github.com/litsx/litsx/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/litsx/litsx.git",
+    "directory": "packages/eslint-plugin-litsx"
+  },
+  "peerDependencies": {
+    "eslint": "^8.57.0 || ^9.0.0",
+    "typescript": ">=5"
+  },
+  "dependencies": {
+    "@babel/core": "^7.26.5",
+    "@babel/eslint-parser": "^7.28.6",
+    "@babel/plugin-syntax-jsx": "^7.27.1",
+    "@babel/plugin-syntax-typescript": "^7.27.1",
+    "@litsx/typescript-plugin": "workspace:^"
+  },
+  "scripts": {
+    "build": "node -e 'process.exit(0)'"
+  }
+}
