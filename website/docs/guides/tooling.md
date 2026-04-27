@@ -76,6 +76,63 @@ When the compiler has to recover property metadata from opaque member access lik
 
 In other words, the build pipeline is responsible for preserving the Lit<sup>sx</sup> programming model, not just for emitting valid JavaScript.
 
+## Linting And Formatting
+
+Lit<sup>sx</sup> now ships an official ESLint integration:
+
+- `@litsx/eslint-plugin`
+
+The current shape is intentionally processor-first:
+
+- authored Lit<sup>sx</sup> source is virtualized before ESLint parses it
+- findings are remapped back to the original source positions
+- Lit<sup>sx</sup>-specific semantic rules run with normal ESLint rule ids
+
+The recommended linting baseline is now:
+
+- `@litsx/typescript-plugin` for editor understanding
+- `litsx-tsc` for authored type-checking
+- `@litsx/vite-plugin` for compilation
+- `@litsx/eslint-plugin` for linting
+
+The plugin covers authored forms such as:
+
+- `@event`
+- `.prop`
+- `?attr`
+- `^name(...)`
+
+and currently includes rules such as:
+
+- `@litsx/no-native-classname`
+- `@litsx/no-invalid-binding-value`
+- `@litsx/no-unknown-binding`
+- `@litsx/static-hoists-top-level`
+- `@litsx/no-react-memo`
+- `@litsx/no-duplicate-static-hoist`
+
+The plugin also ships multiple presets:
+
+- `plugin:@litsx/recommended`
+- `plugin:@litsx/recommended-react-migration`
+- `plugin:@litsx/strict`
+
+and flat-config equivalents:
+
+- `configs["recommended-flat"]`
+- `configs["recommended-react-migration-flat"]`
+- `configs["strict-flat"]`
+
+Formatting is still the remaining gap:
+
+- Lit<sup>sx</sup> does **not** yet ship an official Prettier plugin
+
+So the authoritative story today is:
+
+- use the ESLint plugin for linting
+- use `litsx-tsc` and the compiler toolchain for authored correctness
+- treat formatting support as still pending rather than silently assumed
+
 ## Public Surfaces
 
 Most users only need these public entrypoints:

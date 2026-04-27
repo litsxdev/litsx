@@ -683,6 +683,15 @@ body {
   flex: 0 0 auto;
 }
 
+.litsx-hero-pill-icon-mask {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  background-color: currentColor;
+  -webkit-mask: var(--litsx-hero-pill-mask) no-repeat center / contain;
+  mask: var(--litsx-hero-pill-mask) no-repeat center / contain;
+}
+
 .dark .litsx-hero-pill {
   border-color: rgba(255, 255, 255, 0.08);
   background: rgba(255, 255, 255, 0.04);

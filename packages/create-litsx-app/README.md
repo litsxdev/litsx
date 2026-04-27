@@ -112,6 +112,19 @@ That is why generated projects use:
 
 This keeps the developer experience aligned with LitSX syntax without requiring a custom TypeScript source format.
 
+LitSX now ships an official ESLint integration for authored syntax such as `@click`, `.value`, and `^styles(...)`:
+
+- `@litsx/eslint-plugin`
+
+For scaffolded projects, the supported baseline is therefore:
+
+- `@litsx/typescript-plugin` in the editor
+- `litsx-tsc` for authored static checking
+- `@litsx/vite-plugin` for compilation
+- `@litsx/eslint-plugin` for linting
+
+Formatting is still the gap: there is not yet an official Prettier plugin for LitSX-authored syntax.
+
 ## Who This Package Is For
 
 Use `create-litsx-app` when you want:
