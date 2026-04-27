@@ -4,12 +4,18 @@ Examples are where the framework becomes concrete.
 
 Use this section when you want to see authored Lit<sup>sx</sup> code that is actually worth copying, not raw fixtures or transform output dumps.
 
-## Native Authoring
+## Flagship Native Authoring
+
+- [Controlled Disclosure](./controlled-disclosure.md)
+- [Smart Props](./property-inference.md)
+- [Async Action Form](./async-action-form.md)
+- [Optimistic List](./optimistic-list.md)
+- [Native Refs](./native-refs.md)
+
+## Supporting Native Authoring
 
 - [Counter Card](./counter-card.md)
-- [Property Inference](./property-inference.md)
 - [Async Reveal Order](./async-reveal-order.md)
-- [Native Refs](./native-refs.md)
 
 ## React Migration
 

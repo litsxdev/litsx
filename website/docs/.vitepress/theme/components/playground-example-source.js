@@ -12,12 +12,13 @@ export function Counter({
 }: CounterProps) {
   const [count, setCount] = useState(initialCount);
   const tone = count >= 8 ? "#0f766e" : count >= 4 ? "#b45309" : "#7c2d12";
+  const level = count >= 8 ? "High" : count >= 4 ? "Medium" : "Low";
 
   ^styles(\`
     :host {
       display: block;
-      color: #f8f1e8;
       font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+      color: #e5e7eb;
     }
 
     button {
@@ -25,49 +26,44 @@ export function Counter({
     }
 
     .card {
-      width: min(100%, 22rem);
+      display: grid;
+      gap: 0.75rem;
+      width: min(100%, 20rem);
       padding: 1rem;
-      border-radius: 1.25rem;
-      background:
-        radial-gradient(circle at top left, rgba(255, 255, 255, 0.14), transparent 42%),
-        linear-gradient(160deg, #111827, #1f2937);
-      box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.08),
-        0 18px 40px rgba(15, 23, 42, 0.22);
+      border-radius: 1rem;
+      background: #111827;
+      border: 1px solid #1f2937;
     }
 
-    .eyebrow {
-      font-size: 0.72rem;
-      text-transform: uppercase;
-      letter-spacing: 0.12em;
-      color: rgba(248, 241, 232, 0.64);
-    }
-
-    .value {
-      margin: 0.35rem 0 0;
-      font-size: 2.8rem;
-      font-weight: 700;
-      line-height: 0.95;
-    }
-
-    .footer {
-      margin-top: 1rem;
+    .row {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 1rem;
+      gap: 0.75rem;
+    }
+
+    .label {
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #94a3b8;
+    }
+
+    .value {
+      margin: 0;
+      font-size: 2.4rem;
+      font-weight: 700;
     }
 
     .tag {
-      padding: 0.35rem 0.65rem;
+      padding: 0.3rem 0.55rem;
       border-radius: 999px;
-      background: rgba(255, 255, 255, 0.08);
-      color: rgba(248, 241, 232, 0.8);
-      font-size: 0.82rem;
+      background: #1f2937;
+      color: #cbd5e1;
+      font-size: 0.78rem;
     }
 
     .button {
-      appearance: none;
       border: 0;
       border-radius: 999px;
       padding: 0.55rem 0.9rem;
@@ -82,10 +78,13 @@ export function Counter({
 
   return (
     <div class="card">
-      <div class="eyebrow">{title}</div>
-      <p class="value">{count}</p>
-      <div class="footer">
-        <span class="tag">{count >= 8 ? "High" : count >= 4 ? "Medium" : "Low"}</span>
+      <div class="label">{title}</div>
+      <div class="row">
+        <p class="value">{count}</p>
+        <span class="tag">{level}</span>
+      </div>
+      <div class="row">
+        <span class="tag">local state + runtime style</span>
         <button class="button" @click={() => setCount((value) => value + 1)}>
           Increment
         </button>
@@ -99,7 +98,9 @@ export const propertyInferenceExampleSource = `
 
 type ProfileCardProps = {
   title: string;
+  subtitle: string;
   active: boolean;
+  tone: "neutral" | "success";
   tags: string[];
   createdAt: Date;
   onSelect: (id: string) => void;
@@ -107,13 +108,17 @@ type ProfileCardProps = {
 
 export function ProfileCard({
   title = "Ada Lovelace",
+  subtitle = "Analytical Engine notes",
   active = true,
+  tone = "success",
   tags = ["typed props", "reflect"],
   createdAt = new Date("1843-07-01"),
   onSelect = (id) => alert(\`Selected profile: \${id}\`),
 }: ProfileCardProps) {
   ^properties<ProfileCardProps>({
     active: { reflect: true },
+    tags: { attribute: false },
+    createdAt: { attribute: false },
     onSelect: { attribute: false },
   });
 
@@ -129,30 +134,32 @@ export function ProfileCard({
     }
 
     .card {
+      display: grid;
+      gap: 0.85rem;
       width: min(100%, 24rem);
       padding: 1rem;
       border-radius: 1rem;
-      background:
-        radial-gradient(circle at top left, rgba(255, 255, 255, 0.08), transparent 38%),
-        linear-gradient(155deg, #0f172a, #1e293b);
-      box-shadow: 0 18px 40px rgba(15, 23, 42, 0.24);
+      background: #0f172a;
+      border: 1px solid #1e293b;
     }
 
     .eyebrow {
-      font-size: 0.72rem;
-      text-transform: uppercase;
-      letter-spacing: 0.12em;
-      color: rgba(226, 232, 240, 0.62);
+      font-size: 0.78rem;
+      color: #94a3b8;
     }
 
     .title {
-      margin: 0.35rem 0 0;
-      font-size: 1.45rem;
+      margin: 0;
+      font-size: 1.25rem;
       font-weight: 700;
     }
 
+    .subtitle {
+      margin: 0.15rem 0 0;
+      color: #cbd5e1;
+    }
+
     .meta {
-      margin-top: 0.8rem;
       display: flex;
       flex-wrap: wrap;
       gap: 0.5rem;
@@ -161,13 +168,12 @@ export function ProfileCard({
     .pill {
       padding: 0.35rem 0.6rem;
       border-radius: 999px;
-      background: rgba(255, 255, 255, 0.08);
+      background: #1e293b;
       font-size: 0.8rem;
-      color: rgba(226, 232, 240, 0.88);
+      color: #cbd5e1;
     }
 
     .footer {
-      margin-top: 0.95rem;
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -183,8 +189,11 @@ export function ProfileCard({
       color: #86efac;
     }
 
+    :host([active]) .card[data-tone="success"] {
+      border-color: #14532d;
+    }
+
     .button {
-      appearance: none;
       border: 0;
       border-radius: 999px;
       padding: 0.55rem 0.9rem;
@@ -196,10 +205,13 @@ export function ProfileCard({
   \`);
 
   return (
-    <article class="card">
-      <div class="eyebrow">Property inference</div>
+    <article class="card" data-tone={tone}>
+      <div class="eyebrow">TypeScript owns the prop contract</div>
       <h2 class="title">{title}</h2>
+      <p class="subtitle">{subtitle}</p>
       <div class="meta">
+        <span class="pill">reflect: active</span>
+        <span class="pill">js-only: callback / date / tags</span>
         <span class="pill">{createdAt.toISOString().slice(0, 10)}</span>
         <span class="pill">{tags.join(" · ")}</span>
       </div>
@@ -833,13 +845,13 @@ export function Disclosure({
     }
 
     .card {
+      display: grid;
+      gap: 0.75rem;
       width: min(100%, 25rem);
       padding: 1rem;
       border-radius: 1rem;
-      background:
-        radial-gradient(circle at top left, rgba(255, 255, 255, 0.08), transparent 38%),
-        linear-gradient(155deg, #102033, #0f172a);
-      box-shadow: 0 18px 40px rgba(15, 23, 42, 0.24);
+      background: #102033;
+      border: 1px solid #1d4ed8;
     }
 
     .row {
@@ -856,7 +868,6 @@ export function Disclosure({
     }
 
     .button {
-      appearance: none;
       border: 0;
       border-radius: 999px;
       padding: 0.55rem 0.9rem;
@@ -867,16 +878,15 @@ export function Disclosure({
     }
 
     .status {
-      margin-top: 0.75rem;
       font-size: 0.85rem;
-      color: rgba(226, 232, 240, 0.72);
+      color: #93c5fd;
     }
 
     .panel {
-      margin-top: 0.85rem;
       padding: 0.85rem 0.95rem;
       border-radius: 0.9rem;
-      background: rgba(148, 163, 184, 0.12);
+      background: #0f172a;
+      border: 1px solid #1e3a8a;
     }
   \`);
 
@@ -2241,18 +2251,16 @@ function HostRefCard({ ref }: { ref?: RefProp<HTMLElement> }) {
     .ref-card {
       display: grid;
       gap: 0.45rem;
-      padding: 0.9rem 1rem;
-      border-radius: 1rem;
-      background: rgba(255, 255, 255, 0.06);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      color: rgba(244, 239, 232, 0.96);
+      padding: 0.8rem 0.9rem;
+      border-radius: 0.9rem;
+      background: #182234;
+      border: 1px solid #263346;
+      color: #f8fafc;
     }
 
     .ref-card span {
       font-size: 0.82rem;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      color: rgba(244, 239, 232, 0.68);
+      color: #93c5fd;
     }
   \`);
 
@@ -2279,55 +2287,31 @@ function ForwardedDomInput({ ref }: { ref?: RefProp<HTMLInputElement> }) {
     .ref-card {
       display: grid;
       gap: 0.45rem;
-      padding: 0.9rem 1rem;
-      border-radius: 1rem;
-      background: rgba(255, 255, 255, 0.06);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      color: rgba(244, 239, 232, 0.96);
+      padding: 0.8rem 0.9rem;
+      border-radius: 0.9rem;
+      background: #182234;
+      border: 1px solid #263346;
+      color: #f8fafc;
     }
 
     .ref-card span {
       font-size: 0.82rem;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      color: rgba(244, 239, 232, 0.68);
+      color: #93c5fd;
     }
 
     .ref-card input {
-      appearance: none;
-      -webkit-appearance: none;
       width: 100%;
       box-sizing: border-box;
       border: 0;
-      border-radius: 0.8rem;
-      padding: 0.72rem 0.82rem;
-      background: rgba(15, 23, 42, 0.68);
+      border-radius: 0.75rem;
+      padding: 0.7rem 0.8rem;
+      background: #0f172a;
       color: #f8fafc;
-      line-height: 1.35;
-      box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.22);
-      transition:
-        box-shadow 140ms ease,
-        background 140ms ease;
+      box-shadow: inset 0 0 0 1px #334155;
     }
 
     .ref-card input::placeholder {
-      color: rgba(226, 232, 240, 0.48);
-    }
-
-    .ref-card input:hover {
-      background: rgba(15, 23, 42, 0.76);
-      box-shadow:
-        inset 0 0 0 1px rgba(125, 211, 252, 0.24),
-        0 0 0 1px rgba(125, 211, 252, 0.04);
-    }
-
-    .ref-card input:focus {
-      background: rgba(15, 23, 42, 0.82);
-      outline: 2px solid rgba(56, 189, 248, 0.8);
-      outline-offset: 2px;
-      box-shadow:
-        inset 0 0 0 1px rgba(125, 211, 252, 0.42),
-        0 10px 24px rgba(14, 165, 233, 0.18);
+      color: #64748b;
     }
   \`);
 
@@ -2356,55 +2340,31 @@ function ImperativeHandleInput({ ref }: { ref?: RefProp<InputApi> }) {
     .ref-card {
       display: grid;
       gap: 0.45rem;
-      padding: 0.9rem 1rem;
-      border-radius: 1rem;
-      background: rgba(255, 255, 255, 0.06);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      color: rgba(244, 239, 232, 0.96);
+      padding: 0.8rem 0.9rem;
+      border-radius: 0.9rem;
+      background: #182234;
+      border: 1px solid #263346;
+      color: #f8fafc;
     }
 
     .ref-card span {
       font-size: 0.82rem;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      color: rgba(244, 239, 232, 0.68);
+      color: #93c5fd;
     }
 
     .ref-card input {
-      appearance: none;
-      -webkit-appearance: none;
       width: 100%;
       box-sizing: border-box;
       border: 0;
-      border-radius: 0.8rem;
-      padding: 0.72rem 0.82rem;
-      background: rgba(15, 23, 42, 0.68);
+      border-radius: 0.75rem;
+      padding: 0.7rem 0.8rem;
+      background: #0f172a;
       color: #f8fafc;
-      line-height: 1.35;
-      box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.22);
-      transition:
-        box-shadow 140ms ease,
-        background 140ms ease;
+      box-shadow: inset 0 0 0 1px #334155;
     }
 
     .ref-card input::placeholder {
-      color: rgba(226, 232, 240, 0.48);
-    }
-
-    .ref-card input:hover {
-      background: rgba(15, 23, 42, 0.76);
-      box-shadow:
-        inset 0 0 0 1px rgba(125, 211, 252, 0.24),
-        0 0 0 1px rgba(125, 211, 252, 0.04);
-    }
-
-    .ref-card input:focus {
-      background: rgba(15, 23, 42, 0.82);
-      outline: 2px solid rgba(56, 189, 248, 0.8);
-      outline-offset: 2px;
-      box-shadow:
-        inset 0 0 0 1px rgba(125, 211, 252, 0.42),
-        0 10px 24px rgba(14, 165, 233, 0.18);
+      color: #64748b;
     }
   \`);
 
@@ -2451,13 +2411,9 @@ export function NativeRefResolutionDemo() {
       display: grid;
       gap: 0.9rem;
       padding: 1rem;
-      border-radius: 1.4rem;
-      background:
-        radial-gradient(circle at top left, rgba(255, 255, 255, 0.14), transparent 35%),
-        linear-gradient(165deg, #152238, #0f172a 58%, #111827);
-      box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.08),
-        0 24px 60px rgba(15, 23, 42, 0.24);
+      border-radius: 1rem;
+      background: #0f172a;
+      border: 1px solid #1e293b;
     }
 
     .ref-actions {
@@ -2467,28 +2423,22 @@ export function NativeRefResolutionDemo() {
     }
 
     .ref-button {
-      appearance: none;
       border: 0;
       border-radius: 999px;
-      padding: 0.78rem 0.95rem;
-      background: linear-gradient(135deg, #38bdf8, #0ea5e9);
+      padding: 0.72rem 0.9rem;
+      background: #38bdf8;
       color: #082f49;
       cursor: pointer;
       font-weight: 700;
-      box-shadow: 0 12px 24px rgba(14, 165, 233, 0.26);
-    }
-
-    .ref-button:hover {
-      filter: brightness(1.04);
     }
 
     .ref-status {
       margin: 0;
       padding: 0.8rem 0.95rem;
-      border-radius: 0.9rem;
-      background: rgba(15, 23, 42, 0.6);
+      border-radius: 0.85rem;
+      background: #111827;
       color: #dbeafe;
-      border: 1px solid rgba(125, 211, 252, 0.18);
+      border: 1px solid #1e293b;
       font-size: 0.95rem;
     }
   \`);
@@ -2671,59 +2621,55 @@ export function UseAsyncStateDemo() {
     :host {
       display: block;
       font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
-      color: #f4efe8;
+      color: #e5e7eb;
     }
 
-    .async-card {
+    button {
+      font: inherit;
+    }
+
+    .card {
       display: grid;
       gap: 0.85rem;
       padding: 1rem;
       border-radius: 1rem;
-      background: linear-gradient(160deg, rgba(17, 24, 39, 0.96), rgba(28, 45, 67, 0.88));
-      border: 1px solid rgba(148, 163, 184, 0.18);
+      background: #111827;
+      border: 1px solid #1f2937;
     }
 
-    .async-actions {
+    .actions {
       display: flex;
       flex-wrap: wrap;
       gap: 0.65rem;
     }
 
-    .async-button {
+    .button {
       padding: 0.7rem 0.88rem;
       border-radius: 999px;
       border: 0;
       cursor: pointer;
-      font: 600 0.88rem/1 "IBM Plex Sans", "Segoe UI", sans-serif;
       color: #e2e8f0;
-      background: rgba(15, 23, 42, 0.74);
-      box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.22);
+      background: #1e293b;
     }
 
-    .async-button:hover {
-      background: rgba(30, 41, 59, 0.9);
-      box-shadow: inset 0 0 0 1px rgba(125, 211, 252, 0.38);
+    .button[data-kind="primary"] {
+      background: #0f766e;
     }
 
-    .async-button[data-kind="danger"] {
-      background: rgba(68, 16, 26, 0.72);
-      box-shadow: inset 0 0 0 1px rgba(251, 113, 133, 0.26);
+    .button[data-kind="danger"] {
+      background: #7f1d1d;
     }
 
-    .async-button[data-kind="danger"]:hover {
-      background: rgba(96, 18, 34, 0.84);
-    }
-
-    .async-status {
+    .status {
       margin: 0;
       padding: 0.78rem 0.9rem;
-      border-radius: 0.9rem;
-      background: rgba(255, 255, 255, 0.06);
-      color: rgba(244, 239, 232, 0.94);
+      border-radius: 0.85rem;
+      background: #0f172a;
+      color: #e2e8f0;
       font-size: 0.92rem;
     }
 
-    .async-error {
+    .error {
       color: #fda4af;
     }
   \`);
@@ -2737,16 +2683,17 @@ export function UseAsyncStateDemo() {
   });
 
   return (
-    <div class="async-card">
-      <div class="async-actions">
+    <div class="card">
+      <div class="actions">
         <button
-          class="async-button"
+          class="button"
+          data-kind="primary"
           @click={() => saveCount(count + 1)}
         >
           Save next count
         </button>
         <button
-          class="async-button"
+          class="button"
           data-kind="danger"
           @click={() => {
             saveCount(13).catch(() => {});
@@ -2755,15 +2702,15 @@ export function UseAsyncStateDemo() {
           Trigger error
         </button>
         <button
-          class="async-button"
+          class="button"
           @click={() => meta.reset()}
         >
           Reset
         </button>
       </div>
-      <p class="async-status">Authoritative count: {count}</p>
-      <p class="async-status">Pending: {meta.pending ? "yes" : "no"}</p>
-      <p class="async-status async-error">Latest error: {meta.error?.message ?? "none"}</p>
+      <p class="status">Authoritative count: {count}</p>
+      <p class="status">Pending: {meta.pending ? "yes" : "no"}</p>
+      <p class="status error">Latest error: {meta.error?.message ?? "none"}</p>
     </div>
   );
 }
@@ -2777,70 +2724,67 @@ export function UseOptimisticDemo() {
     :host {
       display: block;
       font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
-      color: #f4efe8;
+      color: #e5e7eb;
     }
 
-    .optimistic-card {
+    button {
+      font: inherit;
+    }
+
+    .card {
       display: grid;
       gap: 0.85rem;
       padding: 1rem;
       border-radius: 1rem;
-      background: linear-gradient(160deg, rgba(20, 18, 35, 0.96), rgba(44, 33, 73, 0.88));
-      border: 1px solid rgba(168, 85, 247, 0.18);
+      background: #111827;
+      border: 1px solid #312e81;
     }
 
-    .optimistic-actions {
+    .actions {
       display: flex;
       flex-wrap: wrap;
       gap: 0.65rem;
     }
 
-    .optimistic-copy {
+    .copy {
       margin: 0;
-      color: rgba(245, 243, 255, 0.78);
+      color: #cbd5e1;
       font-size: 0.93rem;
       line-height: 1.45;
     }
 
-    .optimistic-button {
+    .button {
       padding: 0.7rem 0.88rem;
       border-radius: 999px;
       border: 0;
       cursor: pointer;
-      font: 600 0.88rem/1 "IBM Plex Sans", "Segoe UI", sans-serif;
       color: #f5f3ff;
-      background: rgba(46, 16, 101, 0.68);
-      box-shadow: inset 0 0 0 1px rgba(196, 181, 253, 0.2);
+      background: #4c1d95;
     }
 
-    .optimistic-button:hover {
-      background: rgba(76, 29, 149, 0.82);
-      box-shadow: inset 0 0 0 1px rgba(216, 180, 254, 0.32);
-    }
-
-    .optimistic-columns {
+    .columns {
       display: grid;
       gap: 0.8rem;
       grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
-    .optimistic-panel {
+    .panel {
       display: grid;
       gap: 0.65rem;
       padding: 0.82rem;
-      border-radius: 0.92rem;
-      background: rgba(255, 255, 255, 0.05);
-      border: 1px solid rgba(196, 181, 253, 0.14);
+      border-radius: 0.9rem;
+      background: #0f172a;
+      border: 1px solid #312e81;
     }
 
-    .optimistic-heading {
+    .heading {
       margin: 0;
       font-size: 0.9rem;
       font-weight: 700;
       color: #f5f3ff;
     }
 
-    .optimistic-list {
+    .list {
       display: grid;
       gap: 0.45rem;
       margin: 0;
@@ -2848,18 +2792,18 @@ export function UseOptimisticDemo() {
       list-style: none;
     }
 
-    .optimistic-item {
+    .item {
       padding: 0.68rem 0.8rem;
-      border-radius: 0.82rem;
-      background: rgba(255, 255, 255, 0.06);
+      border-radius: 0.8rem;
+      background: #111827;
     }
 
-    .optimistic-meta {
+    .meta {
       margin: 0;
       padding: 0.78rem 0.9rem;
-      border-radius: 0.86rem;
-      background: rgba(255, 255, 255, 0.06);
-      color: rgba(245, 243, 255, 0.92);
+      border-radius: 0.85rem;
+      background: #0f172a;
+      color: #f5f3ff;
       font-size: 0.9rem;
     }
   \`);
@@ -2872,54 +2816,54 @@ export function UseOptimisticDemo() {
   const optimisticOnlyCount = optimisticTodos.length - baseTodos.length;
 
   return (
-    <div class="optimistic-card">
-      <p class="optimistic-copy">
+    <div class="card">
+      <p class="copy">
         This example keeps an authoritative todo list and a separate optimistic overlay.
         The right column shows what the UI renders while the optimistic queue is active.
       </p>
 
-      <div class="optimistic-actions">
+      <div class="actions">
         <button
-          class="optimistic-button"
+          class="button"
           @click={() => addOptimisticTodo(\`Draft #\${optimisticTodos.length + 1}\`)}
         >
           Queue optimistic todo
         </button>
         <button
-          class="optimistic-button"
+          class="button"
           @click={() => setBaseTodos([...baseTodos, \`Server item #\${baseTodos.length + 1}\`])}
         >
           Simulate server commit
         </button>
         <button
-          class="optimistic-button"
+          class="button"
           @click={() => resetOptimisticTodos()}
         >
           Discard optimistic overlay
         </button>
       </div>
 
-      <div class="optimistic-columns">
-        <section class="optimistic-panel">
-          <p class="optimistic-heading">Authoritative state</p>
-          <ul class="optimistic-list">
+      <div class="columns">
+        <section class="panel">
+          <p class="heading">Authoritative state</p>
+          <ul class="list">
             {baseTodos.map((todo) => (
-              <li class="optimistic-item">{todo}</li>
+              <li class="item">{todo}</li>
             ))}
           </ul>
         </section>
 
-        <section class="optimistic-panel">
-          <p class="optimistic-heading">Rendered with optimistic overlay</p>
-          <ul class="optimistic-list">
+        <section class="panel">
+          <p class="heading">Rendered with optimistic overlay</p>
+          <ul class="list">
             {optimisticTodos.map((todo) => (
-              <li class="optimistic-item">{todo}</li>
+              <li class="item">{todo}</li>
             ))}
           </ul>
         </section>
       </div>
 
-      <p class="optimistic-meta">
+      <p class="meta">
         Optimistic items pending: {optimisticOnlyCount > 0 ? optimisticOnlyCount : 0}
       </p>
     </div>

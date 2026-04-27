@@ -1,10 +1,10 @@
-# Property Inference
+# Smart Props
 
-This example shows how typed props, static hoists, and reflected metadata fit together in normal authored code.
+This example is about keeping the prop contract TypeScript-first while still handling the awkward cases.
 
 - prop types come from TypeScript
-- `^properties(...)` only overrides the parts that need explicit metadata
-- the component still reads like ordinary JSX-authored UI
+- `^properties(...)` only touches the props that need explicit metadata
+- reflected booleans and JS-only values can live in the same authored API
 
 <script setup>
 import { propertyInferenceExampleSource } from "../.vitepress/theme/components/playground-example-source.js";
@@ -21,12 +21,13 @@ import { propertyInferenceExampleSource } from "../.vitepress/theme/components/p
 
 ## What To Notice
 
-- `active`, `tags`, `createdAt`, and `onSelect` do not all need the same metadata
+- `active` reflects, while `tags`, `createdAt`, and `onSelect` stay JS-only
 - `^properties(...)` is additive, not a replacement for inference
-- the authored API stays TypeScript-first instead of class-metadata-first
+- the authored API stays close to the prop type instead of becoming decorator-heavy
 
 ## Next
 
-- [Counter Card](./counter-card.md)
+- [Controlled Disclosure](./controlled-disclosure.md)
+- [Async Action Form](./async-action-form.md)
 - [Property Inference Guide](../guides/property-inference.md)
 - [Static Hoists](../guides/static-hoists.md)

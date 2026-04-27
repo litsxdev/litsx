@@ -23,6 +23,7 @@ import { nativeRefResolutionExampleSource } from "../.vitepress/theme/components
 
 ## What To Notice
 
+- the parent always writes `ref={...}`
 - `HostRefCard` leaves the ref alone, so the parent gets the component instance
 - `ForwardedDomInput` forwards the ref to an inner `input`
 - `ImperativeHandleInput` publishes a stable command API instead of exposing raw internals
@@ -35,6 +36,7 @@ import { nativeRefResolutionExampleSource } from "../.vitepress/theme/components
 
 ## Next
 
+- [Controlled Disclosure](./controlled-disclosure.md)
 - [Refs](../guides/refs.md)
 - [React Search Card](./react-search-card.md)
 - [useRef](../reference/generated/useref.md)
