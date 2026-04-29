@@ -10,7 +10,7 @@ function shouldTransform(id, include) {
     return include.test(id);
   }
 
-  return /\.(jsx|tsx)$/.test(id);
+  return /\.(jsx|tsx|litsx)$/.test(id) || id.endsWith(".litsx.jsx");
 }
 
 function formatWarningLocation(warning) {
@@ -109,7 +109,7 @@ export function litsx(options = {}) {
     return {
       name: "litsx-optimize-deps",
       setup(build) {
-        build.onLoad({ filter: /\.[jt]sx$/ }, async ({ path: filePath }) => {
+        build.onLoad({ filter: /\.(?:[jt]sx|litsx(?:\.jsx)?)$/ }, async ({ path: filePath }) => {
           if (!shouldTransform(filePath, include)) {
             return null;
           }

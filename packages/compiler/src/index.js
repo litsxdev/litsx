@@ -222,7 +222,7 @@ export function createLitsxCompilationSession(sessionOptions = {}) {
             this.authoredInputCache.delete(key);
           }
         }
-        if (/\.(jsx|tsx|js|ts)$/.test(file)) {
+        if (/\.(jsx|tsx|js|ts|litsx)$/.test(file) || file.endsWith(".litsx.jsx")) {
           this.typescriptSession?.invalidate?.();
         }
       }

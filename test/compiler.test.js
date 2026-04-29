@@ -59,6 +59,21 @@ describe("@litsx/compiler", () => {
     assert.ok(Array.isArray(result.metadata.litsxTemplateAttributeMappings));
   }, 20000);
 
+  it("compiles .litsx source with TypeScript syntax by default", () => {
+    const source = [
+      "export const Counter = ({ label }: { label: string }) => {",
+      "  return <button class=\"cta\" @click={save}>{label}</button>;",
+      "};",
+    ].join("\n");
+
+    const result = transformLitsxSync(source, {
+      filename: "/virtual/Counter.litsx",
+    });
+
+    assert.match(result.code, /html`/);
+    assert.match(result.code, /@click=\$\{save\}/);
+  }, 20000);
+
   it("keeps lit-style attributes aligned in the final sourcemap", async () => {
     const source = [
       "export function Counter(){",
@@ -176,7 +191,7 @@ describe("@litsx/compiler", () => {
 
     assert.ok(Array.isArray(result.metadata.litsxWarnings));
     assert.strictEqual(result.metadata.litsxWarnings.length, 1);
-    assert.strictEqual(result.metadata.litsxWarnings[0].code, "LITSX_REACT_MEMO_STRIPPED");
+    assert.strictEqual(result.metadata.litsxWarnings[0].code, 91016);
     assert.match(result.metadata.litsxWarnings[0].message, /migration wrapper only/);
   }, 20000);
 

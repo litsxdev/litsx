@@ -14,7 +14,7 @@ The plugin virtualizes prefixed JSX attribute names into TypeScript-safe names f
 
 Today it provides:
 
-- tolerance for `@event`, `.prop` and `?attr` in `.jsx` and `.tsx`
+- tolerance for `@event`, `.prop` and `?attr` in `.jsx`, `.tsx`, `.litsx`, and `.litsx.jsx`
 - remapped diagnostics and quick info spans
 - filtered completions that hide the internal `__litsx_*` names
 - contextual completions for `@event`, `.prop` and `?attr`

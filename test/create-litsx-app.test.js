@@ -36,8 +36,8 @@ describe("create-litsx-app", () => {
     const viteConfig = result.files.get("vite.config.js");
     const storybookMain = result.files.get(".storybook/main.js");
     const storybookPreview = result.files.get(".storybook/preview.js");
-    const appSource = result.files.get("src/my-litsx-app.jsx");
-    const storySource = result.files.get("src/stories/status-pill.stories.jsx");
+    const appSource = result.files.get("src/my-litsx-app.litsx");
+    const storySource = result.files.get("src/stories/status-pill.stories.litsx");
     const docsSource = result.files.get("src/stories/status-pill.docs.mdx");
 
     assert.ok(packageJson.dependencies.litsx);
@@ -55,6 +55,7 @@ describe("create-litsx-app", () => {
     assert.ok(packageJson.scripts["build-storybook"]);
     assert.match(jsconfig, /"module": "ESNext"/);
     assert.match(jsconfig, /"moduleResolution": "Bundler"/);
+    assert.match(jsconfig, /"allowArbitraryExtensions": true/);
     assert.match(jsconfig, /"allowJs": true/);
     assert.match(jsconfig, /"checkJs": true/);
     assert.match(jsconfig, /"jsxImportSource": "litsx"/);
@@ -86,7 +87,7 @@ describe("create-litsx-app", () => {
   it("renders the app profile without storybook baggage", () => {
     const result = renderProjectFiles("/tmp/my-litsx-app", { template: "app" });
     const packageJson = JSON.parse(result.files.get("package.json"));
-    const appSource = result.files.get("src/my-litsx-app.jsx");
+    const appSource = result.files.get("src/my-litsx-app.litsx");
     const readme = result.files.get("README.md");
     const eslintConfig = result.files.get("eslint.config.js");
     const jsconfig = result.files.get("jsconfig.json");
@@ -98,7 +99,7 @@ describe("create-litsx-app", () => {
     assert.ok(!packageJson.devDependencies.storybook);
     assert.strictEqual(packageJson.scripts.lint, "eslint .");
     assert.ok(!result.files.has(".storybook/main.js"));
-    assert.ok(!result.files.has("src/stories/status-pill.stories.jsx"));
+    assert.ok(!result.files.has("src/stories/status-pill.stories.litsx"));
     assert.match(appSource, /Hello LitSX/);
     assert.match(appSource, /useState/);
     assert.match(appSource, /\^styles\(/);
@@ -110,13 +111,14 @@ describe("create-litsx-app", () => {
     assert.match(readme, /npm run typecheck/);
     assert.match(eslintConfig, /recommended-flat/);
     assert.match(jsconfig, /"moduleResolution": "Bundler"/);
+    assert.match(jsconfig, /"allowArbitraryExtensions": true/);
     assert.match(vscodeSettings, /"typescript\.tsserver\.useSeparateSyntaxServer": false/);
   });
 
   it("renders the component profile with library structure but without storybook", () => {
     const result = renderProjectFiles("/tmp/my-litsx-app", { template: "component" });
     const packageJson = JSON.parse(result.files.get("package.json"));
-    const componentSource = result.files.get("src/my-litsx-app.jsx");
+    const componentSource = result.files.get("src/my-litsx-app.litsx");
     const readme = result.files.get("README.md");
 
     assert.strictEqual(result.template, "component");
@@ -124,10 +126,10 @@ describe("create-litsx-app", () => {
     assert.ok(!packageJson.scripts.storybook);
     assert.ok(!packageJson.devDependencies.storybook);
     assert.strictEqual(packageJson.scripts.lint, "eslint .");
-    assert.ok(result.files.has("src/components/status-pill.jsx"));
-    assert.ok(result.files.has("src/components/button-card.jsx"));
+    assert.ok(result.files.has("src/components/status-pill.litsx"));
+    assert.ok(result.files.has("src/components/button-card.litsx"));
     assert.ok(!result.files.has(".storybook/main.js"));
-    assert.ok(!result.files.has("src/stories/status-pill.stories.jsx"));
+    assert.ok(!result.files.has("src/stories/status-pill.stories.litsx"));
     assert.match(componentSource, /ButtonCard/);
     assert.match(componentSource, /StatusPill/);
     assert.match(readme, /component-library structure/);
@@ -170,10 +172,10 @@ describe("create-litsx-app", () => {
     assert.ok(fs.existsSync(path.join(targetDir, "playwright.config.js")));
     assert.ok(fs.existsSync(path.join(targetDir, "Dockerfile.visual")));
     assert.ok(fs.existsSync(path.join(targetDir, "tests", "visual", "storybook.spec.js")));
-    assert.ok(fs.existsSync(path.join(targetDir, "src", `${result.packageName}.jsx`)));
-    assert.ok(fs.existsSync(path.join(targetDir, "src", "components", "status-pill.jsx")));
-    assert.ok(fs.existsSync(path.join(targetDir, "src", "components", "button-card.jsx")));
-    assert.ok(fs.existsSync(path.join(targetDir, "src", "stories", "status-pill.stories.jsx")));
+    assert.ok(fs.existsSync(path.join(targetDir, "src", `${result.packageName}.litsx`)));
+    assert.ok(fs.existsSync(path.join(targetDir, "src", "components", "status-pill.litsx")));
+    assert.ok(fs.existsSync(path.join(targetDir, "src", "components", "button-card.litsx")));
+    assert.ok(fs.existsSync(path.join(targetDir, "src", "stories", "status-pill.stories.litsx")));
     assert.ok(fs.existsSync(path.join(targetDir, "src", "stories", "status-pill.docs.mdx")));
     assert.ok(fs.existsSync(path.join(targetDir, "src", "styles", "tokens.css")));
   });

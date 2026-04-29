@@ -2,12 +2,20 @@
 
 Scaffold a new LitSX project with the recommended editor, type-checking, and Vite build setup.
 
-Generated projects are JavaScript-first and come preconfigured for authored LitSX syntax such as:
+Generated projects come preconfigured for authored LitSX syntax such as:
 
 - `@click`
 - `.prop`
 - `?attr`
 - static hoists like `^styles(...)`
+
+The official authoring posture is now:
+
+- **`.litsx`** as the primary authored source format
+- **`.litsx.jsx`** as the explicit JavaScript variant
+- plain `.jsx` / `.tsx` remain supported as compatibility paths
+
+So the scaffold now uses LitSX-authored source directly instead of treating JSX/TSX as the primary product surface.
 
 ## Installation
 
@@ -33,7 +41,7 @@ npm run dev
 
 That path gives you the smallest scaffold with:
 
-- authored LitSX JSX
+- authored LitSX source in `src/<app>.litsx`
 - `@click` event binding
 - local state with `useState(...)`
 - component-owned styling with `^styles(...)`
@@ -45,13 +53,15 @@ The scaffold includes:
 
 - `vite`
 - `litsx`
+- `vscode-litsx` as the intended VS Code extension companion
 - `@litsx/vite-plugin`
 - `@litsx/eslint-plugin`
 - `@litsx/typescript-plugin`
 - `eslint.config.js` with `recommended-flat`
-- `jsconfig.json` configured with `jsxImportSource: "litsx"`
+- `jsconfig.json` configured with `jsxImportSource: "litsx"` and arbitrary-extension imports enabled
 - `npm run lint` wired to `eslint .`
 - `npm run typecheck` wired to `litsx-tsc -p jsconfig.json --noEmit`
+- `.vscode/settings.json` to keep the workspace aligned with LitSX until the editor extension can cover those defaults by itself
 
 Depending on the selected template, it can also include:
 
@@ -123,17 +133,18 @@ That means generated apps do not need to know about:
 
 The scaffold also wires Storybook through the Vite builder, so LitSX authored stories and demo components run through the same Vite plugin integration.
 
-## Why the Scaffold Is JavaScript-First
+## Why the Scaffold Uses `.litsx`
 
-Plain `tsc` still does not parse LitSX-authored forms such as `@click` or `^styles(...)` natively.
+Plain `tsc` still does not parse LitSX-authored forms such as `@click` or `^styles(...)` natively, and VS Code's built-in JSX grammars do not understand LitSX-authored attrs and hoists cleanly.
 
 That is why generated projects use:
 
 - `jsconfig.json` for editor support
 - `@litsx/typescript-plugin` for language-service features
 - `litsx-tsc` for CLI type-checking
+- `vscode-litsx` for authored grammar/highlighting
 
-This keeps the developer experience aligned with LitSX syntax without requiring a custom TypeScript source format.
+This keeps the developer experience aligned with LitSX syntax while giving LitSX its own authored source format instead of patching standard JSX in place.
 
 LitSX now ships an official ESLint integration for authored syntax such as `@click`, `.value`, and `^styles(...)`:
 
@@ -141,10 +152,17 @@ LitSX now ships an official ESLint integration for authored syntax such as `@cli
 
 For scaffolded projects, the supported baseline is therefore:
 
+- `vscode-litsx` for highlighting and VS Code defaults
 - `@litsx/typescript-plugin` in the editor
 - `litsx-tsc` for authored static checking
 - `@litsx/vite-plugin` for compilation
 - `@litsx/eslint-plugin` for linting
+
+The recommended lint preset in scaffolded apps is the editor-friendly one:
+
+- `recommended-flat`
+
+Use `recommended-lint-flat` instead if you want ESLint to repeat LitSX semantic checks in CI or editor linting.
 
 Formatting is still the gap: there is not yet an official Prettier plugin for LitSX-authored syntax.
 

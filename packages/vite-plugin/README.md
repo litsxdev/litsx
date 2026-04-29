@@ -57,7 +57,7 @@ Returns a Vite plugin with:
 
 Default behavior:
 
-- transforms `.jsx` and `.tsx`
+- transforms `.jsx`, `.tsx`, `.litsx`, and `.litsx.jsx`
 - returns `{ code, map }`
 - delegates compilation to `@litsx/compiler`
 
@@ -72,7 +72,7 @@ Controls which module ids are transformed.
 Default behavior:
 
 ```js
-/\.(jsx|tsx)$/
+/\.(jsx|tsx|litsx)$/
 ```
 
 Examples:
@@ -86,7 +86,7 @@ litsx({
 ```js
 litsx({
   include(id) {
-    return id.endsWith(".jsx") || id.endsWith(".tsx");
+    return id.endsWith(".jsx") || id.endsWith(".tsx") || id.endsWith(".litsx");
   },
 });
 ```

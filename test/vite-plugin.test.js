@@ -23,6 +23,21 @@ describe("@litsx/vite-plugin", () => {
     assert.ok(result.map);
   }, 30000);
 
+  it("transforms .litsx files and returns code with a sourcemap", async () => {
+    const plugin = litsx({ sourceMaps: true });
+    const source = [
+      "export const Counter = ({ label }: { label: string }) => {",
+      "  return <button @click={save}>{label}</button>;",
+      "};",
+    ].join("\n");
+
+    const result = await plugin.transform(source, "/virtual/Counter.litsx");
+
+    assert.ok(result);
+    assert.match(result.code, /html`/);
+    assert.ok(result.map);
+  }, 30000);
+
   it("ignores non-matching files by default", async () => {
     const plugin = litsx();
     const result = await plugin.transform("export const value = 1;", "/virtual/value.js");

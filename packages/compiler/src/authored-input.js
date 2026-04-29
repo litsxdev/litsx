@@ -88,7 +88,7 @@ function collectReactMemoWarnings(ast) {
     const column = node.loc?.start?.column ?? null;
 
     warnings.push({
-      code: "LITSX_REACT_MEMO_STRIPPED",
+      code: 91016,
       message:
         "`memo(...)` is removed during LitSX lowering. LitSX does not use React-style parent re-render bailout semantics, so `memo` is treated as a migration wrapper only.",
       line,
@@ -97,7 +97,7 @@ function collectReactMemoWarnings(ast) {
 
     if ((node.arguments || []).length > 1) {
       warnings.push({
-        code: "LITSX_REACT_MEMO_COMPARATOR_IGNORED",
+        code: 91017,
         message:
           "`memo(Component, areEqual)` ignores the comparator during LitSX lowering because LitSX does not use React-style parent re-render bailout semantics.",
         line,
@@ -146,7 +146,10 @@ function normalizeParserPlugins(filename, parserPlugins = []) {
     return parserPlugins;
   }
 
-  if (typeof filename === "string" && filename.endsWith(".tsx")) {
+  if (typeof filename === "string" && (
+    filename.endsWith(".tsx") ||
+    filename.endsWith(".litsx")
+  )) {
     return ["typescript"];
   }
 

@@ -5,7 +5,7 @@ export { litsxVitePressMarkdown } from "./shiki-litsx-languages.js";
 function defaultInclude(id) {
   return (
     id.includes("/website/docs/.vitepress/theme/components/") &&
-    (id.endsWith(".jsx") || id.endsWith(".tsx"))
+    (id.endsWith(".jsx") || id.endsWith(".tsx") || id.endsWith(".litsx") || id.endsWith(".litsx.jsx"))
   );
 }
 

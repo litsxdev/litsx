@@ -37,7 +37,7 @@ function profilePhase(namespace, name, callback) {
 }
 
 function isRelevantFile(fileName) {
-  return /\.(jsx|tsx)$/.test(fileName);
+  return /\.(jsx|tsx|litsx)$/.test(fileName) || fileName.endsWith(".litsx.jsx");
 }
 
 function readSnapshotText(snapshot) {
@@ -185,7 +185,10 @@ function wrapSyntacticDiagnostics(method, getVirtualization, getAuthoredDiagnost
     const diagnostics = wrapDiagnostics(method, getVirtualization)(fileName);
     const virtualization = getVirtualization(fileName);
 
-    if (!/\.[cm]?[jt]sx$/.test(fileName) || !virtualization) {
+    if (
+      !(/\.[cm]?[jt]sx$/.test(fileName) || fileName.endsWith(".litsx") || fileName.endsWith(".litsx.jsx")) ||
+      !virtualization
+    ) {
       return diagnostics;
     }
 
@@ -598,8 +601,24 @@ export default function init(modules) {
       const virtualizations = new Map();
 
       function getPluginsForFile(fileName) {
-        return fileName.endsWith(".tsx") ? ["typescript"] : [];
+        return (fileName.endsWith(".tsx") || fileName.endsWith(".litsx")) ? ["typescript"] : [];
       }
+
+      const originalGetScriptKind = typeof host.getScriptKind === "function"
+        ? host.getScriptKind.bind(host)
+        : null;
+
+      host.getScriptKind = (fileName) => {
+        if (fileName.endsWith(".litsx")) {
+          return ts.ScriptKind.TSX;
+        }
+
+        if (fileName.endsWith(".litsx.jsx")) {
+          return ts.ScriptKind.JSX;
+        }
+
+        return originalGetScriptKind?.(fileName);
+      };
 
       function getCachedRecord(fileName) {
         return virtualizations.get(fileName) ?? null;

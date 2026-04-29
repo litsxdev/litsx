@@ -182,6 +182,7 @@ function createBaseFiles(packageName, className, includeStorybook) {
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "allowJs": true,
+    "allowArbitraryExtensions": true,
     "checkJs": true,
     "jsx": "react-jsx",
     "jsxImportSource": "litsx",
@@ -225,7 +226,7 @@ export default [
   "typescript.tsserver.useSeparateSyntaxServer": false
 }
 `);
-  files.set("src/main.js", `import { ${className} } from "./${packageName}.jsx";
+  files.set("src/main.js", `import { ${className} } from "./${packageName}.litsx";
 import "./styles/tokens.css";
 
 customElements.define("app-root", ${className});
@@ -239,7 +240,7 @@ document.querySelector("#app").innerHTML = "<app-root></app-root>";
 function createAppProfileFiles(packageName, className) {
   const files = createBaseFiles(packageName, className, false);
 
-  files.set(`src/${packageName}.jsx`, `import { useState } from "litsx";
+  files.set(`src/${packageName}.litsx`, `import { useState } from "litsx";
 
 export const ${className} = ({ title = "Hello LitSX" }) => {
   ^styles(\`
@@ -285,7 +286,7 @@ export const ${className} = ({ title = "Hello LitSX" }) => {
     <main class="shell">
       <h1 class="title">{title}</h1>
       <p class="lede">
-        Edit <code>src/${packageName}.jsx</code> and click the button to confirm
+        Edit <code>src/${packageName}.litsx</code> and click the button to confirm
         authored LitSX is running.
       </p>
       <button class="cta" @click={() => setCount((value) => value + 1)}>
@@ -318,7 +319,7 @@ Generated with \`create-litsx-app --template app\`.
 
 1. \`npm install\`
 2. \`npm run dev\`
-3. Open the local Vite URL and edit \`src/${packageName}.jsx\`
+3. Open the local Vite URL and edit \`src/${packageName}.litsx\`
 
 ## Scripts
 
@@ -342,8 +343,8 @@ Generated with \`create-litsx-app --template app\`.
 function createComponentProfileFiles(packageName, className) {
   const files = createBaseFiles(packageName, className, false);
 
-  files.set(`src/${packageName}.jsx`, `import { StatusPill } from "./components/status-pill.jsx";
-import { ButtonCard } from "./components/button-card.jsx";
+  files.set(`src/${packageName}.litsx`, `import { StatusPill } from "./components/status-pill.litsx";
+import { ButtonCard } from "./components/button-card.litsx";
 
 export const ${className} = ({ title = "Litsx Components" }) => {
   return (
@@ -361,7 +362,7 @@ export const ${className} = ({ title = "Litsx Components" }) => {
   );
 };
 `);
-  files.set("src/components/status-pill.jsx", `export const StatusPill = ({ label = "idle", active = false, tone = "neutral" }) => {
+  files.set("src/components/status-pill.litsx", `export const StatusPill = ({ label = "idle", active = false, tone = "neutral" }) => {
   return (
     <span class="status-pill" ?data-active={active} data-tone={tone}>
       {label}
@@ -369,7 +370,7 @@ export const ${className} = ({ title = "Litsx Components" }) => {
   );
 };
 `);
-  files.set("src/components/button-card.jsx", `export const ButtonCard = ({
+  files.set("src/components/button-card.litsx", `export const ButtonCard = ({
   title = "Component",
   description = "A reusable Litsx primitive.",
 }) => {
@@ -488,7 +489,7 @@ function createDesignSystemProfileFiles(packageName, className) {
 
 export default {
   framework: "@storybook/web-components-vite",
-  stories: ["../src/**/*.stories.@(js|jsx|mdx)", "../src/**/*.docs.mdx"],
+  stories: ["../src/**/*.stories.@(js|jsx|litsx|mdx)", "../src/**/*.docs.mdx"],
   addons: [
     "@storybook/addon-essentials",
     "@storybook/addon-docs",
@@ -514,9 +515,9 @@ export const parameters = {
   },
 };
 `);
-  files.set(`src/${packageName}.jsx`, `import { SuspenseBoundary } from "litsx";
-import { StatusPill } from "./components/status-pill.jsx";
-import { ButtonCard } from "./components/button-card.jsx";
+  files.set(`src/${packageName}.litsx`, `import { SuspenseBoundary } from "litsx";
+import { StatusPill } from "./components/status-pill.litsx";
+import { ButtonCard } from "./components/button-card.litsx";
 
 export const ${className} = ({ title = "Litsx" }) => {
   return (
@@ -543,7 +544,7 @@ export const ${className} = ({ title = "Litsx" }) => {
   );
 };
 `);
-  files.set("src/components/status-pill.jsx", `export const StatusPill = ({ label = "idle", active = false, tone = "neutral" }) => {
+  files.set("src/components/status-pill.litsx", `export const StatusPill = ({ label = "idle", active = false, tone = "neutral" }) => {
   return (
     <span class="status-pill" ?data-active={active} data-tone={tone}>
       {label}
@@ -551,7 +552,7 @@ export const ${className} = ({ title = "Litsx" }) => {
   );
 };
 `);
-  files.set("src/components/button-card.jsx", `export const ButtonCard = ({
+  files.set("src/components/button-card.litsx", `export const ButtonCard = ({
   title = "Component",
   description = "A documented Litsx building block.",
 }) => {
@@ -566,7 +567,7 @@ export const ${className} = ({ title = "Litsx" }) => {
   );
 };
 `);
-  files.set("src/stories/status-pill.stories.jsx", `import { StatusPill } from "../components/status-pill.jsx";
+  files.set("src/stories/status-pill.stories.litsx", `import { StatusPill } from "../components/status-pill.litsx";
 
 const meta = {
   title: "Components/StatusPill",
@@ -602,7 +603,7 @@ export const Warning = {
 };
 `);
   files.set("src/stories/status-pill.docs.mdx", `import { Meta, Canvas, Controls } from "@storybook/blocks";
-import * as StatusPillStories from "./status-pill.stories.jsx";
+import * as StatusPillStories from "./status-pill.stories.litsx";
 
 <Meta of={StatusPillStories} />
 

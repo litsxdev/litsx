@@ -6,6 +6,18 @@ const SESSION_CACHE_LIMIT = 50;
 const DISK_SOURCE_TEXT_CACHE = new Map();
 const DISK_SOURCE_FILE_CACHE = new Map();
 const DISK_FILE_CACHE_LIMIT = 500;
+const EXTRA_FILE_EXTENSIONS = [
+  {
+    extension: ".litsx",
+    isMixedContent: false,
+    scriptKind: 4,
+  },
+  {
+    extension: ".litsx.jsx",
+    isMixedContent: false,
+    scriptKind: 2,
+  },
+];
 const nodeRequire = (() => {
   try {
     return createRequire(import.meta.url);
@@ -50,6 +62,36 @@ function dirname(filePath) {
     return "/";
   }
   return normalized.slice(0, lastSlash);
+}
+
+function inferScriptKind(ts, filePath) {
+  const normalized = normalizeFilePath(filePath);
+
+  if (normalized.endsWith(".litsx")) {
+    return ts.ScriptKind.TSX;
+  }
+
+  if (normalized.endsWith(".litsx.jsx")) {
+    return ts.ScriptKind.JSX;
+  }
+
+  if (normalized.endsWith(".tsx")) {
+    return ts.ScriptKind.TSX;
+  }
+
+  if (normalized.endsWith(".jsx")) {
+    return ts.ScriptKind.JSX;
+  }
+
+  if (normalized.endsWith(".ts")) {
+    return ts.ScriptKind.TS;
+  }
+
+  if (normalized.endsWith(".js")) {
+    return ts.ScriptKind.JS;
+  }
+
+  return undefined;
 }
 
 function defaultReadFile(filePath) {
@@ -100,7 +142,13 @@ function getCachedDiskSourceText(filePath, readFile = defaultReadFile) {
   return sourceText;
 }
 
-function getCachedDiskSourceFile(filePath, languageVersion, createSourceFile, readFile = defaultReadFile) {
+function getCachedDiskSourceFile(
+  filePath,
+  languageVersion,
+  createSourceFile,
+  readFile = defaultReadFile,
+  getScriptKind = () => undefined,
+) {
   const normalizedPath = normalizeFilePath(filePath);
   const version = getDiskFileVersion(filePath);
   if (!version) {
@@ -122,7 +170,13 @@ function getCachedDiskSourceFile(filePath, languageVersion, createSourceFile, re
     return undefined;
   }
 
-  const sourceFile = createSourceFile(filePath, sourceText, languageVersion, true);
+  const sourceFile = createSourceFile(
+    filePath,
+    sourceText,
+    languageVersion,
+    true,
+    getScriptKind(filePath),
+  );
   const record = { version, sourceFile };
   DISK_SOURCE_FILE_CACHE.set(cacheKey, record);
   trimCacheToLimit(DISK_SOURCE_FILE_CACHE, DISK_FILE_CACHE_LIMIT);
@@ -224,7 +278,7 @@ function getCachedSourceFile(session, fileName, sourceText, languageVersion, scr
     transformedText,
     languageVersion,
     true,
-    scriptKind,
+    scriptKind ?? inferScriptKind(session.typescript, fileName),
   );
   fileCache.set(sourceText, sourceFile);
   return sourceFile;
@@ -250,6 +304,7 @@ function createProjectHost(session, config) {
       : ts.createCompilerHost(config.parsedCommandLine.options);
   const originalReadFile = host.readFile.bind(host);
   const originalGetSourceFile = host.getSourceFile.bind(host);
+  host.extraFileExtensions = EXTRA_FILE_EXTENSIONS;
 
   if (typeof host.useCaseSensitiveFileNames !== "function") {
     host.useCaseSensitiveFileNames = () => ts.sys.useCaseSensitiveFileNames;
@@ -331,6 +386,7 @@ function createStandaloneHost(session, config) {
   const host = ts.createCompilerHost(config.compilerOptions, true);
   const originalReadFile = host.readFile.bind(host);
   const originalFileExists = host.fileExists.bind(host);
+  host.extraFileExtensions = EXTRA_FILE_EXTENSIONS;
 
   host.readFile = (filePath) => {
     const normalizedPath = normalizeFilePath(filePath);
@@ -352,13 +408,20 @@ function createStandaloneHost(session, config) {
     const normalizedPath = normalizeFilePath(filePath);
     if (session.overlayFiles.has(normalizedPath)) {
       const sourceText = session.overlayFiles.get(normalizedPath);
-      return ts.createSourceFile(filePath, sourceText, languageVersion, true);
+      return ts.createSourceFile(
+        filePath,
+        sourceText,
+        languageVersion,
+        true,
+        inferScriptKind(ts, filePath),
+      );
     }
     return getCachedDiskSourceFile(
       filePath,
       languageVersion,
       ts.createSourceFile,
       originalReadFile,
+      (nextFilePath) => inferScriptKind(ts, nextFilePath),
     );
   };
 
@@ -376,12 +439,19 @@ function createInMemoryHost(session, config) {
   const sourceDir = dirname(config.sourceFilename);
 
   return {
+    extraFileExtensions: EXTRA_FILE_EXTENSIONS,
     getSourceFile(filePath, languageVersion) {
       const normalizedPath = normalizeFilePath(filePath);
       const overlaySource = session.overlayFiles.get(normalizedPath);
       const fileSource = overlaySource ?? files.get(normalizedPath);
       if (fileSource == null) return undefined;
-      return ts.createSourceFile(normalizedPath, fileSource, languageVersion, true);
+      return ts.createSourceFile(
+        normalizedPath,
+        fileSource,
+        languageVersion,
+        true,
+        inferScriptKind(ts, normalizedPath),
+      );
     },
     readFile(filePath) {
       const normalizedPath = normalizeFilePath(filePath);

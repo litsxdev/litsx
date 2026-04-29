@@ -15,6 +15,18 @@ const PARSED_COMMAND_LINE_CACHE = new Map();
 const TYPECHECK_SESSION_BY_PROJECT = new Map();
 const TYPECHECK_SESSION_CACHE_LIMIT = 20;
 const FORMAT_HOST = createFormatHost();
+const LITSX_EXTRA_FILE_EXTENSIONS = [
+  {
+    extension: ".litsx",
+    isMixedContent: false,
+    scriptKind: ts.ScriptKind.TSX,
+  },
+  {
+    extension: ".litsx.jsx",
+    isMixedContent: false,
+    scriptKind: ts.ScriptKind.JSX,
+  },
+];
 
 function profilePhase(namespace, name, callback) {
   if (!PROFILE_ENABLED) {
@@ -35,11 +47,37 @@ function profilePhase(namespace, name, callback) {
 }
 
 function isRelevantFile(fileName) {
-  return /\.(jsx|tsx)$/.test(fileName);
+  return /\.(jsx|tsx|litsx)$/.test(fileName) || fileName.endsWith(".litsx.jsx");
 }
 
 function getPluginsForFile(fileName) {
-  return fileName.endsWith(".tsx") ? ["typescript"] : [];
+  return (fileName.endsWith(".tsx") || fileName.endsWith(".litsx")) ? ["typescript"] : [];
+}
+
+function getAdditionalLitsxFileNames(tsconfigPath, configJson, basePath) {
+  const configuredFiles = Array.isArray(configJson?.files)
+    ? configJson.files
+        .filter((file) => file.endsWith(".litsx") || file.endsWith(".litsx.jsx"))
+        .map((file) => path.resolve(basePath, file))
+    : [];
+
+  const explicitlyIncludedFiles = Array.isArray(configJson?.include)
+    ? configJson.include
+        .filter((pattern) => pattern.endsWith(".litsx") || pattern.endsWith(".litsx.jsx"))
+        .map((pattern) => path.resolve(basePath, pattern))
+        .filter((fileName) => ts.sys.fileExists(fileName))
+    : [];
+
+  const includedFiles = ts.sys.readDirectory(
+    basePath,
+    [".litsx", ".litsx.jsx"],
+    configJson?.exclude,
+    configJson?.include ?? ["**/*"],
+  );
+
+  return [...new Set([...configuredFiles, ...explicitlyIncludedFiles, ...includedFiles])]
+    .filter((fileName) => fileName !== tsconfigPath)
+    .sort();
 }
 
 function trimCacheToLimit(cache, limit) {
@@ -309,11 +347,31 @@ function resolveParsedCommandLine(rawArgs) {
       path.dirname(projectPath),
       parsedCommandLine.options,
       projectPath,
+      undefined,
+      LITSX_EXTRA_FILE_EXTENSIONS,
     ),
     projectPath,
     projectVersion,
     __litsxSessionKey: createSessionKey(projectPath, rawArgs),
   };
+
+  resolved.fileNames = [
+    ...new Set([
+      ...resolved.fileNames,
+      ...getAdditionalLitsxFileNames(projectPath, configFile.config, path.dirname(projectPath)),
+    ]),
+  ].sort();
+
+  if (resolved.fileNames.some((fileName) => fileName.endsWith(".litsx") || fileName.endsWith(".litsx.jsx"))) {
+    resolved.options = {
+      ...resolved.options,
+      allowNonTsExtensions: true,
+    };
+  }
+
+  if (resolved.fileNames.length > 0 && Array.isArray(resolved.errors)) {
+    resolved.errors = resolved.errors.filter((error) => error?.code !== 18003);
+  }
 
   PARSED_COMMAND_LINE_CACHE.set(cacheKey, resolved);
   trimCacheToLimit(PARSED_COMMAND_LINE_CACHE, TYPECHECK_SESSION_CACHE_LIMIT);
