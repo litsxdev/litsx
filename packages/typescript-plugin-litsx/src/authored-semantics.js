@@ -456,7 +456,7 @@ function collectReactMemoIssues(ast, virtualization) {
       createOriginalIssue(virtualization, {
         kind: "react-memo",
         severity: "warning",
-        code: "LITSX_REACT_MEMO_STRIPPED",
+        code: 91016,
         start: node.start ?? 0,
         length: Math.max(0, (node.end ?? node.start ?? 0) - (node.start ?? 0)),
         message:
@@ -469,7 +469,7 @@ function collectReactMemoIssues(ast, virtualization) {
         createOriginalIssue(virtualization, {
           kind: "react-memo",
           severity: "warning",
-          code: "LITSX_REACT_MEMO_COMPARATOR_IGNORED",
+          code: 91017,
           start: node.start ?? 0,
           length: Math.max(0, (node.end ?? node.start ?? 0) - (node.start ?? 0)),
           message:
@@ -544,7 +544,11 @@ function collectReactCompatSurfaceIssues(ast, virtualization) {
 function collectComponentLikeFunctions(ast) {
   const functions = [];
 
-  function isComponentLikeFunction(node) {
+  function isPascalCaseName(name) {
+    return typeof name === "string" && /^[A-Z]/.test(name);
+  }
+
+  function isComponentLikeFunction(node, parent) {
     if (!node || typeof node !== "object") {
       return false;
     }
@@ -553,11 +557,19 @@ function collectComponentLikeFunctions(ast) {
       node.type === "FunctionDeclaration" ||
       node.type === "FunctionExpression"
     ) {
-      return /^[A-Z]/.test(node.id?.name ?? "");
+      return isPascalCaseName(node.id?.name ?? "");
     }
 
     if (node.type === "ArrowFunctionExpression") {
-      return true;
+      if (parent?.type === "VariableDeclarator" && parent.id?.type === "Identifier") {
+        return isPascalCaseName(parent.id.name);
+      }
+
+      if (parent?.type === "AssignmentExpression" && parent.left?.type === "Identifier") {
+        return isPascalCaseName(parent.left.name);
+      }
+
+      return false;
     }
 
     return false;
@@ -568,7 +580,7 @@ function collectComponentLikeFunctions(ast) {
       return;
     }
 
-    if (isComponentLikeFunction(node)) {
+    if (isComponentLikeFunction(node, parent)) {
       functions.push({ node, parent });
     }
 
@@ -620,7 +632,7 @@ function collectPropsAccessIssues(ast, virtualization) {
           issues.push(createOriginalIssue(virtualization, {
             kind: "opaque-prop-metadata-inference",
             severity: "warning",
-            code: "LITSX_PROP_FALLBACK_STRING",
+            code: 91018,
             start: child.start ?? 0,
             length: Math.max(0, (child.end ?? child.start ?? 0) - (child.start ?? 0)),
             message: `Falling back to String for prop "${propName}" inferred from opaque props access. Prefer destructuring, TypeScript types, or ^properties(...) for stronger property metadata.`,
@@ -783,6 +795,7 @@ export function inferLitsxAttributeInfoAtPosition(sourceText, position) {
 }
 
 export function collectLitsxAuthoredIssues(sourceText, options = {}) {
+  const channel = options.channel === "eslint" ? "eslint" : options.channel === "all" ? "all" : "typescript";
   const plugins = Array.from(new Set(["jsx", ...(options.plugins ?? [])]));
   const virtualization = createVirtualLitsxJsxSource(sourceText);
   let ast;
@@ -967,7 +980,14 @@ export function collectLitsxAuthoredIssues(sourceText, options = {}) {
     }
   }
 
-  return issues;
+  if (channel === "all") {
+    return issues;
+  }
+
+  const eslintOnlyCodes = new Set([91015, 91016, 91017]);
+  return issues.filter((issue) => (
+    channel === "eslint" ? true : !eslintOnlyCodes.has(issue.code)
+  ));
 }
 
 export {

@@ -73,7 +73,7 @@ describe("react compat internal wrappers", () => {
     assert.strictEqual(meta.warnings.length, 2);
     assert.deepStrictEqual(
       meta.warnings.map((warning) => warning.code),
-      ["LITSX_REACT_MEMO_STRIPPED", "LITSX_REACT_MEMO_COMPARATOR_IGNORED"]
+      [91016, 91017]
     );
   });
 
@@ -99,7 +99,7 @@ describe("react compat internal wrappers", () => {
     });
     assert.strictEqual(meta.cleanups.length, 2);
     assert.strictEqual(meta.warnings.length, 1);
-    assert.strictEqual(meta.warnings[0].code, "LITSX_REACT_MEMO_STRIPPED");
+    assert.strictEqual(meta.warnings[0].code, 91016);
   });
 
   it("supports default React imports and forwardRef wrappers without explicit ref params", () => {
@@ -134,7 +134,7 @@ describe("react compat internal wrappers", () => {
     assert.deepStrictEqual(meta.options, {});
     assert.strictEqual(meta.cleanups.length, 1);
     assert.strictEqual(meta.warnings.length, 1);
-    assert.strictEqual(meta.warnings[0].code, "LITSX_REACT_MEMO_STRIPPED");
+    assert.strictEqual(meta.warnings[0].code, 91016);
   });
 
   it("returns null for unsupported wrapper shapes", () => {

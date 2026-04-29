@@ -892,10 +892,11 @@ function findReplacementByOriginalPosition(position, replacements) {
 }
 
 function findReplacementByVirtualPosition(position, replacements) {
+  let originalCursor = 0;
   let virtualCursor = 0;
 
   for (const replacement of replacements) {
-    const untouchedLength = replacement.start - virtualCursor;
+    const untouchedLength = replacement.start - originalCursor;
     const replacementVirtualStart = virtualCursor + untouchedLength;
     const replacementVirtualEnd =
       replacementVirtualStart + replacement.replacement.length;
@@ -908,7 +909,8 @@ function findReplacementByVirtualPosition(position, replacements) {
       };
     }
 
-    virtualCursor = replacementVirtualEnd + (replacement.end - replacement.start);
+    originalCursor = replacement.end;
+    virtualCursor = replacementVirtualEnd;
   }
 
   return null;

@@ -23,6 +23,7 @@ export function createLintState(text, filename) {
   const authoredIssues = collectLitsxAuthoredIssues(text, {
     sourceFileName: filename,
     plugins: ["typescript"],
+    channel: "eslint",
   });
 
   return {

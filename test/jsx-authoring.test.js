@@ -448,4 +448,34 @@ describe("@litsx/jsx-authoring", () => {
       { start: source.indexOf("@click"), length: "@click".length },
     );
   });
+
+  it("remaps spans to the correct authored attribute when multiple replacements share a tag", () => {
+    const source = `
+      const view = (
+        <>
+          <input .valuee={count} @focus={() => {}} />
+          <button @blur={() => {}} @clcik={() => setCount((v) => v + 1)} />
+          <button ?disbled={count > 3} />
+        </>
+      );
+    `;
+    const result = createVirtualLitsxJsxSource(source);
+    const targets = [".valuee", "@focus", "@clcik", "?disbled"];
+
+    for (const target of targets) {
+      const replacement = result.replacements.find((entry) => entry.originalName === target);
+      assert.ok(replacement, `Missing replacement for ${target}`);
+
+      const virtualStart = mapOriginalPositionToVirtual(replacement.start, result.replacements);
+      const remappedSpan = remapTextSpanToOriginal(
+        { start: virtualStart, length: replacement.replacement.length },
+        result.replacements,
+      );
+
+      assert.deepStrictEqual(
+        remappedSpan,
+        { start: replacement.start, length: replacement.end - replacement.start },
+      );
+    }
+  });
 });

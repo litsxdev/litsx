@@ -45,15 +45,17 @@ describe("compiler authored input helpers", () => {
       filename: "/virtual/Button.jsx",
     });
 
-    const warningCodes = result.authoredWarnings.map((warning) => warning.code).sort();
+    const warningCodes = result.authoredWarnings
+      .map((warning) => warning.code)
+      .sort((left, right) => String(left).localeCompare(String(right)));
 
     assert.deepStrictEqual(warningCodes, [
+      91016,
+      91016,
+      91017,
       "LITSX_NATIVE_CLASSNAME",
       "LITSX_NATIVE_CLASSNAME",
-      "LITSX_REACT_MEMO_COMPARATOR_IGNORED",
-      "LITSX_REACT_MEMO_STRIPPED",
-      "LITSX_REACT_MEMO_STRIPPED",
-    ]);
+    ].sort((left, right) => String(left).localeCompare(String(right))));
   });
 
   it("applies authoring plugins through the provided runtime transform", () => {

@@ -127,6 +127,21 @@ describe("@litsx/eslint-plugin", () => {
     assert.deepStrictEqual(result.messages, []);
   });
 
+  it("supports .litsx files in recommended lint flat config", async () => {
+    const eslint = new FlatESLint({
+      cwd: process.cwd(),
+      overrideConfigFile: true,
+      overrideConfig: [plugin.configs["recommended-lint-flat"]],
+    });
+
+    const [result] = await eslint.lintText(
+      'const Button = ({ label }: { label: string }) => <button @click={handleClick}>{label}</button>;',
+      { filePath: "example.litsx" },
+    );
+
+    assert.deepStrictEqual(result.messages, []);
+  });
+
   it("can suppress baseline authored diagnostics in the editor processor", () => {
     const processor = createLitsxProcessor({
       includeAuthoredDiagnostics: false,

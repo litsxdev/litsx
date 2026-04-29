@@ -129,7 +129,7 @@ describe("@litsx/playground compiler", () => {
 
     assert.ok(Array.isArray(result.metadata.litsxWarnings));
     assert.strictEqual(result.metadata.litsxWarnings.length, 1);
-    assert.strictEqual(result.metadata.litsxWarnings[0].code, "LITSX_PROP_FALLBACK_STRING");
+    assert.strictEqual(result.metadata.litsxWarnings[0].code, 91018);
     assert.strictEqual(result.metadata.litsxWarnings[0].propName, "title");
   });
 
@@ -600,7 +600,7 @@ describe("@litsx/playground compiler", () => {
     assert.doesNotMatch(code, /\blazy\(/);
     assert.deepStrictEqual(metadata.litsxWarnings || [], [
       {
-        code: "LITSX_REACT_MEMO_STRIPPED",
+        code: 91016,
         line: 7,
         column: 26,
         message:

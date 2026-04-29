@@ -1294,7 +1294,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
 
     assert.ok(Array.isArray(result.metadata.litsxWarnings));
     assert.strictEqual(result.metadata.litsxWarnings.length, 1);
-    assert.strictEqual(result.metadata.litsxWarnings[0].code, "LITSX_PROP_FALLBACK_STRING");
+    assert.strictEqual(result.metadata.litsxWarnings[0].code, 91018);
     assert.strictEqual(result.metadata.litsxWarnings[0].propName, "title");
     assert.match(result.metadata.litsxWarnings[0].message, /Falling back to String/);
   });

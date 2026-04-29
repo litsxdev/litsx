@@ -5,7 +5,11 @@ function normalizeLocationNumber(value) {
 export function normalizeLitsxWarning(warning, context = {}) {
   const normalized = warning && typeof warning === "object" ? { ...warning } : {};
 
-  normalized.code = typeof normalized.code === "string" && normalized.code !== "" ? normalized.code : null;
+  normalized.code =
+    (typeof normalized.code === "string" && normalized.code !== "") ||
+    (typeof normalized.code === "number" && Number.isFinite(normalized.code))
+      ? normalized.code
+      : null;
   normalized.message =
     typeof normalized.message === "string" && normalized.message !== ""
       ? normalized.message

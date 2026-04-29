@@ -37,7 +37,7 @@ const strictRules = {
   "@litsx/no-opaque-prop-metadata-inference": "warn",
   "@litsx/require-top-level-hoists-first": "warn",
 };
-const files = ["**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}"];
+const files = ["**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts,litsx}", "**/*.litsx.jsx"];
 const legacyParserOptions = {
   ecmaVersion: "latest",
   sourceType: "module",

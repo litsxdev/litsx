@@ -1115,7 +1115,7 @@ export function extractProperties(functionPath, programPath, options = {}) {
 
       if (!propertyMap.has(propName) && warn) {
         warn({
-          code: "LITSX_PROP_FALLBACK_STRING",
+          code: 91018,
           message: `Falling back to String for prop "${propName}" inferred from opaque props access. Prefer destructuring, TypeScript types, or ^properties(...) for stronger property metadata.`,
           propName,
           localName: bindingName,

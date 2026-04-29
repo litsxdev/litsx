@@ -276,6 +276,38 @@ describe("@litsx/typescript-plugin", () => {
     assert.match(diagnostics[0].messageText, /known LitSX event set for <button>/);
   });
 
+  it("does not treat nested state updater callbacks as component props access", () => {
+    const diagnostics = collectLitsxAuthoredDiagnostics(
+      `
+        const DxSmokeApp = ({ title }) => {
+          const [items, setItems] = useState(["alpha"]);
+
+          return (
+            <button
+              @click={() => {
+                setItems((current) => current.map((entry) => entry.toUpperCase()));
+              }}
+            >
+              {title}
+            </button>
+          );
+        };
+      `,
+      {
+        DiagnosticCategory: {
+          Warning: 0,
+          Error: 1,
+        },
+      },
+      {
+        plugins: ["typescript"],
+      },
+    );
+
+    assert.ok(!diagnostics.some((diagnostic) => diagnostic.code === 91014));
+    assert.ok(!diagnostics.some((diagnostic) => diagnostic.code === 91018));
+  });
+
   it("suggests the closest known listener binding when the authored name is near a valid one", () => {
     const diagnostics = collectLitsxAuthoredDiagnostics(
       '<button @clcik={handleClick} />',
@@ -958,6 +990,90 @@ describe("@litsx/typescript-plugin", () => {
           noEmit: true,
         },
         include: ["index.jsx"],
+      }),
+    );
+    fs.writeFileSync(
+      filePath,
+      `
+        const handleClick = () => {};
+        const value = 1;
+        const busy = false;
+        const view = <button @click={handleClick} .value={value} ?disabled={busy}>Save</button>;
+      `,
+    );
+
+    process.stderr.write = () => true;
+
+    try {
+      process.chdir(tempDir);
+      assert.equal(runLitsxTypecheck([]), 0);
+    } finally {
+      process.chdir(originalCwd);
+      process.stderr.write = originalWrite;
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  }, 20_000);
+
+  it("typechecks a LitSX-authored .litsx project end-to-end", () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-typecheck-valid-litsx-"));
+    const tsconfigPath = path.join(tempDir, "tsconfig.json");
+    const filePath = path.join(tempDir, "index.litsx");
+    const originalCwd = process.cwd();
+    const originalWrite = process.stderr.write;
+
+    fs.writeFileSync(
+      tsconfigPath,
+      JSON.stringify({
+        compilerOptions: {
+          jsx: "preserve",
+          allowJs: true,
+          allowArbitraryExtensions: true,
+          checkJs: true,
+          noEmit: true,
+        },
+        include: ["index.litsx"],
+      }),
+    );
+    fs.writeFileSync(
+      filePath,
+      `
+        const handleClick = () => {};
+        const value = 1;
+        const busy = false;
+        export const view = ({ label }: { label: string }) => <button @click={handleClick} .value={value} ?disabled={busy}>{label}</button>;
+      `,
+    );
+
+    process.stderr.write = () => true;
+
+    try {
+      process.chdir(tempDir);
+      assert.equal(runLitsxTypecheck([]), 0);
+    } finally {
+      process.chdir(originalCwd);
+      process.stderr.write = originalWrite;
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  }, 20_000);
+
+  it("typechecks a LitSX-authored .litsx.jsx project end-to-end", () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-typecheck-valid-litsx-jsx-"));
+    const tsconfigPath = path.join(tempDir, "tsconfig.json");
+    const filePath = path.join(tempDir, "index.litsx.jsx");
+    const originalCwd = process.cwd();
+    const originalWrite = process.stderr.write;
+
+    fs.writeFileSync(
+      tsconfigPath,
+      JSON.stringify({
+        compilerOptions: {
+          jsx: "preserve",
+          allowJs: true,
+          allowArbitraryExtensions: true,
+          checkJs: true,
+          noEmit: true,
+        },
+        include: ["index.litsx.jsx"],
       }),
     );
     fs.writeFileSync(
@@ -3517,15 +3633,19 @@ describe("@litsx/typescript-plugin", () => {
     assert.strictEqual(remapVirtualText("bind __litsx_bool_disabled here"), "bind ?disabled here");
   });
 
-  it("only exposes existing JSX and TSX files through getExternalFiles", () => {
+  it("only exposes existing LitSX-relevant files through getExternalFiles", () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-plugin-external-files-"));
     const jsxFile = path.join(tempDir, "view.jsx");
     const tsxFile = path.join(tempDir, "view.tsx");
+    const litsxFile = path.join(tempDir, "view.litsx");
+    const litsxJsxFile = path.join(tempDir, "view.litsx.jsx");
     const jsFile = path.join(tempDir, "ignored.js");
     const missingJsxFile = path.join(tempDir, "missing.jsx");
 
     fs.writeFileSync(jsxFile, "const view = <button @click={save} />;");
     fs.writeFileSync(tsxFile, "const view = <button @click={save} />;");
+    fs.writeFileSync(litsxFile, "const view = <button @click={save} />;");
+    fs.writeFileSync(litsxJsxFile, "const view = <button @click={save} />;");
     fs.writeFileSync(jsFile, "const value = 1;");
 
     try {
@@ -3541,11 +3661,11 @@ describe("@litsx/typescript-plugin", () => {
 
       const result = pluginModule.getExternalFiles({
         getFileNames() {
-          return [jsxFile, tsxFile, jsFile, missingJsxFile];
+          return [jsxFile, tsxFile, litsxFile, litsxJsxFile, jsFile, missingJsxFile];
         },
       });
 
-      assert.deepStrictEqual(result.sort(), [jsxFile, tsxFile].sort());
+      assert.deepStrictEqual(result.sort(), [jsxFile, tsxFile, litsxFile, litsxJsxFile].sort());
     } finally {
       fs.rmSync(tempDir, { recursive: true, force: true });
     }

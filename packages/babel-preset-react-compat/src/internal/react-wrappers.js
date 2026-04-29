@@ -39,7 +39,7 @@ function createMemoWarnings(callPath) {
   const column = callPath.node.loc?.start?.column ?? null;
 
   warnings.push({
-    code: "LITSX_REACT_MEMO_STRIPPED",
+    code: 91016,
     message:
       "`memo(...)` is removed during LitSX lowering. LitSX does not use React-style parent re-render bailout semantics, so `memo` is treated as a migration wrapper only.",
     line,
@@ -48,7 +48,7 @@ function createMemoWarnings(callPath) {
 
   if (args.length > 1) {
     warnings.push({
-      code: "LITSX_REACT_MEMO_COMPARATOR_IGNORED",
+      code: 91017,
       message:
         "`memo(Component, areEqual)` ignores the comparator during LitSX lowering because LitSX does not use React-style parent re-render bailout semantics.",
       line,

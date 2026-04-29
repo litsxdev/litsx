@@ -363,7 +363,7 @@ describe("native properties internals", () => {
       warnings.map((entry) => entry.propName).sort(),
       ["enabled", "title"]
     );
-    assert.ok(warnings.every((entry) => entry.code === "LITSX_PROP_FALLBACK_STRING"));
+    assert.ok(warnings.every((entry) => entry.code === 91018));
 
     const propertyEntries = Object.fromEntries(
       result.properties.map((prop) => [
