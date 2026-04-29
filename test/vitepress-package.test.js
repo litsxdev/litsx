@@ -231,10 +231,67 @@ describe("@litsx/vitepress", () => {
       );
 
       assert.match(html, /vp-code|shiki/);
-      assert.match(html, /@click/);
-      assert.match(html, /\.value/);
-      assert.match(html, /\?disabled/);
+      assert.match(html, /@(?:<\/span><span[^>]*>)?click/);
+      assert.match(html, /\.(?:<\/span><span[^>]*>)?value/);
+      assert.match(html, /\?(?:<\/span><span[^>]*>)?disabled/);
       assert.match(html, /\^(?:<\/span><span[^>]*>)?styles/);
+    } finally {
+      highlighter.dispose();
+    }
+  });
+
+  it("tokenizes CSS inside ^styles template hoists", async () => {
+    const markdown = litsxVitePressMarkdown();
+    const highlighter = await createHighlighter({
+      themes: ["github-dark"],
+      langs: markdown.languages,
+    });
+
+    try {
+      const html = highlighter.codeToHtml(
+        [
+          "^styles(`",
+          "  :host {",
+          "    display: block;",
+          "    color: red;",
+          "  }",
+          "`);",
+        ].join("\n"),
+        { lang: "tsx", theme: "github-dark" }
+      );
+
+      assert.match(html, /display/);
+      assert.match(html, /color/);
+      assert.match(html, /block/);
+      assert.match(html, /red/);
+      assert.doesNotMatch(html, /\^styles\(\)/);
+    } finally {
+      highlighter.dispose();
+    }
+  });
+
+  it("keeps JSX tag parsing intact for LitSX boolean attrs", async () => {
+    const markdown = litsxVitePressMarkdown();
+    const highlighter = await createHighlighter({
+      themes: ["github-dark"],
+      langs: markdown.languages,
+    });
+
+    try {
+      const tokens = highlighter.codeToTokens(
+        "<button ?disabled={count > 3} />",
+        { lang: "tsx", theme: "github-dark" }
+      );
+
+      const tagNameToken = tokens.tokens[0].find((token) => token.content === "button");
+      const attrNameToken = tokens.tokens[0].find((token) => token.content === "disabled");
+      const operatorToken = tokens.tokens[0].find((token) => token.content === "?");
+
+      assert.ok(tagNameToken);
+      assert.ok(attrNameToken);
+      assert.ok(operatorToken);
+      assert.notStrictEqual(tagNameToken.color, "#E1E4E8");
+      assert.notStrictEqual(attrNameToken.color, "#E1E4E8");
     } finally {
       highlighter.dispose();
     }

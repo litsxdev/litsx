@@ -25,11 +25,17 @@ That scaffold keeps the first contact intentionally small:
 - one `^styles(...)`
 - one `eslint.config.js` already wired to the official Lit<sup>sx</sup> preset
 
+For the editor story, Lit<sup>sx</sup> now treats its own authored source format as the primary path:
+
+- `.litsx` is the primary authored source format
+- `.litsx.jsx` is the explicit JavaScript variant
+- plain `.jsx` and `.tsx` remain supported as compatibility paths
+
 ## The Default Model
 
 By default, think in native Lit<sup>sx</sup> terms:
 
-- JSX is the authoring format
+- `.litsx` is the primary authoring format
 - Lit powers rendering
 - the deployed unit is a web component
 - prop types are the source of truth for generated property metadata
@@ -46,6 +52,7 @@ In practice, a static hoist such as `^styles(...)` or `^properties(...)`:
 - `litsx` is the runtime package
 - Babel transforms handle native Lit<sup>sx</sup> JSX
 - the TypeScript plugin improves authored JSX tooling
+- the VS Code extension handles Lit<sup>sx</sup>-specific highlighting
 - Storybook and visual testing can be scaffolded for component and design-system workflows
 
 In practice, a Lit<sup>sx</sup> project has three layers working together:

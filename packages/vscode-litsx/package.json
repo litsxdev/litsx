@@ -1,0 +1,135 @@
+{
+  "name": "vscode-litsx",
+  "displayName": "LitSX",
+  "description": "VS Code syntax highlighting and workspace defaults for LitSX-authored .litsx and .litsx.jsx files.",
+  "version": "0.1.0",
+  "publisher": "litsx",
+  "license": "Apache-2.0",
+  "private": true,
+  "main": "./extension.cjs",
+  "engines": {
+    "vscode": "^1.95.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "keywords": [
+    "litsx",
+    "lit",
+    "jsx",
+    "tsx",
+    "web-components"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/litsx/litsx.git",
+    "directory": "packages/vscode-litsx"
+  },
+  "scripts": {
+    "build": "node ./scripts/build-grammars.mjs"
+  },
+  "activationEvents": [
+    "onLanguage:typescriptreact",
+    "onLanguage:javascriptreact",
+    "onLanguage:litsx",
+    "onLanguage:litsx-jsx",
+    "onCommand:litsx.switchCurrentFileToLitsxMode",
+    "onCommand:litsx.resetCurrentFileLanguageMode",
+    "onCommand:litsx.dumpCurrentFileDiagnostics"
+  ],
+  "homepage": "https://github.com/litsx/litsx/tree/main/packages/vscode-litsx",
+  "bugs": {
+    "url": "https://github.com/litsx/litsx/issues"
+  },
+  "contributes": {
+    "commands": [
+      {
+        "command": "litsx.switchCurrentFileToLitsxMode",
+        "title": "LitSX: Switch Current File to LitSX Mode"
+      },
+      {
+        "command": "litsx.resetCurrentFileLanguageMode",
+        "title": "LitSX: Reset Current File to Standard Language Mode"
+      },
+      {
+        "command": "litsx.dumpCurrentFileDiagnostics",
+        "title": "LitSX: Dump Current File Diagnostics"
+      }
+    ],
+    "configuration": {
+      "title": "LitSX",
+      "properties": {
+        "litsx.autoSuggestLanguageMode": {
+          "type": "boolean",
+          "default": true,
+          "description": "Suggest switching TSX/JSX files to a LitSX language mode when LitSX-authored syntax is detected."
+        },
+        "litsx.traceDiagnostics": {
+          "type": "boolean",
+          "default": false,
+          "description": "Log LitSX diagnostic refreshes and ranges to the LitSX output channel for debugging."
+        }
+      }
+    },
+    "configurationDefaults": {
+      "js/ts.tsdk.path": "node_modules/typescript/lib",
+      "typescript.tsserver.useSeparateSyntaxServer": false,
+      "editor.tokenColorCustomizations": {
+        "textMateRules": [
+          {
+            "scope": [
+              "keyword.operator.litsx",
+              "entity.other.attribute-name.event.litsx",
+              "entity.other.attribute-name.property.litsx",
+              "entity.other.attribute-name.boolean.litsx",
+              "entity.name.hoist.litsx"
+            ],
+            "settings": {
+              "fontStyle": "italic"
+            }
+          }
+        ]
+      }
+    },
+    "languages": [
+      {
+        "id": "litsx",
+        "aliases": [
+          "LitSX",
+          "litsx"
+        ],
+        "extensions": [
+          ".litsx"
+        ]
+      },
+      {
+        "id": "litsx-jsx",
+        "aliases": [
+          "LitSX JSX",
+          "litsx-jsx"
+        ],
+        "extensions": [
+          ".litsx.jsx"
+        ]
+      }
+    ],
+    "grammars": [
+      {
+        "language": "litsx-jsx",
+        "scopeName": "source.js.jsx",
+        "path": "./syntaxes/litsx-jsx.tmLanguage.json",
+        "embeddedLanguages": {
+          "meta.embedded.block.css": "css"
+        }
+      },
+      {
+        "language": "litsx",
+        "scopeName": "source.tsx",
+        "path": "./syntaxes/litsx.tmLanguage.json",
+        "embeddedLanguages": {
+          "meta.embedded.block.css": "css"
+        }
+      }
+    ]
+  }
+}

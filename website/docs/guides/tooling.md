@@ -5,6 +5,7 @@ Lit<sup>sx</sup> has its own tooling stack for authoring JSX that targets Lit an
 - `@litsx/vite-plugin`
 - `@litsx/compiler`
 - `litsx/jsx-runtime` and `litsx/jsx-dev-runtime`
+- `vscode-litsx`
 - `@litsx/typescript-plugin`
 - `create-litsx-app`
 
@@ -14,14 +15,33 @@ The baseline setup for a project is:
 
 - `litsx` runtime
 - `@litsx/vite-plugin` for Vite-based compilation
+- `vscode-litsx` for editor highlighting and workspace defaults
 - `@litsx/typescript-plugin`
 - `jsxImportSource: "litsx"`
 - `litsx-tsc` for CLI type-checking of authored Lit<sup>sx</sup> syntax
 - the scaffold from `create-litsx-app`
 
+The official authored source extensions are now:
+
+- `*.litsx`
+- `*.litsx.jsx`
+
+This is not just branding. VS Code's built-in JSX grammars still treat Lit<sup>sx</sup>
+authored attributes such as `@click`, `.value`, and `?disabled` as illegal tokens,
+so the official editor path uses dedicated Lit<sup>sx</sup> language modes instead of
+trying to patch `typescriptreact` or `javascriptreact`.
+
 That stack is enough to treat Lit<sup>sx</sup> as its own framework in the editor and build pipeline.
 
-For editor DX, the important piece is `@litsx/typescript-plugin`.
+For editor DX, the stack is now split intentionally:
+
+- `vscode-litsx` for syntax highlighting and VS Code defaults
+- `@litsx/typescript-plugin` for hover, completions, diagnostics, and rename
+
+For `tsx` and `jsx` files, `vscode-litsx` does not hijack the standard VS Code
+language mode globally. Instead, it allows the LitSX language modes to be
+selected manually and can suggest switching when Lit<sup>sx</sup>-authored
+syntax is detected in a `typescriptreact` or `javascriptreact` document.
 
 For app builds on Vite, the public compilation surface is `@litsx/vite-plugin`.
 
@@ -46,7 +66,7 @@ That is why the scaffolding now exposes:
 
 - `npm run typecheck`
 
-Plain `tsc --noEmit` is still fine for standard TS/JSX, but it will not parse Lit<sup>sx</sup>-specific authored syntax by itself.
+Plain `tsc --noEmit` is still fine for standard TS/JSX, but it will not parse Lit<sup>sx</sup>-specific authored syntax by itself, including files such as `*.litsx`.
 
 That split is deliberate:
 
@@ -90,6 +110,7 @@ The current shape is intentionally processor-first:
 
 The recommended linting baseline is now:
 
+- `vscode-litsx` for syntax highlighting and workspace defaults
 - `@litsx/typescript-plugin` for editor understanding
 - `litsx-tsc` for authored type-checking
 - `@litsx/vite-plugin` for compilation
@@ -123,6 +144,23 @@ and flat-config equivalents:
 - `configs["recommended-lint-flat"]`
 - `configs["recommended-react-migration-flat"]`
 - `configs["strict-flat"]`
+
+The intended split is:
+
+- `recommended`
+  - editor-friendly baseline
+  - avoids duplicating inline feedback already provided by `@litsx/typescript-plugin`
+- `recommended-lint`
+  - enables Lit<sup>sx</sup> semantic lint rules directly in ESLint
+  - useful for CI or teams that want the same checks enforced by lint
+
+## What Comes From Where
+
+- Syntax highlighting and VS Code defaults: `vscode-litsx`
+- Hover, completion, diagnostics, rename, definition: `@litsx/typescript-plugin`
+- Lint and policy enforcement: `@litsx/eslint-plugin`
+- Authored CLI type-checking: `litsx-tsc`
+- Compilation: `@litsx/vite-plugin`
 
 Formatting is still the remaining gap:
 
@@ -184,3 +222,9 @@ That keeps the docs close to the code and reduces duplication.
 - [Getting Started](../getting-started.md)
 - [Property Inference](./property-inference.md)
 - [Examples](../examples/)
+The official authored route is now:
+
+- `.litsx` as the primary source format
+- `.litsx.jsx` as the explicit JS variant
+
+Plain `.jsx` and `.tsx` remain supported as compatibility paths for migration and interop.
