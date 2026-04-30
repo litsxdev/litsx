@@ -162,15 +162,24 @@ The intended split is:
 - Authored CLI type-checking: `litsx-tsc`
 - Compilation: `@litsx/vite-plugin`
 
-Formatting is still the remaining gap:
+Formatting now has an official starting point:
 
-- Lit<sup>sx</sup> does **not** yet ship an official Prettier plugin
+- `prettier-plugin-litsx`
+
+The v1 surface is intentionally narrow:
+
+- `*.litsx`
+- `*.litsx.jsx`
+
+It preserves Lit<sup>sx</sup>-authored syntax directly and formats static
+`^styles(\`...\`)` templates as CSS. Plain `tsx/jsx` compatibility formatting is
+still intentionally out of scope for now.
 
 So the authoritative story today is:
 
 - use the ESLint plugin for linting
 - use `litsx-tsc` and the compiler toolchain for authored correctness
-- treat formatting support as still pending rather than silently assumed
+- use `prettier-plugin-litsx` for official authored-source formatting
 
 ## Public Surfaces
 

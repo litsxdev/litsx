@@ -526,7 +526,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@babel/parser@npm:^7.26.5, @babel/parser@npm:^7.28.6, @babel/parser@npm:^7.29.0, @babel/parser@npm:^7.29.2":
+"@babel/parser@npm:^7.26.5, @babel/parser@npm:^7.28.5, @babel/parser@npm:^7.28.6, @babel/parser@npm:^7.29.0, @babel/parser@npm:^7.29.2":
   version: 7.29.2
   resolution: "@babel/parser@npm:7.29.2"
   dependencies:
@@ -1656,14 +1656,14 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@litsx/eslint-plugin@workspace:packages/eslint-plugin-litsx":
+"@litsx/eslint-plugin@workspace:^, @litsx/eslint-plugin@workspace:packages/eslint-plugin-litsx":
   version: 0.0.0-use.local
   resolution: "@litsx/eslint-plugin@workspace:packages/eslint-plugin-litsx"
   dependencies:
     "@babel/core": "npm:^7.26.5"
     "@babel/eslint-parser": "npm:^7.28.6"
     "@babel/plugin-syntax-jsx": "npm:^7.27.1"
-    "@babel/plugin-transform-typescript": "npm:^7.28.6"
+    "@babel/plugin-syntax-typescript": "npm:^7.27.1"
     "@litsx/typescript-plugin": "workspace:^"
   peerDependencies:
     eslint: ^8.57.0 || ^9.0.0
@@ -1712,7 +1712,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@litsx/typescript-plugin@workspace:packages/typescript-plugin-litsx"
   dependencies:
-    "@litsx/typescript-session": "workspace:^"
+    "@babel/parser": "npm:^7.28.5"
   peerDependencies:
     typescript: ">=5"
   bin:
@@ -1728,7 +1728,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@litsx/vite-plugin@workspace:packages/vite-plugin":
+"@litsx/vite-plugin@workspace:^, @litsx/vite-plugin@workspace:packages/vite-plugin":
   version: 0.0.0-use.local
   resolution: "@litsx/vite-plugin@workspace:packages/vite-plugin"
   dependencies:
@@ -1813,7 +1813,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@open-wc/scoped-elements@npm:^3.0.6":
+"@open-wc/scoped-elements@npm:^3.0.0, @open-wc/scoped-elements@npm:^3.0.6":
   version: 3.0.6
   resolution: "@open-wc/scoped-elements@npm:3.0.6"
   dependencies:
@@ -3263,6 +3263,22 @@ __metadata:
   languageName: node
   linkType: hard
 
+"dx-smoke-app@workspace:packages/dx-smoke-app":
+  version: 0.0.0-use.local
+  resolution: "dx-smoke-app@workspace:packages/dx-smoke-app"
+  dependencies:
+    "@litsx/eslint-plugin": "workspace:^"
+    "@litsx/typescript-plugin": "workspace:^"
+    "@litsx/vite-plugin": "workspace:^"
+    "@open-wc/scoped-elements": "npm:^3.0.0"
+    eslint: "npm:^9.0.0"
+    lit: "npm:^3.2.1"
+    litsx: "workspace:^"
+    typescript: "npm:^5.9.3"
+    vite: "npm:^7.1.0"
+  languageName: unknown
+  linkType: soft
+
 "electron-to-chromium@npm:^1.5.73":
   version: 1.5.83
   resolution: "electron-to-chromium@npm:1.5.83"
@@ -3529,7 +3545,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"eslint@npm:^9.26.0":
+"eslint@npm:^9.0.0, eslint@npm:^9.26.0":
   version: 9.39.4
   resolution: "eslint@npm:9.39.4"
   dependencies:
@@ -4388,6 +4404,7 @@ __metadata:
     happy-dom: "npm:^20.8.9"
     jsdom: "npm:^29.0.2"
     magic-string: "npm:^0.30.21"
+    prettier: "npm:^3.8.3"
     rollup: "npm:^4.60.1"
     tsup: "npm:^8.5.1"
     typescript: "npm:^5.8.3"
@@ -5000,6 +5017,15 @@ __metadata:
   version: 1.2.1
   resolution: "prelude-ls@npm:1.2.1"
   checksum: 10c0/b00d617431e7886c520a6f498a2e14c75ec58f6d93ba48c3b639cf241b54232d90daa05d83a9e9b9fef6baa63cb7e1e4602c2372fea5bc169668401eb127d0cd
+  languageName: node
+  linkType: hard
+
+"prettier@npm:^3.8.3":
+  version: 3.8.3
+  resolution: "prettier@npm:3.8.3"
+  bin:
+    prettier: bin/prettier.cjs
+  checksum: 10c0/754816fd7593eb80f6376d7476d463e832c38a12f32775a82683adb6e35b772b1f484d65f19401507b983a8c8a7cd5a4a9f12006bd56491e8f35503473f77473
   languageName: node
   linkType: hard
 
@@ -5731,7 +5757,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"typescript@npm:^5.8.3":
+"typescript@npm:^5.8.3, typescript@npm:^5.9.3":
   version: 5.9.3
   resolution: "typescript@npm:5.9.3"
   bin:
@@ -5741,7 +5767,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"typescript@patch:typescript@npm%3A^5.8.3#optional!builtin<compat/typescript>":
+"typescript@patch:typescript@npm%3A^5.8.3#optional!builtin<compat/typescript>, typescript@patch:typescript@npm%3A^5.9.3#optional!builtin<compat/typescript>":
   version: 5.9.3
   resolution: "typescript@patch:typescript@npm%3A5.9.3#optional!builtin<compat/typescript>::version=5.9.3&hash=5786d5"
   bin:
@@ -5973,7 +5999,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"vite@npm:^7.1.7":
+"vite@npm:^7.1.0, vite@npm:^7.1.7":
   version: 7.3.2
   resolution: "vite@npm:7.3.2"
   dependencies:
@@ -6125,6 +6151,12 @@ __metadata:
   checksum: 10c0/061fdd0319ba533c926b139b9377a7dbf91e63d815d86fe318a207bd19842b74ca6f6402ea61b26ed9d2924306bdb4d0b13f69c29e2a2a89b3b67602bcccb54c
   languageName: node
   linkType: hard
+
+"vscode-litsx@workspace:packages/vscode-litsx":
+  version: 0.0.0-use.local
+  resolution: "vscode-litsx@workspace:packages/vscode-litsx"
+  languageName: unknown
+  linkType: soft
 
 "vue@npm:^3.5.13":
   version: 3.5.32
