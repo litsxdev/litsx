@@ -9,13 +9,13 @@ Generated projects come preconfigured for authored LitSX syntax such as:
 - `?attr`
 - static hoists like `^styles(...)`
 
-The official authoring posture is now:
+The official authoring posture is:
 
 - **`.litsx`** as the primary authored source format
 - **`.litsx.jsx`** as the explicit JavaScript variant
 - plain `.jsx` / `.tsx` remain supported as compatibility paths
 
-So the scaffold now uses LitSX-authored source directly instead of treating JSX/TSX as the primary product surface.
+So the scaffold uses LitSX-authored source directly instead of treating JSX/TSX as the primary product surface.
 
 ## Installation
 
@@ -148,7 +148,7 @@ That is why generated projects use:
 
 This keeps the developer experience aligned with LitSX syntax while giving LitSX its own authored source format instead of patching standard JSX in place.
 
-LitSX now ships an official ESLint integration for authored syntax such as `@click`, `.value`, and `^styles(...)`:
+LitSX ships an official ESLint integration for authored syntax such as `@click`, `.value`, and `^styles(...)`:
 
 - `@litsx/eslint-plugin`
 
@@ -166,7 +166,7 @@ The recommended lint preset in scaffolded apps is the editor-friendly one:
 
 Use `recommended-lint-flat` instead if you want ESLint to repeat LitSX semantic checks in CI or editor linting.
 
-Formatting is now part of the baseline:
+Formatting is part of the baseline:
 
 - `prettier`
 - `prettier-plugin-litsx`

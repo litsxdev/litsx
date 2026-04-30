@@ -34,7 +34,7 @@ suggest switching when LitSX-authored syntax is detected in a standard
 - it provides dedicated `LitSX` and `LitSX JSX` language modes
 - `.litsx` is the authored source default
 - `.litsx.jsx` remains the explicit JavaScript variant
-- it does not yet replace the full JavaScript or TypeScript language services
+- it does not replace the full JavaScript or TypeScript language services
 - it complements `@litsx/typescript-plugin` and `@litsx/eslint-plugin`
 
 ## File Extensions
@@ -61,7 +61,7 @@ The intended split is:
 - LitSX virtualization/remapping logic for TypeScript-facing semantics: `@litsx/typescript-plugin`
 - lint and policy: `@litsx/eslint-plugin`
 
-For the dedicated `LitSX` and `LitSX JSX` language modes, the extension now:
+For the dedicated `LitSX` and `LitSX JSX` language modes, the extension:
 
 - surfaces authored LitSX diagnostics directly
 - adds project-backed TypeScript diagnostics for the current file

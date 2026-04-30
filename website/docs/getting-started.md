@@ -25,7 +25,7 @@ That scaffold keeps the first contact intentionally small:
 - one `^styles(...)`
 - one `eslint.config.js` already wired to the official Lit<sup>sx</sup> preset
 
-For the editor story, Lit<sup>sx</sup> now treats its own authored source format as the primary path:
+For the editor story, Lit<sup>sx</sup> treats its own authored source format as the primary path:
 
 - `.litsx` is the primary authored source format
 - `.litsx.jsx` is the explicit JavaScript variant

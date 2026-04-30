@@ -70,7 +70,7 @@ yarn docs:build
 
 ## Focus
 
-The workspace currently focuses on:
+The workspace focuses on:
 
 - native LitSX JSX ergonomics
 - React compatibility as a separate transform layer

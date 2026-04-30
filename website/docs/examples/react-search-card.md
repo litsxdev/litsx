@@ -30,7 +30,7 @@ import {
 
 ## Ref As Prop
 
-This smaller example isolates the `forwardRef`-style path that is now handled inside the React compatibility preset.
+This smaller example isolates the `forwardRef`-style path handled inside the React compatibility preset.
 
 <ClientOnly>
   <litsx-playground

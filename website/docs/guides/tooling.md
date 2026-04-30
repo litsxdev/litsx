@@ -21,7 +21,7 @@ The baseline setup for a project is:
 - `litsx-tsc` for CLI type-checking of authored Lit<sup>sx</sup> syntax
 - the scaffold from `create-litsx-app`
 
-The official authored source extensions are now:
+The official authored source extensions are:
 
 - `*.litsx`
 - `*.litsx.jsx`
@@ -33,7 +33,7 @@ trying to patch `typescriptreact` or `javascriptreact`.
 
 That stack is enough to treat Lit<sup>sx</sup> as its own framework in the editor and build pipeline.
 
-For editor DX, the stack is now split intentionally:
+For editor DX, the stack is split intentionally:
 
 - `vscode-litsx` for syntax highlighting and VS Code defaults
 - `@litsx/typescript-plugin` for hover, completions, diagnostics, and rename
@@ -62,7 +62,7 @@ Typical scaffolded usage:
 litsx-tsc -p jsconfig.json --noEmit
 ```
 
-That is why the scaffolding now exposes:
+That is why the scaffolding exposes:
 
 - `npm run typecheck`
 
@@ -98,7 +98,7 @@ In other words, the build pipeline is responsible for preserving the Lit<sup>sx<
 
 ## Linting And Formatting
 
-Lit<sup>sx</sup> now ships an official ESLint integration:
+Lit<sup>sx</sup> ships an official ESLint integration:
 
 - `@litsx/eslint-plugin`
 
@@ -108,7 +108,7 @@ The current shape is intentionally processor-first:
 - findings are remapped back to the original source positions
 - Lit<sup>sx</sup>-specific semantic rules run with normal ESLint rule ids
 
-The recommended linting baseline is now:
+The recommended linting baseline is:
 
 - `vscode-litsx` for syntax highlighting and workspace defaults
 - `@litsx/typescript-plugin` for editor understanding
@@ -123,7 +123,7 @@ The plugin covers authored forms such as:
 - `?attr`
 - `^name(...)`
 
-and currently includes rules such as:
+and includes rules such as:
 
 - `@litsx/no-native-classname`
 - `@litsx/no-invalid-binding-value`
@@ -162,7 +162,7 @@ The intended split is:
 - Authored CLI type-checking: `litsx-tsc`
 - Compilation: `@litsx/vite-plugin`
 
-Formatting now has an official starting point:
+Formatting has an official starting point:
 
 - `prettier-plugin-litsx`
 
@@ -172,8 +172,8 @@ The v1 surface is intentionally narrow:
 - `*.litsx.jsx`
 
 It preserves Lit<sup>sx</sup>-authored syntax directly and formats static
-`^styles(\`...\`)` templates as CSS. Plain `tsx/jsx` compatibility formatting is
-still intentionally out of scope for now.
+`^styles(\`...\`)` templates as CSS. Plain `tsx/jsx` compatibility formatting remains
+intentionally out of scope in this first pass.
 
 So the authoritative story today is:
 

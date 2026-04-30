@@ -8,7 +8,7 @@ This v1 is **processor-first**:
 - ESLint findings are remapped back to original authored positions
 - LitSX-specific semantic rules run with normal ESLint `ruleId`s
 
-It does **not** ship a dedicated LitSX parser yet.
+It does **not** ship a dedicated LitSX parser.
 
 ## Installation
 

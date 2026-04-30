@@ -156,7 +156,7 @@ export function Banner(props) {
 }
 ```
 
-This now compiles to a descriptor like:
+This compiles to a descriptor like:
 
 ```js
 {

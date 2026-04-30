@@ -9,7 +9,7 @@ v1 intentionally covers the official authored formats only:
 - `*.litsx`
 - `*.litsx.jsx`
 
-It does **not** claim plain `*.tsx` or `*.jsx` formatting yet.
+It does **not** claim plain `*.tsx` or `*.jsx` formatting.
 
 The plugin preserves LitSX-authored syntax directly:
 

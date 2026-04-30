@@ -8,11 +8,11 @@ The plugin exists to make editor tooling tolerate Lit-flavoured JSX attributes s
 - `.value={model.value}`
 - `?disabled={busy}`
 
-## Current scope
+## Scope
 
 The plugin virtualizes prefixed JSX attribute names into TypeScript-safe names for the language service and then remaps the results back to the authored Litsx syntax.
 
-Today it provides:
+It provides:
 
 - tolerance for `@event`, `.prop` and `?attr` in `.jsx`, `.tsx`, `.litsx`, and `.litsx.jsx`
 - remapped diagnostics and quick info spans
@@ -21,7 +21,7 @@ Today it provides:
 - authored diagnostics for obviously invalid Lit bindings
 - a `litsx-tsc` CLI path for virtualized type-checking when authored source uses Lit<sup>sx</sup>-specific syntax that plain `tsc` cannot parse directly
 
-It does not yet provide:
+It does not provide:
 
 - exhaustive DOM/custom-element semantics for every tag
 - editor refactors or quick-fixes

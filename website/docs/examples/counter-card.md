@@ -1,6 +1,6 @@
 # Counter Card
 
-This example is now the compact support demo, not the main sales pitch.
+This example is a compact support demo, not the main sales pitch.
 
 - local state with `useState(...)`
 - component-owned styling with `^styles(...)`

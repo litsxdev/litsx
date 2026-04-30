@@ -1,6 +1,6 @@
 # React Context
 
-This example isolates the new React context support in `@litsx/babel-preset-react-compat`.
+This example isolates the React context support in `@litsx/babel-preset-react-compat`.
 
 It keeps the authored React shape:
 

@@ -20,7 +20,7 @@ Most other React lowering stages are internal to the preset. Treat the preset as
 
 ## Supported Surface
 
-The supported React-authored migration surface currently includes:
+The supported React-authored migration surface includes:
 
 - `className`
 - `htmlFor`
