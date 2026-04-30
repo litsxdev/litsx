@@ -58,8 +58,10 @@ The scaffold includes:
 - `@litsx/eslint-plugin`
 - `@litsx/typescript-plugin`
 - `eslint.config.js` with `recommended-flat`
+- `prettier.config.js` wired to `prettier-plugin-litsx`
 - `jsconfig.json` configured with `jsxImportSource: "litsx"` and arbitrary-extension imports enabled
 - `npm run lint` wired to `eslint .`
+- `npm run format` wired to `prettier --write .`
 - `npm run typecheck` wired to `litsx-tsc -p jsconfig.json --noEmit`
 - `.vscode/settings.json` to keep the workspace aligned with LitSX until the editor extension can cover those defaults by itself
 
@@ -164,7 +166,19 @@ The recommended lint preset in scaffolded apps is the editor-friendly one:
 
 Use `recommended-lint-flat` instead if you want ESLint to repeat LitSX semantic checks in CI or editor linting.
 
-Formatting is still the gap: there is not yet an official Prettier plugin for LitSX-authored syntax.
+Formatting is now part of the baseline:
+
+- `prettier`
+- `prettier-plugin-litsx`
+
+The scaffold wires `prettier-plugin-litsx` only for the official authored
+formats:
+
+- `*.litsx`
+- `*.litsx.jsx`
+
+That keeps the formatting story aligned with the official source extensions
+instead of silently claiming support for every JSX-bearing compatibility file.
 
 ## Who This Package Is For
 

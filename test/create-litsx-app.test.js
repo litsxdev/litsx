@@ -32,6 +32,7 @@ describe("create-litsx-app", () => {
     const packageJson = JSON.parse(result.files.get("package.json"));
     const jsconfig = result.files.get("jsconfig.json");
     const eslintConfig = result.files.get("eslint.config.js");
+    const prettierConfig = result.files.get("prettier.config.js");
     const vscodeSettings = result.files.get(".vscode/settings.json");
     const viteConfig = result.files.get("vite.config.js");
     const storybookMain = result.files.get(".storybook/main.js");
@@ -45,8 +46,11 @@ describe("create-litsx-app", () => {
     assert.ok(packageJson.devDependencies["@litsx/typescript-plugin"]);
     assert.ok(packageJson.devDependencies["@litsx/vite-plugin"]);
     assert.ok(packageJson.devDependencies["@litsx/eslint-plugin"]);
+    assert.ok(packageJson.devDependencies.prettier);
+    assert.ok(packageJson.devDependencies["prettier-plugin-litsx"]);
     assert.ok(packageJson.devDependencies.eslint);
     assert.strictEqual(packageJson.scripts.lint, "eslint .");
+    assert.strictEqual(packageJson.scripts.format, "prettier --write .");
     assert.strictEqual(packageJson.scripts.typecheck, "litsx-tsc -p jsconfig.json --noEmit");
     assert.ok(packageJson.devDependencies["@storybook/web-components-vite"]);
     assert.ok(packageJson.devDependencies["@storybook/addon-docs"]);
@@ -61,6 +65,9 @@ describe("create-litsx-app", () => {
     assert.match(jsconfig, /"jsxImportSource": "litsx"/);
     assert.match(eslintConfig, /@litsx\/eslint-plugin/);
     assert.match(eslintConfig, /recommended-flat/);
+    assert.match(prettierConfig, /prettier-plugin-litsx/);
+    assert.match(prettierConfig, /parser: "litsx"/);
+    assert.match(prettierConfig, /parser: "litsx-jsx"/);
     assert.match(vscodeSettings, /"js\/ts\.tsdk\.path": "node_modules\/typescript\/lib"/);
     assert.match(vscodeSettings, /"typescript\.tsserver\.useSeparateSyntaxServer": false/);
     assert.match(jsconfig, /"name": "@litsx\/typescript-plugin"/);
@@ -90,6 +97,7 @@ describe("create-litsx-app", () => {
     const appSource = result.files.get("src/my-litsx-app.litsx");
     const readme = result.files.get("README.md");
     const eslintConfig = result.files.get("eslint.config.js");
+    const prettierConfig = result.files.get("prettier.config.js");
     const jsconfig = result.files.get("jsconfig.json");
     const vscodeSettings = result.files.get(".vscode/settings.json");
 
@@ -98,6 +106,7 @@ describe("create-litsx-app", () => {
     assert.ok(!packageJson.scripts.storybook);
     assert.ok(!packageJson.devDependencies.storybook);
     assert.strictEqual(packageJson.scripts.lint, "eslint .");
+    assert.strictEqual(packageJson.scripts.format, "prettier --write .");
     assert.ok(!result.files.has(".storybook/main.js"));
     assert.ok(!result.files.has("src/stories/status-pill.stories.litsx"));
     assert.match(appSource, /Hello LitSX/);
@@ -108,8 +117,10 @@ describe("create-litsx-app", () => {
     assert.doesNotMatch(appSource, /ButtonCard/);
     assert.match(readme, /First Run/);
     assert.match(readme, /npm run lint/);
+    assert.match(readme, /npm run format/);
     assert.match(readme, /npm run typecheck/);
     assert.match(eslintConfig, /recommended-flat/);
+    assert.match(prettierConfig, /prettier-plugin-litsx/);
     assert.match(jsconfig, /"moduleResolution": "Bundler"/);
     assert.match(jsconfig, /"allowArbitraryExtensions": true/);
     assert.match(vscodeSettings, /"typescript\.tsserver\.useSeparateSyntaxServer": false/);
@@ -237,6 +248,7 @@ describe("create-litsx-app", () => {
         "@litsx/eslint-plugin": "^0.1.0",
         "@litsx/typescript-plugin": "^1.0.0",
         "@litsx/vite-plugin": "^0.1.0",
+        "prettier-plugin-litsx": "^0.0.0",
         vite: "^7.1.0",
       },
     };
@@ -248,6 +260,7 @@ describe("create-litsx-app", () => {
     assert.strictEqual(packageJson.devDependencies["@litsx/eslint-plugin"], "workspace:^");
     assert.strictEqual(packageJson.devDependencies["@litsx/typescript-plugin"], "workspace:^");
     assert.strictEqual(packageJson.devDependencies["@litsx/vite-plugin"], "workspace:^");
+    assert.strictEqual(packageJson.devDependencies["prettier-plugin-litsx"], "workspace:^");
     assert.strictEqual(packageJson.devDependencies.vite, "^7.1.0");
   });
 });

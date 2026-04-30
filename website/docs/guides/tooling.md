@@ -231,9 +231,3 @@ That keeps the docs close to the code and reduces duplication.
 - [Getting Started](../getting-started.md)
 - [Property Inference](./property-inference.md)
 - [Examples](../examples/)
-The official authored route is now:
-
-- `.litsx` as the primary source format
-- `.litsx.jsx` as the explicit JS variant
-
-Plain `.jsx` and `.tsx` remain supported as compatibility paths for migration and interop.

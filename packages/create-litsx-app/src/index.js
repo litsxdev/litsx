@@ -4,6 +4,7 @@ import path from "path";
 const LOCAL_WORKSPACE_PACKAGE_NAMES = [
   "litsx",
   "@litsx/eslint-plugin",
+  "prettier-plugin-litsx",
   "@litsx/typescript-plugin",
   "@litsx/vite-plugin",
 ];
@@ -83,6 +84,7 @@ function createBasePackageJson(packageName) {
       dev: "vite",
       build: "vite build",
       lint: "eslint .",
+      format: "prettier --write .",
       typecheck: "litsx-tsc -p jsconfig.json --noEmit",
       preview: "vite preview",
     },
@@ -96,6 +98,8 @@ function createBasePackageJson(packageName) {
       "@litsx/typescript-plugin": "^1.0.0",
       "@litsx/vite-plugin": "^0.1.0",
       "eslint": "^9.0.0",
+      "prettier": "^3.8.3",
+      "prettier-plugin-litsx": "^0.0.0",
       "typescript": "^5.9.3",
       "vite": "^7.1.0"
     }
@@ -221,6 +225,24 @@ export default [
   litsx.configs["recommended-flat"],
 ];
 `);
+  files.set("prettier.config.js", `export default {
+  plugins: ["prettier-plugin-litsx"],
+  overrides: [
+    {
+      files: "*.litsx",
+      options: {
+        parser: "litsx",
+      },
+    },
+    {
+      files: "*.litsx.jsx",
+      options: {
+        parser: "litsx-jsx",
+      },
+    },
+  ],
+};
+`);
   files.set(".vscode/settings.json", `{
   "js/ts.tsdk.path": "node_modules/typescript/lib",
   "typescript.tsserver.useSeparateSyntaxServer": false
@@ -326,6 +348,7 @@ Generated with \`create-litsx-app --template app\`.
 - \`npm run dev\`
 - \`npm run build\`
 - \`npm run lint\`
+- \`npm run format\`
 - \`npm run typecheck\`
 - \`npm run preview\`
 
@@ -468,6 +491,7 @@ Generated with \`create-litsx-app --template component\`.
 - \`npm run dev\`
 - \`npm run build\`
 - \`npm run lint\`
+- \`npm run format\`
 - \`npm run preview\`
 
 ## Included
@@ -719,6 +743,7 @@ Generated with \`create-litsx-app --template design-system\`.
 - \`npm run dev\`
 - \`npm run build\`
 - \`npm run lint\`
+- \`npm run format\`
 - \`npm run preview\`
 - \`npm run storybook\`
 - \`npm run build-storybook\`
