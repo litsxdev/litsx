@@ -5,8 +5,9 @@
   "version": "0.1.0",
   "publisher": "litsx",
   "license": "Apache-2.0",
-  "private": true,
-  "main": "./extension.cjs",
+  "icon": "icon.png",
+  "type": "module",
+  "main": "./dist/extension.cjs",
   "engines": {
     "vscode": "^1.95.0"
   },
@@ -20,13 +21,22 @@
     "tsx",
     "web-components"
   ],
+  "files": [
+    "dist",
+    "syntaxes",
+    "icon.png",
+    "README.md",
+    "package.json"
+  ],
   "repository": {
     "type": "git",
     "url": "https://github.com/litsx/litsx.git",
     "directory": "packages/vscode-litsx"
   },
   "scripts": {
-    "build": "node ./scripts/build-grammars.mjs"
+    "build": "node ./scripts/build-grammars.mjs && ../../node_modules/.bin/rollup --config rollup.config.mjs",
+    "package:vsix": "yarn build && npx @vscode/vsce package --out dist/vscode-litsx.vsix",
+    "package:vsix:pre-release": "yarn build && npx @vscode/vsce package --pre-release --out dist/vscode-litsx.vsix"
   },
   "activationEvents": [
     "onLanguage:typescriptreact",

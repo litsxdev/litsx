@@ -1,8 +1,10 @@
-"use strict";
+import fs from "fs";
+import path from "path";
+import { createRequire } from "module";
+import { fileURLToPath, pathToFileURL } from "url";
 
-const fs = require("fs");
-const path = require("path");
-const { pathToFileURL } = require("url");
+const require = createRequire(import.meta.url);
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 let authoredModulePromise = null;
 let tsModule = null;
@@ -14,7 +16,7 @@ function normalizeFileName(fileName) {
 
 async function loadAuthoredModule() {
   if (!authoredModulePromise) {
-    const modulePath = path.resolve(__dirname, "../typescript-plugin-litsx/src/virtual-source.js");
+    const modulePath = path.resolve(__dirname, "../../typescript-plugin-litsx/src/virtual-source.js");
     authoredModulePromise = import(pathToFileURL(modulePath).href);
   }
 
@@ -711,7 +713,7 @@ async function computeLitsxProjectCompletions(fileName, sourceText, languageId, 
   return mergedEntries;
 }
 
-module.exports = {
+export {
   computeLitsxCompletions,
   computeLitsxDiagnostics,
   computeLitsxHover,

@@ -1,26 +1,24 @@
-"use strict";
-
-const {
+import * as vscode from "vscode";
+import {
   detectLitsxSyntax,
   getSuggestedLitsxLanguageId,
   getStandardLanguageId,
   isStandardJsxLanguage,
-} = require("./detect.cjs");
-const {
+} from "./detect.js";
+import {
   computeLitsxCompletions,
   computeLitsxDiagnostics,
   computeLitsxHover,
   computeLitsxProjectCompletions,
   computeLitsxProjectDiagnostics,
   computeLitsxProjectHover,
-} = require("./editor-support.cjs");
+} from "./editor-support.js";
 
 const LANGUAGE_SELECTIONS_KEY = "litsx.languageSelections";
 const DISMISSED_SIGNATURES_KEY = "litsx.dismissedSignatures";
 const RECENT_CLOSE_WINDOW_MS = 1500;
 
 function activate(context) {
-  const vscode = require("vscode");
   const diagnostics = vscode.languages.createDiagnosticCollection("litsx");
   const output = vscode.window.createOutputChannel("LitSX");
   const dismissedDocumentVersions = new Map();
@@ -520,7 +518,7 @@ function activate(context) {
 
 function deactivate() {}
 
-module.exports = {
+export {
   activate,
   deactivate,
 };

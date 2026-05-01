@@ -518,6 +518,20 @@ body {
   border-radius: 7px;
 }
 
+.vp-doc :not(pre) > code {
+  color: color-mix(in srgb, var(--vp-c-brand-3) 40%, var(--vp-c-text-1));
+  background: color-mix(in srgb, var(--vp-c-bg-alt) 84%, var(--vp-c-bg));
+  border: 1px solid color-mix(in srgb, var(--vp-c-border) 78%, transparent);
+  padding: 0.14rem 0.42rem;
+  font-weight: 600;
+}
+
+.dark .vp-doc :not(pre) > code {
+  color: color-mix(in srgb, var(--vp-c-brand-3) 70%, white);
+  background: color-mix(in srgb, var(--vp-c-bg-alt) 92%, black);
+  border-color: color-mix(in srgb, var(--vp-c-brand-1) 20%, var(--vp-c-border));
+}
+
 .VPSidebar .VPSidebarItem.level-0 > .item > .text,
 .VPSidebar .VPSidebarItem.level-0 > .item > .link > .text {
   font-family: Montserrat, var(--vp-font-family-base);

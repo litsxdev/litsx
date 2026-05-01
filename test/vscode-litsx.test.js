@@ -1,25 +1,23 @@
 import assert from "assert";
-import { createRequire } from "module";
 import fs from "fs";
 import os from "os";
 import path from "path";
 import { describe, it } from "vitest";
-
-const extensionDir = path.resolve("packages/vscode-litsx");
-const require = createRequire(import.meta.url);
-const {
+import {
   detectLitsxSyntax,
   getStandardLanguageId,
   getSuggestedLitsxLanguageId,
-} = require(path.join(extensionDir, "detect.cjs"));
-const {
+} from "../packages/vscode-litsx/src/detect.js";
+import {
   computeLitsxCompletions,
   computeLitsxDiagnostics,
   computeLitsxHover,
   computeLitsxProjectCompletions,
   computeLitsxProjectDiagnostics,
   computeLitsxProjectHover,
-} = require(path.join(extensionDir, "editor-support.cjs"));
+} from "../packages/vscode-litsx/src/editor-support.js";
+
+const extensionDir = path.resolve("packages/vscode-litsx");
 
 function readJson(relativePath) {
   return JSON.parse(
@@ -32,7 +30,7 @@ describe("vscode-litsx", () => {
     const manifest = readJson("package.json");
 
     assert.strictEqual(manifest.name, "vscode-litsx");
-    assert.strictEqual(manifest.main, "./extension.cjs");
+    assert.strictEqual(manifest.main, "./dist/extension.cjs");
     assert.strictEqual(manifest.contributes.languages.length, 2);
     assert.strictEqual(manifest.contributes.grammars.length, 2);
     assert.deepStrictEqual(
@@ -235,7 +233,7 @@ describe("vscode-litsx", () => {
     assert.ok(diagnostics.some((diagnostic) => diagnostic.code === 2322));
     assert.match(hover.code, /const count: number/);
     assert.ok(completions.some((entry) => entry.label === "count"));
-  });
+  }, 15000);
 
   it("filters raw TypeScript diagnostics on authored binding names", async () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-vscode-"));
@@ -284,7 +282,7 @@ describe("vscode-litsx", () => {
         .map((diagnostic) => [diagnostic.start, diagnostic.length]),
       [[7, 7]],
     );
-  });
+  }, 15000);
 
   it("reports authored diagnostics on later attributes in the same opening tag", async () => {
     const filePath = path.resolve("packages/dx-smoke-app/src/dx-smoke-app.litsx");

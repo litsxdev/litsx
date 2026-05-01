@@ -62,7 +62,7 @@ export const playgroundStyles = `
     border: 1px solid var(--vp-c-divider);
     border-radius: 12px;
     overflow: hidden;
-    background: var(--vp-c-bg-soft);
+    background: var(--litsx-editor-bg);
     contain: layout paint;
   }
 
@@ -357,6 +357,7 @@ export const playgroundStyles = `
   .litsx-playground__output .cm-scroller {
     overflow: auto;
     padding: 0;
+    background: var(--litsx-editor-bg);
   }
 
   .litsx-playground__editor-panel .cm-gutters,

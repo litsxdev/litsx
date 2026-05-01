@@ -37,6 +37,19 @@ suggest switching when LitSX-authored syntax is detected in a standard
 - it does not replace the full JavaScript or TypeScript language services
 - it complements `@litsx/typescript-plugin` and `@litsx/eslint-plugin`
 
+## Marketplace Release Track
+
+`vscode-litsx` is released as a VS Code Marketplace extension.
+
+Before publishing a release candidate, package a `.vsix` and verify it in a
+clean VS Code profile. The release checklist for this repository lives in the
+root [`RELEASING.md`](../../RELEASING.md).
+
+Build and package commands:
+
+- `yarn workspace vscode-litsx build`
+- `yarn workspace vscode-litsx package:vsix`
+
 ## File Extensions
 
 Use these file extensions for official LitSX-authored source:

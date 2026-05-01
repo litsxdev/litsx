@@ -1,5 +1,3 @@
-"use strict";
-
 const STANDARD_LITSX_LANGUAGE_BY_SOURCE = {
   javascriptreact: "litsx-jsx",
   typescriptreact: "litsx",
@@ -36,7 +34,7 @@ function getStandardLanguageId(languageId) {
   return SOURCE_LANGUAGE_BY_LITSX[languageId] ?? null;
 }
 
-module.exports = {
+export {
   STANDARD_LITSX_LANGUAGE_BY_SOURCE,
   SOURCE_LANGUAGE_BY_LITSX,
   detectLitsxSyntax,

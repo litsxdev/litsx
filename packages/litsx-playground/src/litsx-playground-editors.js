@@ -33,6 +33,7 @@ const sourceEditorTheme = EditorView.theme({
   ".cm-scroller": {
     fontFamily: '"SFMono-Regular", "Menlo", "Monaco", monospace',
     lineHeight: "1.6",
+    backgroundColor: "var(--litsx-editor-bg)",
   },
   ".cm-gutters": {
     border: "0",
@@ -84,6 +85,7 @@ const emittedEditorTheme = EditorView.theme({
   ".cm-scroller": {
     fontFamily: '"SFMono-Regular", "Menlo", "Monaco", monospace',
     lineHeight: "1.6",
+    backgroundColor: "var(--litsx-editor-bg)",
   },
   ".cm-gutters": {
     border: "0",
