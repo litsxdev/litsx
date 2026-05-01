@@ -91,15 +91,15 @@ function createBasePackageJson(packageName) {
     dependencies: {
       "@open-wc/scoped-elements": "^3.0.0",
       "lit": "^3.2.1",
-      "litsx": "^1.0.0",
+      "litsx": "^0.1.0",
     },
     devDependencies: {
       "@litsx/eslint-plugin": "^0.1.0",
-      "@litsx/typescript-plugin": "^1.0.0",
+      "@litsx/typescript-plugin": "^0.1.0",
       "@litsx/vite-plugin": "^0.1.0",
       "eslint": "^9.0.0",
       "prettier": "^3.8.3",
-      "prettier-plugin-litsx": "^0.0.0",
+      "prettier-plugin-litsx": "^0.1.0",
       "typescript": "^5.9.3",
       "vite": "^7.1.0"
     }

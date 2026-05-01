@@ -1,6 +1,6 @@
 {
   "name": "@litsx/typescript-plugin",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "description": "TypeScript language-service support for Litsx JSX syntax",
   "author": "Litsx Team",
   "homepage": "https://github.com/litsx/litsx/tree/main/packages/typescript-plugin-litsx",

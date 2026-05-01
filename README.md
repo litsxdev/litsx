@@ -21,14 +21,16 @@ Because plain `tsc` does not parse this authored syntax directly, editor support
 ### Core public packages
 
 - [`packages/litsx`](./packages/litsx): main runtime package, JSX runtime entrypoints, async boundaries, and runtime infrastructure
+- [`packages/compiler`](./packages/compiler): public programmatic compilation facade
 - [`packages/create-litsx-app`](./packages/create-litsx-app): project scaffolder
+- [`packages/eslint-plugin-litsx`](./packages/eslint-plugin-litsx): official ESLint integration for LitSX-authored source
+- [`packages/prettier-plugin-litsx`](./packages/prettier-plugin-litsx): official Prettier integration for `.litsx` and `.litsx.jsx`
 - [`packages/typescript-plugin-litsx`](./packages/typescript-plugin-litsx): TypeScript language-service support for LitSX-authored JSX
 - [`packages/jsx-authoring`](./packages/jsx-authoring): shared authored JSX language model and parser helpers
 - [`packages/babel-parser-litsx`](./packages/babel-parser-litsx): Babel parser adapter for LitSX-authored JSX
 - [`packages/light-dom-registry`](./packages/light-dom-registry): contextual light DOM registry runtime
 - [`packages/litsx-playground`](./packages/litsx-playground): embedded playground and preview runtime
 - [`packages/vite-plugin`](./packages/vite-plugin): Vite integration
-- [`packages/vitepress`](./packages/vitepress): docs integration and theme helpers
 
 ### Babel toolchain
 
@@ -38,9 +40,14 @@ Because plain `tsc` does not parse this authored syntax directly, editor support
 - [`packages/babel-plugin-transform-jsx-html-template`](./packages/babel-plugin-transform-jsx-html-template): JSX to Lit `html` template lowering
 - [`packages/babel-plugin-litsx-proptypes`](./packages/babel-plugin-litsx-proptypes): React `prop-types` compat lowering to native property hoists
 
-### Internal shared package
+### Additional public tooling
 
-- [`packages/shared/babel-plugin-shared-hooks`](./packages/shared/babel-plugin-shared-hooks): shared transform helpers used by multiple Babel pipelines
+- [`packages/shared/babel-plugin-shared-hooks`](./packages/shared/babel-plugin-shared-hooks): shared transform helpers consumed by the public Babel packages
+
+### Internal workspace packages
+
+- [`packages/vitepress`](./packages/vitepress): docs integration and theme helpers
+- [`packages/shared/typescript-session`](./packages/shared/typescript-session): private TypeScript session plumbing used by editor and type-check tooling
 
 ## Development
 

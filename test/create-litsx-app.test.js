@@ -241,14 +241,14 @@ describe("create-litsx-app", () => {
   it("can rewrite scaffold dependencies to local workspace ranges for smoke testing", () => {
     const packageJson = {
       dependencies: {
-        litsx: "^1.0.0",
+        litsx: "^0.1.0",
         lit: "^3.2.1",
       },
       devDependencies: {
         "@litsx/eslint-plugin": "^0.1.0",
-        "@litsx/typescript-plugin": "^1.0.0",
+        "@litsx/typescript-plugin": "^0.1.0",
         "@litsx/vite-plugin": "^0.1.0",
-        "prettier-plugin-litsx": "^0.0.0",
+        "prettier-plugin-litsx": "^0.1.0",
         vite: "^7.1.0",
       },
     };
