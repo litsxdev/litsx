@@ -1,7 +1,7 @@
 import {
   createUseRefTransform,
   createUseStateTransform,
-} from "../../../shared/babel-plugin-shared-hooks/src/index.js";
+} from "../../../babel-plugin-shared-hooks/src/index.js";
 
 export const reactUseState = createUseStateTransform({
   importSource: "react",

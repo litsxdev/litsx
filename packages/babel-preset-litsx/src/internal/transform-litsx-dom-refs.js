@@ -1,4 +1,4 @@
-import { createUseRefTransform } from "../../../shared/babel-plugin-shared-hooks/src/index.js";
+import { createUseRefTransform } from "../../../babel-plugin-shared-hooks/src/index.js";
 
 export default createUseRefTransform({
   importSource: "litsx",

@@ -1,5 +1,12 @@
 # Litsx
 
+[![Test](https://github.com/litsxdev/litsx/actions/workflows/test.yml/badge.svg)](https://github.com/litsxdev/litsx/actions/workflows/test.yml)
+[![Release Validate](https://github.com/litsxdev/litsx/actions/workflows/release-validate.yml/badge.svg)](https://github.com/litsxdev/litsx/actions/workflows/release-validate.yml)
+[![Deploy Docs](https://github.com/litsxdev/litsx/actions/workflows/deploy-docs.yml/badge.svg)](https://github.com/litsxdev/litsx/actions/workflows/deploy-docs.yml)
+[![Release](https://github.com/litsxdev/litsx/actions/workflows/release.yml/badge.svg)](https://github.com/litsxdev/litsx/actions/workflows/release.yml)
+[![Docs](https://img.shields.io/badge/docs-litsx.dev-0a7ea4)](https://litsx.dev/)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](./LICENSE)
+
 Litsx is a Lit-first compiler and tooling workspace for authoring web components with modern JSX, static hoists, and an optional React-compat migration layer.
 
 This repository contains the runtime, Babel presets, authoring support, playground, docs tooling, and scaffolding packages that make up the LitSX toolchain.
@@ -29,7 +36,6 @@ Because plain `tsc` does not parse this authored syntax directly, editor support
 - [`packages/jsx-authoring`](./packages/jsx-authoring): shared authored JSX language model and parser helpers
 - [`packages/babel-parser-litsx`](./packages/babel-parser-litsx): Babel parser adapter for LitSX-authored JSX
 - [`packages/light-dom-registry`](./packages/light-dom-registry): contextual light DOM registry runtime
-- [`packages/litsx-playground`](./packages/litsx-playground): embedded playground and preview runtime
 - [`packages/vite-plugin`](./packages/vite-plugin): Vite integration
 
 ### Babel toolchain
@@ -42,12 +48,13 @@ Because plain `tsc` does not parse this authored syntax directly, editor support
 
 ### Additional public tooling
 
-- [`packages/shared/babel-plugin-shared-hooks`](./packages/shared/babel-plugin-shared-hooks): shared transform helpers consumed by the public Babel packages
+- [`packages/babel-plugin-shared-hooks`](./packages/babel-plugin-shared-hooks): shared transform helpers consumed by the public Babel packages
+- [`packages/typescript-session`](./packages/typescript-session): shared TypeScript session plumbing used by editor and type-check tooling
 
 ### Internal workspace packages
 
+- [`packages/litsx-playground`](./packages/litsx-playground): embedded playground and preview runtime for docs and demos
 - [`packages/vitepress`](./packages/vitepress): docs integration and theme helpers
-- [`packages/shared/typescript-session`](./packages/shared/typescript-session): private TypeScript session plumbing used by editor and type-check tooling
 
 ## Development
 

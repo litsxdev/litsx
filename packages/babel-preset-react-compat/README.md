@@ -1,5 +1,10 @@
 # `@litsx/babel-preset-react-compat`
 
+[![npm](https://img.shields.io/badge/npm-@litsx%2Fbabel--preset--react--compat-CB3837)](https://www.npmjs.com/package/@litsx/babel-preset-react-compat)
+[![Release](https://img.shields.io/badge/release-public-2ea44f)](../../RELEASING.md)
+[![Module](https://img.shields.io/badge/module-ESM%20%2B%20CJS-0366d6)](./package.json)
+[![Provenance](https://img.shields.io/badge/npm_provenance-enabled-2ea44f)](../../RELEASING.md)
+
 Canonical Babel preset for migrating React-authored source onto the LitSX runtime model.
 
 ## What It Includes

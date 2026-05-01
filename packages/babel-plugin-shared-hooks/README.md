@@ -1,6 +1,11 @@
 # `@litsx/babel-plugin-shared-hooks`
 
-Internal shared utilities for the LitSX Babel plugin family.
+[![npm](https://img.shields.io/badge/npm-@litsx%2Fbabel--plugin--shared--hooks-CB3837)](https://www.npmjs.com/package/@litsx/babel-plugin-shared-hooks)
+[![Release](https://img.shields.io/badge/release-public-2ea44f)](../../RELEASING.md)
+[![Module](https://img.shields.io/badge/module-ESM%20%2B%20CJS-0366d6)](./package.json)
+[![Provenance](https://img.shields.io/badge/npm_provenance-enabled-2ea44f)](../../RELEASING.md)
+
+Shared hook-transform utilities for the LitSX Babel plugin family.
 
 ## Purpose
 
@@ -27,7 +32,7 @@ This package is for:
 - LitSX maintainers
 - advanced plugin authors extending the same internal transform model
 
-It is not meant to be added directly to application Babel configs.
+It is not the recommended first entrypoint for application Babel configs.
 
 ## Use the Public Packages Instead
 

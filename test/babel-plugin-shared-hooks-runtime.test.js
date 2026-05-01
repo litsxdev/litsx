@@ -2,7 +2,7 @@ import assert from "assert";
 import babelCore from "@babel/core";
 import parser from "../packages/babel-parser-litsx/src/index.mjs";
 import { describe, it } from "vitest";
-import { createRuntimeHooksTransform } from "../packages/shared/babel-plugin-shared-hooks/src/index.js";
+import { createRuntimeHooksTransform } from "../packages/babel-plugin-shared-hooks/src/index.js";
 
 const { transformFromAstSync } = babelCore;
 

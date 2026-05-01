@@ -1,5 +1,10 @@
 # `@litsx/compiler`
 
+[![npm](https://img.shields.io/badge/npm-@litsx%2Fcompiler-CB3837)](https://www.npmjs.com/package/@litsx/compiler)
+[![Release](https://img.shields.io/badge/release-public-2ea44f)](../../RELEASING.md)
+[![Module](https://img.shields.io/badge/module-ESM%20%2B%20CJS-0366d6)](./package.json)
+[![Provenance](https://img.shields.io/badge/npm_provenance-enabled-2ea44f)](../../RELEASING.md)
+
 Build-facing LitSX compilation facade.
 
 Use this package when you need to compile authored LitSX source programmatically and want the correct compilation pipeline applied by default:

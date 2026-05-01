@@ -30,7 +30,7 @@
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/litsx/litsx.git",
+    "url": "https://github.com/litsxdev/litsx.git",
     "directory": "packages/vitepress"
   },
   "peerDependencies": {

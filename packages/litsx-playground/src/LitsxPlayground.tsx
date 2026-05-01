@@ -384,7 +384,7 @@ export function LitsxPlayground({
         Made with <span class="litsx-playground__signature-heart">♥</span> using{" "}
         <a
           class="litsx-playground__signature-link"
-          href="https://github.com/litsx/litsx/tree/main/packages/litsx-playground"
+          href="https://github.com/litsxdev/litsx/tree/main/packages/litsx-playground"
           target="_blank"
           rel="noreferrer"
         >

@@ -3,30 +3,42 @@
   "version": "0.1.0",
   "description": "Native Litsx runtime primitives, JSX runtime entrypoints, and web component utilities",
   "type": "module",
-  "main": "src/index.js",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
   "types": "./src/index.d.ts",
   "exports": {
     ".": {
       "types": "./src/index.d.ts",
-      "default": "./src/index.js"
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs",
+      "default": "./dist/index.js"
     },
     "./jsx-runtime": {
       "types": "./src/jsx-runtime.d.ts",
-      "default": "./src/jsx-runtime.js"
+      "import": "./dist/jsx-runtime.js",
+      "require": "./dist/jsx-runtime.cjs",
+      "default": "./dist/jsx-runtime.js"
     },
     "./jsx-dev-runtime": {
       "types": "./src/jsx-dev-runtime.d.ts",
-      "default": "./src/jsx-dev-runtime.js"
+      "import": "./dist/jsx-dev-runtime.js",
+      "require": "./dist/jsx-dev-runtime.cjs",
+      "default": "./dist/jsx-dev-runtime.js"
     },
     "./runtime-infrastructure": {
-      "default": "./src/runtime-infrastructure/index.js"
+      "import": "./dist/runtime-infrastructure/index.js",
+      "require": "./dist/runtime-infrastructure/index.cjs",
+      "default": "./dist/runtime-infrastructure/index.js"
     },
     "./context": {
       "types": "./src/context.d.ts",
-      "default": "./src/context.js"
+      "import": "./dist/context.js",
+      "require": "./dist/context.cjs",
+      "default": "./dist/context.js"
     }
   },
   "files": [
+    "dist",
     "src",
     "README.md"
   ],
@@ -37,16 +49,16 @@
     "web-components"
   ],
   "license": "Apache-2.0",
-  "homepage": "https://github.com/litsx/litsx/tree/main/packages/litsx",
+  "homepage": "https://github.com/litsxdev/litsx/tree/main/packages/litsx",
   "bugs": {
-    "url": "https://github.com/litsx/litsx/issues"
+    "url": "https://github.com/litsxdev/litsx/issues"
   },
   "publishConfig": {
     "access": "public"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/litsx/litsx.git",
+    "url": "https://github.com/litsxdev/litsx.git",
     "directory": "packages/litsx"
   },
   "peerDependencies": {
@@ -59,5 +71,9 @@
   },
   "devDependencies": {
     "lit": "^3.2.1"
+  },
+  "scripts": {
+    "build": "../../node_modules/.bin/rollup --config rollup.config.mjs",
+    "prepack": "yarn build"
   }
 }

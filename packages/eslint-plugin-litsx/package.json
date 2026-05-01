@@ -3,12 +3,20 @@
   "version": "0.1.0",
   "description": "Official ESLint processor support for LitSX-authored syntax",
   "type": "module",
-  "main": "./src/index.js",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
   "exports": {
-    ".": "./src/index.js",
-    "./processor": "./src/processor.js"
+    ".": {
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./processor": {
+      "import": "./dist/processor.js",
+      "require": "./dist/processor.cjs"
+    }
   },
   "files": [
+    "dist",
     "src",
     "README.md"
   ],
@@ -19,16 +27,16 @@
     "jsx"
   ],
   "license": "Apache-2.0",
-  "homepage": "https://github.com/litsx/litsx/tree/main/packages/eslint-plugin-litsx",
+  "homepage": "https://github.com/litsxdev/litsx/tree/main/packages/eslint-plugin-litsx",
   "bugs": {
-    "url": "https://github.com/litsx/litsx/issues"
+    "url": "https://github.com/litsxdev/litsx/issues"
   },
   "publishConfig": {
     "access": "public"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/litsx/litsx.git",
+    "url": "https://github.com/litsxdev/litsx.git",
     "directory": "packages/eslint-plugin-litsx"
   },
   "peerDependencies": {
@@ -43,6 +51,7 @@
     "@litsx/typescript-plugin": "workspace:^"
   },
   "scripts": {
-    "build": "node -e 'process.exit(0)'"
+    "build": "../../node_modules/.bin/rollup --config rollup.config.mjs",
+    "prepack": "yarn build"
   }
 }

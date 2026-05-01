@@ -1,5 +1,10 @@
 # litsx
 
+[![npm](https://img.shields.io/badge/npm-litsx-CB3837)](https://www.npmjs.com/package/litsx)
+[![Release](https://img.shields.io/badge/release-public-2ea44f)](../../RELEASING.md)
+[![Module](https://img.shields.io/badge/module-ESM%20%2B%20CJS-0366d6)](./package.json)
+[![Provenance](https://img.shields.io/badge/npm_provenance-enabled-2ea44f)](../../RELEASING.md)
+
 Runtime helpers that back the Lit<sup>SX</sup> Babel transforms. The module bundles an `EffectsController` plus native effect helpers (`prepareEffects`, `useAfterUpdate`, `useOnCommit`) so rewritten components can schedule work in Lit terms, while still exposing React-shaped aliases for migration and compat.
 
 The package also exposes `litsx/jsx-runtime` and `litsx/jsx-dev-runtime` entrypoints so editors and TypeScript can treat Litsx as a first-class JSX runtime via `jsxImportSource: "litsx"`.

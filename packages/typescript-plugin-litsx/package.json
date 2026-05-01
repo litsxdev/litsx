@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "description": "TypeScript language-service support for Litsx JSX syntax",
   "author": "Litsx Team",
-  "homepage": "https://github.com/litsx/litsx/tree/main/packages/typescript-plugin-litsx",
+  "homepage": "https://github.com/litsxdev/litsx/tree/main/packages/typescript-plugin-litsx",
   "bugs": {
-    "url": "https://github.com/litsx/litsx/issues"
+    "url": "https://github.com/litsxdev/litsx/issues"
   },
   "license": "Apache-2.0",
   "publishConfig": {
@@ -20,14 +20,14 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/litsx/litsx.git",
+    "url": "https://github.com/litsxdev/litsx.git",
     "directory": "packages/typescript-plugin-litsx"
   },
   "type": "module",
   "main": "./tsserver-plugin.cjs",
   "module": "./dist/index.js",
   "bin": {
-    "litsx-tsc": "./bin/litsx-tsc.js"
+    "litsx-tsc": "./dist/litsx-tsc.js"
   },
   "exports": {
     ".": {
@@ -52,7 +52,6 @@
     }
   },
   "files": [
-    "bin",
     "dist",
     "tsserver-plugin.cjs",
     "README.md"
@@ -64,6 +63,7 @@
     "typescript": ">=5"
   },
   "scripts": {
-    "build": "../../node_modules/.bin/rollup --config rollup.config.mjs"
+    "build": "../../node_modules/.bin/rollup --config rollup.config.mjs",
+    "prepack": "yarn build"
   }
 }

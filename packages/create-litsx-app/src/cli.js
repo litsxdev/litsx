@@ -1,10 +1,8 @@
-#!/usr/bin/env node
-
 import {
   createNextStepCommands,
   createProject,
   inferPackageManager,
-} from "../src/index.js";
+} from "./index.js";
 
 const args = process.argv.slice(2);
 const helpRequested = args.includes("--help") || args.includes("-h");

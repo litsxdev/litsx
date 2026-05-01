@@ -1,5 +1,10 @@
 # `vscode-litsx`
 
+[![VS Code](https://img.shields.io/badge/distribution-VS%20Code%20Marketplace-0078d7)](../../RELEASING.md)
+[![Release](https://img.shields.io/badge/release-manual-6e7781)](../../RELEASING.md)
+[![Package](https://img.shields.io/badge/package-vsix-0078d7)](./package.json)
+[![Attestation](https://img.shields.io/badge/vsix_attestation-enabled-2ea44f)](../../RELEASING.md)
+
 Official VS Code support for LitSX-authored source.
 
 This extension focuses on the editor layer that TypeScript plugins do not cover

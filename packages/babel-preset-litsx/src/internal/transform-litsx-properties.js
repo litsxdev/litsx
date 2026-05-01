@@ -4,7 +4,7 @@ import {
   getOrCreateStandaloneTsSession,
   normalizeFilePath,
   dirname,
-} from "../../../shared/typescript-session/src/index.js";
+} from "../../../typescript-session/src/index.js";
 
 let ts;
 let t;

@@ -163,9 +163,9 @@ function createSharedPlugins() {
   ];
 }
 
-function createMinifyPlugin() {
+function createMinifyPlugin(module = true) {
   return terser({
-    module: true,
+    module,
     compress: {
       passes: 2,
     },
@@ -179,12 +179,20 @@ const runtimeConfig = {
   input: {
     "playground-runtime": path.join(configDir, "src/playground-runtime.js"),
   },
-  output: {
-    dir: distDir,
-    format: "es",
-    entryFileNames: "[name].js",
-    inlineDynamicImports: true,
-  },
+  output: [
+    {
+      dir: distDir,
+      format: "es",
+      entryFileNames: "[name].js",
+      inlineDynamicImports: true,
+    },
+    {
+      dir: distDir,
+      format: "cjs",
+      entryFileNames: "[name].cjs",
+      inlineDynamicImports: true,
+    },
+  ],
   external: ["lit"],
   plugins: [
     ...createSharedPlugins(),
@@ -197,12 +205,20 @@ const packageConfig = {
     index: path.join(configDir, "src/index.js"),
     "litsx-playground.worker": path.join(configDir, "src/litsx-playground.worker.js"),
   },
-  output: {
-    dir: distDir,
-    format: "es",
-    entryFileNames: "[name].js",
-    chunkFileNames: "chunks/[name]-[hash].js",
-  },
+  output: [
+    {
+      dir: distDir,
+      format: "es",
+      entryFileNames: "[name].js",
+      chunkFileNames: "chunks/[name]-[hash].js",
+    },
+    {
+      dir: distDir,
+      format: "cjs",
+      entryFileNames: "[name].cjs",
+      chunkFileNames: "chunks/[name]-[hash].cjs",
+    },
+  ],
   external: ["lit"],
   plugins: [
     ...createSharedPlugins(),
@@ -234,7 +250,7 @@ const packageConfig = {
     }),
     inlinePlaygroundRuntimeSource(),
     copyPreviewRuntimeModules(),
-    createMinifyPlugin(),
+    createMinifyPlugin(false),
   ],
 };
 

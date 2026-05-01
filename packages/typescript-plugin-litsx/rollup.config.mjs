@@ -62,4 +62,14 @@ export default [
       sourcemap: true,
     },
   },
+  {
+    input: "src/litsx-tsc.js",
+    external,
+    plugins,
+    output: {
+      file: "dist/litsx-tsc.js",
+      format: "esm",
+      banner: "#!/usr/bin/env node",
+    },
+  },
 ];

@@ -8,7 +8,7 @@ import { createLitsxTypecheckSession } from "../../typescript-plugin-litsx/src/t
 import {
   createStandaloneTsSession,
   normalizeFilePath,
-} from "../../shared/typescript-session/src/index.js";
+} from "../../typescript-session/src/index.js";
 import {
   patchLitAttributeSourcemap,
 } from "../../babel-plugin-transform-jsx-html-template/src/index.js";

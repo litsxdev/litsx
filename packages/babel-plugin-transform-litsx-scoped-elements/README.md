@@ -1,5 +1,10 @@
 # @litsx/babel-plugin-transform-litsx-scoped-elements
 
+[![npm](https://img.shields.io/badge/npm-@litsx%2Fbabel--plugin--transform--litsx--scoped--elements-CB3837)](https://www.npmjs.com/package/@litsx/babel-plugin-transform-litsx-scoped-elements)
+[![Release](https://img.shields.io/badge/release-public-2ea44f)](../../RELEASING.md)
+[![Module](https://img.shields.io/badge/module-ESM%20%2B%20CJS-0366d6)](./package.json)
+[![Provenance](https://img.shields.io/badge/npm_provenance-enabled-2ea44f)](../../RELEASING.md)
+
 Automatically wires the Lit<sup>sx</sup> element mixins for LitElement classes so components can use locally registered custom elements through a shared `static elements` contract in both shadow DOM and light DOM paths.
 
 ## What it does

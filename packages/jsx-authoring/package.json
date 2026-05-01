@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "description": "Shared authored JSX language utilities for Lit sx",
   "author": "LitX Team",
-  "homepage": "https://github.com/litsx/litsx/tree/main/packages/jsx-authoring",
+  "homepage": "https://github.com/litsxdev/litsx/tree/main/packages/jsx-authoring",
   "bugs": {
-    "url": "https://github.com/litsx/litsx/issues"
+    "url": "https://github.com/litsxdev/litsx/issues"
   },
   "license": "Apache-2.0",
   "publishConfig": {
@@ -13,22 +13,32 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/litsx/litsx.git",
+    "url": "https://github.com/litsxdev/litsx.git",
     "directory": "packages/jsx-authoring"
   },
   "type": "module",
-  "main": "./src/index.js",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
   "exports": {
-    ".": "./src/index.js",
-    "./parser": "./src/parser.js"
+    ".": {
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./parser": {
+      "import": "./dist/parser.js",
+      "require": "./dist/parser.cjs"
+    }
   },
   "dependencies": {
     "magic-string": "^0.30.21"
   },
   "files": [
-    "src"
+    "dist",
+    "src",
+    "README.md"
   ],
   "scripts": {
-    "build": "node -e 'process.exit(0)'"
+    "build": "../../node_modules/.bin/rollup --config rollup.config.mjs",
+    "prepack": "yarn build"
   }
 }

@@ -1,0 +1,39 @@
+{
+  "name": "@litsx/typescript-session",
+  "version": "0.1.0",
+  "description": "Shared TypeScript session utilities for LitSX compiler and tooling",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md"
+  ],
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/litsxdev/litsx/tree/main/packages/typescript-session",
+  "bugs": {
+    "url": "https://github.com/litsxdev/litsx/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/litsxdev/litsx.git",
+    "directory": "packages/typescript-session"
+  },
+  "peerDependencies": {
+    "typescript": ">=5"
+  },
+  "scripts": {
+    "build": "../../node_modules/.bin/rollup --config rollup.config.mjs",
+    "prepack": "yarn build"
+  }
+}

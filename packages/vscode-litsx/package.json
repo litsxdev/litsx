@@ -30,9 +30,17 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/litsx/litsx.git",
+    "url": "https://github.com/litsxdev/litsx.git",
     "directory": "packages/vscode-litsx"
   },
+  "files": [
+    "dist",
+    "syntaxes",
+    "icon.png",
+    "LICENSE",
+    "README.md",
+    "package.json"
+  ],
   "scripts": {
     "build": "node ./scripts/build-grammars.mjs && ../../node_modules/.bin/rollup --config rollup.config.mjs",
     "package:vsix": "yarn build && npx @vscode/vsce package --out dist/vscode-litsx.vsix",
@@ -47,9 +55,9 @@
     "onCommand:litsx.resetCurrentFileLanguageMode",
     "onCommand:litsx.dumpCurrentFileDiagnostics"
   ],
-  "homepage": "https://github.com/litsx/litsx/tree/main/packages/vscode-litsx",
+  "homepage": "https://github.com/litsxdev/litsx/tree/main/packages/vscode-litsx",
   "bugs": {
-    "url": "https://github.com/litsx/litsx/issues"
+    "url": "https://github.com/litsxdev/litsx/issues"
   },
   "contributes": {
     "commands": [

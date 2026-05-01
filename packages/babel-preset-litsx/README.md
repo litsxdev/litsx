@@ -1,5 +1,10 @@
 # `@litsx/babel-preset-litsx`
 
+[![npm](https://img.shields.io/badge/npm-@litsx%2Fbabel--preset--litsx-CB3837)](https://www.npmjs.com/package/@litsx/babel-preset-litsx)
+[![Release](https://img.shields.io/badge/release-public-2ea44f)](../../RELEASING.md)
+[![Module](https://img.shields.io/badge/module-ESM%20%2B%20CJS-0366d6)](./package.json)
+[![Provenance](https://img.shields.io/badge/npm_provenance-enabled-2ea44f)](../../RELEASING.md)
+
 Canonical native Babel preset for LitSX-authored source.
 
 Use this preset when you want the supported LitSX Babel pipeline directly, without going through `@litsx/compiler`.

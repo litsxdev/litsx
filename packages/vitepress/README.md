@@ -1,5 +1,9 @@
 # `@litsx/vitepress`
 
+[![Workspace](https://img.shields.io/badge/workspace-internal-6e7781)](../../README.md)
+[![Release](https://img.shields.io/badge/release-private-6e7781)](../../RELEASING.md)
+[![Audience](https://img.shields.io/badge/audience-website-8250df)](../../README.md)
+
 Internal VitePress integration for the LitSX website.
 
 This package owns the website-specific VitePress setup:

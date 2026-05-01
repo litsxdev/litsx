@@ -16,7 +16,7 @@ const { theme } = useData();
 
 const githubLink = computed(() =>
   (theme.value.socialLinks || []).find((link) => link.icon === "github")?.link ||
-  "https://github.com/litsx/litsx",
+  "https://github.com/litsxdev/litsx",
 );
 </script>
 

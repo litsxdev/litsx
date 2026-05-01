@@ -3,30 +3,36 @@
   "version": "0.1.0",
   "description": "Contextual light DOM registry runtime for LitSX element delegation",
   "type": "module",
-  "main": "./src/index.js",
-  "module": "./src/index.js",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
   "exports": {
     ".": {
-      "import": "./src/index.js",
-      "default": "./src/index.js"
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs",
+      "default": "./dist/index.js"
     }
   },
   "files": [
+    "dist",
     "src",
     "NOTICE",
     "README.md"
   ],
+  "scripts": {
+    "build": "../../node_modules/.bin/rollup --config rollup.config.mjs",
+    "prepack": "yarn build"
+  },
   "license": "Apache-2.0",
-  "homepage": "https://github.com/litsx/litsx/tree/main/packages/light-dom-registry",
+  "homepage": "https://github.com/litsxdev/litsx/tree/main/packages/light-dom-registry",
   "bugs": {
-    "url": "https://github.com/litsx/litsx/issues"
+    "url": "https://github.com/litsxdev/litsx/issues"
   },
   "publishConfig": {
     "access": "public"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/litsx/litsx.git",
+    "url": "https://github.com/litsxdev/litsx.git",
     "directory": "packages/light-dom-registry"
   }
 }

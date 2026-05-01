@@ -1,5 +1,10 @@
 # @litsx/babel-plugin-litsx-proptypes
 
+[![npm](https://img.shields.io/badge/npm-@litsx%2Fbabel--plugin--litsx--proptypes-CB3837)](https://www.npmjs.com/package/@litsx/babel-plugin-litsx-proptypes)
+[![Release](https://img.shields.io/badge/release-public-2ea44f)](../../RELEASING.md)
+[![Module](https://img.shields.io/badge/module-ESM%20%2B%20CJS-0366d6)](./package.json)
+[![Provenance](https://img.shields.io/badge/npm_provenance-enabled-2ea44f)](../../RELEASING.md)
+
 React `propTypes` compatibility for Lit<sup>SX</sup>.
 
 This plugin is no longer part of native LitSX authoring. Its job is to take React-style `Component.propTypes = { ... }` assignments and lower them into native LitSX `^properties(...)` hoists so the rest of the LitSX pipeline can handle them normally.

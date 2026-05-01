@@ -1,17 +1,20 @@
 {
   "name": "@litsx/playground",
+  "private": true,
   "version": "0.1.0",
   "description": "Litsx playground component, preview runtime wiring, and worker integration",
   "type": "module",
-  "main": "./dist/index.js",
+  "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "exports": {
     ".": {
       "import": "./dist/index.js",
+      "require": "./dist/index.cjs",
       "default": "./dist/index.js"
     },
     "./playground-runtime": {
       "import": "./dist/playground-runtime.js",
+      "require": "./dist/playground-runtime.cjs",
       "default": "./dist/playground-runtime.js"
     },
     "./worker": {
@@ -25,16 +28,13 @@
     "README.md"
   ],
   "license": "Apache-2.0",
-  "homepage": "https://github.com/litsx/litsx/tree/main/packages/litsx-playground",
+  "homepage": "https://github.com/litsxdev/litsx/tree/main/packages/litsx-playground",
   "bugs": {
-    "url": "https://github.com/litsx/litsx/issues"
-  },
-  "publishConfig": {
-    "access": "public"
+    "url": "https://github.com/litsxdev/litsx/issues"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/litsx/litsx.git",
+    "url": "https://github.com/litsxdev/litsx.git",
     "directory": "packages/litsx-playground"
   },
   "scripts": {

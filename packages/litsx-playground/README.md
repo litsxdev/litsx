@@ -1,8 +1,14 @@
 # @litsx/playground
 
-Playground package for Lit<sup>sx</sup> examples, docs, and embeddable demos.
+[![Workspace](https://img.shields.io/badge/workspace-internal-6e7781)](../../README.md)
+[![Release](https://img.shields.io/badge/release-private-6e7781)](../../RELEASING.md)
+[![Audience](https://img.shields.io/badge/audience-docs%20%26%20demos-8250df)](../../README.md)
+
+Internal playground package for Lit<sup>sx</sup> examples, docs, and embeddable demos.
 
 It bundles the playground custom element, the preview runtime used inside the iframe, and the compilation worker used by the editor.
+
+This package is currently repo-internal and is **not** part of the public npm release set.
 
 ## What It Exports
 
@@ -12,14 +18,6 @@ It bundles the playground custom element, the preview runtime used inside the if
   Preview runtime entry consumed by the iframe import map.
 - `@litsx/playground/worker`
   Module worker entry used to compile authored playground source.
-
-## Installation
-
-```bash
-yarn add @litsx/playground litsx lit
-```
-
-`lit` and `litsx` are kept external by the package build and must be available in the host app.
 
 ## Usage
 

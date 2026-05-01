@@ -1,5 +1,10 @@
 # `@litsx/jsx-authoring`
 
+[![npm](https://img.shields.io/badge/npm-@litsx%2Fjsx--authoring-CB3837)](https://www.npmjs.com/package/@litsx/jsx-authoring)
+[![Release](https://img.shields.io/badge/release-public-2ea44f)](../../RELEASING.md)
+[![Module](https://img.shields.io/badge/module-ESM%20%2B%20CJS-0366d6)](./package.json)
+[![Provenance](https://img.shields.io/badge/npm_provenance-enabled-2ea44f)](../../RELEASING.md)
+
 Shared authored-JSX language utilities for LitSX.
 
 This package is the source of truth for the authored syntax layer reused across:

@@ -22,7 +22,7 @@ import {
   injectCustomHookHostArguments,
   finalizeReactUseStateImports,
   isReactEventAttribute,
-} from "../packages/shared/babel-plugin-shared-hooks/src/index.js";
+} from "../packages/babel-plugin-shared-hooks/src/index.js";
 import { describe, it } from "vitest";
 
 const { transformFromAstSync, types: t } = babelCore;

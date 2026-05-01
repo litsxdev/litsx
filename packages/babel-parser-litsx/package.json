@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "description": "Babel parser adapter for Litsx-authored JSX",
   "author": "LitX Team",
-  "homepage": "https://github.com/litsx/litsx/tree/main/packages/babel-parser-litsx",
+  "homepage": "https://github.com/litsxdev/litsx/tree/main/packages/babel-parser-litsx",
   "bugs": {
-    "url": "https://github.com/litsx/litsx/issues"
+    "url": "https://github.com/litsxdev/litsx/issues"
   },
   "license": "Apache-2.0",
   "publishConfig": {
@@ -21,18 +21,21 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/litsx/litsx.git",
+    "url": "https://github.com/litsxdev/litsx.git",
     "directory": "packages/babel-parser-litsx"
   },
-  "main": "./src/index.mjs",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
   "exports": {
-    ".": "./src/index.mjs",
-    "./bin/*": "./bin/*"
+    ".": {
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
   },
   "types": "./typings/babel-parser.d.ts",
   "files": [
-    "bin",
-    "src",
+    "dist",
+    "README.md",
     "typings/babel-parser.d.ts"
   ],
   "engines": {
@@ -52,9 +55,10 @@
     "@babel/helper-validator-identifier": "^7.25.9",
     "charcodes": "^0.2.0"
   },
-  "bin": "./bin/babel-parser.mjs",
+  "bin": "./dist/babel-parser.mjs",
   "type": "module",
   "scripts": {
-    "build": "node -e 'process.exit(0)'"
+    "build": "../../node_modules/.bin/rollup --config rollup.config.mjs",
+    "prepack": "yarn build"
   }
 }

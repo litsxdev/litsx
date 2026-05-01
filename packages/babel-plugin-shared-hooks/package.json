@@ -3,12 +3,18 @@
   "version": "0.1.0",
   "description": "Shared hook transform utilities used by the Litsx Babel plugin family",
   "type": "module",
-  "main": "./src/index.js",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
   "exports": {
-    ".": "./src/index.js"
+    ".": {
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
   },
   "files": [
-    "src"
+    "dist",
+    "src",
+    "README.md"
   ],
   "keywords": [
     "babel-plugin",
@@ -17,17 +23,17 @@
     "hooks"
   ],
   "license": "Apache-2.0",
-  "homepage": "https://github.com/litsx/litsx/tree/main/packages/shared/babel-plugin-shared-hooks",
+  "homepage": "https://github.com/litsxdev/litsx/tree/main/packages/babel-plugin-shared-hooks",
   "bugs": {
-    "url": "https://github.com/litsx/litsx/issues"
+    "url": "https://github.com/litsxdev/litsx/issues"
   },
   "publishConfig": {
     "access": "public"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/litsx/litsx.git",
-    "directory": "packages/shared/babel-plugin-shared-hooks"
+    "url": "https://github.com/litsxdev/litsx.git",
+    "directory": "packages/babel-plugin-shared-hooks"
   },
   "peerDependencies": {
     "@babel/core": ">=7"
@@ -39,6 +45,7 @@
     "@babel/core": "^7.26.5"
   },
   "scripts": {
-    "build": "node -e 'process.exit(0)'"
+    "build": "../../node_modules/.bin/rollup --config rollup.config.mjs",
+    "prepack": "yarn build"
   }
 }

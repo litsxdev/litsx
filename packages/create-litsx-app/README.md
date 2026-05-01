@@ -1,5 +1,10 @@
 # `create-litsx-app`
 
+[![npm](https://img.shields.io/badge/npm-create--litsx--app-CB3837)](https://www.npmjs.com/package/create-litsx-app)
+[![Release](https://img.shields.io/badge/release-public-2ea44f)](../../RELEASING.md)
+[![CLI](https://img.shields.io/badge/entrypoint-CLI-8250df)](./package.json)
+[![Provenance](https://img.shields.io/badge/npm_provenance-enabled-2ea44f)](../../RELEASING.md)
+
 Scaffold a new LitSX project with the recommended editor, type-checking, and Vite build setup.
 
 Generated projects come preconfigured for authored LitSX syntax such as:

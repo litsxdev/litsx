@@ -3,19 +3,25 @@
   "version": "0.1.0",
   "description": "Build-facing LitSX compilation facade with correct parser and sourcemap handling",
   "type": "module",
-  "main": "./src/index.js",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
   "types": "./src/index.d.ts",
   "exports": {
     ".": {
       "types": "./src/index.d.ts",
-      "default": "./src/index.js"
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs",
+      "default": "./dist/index.js"
     },
     "./authored-input": {
       "types": "./src/authored-input.d.ts",
-      "default": "./src/authored-input.js"
+      "import": "./dist/authored-input.js",
+      "require": "./dist/authored-input.cjs",
+      "default": "./dist/authored-input.js"
     }
   },
   "files": [
+    "dist",
     "src",
     "README.md"
   ],
@@ -27,16 +33,16 @@
     "jsx"
   ],
   "license": "Apache-2.0",
-  "homepage": "https://github.com/litsx/litsx/tree/main/packages/compiler",
+  "homepage": "https://github.com/litsxdev/litsx/tree/main/packages/compiler",
   "bugs": {
-    "url": "https://github.com/litsx/litsx/issues"
+    "url": "https://github.com/litsxdev/litsx/issues"
   },
   "publishConfig": {
     "access": "public"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/litsx/litsx.git",
+    "url": "https://github.com/litsxdev/litsx.git",
     "directory": "packages/compiler"
   },
   "dependencies": {
@@ -48,6 +54,7 @@
     "@litsx/typescript-session": "workspace:^"
   },
   "scripts": {
-    "build": "node -e 'process.exit(0)'"
+    "build": "../../node_modules/.bin/rollup --config rollup.config.mjs",
+    "prepack": "yarn build"
   }
 }

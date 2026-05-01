@@ -1,7 +1,7 @@
 import { fileURLToPath } from "url";
 import path from "path";
 import ts from "typescript";
-import { getOrCreateProjectTsSession } from "../../shared/typescript-session/src/index.js";
+import { getOrCreateProjectTsSession } from "../../typescript-session/src/index.js";
 
 import {
   createToolingVirtualLitsxSource,
