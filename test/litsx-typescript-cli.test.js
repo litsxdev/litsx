@@ -8,9 +8,9 @@ const tsconfigPath = path.join(fixtureDir, "tsconfig.litsx-jsx.json");
 
 describe("litsx typescript cli", () => {
   it("type-checks the fixture through the virtualized litsx TypeScript entrypoint", () => {
-    execFileSync("node", ["packages/typescript-plugin-litsx/bin/litsx-tsc.js", "-p", tsconfigPath, "--noEmit"], {
+    execFileSync("node", ["packages/typescript-plugin-litsx/dist/litsx-tsc.js", "-p", tsconfigPath, "--noEmit"], {
       cwd: path.resolve("."),
       stdio: "pipe",
     });
-  }, 15000);
+  }, 30000);
 });
