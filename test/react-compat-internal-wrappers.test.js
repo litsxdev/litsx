@@ -152,4 +152,45 @@ describe("react compat internal wrappers", () => {
     assert.strictEqual(getReactWrapperMetadata(memoFactory), null);
     assert.strictEqual(getReactWrapperMetadata(factoryCall), null);
   });
+
+  it("returns null for wrappers that are not imported from React or use unsupported member syntax", () => {
+    const calls = getCallExpressions(`
+      import { memo as preactMemo } from "preact/compat";
+      import React from "react";
+      import * as Preact from "preact/compat";
+
+      const One = preactMemo(function One(props) {
+        return <div>{props.title}</div>;
+      });
+
+      const Two = React["memo"](function Two(props) {
+        return <div>{props.title}</div>;
+      });
+
+      const Three = Preact.memo(function Three(props) {
+        return <div>{props.title}</div>;
+      });
+    `);
+
+    const [preactMemoCall, computedMemberCall, preactNamespaceCall] = calls;
+
+    assert.strictEqual(getReactWrapperMetadata(preactMemoCall), null);
+    assert.strictEqual(getReactWrapperMetadata(computedMemberCall), null);
+    assert.strictEqual(getReactWrapperMetadata(preactNamespaceCall), null);
+  });
+
+  it("returns null for helper calls without component arguments", () => {
+    const [memoCall, reactMemoCall, forwardCall, reactForwardCall] = getCallExpressions(`
+      import React, { memo, forwardRef } from "react";
+      const One = memo();
+      const Two = React.memo();
+      const Three = forwardRef();
+      const Four = React.forwardRef();
+    `);
+
+    assert.strictEqual(getReactWrapperMetadata(memoCall), null);
+    assert.strictEqual(getReactWrapperMetadata(reactMemoCall), null);
+    assert.strictEqual(getReactWrapperMetadata(forwardCall), null);
+    assert.strictEqual(getReactWrapperMetadata(reactForwardCall), null);
+  });
 });

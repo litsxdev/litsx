@@ -46,6 +46,9 @@ export default declare((api) => {
       return t.booleanLiteral(true);
     }
     if (t.isJSXExpressionContainer(value)) {
+      if (!value.expression || t.isJSXEmptyExpression(value.expression)) {
+        return t.booleanLiteral(true);
+      }
       return t.cloneNode(value.expression, true);
     }
     if (t.isStringLiteral(value) || t.isNumericLiteral(value)) {
@@ -59,12 +62,18 @@ export default declare((api) => {
       if (t.isJSXText(child)) {
         return child.value.replace(/\s+/g, "").length > 0;
       }
-      return !(t.isJSXExpressionContainer(child) && child.expression == null);
+      return !(
+        t.isJSXExpressionContainer(child) &&
+        (child.expression == null || t.isJSXEmptyExpression(child.expression))
+      );
     });
   }
 
   function cloneChild(child) {
-    if (t.isJSXExpressionContainer(child) && child.expression == null) {
+    if (
+      t.isJSXExpressionContainer(child) &&
+      (child.expression == null || t.isJSXEmptyExpression(child.expression))
+    ) {
       return null;
     }
     return t.cloneNode(child, true);

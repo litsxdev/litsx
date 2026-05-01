@@ -38,34 +38,43 @@ export default declare((api) => {
     );
   }
 
-  function attributeValueToExpression(value) {
-    if (!value) {
+function attributeValueToExpression(value) {
+  if (!value) {
+    return t.booleanLiteral(true);
+  }
+  if (t.isJSXExpressionContainer(value)) {
+    if (!value.expression || t.isJSXEmptyExpression(value.expression)) {
       return t.booleanLiteral(true);
     }
-    if (t.isJSXExpressionContainer(value)) {
-      return t.cloneNode(value.expression, true);
-    }
-    if (t.isStringLiteral(value) || t.isNumericLiteral(value)) {
-      return t.cloneNode(value, true);
-    }
+    return t.cloneNode(value.expression, true);
+  }
+  if (t.isStringLiteral(value) || t.isNumericLiteral(value)) {
+    return t.cloneNode(value, true);
+  }
     return t.cloneNode(value, true);
   }
 
-  function filterChildren(children) {
-    return children.filter((child) => {
-      if (t.isJSXText(child)) {
-        return child.value.replace(/\s+/g, "").length > 0;
-      }
-      return !(t.isJSXExpressionContainer(child) && child.expression == null);
-    });
-  }
-
-  function cloneChild(child) {
-    if (t.isJSXExpressionContainer(child) && child.expression == null) {
-      return null;
+function filterChildren(children) {
+  return children.filter((child) => {
+    if (t.isJSXText(child)) {
+      return child.value.replace(/\s+/g, "").length > 0;
     }
-    return t.cloneNode(child, true);
+    return !(
+      t.isJSXExpressionContainer(child) &&
+      (child.expression == null || t.isJSXEmptyExpression(child.expression))
+    );
+  });
+}
+
+function cloneChild(child) {
+  if (
+    t.isJSXExpressionContainer(child) &&
+    (child.expression == null || t.isJSXEmptyExpression(child.expression))
+  ) {
+    return null;
   }
+  return t.cloneNode(child, true);
+}
 
   function buildChildrenExpression(children) {
     const filtered = filterChildren(children).map(cloneChild).filter(Boolean);

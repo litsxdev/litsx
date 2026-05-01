@@ -73,6 +73,21 @@ describe("react compat internal events", () => {
     assert.match(code, /@click=\{true\}/);
   });
 
+  it("treats empty JSX event expressions as boolean true", () => {
+    const source = `const view = <button onClick={value}></button>`;
+    const ast = parser.parse(source, { sourceType: "module" });
+    const attrValue = ast.program.body[0].declarations[0].init.openingElement.attributes[0].value;
+    attrValue.expression = { type: "JSXEmptyExpression" };
+
+    const { code } = transformFromAstSync(ast, source, {
+      configFile: false,
+      babelrc: false,
+      plugins: [plugin],
+    });
+
+    assert.match(code, /@click=\{true\}/);
+  });
+
   it("rewrites aliased DOM event names that need compatibility remapping", () => {
     const source = `const view = <button onDoubleClick={onDbl} onBlur={onBlur}></button>;`;
     const ast = parser.parse(source, { sourceType: "module" });
@@ -157,6 +172,20 @@ describe("react compat internal events", () => {
     assert.match(stringCode, /@click=\{"tap"\}/);
   });
 
+  it("leaves lowercase DOM-style listener attributes untouched", () => {
+    const source = `const view = <button onclick={handleClick}></button>;`;
+    const ast = parser.parse(source, { sourceType: "module" });
+
+    const { code } = transformFromAstSync(ast, source, {
+      configFile: false,
+      babelrc: false,
+      plugins: [plugin],
+    });
+
+    assert.match(code, /onclick=\{handleClick\}/);
+    assert.doesNotMatch(code, /@click/);
+  });
+
   it("keeps alias candidates untouched when lowercase normalization is disabled", () => {
     const source = `const view = <button onDoubleClick={handler}></button>;`;
     const ast = parser.parse(source, { sourceType: "module" });
@@ -230,5 +259,21 @@ describe("react compat internal events", () => {
 
     assert.match(code, /svg:onClick=\{handler\}/);
     assert.doesNotMatch(code, /@click/);
+  });
+
+  it("preserves existing object listeners when adding capture metadata", () => {
+    const source = `const view = <button onBlurCapture={{ handleEvent: handler, passive: true }}></button>;`;
+    const ast = parser.parse(source, { sourceType: "module" });
+
+    const { code } = transformFromAstSync(ast, source, {
+      configFile: false,
+      babelrc: false,
+      plugins: [plugin],
+    });
+
+    assert.match(
+      code,
+      /@focusout=\{\{\s*handleEvent: handler,\s*passive: true,\s*capture: true\s*\}\}/
+    );
   });
 });

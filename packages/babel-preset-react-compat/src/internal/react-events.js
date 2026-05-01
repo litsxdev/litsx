@@ -28,7 +28,7 @@ function resolveEventDescriptor(name, opts) {
   }
 
   return {
-    name: alias.name || normalized,
+    name: alias.name,
     capture: Boolean(alias.capture),
   };
 }
@@ -76,10 +76,6 @@ function extractExpression(value, t) {
       return t.booleanLiteral(true);
     }
     return t.cloneNode(expression, true);
-  }
-
-  if (t.isStringLiteral(value)) {
-    return t.stringLiteral(value.value);
   }
 
   return t.cloneNode(value, true);
@@ -169,9 +165,7 @@ export default declare((api, options) => {
         });
       },
       TaggedTemplateExpression(path) {
-        const { node } = path;
-        if (!t.isTemplateLiteral(node.quasi)) return;
-        transformTemplateLiteral(node.quasi, options || {}, t);
+        transformTemplateLiteral(path.node.quasi, options || {}, t);
       },
     },
   };

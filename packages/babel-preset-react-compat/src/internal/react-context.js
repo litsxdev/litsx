@@ -140,7 +140,10 @@ function getRenderFunctionFromConsumer(path, t) {
       return child.value.trim() !== "";
     }
 
-    if (t.isJSXExpressionContainer(child) && child.expression == null) {
+    if (
+      t.isJSXExpressionContainer(child) &&
+      (child.expression == null || t.isJSXEmptyExpression(child.expression))
+    ) {
       return false;
     }
 

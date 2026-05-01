@@ -137,6 +137,30 @@ describe("react compat internal dom attributes", () => {
     assert.match(code, /<textarea onInput=\{handleEdit\} \/>/);
   });
 
+  it("leaves member and namespaced tags untouched while still rewriting native siblings", () => {
+    const source = `
+      const view = (
+        <>
+          <UI.Input htmlFor="search" onChange={handlePanelChange} value={query} />
+          <svg:foreignObject htmlFor="shape" />
+          <input type={"radio"} onChange={handleToggle} />
+        </>
+      );
+    `;
+    const ast = parser.parse(source, { sourceType: "module", plugins: ["jsx"] });
+
+    const { code } = transformFromAstSync(ast, source, {
+      configFile: false,
+      babelrc: false,
+      plugins: [plugin],
+    });
+
+    assert.match(code, /<UI\.Input htmlFor="search" onChange=\{handlePanelChange\} value=\{query\} \/>/);
+    assert.match(code, /<svg:foreignObject htmlFor="shape" \/>/);
+    assert.match(code, /<input type=\{"radio"\} onChange=\{handleToggle\} \/>/);
+    assert.doesNotMatch(code, /onInput=\{handleToggle\}/);
+  });
+
   it("covers default value and checked edge cases in JSX", () => {
     const source = `
       const view = (
@@ -163,6 +187,34 @@ describe("react compat internal dom attributes", () => {
     assert.doesNotMatch(code, /defaultChecked=\{initiallyChecked\}/);
   });
 
+  it("keeps change handlers on checked inputs and unsupported defaultValue targets", () => {
+    const source = `
+      const view = (
+        <>
+          <input defaultChecked={initiallyChecked} onChange={handleToggle} />
+          <input ?checked={checked} onChange={handleCheckedToggle} />
+          <input type="FILE" onChange={handleUpload} />
+          <section defaultValue={fallback} />
+        </>
+      );
+    `;
+    const ast = parser.parse(source, { sourceType: "module", plugins: ["jsx"] });
+
+    const { code } = transformFromAstSync(ast, source, {
+      configFile: false,
+      babelrc: false,
+      plugins: [plugin],
+    });
+
+    assert.match(code, /\?checked=\{initiallyChecked\} onChange=\{handleToggle\}/);
+    assert.match(code, /<input \?checked=\{checked\} onChange=\{handleCheckedToggle\} \/>/);
+    assert.match(code, /<input type="FILE" onChange=\{handleUpload\} \/>/);
+    assert.match(code, /<section defaultValue=\{fallback\} \/>/);
+    assert.doesNotMatch(code, /onInput=\{handleToggle\}/);
+    assert.doesNotMatch(code, /onInput=\{handleCheckedToggle\}/);
+    assert.doesNotMatch(code, /onInput=\{handleUpload\}/);
+  });
+
   it("rewrites template literals for additional native DOM semantics", () => {
     const source = `
       const views = [
@@ -184,5 +236,46 @@ describe("react compat internal dom attributes", () => {
     assert.match(code, /<input type="\$\{"checkbox"\}" \?checked=\$\{checked\} onChange="\$\{handleToggle\}">/);
     assert.match(code, /<option \?selected=\$\{active\}>A<\/option>/);
     assert.match(code, /<input \.value="\$\{fallback\}">/);
+  });
+
+  it("handles template literals with pre-closed tags and unsupported checked/defaultValue targets", () => {
+    const source = `
+      const views = [
+        html\`<div></div>\${suffix}\`,
+        <section defaultValue={fallback} />,
+        <div checked={value}></div>
+      ];
+    `;
+    const ast = parser.parse(source, { sourceType: "module" });
+
+    const { code } = transformFromAstSync(ast, source, {
+      configFile: false,
+      babelrc: false,
+      plugins: [templatePlugin, plugin],
+    });
+
+    assert.match(code, /<div><\/div>\$\{suffix\}/);
+    assert.match(code, /<section defaultValue="\$\{fallback\}"><\/section>/);
+    assert.match(code, /<div checked="\$\{value\}"><\/div>/);
+  });
+
+  it("keeps template onChange handlers for checked and file inputs", () => {
+    const source = `
+      const views = [
+        <input defaultChecked={checked} onChange={handleToggle} />,
+        <input type={"file"} onChange={handleUpload} />
+      ];
+    `;
+    const ast = parser.parse(source, { sourceType: "module" });
+
+    const { code } = transformFromAstSync(ast, source, {
+      configFile: false,
+      babelrc: false,
+      plugins: [templatePlugin, plugin],
+    });
+
+    assert.match(code, /<input \?checked=\$\{checked\} onChange="\$\{handleToggle\}">/);
+    assert.match(code, /<input type="\$\{"file"\}" onInput="\$\{handleUpload\}">/);
+    assert.doesNotMatch(code, /onInput="\$\{handleToggle\}"/);
   });
 });

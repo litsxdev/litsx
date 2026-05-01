@@ -12,10 +12,6 @@ function stringifyJsxName(nameNode, t) {
     return nameNode.name;
   }
 
-  if (t.isJSXMemberExpression(nameNode) || t.isJSXNamespacedName(nameNode)) {
-    return null;
-  }
-
   return null;
 }
 
@@ -27,7 +23,7 @@ function isNativeTag(openingElement, t) {
 
 function getTagName(openingElement, t) {
   const name = stringifyJsxName(openingElement.name, t);
-  return name ? name.toLowerCase() : null;
+  return name?.toLowerCase() ?? null;
 }
 
 function getRawAttributeName(attrPath) {
@@ -254,7 +250,6 @@ export default declare((api) => {
         transformJsxOpeningElement(path, t);
       },
       TaggedTemplateExpression(path) {
-        if (!t.isTemplateLiteral(path.node.quasi)) return;
         transformTemplateLiteral(path.node.quasi);
       },
     },

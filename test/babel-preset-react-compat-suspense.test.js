@@ -38,6 +38,16 @@ describe("@litsx/babel-preset-react-compat suspense boundaries", () => {
     return result.code;
   }
 
+  function transformAst(ast, source) {
+    const result = transformFromAstSync(ast, source, {
+      configFile: false,
+      babelrc: false,
+      presets: [[reactCompatPreset, { jsxTemplate: false }]],
+      generatorOpts: { decoratorsBeforeExport: true },
+    });
+    return result.code;
+  }
+
   it("rewrites Suspense to a suspense-boundary utility component", () => {
     const source = [
       "import { Suspense } from 'react';",
@@ -215,6 +225,108 @@ describe("@litsx/babel-preset-react-compat suspense boundaries", () => {
     const code = run(source);
 
     assert.match(code, /\.contentRenderer=\{\(\)\s*=>\s*<>\s*<div>alpha<\/div>\s*<div>beta<\/div>\s*<\/>\}/s);
+  });
+
+  it("supports boolean fallbacks and single expression children", () => {
+    const source = [
+      "import { Suspense as Wait } from 'react';",
+      "",
+      "export const Screen = ({ readyView }) => {",
+      "  return <Wait fallback>{readyView}</Wait>;",
+      "};",
+    ].join("\n");
+
+    const code = run(source);
+
+    assert.match(code, /<suspense-boundary/);
+    assert.match(code, /\.fallbackRenderer=\{\(\)\s*=>\s*true\}/);
+    assert.match(code, /\.contentRenderer=\{\(\)\s*=>\s*this\.readyView\}/);
+  });
+
+  it("supports string fallbacks and plain text children", () => {
+    const source = [
+      "import { Suspense } from 'react';",
+      "",
+      "export const Screen = () => {",
+      "  return <Suspense fallback=\"loading\">ready</Suspense>;",
+      "};",
+    ].join("\n");
+
+    const code = run(source);
+
+    assert.match(code, /\.fallbackRenderer=\{\(\)\s*=>\s*\"loading\"\}/);
+    assert.match(code, /\.contentRenderer=\{\(\)\s*=>\s*\"ready\"\}/);
+  });
+
+  it("treats empty fallback expressions as boolean true instead of crashing", () => {
+    const source = [
+      "import { Suspense } from 'react';",
+      "",
+      "export const Screen = () => {",
+      "  return <Suspense fallback={true}><div>ready</div></Suspense>;",
+      "};",
+    ].join("\n");
+    const ast = parser.parse(source, { sourceType: "module" });
+    ast.program.body[1].declaration.declarations[0].init.body.body[0].argument.openingElement.attributes[0].value.expression = {
+      type: "JSXEmptyExpression",
+    };
+
+    const code = transformAst(ast, source);
+
+    assert.match(code, /\.fallbackRenderer=\{\(\)\s*=>\s*true\}/);
+    assert.match(code, /\.contentRenderer=\{\(\)\s*=>\s*<div>ready<\/div>\}/);
+  });
+
+  it("leaves non-React namespace suspense lookalikes untouched", () => {
+    const source = [
+      "import * as UI from 'ui-kit';",
+      "",
+      "export const Screen = () => {",
+      "  return <UI.Suspense fallback=\"loading\"><div>ready</div></UI.Suspense>;",
+      "};",
+    ].join("\n");
+
+    const code = run(source);
+
+    assert.match(code, /<UI\.Suspense fallback="loading"><div>ready<\/div><\/UI\.Suspense>/);
+    assert.doesNotMatch(code, /<suspense-boundary/);
+  });
+
+  it("drops key attributes from suspense lists imported under aliases", () => {
+    const source = [
+      "import { Suspense as Wait, SuspenseList as Queue } from 'react';",
+      "",
+      "export const Screen = () => {",
+      "  return (",
+      "    <Queue key=\"outer\" revealOrder=\"forwards\">",
+      "      <Wait fallback={<span>One</span>}>",
+      "        <div>alpha</div>",
+      "      </Wait>",
+      "    </Queue>",
+      "  );",
+      "};",
+    ].join("\n");
+
+    const code = run(source);
+
+    assert.match(code, /<suspense-list revealOrder=\"forwards\">/);
+    assert.doesNotMatch(code, /key=\"outer\"/);
+    assert.match(code, /<suspense-boundary/);
+  });
+
+  it("renders numeric fallbacks and null content when suspense children are empty comments", () => {
+    const source = [
+      "import { Suspense } from 'react';",
+      "",
+      "export const Screen = () => {",
+      "  return <Suspense fallback={404}>{/* empty */}</Suspense>;",
+      "};",
+    ].join("\n");
+
+    const code = run(source);
+
+    assert.match(code, /\.fallbackRenderer=\{\(\)\s*=>\s*404\}/);
+    assert.match(code, /\.contentRenderer=\{\(\)\s*=>\s*null\}/);
   });
 
   it("moves only matching ensureLazyElement calls into suspense content renderers", () => {

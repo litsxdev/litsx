@@ -126,6 +126,24 @@ describe("react compat internal context", () => {
     assert.throws(() => run(multipleChildren), /requires exactly one function child/);
   });
 
+  it("ignores empty JSX comments around the Consumer function child", () => {
+    const source = [
+      "import { createContext } from 'react';",
+      "const ThemeContext = createContext('light');",
+      "export const Example = () => (",
+      "  <ThemeContext.Consumer>",
+      "    {/* leading */}",
+      "    {value => <span>{value}</span>}",
+      "    {/* trailing */}",
+      "  </ThemeContext.Consumer>",
+      ");",
+    ].join("\n");
+
+    const code = run(source);
+
+    assert.match(code, /renderContext\(this, ThemeContext, value => <span>\{value\}<\/span>\)/);
+  });
+
   it("preserves Provider keys and lowers Consumer to a plain call outside JSX", () => {
     const source = [
       "import { createContext } from '@litsx/react';",

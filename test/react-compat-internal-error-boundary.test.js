@@ -26,6 +26,16 @@ describe("react compat internal error boundary", () => {
     return result.code;
   }
 
+  function runAst(ast, code) {
+    const result = transformFromAstSync(ast, code, {
+      configFile: false,
+      babelrc: false,
+      plugins: [plugin],
+      generatorOpts: { decoratorsBeforeExport: true },
+    });
+    return result.code;
+  }
+
   it("rewrites ErrorBoundary JSX into utility component markup", () => {
     const source = [
       "import { LitElement, html } from 'lit';",
@@ -151,5 +161,49 @@ describe("react compat internal error boundary", () => {
     const code = run(source);
 
     assert.match(code, /<>\s*\{keyed\('route-a',\s*<ErrorBoundary[\s\S]*\.contentRenderer=\{\(\) => null\}[\s\S]*<\/ErrorBoundary>\)\}\s*<\/>/s);
+  });
+
+  it("treats comment-only content as empty boundary content", () => {
+    const source = [
+      "import { ErrorBoundary } from 'react';",
+      "",
+      "export function Example() {",
+      "  return (",
+      "    <ErrorBoundary fallback='Oops'>",
+      "      {/* empty */}",
+      "    </ErrorBoundary>",
+      "  );",
+      "}",
+    ].join("\n");
+
+    const code = run(source);
+
+    assert.match(code, /\.fallbackRenderer=\{\(\) => 'Oops'\}/);
+    assert.match(code, /\.contentRenderer=\{\(\) => null\}/);
+  });
+
+  it("treats empty fallback and onError expressions as boolean true instead of crashing", () => {
+    const source = [
+      "import { ErrorBoundary } from 'react';",
+      "",
+      "export function Example() {",
+      "  return (",
+      "    <ErrorBoundary fallback={true} onError={handleError}>",
+      "      <div>ready</div>",
+      "    </ErrorBoundary>",
+      "  );",
+      "}",
+    ].join("\n");
+    const ast = parser.parse(source, { sourceType: "module" });
+    const attributes =
+      ast.program.body[1].declaration.body.body[0].argument.openingElement.attributes;
+    attributes[0].value.expression = { type: "JSXEmptyExpression" };
+    attributes[1].value.expression = { type: "JSXEmptyExpression" };
+
+    const code = runAst(ast, source);
+
+    assert.match(code, /\.fallbackRenderer=\{\(\) => true\}/);
+    assert.match(code, /\.contentRenderer=\{\(\) => <div>ready<\/div>\}/);
+    assert.match(code, /\.onError=\{true\}/);
   });
 });
