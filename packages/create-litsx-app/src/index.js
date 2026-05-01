@@ -16,15 +16,6 @@ const PUBLISHED_PACKAGE_VERSIONS = {
   "@litsx/vite-plugin": "^0.1.0",
   "prettier-plugin-litsx": "^0.1.0"
 };
-
-const PUBLISHED_PACKAGE_VERSIONS = {
-  "litsx": "^0.1.0",
-  "@litsx/eslint-plugin": "^0.1.0",
-  "@litsx/typescript-plugin": "^0.1.0",
-  "@litsx/vite-plugin": "^0.1.0",
-  "prettier-plugin-litsx": "^0.1.0"
-};
-
 export function inferPackageManager(userAgent = "") {
   if (typeof userAgent !== "string" || userAgent.length === 0) {
     return "npm";
