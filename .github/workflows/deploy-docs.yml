@@ -24,12 +24,21 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: 20
-          cache: yarn
 
       - name: Enable Yarn
         run: |
           corepack enable
           corepack prepare yarn@4.10.3 --activate
+
+      - name: Cache Yarn state
+        uses: actions/cache@v4
+        with:
+          path: |
+            .yarn/install-state.gz
+            .yarn-cache
+          key: ${{ runner.os }}-yarn4-${{ hashFiles('yarn.lock', '.yarnrc.yml', 'package.json') }}
+          restore-keys: |
+            ${{ runner.os }}-yarn4-
 
       - name: Install dependencies
         run: yarn install --frozen-lockfile
