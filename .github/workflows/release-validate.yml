@@ -22,6 +22,7 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: 20
+          package-manager-cache: false
 
       - name: Enable Yarn
         run: |
@@ -29,7 +30,7 @@ jobs:
           corepack prepare yarn@4.10.3 --activate
 
       - name: Cache Yarn state
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             .yarn/install-state.gz
@@ -39,7 +40,7 @@ jobs:
             ${{ runner.os }}-yarn4-
 
       - name: Install dependencies
-        run: yarn install --frozen-lockfile
+        run: yarn install --immutable
 
       - name: Run release validation
         run: |
@@ -57,6 +58,7 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: 20
+          package-manager-cache: false
 
       - name: Enable Yarn
         run: |
@@ -64,7 +66,7 @@ jobs:
           corepack prepare yarn@4.10.3 --activate
 
       - name: Cache Yarn state
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             .yarn/install-state.gz
@@ -74,7 +76,7 @@ jobs:
             ${{ runner.os }}-yarn4-
 
       - name: Install dependencies
-        run: yarn install --frozen-lockfile
+        run: yarn install --immutable
 
       - name: Build npm tarballs
         run: yarn release:artifacts
