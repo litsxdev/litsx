@@ -40,13 +40,13 @@ jobs:
             ${{ runner.os }}-yarn4-
 
       - name: Install dependencies
-        run: yarn install --immutable
+        run: corepack yarn install --immutable
 
       - name: Run release validation
         run: |
-          yarn release:check
-          yarn release:smoke:scaffolds
-          yarn release:test
+          corepack yarn release:check
+          corepack yarn release:smoke:scaffolds
+          corepack yarn release:test
 
   release-artifacts:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -76,16 +76,16 @@ jobs:
             ${{ runner.os }}-yarn4-
 
       - name: Install dependencies
-        run: yarn install --immutable
+        run: corepack yarn install --immutable
 
       - name: Build npm tarballs
-        run: yarn release:artifacts
+        run: corepack yarn release:artifacts
 
       - name: Build VS Code extension
-        run: yarn release:vscode:build
+        run: corepack yarn release:vscode:build
 
       - name: Package VSIX
-        run: yarn release:vscode:package
+        run: corepack yarn release:vscode:package
 
       - name: Upload npm tarballs
         uses: actions/upload-artifact@v4

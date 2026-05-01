@@ -23,7 +23,7 @@ export default defineConfig({
         '**/node_modules/**',
         '**/test/**',
         '**/dist/**',
-        'packages/dx-smoke-app/src/**',
+        'test/fixtures/dx-smoke-app/src/**',
         'packages/vitepress/src/**',
         'packages/litsx-playground/src/LitsxPlayground.tsx',
         'packages/litsx-playground/src/index.js',

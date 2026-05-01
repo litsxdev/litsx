@@ -47,15 +47,15 @@ jobs:
             ${{ runner.os }}-yarn4-
 
       - name: Install dependencies
-        run: yarn install --immutable
+        run: corepack yarn install --immutable
 
       - name: Validate extension release surface
         run: |
-          yarn release:check
-          yarn release:vscode:build
+          corepack yarn release:check
+          corepack yarn release:vscode:build
 
       - name: Package VSIX
-        run: yarn release:vscode:package
+        run: corepack yarn release:vscode:package
 
       - name: Attest VSIX
         uses: actions/attest@v4

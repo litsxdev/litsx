@@ -1,0 +1,26 @@
+{
+  "name": "dx-smoke-app",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "lint": "eslint .",
+    "typecheck": "litsx-tsc -p jsconfig.json --noEmit",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@open-wc/scoped-elements": "^3.0.0",
+    "lit": "^3.2.1",
+    "litsx": "workspace:^"
+  },
+  "devDependencies": {
+    "@litsx/eslint-plugin": "workspace:^",
+    "@litsx/typescript-plugin": "workspace:^",
+    "@litsx/vite-plugin": "workspace:^",
+    "eslint": "^9.0.0",
+    "typescript": "^5.9.3",
+    "vite": "^7.1.0"
+  }
+}

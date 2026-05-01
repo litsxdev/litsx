@@ -37,7 +37,7 @@ Packages outside npm publication do not need changesets:
 
 - `vscode-litsx`
 - `@litsx/vitepress`
-- `dx-smoke-app`
+- `test/fixtures/dx-smoke-app`
 
 Recommended commit style:
 

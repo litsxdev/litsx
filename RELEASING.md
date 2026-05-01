@@ -38,7 +38,10 @@ These stay outside npm publication and are ignored by Changesets:
 - `vscode-litsx`
 - `@litsx/playground`
 - `@litsx/vitepress`
-- `dx-smoke-app`
+
+`test/fixtures/dx-smoke-app` remains in the repository as a fixture for authored-source
+tests, but it is no longer part of the active Yarn workspaces graph or release
+machinery.
 
 ## Contributor workflow
 

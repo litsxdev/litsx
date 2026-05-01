@@ -26,7 +26,6 @@ export const packageDirsByName = new Map([
   ["vscode-litsx", "packages/vscode-litsx"],
   ["@litsx/vitepress", "packages/vitepress"],
   ["@litsx/typescript-session", "packages/typescript-session"],
-  ["dx-smoke-app", "packages/dx-smoke-app"],
 ]);
 
 export function readPackageManifest(packageDir) {

@@ -1,0 +1,14 @@
+:root {
+  --color-bg: #f5efe4;
+  --color-text: #1f2937;
+  --color-panel: #fffaf2;
+  --color-accent: #8c3d1f;
+  --radius-panel: 24px;
+}
+
+body {
+  margin: 0;
+  font-family: "Inter", "Segoe UI", sans-serif;
+  background: linear-gradient(180deg, #fcf8f2 0%, #f1e7d8 100%);
+  color: var(--color-text);
+}

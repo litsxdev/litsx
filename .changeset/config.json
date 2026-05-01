@@ -10,7 +10,6 @@
   "ignore": [
     "vscode-litsx",
     "@litsx/playground",
-    "@litsx/vitepress",
-    "dx-smoke-app"
+    "@litsx/vitepress"
   ]
 }

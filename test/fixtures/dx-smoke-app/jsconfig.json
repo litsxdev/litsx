@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "allowJs": true,
+    "allowImportingTsExtensions": true,
+    "maxNodeModuleJsDepth": 0,
+    "jsx": "react-jsx",
+    "jsxImportSource": "litsx",
+    "checkJs": true,
+    "plugins": [
+      {
+        "name": "@litsx/typescript-plugin"
+      }
+    ]
+  },
+  "include": [
+    "src"
+  ]
+}

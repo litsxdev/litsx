@@ -38,7 +38,7 @@ jobs:
             ${{ runner.os }}-yarn4-
 
       - name: Install dependencies
-        run: yarn install --immutable
+        run: corepack yarn install --immutable
 
       - name: Run test suite
-        run: yarn test
+        run: corepack yarn test

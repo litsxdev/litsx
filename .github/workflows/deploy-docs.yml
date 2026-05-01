@@ -42,13 +42,13 @@ jobs:
             ${{ runner.os }}-yarn4-
 
       - name: Install dependencies
-        run: yarn install --immutable
+        run: corepack yarn install --immutable
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
 
       - name: Build docs
-        run: yarn docs:build
+        run: corepack yarn docs:build
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3

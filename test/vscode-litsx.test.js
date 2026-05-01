@@ -275,7 +275,7 @@ describe("vscode-litsx", () => {
   });
 
   it("keeps diagnostics on the correct authored attribute when multiple bindings are present", async () => {
-    const filePath = path.resolve("packages/dx-smoke-app/src/dx-smoke-app.litsx");
+    const filePath = path.resolve("test/fixtures/dx-smoke-app/src/dx-smoke-app.litsx");
     const sourceText = '<input .valuee={count} @focus={()=>{}} />';
 
     const diagnostics = await computeLitsxProjectDiagnostics(filePath, sourceText, "litsx");
@@ -290,7 +290,7 @@ describe("vscode-litsx", () => {
   }, 15000);
 
   it("reports authored diagnostics on later attributes in the same opening tag", async () => {
-    const filePath = path.resolve("packages/dx-smoke-app/src/dx-smoke-app.litsx");
+    const filePath = path.resolve("test/fixtures/dx-smoke-app/src/dx-smoke-app.litsx");
     const sourceText = '<button @blur={()=>{}} @clcik={() => setCount((v) => v + 1)} />';
 
     const diagnostics = await computeLitsxProjectDiagnostics(filePath, sourceText, "litsx");
