@@ -1,4 +1,8 @@
-src/**
-scripts/**
-rollup.config.mjs
-dist/**/*.map
+**
+!dist/**
+dist/*.vsix
+!syntaxes/**
+!icon.png
+!LICENSE
+!README.md
+!package.json

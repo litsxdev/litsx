@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { excludedPrivatePackages, npmReleasePackages, RELEASE_VERSION, vscodeReleasePackage } from "./release-packages.mjs";
+import { excludedPrivatePackages, npmReleasePackages, vscodeReleasePackage } from "./release-packages.mjs";
 
 const repoRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
 
@@ -42,8 +42,8 @@ function assertCommonManifestFields(packageDir, manifest) {
       fail(`${packageDir} is missing ${field}`);
     }
   }
-  if (manifest.version !== RELEASE_VERSION) {
-    fail(`${packageDir} version is ${manifest.version}, expected ${RELEASE_VERSION}`);
+  if (typeof manifest.version !== "string" || manifest.version.length === 0) {
+    fail(`${packageDir} must declare a non-empty version`);
   }
   if (!manifest.repository?.directory) {
     fail(`${packageDir} repository.directory is missing`);
@@ -62,6 +62,12 @@ function assertFileList(packageDir, manifest) {
     if (!fileExists(path.join(packageDir, entry))) {
       fail(`${packageDir} files entry does not exist: ${entry}`);
     }
+  }
+
+  const hasReadmeOnDisk = fileExists(path.join(packageDir, "README.md"));
+  const filesSet = new Set(manifest.files);
+  if (hasReadmeOnDisk && !filesSet.has("README.md")) {
+    fail(`${packageDir} has a README.md but does not include it in files`);
   }
 }
 
@@ -136,7 +142,7 @@ for (const packageDir of npmReleasePackages) {
 for (const packageDir of excludedPrivatePackages) {
   const manifest = readJson(path.join(packageDir, "package.json"));
   if (manifest.private !== true) {
-    fail(`${packageDir} should remain private for the first public release`);
+    fail(`${packageDir} should remain private and outside npm publication`);
   }
 }
 
@@ -158,13 +164,20 @@ if (vscodeManifest.private === true) {
   fail("packages/vscode-litsx must not remain private");
 }
 assertCommonManifestFields(vscodeReleasePackage, vscodeManifest);
-assertFileList(vscodeReleasePackage, vscodeManifest);
 assertEntrypoints(vscodeReleasePackage, vscodeManifest);
 if (!vscodeManifest.publisher) {
   fail("packages/vscode-litsx is missing publisher");
 }
 if (vscodeManifest.icon && !fileExists(path.join(vscodeReleasePackage, vscodeManifest.icon))) {
   fail(`packages/vscode-litsx icon does not exist: ${vscodeManifest.icon}`);
+}
+for (const requiredFile of ["dist", "syntaxes", "icon.png", "LICENSE", "README.md", "package.json"]) {
+  if (!fileExists(path.join(vscodeReleasePackage, requiredFile))) {
+    fail(`packages/vscode-litsx is missing required packaged file: ${requiredFile}`);
+  }
+}
+if (!fileExists(path.join(vscodeReleasePackage, "LICENSE"))) {
+  fail("packages/vscode-litsx is missing a package-local LICENSE file");
 }
 if (!fileExists(path.join(vscodeReleasePackage, ".vscodeignore"))) {
   fail("packages/vscode-litsx is missing .vscodeignore");

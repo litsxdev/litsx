@@ -21,13 +21,6 @@
     "tsx",
     "web-components"
   ],
-  "files": [
-    "dist",
-    "syntaxes",
-    "icon.png",
-    "README.md",
-    "package.json"
-  ],
   "repository": {
     "type": "git",
     "url": "https://github.com/litsxdev/litsx.git",
@@ -43,8 +36,8 @@
   ],
   "scripts": {
     "build": "node ./scripts/build-grammars.mjs && ../../node_modules/.bin/rollup --config rollup.config.mjs",
-    "package:vsix": "yarn build && npx @vscode/vsce package --out dist/vscode-litsx.vsix",
-    "package:vsix:pre-release": "yarn build && npx @vscode/vsce package --pre-release --out dist/vscode-litsx.vsix"
+    "package:vsix": "yarn build && node -e \"require('node:fs').rmSync('dist/vscode-litsx.vsix', { force: true })\" && ../../node_modules/.bin/vsce package --no-dependencies --out dist/vscode-litsx.vsix",
+    "package:vsix:pre-release": "yarn build && node -e \"require('node:fs').rmSync('dist/vscode-litsx.vsix', { force: true })\" && ../../node_modules/.bin/vsce package --no-dependencies --pre-release --out dist/vscode-litsx.vsix"
   },
   "activationEvents": [
     "onLanguage:typescriptreact",

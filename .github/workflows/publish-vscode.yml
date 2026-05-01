@@ -1,0 +1,62 @@
+name: Publish VS Code Extension
+
+on:
+  workflow_dispatch:
+    inputs:
+      pre-release:
+        description: Publish as pre-release
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: read
+  id-token: write
+  attestations: write
+  artifact-metadata: write
+
+concurrency:
+  group: publish-vscode-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: vscode-marketplace
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: yarn
+
+      - name: Enable Yarn
+        run: corepack enable
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Validate extension release surface
+        run: |
+          yarn release:check
+          yarn release:vscode:build
+
+      - name: Package VSIX
+        run: yarn release:vscode:package
+
+      - name: Attest VSIX
+        uses: actions/attest@v4
+        with:
+          subject-path: packages/vscode-litsx/dist/*.vsix
+
+      - name: Publish extension
+        working-directory: packages/vscode-litsx
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+        run: |
+          if [ "${{ github.event.inputs.pre-release }}" = "true" ]; then
+            ../../node_modules/.bin/vsce publish --no-dependencies --pre-release
+          else
+            ../../node_modules/.bin/vsce publish --no-dependencies
+          fi

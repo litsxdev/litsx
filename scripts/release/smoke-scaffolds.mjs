@@ -2,10 +2,15 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { createProject } from "../../packages/create-litsx-app/src/index.js";
-import { RELEASE_VERSION } from "./release-packages.mjs";
+import { createCaretVersionMap } from "./package-version-map.mjs";
 
 const templates = ["app", "component", "design-system"];
 const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-release-scaffold-"));
+const expectedVersions = createCaretVersionMap([
+  "litsx",
+  "@litsx/typescript-plugin",
+  "prettier-plugin-litsx",
+]);
 
 function assert(condition, message) {
   if (!condition) {
@@ -23,9 +28,9 @@ for (const template of templates) {
   assert(manifest.scripts?.lint, `${template} scaffold is missing lint script`);
   assert(manifest.scripts?.format, `${template} scaffold is missing format script`);
   assert(manifest.scripts?.typecheck, `${template} scaffold is missing typecheck script`);
-  assert(manifest.dependencies?.litsx === `^${RELEASE_VERSION}`, `${template} scaffold should depend on litsx ^${RELEASE_VERSION}`);
-  assert(manifest.devDependencies?.["@litsx/typescript-plugin"] === `^${RELEASE_VERSION}`, `${template} scaffold should depend on @litsx/typescript-plugin ^${RELEASE_VERSION}`);
-  assert(manifest.devDependencies?.["prettier-plugin-litsx"] === `^${RELEASE_VERSION}`, `${template} scaffold should depend on prettier-plugin-litsx ^${RELEASE_VERSION}`);
+  assert(manifest.dependencies?.litsx === expectedVersions.litsx, `${template} scaffold should depend on litsx ${expectedVersions.litsx}`);
+  assert(manifest.devDependencies?.["@litsx/typescript-plugin"] === expectedVersions["@litsx/typescript-plugin"], `${template} scaffold should depend on @litsx/typescript-plugin ${expectedVersions["@litsx/typescript-plugin"]}`);
+  assert(manifest.devDependencies?.["prettier-plugin-litsx"] === expectedVersions["prettier-plugin-litsx"], `${template} scaffold should depend on prettier-plugin-litsx ${expectedVersions["prettier-plugin-litsx"]}`);
   assert(fs.existsSync(path.join(targetDir, "prettier.config.js")), `${template} scaffold is missing prettier.config.js`);
   assert(fs.existsSync(path.join(targetDir, "eslint.config.js")), `${template} scaffold is missing eslint.config.js`);
   assert(fs.existsSync(path.join(targetDir, "jsconfig.json")), `${template} scaffold is missing jsconfig.json`);

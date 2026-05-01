@@ -1,5 +1,3 @@
-export const RELEASE_VERSION = "0.1.0";
-
 export const npmReleasePackages = [
   "packages/litsx",
   "packages/compiler",
@@ -8,7 +6,6 @@ export const npmReleasePackages = [
   "packages/eslint-plugin-litsx",
   "packages/create-litsx-app",
   "packages/prettier-plugin-litsx",
-  "packages/litsx-playground",
   "packages/light-dom-registry",
   "packages/babel-parser-litsx",
   "packages/jsx-authoring",
@@ -18,13 +15,14 @@ export const npmReleasePackages = [
   "packages/babel-plugin-transform-jsx-html-template",
   "packages/babel-plugin-transform-litsx-scoped-elements",
   "packages/babel-plugin-litsx-proptypes",
-  "packages/shared/babel-plugin-shared-hooks",
+  "packages/babel-plugin-shared-hooks",
+  "packages/typescript-session",
 ];
 
 export const vscodeReleasePackage = "packages/vscode-litsx";
 
 export const excludedPrivatePackages = [
   "packages/vitepress",
-  "packages/shared/typescript-session",
+  "packages/litsx-playground",
   "packages/dx-smoke-app",
 ];

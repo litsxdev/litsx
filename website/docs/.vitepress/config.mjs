@@ -10,6 +10,7 @@ const docsConfigDir = path.dirname(fileURLToPath(import.meta.url));
 const workspaceRoot = path.resolve(docsConfigDir, "../../..");
 
 export default defineConfig({
+  base: "/",
   title: "Litsx",
   description: "Lit<sup>sx</sup> is a JSX-first framework for authoring Lit-based web components, with native primitives, tooling, and optional React migration support.",
   head: [
@@ -146,6 +147,6 @@ export default defineConfig({
         ],
       },
     ],
-    socialLinks: [{ icon: "github", link: "https://github.com/litsx/litsx" }],
+    socialLinks: [{ icon: "github", link: "https://github.com/litsxdev/litsx" }],
   },
 });

@@ -1,10 +1,16 @@
 # Releasing LitSX
 
-This repository ships a single first-wave public release line at `0.1.0`.
+LitSX releases are managed with Changesets.
 
-## Release set
+## Model
 
-### npm packages
+- package versioning is independent
+- public npm packages are released from `main`
+- version bumps and changelogs are generated from `.changeset/*.md`
+- GitHub Releases for published npm packages are created automatically by `changesets/action`
+- `vscode-litsx` remains a separate manual Marketplace release
+
+## Public npm packages
 
 - `litsx`
 - `@litsx/compiler`
@@ -13,7 +19,6 @@ This repository ships a single first-wave public release line at `0.1.0`.
 - `@litsx/eslint-plugin`
 - `create-litsx-app`
 - `prettier-plugin-litsx`
-- `@litsx/playground`
 - `@litsx/light-dom-registry`
 - `@litsx/babel-parser`
 - `@litsx/jsx-authoring`
@@ -24,82 +29,137 @@ This repository ships a single first-wave public release line at `0.1.0`.
 - `@litsx/babel-plugin-transform-litsx-scoped-elements`
 - `@litsx/babel-plugin-litsx-proptypes`
 - `@litsx/babel-plugin-shared-hooks`
+- `@litsx/typescript-session`
 
-### VS Code Marketplace
+## Ignored packages
+
+These stay outside npm publication and are ignored by Changesets:
 
 - `vscode-litsx`
-
-### Not in the first public wave
-
+- `@litsx/playground`
 - `@litsx/vitepress`
-- `@litsx/typescript-session`
 - `dx-smoke-app`
-- generated docs artifacts and local workspace noise
 
-## Validation commands
+## Contributor workflow
 
-Run these before publish:
+If a pull request changes one or more public packages, add a changeset:
 
 ```sh
+yarn changeset
+```
+
+That file records:
+
+- which packages change
+- the bump type
+- the changelog summary used later for package changelogs and GitHub Releases
+
+## Local validation
+
+Run these before merging release-affecting work:
+
+```sh
+yarn test
 yarn release:check
 yarn release:smoke:scaffolds
 yarn release:test
 ```
 
-## Manual release checks
+Useful release commands:
 
-### npm packages
+```sh
+yarn changeset
+yarn changeset:status
+yarn changeset:version
+yarn release:publish
+```
 
-For each package in the npm release set:
+## GitHub workflows
 
-- verify `npm pack --dry-run` output is clean
-- verify `main`, `exports`, `files`, and `bin` point to real files in the tarball
-- verify README examples match the current public surface
+### `Test`
 
-### `create-litsx-app`
+- runs on pushes to branches
+- runs on all pull requests, including forks
+- stays secret-free
+- validates the full test suite
 
-Generate each template and verify:
+### `Release Validate`
 
-- `app`
-- `component`
-- `design-system`
+- runs on pushes to `main`
+- runs on pull requests
+- stays secret-free
+- validates release surfaces and scaffold smoke
+- uploads preview npm tarballs and VSIX artifacts on `main`
 
-For at least one generated project per template, run:
+### `Deploy Docs`
 
-- `install`
-- `dev`
-- `build`
-- `lint`
-- `format`
-- `typecheck`
+- runs on pushes to `main`
+- builds the VitePress site with `yarn docs:build`
+- deploys `website/docs/.vitepress/dist` to GitHub Pages
+- assumes custom-domain hosting at:
+  - `https://litsx.dev/`
+- publishes `website/docs/public/CNAME` so the Pages artifact keeps the custom domain attached
 
-### `vscode-litsx`
+### `Release`
+
+- runs on pushes to `main`
+- uses `changesets/action`
+- when unreleased changesets exist:
+  - creates or updates a release PR
+  - bumps package versions
+  - updates package changelogs
+- when the release PR is merged and no pending changesets remain:
+  - publishes changed npm packages
+  - publishes them with npm provenance enabled
+  - creates GitHub Releases for the published packages
+
+### `Publish VS Code Extension`
+
+- remains manual
+- packages a `.vsix`
+- generates a GitHub artifact attestation for that `.vsix`
+- publishes `vscode-litsx` to the Marketplace with `VSCE_PAT`
+
+## Required GitHub setup
+
+- environment: `npm-release`
+  - secret: `NPM_TOKEN`
+- environment: `vscode-marketplace`
+  - secret: `VSCE_PAT`
+
+Recommended repository setup:
+
+- protect `main`
+- require the `Test / test` job
+- require the `Release Validate / validate` job
+- enable GitHub Pages with source set to `GitHub Actions`
+- configure the custom domain `litsx.dev` in the repository Pages settings
+- optionally require reviewers on the `npm-release` environment
+- install the `changeset-bot` GitHub App so PRs get nudged when a changeset is missing
+
+## Scaffold version sync
+
+`create-litsx-app` embeds published dependency ranges for:
+
+- `litsx`
+- `@litsx/eslint-plugin`
+- `@litsx/typescript-plugin`
+- `@litsx/vite-plugin`
+- `prettier-plugin-litsx`
+
+Those ranges are synchronized during `yarn changeset:version`, so the scaffold stays aligned with whatever versions Changesets has just written.
+
+## VS Code extension release
+
+`vscode-litsx` is not published by Changesets.
+
+Public npm packages opt into npm provenance through `publishConfig.provenance: true`, and the `Release` workflow also sets `NPM_CONFIG_PROVENANCE=true` so `changesets publish` emits registry-backed provenance for the packages it publishes.
 
 Before Marketplace publish:
 
-- build the extension bundle:
-  - `yarn release:vscode:build`
-- package a `.vsix`
-  - `yarn release:vscode:package`
-- install it into a clean VS Code profile
-- verify `.litsx` highlighting
-- verify `.litsx.jsx` highlighting
-- verify the TSX/JSX suggestion flow
-- verify the README still reflects the current TS language-service limits
+```sh
+yarn release:vscode:build
+yarn release:vscode:package
+```
 
-## First public release notes
-
-The first public release should communicate:
-
-- LitSX is a Lit-first authored JSX surface for web components
-- official authored files are `.litsx` and `.litsx.jsx`
-- first-wave tooling includes:
-  - `vscode-litsx`
-  - `@litsx/typescript-plugin` and `litsx-tsc`
-  - `@litsx/eslint-plugin`
-  - `prettier-plugin-litsx`
-  - `@litsx/vite-plugin`
-  - `create-litsx-app`
-- intentional limits in `0.1.0`:
-  - no plain `tsx/jsx` Prettier formatting claim
-  - dedicated LitSX VS Code language modes do not replace the full built-in TS service
+Then use the `Publish VS Code Extension` workflow.
