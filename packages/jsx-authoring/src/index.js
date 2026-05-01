@@ -17,8 +17,6 @@ const TAG_NAME_START_CHAR = /[A-Za-z]/;
 const TAG_NAME_CHAR = /[\w:.-]/;
 const MACRO_NAME_START_CHAR = /[A-Za-z$_]/;
 const MACRO_NAME_CHAR = /[A-Za-z0-9$_]/;
-const IDENTIFIER_START_CHAR = /[A-Za-z$_]/;
-const IDENTIFIER_CHAR = /[A-Za-z0-9$_]/;
 
 function isWhitespace(char) {
   return char === " " || char === "\t" || char === "\n" || char === "\r";
@@ -35,27 +33,11 @@ function sanitizeIdentifierTailChar(char) {
 function encodeEditorVirtualAttributeName(name) {
   const prefix = name[0];
   const localName = name.slice(1);
-
-  if (prefix === "@") {
-    return `e${Array.from(localName, sanitizeIdentifierTailChar).join("")}`;
-  }
-
-  if (prefix === ".") {
-    return `p${Array.from(localName, sanitizeIdentifierTailChar).join("")}`;
-  }
-
-  if (prefix === "?") {
-    return `b${Array.from(localName, sanitizeIdentifierTailChar).join("")}`;
-  }
-
-  return name;
+  const encodedPrefix = prefix === "@" ? "e" : prefix === "." ? "p" : "b";
+  return `${encodedPrefix}${Array.from(localName, sanitizeIdentifierTailChar).join("")}`;
 }
 
 function encodeEditorStaticHoistName(originalName, macroName) {
-  if (!originalName.startsWith("^") || originalName.length < 2) {
-    return originalName;
-  }
-
   return `$${macroName}`;
 }
 
@@ -153,55 +135,6 @@ function scanBalancedBraces(sourceText, start) {
     }
 
     if (char === "}") {
-      depth -= 1;
-      index += 1;
-      if (depth <= 0) {
-        return index;
-      }
-      continue;
-    }
-
-    index += 1;
-  }
-
-  return index;
-}
-
-function scanBalancedParens(sourceText, start) {
-  let depth = 0;
-  let index = start;
-
-  while (index < sourceText.length) {
-    const char = sourceText[index];
-    const next = sourceText[index + 1];
-
-    if (char === "'" || char === "\"") {
-      index = scanQuotedString(sourceText, index, char);
-      continue;
-    }
-
-    if (char === "`") {
-      index = scanTemplateLiteral(sourceText, index);
-      continue;
-    }
-
-    if (char === "/" && next === "/") {
-      index = scanLineComment(sourceText, index);
-      continue;
-    }
-
-    if (char === "/" && next === "*") {
-      index = scanBlockComment(sourceText, index);
-      continue;
-    }
-
-    if (char === "(") {
-      depth += 1;
-      index += 1;
-      continue;
-    }
-
-    if (char === ")") {
       depth -= 1;
       index += 1;
       if (depth <= 0) {
@@ -533,10 +466,6 @@ function scanJsxTag(sourceText, start, replacements, encodeAttributeName) {
   };
 }
 
-function scanJsxOpeningTag(sourceText, start, replacements, encodeAttributeName) {
-  return scanJsxTag(sourceText, start, replacements, encodeAttributeName).end;
-}
-
 function scanJsxElement(sourceText, start, replacements, encodeAttributeName) {
   const openingTag = scanJsxTag(sourceText, start, replacements, encodeAttributeName);
 
@@ -702,54 +631,6 @@ function scanStaticMacro(sourceText, start, replacements, encodeMacroName) {
   return index;
 }
 
-function isWordBoundary(char) {
-  return !char || !IDENTIFIER_CHAR.test(char);
-}
-
-function skipWhitespaceAndComments(sourceText, start) {
-  let index = start;
-
-  while (index < sourceText.length) {
-    const char = sourceText[index];
-    const next = sourceText[index + 1];
-
-    if (isWhitespace(char)) {
-      index += 1;
-      continue;
-    }
-
-    if (char === "/" && next === "/") {
-      index = scanLineComment(sourceText, index);
-      continue;
-    }
-
-    if (char === "/" && next === "*") {
-      index = scanBlockComment(sourceText, index);
-      continue;
-    }
-
-    break;
-  }
-
-  return index;
-}
-
-function readIdentifier(sourceText, start) {
-  if (!IDENTIFIER_START_CHAR.test(sourceText[start] || "")) {
-    return null;
-  }
-
-  let index = start + 1;
-  while (index < sourceText.length && IDENTIFIER_CHAR.test(sourceText[index])) {
-    index += 1;
-  }
-
-  return {
-    name: sourceText.slice(start, index),
-    end: index,
-  };
-}
-
 export function createVirtualLitsxJsxSource(sourceText, options = {}) {
   const strategy = options.strategy === "editor" ? "editor" : "compiler";
   const includeSourceMap = options.sourceMap === true;
@@ -883,12 +764,6 @@ export function createVirtualLitsxJsxSourceMap(
     source: options.sourceFileName,
     includeContent: true,
   });
-}
-
-function findReplacementByOriginalPosition(position, replacements) {
-  return replacements.find((replacement) => (
-    position >= replacement.start && position < replacement.end
-  )) || null;
 }
 
 function findReplacementByVirtualPosition(position, replacements) {

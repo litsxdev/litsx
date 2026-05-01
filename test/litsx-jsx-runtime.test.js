@@ -32,6 +32,15 @@ describe("litsx jsx runtime", () => {
     assert.strictEqual(devNode.__self, "self");
   });
 
+  it("defaults jsxDEV props and key when they are omitted", () => {
+    const devNode = jsxDEV("span", null, undefined, false, undefined, undefined);
+
+    assert.deepStrictEqual(devNode.props, {});
+    assert.strictEqual(devNode.key, null);
+    assert.strictEqual(devNode.__source, undefined);
+    assert.strictEqual(devNode.__self, undefined);
+  });
+
   it("defaults JSX props to an empty object when none are provided", () => {
     const node = jsx("div", null, undefined);
 

@@ -176,4 +176,65 @@ describe("@litsx/babel-plugin-shared-hooks createRuntimeHooksTransform", () => {
     assert.match(code, /runtimeNs\.useOnCommit\(this, \(\) => this\.measure\(\), \[]\);/);
     assert.match(code, /prepareEffects\(this\);/);
   });
+
+  it("rewrites namespace custom hooks from non-blocked imports and injects runtime helpers into the existing import", () => {
+    const source = `
+      import { useAfterUpdate } from "litsx";
+      import * as hooks from "./hooks";
+
+      class Card {
+        render() {
+          hooks.useCounter();
+          useAfterUpdate(() => this.sync(), []);
+          return this.value;
+        }
+      }
+    `;
+
+    const code = run(source);
+
+    assert.match(
+      code,
+      /import \{ useAfterUpdate, prepareEffects \} from "litsx";|import \{ prepareEffects, useAfterUpdate \} from "litsx";/
+    );
+    assert.match(code, /hooks\.useCounter\(this\);/);
+    assert.match(code, /useAfterUpdate\(this, \(\) => this\.sync\(\), \[]\);/);
+    assert.match(code, /prepareEffects\(this\);/);
+  });
+
+  it("adds a runtime import when none exists and leaves files without render-hook usage untouched", () => {
+    const hookSource = `
+      import * as hooks from "./hooks";
+
+      class Card {
+        render() {
+          hooks.useCounter();
+          return this.value;
+        }
+      }
+    `;
+
+    const hookCode = run(hookSource);
+    assert.match(
+      hookCode,
+      /import \{ prepareEffects \} from "litsx";/
+    );
+    assert.match(hookCode, /hooks\.useCounter\(this\);/);
+    assert.match(hookCode, /prepareEffects\(this\);/);
+
+    const untouchedSource = `
+      import { useAfterUpdate } from "react";
+
+      class Card {
+        connectedCallback() {
+          useAfterUpdate(() => this.sync(), []);
+        }
+      }
+    `;
+
+    const untouchedCode = run(untouchedSource);
+    assert.doesNotMatch(untouchedCode, /prepareEffects/);
+    assert.match(untouchedCode, /import \{ useAfterUpdate \} from "litsx";/);
+    assert.match(untouchedCode, /useAfterUpdate\(\(\) => this\.sync\(\), \[]\);/);
+  });
 });

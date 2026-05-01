@@ -7,6 +7,7 @@ import {
   detectLitsxSyntax,
   getStandardLanguageId,
   getSuggestedLitsxLanguageId,
+  isStandardJsxLanguage,
 } from "../packages/vscode-litsx/src/detect.js";
 import {
   computeLitsxCompletions,
@@ -137,9 +138,13 @@ describe("vscode-litsx", () => {
       detectLitsxSyntax(`const view = <button onClick={handleClick} disabled={busy} />;`),
       false,
     );
+    assert.strictEqual(detectLitsxSyntax(""), false);
+    assert.strictEqual(detectLitsxSyntax(null), false);
     assert.strictEqual(getSuggestedLitsxLanguageId("typescriptreact"), "litsx");
     assert.strictEqual(getSuggestedLitsxLanguageId("javascriptreact"), "litsx-jsx");
     assert.strictEqual(getSuggestedLitsxLanguageId("typescript"), null);
+    assert.strictEqual(isStandardJsxLanguage("typescriptreact"), true);
+    assert.strictEqual(isStandardJsxLanguage("typescript"), false);
     assert.strictEqual(getStandardLanguageId("litsx"), "typescriptreact");
     assert.strictEqual(getStandardLanguageId("litsx-jsx"), "javascriptreact");
     assert.strictEqual(getStandardLanguageId("typescriptreact"), null);

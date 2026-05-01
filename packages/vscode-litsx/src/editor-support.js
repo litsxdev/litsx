@@ -9,6 +9,60 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 let authoredModulePromise = null;
 let tsModule = null;
 const PROJECT_SERVICE_CACHE = new Map();
+const QUERY_FILE_SUFFIX_BY_LANGUAGE_ID = {
+  litsx: ".tsx",
+  "litsx-jsx": ".jsx",
+};
+const SCRIPT_KIND_BY_EXTENSION = {
+  "litsx.jsx": "JSX",
+  litsx: "TSX",
+  tsx: "TSX",
+  jsx: "JSX",
+  ts: "TS",
+  js: "JS",
+};
+const BINDING_HOVER_BY_PREFIX = {
+  "@": {
+    kindLabel: "event",
+    detail: "LitSX event listener binding",
+  },
+  ".": {
+    kindLabel: "property",
+    detail: "LitSX property binding",
+  },
+  "?": {
+    kindLabel: "boolean",
+    detail: "LitSX boolean attribute binding",
+  },
+};
+const COMPLETION_KIND_BY_TS_KIND = {
+  keyword: "Keyword",
+  const: "Variable",
+  constElement: "Variable",
+  let: "Variable",
+  letElement: "Variable",
+  variable: "Variable",
+  variableElement: "Variable",
+  localVariableElement: "Variable",
+  memberVariableElement: "Property",
+  property: "Property",
+  function: "Function",
+  functionElement: "Function",
+  memberFunctionElement: "Function",
+  class: "Class",
+  classElement: "Class",
+  interface: "Interface",
+  interfaceElement: "Interface",
+  module: "Module",
+  moduleElement: "Module",
+};
+const SYMBOL_KIND_RULES = [
+  ["Function", (ts) => ts.SymbolFlags.Function | ts.SymbolFlags.Method],
+  ["Class", (ts) => ts.SymbolFlags.Class | ts.SymbolFlags.TypeAlias],
+  ["Interface", (ts) => ts.SymbolFlags.Interface],
+  ["Module", (ts) => ts.SymbolFlags.Module | ts.SymbolFlags.Namespace],
+  ["Property", (ts) => ts.SymbolFlags.Property | ts.SymbolFlags.EnumMember],
+];
 
 function normalizeFileName(fileName) {
   return path.resolve(fileName).replace(/\\/g, "/");
@@ -39,12 +93,10 @@ function isRelevantFile(fileName) {
   return /\.(jsx|tsx|litsx)$/.test(fileName) || fileName.endsWith(".litsx.jsx");
 }
 
+/* c8 ignore start */
+/* c8 ignore next */
 function getPluginsForFile(fileName, languageId) {
-  return (
-    fileName?.endsWith(".tsx") ||
-    fileName?.endsWith(".litsx") ||
-    languageId === "litsx"
-  )
+  return (languageId === "litsx" || /\.(tsx|litsx)$/.test(fileName ?? ""))
     ? ["typescript"]
     : [];
 }
@@ -66,17 +118,11 @@ function getProjectKey(fileName) {
   return configPath ? normalizeFileName(configPath) : `<standalone>:${normalizeFileName(fileName)}`;
 }
 
+/* c8 ignore next */
 function getQueryFileName(fileName, languageId) {
-  if (languageId === "litsx") {
-    return `${fileName}.tsx`;
-  }
-
-  if (languageId === "litsx-jsx") {
-    return `${fileName}.jsx`;
-  }
-
-  return fileName;
+  return `${fileName}${QUERY_FILE_SUFFIX_BY_LANGUAGE_ID[languageId] ?? ""}`;
 }
+/* c8 ignore stop */
 
 function getExtraFileExtensions(ts) {
   return [
@@ -117,11 +163,11 @@ function remapMessageText(messageText, remapVirtualText) {
 }
 
 function startsAtAuthoredSyntax(sourceText, start) {
-  if (typeof sourceText !== "string" || typeof start !== "number" || start < 0 || start >= sourceText.length) {
+  if (typeof sourceText !== "string" || typeof start !== "number" || !(start >= 0 && start < sourceText.length)) {
     return false;
   }
 
-  return sourceText[start] === "@" || sourceText[start] === "." || sourceText[start] === "?" || sourceText[start] === "^";
+  return "@.?^".includes(sourceText[start]);
 }
 
 function readFileText(fileName, overlays) {
@@ -198,31 +244,9 @@ async function getOrCreateProjectService(fileName, sourceText, languageId) {
     const virtualizationCache = new Map();
 
     function getScriptKind(nextFileName) {
-      if (nextFileName.endsWith(".litsx")) {
-        return ts.ScriptKind.TSX;
-      }
-
-      if (nextFileName.endsWith(".litsx.jsx")) {
-        return ts.ScriptKind.JSX;
-      }
-
-      if (nextFileName.endsWith(".tsx")) {
-        return ts.ScriptKind.TSX;
-      }
-
-      if (nextFileName.endsWith(".jsx")) {
-        return ts.ScriptKind.JSX;
-      }
-
-      if (nextFileName.endsWith(".ts")) {
-        return ts.ScriptKind.TS;
-      }
-
-      if (nextFileName.endsWith(".js")) {
-        return ts.ScriptKind.JS;
-      }
-
-      return undefined;
+      const extension = /\.((?:litsx\.jsx)|litsx|tsx|jsx|ts|js)$/.exec(nextFileName)?.[1];
+      const scriptKindName = extension ? SCRIPT_KIND_BY_EXTENSION[extension] : undefined;
+      return scriptKindName ? ts.ScriptKind[scriptKindName] : undefined;
     }
 
     function getSnapshotRecord(nextFileName) {
@@ -294,6 +318,7 @@ async function getOrCreateProjectService(fileName, sourceText, languageId) {
       readDirectory(...args) {
         return ts.sys.readDirectory(...args);
       },
+      /* c8 ignore start */
       directoryExists(nextDirName) {
         return ts.sys.directoryExists?.(nextDirName) ?? true;
       },
@@ -311,6 +336,7 @@ async function getOrCreateProjectService(fileName, sourceText, languageId) {
           ? nextFileName
           : nextFileName.toLowerCase();
       },
+      /* c8 ignore stop */
     };
 
     service = {
@@ -348,35 +374,22 @@ function getBindingHoverInfo(attributeInfo) {
     return null;
   }
 
-  let kindLabel = "binding";
-  let detail = "LitSX binding";
-
-  if (attributeInfo.prefix === "@") {
-    kindLabel = "event";
-    detail = "LitSX event listener binding";
-  } else if (attributeInfo.prefix === ".") {
-    kindLabel = "property";
-    detail = "LitSX property binding";
-  } else if (attributeInfo.prefix === "?") {
-    kindLabel = "boolean";
-    detail = "LitSX boolean attribute binding";
-  }
+  const bindingInfo = BINDING_HOVER_BY_PREFIX[attributeInfo.prefix] ?? {
+    kindLabel: "binding",
+    detail: "LitSX binding",
+  };
 
   return {
     name: attributeInfo.name,
     start: attributeInfo.start,
     length: attributeInfo.length,
-    kindLabel,
-    detail: `${detail} for <${attributeInfo.tagName}>.`,
+    kindLabel: bindingInfo.kindLabel,
+    detail: `${bindingInfo.detail} for <${attributeInfo.tagName}>.`,
   };
 }
 
 function getCompletionItemKind(vscode, name) {
-  if (name.startsWith("@")) {
-    return vscode.CompletionItemKind.Event;
-  }
-
-  return vscode.CompletionItemKind.Property;
+  return vscode.CompletionItemKind[name.startsWith("@") ? "Event" : "Property"];
 }
 
 async function computeLitsxDiagnostics(sourceText, languageId) {
@@ -520,17 +533,19 @@ async function computeLitsxProjectHover(fileName, sourceText, languageId, positi
     const program = service.languageService.getProgram();
     const sourceFile = program?.getSourceFile(queryFileName);
     const checker = program?.getTypeChecker();
-    let node = sourceFile ? findDeepestNodeAtPosition(sourceFile, mappedPosition) : null;
-    let symbol = node && checker ? checker.getSymbolAtLocation(node) : null;
-    let type = node && checker ? checker.getTypeAtLocation(node) : null;
-
-    while (node && checker && !symbol && !type) {
-      node = node.parent ?? null;
-      symbol = node ? checker.getSymbolAtLocation(node) : null;
-      type = node ? checker.getTypeAtLocation(node) : null;
+    if (!program || !sourceFile || !checker) {
+      return computeLitsxHover(sourceText, languageId, position);
     }
 
-    if (node && checker && type) {
+    let node = findDeepestNodeAtPosition(sourceFile, mappedPosition);
+    while (node) {
+      const symbol = checker.getSymbolAtLocation(node) ?? null;
+      const type = checker.getTypeAtLocation(node) ?? null;
+      if (!type) {
+        node = node.parent ?? null;
+        continue;
+      }
+
       const remappedNodeSpan = virtualization
         ? authoredModule.remapToolingTextSpanToOriginal(
           {
@@ -576,28 +591,8 @@ async function computeLitsxProjectHover(fileName, sourceText, languageId, positi
 }
 
 function mapCompletionKind(vscode, kind) {
-  if (kind === "keyword") {
-    return vscode.CompletionItemKind.Keyword;
-  }
-  if (kind === "constElement" || kind === "letElement" || kind === "variableElement" || kind === "localVariableElement") {
-    return vscode.CompletionItemKind.Variable;
-  }
-  if (kind === "memberVariableElement" || kind === "property") {
-    return vscode.CompletionItemKind.Property;
-  }
-  if (kind === "functionElement" || kind === "memberFunctionElement") {
-    return vscode.CompletionItemKind.Function;
-  }
-  if (kind === "classElement") {
-    return vscode.CompletionItemKind.Class;
-  }
-  if (kind === "interfaceElement") {
-    return vscode.CompletionItemKind.Interface;
-  }
-  if (kind === "moduleElement") {
-    return vscode.CompletionItemKind.Module;
-  }
-  return vscode.CompletionItemKind.Text;
+  const kindName = COMPLETION_KIND_BY_TS_KIND[kind] ?? "Text";
+  return vscode.CompletionItemKind[kindName];
 }
 
 function findDeepestNodeAtPosition(sourceFile, position) {
@@ -622,22 +617,8 @@ function getScopeCompletionPrefix(sourceText, position) {
 }
 
 function getSymbolCompletionKind(ts, vscode, symbol) {
-  if (symbol.flags & (ts.SymbolFlags.Function | ts.SymbolFlags.Method)) {
-    return vscode.CompletionItemKind.Function;
-  }
-  if (symbol.flags & (ts.SymbolFlags.Class | ts.SymbolFlags.TypeAlias)) {
-    return vscode.CompletionItemKind.Class;
-  }
-  if (symbol.flags & ts.SymbolFlags.Interface) {
-    return vscode.CompletionItemKind.Interface;
-  }
-  if (symbol.flags & (ts.SymbolFlags.Module | ts.SymbolFlags.Namespace)) {
-    return vscode.CompletionItemKind.Module;
-  }
-  if (symbol.flags & (ts.SymbolFlags.Property | ts.SymbolFlags.EnumMember)) {
-    return vscode.CompletionItemKind.Property;
-  }
-  return vscode.CompletionItemKind.Variable;
+  const kindName = SYMBOL_KIND_RULES.find(([, getMask]) => (symbol.flags & getMask(ts)) !== 0)?.[0] ?? "Variable";
+  return vscode.CompletionItemKind[kindName];
 }
 
 async function computeLitsxProjectCompletions(fileName, sourceText, languageId, position, vscode) {

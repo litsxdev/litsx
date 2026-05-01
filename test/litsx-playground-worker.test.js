@@ -104,4 +104,61 @@ describe("@litsx/playground worker entrypoints", () => {
     );
     expect(selfScope.postMessage.mock.calls[0][0].stack).toMatch(/compile exploded/);
   });
+
+  it("uses fallback filenames and empty warnings when worker payloads are partial", async () => {
+    const compileLitsxPlayground = vi.fn(async () => ({
+      code: "export const Demo = 1;",
+      metadata: {},
+    }));
+    vi.doMock("../packages/litsx-playground/src/litsx-playground-compiler.js", () => ({
+      compileLitsxPlayground,
+    }));
+
+    const selfScope = {
+      postMessage: vi.fn(),
+    };
+    globalThis.self = selfScope;
+
+    await import("../packages/litsx-playground/src/litsx-playground.worker.js");
+    await selfScope.onmessage({
+      data: {
+        id: 9,
+        source: "export const Demo = 1;",
+      },
+    });
+
+    expect(compileLitsxPlayground).toHaveBeenCalledWith("export const Demo = 1;", {
+      filename: "/playground/App.tsx",
+      mode: undefined,
+    });
+    expect(selfScope.postMessage).toHaveBeenCalledWith({
+      id: 9,
+      ok: true,
+      code: "export const Demo = 1;",
+      warnings: [],
+    });
+  });
+
+  it("stringifies non-Error worker failures safely", async () => {
+    vi.doMock("../packages/litsx-playground/src/litsx-playground-compiler.js", () => ({
+      compileLitsxPlayground: vi.fn(async () => {
+        throw "bad compile";
+      }),
+    }));
+
+    const selfScope = {
+      postMessage: vi.fn(),
+    };
+    globalThis.self = selfScope;
+
+    await import("../packages/litsx-playground/src/litsx-playground.worker.js");
+    await selfScope.onmessage({});
+
+    expect(selfScope.postMessage).toHaveBeenCalledWith({
+      id: undefined,
+      ok: false,
+      error: "bad compile",
+      stack: "",
+    });
+  });
 });

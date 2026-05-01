@@ -138,6 +138,51 @@ describe("litsx effects controller", () => {
     assert.strictEqual(runs, 2);
   });
 
+  it("handles adopted callbacks when hosts or controllers are partially missing", () => {
+    const host = new TestHost();
+    let adoptedRuns = 0;
+    host.adoptedCallback = function (...args) {
+      this.originalArgs = args;
+    };
+
+    prepareEffects(host);
+    const controller = host.controllers[0];
+    host[Symbol.for ? Symbol.for("unused") : "unused"] = true;
+    host.controllers.push(null);
+    host.controllers.push({ hostAdopted() {} });
+
+    host.adoptedCallback("doc");
+
+    assert.deepStrictEqual(host.originalArgs, ["doc"]);
+    assert.equal(adoptedRuns, 0);
+
+    controller.hostAdopted = (...args) => {
+      adoptedRuns += args.length;
+    };
+
+    host.adoptedCallback("new-doc");
+
+    assert.equal(adoptedRuns, 1);
+  });
+
+  it("cleans up disconnected imperative refs and external stores defensively", () => {
+    const host = new TestHost();
+    prepareEffects(host);
+    const controller = host.controllers[0];
+    let unsubscribed = 0;
+
+    controller.imperatives.push({ ref: { current: { value: 1 } } }, null);
+    controller.externalStores.push(
+      { unsubscribe: () => { unsubscribed += 1; } },
+      { unsubscribe: null },
+    );
+    controller.hostDisconnected();
+
+    assert.equal(unsubscribed, 1);
+    assert.strictEqual(controller.imperatives[0].ref.current, null);
+    assert.equal(controller.externalStores.length, 0);
+  });
+
   it("keeps useEvent stable while updating the callback body", () => {
     const host = new TestHost();
     const target = {
@@ -1047,6 +1092,33 @@ describe("litsx effects controller", () => {
     ]);
   });
 
+  it("marks connected effects dirty when previous deps are non-array or change length", () => {
+    const host = new TestHost();
+    const controller = new EffectsController(host);
+
+    controller.connectedEffects[0] = {
+      callback: () => {},
+      deps: null,
+      cleanup: undefined,
+      active: true,
+      needsRun: false,
+    };
+    controller.connectedCursor = 0;
+
+    controller.registerConnected(() => {}, ["alpha"]);
+
+    assert.strictEqual(controller.connectedEffects[0].needsRun, true);
+
+    controller.connectedEffects[0].deps = ["alpha"];
+    controller.connectedEffects[0].active = true;
+    controller.connectedEffects[0].needsRun = false;
+    controller.connectedCursor = 0;
+
+    controller.registerConnected(() => {}, ["alpha", "beta"]);
+
+    assert.strictEqual(controller.connectedEffects[0].needsRun, true);
+  });
+
   it("re-arms connection-scoped setup on adoptedCallback", () => {
     const host = new TestHost();
     const events = [];
@@ -1061,6 +1133,29 @@ describe("litsx effects controller", () => {
     host.adoptedCallback();
 
     assert.deepStrictEqual(events, ["connect", "cleanup", "connect"]);
+  });
+
+  it("ignores adopted host transitions while the host is disconnected", () => {
+    const host = new TestHost();
+    const controller = new EffectsController(host);
+    let cleanups = 0;
+
+    controller.connectedEffects.push({
+      callback: () => {},
+      deps: [],
+      cleanup: () => {
+        cleanups += 1;
+      },
+      active: true,
+      needsRun: false,
+    });
+    controller.hostIsConnected = false;
+
+    controller.hostAdopted();
+
+    assert.strictEqual(cleanups, 0);
+    assert.strictEqual(controller.connectedEffects[0].active, true);
+    assert.strictEqual(controller.connectedEffects[0].needsRun, false);
   });
 
   it("resolves the active host for custom-hook style calls during render", () => {

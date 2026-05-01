@@ -2,6 +2,26 @@ import assert from "assert";
 import { describe, it } from "vitest";
 import { FlatESLint, LegacyESLint } from "eslint/use-at-your-own-risk";
 import plugin, { createLitsxProcessor } from "../packages/eslint-plugin-litsx/src/index.js";
+import { getRuleIdForIssue, convertIssueToLintMessage } from "../packages/eslint-plugin-litsx/src/messages.js";
+import {
+  createMessageDedupKey,
+  lineColumnToOffset,
+  mapOriginalSpanToVirtual,
+  offsetToLineColumn,
+  remapLintFix,
+  remapLintMessage,
+  remapVirtualOffsetToOriginal,
+} from "../packages/eslint-plugin-litsx/src/remap.js";
+import {
+  computeLineStarts as computeLintLineStarts,
+  createLintState,
+  getLintState,
+  setLintState,
+  takeLintState,
+} from "../packages/eslint-plugin-litsx/src/state.js";
+import { createIssueBackedRule } from "../packages/eslint-plugin-litsx/src/rule-utils.js";
+import noUnknownStaticHoist from "../packages/eslint-plugin-litsx/src/rules/no-unknown-static-hoist.js";
+import noNativeClassname from "../packages/eslint-plugin-litsx/src/rules/no-native-classname.js";
 
 function computeLineStarts(text) {
   const starts = [0];
@@ -291,5 +311,177 @@ describe("@litsx/eslint-plugin", () => {
 
     assert.equal(result.messages.length, 1);
     assert.equal(result.messages[0].ruleId, "@litsx/no-unknown-static-hoist");
+  });
+
+  it("covers message helpers for known, unknown, and warning-level authored issues", () => {
+    assert.equal(getRuleIdForIssue({ kind: "native-classname" }), "@litsx/no-native-classname");
+    assert.equal(getRuleIdForIssue({ kind: "something-else" }), "@litsx/authored-syntax");
+
+    const state = {
+      originalLineStarts: computeLineStarts("alpha\nbeta"),
+    };
+    const message = convertIssueToLintMessage({
+      severity: "warning",
+      message: "Warn",
+      start: -4,
+      length: -10,
+    }, state);
+    const fallback = convertIssueToLintMessage({}, state);
+
+    assert.deepStrictEqual(message, {
+      ruleId: "@litsx/authored-syntax",
+      severity: 1,
+      message: "Warn",
+      line: 1,
+      column: 1,
+      endLine: 1,
+      endColumn: 1,
+    });
+    assert.equal(fallback.severity, 2);
+    assert.equal(fallback.message, "Unknown LitSX authored syntax issue.");
+  });
+
+  it("covers remap helpers for offsets, spans, fixes, suggestions, and dedup keys", () => {
+    const virtualization = {
+      toolingPreambleLength: 3,
+      replacements: [
+        {
+          start: 2,
+          end: 8,
+          replacement: "__litsx_event_click",
+        },
+      ],
+    };
+    const state = {
+      virtualization,
+      originalLineStarts: [0, 6],
+      virtualLineStarts: [0, 9],
+    };
+
+    assert.deepStrictEqual(offsetToLineColumn(-5, [0, 6]), { line: 1, column: 1 });
+    assert.equal(lineColumnToOffset(10, 0, [0, 6]), 6);
+    assert.equal(remapVirtualOffsetToOriginal(1, null), 1);
+    assert.equal(remapVirtualOffsetToOriginal(3, virtualization), 0);
+    assert.equal(remapVirtualOffsetToOriginal(7, virtualization), 2);
+
+    assert.deepStrictEqual(mapOriginalSpanToVirtual(2, 4, virtualization), {
+      start: 5,
+      end: 24,
+    });
+    assert.deepStrictEqual(mapOriginalSpanToVirtual(0, 10, virtualization), {
+      start: 3,
+      end: 26,
+    });
+
+    assert.deepStrictEqual(remapLintFix(null, virtualization), null);
+    assert.equal(remapLintFix({ range: [5, 6], text: "x" }, virtualization), null);
+    assert.deepStrictEqual(remapLintFix({ range: [0, 2], text: "ok" }, virtualization), {
+      range: [0, 0],
+      text: "ok",
+    });
+
+    const remapped = remapLintMessage({
+      message: "bad",
+      line: 1,
+      column: 6,
+      endLine: 1,
+      endColumn: 7,
+      fix: { range: [0, 2], text: "ok" },
+      suggestions: [
+        { desc: "drop", fix: { range: [5, 6], text: "x" } },
+        { desc: "keep", fix: { range: [0, 2], text: "ok" } },
+        { desc: "noop" },
+      ],
+    }, state);
+
+    assert.equal(remapped.line, 1);
+    assert.equal(remapped.fix.range[0], 0);
+    assert.equal(remapped.suggestions.length, 3);
+    assert.equal(remapped.suggestions[0].fix, null);
+    assert.equal(remapLintMessage({ message: "plain" }, null).message, "plain");
+    assert.equal(createMessageDedupKey({ severity: 2, message: "x", line: 3 }), "2|x|3");
+  });
+
+  it("covers lint state helpers and processor branches around missing state and deduping", () => {
+    assert.deepStrictEqual(computeLintLineStarts("a\nb"), [0, 2]);
+
+    const state = createLintState('const view = <button @click="nope" />;', "/virtual/state.jsx");
+    setLintState("/virtual/manual.jsx", state);
+    assert.strictEqual(getLintState("/virtual/manual.jsx"), state);
+    assert.strictEqual(takeLintState("/virtual/manual.jsx"), state);
+    assert.equal(getLintState("/virtual/manual.jsx"), null);
+
+    const processor = createLitsxProcessor();
+    const postWithoutPreprocess = processor.postprocess([[{
+      ruleId: "demo",
+      severity: 2,
+      message: "plain",
+      line: 1,
+      column: 1,
+    }]], "/virtual/missing.jsx");
+    assert.equal(postWithoutPreprocess.length, 1);
+
+    const dedupState = createLintState('const view = <button @click="nope" />;', "/virtual/dedup.jsx");
+    const duplicateMessage = convertIssueToLintMessage(dedupState.authoredIssues[0], dedupState);
+    setLintState("/virtual/dedup.jsx", dedupState);
+    const deduped = processor.postprocess([[duplicateMessage]], "/virtual/dedup.jsx");
+
+    assert.equal(deduped.length, 1);
+    assert.equal(deduped[0].message, duplicateMessage.message);
+  });
+
+  it("covers generic issue-backed rules and no-native-classname fix fallback", () => {
+    const reports = [];
+    const context = {
+      filename: "/virtual/rule.jsx",
+      sourceCode: {
+        text: 'const view = <button className="cta" />;',
+      },
+      report(payload) {
+        reports.push(payload);
+      },
+    };
+
+    const rule = createIssueBackedRule({
+      name: "demo",
+      meta: { type: "problem", schema: [] },
+      matchesIssue: (issue) => issue.kind === "native-classname",
+      buildFix: () => null,
+    });
+
+    rule.create(context).Program();
+    assert.equal(reports.length, 1);
+    assert.equal(reports[0].fix(() => {}), null);
+
+    const noFixIssueRule = noNativeClassname.create({
+      ...context,
+      sourceCode: {
+        text: 'const view = <button />;',
+      },
+    });
+    const noFixReports = [];
+    noFixIssueRule.Program?.call({
+      report(payload) {
+        noFixReports.push(payload);
+      },
+    });
+  });
+
+  it("covers configurable static hoist rule branches directly", () => {
+    const reports = [];
+    const visitor = noUnknownStaticHoist.create({
+      options: [{ allow: ["analyticsTag"] }],
+      report(payload) {
+        reports.push(payload);
+      },
+    });
+
+    visitor.CallExpression({ callee: { type: "MemberExpression", name: "__litsx_static_styles" } });
+    visitor.CallExpression({ callee: { type: "Identifier", name: "__litsx_static_styles" } });
+    visitor.CallExpression({ callee: { type: "Identifier", name: "__litsx_static_analyticsTag" } });
+    visitor.CallExpression({ callee: { type: "Identifier", name: "__litsx_static_unknownMacro" } });
+
+    assert.equal(reports.length, 1);
+    assert.match(reports[0].message, /unknownMacro/);
   });
 });

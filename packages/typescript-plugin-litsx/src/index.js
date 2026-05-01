@@ -55,6 +55,22 @@ function remapDisplayParts(parts) {
   }));
 }
 
+function remapMessageText(messageText) {
+  if (typeof messageText === "string") {
+    return remapVirtualText(messageText);
+  }
+
+  if (!messageText || typeof messageText !== "object") {
+    return messageText;
+  }
+
+  return {
+    ...messageText,
+    messageText: remapMessageText(messageText.messageText),
+    next: messageText.next?.map(remapMessageText),
+  };
+}
+
 function remapNumericTextSpan(start, length, virtualization) {
   if (typeof start !== "number") {
     return null;
@@ -123,6 +139,7 @@ function remapRelatedInformation(info, getVirtualization, fallbackVirtualization
       }
       : {}),
     span: remappedSpan,
+    messageText: remapMessageText(info.messageText),
   };
 }
 
@@ -150,6 +167,7 @@ function wrapDiagnostics(method, getVirtualization) {
             start: diagnostic.start,
             length: diagnostic.length,
           }),
+        messageText: remapMessageText(diagnostic.messageText),
         relatedInformation: diagnostic.relatedInformation?.map((info) => (
           remapRelatedInformation(info, getVirtualization, virtualization)
         )),

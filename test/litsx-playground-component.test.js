@@ -95,7 +95,8 @@ describe("LitsxPlayground docs component", () => {
     assert.match(code, /if \(previousFullscreenRef\.current && !isFullscreen\) \{/);
     assert.match(code, /setPreviewHeight\(initialHeight\);/);
     assert.match(code, /setIframeVersion\(value => value \+ 1\);/);
-    assert.match(code, /window\.addEventListener\("keydown", handleKeyDown\);/);
+    assert.match(code, /document\.addEventListener\("fullscreenchange", handleFullscreenChange\);/);
+    assert.match(code, /document\.removeEventListener\("fullscreenchange", handleFullscreenChange\);/);
     assert.match(code, /useStyle\(this, "--litsx-playground-preview-height",/);
     assert.match(code, /useStyle\(this, "--litsx-playground-preview-width",/);
     assert.match(code, /workerRef\.current\.postMessage\(\{\s*id: compileRequestId\.current,\s*source: nextSource,\s*filename: this\.filename,\s*mode\s*\}\);/s);

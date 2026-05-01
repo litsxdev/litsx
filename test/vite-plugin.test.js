@@ -59,6 +59,20 @@ describe("@litsx/vite-plugin", () => {
     assert.strictEqual(ignored, null);
   }, 30000);
 
+  it("supports regexp include filters", async () => {
+    const plugin = litsx({
+      include: /\.demo$/,
+    });
+    const source = "export const Counter = () => <button @click={save}>Hi</button>;";
+
+    const transformed = await plugin.transform(source, "/virtual/example.demo");
+    const ignored = await plugin.transform(source, "/virtual/example.jsx");
+
+    assert.ok(transformed);
+    assert.match(transformed.code, /html`/);
+    assert.strictEqual(ignored, null);
+  }, 30000);
+
   it("adds an optimizeDeps esbuild plugin that compiles LitSX-authored jsx during dependency scanning", async () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-vite-optimize-deps-"));
     const sourcePath = path.join(tempDir, "Counter.jsx");
@@ -106,6 +120,37 @@ describe("@litsx/vite-plugin", () => {
       assert.strictEqual(transformSync.mock.calls[0][1].filename, sourcePath);
     } finally {
       fs.rmSync(tempDir, { recursive: true, force: true });
+      sessionSpy.mockRestore();
+    }
+  });
+
+  it("skips optimizeDeps transforms for files outside the include filter", async () => {
+    const transformSync = vi.fn();
+    const session = {
+      transform: vi.fn(async () => ({ code: "", map: null, metadata: {} })),
+      transformSync,
+      getTypecheckSession: vi.fn(),
+      invalidate: vi.fn(),
+      dispose: vi.fn(),
+    };
+    const sessionSpy = vi
+      .spyOn(compilerModule, "createLitsxCompilationSession")
+      .mockReturnValue(session);
+    const plugin = litsx({
+      include: /\.demo$/,
+    });
+    const config = plugin.config({ optimizeDeps: { esbuildOptions: {} } });
+    const scanPlugin = config.optimizeDeps.esbuildOptions.plugins.at(-1);
+    const onLoad = vi.fn();
+
+    try {
+      scanPlugin.setup({ onLoad });
+      const [, handler] = onLoad.mock.calls[0];
+      const result = await handler({ path: "/virtual/example.jsx" });
+
+      assert.strictEqual(result, null);
+      assert.strictEqual(transformSync.mock.calls.length, 0);
+    } finally {
       sessionSpy.mockRestore();
     }
   });
@@ -216,6 +261,45 @@ describe("@litsx/vite-plugin", () => {
       assert.match(
         warn.mock.calls[0][0],
         /\[LITSX_NATIVE_CLASSNAME\] \/virtual\/example\.jsx:3:14 className is not native LitSX syntax\./
+      );
+    } finally {
+      sessionSpy.mockRestore();
+    }
+  });
+
+  it("formats fallback LitSX warnings when code or column are missing", async () => {
+    const transform = vi.fn(async () => ({
+      code: "export const value = 1;",
+      map: null,
+      metadata: {
+        litsxWarnings: [
+          {
+            line: 3,
+            message: "",
+          },
+        ],
+      },
+    }));
+    const session = {
+      transform,
+      transformSync: vi.fn(),
+      getTypecheckSession: vi.fn(),
+      invalidate: vi.fn(),
+      dispose: vi.fn(),
+    };
+    const sessionSpy = vi
+      .spyOn(compilerModule, "createLitsxCompilationSession")
+      .mockReturnValue(session);
+    const warn = vi.fn();
+
+    try {
+      const plugin = litsx();
+      await plugin.transform.call({ warn }, "export const value = 1;", "/virtual/example.jsx");
+
+      assert.strictEqual(warn.mock.calls.length, 1);
+      assert.match(
+        warn.mock.calls[0][0],
+        /\[LITSX_WARNING\] \/virtual\/example\.jsx:3 LitSX emitted a warning during compilation\./,
       );
     } finally {
       sessionSpy.mockRestore();
@@ -340,6 +424,39 @@ describe("@litsx/vite-plugin", () => {
           return true;
         }
       );
+    } finally {
+      sessionSpy.mockRestore();
+    }
+  });
+
+  it("surfaces compiler failures without location context when no loc is available", async () => {
+    const compilerError = new Error("plain failure");
+    const transform = vi.fn(async () => {
+      throw compilerError;
+    });
+    const session = {
+      transform,
+      transformSync: vi.fn(),
+      getTypecheckSession: vi.fn(),
+      invalidate: vi.fn(),
+      dispose: vi.fn(),
+    };
+    const sessionSpy = vi
+      .spyOn(compilerModule, "createLitsxCompilationSession")
+      .mockReturnValue(session);
+    const error = vi.fn((value) => value);
+
+    try {
+      const plugin = litsx();
+      const result = await plugin.transform.call(
+        { error },
+        "export const Broken = true;",
+        "/virtual/Broken.jsx",
+      );
+
+      assert.strictEqual(result.loc, undefined);
+      assert.strictEqual(result.frame, undefined);
+      assert.match(result.message, /plain failure/);
     } finally {
       sessionSpy.mockRestore();
     }

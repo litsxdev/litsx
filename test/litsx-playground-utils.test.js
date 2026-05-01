@@ -125,6 +125,31 @@ describe("@litsx/playground utilities", () => {
       ),
       null
     );
+    assert.strictEqual(
+      readPreviewMessage(
+        {
+          data: {
+            previewId: "preview-1",
+            type: "litsx-playground-preview-height",
+            height: "tall",
+          },
+        },
+        "preview-1"
+      ),
+      null
+    );
+    assert.strictEqual(
+      readPreviewMessage(
+        {
+          data: {
+            previewId: "preview-1",
+            type: "unknown",
+          },
+        },
+        "preview-1"
+      ),
+      null
+    );
   });
 
   it("creates fallback preview documents with a default placeholder", () => {

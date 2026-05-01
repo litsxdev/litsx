@@ -69,6 +69,67 @@ async function importPlaygroundCompilerWithMockedRuntime({
 }
 
 describe("@litsx/playground compiler", () => {
+  it("reuses cached results for the same source and options object graph", async () => {
+    const { mod, Babel } = await importPlaygroundCompilerWithMockedRuntime();
+    const compile = mod.compileLitsxPlayground || mod.default;
+    const outputPlugin = () => ({ visitor: {} });
+    const options = {
+      filename: "/playground/Cached.tsx",
+      outputPlugins: [outputPlugin],
+    };
+
+    const first = await compile("export function Demo() { return <p>Hello</p>; }", options);
+    const second = await compile("export function Demo() { return <p>Hello</p>; }", options);
+
+    assert.strictEqual(first, second);
+    expect(Babel.transformFromAst).toHaveBeenCalledTimes(3);
+  });
+
+  it("supports output plugins and disabling final jsx-template lowering", async () => {
+    const transformFromAst = vi
+      .fn()
+      .mockReturnValueOnce({
+        ast: { type: "File", phase: "first" },
+        code: "const phaseOne = true;",
+        metadata: { litsxWarnings: [] },
+      })
+      .mockReturnValueOnce({
+        ast: { type: "File", phase: "second" },
+        code: "const phaseTwo = true;",
+      });
+    const transform = vi.fn((code) => ({ code: `${code}\n// formatted` }));
+    const { mod, Babel } = await importPlaygroundCompilerWithMockedRuntime({
+      transformFromAst,
+      transform,
+    });
+    const compile = mod.compileLitsxPlayground || mod.default;
+    const outputPlugin = ["custom-output", { loose: true }];
+
+    const result = await compile("export function Demo() { return <p>Hello</p>; }", {
+      filename: "/playground/Output.tsx",
+      jsxTemplate: false,
+      outputPlugins: [outputPlugin],
+    });
+
+    expect(Babel.transformFromAst).toHaveBeenCalledTimes(2);
+    expect(Babel.transformFromAst.mock.calls[1][2].plugins).toEqual([outputPlugin]);
+    expect(transform).toHaveBeenCalledWith("const phaseTwo = true;", expect.objectContaining({
+      filename: "/playground/Output.tsx",
+    }));
+    assert.match(result.code, /phaseTwo/);
+  });
+
+  it("preloads the active injected compiler runtime without touching the CDN path", async () => {
+    const { mod } = await importPlaygroundCompilerWithMockedRuntime();
+
+    const preloadPromise = mod.preloadLitsxPlaygroundCompiler();
+    const runtime = await preloadPromise;
+
+    assert.ok(preloadPromise && typeof preloadPromise.then === "function");
+    assert.ok(runtime.Babel);
+    assert.ok(runtime.parser);
+  });
+
   it("compiles an in-memory Lit sx module to LitElement + html output", async () => {
     const source = `
       type CounterProps = {

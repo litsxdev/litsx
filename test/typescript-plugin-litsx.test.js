@@ -6,6 +6,10 @@ import path from "path";
 import ts from "typescript";
 import { describe, it, vi } from "vitest";
 import * as virtualSourceModule from "../packages/typescript-plugin-litsx/src/virtual-source.js";
+import {
+  collectLitsxAuthoredIssues,
+  inferLitsxStaticHoistInfoAtPosition,
+} from "../packages/typescript-plugin-litsx/src/authored-semantics.js";
 
 import plugin, {
   collectLitsxAuthoredDiagnostics,
@@ -68,6 +72,372 @@ describe("@litsx/typescript-plugin", () => {
     assert.match(diagnostics[0].messageText, /must use an expression/);
     assert.match(diagnostics[1].messageText, /must use an expression/);
     assert.match(diagnostics[2].messageText, /must be bare or use an expression/);
+  });
+
+  it("surfaces authored parse errors and filters eslint-only issues by channel", () => {
+    const parseIssues = collectLitsxAuthoredIssues("<button @click={}></button>");
+    assert.strictEqual(parseIssues.length, 1);
+    assert.strictEqual(parseIssues[0].code, 91000);
+
+    const source = `
+      import React, { memo } from "react";
+
+      const Card = memo(function Card(props) {
+        const value = props.title;
+        const ready = true;
+        ^styles(\`:host { display: block; }\`);
+        return (
+          <label htmlFor="field">
+            <input defaultValue="a" defaultChecked dangerouslySetInnerHTML={{ __html: value }} />
+          </label>
+        );
+      }, () => true);
+    `;
+
+    const tsIssues = collectLitsxAuthoredIssues(source);
+    const eslintIssues = collectLitsxAuthoredIssues(source, { channel: "eslint" });
+    const allIssues = collectLitsxAuthoredIssues(source, { channel: "all" });
+
+    assert.ok(tsIssues.some((issue) => issue.code === 91010));
+    assert.ok(tsIssues.some((issue) => issue.code === 91014));
+    assert.ok(tsIssues.some((issue) => issue.code === 91018));
+    assert.ok(!tsIssues.some((issue) => issue.code === 91015));
+    assert.ok(!tsIssues.some((issue) => issue.code === 91016));
+    assert.ok(!tsIssues.some((issue) => issue.code === 91017));
+
+    assert.ok(eslintIssues.some((issue) => issue.code === 91015));
+    assert.ok(eslintIssues.some((issue) => issue.code === 91016));
+    assert.ok(eslintIssues.some((issue) => issue.code === 91017));
+    assert.ok(allIssues.some((issue) => issue.code === 91016));
+    assert.ok(allIssues.some((issue) => issue.code === 91017));
+  });
+
+
+  it("infers static hoist and attribute completion metadata from authored source", () => {
+    const source = `
+      function Card() {
+        ^styles(\`:host { display: block; }\`);
+        return <input @fo .va ?di />;
+      }
+    `;
+
+    const hoistPosition = source.indexOf("^styles") + 3;
+    const hoistInfo = inferLitsxStaticHoistInfoAtPosition(source, hoistPosition);
+    assert.deepStrictEqual(
+      {
+        name: hoistInfo?.name,
+        start: hoistInfo?.start,
+        length: hoistInfo?.length,
+      },
+      {
+        name: "^styles",
+        start: source.indexOf("^styles"),
+        length: "^styles".length,
+      },
+    );
+    assert.match(hoistInfo?.documentation ?? "", /static style hoist/i);
+    assert.strictEqual(inferLitsxStaticHoistInfoAtPosition("const value = count ^ other;", 10), null);
+    assert.strictEqual(inferLitsxStaticHoistInfoAtPosition(null, 0), null);
+
+    const eventPosition = source.indexOf("@fo") + 3;
+    const propPosition = source.indexOf(".va") + 3;
+    const boolPosition = source.indexOf("?di") + 3;
+    const outsidePosition = source.indexOf("return") - 1;
+
+    assert.deepStrictEqual(
+      inferLitsxAttributeCompletionContext(source, eventPosition),
+      {
+        tagName: "input",
+        prefix: "@",
+        partialName: "fo",
+        start: source.indexOf("@fo"),
+        length: 3,
+      },
+    );
+    assert.deepStrictEqual(
+      inferLitsxAttributeInfoAtPosition(source, propPosition),
+      {
+        tagName: "input",
+        prefix: ".",
+        localName: "va",
+        name: ".va",
+        start: source.indexOf(".va"),
+        length: 3,
+      },
+    );
+    assert.strictEqual(inferLitsxAttributeCompletionContext(source, outsidePosition), null);
+    assert.strictEqual(inferLitsxAttributeInfoAtPosition(source, outsidePosition), null);
+
+    assert.deepStrictEqual(getLitsxAttributeCompletionNames(null), []);
+    assert.deepStrictEqual(getLitsxAttributeCompletionNames({
+      tagName: "input",
+      prefix: "@",
+      partialName: "fo",
+    }), ["@focus"]);
+    assert.deepStrictEqual(getLitsxAttributeCompletionNames({
+      tagName: "unknown-tag",
+      prefix: ".",
+      partialName: "va",
+    }), [".value"]);
+    assert.deepStrictEqual(getLitsxAttributeCompletionNames({
+      tagName: "input",
+      prefix: "!",
+      partialName: "",
+    }), []);
+    assert.deepStrictEqual(getLitsxAttributeCompletionNames({
+      tagName: "input",
+      prefix: "?",
+      partialName: "di",
+    }), ["?disabled"]);
+    assert.strictEqual(inferLitsxAttributeInfoAtPosition(source, boolPosition)?.name, "?di");
+
+    const unknownHoistSource = `
+      function Card() {
+        ^customThing({ mode: "open" });
+      }
+    `;
+    const unknownHoist = inferLitsxStaticHoistInfoAtPosition(
+      unknownHoistSource,
+      unknownHoistSource.indexOf("^customThing") + 5,
+    );
+    assert.match(unknownHoist?.documentation ?? "", /static hoist \^customThing/i);
+    assert.strictEqual(
+      inferLitsxStaticHoistInfoAtPosition("const broken = ^styles;", "const broken = ^styles;".indexOf("^styles") + 1),
+      null,
+    );
+    assert.strictEqual(
+      inferLitsxStaticHoistInfoAtPosition("const broken = ^styles()", "const broken = ^styles()".indexOf("^styles") + 2),
+      null,
+    );
+  });
+
+  it("rejects malformed static hoist probes before a valid hoist match", () => {
+    const source = `
+      const invalid = value^styles();
+      const broken = ^ styles();
+      const unfinished = ^styles value;
+      function Card() {
+        ^styles(\`:host { display: block; }\`);
+      }
+    `;
+
+    const validStart = source.lastIndexOf("^styles");
+    assert.strictEqual(
+      inferLitsxStaticHoistInfoAtPosition(source, source.indexOf("^styles()") + 2),
+      null,
+    );
+    assert.strictEqual(
+      inferLitsxStaticHoistInfoAtPosition(source, source.indexOf("^ styles") + 1),
+      null,
+    );
+    assert.strictEqual(
+      inferLitsxStaticHoistInfoAtPosition(source, source.indexOf("^styles value") + 3),
+      null,
+    );
+    assert.deepStrictEqual(
+      inferLitsxStaticHoistInfoAtPosition(source, validStart + 2),
+      {
+        name: "^styles",
+        start: validStart,
+        length: "^styles".length,
+        documentation: "LitSX static style hoist. Declare component-scoped styles before render-time statements.",
+      },
+    );
+  });
+
+  it("limits native className warnings to intrinsic elements", () => {
+    const issues = collectLitsxAuthoredIssues(`
+      const view = (
+        <>
+          <button className="cta" />
+          <FancyButton className="cta" />
+        </>
+      );
+    `);
+
+    const classNameIssues = issues.filter((issue) => issue.code === 91008);
+    assert.strictEqual(classNameIssues.length, 1);
+  });
+
+  it("reports duplicate static hoists and avoids duplicate opaque prop warnings for the same prop", () => {
+    const issues = collectLitsxAuthoredIssues(`
+      const Card = (props) => {
+        ^styles(\`:host { display: block; }\`);
+        ^styles(\`:host { color: red; }\`);
+        return <div>{props.title}{props.title}</div>;
+      };
+    `, { channel: "all" });
+
+    assert.ok(issues.some((issue) => issue.code === 91009));
+    assert.strictEqual(
+      issues.filter((issue) => issue.code === 91018).length,
+      1,
+    );
+    assert.strictEqual(
+      issues.filter((issue) => issue.code === 91014).length,
+      1,
+    );
+  });
+
+  it("reports react compat surface warnings for every supported intrinsic attribute alias", () => {
+    const issues = collectLitsxAuthoredIssues(`
+      const view = (
+        <label htmlFor="search">
+          <input defaultValue="a" defaultChecked dangerouslySetInnerHTML={{ __html: html }} />
+        </label>
+      );
+    `, { channel: "all" });
+
+    assert.ok(issues.some((issue) => issue.code === 91010));
+    assert.ok(issues.some((issue) => issue.code === 91011));
+    assert.ok(issues.some((issue) => issue.code === 91012));
+    assert.ok(issues.some((issue) => issue.code === 91013));
+  });
+
+  it("detects namespaced React.memo and assignment-style component hoists", () => {
+    const issues = collectLitsxAuthoredIssues(`
+      import * as React from "react";
+
+      Card = React.memo((props) => {
+        const message = props.title;
+        const ready = true;
+        ^lightDom();
+        return <div>{message}{ready ? props.title : null}</div>;
+      }, () => true);
+    `, { channel: "all" });
+
+    assert.ok(issues.some((issue) => issue.code === 91016));
+    assert.ok(issues.some((issue) => issue.code === 91017));
+  });
+
+  it("detects component-like function expressions, assignment expressions, and hoists-first ordering", () => {
+    const issues = collectLitsxAuthoredIssues(`
+      let AssignedCard;
+      AssignedCard = function AssignedCard(props) {
+        const label = props.title;
+        ^lightDom();
+        return <div>{label}</div>;
+      };
+
+      const ArrowCard = (props) => {
+        const theme = props.theme;
+        ^shadowRootOptions({ mode: "open" });
+        return <div>{theme}</div>;
+      };
+    `, { channel: "all" });
+
+    assert.ok(issues.some((issue) => issue.code === 91014));
+    assert.ok(issues.some((issue) => issue.code === 91018));
+    assert.ok(issues.some((issue) => issue.code === 91015));
+  });
+
+  it("ignores opaque prop access checks for non-component functions and non-identifier params", () => {
+    const issues = collectLitsxAuthoredIssues(`
+      function helper(props) {
+        return props.title;
+      }
+
+      const lower = (props) => props.title;
+
+      export function Card({ title }) {
+        return <div>{title}</div>;
+      }
+    `, { channel: "all" });
+
+    assert.ok(!issues.some((issue) => issue.code === 91014));
+    assert.ok(!issues.some((issue) => issue.code === 91018));
+  });
+
+  it("treats PascalCase function declarations as components and ignores member assignments", () => {
+    const issues = collectLitsxAuthoredIssues(`
+      function Card(props) {
+        return <div>{props.title}</div>;
+      }
+
+      controls.Card = (props) => props.title;
+    `, { channel: "all" });
+
+    assert.strictEqual(issues.filter((issue) => issue.code === 91014).length, 1);
+    assert.ok(issues.some((issue) => issue.code === 91018));
+  });
+
+  it("skips react-compat warnings on non-intrinsic JSX tags and omits distant binding suggestions", () => {
+    const issues = collectLitsxAuthoredIssues(`
+      const view = (
+        <>
+          <Widget htmlFor="field" defaultValue="x" />
+          <button @somethingwild={handler} />
+        </>
+      );
+    `);
+
+    assert.ok(!issues.some((issue) => issue.code === 91010));
+    const listenerIssue = issues.find((issue) => issue.code === 91006);
+    assert.ok(listenerIssue);
+    assert.doesNotMatch(listenerIssue.message, /Did you mean/);
+  });
+
+  it("skips native className warnings for mocked member-expression component tags", () => {
+    const parseSpy = vi.spyOn(babelParser, "parse").mockReturnValue({
+      type: "File",
+      program: {
+        type: "Program",
+        body: [
+          {
+            type: "ExpressionStatement",
+            expression: {
+              type: "JSXElement",
+              openingElement: {
+                type: "JSXOpeningElement",
+                name: {
+                  type: "JSXMemberExpression",
+                  object: {
+                    type: "JSXIdentifier",
+                    name: "UI",
+                  },
+                  property: {
+                    type: "JSXIdentifier",
+                    name: "Button",
+                  },
+                },
+                attributes: [
+                  null,
+                  {
+                    type: "JSXAttribute",
+                    start: 4,
+                    end: 13,
+                    name: {
+                      type: "JSXIdentifier",
+                      name: "className",
+                    },
+                    value: {
+                      type: "StringLiteral",
+                      value: "cta",
+                    },
+                  },
+                ],
+              },
+            },
+          },
+        ],
+      },
+    });
+
+    try {
+      assert.deepStrictEqual(
+        collectLitsxAuthoredDiagnostics("<UI.Button className=\"cta\" />", {
+          DiagnosticCategory: {
+            Warning: 0,
+            Error: 1,
+          },
+        }, {
+          plugins: ["typescript"],
+        }),
+        [],
+      );
+    } finally {
+      parseSpy.mockRestore();
+    }
   });
 
   it("warns when native className is authored on intrinsic elements", () => {
@@ -437,6 +807,10 @@ describe("@litsx/typescript-plugin", () => {
       inferLitsxAttributeCompletionContext("< @cli", "< @cli".length),
       null,
     );
+    assert.deepStrictEqual(
+      inferLitsxAttributeInfoAtPosition("< @cli", "< @cli".length),
+      null,
+    );
     assert.deepStrictEqual(getLitsxAttributeCompletionNames(null), []);
     assert.deepStrictEqual(
       getLitsxAttributeCompletionNames({
@@ -549,6 +923,22 @@ describe("@litsx/typescript-plugin", () => {
     assert.strictEqual(parseFailureDiagnostics.length, 1);
     assert.strictEqual(parseFailureDiagnostics[0].code, 91000);
     assert.match(parseFailureDiagnostics[0].messageText, /LitSX syntax could not be parsed/);
+  });
+
+  it("falls back when parser errors omit position and message text", () => {
+    const parseSpy = vi.spyOn(babelParser, "parse").mockImplementation(() => {
+      throw {};
+    });
+
+    try {
+      const issues = collectLitsxAuthoredIssues("const value = true;");
+      assert.strictEqual(issues.length, 1);
+      assert.strictEqual(issues[0].code, 91000);
+      assert.strictEqual(issues[0].start, 0);
+      assert.match(issues[0].message, /Unexpected syntax/);
+    } finally {
+      parseSpy.mockRestore();
+    }
   });
 
   it("handles parser ASTs rooted at the program node and hoists with callee fallback spans", () => {
@@ -925,6 +1315,503 @@ describe("@litsx/typescript-plugin", () => {
 
       assert.strictEqual(diagnostics.length, 1);
       assert.strictEqual(diagnostics[0].code, 91003);
+    } finally {
+      parseSpy.mockRestore();
+    }
+  });
+
+  it("handles mocked AST branches for function expressions, namespaced tags, and duplicate singleton hoists", () => {
+    const parseSpy = vi.spyOn(babelParser, "parse").mockReturnValue({
+      type: "File",
+      program: {
+        type: "Program",
+        body: [
+          {
+            type: "ExpressionStatement",
+            expression: {
+              type: "AssignmentExpression",
+              left: {
+                type: "Identifier",
+                name: "AssignedCard",
+              },
+              right: {
+                type: "FunctionExpression",
+                id: {
+                  type: "Identifier",
+                  name: "AssignedCard",
+                },
+                params: [
+                  {
+                    type: "Identifier",
+                    name: "props",
+                    start: 10,
+                    end: 15,
+                  },
+                ],
+                body: {
+                  type: "BlockStatement",
+                  body: [
+                    {
+                      type: "ExpressionStatement",
+                      expression: {
+                        type: "Identifier",
+                        name: "runtime",
+                      },
+                    },
+                    {
+                      type: "ExpressionStatement",
+                      expression: {
+                        type: "CallExpression",
+                        start: 20,
+                        end: 35,
+                        callee: {
+                          type: "Identifier",
+                          name: "__litsx_static_lightDom",
+                        },
+                      },
+                    },
+                    {
+                      type: "ExpressionStatement",
+                      expression: {
+                        type: "MemberExpression",
+                        object: {
+                          type: "Identifier",
+                          name: "props",
+                        },
+                        property: {
+                          type: "Identifier",
+                          name: "title",
+                        },
+                        computed: false,
+                        start: 40,
+                        end: 51,
+                      },
+                    },
+                    {
+                      type: "ExpressionStatement",
+                      expression: {
+                        type: "CallExpression",
+                        start: 60,
+                        end: 75,
+                        callee: {
+                          type: "Identifier",
+                          name: "__litsx_static_styles",
+                        },
+                      },
+                    },
+                    {
+                      type: "ExpressionStatement",
+                      expression: {
+                        type: "CallExpression",
+                        start: 80,
+                        end: 95,
+                        callee: {
+                          type: "Identifier",
+                          name: "__litsx_static_styles",
+                        },
+                      },
+                    },
+                    {
+                      type: "ExpressionStatement",
+                      expression: {
+                        type: "JSXElement",
+                        openingElement: {
+                          type: "JSXOpeningElement",
+                          name: {
+                            type: "JSXNamespacedName",
+                            namespace: {
+                              type: "JSXIdentifier",
+                              name: "svg",
+                            },
+                            name: {
+                              type: "JSXIdentifier",
+                              name: "path",
+                            },
+                          },
+                          attributes: [
+                            {
+                              type: "JSXAttribute",
+                              start: 100,
+                              end: 108,
+                              name: {
+                                type: "JSXIdentifier",
+                                name: "className",
+                              },
+                              value: {
+                                type: "StringLiteral",
+                                value: "cta",
+                              },
+                            },
+                          ],
+                        },
+                      },
+                    },
+                  ],
+                },
+              },
+            },
+          },
+        ],
+      },
+    });
+
+    try {
+      const issues = collectLitsxAuthoredIssues("const mock = true;", {
+        channel: "all",
+        plugins: ["typescript"],
+      });
+
+      assert.ok(issues.some((issue) => issue.code === 91008));
+      assert.ok(issues.some((issue) => issue.code === 91009));
+      assert.ok(issues.some((issue) => issue.code === 91014));
+      assert.ok(issues.some((issue) => issue.code === 91015));
+      assert.ok(issues.some((issue) => issue.code === 91018));
+    } finally {
+      parseSpy.mockRestore();
+    }
+  });
+
+  it("covers unknown static hoists and binding warnings without suggestions in mocked ASTs", () => {
+    const parseSpy = vi.spyOn(babelParser, "parse").mockReturnValue({
+      type: "File",
+      program: {
+        type: "Program",
+        body: [
+          {
+            type: "FunctionDeclaration",
+            id: {
+              type: "Identifier",
+              name: "Card",
+            },
+            params: [
+              {
+                type: "Identifier",
+                name: "props",
+                start: 5,
+                end: 10,
+              },
+            ],
+            body: {
+              type: "BlockStatement",
+              body: [
+                {
+                  type: "ExpressionStatement",
+                  expression: {
+                    type: "Identifier",
+                    name: "runtime",
+                  },
+                },
+                {
+                  type: "ExpressionStatement",
+                  expression: {
+                    type: "CallExpression",
+                    start: 12,
+                    end: 24,
+                    callee: {
+                      type: "Identifier",
+                      name: "__litsx_static_customThing",
+                    },
+                  },
+                },
+                {
+                  type: "ExpressionStatement",
+                  expression: {
+                    type: "CallExpression",
+                    start: 26,
+                    end: 38,
+                    callee: {
+                      type: "Identifier",
+                      name: "__litsx_static_customThing",
+                    },
+                  },
+                },
+                {
+                  type: "ExpressionStatement",
+                  expression: {
+                    type: "MemberExpression",
+                    object: {
+                      type: "Identifier",
+                      name: "props",
+                    },
+                    property: {
+                      type: "Identifier",
+                      name: "title",
+                    },
+                    computed: false,
+                    start: 40,
+                    end: 51,
+                  },
+                },
+                {
+                  type: "ExpressionStatement",
+                  expression: {
+                    type: "JSXElement",
+                    openingElement: {
+                      type: "JSXOpeningElement",
+                      name: {
+                        type: "JSXIdentifier",
+                        name: "input",
+                      },
+                      attributes: [
+                        [],
+                        {
+                          type: "JSXAttribute",
+                          start: 60,
+                          end: 79,
+                          name: {
+                            type: "JSXIdentifier",
+                            name: "__litsx_event_somethingwild",
+                          },
+                          value: {
+                            type: "JSXExpressionContainer",
+                            expression: {
+                              type: "Identifier",
+                              name: "handler",
+                            },
+                          },
+                        },
+                        {
+                          type: "JSXAttribute",
+                          start: 80,
+                          end: 106,
+                          name: {
+                            type: "JSXIdentifier",
+                            name: "__litsx_prop_superunknownprop",
+                          },
+                          value: {
+                            type: "JSXExpressionContainer",
+                            expression: {
+                              type: "Identifier",
+                              name: "value",
+                            },
+                          },
+                        },
+                        {
+                          type: "JSXAttribute",
+                          start: 107,
+                          end: 123,
+                          name: {
+                            type: "JSXIdentifier",
+                            name: "__litsx_bool_totallyoff",
+                          },
+                        },
+                      ],
+                    },
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    });
+
+    try {
+      const issues = collectLitsxAuthoredIssues("const mock = true;", {
+        channel: "all",
+        plugins: ["typescript"],
+      });
+
+      assert.ok(issues.some((issue) => issue.code === 91014));
+      assert.ok(issues.some((issue) => issue.code === 91015 && /\^customThing/.test(issue.message)));
+      assert.ok(issues.some((issue) => issue.code === 91018));
+      assert.ok(issues.some((issue) => issue.code === 91006 && !/Did you mean/.test(issue.message)));
+      assert.ok(issues.some((issue) => issue.code === 91004 && !/Did you mean/.test(issue.message)));
+      assert.ok(issues.some((issue) => issue.code === 91005 && !/Did you mean/.test(issue.message)));
+      assert.ok(!issues.some((issue) => issue.code === 91009));
+    } finally {
+      parseSpy.mockRestore();
+    }
+  });
+
+  it("handles mocked AST branches for PascalCase declarations, empty authored binding names, and imported memo aliases", () => {
+    const parseSpy = vi.spyOn(babelParser, "parse").mockReturnValue({
+      type: "File",
+      program: {
+        type: "Program",
+        body: [
+          {
+            type: "ImportDeclaration",
+            source: { value: "react" },
+            specifiers: [
+              {
+                type: "ImportSpecifier",
+                imported: { type: "Identifier", name: "memo" },
+                local: { type: "Identifier", name: "memoAlias" },
+              },
+            ],
+          },
+          {
+            type: "FunctionDeclaration",
+            id: { type: "Identifier", name: "Card" },
+            params: [{ type: "Identifier", name: "props", start: 1, end: 6 }],
+            body: {
+              type: "BlockStatement",
+              body: [
+                {
+                  type: "ExpressionStatement",
+                  expression: {
+                    type: "MemberExpression",
+                    object: { type: "Identifier", name: "props" },
+                    property: { type: "Identifier", name: "title" },
+                    computed: false,
+                    start: 10,
+                    end: 21,
+                  },
+                },
+                {
+                  type: "ExpressionStatement",
+                  expression: {
+                    type: "CallExpression",
+                    start: 24,
+                    end: 36,
+                    callee: { type: "Identifier", name: "__litsx_static_customThing" },
+                  },
+                },
+                {
+                  type: "ExpressionStatement",
+                  expression: {
+                    type: "JSXElement",
+                    openingElement: {
+                      type: "JSXOpeningElement",
+                      name: { type: "JSXIdentifier", name: "input" },
+                      attributes: [
+                        {
+                          type: "JSXAttribute",
+                          start: 40,
+                          end: 64,
+                          name: { type: "JSXIdentifier", name: "__litsx_event_somethingwild" },
+                          value: {
+                            type: "JSXExpressionContainer",
+                            expression: { type: "Identifier", name: "handler" },
+                          },
+                        },
+                        {
+                          type: "JSXAttribute",
+                          start: 65,
+                          end: 92,
+                          name: { type: "JSXIdentifier", name: "__litsx_prop_superunknownprop" },
+                          value: {
+                            type: "JSXExpressionContainer",
+                            expression: { type: "Identifier", name: "value" },
+                          },
+                        },
+                        {
+                          type: "JSXAttribute",
+                          start: 93,
+                          end: 117,
+                          name: { type: "JSXIdentifier", name: "__litsx_bool_totallyoff" },
+                        },
+                      ],
+                    },
+                  },
+                },
+              ],
+            },
+          },
+          {
+            type: "ExpressionStatement",
+            expression: {
+              type: "CallExpression",
+              start: 90,
+              end: 104,
+              callee: { type: "Identifier", name: "memoAlias" },
+              arguments: [{ type: "Identifier", name: "Card" }],
+            },
+          },
+          {
+            type: "ExpressionStatement",
+            expression: {
+              type: "AssignmentExpression",
+              left: {
+                type: "MemberExpression",
+                object: { type: "Identifier", name: "controls" },
+                property: { type: "Identifier", name: "Card" },
+              },
+              right: {
+                type: "ArrowFunctionExpression",
+                params: [{ type: "Identifier", name: "props" }],
+                body: {
+                  type: "MemberExpression",
+                  object: { type: "Identifier", name: "props" },
+                  property: { type: "Identifier", name: "label" },
+                  computed: false,
+                },
+              },
+            },
+          },
+        ],
+      },
+    });
+
+    try {
+      const issues = collectLitsxAuthoredIssues("const mock = true;", {
+        channel: "all",
+        plugins: ["typescript"],
+      });
+
+      assert.strictEqual(issues.filter((issue) => issue.code === 91014).length, 1);
+      assert.strictEqual(issues.filter((issue) => issue.code === 91018).length, 1);
+      assert.ok(issues.some((issue) => issue.code === 91015 && /\^customThing/.test(issue.message)));
+      assert.ok(issues.some((issue) => issue.code === 91016));
+      assert.ok(issues.some((issue) => issue.code === 91006 && !/Did you mean/.test(issue.message)));
+      assert.ok(issues.some((issue) => issue.code === 91004 && !/Did you mean/.test(issue.message)));
+      assert.ok(issues.some((issue) => issue.code === 91005 && !/Did you mean/.test(issue.message)));
+    } finally {
+      parseSpy.mockRestore();
+    }
+  });
+
+  it("skips react-compat warnings for uppercase JSX identifiers in mocked ASTs", () => {
+    const parseSpy = vi.spyOn(babelParser, "parse").mockReturnValue({
+      type: "File",
+      program: {
+        type: "Program",
+        body: [
+          {
+            type: "ExpressionStatement",
+            expression: {
+              type: "JSXElement",
+              openingElement: {
+                type: "JSXOpeningElement",
+                name: {
+                  type: "JSXIdentifier",
+                  name: "Button",
+                },
+                attributes: [
+                  {
+                    type: "JSXAttribute",
+                    start: 8,
+                    end: 24,
+                    name: {
+                      type: "JSXIdentifier",
+                      name: "defaultValue",
+                    },
+                    value: {
+                      type: "StringLiteral",
+                      value: "cta",
+                    },
+                  },
+                ],
+              },
+            },
+          },
+        ],
+      },
+    });
+
+    try {
+      assert.deepStrictEqual(
+        collectLitsxAuthoredDiagnostics("<Button defaultValue=\"cta\" />", {
+          DiagnosticCategory: {
+            Warning: 0,
+            Error: 1,
+          },
+        }, {
+          plugins: ["typescript"],
+        }),
+        [],
+      );
     } finally {
       parseSpy.mockRestore();
     }
@@ -1756,6 +2643,304 @@ describe("@litsx/typescript-plugin", () => {
     })();
   });
 
+  it("surfaces missing and invalid tsconfig states through createLitsxTypecheckSession", () => {
+    return (async () => {
+      await withMockedTypeScript((tsModule) => ({
+        ...tsModule,
+        parseCommandLine() {
+          return {
+            errors: [],
+            options: {},
+            fileNames: [],
+          };
+        },
+        findConfigFile() {
+          return undefined;
+        },
+      }), ({ createLitsxTypecheckSession }) => {
+        const session = createLitsxTypecheckSession([]);
+        assert.strictEqual(session.parsedCommandLine.errors[0].code, 5083);
+      });
+
+      await withMockedTypeScript((tsModule) => ({
+        ...tsModule,
+        parseCommandLine() {
+          return {
+            errors: [],
+            options: {},
+            fileNames: [],
+          };
+        },
+        findConfigFile() {
+          return "/virtual/tsconfig.json";
+        },
+        readConfigFile() {
+          return {
+            error: {
+              category: tsModule.DiagnosticCategory.Error,
+              code: 10001,
+              messageText: "broken tsconfig",
+            },
+          };
+        },
+      }), ({ createLitsxTypecheckSession }) => {
+        const session = createLitsxTypecheckSession([]);
+        assert.strictEqual(session.parsedCommandLine.errors[0].code, 10001);
+      });
+    })();
+  });
+
+  it("collects additional .litsx files from tsconfig files, include patterns, and directory reads", () => {
+    return (async () => {
+      let parseCalls = 0;
+
+      await withMockedTypeScript((tsModule) => ({
+        ...tsModule,
+        parseCommandLine() {
+          return {
+            errors: [],
+            options: {},
+            fileNames: [],
+          };
+        },
+        findConfigFile() {
+          return "/virtual/tsconfig.json";
+        },
+        readConfigFile() {
+          return {
+            config: {
+              files: ["src/direct.litsx", "src/ignored.ts"],
+              include: ["src/pattern.litsx.jsx", "src/**/*.tsx"],
+              exclude: ["dist"],
+              compilerOptions: {},
+            },
+          };
+        },
+        parseJsonConfigFileContent(_config, _host, basePath, options, projectPath) {
+          parseCalls += 1;
+          return {
+            errors: [
+              {
+                code: 18003,
+              },
+            ],
+            options,
+            fileNames: ["/virtual/src/main.tsx"],
+            projectReferences: undefined,
+            projectPath,
+            projectVersion: "1",
+          };
+        },
+        sys: {
+          ...tsModule.sys,
+          readFile(fileName) {
+            if (fileName === "/virtual/tsconfig.json") {
+              return JSON.stringify({ compilerOptions: {} });
+            }
+            return "";
+          },
+          fileExists(fileName) {
+            return fileName === "/virtual/tsconfig.json"
+              || fileName === "/virtual/src/pattern.litsx.jsx";
+          },
+          readDirectory(basePath, extensions) {
+            assert.strictEqual(basePath, "/virtual");
+            assert.deepStrictEqual(extensions, [".litsx", ".litsx.jsx"]);
+            return [
+              "/virtual/tsconfig.json",
+              "/virtual/src/discovered.litsx",
+            ];
+          },
+          getModifiedTime() {
+            return new Date(1);
+          },
+        },
+      }), ({ createLitsxTypecheckSession }) => {
+        const first = createLitsxTypecheckSession(["--project", "/virtual/tsconfig.json"]);
+        const second = createLitsxTypecheckSession(["--project", "/virtual/tsconfig.json"]);
+
+        assert.strictEqual(parseCalls, 1);
+        assert.deepStrictEqual(first.parsedCommandLine.errors, []);
+        assert.deepStrictEqual(first.parsedCommandLine.fileNames, [
+          "/virtual/src/direct.litsx",
+          "/virtual/src/discovered.litsx",
+          "/virtual/src/main.tsx",
+          "/virtual/src/pattern.litsx.jsx",
+        ]);
+        assert.strictEqual(first.parsedCommandLine.options.allowNonTsExtensions, true);
+        assert.strictEqual(second.parsedCommandLine.fileNames.length, 4);
+      });
+    })();
+  });
+
+  it("accepts an existing typecheck session object in runLitsxTypecheck", () => {
+    return withMockedTypeScript((tsModule) => ({
+      ...tsModule,
+      getPreEmitDiagnostics() {
+        return [];
+      },
+    }), ({ runLitsxTypecheck: mockedRunLitsxTypecheck }) => {
+      const existingSession = {
+        parsedCommandLine: {
+          errors: [],
+          fileNames: [],
+        },
+        virtualizationState: {
+          getVirtualizedText(_fileName, sourceText) {
+            return sourceText;
+          },
+        },
+        projectSession: {
+          refresh() {},
+          getProgram() {
+            return { mocked: true };
+          },
+          clearOverlayFile() {},
+        },
+      };
+
+      assert.strictEqual(mockedRunLitsxTypecheck(existingSession), 0);
+    });
+  });
+
+  it("reuses cached sessions while replacing the project session when one is provided", () => {
+    return (async () => {
+      let version = 1;
+      const firstProjectSession = {
+        refresh: vi.fn(),
+      };
+      const secondProjectSession = {
+        refresh: vi.fn(),
+      };
+
+      await withMockedTypeScript((tsModule) => ({
+        ...tsModule,
+        parseCommandLine() {
+          return {
+            errors: [],
+            options: {},
+            fileNames: [],
+          };
+        },
+        findConfigFile() {
+          return "/virtual/tsconfig.json";
+        },
+        readConfigFile() {
+          return {
+            config: {
+              compilerOptions: {},
+            },
+          };
+        },
+        sys: {
+          ...tsModule.sys,
+          readFile(fileName) {
+            if (fileName === "/virtual/tsconfig.json") {
+              return JSON.stringify({ compilerOptions: {} });
+            }
+            return tsModule.sys.readFile(fileName);
+          },
+          fileExists(fileName) {
+            return fileName === "/virtual/tsconfig.json" || tsModule.sys.fileExists(fileName);
+          },
+          getModifiedTime(fileName) {
+            if (fileName === "/virtual/tsconfig.json") {
+              return new Date(version);
+            }
+            return tsModule.sys.getModifiedTime?.(fileName);
+          },
+        },
+        parseJsonConfigFileContent() {
+          return {
+            errors: [],
+            options: {
+              noEmit: true,
+            },
+            fileNames: [],
+            projectReferences: undefined,
+            projectPath: "/virtual/tsconfig.json",
+            projectVersion: String(version),
+          };
+        },
+      }), ({ createLitsxTypecheckSession }) => {
+        const firstSession = createLitsxTypecheckSession([], {
+          projectSession: firstProjectSession,
+        });
+        version = 2;
+        const secondSession = createLitsxTypecheckSession([], {
+          projectSession: secondProjectSession,
+        });
+
+        assert.strictEqual(secondSession, firstSession);
+        assert.strictEqual(secondSession.projectSession, secondProjectSession);
+        assert.strictEqual(secondSession.parsedCommandLine.projectVersion, "2");
+        assert.strictEqual(firstProjectSession.refresh.mock.calls.length, 0);
+        assert.deepStrictEqual(secondProjectSession.refresh.mock.calls[0][0], {
+          parsedCommandLine: secondSession.parsedCommandLine,
+        });
+      });
+    })();
+  });
+
+  it("sets and clears overlay files while running a typecheck session", () => {
+    return withMockedTypeScript((tsModule) => ({
+      ...tsModule,
+      getPreEmitDiagnostics() {
+        return [];
+      },
+    }), ({ runLitsxTypecheck: mockedRunLitsxTypecheck }) => {
+      const overlays = [];
+      const cleared = [];
+      const existingSession = {
+        parsedCommandLine: {
+          errors: [],
+          fileNames: ["/virtual/litsx.tsx", "/virtual/plain.tsx", "/virtual/missing.tsx"],
+        },
+        virtualizationState: {
+          getVirtualizedText(fileName, sourceText) {
+            if (fileName === "/virtual/litsx.tsx") {
+              return sourceText.replace("@click", "__litsx_event_click");
+            }
+            return sourceText;
+          },
+          get() {
+            return null;
+          },
+        },
+        projectSession: {
+          refresh() {},
+          readFile(fileName) {
+            if (fileName === "/virtual/litsx.tsx") {
+              return "const view = <button @click={save} />;";
+            }
+            if (fileName === "/virtual/plain.tsx") {
+              return "const view = <button onClick={save} />;";
+            }
+            return undefined;
+          },
+          setOverlayFile(fileName, text) {
+            overlays.push([fileName, text]);
+          },
+          clearOverlayFile(fileName) {
+            cleared.push(fileName);
+          },
+          getProgram() {
+            return { mocked: true };
+          },
+        },
+      };
+
+      assert.strictEqual(mockedRunLitsxTypecheck(existingSession), 0);
+      assert.deepStrictEqual(overlays, [
+        ["/virtual/litsx.tsx", "const view = <button __litsx_event_click={save} />;"],
+      ]);
+      assert.deepStrictEqual(cleared.sort(), [
+        "/virtual/missing.tsx",
+        "/virtual/plain.tsx",
+      ]);
+    });
+  });
+
   it("filters virtual attribute completions and remaps diagnostics", () => {
     const source = `
           const view = <button @click={handleClick} />;
@@ -1959,9 +3144,9 @@ describe("@litsx/typescript-plugin", () => {
 
     assert.strictEqual(diagnostic.start, originalEventStart);
     assert.strictEqual(diagnostic.length, "@click".length);
-    assert.strictEqual(diagnostic.messageText.messageText, "__litsx_event_click is wrong");
-    assert.strictEqual(diagnostic.messageText.next[0].messageText, "__litsx_event_click follow-up");
-    assert.strictEqual(diagnostic.relatedInformation[0].messageText, "__litsx_event_click related");
+    assert.strictEqual(diagnostic.messageText.messageText, "@click is wrong");
+    assert.strictEqual(diagnostic.messageText.next[0].messageText, "@click follow-up");
+    assert.strictEqual(diagnostic.relatedInformation[0].messageText, "@click related");
     assert.strictEqual(diagnostic.relatedInformation[0].start, 1);
   });
 
@@ -2937,6 +4122,183 @@ describe("@litsx/typescript-plugin", () => {
     assert.match(details.documentation[0].text, /LitSX event listener binding for <button>/);
   });
 
+  it("passes through completion details and navigation wrappers when there is no contextual or remapped result", () => {
+    const source = `const view = <button @click={handleClick} />;`;
+    const snapshots = new Map([["/virtual/details.tsx", source]]);
+    const passthroughDetails = {
+      name: "class",
+      kind: "property",
+      displayParts: [{ text: "class", kind: "propertyName" }],
+      documentation: [{ text: "plain docs", kind: "text" }],
+    };
+    const passthroughDefinitionAndBoundSpan = {
+      textSpan: { start: 1, length: 2 },
+      definitions: undefined,
+    };
+    const passthroughRenameInfo = {
+      canRename: true,
+      triggerSpan: undefined,
+    };
+
+    const pluginModule = plugin({
+      typescript: {
+        ScriptKind: {
+          TSX: 4,
+          JSX: 2,
+        },
+        ScriptSnapshot: {
+          fromString(value) {
+            return {
+              getLength() {
+                return value.length;
+              },
+              getText(start, end) {
+                return value.slice(start, end);
+              },
+            };
+          },
+        },
+      },
+    });
+
+    const wrapped = pluginModule.create({
+      languageServiceHost: {
+        getScriptSnapshot(fileName) {
+          const text = snapshots.get(fileName);
+          if (text == null) {
+            return undefined;
+          }
+          return {
+            getLength() {
+              return text.length;
+            },
+            getText(start, end) {
+              return text.slice(start, end);
+            },
+          };
+        },
+      },
+      languageService: {
+        getSyntacticDiagnostics() {
+          return [];
+        },
+        getSemanticDiagnostics() {
+          return [];
+        },
+        getSuggestionDiagnostics() {
+          return [];
+        },
+        getQuickInfoAtPosition() {
+          return undefined;
+        },
+        getCompletionsAtPosition() {
+          return null;
+        },
+        getCompletionEntryDetails() {
+          return passthroughDetails;
+        },
+        getDefinitionAtPosition() {
+          return undefined;
+        },
+        getDefinitionAndBoundSpan() {
+          return passthroughDefinitionAndBoundSpan;
+        },
+        getReferencesAtPosition() {
+          return undefined;
+        },
+        getRenameInfo() {
+          return passthroughRenameInfo;
+        },
+        findRenameLocations() {
+          return undefined;
+        },
+      },
+    });
+
+    assert.deepStrictEqual(
+      wrapped.getCompletionEntryDetails("/virtual/details.tsx", source.indexOf("@click"), "class"),
+      passthroughDetails,
+    );
+    assert.strictEqual(
+      wrapped.getDefinitionAtPosition("/virtual/details.tsx", source.indexOf("@click")),
+      undefined,
+    );
+    assert.strictEqual(
+      wrapped.getReferencesAtPosition("/virtual/details.tsx", source.indexOf("@click")),
+      undefined,
+    );
+    assert.strictEqual(
+      wrapped.findRenameLocations("/virtual/details.tsx", source.indexOf("@click"), false, false, false),
+      undefined,
+    );
+    assert.strictEqual(
+      wrapped.getRenameInfo("/virtual/details.tsx", source.indexOf("@click")),
+      passthroughRenameInfo,
+    );
+    assert.deepStrictEqual(
+      wrapped.getDefinitionAndBoundSpan("/virtual/details.tsx", source.indexOf("@click")),
+      passthroughDefinitionAndBoundSpan,
+    );
+  });
+
+  it("reports LitSX script kinds through the wrapped host", () => {
+    const pluginModule = plugin({
+      typescript: {
+        ScriptKind: {
+          TSX: 4,
+          JSX: 2,
+        },
+        ScriptSnapshot: {
+          fromString(value) {
+            return {
+              getLength() {
+                return value.length;
+              },
+              getText(start, end) {
+                return value.slice(start, end);
+              },
+            };
+          },
+        },
+      },
+    });
+
+    const host = {
+      getScriptSnapshot() {
+        return undefined;
+      },
+      getScriptKind(fileName) {
+        return fileName.endsWith(".tsx") ? 4 : 1;
+      },
+    };
+
+    pluginModule.create({
+      languageServiceHost: host,
+      languageService: {
+        getSyntacticDiagnostics() {
+          return [];
+        },
+        getSemanticDiagnostics() {
+          return [];
+        },
+        getSuggestionDiagnostics() {
+          return [];
+        },
+        getQuickInfoAtPosition() {
+          return undefined;
+        },
+        getCompletionsAtPosition() {
+          return null;
+        },
+      },
+    });
+
+    assert.strictEqual(host.getScriptKind("/virtual/card.litsx"), 4);
+    assert.strictEqual(host.getScriptKind("/virtual/card.litsx.jsx"), 2);
+    assert.strictEqual(host.getScriptKind("/virtual/card.tsx"), 4);
+    assert.strictEqual(host.getScriptKind("/virtual/card.ts"), 1);
+  });
+
   it("remaps definition, references, and rename spans back to authored positions", () => {
     const source = `
       const handleClick = () => {};
@@ -3628,6 +4990,224 @@ describe("@litsx/typescript-plugin", () => {
     assert.deepStrictEqual(semanticDiagnostics, []);
   });
 
+  it("drops raw jsx parser cascades when authored jsx files have no LitSX warnings", () => {
+    const source = `const view = <button @click={handleClick} />;`;
+    const snapshots = new Map([["/virtual/clean.jsx", source]]);
+
+    const pluginModule = plugin({
+      typescript: {
+        DiagnosticCategory: {
+          Warning: 0,
+          Error: 1,
+        },
+        ScriptSnapshot: {
+          fromString(value) {
+            return {
+              getLength() {
+                return value.length;
+              },
+              getText(start, end) {
+                return value.slice(start, end);
+              },
+            };
+          },
+        },
+      },
+    });
+
+    const wrapped = pluginModule.create({
+      languageServiceHost: {
+        getScriptSnapshot(fileName) {
+          const text = snapshots.get(fileName);
+          if (text == null) return undefined;
+          return {
+            getLength() {
+              return text.length;
+            },
+            getText(start, end) {
+              return text.slice(start, end);
+            },
+          };
+        },
+      },
+      languageService: {
+        getSyntacticDiagnostics() {
+          return [
+            {
+              code: 1003,
+              category: 1,
+              start: source.indexOf("@click"),
+              length: 1,
+              messageText: "Identifier expected.",
+            },
+          ];
+        },
+        getSemanticDiagnostics() {
+          return [];
+        },
+        getSuggestionDiagnostics() {
+          return [];
+        },
+        getQuickInfoAtPosition() {
+          return undefined;
+        },
+        getCompletionsAtPosition() {
+          return null;
+        },
+      },
+    });
+
+    assert.deepStrictEqual(wrapped.getSyntacticDiagnostics("/virtual/clean.jsx"), []);
+  });
+
+  it("remaps suggestion diagnostics and related information", () => {
+    const source = `const view = <button @click={handleClick} />;`;
+    const virtualSource = createVirtualLitsxJsxSource(source);
+    const virtualEventStart = virtualSource.code.indexOf("__litsx_event_click");
+    const originalEventStart = source.indexOf("@click");
+    const snapshots = new Map([["/virtual/suggestion.tsx", source]]);
+
+    const pluginModule = plugin({
+      typescript: {
+        ScriptSnapshot: {
+          fromString(value) {
+            return {
+              getLength() {
+                return value.length;
+              },
+              getText(start, end) {
+                return value.slice(start, end);
+              },
+            };
+          },
+        },
+      },
+    });
+
+    const wrapped = pluginModule.create({
+      languageServiceHost: {
+        getScriptSnapshot(fileName) {
+          const text = snapshots.get(fileName);
+          if (text == null) return undefined;
+          return {
+            getLength() {
+              return text.length;
+            },
+            getText(start, end) {
+              return text.slice(start, end);
+            },
+          };
+        },
+      },
+      languageService: {
+        getSyntacticDiagnostics() {
+          return [];
+        },
+        getSemanticDiagnostics() {
+          return [];
+        },
+        getSuggestionDiagnostics() {
+          return [
+            {
+              code: 80001,
+              category: 2,
+              start: virtualEventStart,
+              length: "__litsx_event_click".length,
+              messageText: "Suggestion for __litsx_event_click",
+              relatedInformation: [
+                {
+                  file: { fileName: "/virtual/suggestion.tsx" },
+                  start: virtualEventStart,
+                  length: "__litsx_event_click".length,
+                  messageText: "See __litsx_event_click",
+                },
+              ],
+            },
+          ];
+        },
+        getQuickInfoAtPosition() {
+          return undefined;
+        },
+        getCompletionsAtPosition() {
+          return null;
+        },
+      },
+    });
+
+    const diagnostics = wrapped.getSuggestionDiagnostics("/virtual/suggestion.tsx");
+
+    assert.strictEqual(diagnostics[0].start, originalEventStart);
+    assert.strictEqual(diagnostics[0].length, "@click".length);
+    assert.match(diagnostics[0].messageText, /@click/);
+    assert.strictEqual(diagnostics[0].relatedInformation[0].start, originalEventStart);
+    assert.match(diagnostics[0].relatedInformation[0].messageText, /@click/);
+  });
+
+  it("passes through undefined optional navigation methods", () => {
+    const source = `const view = <button @click={handleClick} />;`;
+    const snapshots = new Map([["/virtual/optional.tsx", source]]);
+    const pluginModule = plugin({
+      typescript: {
+        ScriptSnapshot: {
+          fromString(value) {
+            return {
+              getLength() {
+                return value.length;
+              },
+              getText(start, end) {
+                return value.slice(start, end);
+              },
+            };
+          },
+        },
+      },
+    });
+
+    const wrapped = pluginModule.create({
+      languageServiceHost: {
+        getScriptSnapshot(fileName) {
+          const text = snapshots.get(fileName);
+          if (text == null) return undefined;
+          return {
+            getLength() {
+              return text.length;
+            },
+            getText(start, end) {
+              return text.slice(start, end);
+            },
+          };
+        },
+      },
+      languageService: {
+        getSyntacticDiagnostics() {
+          return [];
+        },
+        getSemanticDiagnostics() {
+          return [];
+        },
+        getSuggestionDiagnostics() {
+          return [];
+        },
+        getQuickInfoAtPosition() {
+          return undefined;
+        },
+        getCompletionsAtPosition() {
+          return null;
+        },
+      },
+    });
+
+    const position = source.indexOf("@click");
+    assert.strictEqual(wrapped.getDefinitionAtPosition("/virtual/optional.tsx", position), undefined);
+    assert.strictEqual(wrapped.getDefinitionAndBoundSpan("/virtual/optional.tsx", position), undefined);
+    assert.strictEqual(wrapped.getReferencesAtPosition("/virtual/optional.tsx", position), undefined);
+    assert.strictEqual(wrapped.getRenameInfo("/virtual/optional.tsx", position), undefined);
+    assert.strictEqual(
+      wrapped.findRenameLocations("/virtual/optional.tsx", position, false, false, false),
+      undefined,
+    );
+  });
+
   it("remaps internal virtual names in quick-info text fragments", () => {
     assert.strictEqual(remapVirtualText("__litsx_prop_value"), ".value");
     assert.strictEqual(remapVirtualText("bind __litsx_bool_disabled here"), "bind ?disabled here");
@@ -3683,6 +5263,43 @@ describe("@litsx/typescript-plugin", () => {
     });
 
     assert.deepStrictEqual(pluginModule.getExternalFiles({}), []);
+  });
+
+  it("recomputes external files when the project version changes", () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-plugin-external-files-version-"));
+    const jsxFile = path.join(tempDir, "view.jsx");
+    fs.writeFileSync(jsxFile, "const view = <button @click={save} />;");
+    const readSpy = vi.spyOn(fs, "readFileSync");
+    let version = "1";
+
+    try {
+      const pluginModule = plugin({
+        typescript: {
+          ScriptSnapshot: {
+            fromString(value) {
+              return value;
+            },
+          },
+        },
+      });
+
+      const project = {
+        getProjectVersion() {
+          return version;
+        },
+        getFileNames() {
+          return [jsxFile];
+        },
+      };
+
+      assert.deepStrictEqual(pluginModule.getExternalFiles(project), [jsxFile]);
+      version = "2";
+      assert.deepStrictEqual(pluginModule.getExternalFiles(project), [jsxFile]);
+      assert.strictEqual(readSpy.mock.calls.filter(([fileName]) => fileName === jsxFile).length, 2);
+    } finally {
+      readSpy.mockRestore();
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
   });
 
   it("reuses cached external files while the project version is unchanged", () => {

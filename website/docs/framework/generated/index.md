@@ -87,6 +87,21 @@ export interface LitsxDomAttributes<Target = EventTarget> {
      * so the public JSX type surface intentionally avoids React-style `onClick` props.
      */
     _currentTarget?: Target | undefined;
+    /**
+     * Tooling virtualizes authored `@event` bindings to `__litsx_event_*` attributes
+     * so TypeScript can parse and typecheck LitSX-authored JSX.
+     */
+    [attributeName: `__litsx_event_${string}`]: ((event?: Event) => unknown) | undefined;
+    /**
+     * Tooling virtualizes authored `.prop` bindings to `__litsx_prop_*` attributes
+     * while preserving the original source spans for editor features.
+     */
+    [attributeName: `__litsx_prop_${string}`]: unknown;
+    /**
+     * Tooling virtualizes authored `?attr` bindings to `__litsx_bool_*` attributes
+     * while preserving the original source spans for editor features.
+     */
+    [attributeName: `__litsx_bool_${string}`]: boolean | undefined;
 }
 ```
 

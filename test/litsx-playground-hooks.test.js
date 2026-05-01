@@ -66,6 +66,7 @@ async function importHooksWithEditorMocks() {
 
   const createSourceEditorState = vi.fn((doc, onChange) => ({ kind: "source", doc, onChange }));
   const createEmittedEditorState = vi.fn((doc) => ({ kind: "emitted", doc }));
+  const foldSourceEditorHoists = vi.fn();
   const setEditorDocument = vi.fn();
   const editorDestroy = vi.fn();
   const editorInstances = [];
@@ -85,6 +86,7 @@ async function importHooksWithEditorMocks() {
   vi.doMock("../packages/litsx-playground/src/litsx-playground-editors.js", () => ({
     createSourceEditorState,
     createEmittedEditorState,
+    foldSourceEditorHoists,
     setEditorDocument,
   }));
 
@@ -93,6 +95,7 @@ async function importHooksWithEditorMocks() {
     mod,
     createSourceEditorState,
     createEmittedEditorState,
+    foldSourceEditorHoists,
     setEditorDocument,
     editorDestroy,
     editorInstances,
@@ -336,6 +339,7 @@ describe("@litsx/playground hooks", () => {
       mod,
       createSourceEditorState,
       createEmittedEditorState,
+      foldSourceEditorHoists,
       editorDestroy,
       editorInstances,
     } = await importHooksWithEditorMocks();
@@ -384,6 +388,7 @@ describe("@litsx/playground hooks", () => {
 
     expect(createSourceEditorState).toHaveBeenCalledWith("source", expect.any(Function));
     expect(createEmittedEditorState).toHaveBeenCalledWith("emitted output");
+    expect(foldSourceEditorHoists).toHaveBeenCalledTimes(1);
     expect(editorInstances).toHaveLength(2);
     expect(globalThis.Worker).toHaveBeenCalledTimes(1);
     expect(args.isMountedRef.current).toBe(true);

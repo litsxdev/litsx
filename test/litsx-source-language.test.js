@@ -4,11 +4,10 @@ import assert from "assert";
 import { EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { forceLinting, forEachDiagnostic } from "@codemirror/lint";
-import { foldable } from "@codemirror/language";
+import { foldable, syntaxTree } from "@codemirror/language";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   litsxSourceHighlighting,
-  litsxSourceParseStabilizer,
   litsxSourceSupport,
 } from "../packages/litsx-playground/src/litsx-source-language.js";
 
@@ -131,24 +130,17 @@ function Broken() {
     }
   });
 
-  it("schedules reparsing on construction and doc updates, then clears timers on destroy", () => {
-    vi.useFakeTimers();
-
+  it("keeps the LitSX source support active across construction and doc updates", () => {
     const view = new EditorView({
       state: EditorState.create({
         doc: `function Demo() { return <p>Hello</p>; }`,
-        extensions: [litsxSourceParseStabilizer],
+        extensions: [litsxSourceSupport().extension],
       }),
       parent: document.body.appendChild(document.createElement("div")),
     });
 
-    const pluginValue = view.plugin(litsxSourceParseStabilizer);
-
     try {
-      expect(pluginValue.timeoutId).not.toBe(null);
-
-      vi.runAllTimers();
-      expect(pluginValue.timeoutId).toBe(null);
+      expect(syntaxTree(view.state).length).toBeGreaterThan(0);
 
       view.dispatch({
         changes: {
@@ -158,14 +150,9 @@ function Broken() {
         },
       });
 
-      expect(pluginValue.timeoutId).not.toBe(null);
-
-      view.destroy();
-      expect(pluginValue.timeoutId).toBe(null);
+      expect(syntaxTree(view.state).length).toBeGreaterThan(0);
     } finally {
-      if (view.dom.isConnected) {
-        view.destroy();
-      }
+      view.destroy();
     }
   });
 });

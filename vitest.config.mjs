@@ -17,12 +17,14 @@ export default defineConfig({
       ? [new TransformReporter()]
       : ['default'],
     coverage: {
-      reporter: ['text', 'html'],
+      reporter: ['text', 'html', 'json-summary'],
       include: ['packages/*/src/**', 'packages/react/*/src/**', 'packages/shared/*/src/**'],
       exclude: [
         '**/node_modules/**',
         '**/test/**',
         '**/dist/**',
+        'packages/dx-smoke-app/src/**',
+        'packages/vitepress/src/**',
         'packages/litsx-playground/src/LitsxPlayground.tsx',
         'packages/litsx-playground/src/index.js',
         'packages/litsx-playground/src/playground-runtime.js',

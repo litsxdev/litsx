@@ -99,6 +99,31 @@ describe("@litsx/babel-plugin-shared-hooks helpers", () => {
     const unsupportedDeclaration = unsupportedAst.program.body[0].declarations[0];
 
     assert.equal(extractUseStateInfo(unsupportedDeclaration, new Set(), t), null);
+
+    const nonCallAst = parseModule("const value = 1;");
+    const nonCallDeclaration = nonCallAst.program.body[0].declarations[0];
+    assert.equal(extractUseStateInfo(nonCallDeclaration, new Set(), t), null);
+
+    const wrongHookAst = parseModule("const value = useMemo(0);");
+    const wrongHookDeclaration = wrongHookAst.program.body[0].declarations[0];
+    assert.equal(extractUseStateInfo(wrongHookDeclaration, new Set(), t), null);
+  });
+
+  it("generates fallback state keys when bindings are missing or setter names are non-standard", () => {
+    const emptyPatternAst = parseModule("const [,] = useState(0);");
+    const emptyPatternDeclaration = emptyPatternAst.program.body[0].declarations[0];
+    const emptyPatternInfo = extractUseStateInfo(emptyPatternDeclaration, new Set(["state1"]), t);
+
+    assert.equal(emptyPatternInfo.valueBindingName, null);
+    assert.equal(emptyPatternInfo.setterBindingName, null);
+    assert.equal(emptyPatternInfo.stateKeyName, "state2");
+
+    const oddSetterAst = parseModule("const [, updateReady] = useState(0);");
+    const oddSetterDeclaration = oddSetterAst.program.body[0].declarations[0];
+    const oddSetterInfo = extractUseStateInfo(oddSetterDeclaration, new Set(["updateReadyState"]), t);
+
+    assert.equal(oddSetterInfo.setterBindingName, "updateReady");
+    assert.equal(oddSetterInfo.stateKeyName, "updateReadyState1");
   });
 
   it("detects React event attributes and throws on authored onX props", () => {
@@ -107,6 +132,7 @@ describe("@litsx/babel-plugin-shared-hooks helpers", () => {
 
     assert.equal(isReactEventAttribute(openingElement.attributes[0].name, t), true);
     assert.equal(isReactEventAttribute(openingElement.attributes[1].name, t), false);
+    assert.equal(isReactEventAttribute(t.jsxNamespacedName(t.jsxIdentifier("svg"), t.jsxIdentifier("onClick")), t), false);
 
     assert.throws(() => {
       transformFromAstSync(ast, "const view = <button onClick={save} />;", {
@@ -456,6 +482,24 @@ describe("@litsx/babel-plugin-shared-hooks helpers", () => {
     assert.match(namespaceResult.code, /import \* as runtime from "litsx";/);
     assert.match(namespaceResult.code, /import \{ prepareEffects \} from "litsx";/);
     assert.match(existingResult.code, /import \{ useId, prepareEffects \} from "litsx";|import \{ prepareEffects, useId \} from "litsx";/);
+  });
+
+  it("skips empty runtime import requests and can insert into files with no imports", () => {
+    const noImportsAst = parseModule(`const value = 1;`);
+    const noImportsResult = transformFromAstSync(noImportsAst, "", {
+      configFile: false,
+      babelrc: false,
+      plugins: [() => ({
+        visitor: {
+          Program(programPath) {
+            ensureRuntimeNamedImports(programPath, "litsx", [], t);
+            ensureRuntimeNamedImports(programPath, "litsx", ["prepareEffects", null, "prepareEffects"], t);
+          },
+        },
+      })],
+    });
+
+    assert.match(noImportsResult.code, /^import \{ prepareEffects \} from "litsx";\s+const value = 1;/s);
   });
 
   it("collects and finalizes useState imports across source and runtime modules", () => {

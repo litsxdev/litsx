@@ -15,6 +15,18 @@ async function formatWith(parser, source) {
   });
 }
 
+async function formatWithOptions(parser, source, extraOptions = {}) {
+  return prettier.format(source, {
+    parser,
+    plugins: [plugin],
+    semi: true,
+    singleQuote: false,
+    trailingComma: "all",
+    tabWidth: 2,
+    ...extraOptions,
+  });
+}
+
 describe("prettier-plugin-litsx", () => {
   it("formats .litsx authored bindings and static hoists without virtual names", async () => {
     const source = `export const App=({title}:{title:string})=>{^properties({open:{type:Boolean}});return <button class="cta" @click={()=>{}} .value={title} ?disabled={false}>{title}</button>;};`;
@@ -39,6 +51,28 @@ describe("prettier-plugin-litsx", () => {
     assert.match(formatted, /color: red;/);
     assert.match(formatted, /margin: 0 auto;/);
     assert.match(formatted, /padding: 12px 18px;/);
+  });
+
+  it("formats empty and multiline ^styles templates with tab indentation when requested", async () => {
+    const source = `export const App = () => {
+\t^styles(\`
+.card{display:block;}
+
+button{padding:4px;}
+\t\`);
+\t^styles(\`\`);
+\treturn <button />;
+};
+`;
+
+    const formatted = await formatWithOptions("litsx", source, {
+      useTabs: true,
+    });
+
+    assert.match(formatted, /\^styles\(`\n\t\t\.card \{/);
+    assert.match(formatted, /\n\t\tbutton \{/);
+    assert.match(formatted, /\n\t\t\}\n\t`\);/);
+    assert.match(formatted, /\^styles\(``\);/);
   });
 
   it("preserves interpolated ^styles templates without crashing", async () => {
@@ -74,6 +108,43 @@ describe("prettier-plugin-litsx", () => {
       () => formatWith("litsx", `export const App = () => <button @click={() => } />;`),
       /Unexpected token|Unexpected/,
     );
+  });
+
+  it("exposes an async root embed printer for LitSX documents", async () => {
+    const parserInstance = plugin.parsers.litsx;
+    const printer = plugin.printers[parserInstance.astFormat];
+    const ast = parserInstance.parse(
+      "export const App=()=>{^styles(`:host{display:block;}`);return <button />;};",
+      { filepath: "/virtual/App.litsx" },
+    );
+    const embed = printer.embed({ node: ast }, {
+      parser: "litsx",
+      plugins: [plugin],
+      semi: true,
+      tabWidth: 2,
+      useTabs: false,
+    });
+
+    assert.strictEqual(typeof embed, "function");
+    const formatted = await embed();
+    assert.match(formatted, /export const App = \(\) => \{/);
+    assert.match(formatted, /display: block;/);
+  });
+
+  it("exposes a single root parser and printer for the authored ast surface", () => {
+    const parserInstance = plugin.parsers.litsx;
+    const printer = plugin.printers[parserInstance.astFormat];
+    const ast = parserInstance.parse("export const App = () => <button />;", {
+      filepath: "/virtual/App.litsx",
+    });
+
+    assert.strictEqual(ast.type, "LitsxDocument");
+    assert.strictEqual(parserInstance.locStart(ast), 0);
+    assert.strictEqual(parserInstance.locEnd(ast), ast.end);
+    assert.deepStrictEqual(printer.getVisitorKeys(ast), []);
+    assert.strictEqual(printer.getVisitorKeys({ type: "OtherNode" }), undefined);
+    assert.strictEqual(printer.canAttachComment(ast), false);
+    assert.strictEqual(printer.embed({ node: { type: "OtherNode" } }, {}), null);
   });
 
   it("does not claim plain tsx or jsx file extensions", () => {

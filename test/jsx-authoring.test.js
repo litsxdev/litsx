@@ -2,15 +2,22 @@ import assert from "assert";
 import { describe, it } from "vitest";
 
 import {
+  applyVirtualAttributeReplacements,
   createVirtualLitsxJsxSourceMap,
   createVirtualLitsxJsxSource,
+  encodeVirtualAttributeName,
   decodeVirtualAttributeName,
+  decodeVirtualStaticHoistName,
   looksLikeLitsxJsx,
   mapOriginalPositionToVirtual,
   mapVirtualPositionToOriginal,
   remapVirtualText,
   remapTextSpanToOriginal,
 } from "../packages/jsx-authoring/src/index.js";
+import {
+  getLitsxVirtualizationMetadata,
+  parseWithLitsxVirtualization,
+} from "../packages/jsx-authoring/src/parser.js";
 
 describe("@litsx/jsx-authoring", () => {
   it("virtualizes lit-flavoured jsx attribute prefixes into ts-safe names", () => {
@@ -199,6 +206,34 @@ describe("@litsx/jsx-authoring", () => {
     assert.match(result.code, /"@click": handleClick/);
   });
 
+  it("scans balanced authored expressions with strings, templates, and comments inside braces", () => {
+    const source = `
+      const view = (
+        <button
+          @click={{
+            run: () => {
+              const a = 'single quote';
+              const b = "double quote";
+              const c = \`template \${value}\`;
+              // line comment
+              /* block comment */
+              return { a, b, c };
+            },
+          }}
+        />
+      );
+    `;
+
+    const result = createVirtualLitsxJsxSource(source, {
+      plugins: ["typescript"],
+    });
+
+    assert.match(result.code, /__litsx_event_click/);
+    assert.match(result.code, /single quote/);
+    assert.match(result.code, /double quote/);
+    assert.match(result.code, /template/);
+  });
+
   it("marks compiler collisions when source already contains reserved virtual names", () => {
     const source = `const view = <button __litsx_event_click={handler} />;`;
     const result = createVirtualLitsxJsxSource(source);
@@ -226,6 +261,250 @@ describe("@litsx/jsx-authoring", () => {
     );
   });
 
+  it("handles empty, unchanged, and mixins-only sources without producing replacements", () => {
+    assert.deepStrictEqual(createVirtualLitsxJsxSource(null), {
+      code: null,
+      map: null,
+      replacements: [],
+    });
+
+    const plainSource = `const view = <button class="cta">Save</button>;`;
+    const unchanged = createVirtualLitsxJsxSource(plainSource);
+    assert.equal(unchanged.code, plainSource);
+    assert.deepStrictEqual(unchanged.replacements, []);
+
+    const mixinsOnly = `
+      export function Card() {
+        ^mixins(Selectable);
+        return <div />;
+      }
+    `;
+    const mixinResult = createVirtualLitsxJsxSource(mixinsOnly);
+    assert.equal(mixinResult.code, mixinsOnly);
+    assert.deepStrictEqual(mixinResult.replacements, []);
+  });
+
+  it("survives malformed authored snippets and still remaps exported helpers sensibly", () => {
+    const source = `
+      const broken = <button @click={(() => {
+        const text = \`unterminated \${value}\`;
+        /* comment without closing tag handling */
+    `;
+
+    const result = createVirtualLitsxJsxSource(source, {
+      strategy: "editor",
+      sourceMap: true,
+    });
+
+    assert.match(result.code, /eclick/);
+    assert.equal(typeof result.map?.toString, "function");
+    assert.equal(mapOriginalPositionToVirtual(3, []), 3);
+    assert.deepStrictEqual(remapTextSpanToOriginal({ start: 1, length: 2 }, []), { start: 1, length: 2 });
+  });
+
+  it("covers decode and remap helpers on non-virtual names and overlapping spans", () => {
+    const source = `<button @click={handleClick} .value={value} />`;
+    const result = createVirtualLitsxJsxSource(source);
+    const replacements = result.replacements;
+    const clickVirtualStart = result.code.indexOf("__litsx_event_click");
+
+    assert.equal(decodeVirtualAttributeName("not_virtual"), null);
+    assert.equal(decodeVirtualStaticHoistName("styles"), null);
+    assert.equal(remapVirtualText(42), 42);
+    assert.equal(decodeVirtualStaticHoistName("__litsx_static_styles"), "^styles");
+
+    assert.equal(mapOriginalPositionToVirtual(source.indexOf("@click") + 2, replacements), source.indexOf("@click"));
+    assert.deepStrictEqual(
+      remapTextSpanToOriginal({ start: clickVirtualStart + 1, length: 4 }, replacements),
+      { start: source.indexOf("@click"), length: "@click".length },
+    );
+    assert.deepStrictEqual(
+      remapTextSpanToOriginal(
+        { start: result.code.indexOf("/>"), length: 2 },
+        replacements,
+      ),
+      { start: source.indexOf("/>"), length: 2 },
+    );
+
+    const editable = {
+      writes: [],
+      overwrite(start, end, text) {
+        this.writes.push({ start, end, text });
+      },
+    };
+    applyVirtualAttributeReplacements(editable, replacements);
+    assert.equal(editable.writes.length, replacements.length);
+  });
+
+  it("covers remap helpers before the first replacement and after earlier virtual spans", () => {
+    const replacements = [
+      { start: 10, end: 16, replacement: "evt" },
+      { start: 30, end: 36, replacement: "prop" },
+    ];
+
+    assert.equal(mapOriginalPositionToVirtual(5, replacements), 5);
+    assert.deepStrictEqual(
+      remapTextSpanToOriginal({ start: 20, length: 2 }, replacements),
+      { start: 23, length: 2 },
+    );
+  });
+
+  it("scans authored attributes with quoted and bare values without breaking virtualization", () => {
+    const source = `
+      const view = <button @click="handleClick" .value='text' ?disabled=busy data-kind=plain />;
+    `;
+
+    const result = createVirtualLitsxJsxSource(source, {
+      strategy: "editor",
+    });
+
+    assert.match(result.code, /eclick="handleClick"/);
+    assert.match(result.code, /pvalue='text'/);
+    assert.match(result.code, /bdisabled=busy/);
+    assert.match(result.code, /data-kind=plain/);
+  });
+
+  it("survives malformed closing tags and stray less-than comparisons around authored JSX", () => {
+    const source = `
+      const comparison = count < limit ? (
+        <section>
+          <button @click={handleClick}></button
+        </section>
+      ) : null;
+    `;
+
+    const result = createVirtualLitsxJsxSource(source);
+
+    assert.match(result.code, /count < limit/);
+    assert.match(result.code, /__litsx_event_click/);
+  });
+
+  it("parses with virtualization metadata and restores authored JSX attribute names", () => {
+    const parsed = parseWithLitsxVirtualization(
+      (virtualCode) => ({
+        type: "File",
+        program: {
+          type: "Program",
+          body: [
+            {
+              type: "ExpressionStatement",
+              start: virtualCode.indexOf("__litsx_event_click"),
+              end: virtualCode.indexOf("__litsx_event_click") + "__litsx_event_click".length,
+              loc: {
+                start: {
+                  line: 1,
+                  column: virtualCode.indexOf("__litsx_event_click"),
+                  index: virtualCode.indexOf("__litsx_event_click"),
+                },
+                end: {
+                  line: 1,
+                  column: virtualCode.indexOf("__litsx_event_click") + "__litsx_event_click".length,
+                  index: virtualCode.indexOf("__litsx_event_click") + "__litsx_event_click".length,
+                },
+              },
+              expression: {
+                type: "JSXAttribute",
+                start: virtualCode.indexOf("__litsx_event_click"),
+                end: virtualCode.indexOf("__litsx_event_click") + "__litsx_event_click".length,
+                loc: {
+                  start: {
+                    line: 1,
+                    column: virtualCode.indexOf("__litsx_event_click"),
+                    index: virtualCode.indexOf("__litsx_event_click"),
+                  },
+                  end: {
+                    line: 1,
+                    column: virtualCode.indexOf("__litsx_event_click") + "__litsx_event_click".length,
+                    index: virtualCode.indexOf("__litsx_event_click") + "__litsx_event_click".length,
+                  },
+                },
+                name: {
+                  type: "JSXIdentifier",
+                  name: "__litsx_event_click",
+                },
+              },
+            },
+          ],
+        },
+      }),
+      `const view = <button @click={handleClick} />;`,
+      { sourceFilename: "/virtual/example.tsx", plugins: ["typescript"] },
+    );
+
+    const metadata = getLitsxVirtualizationMetadata(parsed);
+    assert.ok(metadata);
+    assert.match(metadata.code, /__litsx_event_click/);
+    assert.equal(parsed.program.body[0].expression.name.name, "@click");
+    assert.equal(parsed.program.body[0].start, `const view = <button `.length);
+  });
+
+  it("handles parser virtualization fallbacks when no metadata or remapping is needed", () => {
+    const ast = parseWithLitsxVirtualization(
+      () => ({
+        type: "File",
+        program: { type: "Program", body: [] },
+      }),
+      `const value = 1;`,
+      { litsxSourceMap: false },
+    );
+
+    assert.equal(getLitsxVirtualizationMetadata(null), null);
+    assert.equal(getLitsxVirtualizationMetadata(ast).map, null);
+    assert.deepStrictEqual(ast.program.body, []);
+  });
+
+  it("preserves explicit jsx parser plugins and sourceFileName options in parser virtualization", () => {
+    let receivedOptions = null;
+    const ast = parseWithLitsxVirtualization(
+      (_virtualCode, parserOptions) => {
+        receivedOptions = parserOptions;
+        return {
+          type: "File",
+          program: { type: "Program", body: [] },
+        };
+      },
+      `const view = <button @click={handleClick} />;`,
+      {
+        plugins: [["jsx", { runtime: "automatic" }], "typescript"],
+        sourceFileName: "/virtual/explicit.tsx",
+      },
+    );
+
+    assert.deepStrictEqual(receivedOptions.plugins, [["jsx", { runtime: "automatic" }], "typescript"]);
+    assert.equal(getLitsxVirtualizationMetadata(ast).map.sources[0], "/virtual/explicit.tsx");
+  });
+
+  it("preserves string jsx plugins and sourceFilename aliases in parser virtualization", () => {
+    let receivedOptions = null;
+    const ast = parseWithLitsxVirtualization(
+      (_virtualCode, parserOptions) => {
+        receivedOptions = parserOptions;
+        return {
+          type: "File",
+          program: { type: "Program", body: [] },
+        };
+      },
+      `const view = <button @click={handleClick} />;`,
+      {
+        plugins: ["jsx", "typescript"],
+        sourceFilename: "/virtual/alias.tsx",
+      },
+    );
+
+    assert.deepStrictEqual(receivedOptions.plugins, ["jsx", "typescript"]);
+    assert.equal(getLitsxVirtualizationMetadata(ast).map.sources[0], "/virtual/alias.tsx");
+  });
+
+  it("gracefully returns null when the underlying parser returns no AST", () => {
+    const ast = parseWithLitsxVirtualization(
+      () => null,
+      `const view = <button @click={handleClick} />;`,
+      { plugins: ["jsx"] },
+    );
+
+    assert.equal(ast, null);
+  });
+
   it("virtualizes static macros after comments and preserves ^mixins", () => {
     const source = `
       export function Card() {
@@ -247,6 +526,26 @@ describe("@litsx/jsx-authoring", () => {
     assert.match(result.code, /\$properties\(/);
     assert.match(result.code, /\$styles\(/);
     assert.match(result.code, /\^mixins\(Selectable\)/);
+  });
+
+  it("covers helper exports and top-level macro detection edge cases", () => {
+    assert.equal(encodeVirtualAttributeName("@click"), "__litsx_event_click");
+    assert.equal(encodeVirtualAttributeName(".value"), "__litsx_prop_value");
+    assert.equal(encodeVirtualAttributeName("?disabled"), "__litsx_bool_disabled");
+    assert.equal(encodeVirtualAttributeName("class"), "class");
+    assert.equal(
+      remapVirtualText("__litsx_static_styles __litsx_event_click"),
+      "^styles @click",
+    );
+
+    assert.equal(looksLikeLitsxJsx("  ^styles(`:host {}`);"), true);
+    assert.equal(looksLikeLitsxJsx("value ^ styles"), false);
+
+    const falseMacroStart = createVirtualLitsxJsxSource("const value = count ^styles;", {
+      strategy: "editor",
+    });
+    assert.equal(falseMacroStart.code, "const value = count ^styles;");
+    assert.deepStrictEqual(falseMacroStart.replacements, []);
   });
 
   it("virtualizes authored attributes nested inside comments, templates, and closures in JSX expressions", () => {

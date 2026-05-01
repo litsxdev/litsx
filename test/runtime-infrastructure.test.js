@@ -99,6 +99,15 @@ describe("litsx runtime infrastructure", () => {
     assert.equal(styles.length, 1);
     assert.match(style.textContent, /color: blue/);
 
+    const sameStyleNode = style;
+    host.update();
+
+    assert.strictEqual(
+      host.querySelector("style[data-litsx-light-dom-style]"),
+      sameStyleNode,
+    );
+    assert.match(sameStyleNode.textContent, /color: blue/);
+
     host.remove();
   });
 

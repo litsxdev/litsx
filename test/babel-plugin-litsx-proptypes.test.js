@@ -325,4 +325,207 @@ describe("@litsx/babel-plugin-litsx-proptypes", function () {
 
     assert.match(code, /__litsx_static_properties\(\{\s*title: \{\s*\.\.\.\{\s*type: String\s*\},\s*reflect: true\s*\},\s*onSelect: \{\s*type: Object,\s*attribute: false\s*\},\s*\.\.\.sharedProperties,\s*subtitle: \{\s*reflect: true\s*\}\s*\}\)/s);
   });
+
+  it("supports empty and non-plain helper arguments with defaulted runtime descriptors", () => {
+    const source = `
+      import PT from "prop-types";
+
+      export function Card(props) {
+        return <article>{props.mode}{props.choice}{String(props.loose)}{String(props.strict)}</article>;
+      }
+
+      Card.propTypes = {
+        mode: PT.oneOf(),
+        choice: PT.oneOfType(PT.string),
+        loose: PT.shape(),
+        strict: PT.exact(null),
+      };
+    `;
+
+    const code = run(source);
+
+    assert.match(code, /import \{[^}]*oneOf[^}]*oneOfType[^}]*shape[^}]*exact[^}]*\} from "@litsx\/prop-types\/runtime"|import \{[^}]*exact[^}]*shape[^}]*oneOfType[^}]*oneOf[^}]*\} from "@litsx\/prop-types\/runtime"/);
+    assert.match(code, /mode: \{\s*type: Object,\s*\.\.\.[A-Za-z0-9_]+\(\[\]\)\s*\}/);
+    assert.match(code, /choice: \{\s*type: Object,\s*\.\.\.[A-Za-z0-9_]+\(\[\]\)\s*\}/);
+    assert.match(code, /loose: \{\s*type: Object,\s*attribute: false,\s*\.\.\.[A-Za-z0-9_]+\(\{\}\)\s*\}/);
+    assert.match(code, /strict: \{\s*type: Object,\s*attribute: false,\s*\.\.\.[A-Za-z0-9_]+\(\{\}\)\s*\}/);
+  });
+
+  it("infers oneOf primitive types and falls back to Object for mixed or sparse values", () => {
+    const source = `
+      import PropTypes from "prop-types";
+
+      export function Card(props) {
+        return <article>{props.level}{String(props.ready)}{props.mixed}</article>;
+      }
+
+      Card.propTypes = {
+        level: PropTypes.oneOf([1, 2, 3]),
+        ready: PropTypes.oneOf([true, false]),
+        mixed: PropTypes.oneOf([1, maybeValue, , false]),
+      };
+    `;
+
+    const code = run(source);
+
+    assert.match(code, /level: \{\s*type: Number,\s*\.\.\.[A-Za-z0-9_]+\(\[1, 2, 3\]\)\s*\}/);
+    assert.match(code, /ready: \{\s*type: Boolean,\s*\.\.\.[A-Za-z0-9_]+\(\[true, false\]\)\s*\}/);
+    assert.match(code, /mixed: \{\s*type: Object,\s*\.\.\.[A-Za-z0-9_]+\(\[1, maybeValue,, false\]\)\s*\}/);
+  });
+
+  it("overrides non-object authored property descriptors and preserves dynamic hoist members", () => {
+    const source = `
+      import PropTypes from "prop-types";
+
+      export function SearchCard(props) {
+        ^properties({
+          title: forwardedTitle,
+          [dynamicKey]: runtimeDescriptor,
+        });
+
+        return <article>{props.title}</article>;
+      }
+
+      SearchCard.propTypes = {
+        title: PropTypes.string,
+      };
+    `;
+
+    const code = run(source);
+
+    assert.match(code, /__litsx_static_properties\(\{\s*title: forwardedTitle,\s*\[dynamicKey\]: runtimeDescriptor\s*\}\)/s);
+  });
+
+  it("ignores malformed or non-component propTypes assignments while transforming valid ones", () => {
+    const source = `
+      import PropTypes from "prop-types";
+
+      const config = {};
+      config.propTypes = {
+        title: PropTypes.string,
+      };
+
+      const NonComponent = 1;
+      NonComponent.propTypes = {
+        title: PropTypes.string,
+      };
+
+      function RealCard(props) {
+        return <article>{props.title}</article>;
+      }
+
+      RealCard["propTypes"] = {
+        title: PropTypes.number,
+      };
+
+      RealCard.propTypes = {
+        title: PropTypes.string,
+      };
+    `;
+
+    const code = run(source);
+
+    assert.match(code, /config\.propTypes = \{\s*title: PropTypes\.string\s*\};/);
+    assert.match(code, /NonComponent\.propTypes = \{\s*title: PropTypes\.string\s*\};/);
+    assert.match(code, /RealCard\["propTypes"\] = \{\s*title: PropTypes\.number\s*\};/);
+    assert.match(code, /__litsx_static_properties\(\{\s*title: \{\s*type: String\s*\}\s*\}\);/);
+  });
+
+  it("supports default-import aliases and rejects non-prop-types member expressions", () => {
+    const source = `
+      import PT from "prop-types";
+
+      export function Card(props) {
+        return <article>{props.title}</article>;
+      }
+
+      Card.propTypes = {
+        title: PT.string,
+      };
+    `;
+
+    const invalidSource = `
+      import PropTypes from "prop-types";
+
+      export function Card(props) {
+        return <article>{props.title}</article>;
+      }
+
+      Card.propTypes = {
+        title: Validators.string,
+      };
+    `;
+
+    const code = run(source);
+
+    assert.match(code, /__litsx_static_properties\(\{\s*title: \{\s*type: String\s*\}\s*\}\);/);
+    assert.throws(() => run(invalidSource), /Unsupported propTypes expression/);
+  });
+
+  it("covers nested runtime validator helpers and Object fallbacks for mixed primitive enums", () => {
+    const source = `
+      import PropTypes from "prop-types";
+
+      export function Card(props) {
+        return <article>{String(props.variant)}{String(props.items)}{String(props.meta)}{String(props.fallback)}</article>;
+      }
+
+      Card.propTypes = {
+        variant: PropTypes.oneOf([1, true]),
+        items: PropTypes.arrayOf(PropTypes.oneOfType(PropTypes.string)),
+        meta: PropTypes.objectOf(
+          PropTypes.shape({
+            "created-at": PropTypes.instanceOf(Date),
+          })
+        ),
+        fallback: PropTypes.unknownThing,
+      };
+    `;
+
+    const code = run(source);
+
+    assert.match(code, /variant: \{\s*type: Object,\s*\.\.\.[A-Za-z0-9_]+\(\[1, true\]\)\s*\}/);
+    assert.match(code, /items: \{\s*type: Array,\s*\.\.\.[A-Za-z0-9_]+\([A-Za-z0-9_]+\(\[\]\)\)\s*\}/);
+    assert.match(code, /meta: \{\s*type: Object,\s*attribute: false,\s*\.\.\.[A-Za-z0-9_]+\([A-Za-z0-9_]+\(\{\s*"created-at": Date\s*\}\)\)\s*\}/s);
+    assert.match(code, /fallback: \{\s*type: Object\s*\}/);
+  });
+
+  it("skips non-static top-level prop keys and leaves files without prop-types imports alone", () => {
+    const transformedSource = `
+      import PropTypes from "prop-types";
+
+      export function Card(props) {
+        return <article>{props.title}</article>;
+      }
+
+      Card.propTypes = {
+        [dynamicKey()]: PropTypes.string,
+        title: PropTypes.string,
+      };
+    `;
+
+    const untouchedSource = `
+      function Card(props) {
+        return <article>{props.title}</article>;
+      }
+
+      Missing.propTypes = {
+        title: validator.string,
+      };
+
+      const Wrapped = forwardRef();
+      Wrapped.propTypes = {
+        title: validator.string,
+      };
+    `;
+
+    const transformedCode = run(transformedSource);
+    const untouchedCode = run(untouchedSource);
+
+    assert.match(transformedCode, /__litsx_static_properties\(\{\s*title: \{\s*type: String\s*\}\s*\}\);/);
+    assert.doesNotMatch(transformedCode, /dynamicKey/);
+    assert.match(untouchedCode, /Missing\.propTypes = \{\s*title: validator\.string\s*\};/);
+    assert.match(untouchedCode, /Wrapped\.propTypes = \{\s*title: validator\.string\s*\};/);
+    assert.doesNotMatch(untouchedCode, /__litsx_static_properties/);
+  });
 });

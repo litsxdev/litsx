@@ -31,7 +31,7 @@ function activate(context) {
   const recentlyClosedLanguageIds = new Map();
 
   function getDocumentKey(document) {
-    return document?.uri?.toString() ?? "";
+    return document.uri.toString();
   }
 
   function getLiveDocument(documentOrKey) {
@@ -44,7 +44,7 @@ function activate(context) {
   }
 
   function getDocumentFingerprint(document) {
-    const text = document?.getText?.() ?? "";
+    const text = document.getText();
     let hash = 5381;
     for (let index = 0; index < text.length; index += 1) {
       hash = ((hash << 5) + hash) ^ text.charCodeAt(index);
@@ -58,10 +58,6 @@ function activate(context) {
 
   async function persistLanguageSelection(document, targetLanguageId) {
     const documentKey = getDocumentKey(document);
-    if (!documentKey || !targetLanguageId) {
-      return;
-    }
-
     persistedSelections = {
       ...persistedSelections,
       [documentKey]: targetLanguageId,
@@ -72,7 +68,7 @@ function activate(context) {
 
   async function clearPersistedLanguageSelection(document) {
     const documentKey = getDocumentKey(document);
-    if (!documentKey || !(documentKey in persistedSelections)) {
+    if (!(documentKey in persistedSelections)) {
       return;
     }
 
@@ -88,10 +84,6 @@ function activate(context) {
 
   async function persistDismissedSignature(document, targetLanguageId) {
     const documentKey = getDocumentKey(document);
-    if (!documentKey || !targetLanguageId) {
-      return;
-    }
-
     dismissedSignatures = {
       ...dismissedSignatures,
       [documentKey]: {
@@ -104,7 +96,7 @@ function activate(context) {
 
   async function clearDismissedSignature(document) {
     const documentKey = getDocumentKey(document);
-    if (!documentKey || !(documentKey in dismissedSignatures)) {
+    if (!(documentKey in dismissedSignatures)) {
       return;
     }
 
@@ -128,10 +120,6 @@ function activate(context) {
 
   function rememberDismissedVersion(document) {
     const documentKey = getDocumentKey(document);
-    if (!documentKey) {
-      return;
-    }
-
     dismissedDocumentVersions.set(documentKey, document.version);
   }
 
@@ -141,7 +129,7 @@ function activate(context) {
   }
 
   async function switchDocumentLanguage(document, targetLanguageId) {
-    if (!document || !targetLanguageId || document.languageId === targetLanguageId) {
+    if (document.languageId === targetLanguageId) {
       return;
     }
 
@@ -168,7 +156,7 @@ function activate(context) {
   }
 
   async function refreshDiagnostics(document) {
-    if (!document || document.isClosed) {
+    if (document.isClosed) {
       return;
     }
 
@@ -291,7 +279,7 @@ function activate(context) {
   }
 
   async function ensurePersistedLanguageMode(document) {
-    if (!document || document.isClosed) {
+    if (document.isClosed) {
       return false;
     }
 
@@ -305,7 +293,7 @@ function activate(context) {
   }
 
   async function suggestLanguageMode(document) {
-    if (!document || document.isClosed) {
+    if (document.isClosed) {
       return;
     }
 
@@ -386,7 +374,7 @@ function activate(context) {
   }
 
   async function handleExplicitLanguageModeChange(document, previousLanguageId, nextLanguageId) {
-    if (!document || previousLanguageId === nextLanguageId) {
+    if (previousLanguageId === nextLanguageId) {
       return;
     }
 
