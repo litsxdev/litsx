@@ -608,13 +608,13 @@ import React, { createContext } from "react";
 
 ```txt
 unknown file: React class contextType is not supported by @litsx/babel-preset-react-compat.
-[0m [90m 4 |[39m
- [90m 5 |[39m       [36mexport[39m [36mclass[39m [33mLegacyPanel[39m [36mextends[39m [33mReact[39m[33m.[39m[33mComponent[39m {
-[31m[1m>[22m[39m[90m 6 |[39m         [36mstatic[39m contextType [33m=[39m [33mThemeContext[39m[33m;[39m
- [90m   |[39m         [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
- [90m 7 |[39m
- [90m 8 |[39m         render() {
- [90m 9 |[39m           [36mreturn[39m [33m<[39m[33mdiv[39m[33m>[39m{[36mthis[39m[33m.[39mcontext}[33m<[39m[33m/[39m[33mdiv[39m[33m>[39m[33m;[39m[0m
+  4 |
+  5 |       export class LegacyPanel extends React.Component {
+> 6 |         static contextType = ThemeContext;
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  7 |
+  8 |         render() {
+  9 |           return <div>{this.context}</div>;
 ```
 
 ### Errors when Context.Consumer does not receive exactly one function child
@@ -643,11 +643,11 @@ import { createContext } from "react";
 
 ```txt
 unknown file: React context Consumer requires a function child.
-[0m [90m  5 |[39m       [36mexport[39m [36mfunction[39m [33mBrokenConsumer[39m() {
- [90m  6 |[39m         [36mreturn[39m (
-[31m[1m>[22m[39m[90m  7 |[39m           [33m<[39m[33mThemeContext[39m[33m.[39m[33mConsumer[39m[33m>[39m
- [90m    |[39m           [31m[1m^[22m[39m
- [90m  8 |[39m             [33m<[39m[33mspan[39m[33m>[39mbroken[33m<[39m[33m/[39m[33mspan[39m[33m>[39m
- [90m  9 |[39m           [33m<[39m[33m/[39m[33mThemeContext[39m[33m.[39m[33mConsumer[39m[33m>[39m
- [90m 10 |[39m         )[33m;[39m[0m
+   5 |       export function BrokenConsumer() {
+   6 |         return (
+>  7 |           <ThemeContext.Consumer>
+     |           ^
+   8 |             <span>broken</span>
+   9 |           </ThemeContext.Consumer>
+  10 |         );
 ```

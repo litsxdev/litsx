@@ -287,6 +287,207 @@ export class Screen extends ShadowDomElementsMixin(LitElement) {
 }
 ```
 
+### Supports boolean fallbacks and single expression children
+
+#### Interpretation
+
+This case captures supported authored syntax and the emitted code path used to preserve that behavior.
+
+#### Authored Input
+
+```jsx
+import { Suspense as Wait } from 'react';
+
+export const Screen = ({ readyView }) => {
+  return <Wait fallback>{readyView}</Wait>;
+};
+```
+
+#### Generated Output
+
+```js
+import { ShadowDomElementsMixin } from "litsx/runtime-infrastructure";
+import { ErrorBoundary, SuspenseBoundary } from "litsx";
+import { LitElement, html } from "lit";
+export class Screen extends ShadowDomElementsMixin(LitElement) {
+  static properties = {
+    readyView: {
+      type: String
+    }
+  };
+  static elements = {
+    "suspense-boundary": SuspenseBoundary
+  };
+  render() {
+    return html`<suspense-boundary .fallbackRenderer=${() => true} .contentRenderer=${() => this.readyView}></suspense-boundary>`;
+  }
+}
+```
+
+### Supports string fallbacks and plain text children
+
+#### Interpretation
+
+This case captures supported authored syntax and the emitted code path used to preserve that behavior.
+
+#### Authored Input
+
+```jsx
+import { Suspense } from 'react';
+
+export const Screen = () => {
+  return <Suspense fallback="loading">ready</Suspense>;
+};
+```
+
+#### Generated Output
+
+```js
+import { ShadowDomElementsMixin } from "litsx/runtime-infrastructure";
+import { ErrorBoundary, SuspenseBoundary } from "litsx";
+import { LitElement, html } from "lit";
+export class Screen extends ShadowDomElementsMixin(LitElement) {
+  render() {
+    return html`<suspense-boundary .fallbackRenderer=${() => "loading"} .contentRenderer=${() => "ready"}></suspense-boundary>`;
+  }
+  static elements = {
+    "suspense-boundary": SuspenseBoundary
+  };
+}
+```
+
+### Treats empty fallback expressions as boolean true instead of crashing
+
+#### Interpretation
+
+This case records the authored input and the generated output as a living transform contract.
+
+#### Authored Input
+
+```jsx
+import { Suspense } from 'react';
+
+export const Screen = () => {
+  return <Suspense fallback={true}><div>ready</div></Suspense>;
+};
+```
+
+#### Generated Output
+
+```js
+import { ShadowDomElementsMixin } from "litsx/runtime-infrastructure";
+import { ErrorBoundary, SuspenseBoundary } from "litsx";
+import { LitElement, html } from "lit";
+export class Screen extends ShadowDomElementsMixin(LitElement) {
+  render() {
+    return html`<suspense-boundary .fallbackRenderer=${() => true} .contentRenderer=${() => html`<div>ready</div>`}></suspense-boundary>`;
+  }
+  static elements = {
+    "suspense-boundary": SuspenseBoundary
+  };
+}
+```
+
+### Leaves non-React namespace suspense lookalikes untouched
+
+#### Interpretation
+
+This case highlights syntax that should survive the transform unchanged or be preserved semantically.
+
+#### Authored Input
+
+```jsx
+import * as UI from 'ui-kit';
+
+export const Screen = () => {
+  return <UI.Suspense fallback="loading"><div>ready</div></UI.Suspense>;
+};
+```
+
+#### Generated Output
+
+```js
+import { ErrorBoundary } from "litsx";
+import { LitElement, html } from "lit";
+import * as UI from 'ui-kit';
+export class Screen extends LitElement {
+  render() {
+    return html`<UI.Suspense fallback="loading"><div>ready</div></UI.Suspense>`;
+  }
+}
+```
+
+### Drops key attributes from suspense lists imported under aliases
+
+#### Interpretation
+
+This case records the authored input and the generated output as a living transform contract.
+
+#### Authored Input
+
+```jsx
+import { Suspense as Wait, SuspenseList as Queue } from 'react';
+
+export const Screen = () => {
+  return (
+    <Queue key="outer" revealOrder="forwards">
+      <Wait fallback={<span>One</span>}>
+        <div>alpha</div>
+      </Wait>
+    </Queue>
+  );
+};
+```
+
+#### Generated Output
+
+```js
+import { ShadowDomElementsMixin } from "litsx/runtime-infrastructure";
+import { ErrorBoundary, SuspenseBoundary, SuspenseList } from "litsx";
+import { LitElement, html } from "lit";
+export class Screen extends ShadowDomElementsMixin(LitElement) {
+  render() {
+    return html`<suspense-list revealOrder="forwards"><suspense-boundary .fallbackRenderer=${() => html`<span>One</span>`} .contentRenderer=${() => html`<div>alpha</div>`}></suspense-boundary></suspense-list>`;
+  }
+  static elements = {
+    "suspense-boundary": SuspenseBoundary,
+    "suspense-list": SuspenseList
+  };
+}
+```
+
+### Renders numeric fallbacks and null content when suspense children are empty comments
+
+#### Interpretation
+
+This case records the authored input and the generated output as a living transform contract.
+
+#### Authored Input
+
+```jsx
+import { Suspense } from 'react';
+
+export const Screen = () => {
+  return <Suspense fallback={404}>{/* empty */}</Suspense>;
+};
+```
+
+#### Generated Output
+
+```js
+import { ShadowDomElementsMixin } from "litsx/runtime-infrastructure";
+import { ErrorBoundary, SuspenseBoundary } from "litsx";
+import { LitElement, html } from "lit";
+export class Screen extends ShadowDomElementsMixin(LitElement) {
+  render() {
+    return html`<suspense-boundary .fallbackRenderer=${() => 404} .contentRenderer=${() => null}></suspense-boundary>`;
+  }
+  static elements = {
+    "suspense-boundary": SuspenseBoundary
+  };
+}
+```
+
 ### Moves only matching ensureLazyElement calls into suspense content renderers
 
 #### Interpretation
