@@ -85,8 +85,8 @@ For the dedicated `LitSX` and `LitSX JSX` language modes, the extension:
 - adds project-backed TypeScript diagnostics for the current file
 - provides authored hover/completion plus basic project-backed TS hover/completion
 
-That keeps useful editor feedback available even when the file is no longer
-using the standard `typescriptreact/javascriptreact` language modes.
+That keeps useful editor feedback available even when the file is operating
+outside the standard `typescriptreact/javascriptreact` language modes.
 
 ## TSX And JSX Detection
 

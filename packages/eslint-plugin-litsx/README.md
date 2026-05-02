@@ -7,7 +7,7 @@
 
 Official ESLint support for LitSX-authored syntax.
 
-This v1 is **processor-first**:
+This package is **processor-first**:
 
 - LitSX-authored source is virtualized before ESLint parses it
 - ESLint findings are remapped back to original authored positions
@@ -37,7 +37,7 @@ Other shipped flat presets:
 - `litsx.configs["recommended-react-migration-flat"]`
 - `litsx.configs["strict-flat"]`
 
-## Legacy Config
+## Classic Config
 
 ```json
 {
@@ -45,7 +45,7 @@ Other shipped flat presets:
 }
 ```
 
-Other shipped legacy presets:
+Other shipped classic presets:
 
 - `plugin:@litsx/recommended-lint`
 - `plugin:@litsx/recommended-react-migration`
@@ -77,7 +77,7 @@ Shipped in `recommended-lint`:
 
 ## Autofix
 
-The v1 plugin only autofixes safe, unambiguous cases.
+The plugin only autofixes safe, unambiguous cases.
 
 Today that means:
 

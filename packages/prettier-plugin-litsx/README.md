@@ -9,7 +9,7 @@ Official Prettier support for LitSX-authored source.
 
 ## Status
 
-v1 intentionally covers the official authored formats only:
+This plugin intentionally covers the official authored formats only:
 
 - `*.litsx`
 - `*.litsx.jsx`
@@ -60,6 +60,6 @@ Recommended configuration:
 
 - `^styles(\`...\`)` is formatted with Prettier's CSS parser only when the
   template is fully static.
-- Templates with `${...}` expressions are preserved without CSS reflow in v1.
+- Templates with `${...}` expressions are preserved without CSS reflow.
 - `*.tsx` and `*.jsx` compatibility formatting is intentionally out of scope
-  for this first release.
+  for this package.

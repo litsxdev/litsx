@@ -7,7 +7,7 @@
 
 React `propTypes` compatibility for Lit<sup>SX</sup>.
 
-This plugin is no longer part of native LitSX authoring. Its job is to take React-style `Component.propTypes = { ... }` assignments and lower them into native LitSX `^properties(...)` hoists so the rest of the LitSX pipeline can handle them normally.
+This plugin is part of the React-compat migration surface. Its job is to take React-style `Component.propTypes = { ... }` assignments and lower them into native LitSX `^properties(...)` hoists so the rest of the LitSX pipeline can handle them normally.
 
 ## What it does
 

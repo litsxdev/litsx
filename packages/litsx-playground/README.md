@@ -17,7 +17,7 @@ This package is currently repo-internal and is **not** part of the public npm re
 - `@litsx/playground/playground-runtime`
   Preview runtime entry consumed by the iframe import map.
 - `@litsx/playground/worker`
-  Module worker entry used to compile authored playground source.
+  Module worker entry that compiles authored playground source.
 
 ## Usage
 

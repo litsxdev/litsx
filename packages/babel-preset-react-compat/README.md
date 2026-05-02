@@ -23,7 +23,7 @@ This preset wires the supported React compatibility pipeline in a fixed order:
 10. React DOM/form attribute compatibility
 11. React event lowering
 
-That ordering makes compatibility for React 19-style `ref` props, legacy `forwardRef(...)`, and wrappers such as `memo(...)` part of one explicit migration contract instead of accidental composition.
+That ordering makes compatibility for React 19-style `ref` props, `forwardRef(...)`, and wrappers such as `memo(...)` part of one explicit migration contract instead of accidental composition.
 
 This preset is the supported public entrypoint for React migration. React event aliasing, effect lowering, wrapper lowering, ref handling, and other migration stages are internal to the preset.
 
