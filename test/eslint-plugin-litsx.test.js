@@ -1,6 +1,5 @@
 import assert from "assert";
 import { describe, it } from "vitest";
-import { FlatESLint, LegacyESLint } from "eslint/use-at-your-own-risk";
 import plugin, { createLitsxProcessor } from "../packages/eslint-plugin-litsx/src/index.js";
 import { getRuleIdForIssue, convertIssueToLintMessage } from "../packages/eslint-plugin-litsx/src/messages.js";
 import {
@@ -54,6 +53,16 @@ function offsetToLineColumn(offset, lineStarts) {
   }
 
   return { line: 1, column: 1 };
+}
+
+async function createFlatESLint(options) {
+  const { FlatESLint } = await import("eslint/use-at-your-own-risk");
+  return new FlatESLint(options);
+}
+
+async function createLegacyESLint(options) {
+  const { LegacyESLint } = await import("eslint/use-at-your-own-risk");
+  return new LegacyESLint(options);
 }
 
 describe("@litsx/eslint-plugin", () => {
@@ -133,7 +142,7 @@ describe("@litsx/eslint-plugin", () => {
   });
 
   it("recommended flat config stays quiet by default", async () => {
-    const eslint = new FlatESLint({
+    const eslint = await createFlatESLint({
       cwd: process.cwd(),
       overrideConfigFile: true,
       overrideConfig: [plugin.configs["recommended-flat"]],
@@ -148,7 +157,7 @@ describe("@litsx/eslint-plugin", () => {
   });
 
   it("supports .litsx files in recommended lint flat config", async () => {
-    const eslint = new FlatESLint({
+    const eslint = await createFlatESLint({
       cwd: process.cwd(),
       overrideConfigFile: true,
       overrideConfig: [plugin.configs["recommended-lint-flat"]],
@@ -177,7 +186,7 @@ describe("@litsx/eslint-plugin", () => {
   });
 
   it("runs with recommended lint flat config and reports LitSX rule ids", async () => {
-    const eslint = new FlatESLint({
+    const eslint = await createFlatESLint({
       cwd: process.cwd(),
       overrideConfigFile: true,
       overrideConfig: [plugin.configs["recommended-lint-flat"]],
@@ -197,7 +206,7 @@ describe("@litsx/eslint-plugin", () => {
   });
 
   it("supports autofix for no-native-classname through the processor", async () => {
-    const eslint = new FlatESLint({
+    const eslint = await createFlatESLint({
       cwd: process.cwd(),
       fix: true,
       overrideConfigFile: true,
@@ -213,7 +222,7 @@ describe("@litsx/eslint-plugin", () => {
   });
 
   it("supports legacy config as well", async () => {
-    const eslint = new LegacyESLint({
+    const eslint = await createLegacyESLint({
       cwd: process.cwd(),
       useEslintrc: false,
       plugins: {
@@ -231,8 +240,9 @@ describe("@litsx/eslint-plugin", () => {
     assert.equal(result.messages[0].ruleId, "@litsx/static-hoists-top-level");
   });
 
+
   it("reports duplicate native hoists in recommended config", async () => {
-    const eslint = new FlatESLint({
+    const eslint = await createFlatESLint({
       cwd: process.cwd(),
       overrideConfigFile: true,
       overrideConfig: [plugin.configs["recommended-lint-flat"]],
@@ -248,7 +258,7 @@ describe("@litsx/eslint-plugin", () => {
   });
 
   it("reports React compatibility surface in migration config", async () => {
-    const eslint = new FlatESLint({
+    const eslint = await createFlatESLint({
       cwd: process.cwd(),
       overrideConfigFile: true,
       overrideConfig: [plugin.configs["recommended-react-migration-flat"]],
@@ -270,7 +280,7 @@ describe("@litsx/eslint-plugin", () => {
   });
 
   it("reports strict-mode props and hoist ordering warnings", async () => {
-    const eslint = new FlatESLint({
+    const eslint = await createFlatESLint({
       cwd: process.cwd(),
       overrideConfigFile: true,
       overrideConfig: [plugin.configs["strict-flat"]],
@@ -290,7 +300,7 @@ describe("@litsx/eslint-plugin", () => {
   });
 
   it("supports the configurable unknown static hoist rule", async () => {
-    const eslint = new FlatESLint({
+    const eslint = await createFlatESLint({
       cwd: process.cwd(),
       overrideConfigFile: true,
       overrideConfig: [
