@@ -1,5 +1,6 @@
 {
   "name": "vscode-litsx",
+  "private": true,
   "displayName": "LitSX",
   "description": "VS Code syntax highlighting and workspace defaults for LitSX-authored .litsx and .litsx.jsx files.",
   "version": "0.1.0",

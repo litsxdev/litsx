@@ -7,7 +7,7 @@ LitSX releases are managed with Changesets.
 - package versioning is independent
 - public npm packages are released from `main`
 - version bumps and changelogs are generated from `.changeset/*.md`
-- GitHub Releases for published npm packages are created automatically by `changesets/action`
+- release publication is gated by the `npm-release` GitHub environment
 - `vscode-litsx` remains a separate manual Marketplace release
 
 ## Public npm packages
@@ -38,6 +38,9 @@ These stay outside npm publication and are ignored by Changesets:
 - `vscode-litsx`
 - `@litsx/playground`
 - `@litsx/vitepress`
+
+`vscode-litsx` remains private to the workspace package graph and is released manually to
+the VS Code Marketplace only.
 
 `test/fixtures/dx-smoke-app` remains in the repository as a fixture for authored-source
 tests and stays outside the active Yarn workspaces graph and release machinery.
@@ -85,6 +88,12 @@ yarn release:publish
 - stays secret-free
 - validates the full test suite
 
+### `Changeset Status`
+
+- runs on pull requests
+- stays secret-free
+- checks whether release-affecting pull requests include valid changesets
+
 ### `Release Validate`
 
 - runs on pushes to `main`
@@ -106,19 +115,19 @@ yarn release:publish
 ### `Release`
 
 - runs on pushes to `main`
-- uses `changesets/action`
-- when unreleased changesets exist:
-  - creates or updates a release PR
-  - bumps package versions
-  - updates package changelogs
-- when the release PR is merged and no pending changesets remain:
-  - publishes changed npm packages
-  - publishes them with npm provenance enabled
-  - creates GitHub Releases for the published packages
+- stays idle when no pending `.changeset/*.md` files are present
+- when pending changesets exist:
+  - waits for approval through the `npm-release` environment
+  - runs `yarn changeset:version`
+  - commits the resulting version and changelog updates back to `main`
+  - publishes public npm packages with `yarn release:publish`
+- does not create a release PR
+- does not publish `vscode-litsx`
 
 ### `Publish VS Code Extension`
 
 - remains manual
+- stays outside npm publication and Changesets versioning
 - packages a `.vsix`
 - generates a GitHub artifact attestation for that `.vsix`
 - publishes `vscode-litsx` to the Marketplace with `VSCE_PAT`
@@ -140,7 +149,6 @@ Recommended repository setup:
 - if you want traffic analytics on the docs site, configure repository variables for one provider:
   - `LITSX_ANALYTICS_PROVIDER=ga4` and `LITSX_GA_MEASUREMENT_ID=G-...`
   - or `LITSX_ANALYTICS_PROVIDER=plausible`, `LITSX_PLAUSIBLE_DOMAIN=litsx.dev`, and optionally `LITSX_PLAUSIBLE_API_HOST=https://plausible.io`
-- optionally require reviewers on the `npm-release` environment
 - install the `changeset-bot` GitHub App so PRs get nudged when a changeset is missing
 
 ## Scaffold version sync
@@ -157,9 +165,9 @@ Those ranges are synchronized during `yarn changeset:version`, so the scaffold s
 
 ## VS Code extension release
 
-`vscode-litsx` is not published by Changesets.
+`vscode-litsx` stays private in the workspace and is not published by Changesets or npm.
 
-Public npm packages opt into npm provenance through `publishConfig.provenance: true`, and the `Release` workflow also sets `NPM_CONFIG_PROVENANCE=true` so `changesets publish` emits registry-backed provenance for the packages it publishes.
+Public npm packages opt into npm provenance through `publishConfig.provenance: true`. npm publication runs from the `Release` workflow after `npm-release` environment approval and requires a valid `NPM_TOKEN`.
 
 Before Marketplace publish:
 

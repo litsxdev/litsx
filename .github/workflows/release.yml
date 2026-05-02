@@ -6,19 +6,66 @@ on:
       - main
 
 permissions:
-  contents: write
-  pull-requests: write
-  id-token: write
+  contents: read
 
 concurrency:
   group: release-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  release:
-    name: Version Or Publish
+  plan:
+    name: Detect Pending Release
+    runs-on: ubuntu-latest
+    outputs:
+      has_changesets: ${{ steps.pending.outputs.has_changesets }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          package-manager-cache: false
+
+      - name: Enable Yarn
+        run: |
+          corepack enable
+          corepack prepare yarn@4.10.3 --activate
+
+      - name: Cache Yarn state
+        uses: actions/cache@v5
+        with:
+          path: |
+            .yarn/install-state.gz
+            .yarn-cache
+          key: ${{ runner.os }}-yarn4-${{ hashFiles('yarn.lock', '.yarnrc.yml', 'package.json') }}
+          restore-keys: |
+            ${{ runner.os }}-yarn4-
+
+      - name: Install dependencies
+        run: corepack yarn install --immutable
+
+      - name: Detect pending changesets
+        id: pending
+        run: |
+          if find .changeset -maxdepth 1 -name '*.md' ! -name 'README.md' -print -quit | grep -q .; then
+            echo "has_changesets=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_changesets=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  publish:
+    name: Publish Packages
+    needs: plan
+    if: needs.plan.outputs.has_changesets == 'true'
     runs-on: ubuntu-latest
     environment: npm-release
+    permissions:
+      contents: write
+      id-token: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -50,22 +97,24 @@ jobs:
       - name: Install dependencies
         run: corepack yarn install --immutable
 
-      - name: Validate release surface
-        run: |
-          corepack yarn release:check
-          corepack yarn release:smoke:scaffolds
-          corepack yarn release:test
+      - name: Materialize release versions
+        run: corepack yarn changeset:version
 
-      - name: Create release pull request or publish
-        id: changesets
-        uses: changesets/action@v1
-        with:
-          version: corepack yarn changeset:version
-          publish: corepack yarn release:publish
-          commit: "chore(release): version packages"
-          title: "chore(release): version packages"
-          createGithubReleases: true
+      - name: Commit release version updates
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No version updates to commit"
+            exit 0
+          fi
+          git commit -m "chore(release): version packages"
+          git push
+
+      - name: Publish packages
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          NPM_CONFIG_PROVENANCE: true
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: corepack yarn release:publish

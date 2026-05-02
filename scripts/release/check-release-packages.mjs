@@ -160,8 +160,8 @@ if (!tsPluginManifest.bin?.["litsx-tsc"]) {
 }
 
 const vscodeManifest = readJson(path.join(vscodeReleasePackage, "package.json"));
-if (vscodeManifest.private === true) {
-  fail("packages/vscode-litsx must not remain private");
+if (vscodeManifest.private !== true) {
+  fail("packages/vscode-litsx must remain private and outside npm publication");
 }
 assertCommonManifestFields(vscodeReleasePackage, vscodeManifest);
 assertEntrypoints(vscodeReleasePackage, vscodeManifest);
