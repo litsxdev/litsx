@@ -42,10 +42,10 @@
     "prepack": "yarn build"
   },
   "dependencies": {
-    "@babel/standalone": "^7.26.5",
+    "@babel/standalone": "^7.29.3",
     "@codemirror/lang-javascript": "^6.2.5",
     "@codemirror/state": "^6.5.2",
-    "@codemirror/view": "^6.38.6",
+    "@codemirror/view": "^6.41.1",
     "@litsx/babel-plugin-transform-jsx-html-template": "workspace:^",
     "@litsx/babel-preset-litsx": "workspace:^",
     "codemirror": "^6.0.2",
