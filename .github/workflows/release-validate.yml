@@ -94,13 +94,13 @@ jobs:
         run: corepack yarn release:vscode:package
 
       - name: Upload npm tarballs
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: npm-release-artifacts
           path: .release-artifacts/npm/*.tgz
 
       - name: Upload VSIX
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: vscode-extension-artifact
           path: packages/vscode-litsx/dist/*.vsix
