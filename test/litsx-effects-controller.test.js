@@ -5,7 +5,7 @@ import {
   ensureLazyElement,
   prepareEffects,
   useMemoValue,
-  useEffect,
+  useAfterUpdate,
   useHost,
   useHostContent,
   useSlot,
@@ -13,7 +13,7 @@ import {
   useRef,
   useOnConnect,
   useId,
-  useLayoutEffect,
+  useOnCommit,
   useEvent,
   useEmit,
   usePrevious,
@@ -101,7 +101,7 @@ describe("litsx effects controller", () => {
     let runs = 0;
 
     prepareEffects(host);
-    useEffect(host, () => {
+    useAfterUpdate(host, () => {
       runs += 1;
     }, []);
     update(host);
@@ -109,7 +109,7 @@ describe("litsx effects controller", () => {
     assert.strictEqual(runs, 1);
 
     prepareEffects(host);
-    useEffect(host, () => {
+    useAfterUpdate(host, () => {
       runs += 1;
     }, []);
     update(host);
@@ -122,7 +122,7 @@ describe("litsx effects controller", () => {
     let runs = 0;
 
     prepareEffects(host);
-    useEffect(host, () => {
+    useAfterUpdate(host, () => {
       runs += 1;
     });
     update(host);
@@ -130,7 +130,7 @@ describe("litsx effects controller", () => {
     assert.strictEqual(runs, 1);
 
     prepareEffects(host);
-    useEffect(host, () => {
+    useAfterUpdate(host, () => {
       runs += 1;
     });
     update(host);
@@ -844,20 +844,20 @@ describe("litsx effects controller", () => {
     };
 
     prepareEffects(host);
-    useEffect(host, callback, [value]);
+    useAfterUpdate(host, callback, [value]);
     update(host);
     assert.strictEqual(runs, 1);
     assert.deepStrictEqual(cleanups, []);
 
     prepareEffects(host);
-    useEffect(host, callback, [value]);
+    useAfterUpdate(host, callback, [value]);
     update(host);
     assert.strictEqual(runs, 1);
     assert.deepStrictEqual(cleanups, []);
 
     value = 2;
     prepareEffects(host);
-    useEffect(host, callback, [value]);
+    useAfterUpdate(host, callback, [value]);
     update(host);
     assert.strictEqual(runs, 2);
     assert.deepStrictEqual(cleanups, [1]);
@@ -868,10 +868,10 @@ describe("litsx effects controller", () => {
     const order = [];
 
     prepareEffects(host);
-    useEffect(host, () => {
+    useAfterUpdate(host, () => {
       order.push("passive");
     }, []);
-    useLayoutEffect(host, () => {
+    useOnCommit(host, () => {
       order.push("layout");
     }, []);
     update(host);
@@ -884,7 +884,7 @@ describe("litsx effects controller", () => {
     const cleanups = [];
 
     prepareEffects(host);
-    useEffect(host, () => () => cleanups.push("cleanup"), []);
+    useAfterUpdate(host, () => () => cleanups.push("cleanup"), []);
     update(host);
 
     host.controllers.forEach((controller) => controller.hostDisconnected());
@@ -986,12 +986,12 @@ describe("litsx effects controller", () => {
     const events = [];
 
     prepareEffects(host);
-    useEffect(host, () => () => events.push("first-cleanup"), []);
-    useLayoutEffect(host, () => () => events.push("layout-cleanup"), []);
+    useAfterUpdate(host, () => () => events.push("first-cleanup"), []);
+    useOnCommit(host, () => () => events.push("layout-cleanup"), []);
     update(host);
 
     prepareEffects(host);
-    useEffect(host, () => () => events.push("second-cleanup"), []);
+    useAfterUpdate(host, () => () => events.push("second-cleanup"), []);
     update(host);
 
     assert.deepStrictEqual(events, ["layout-cleanup"]);
@@ -1006,14 +1006,14 @@ describe("litsx effects controller", () => {
     let runs = 0;
 
     prepareEffects(host);
-    useEffect(host, () => {
+    useAfterUpdate(host, () => {
       runs += 1;
       return undefined;
     }, null);
     update(host);
 
     prepareEffects(host);
-    useEffect(host, () => {
+    useAfterUpdate(host, () => {
       runs += 1;
     }, null);
     update(host);

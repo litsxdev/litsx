@@ -3,7 +3,7 @@ import {
   ContextProvider,
   createContext as createLitContext,
 } from "@lit/context";
-import { useHost } from "./index.js";
+import { useHost } from "./host-hooks.js";
 
 const REACT_CONTEXT_MARK = Symbol("litsx.reactContext");
 const REACT_CONTEXT_KEY = Symbol("litsx.reactContext.key");
