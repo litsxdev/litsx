@@ -28,6 +28,14 @@ import plugin, {
   runLitsxTypecheck,
 } from "../packages/typescript-plugin-litsx/src/index.js";
 
+const TEMP_JSX_GLOBALS_DTS = `
+declare namespace JSX {
+  interface IntrinsicElements {
+    [elemName: string]: any;
+  }
+}
+`;
+
 async function withMockedTypeScript(mockFactory, callback) {
   const actualTs = await vi.importActual("typescript");
 
@@ -1864,6 +1872,7 @@ describe("@litsx/typescript-plugin", () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-typecheck-valid-"));
     const tsconfigPath = path.join(tempDir, "tsconfig.json");
     const filePath = path.join(tempDir, "index.jsx");
+    const globalsPath = path.join(tempDir, "global.d.ts");
     const originalCwd = process.cwd();
     const originalWrite = process.stderr.write;
 
@@ -1876,9 +1885,10 @@ describe("@litsx/typescript-plugin", () => {
           checkJs: true,
           noEmit: true,
         },
-        include: ["index.jsx"],
+        include: ["index.jsx", "global.d.ts"],
       }),
     );
+    fs.writeFileSync(globalsPath, TEMP_JSX_GLOBALS_DTS);
     fs.writeFileSync(
       filePath,
       `
@@ -1905,6 +1915,7 @@ describe("@litsx/typescript-plugin", () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-typecheck-valid-litsx-"));
     const tsconfigPath = path.join(tempDir, "tsconfig.json");
     const filePath = path.join(tempDir, "index.litsx");
+    const globalsPath = path.join(tempDir, "global.d.ts");
     const originalCwd = process.cwd();
     const originalWrite = process.stderr.write;
 
@@ -1918,9 +1929,10 @@ describe("@litsx/typescript-plugin", () => {
           checkJs: true,
           noEmit: true,
         },
-        include: ["index.litsx"],
+        include: ["index.litsx", "global.d.ts"],
       }),
     );
+    fs.writeFileSync(globalsPath, TEMP_JSX_GLOBALS_DTS);
     fs.writeFileSync(
       filePath,
       `
@@ -1947,6 +1959,7 @@ describe("@litsx/typescript-plugin", () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-typecheck-valid-litsx-jsx-"));
     const tsconfigPath = path.join(tempDir, "tsconfig.json");
     const filePath = path.join(tempDir, "index.litsx.jsx");
+    const globalsPath = path.join(tempDir, "global.d.ts");
     const originalCwd = process.cwd();
     const originalWrite = process.stderr.write;
 
@@ -1960,9 +1973,10 @@ describe("@litsx/typescript-plugin", () => {
           checkJs: true,
           noEmit: true,
         },
-        include: ["index.litsx.jsx"],
+        include: ["index.litsx.jsx", "global.d.ts"],
       }),
     );
+    fs.writeFileSync(globalsPath, TEMP_JSX_GLOBALS_DTS);
     fs.writeFileSync(
       filePath,
       `
@@ -1989,6 +2003,7 @@ describe("@litsx/typescript-plugin", () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-typecheck-hoists-"));
     const tsconfigPath = path.join(tempDir, "tsconfig.json");
     const filePath = path.join(tempDir, "index.jsx");
+    const globalsPath = path.join(tempDir, "global.d.ts");
     const originalCwd = process.cwd();
     const originalWrite = process.stderr.write;
 
@@ -2001,9 +2016,10 @@ describe("@litsx/typescript-plugin", () => {
           checkJs: true,
           noEmit: true,
         },
-        include: ["index.jsx"],
+        include: ["index.jsx", "global.d.ts"],
       }),
     );
+    fs.writeFileSync(globalsPath, TEMP_JSX_GLOBALS_DTS);
     fs.writeFileSync(
       filePath,
       `
@@ -2115,6 +2131,7 @@ describe("@litsx/typescript-plugin", () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-typecheck-diagnostic-"));
     const tsconfigPath = path.join(tempDir, "tsconfig.json");
     const filePath = path.join(tempDir, "index.jsx");
+    const globalsPath = path.join(tempDir, "global.d.ts");
     const originalCwd = process.cwd();
     const originalWrite = process.stderr.write;
     let stderrOutput = "";
@@ -2128,9 +2145,10 @@ describe("@litsx/typescript-plugin", () => {
           checkJs: true,
           noEmit: true,
         },
-        include: ["index.jsx"],
+        include: ["index.jsx", "global.d.ts"],
       }),
     );
+    fs.writeFileSync(globalsPath, TEMP_JSX_GLOBALS_DTS);
     fs.writeFileSync(
       filePath,
       `
@@ -5527,6 +5545,7 @@ describe("@litsx/typescript-plugin", () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-typecheck-project-"));
     const tsconfigPath = path.join(tempDir, "tsconfig.json");
     const filePath = path.join(tempDir, "index.tsx");
+    const globalsPath = path.join(tempDir, "global.d.ts");
     const originalWrite = process.stderr.write;
     const originalUseCaseSensitive = ts.sys.useCaseSensitiveFileNames;
 
@@ -5537,9 +5556,10 @@ describe("@litsx/typescript-plugin", () => {
           jsx: "preserve",
           noEmit: true,
         },
-        include: ["index.tsx"],
+        include: ["index.tsx", "global.d.ts"],
       }),
     );
+    fs.writeFileSync(globalsPath, TEMP_JSX_GLOBALS_DTS);
     fs.writeFileSync(
       filePath,
       `

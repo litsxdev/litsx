@@ -355,6 +355,15 @@ function resolveParsedCommandLine(rawArgs) {
     __litsxSessionKey: createSessionKey(projectPath, rawArgs),
   };
 
+  if (!Object.hasOwn(configFile.config?.compilerOptions || {}, "types")) {
+    resolved.options = {
+      ...resolved.options,
+      // Preserve TypeScript 5.x ambient @types loading for litsx-tsc when
+      // projects haven't opted into an explicit `types` list yet.
+      types: ["*"],
+    };
+  }
+
   resolved.fileNames = [
     ...new Set([
       ...resolved.fileNames,

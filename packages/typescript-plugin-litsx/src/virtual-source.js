@@ -45,7 +45,7 @@ export function createToolingVirtualLitsxSource(sourceText, options = {}) {
           : (
             name === "__litsx_static_lightDom"
               ? "function __litsx_static_lightDom() {}\n"
-              : `function ${name}(value) { return value; }\n`
+              : `/** @template T @param {T} value @returns {T} */\nfunction ${name}(value) { return value; }\n`
           )
       ))
   );

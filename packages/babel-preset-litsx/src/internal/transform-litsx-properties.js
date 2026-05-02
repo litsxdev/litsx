@@ -233,6 +233,7 @@ export function createTypeResolver(filename, source, options = {}) {
     strict: false,
     esModuleInterop: true,
     allowSyntheticDefaultImports: true,
+    types: [],
   };
 
   if (shouldUseInMemoryResolution || !filename) {

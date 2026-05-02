@@ -107,7 +107,7 @@ function createBasePackageJson(packageName) {
       "eslint": "^9.0.0",
       "prettier": "^3.8.3",
       "prettier-plugin-litsx": PUBLISHED_PACKAGE_VERSIONS["prettier-plugin-litsx"],
-      "typescript": "^5.9.3",
+      "typescript": "^6.0.0",
       "vite": "^8.0.3"
     }
   };

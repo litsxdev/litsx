@@ -232,6 +232,7 @@ async function getOrCreateProjectService(fileName, sourceText, languageId) {
         allowJs: true,
         checkJs: true,
         allowNonTsExtensions: true,
+        types: [],
       };
       rootNames = [queryFileName];
     }

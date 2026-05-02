@@ -26,18 +26,22 @@ const { transformFromAstAsync, transformFromAstSync } = babelCore;
 const PROFILE_ENABLED = process.env.LITSX_PROFILE === "1";
 const PRESET_PLUGIN_CACHE = new WeakMap();
 const DEFAULT_PRESET_PLUGIN_CACHE = new Map();
-const STANDALONE_TS_COMPILER_OPTIONS = {
-  target: 99,
-  module: 99,
-  moduleResolution: 100,
-  jsx: 1,
-  allowJs: true,
-  checkJs: false,
-  skipLibCheck: true,
-  strict: false,
-  esModuleInterop: true,
-  allowSyntheticDefaultImports: true,
-};
+
+function createStandaloneTsCompilerOptions(ts) {
+  return {
+    target: ts.ScriptTarget.ESNext,
+    module: ts.ModuleKind.ESNext,
+    moduleResolution: ts.ModuleResolutionKind.Bundler,
+    jsx: ts.JsxEmit.Preserve,
+    allowJs: true,
+    checkJs: false,
+    skipLibCheck: true,
+    strict: false,
+    esModuleInterop: true,
+    allowSyntheticDefaultImports: true,
+    types: [],
+  };
+}
 
 function getSourceFeaturesCacheKey(sourceFeatures) {
   if (!sourceFeatures) {
@@ -79,12 +83,12 @@ function normalizePluginList(plugins) {
   return Array.isArray(plugins) ? plugins : [];
 }
 
-function getStandaloneTsSessionKey(filename = "") {
+function getStandaloneTsSessionKey(filename = "", ts = ensureTypescriptModule()) {
   const normalizedFilename = normalizeFilePath(filename);
   const directory = normalizedFilename ? normalizedFilename.slice(0, normalizedFilename.lastIndexOf("/")) || "/" : "/";
   return JSON.stringify({
     directory,
-    compilerOptions: STANDALONE_TS_COMPILER_OPTIONS,
+    compilerOptions: createStandaloneTsCompilerOptions(ts),
   });
 }
 
@@ -159,10 +163,11 @@ function createCompilerCaches() {
 }
 
 function createStandaloneCompilerTsSession(options = {}) {
+  const typescriptModule = options.typescriptModule || ensureTypescriptModule();
   return createStandaloneTsSession({
-    sessionKey: getStandaloneTsSessionKey(options.filename),
-    typescript: options.typescriptModule || ensureTypescriptModule(),
-    compilerOptions: STANDALONE_TS_COMPILER_OPTIONS,
+    sessionKey: getStandaloneTsSessionKey(options.filename, typescriptModule),
+    typescript: typescriptModule,
+    compilerOptions: createStandaloneTsCompilerOptions(typescriptModule),
   });
 }
 
