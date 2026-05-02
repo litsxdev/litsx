@@ -6,6 +6,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: write
 
 concurrency:
   group: test-${{ github.ref }}
@@ -46,31 +47,11 @@ jobs:
       - name: Run test suite with coverage
         run: corepack yarn coverage
 
-      - name: Write coverage summary
-        run: |
-          node --input-type=module <<'EOF'
-          import fs from "node:fs";
-
-          const summaryPath = "coverage/coverage-summary.json";
-          const stepSummaryPath = process.env.GITHUB_STEP_SUMMARY;
-
-          if (!fs.existsSync(summaryPath) || !stepSummaryPath) {
-            process.exit(0);
-          }
-
-          const coverage = JSON.parse(fs.readFileSync(summaryPath, "utf8"));
-          const total = coverage.total;
-
-          const lines = [
-            "## Coverage",
-            "",
-            "| Metric | Coverage | Covered / Total |",
-            "| --- | ---: | ---: |",
-            `| Lines | ${total.lines.pct}% | ${total.lines.covered} / ${total.lines.total} |`,
-            `| Statements | ${total.statements.pct}% | ${total.statements.covered} / ${total.statements.total} |`,
-            `| Functions | ${total.functions.pct}% | ${total.functions.covered} / ${total.functions.total} |`,
-            `| Branches | ${total.branches.pct}% | ${total.branches.covered} / ${total.branches.total} |`,
-          ];
-
-          fs.appendFileSync(stepSummaryPath, `${lines.join("\n")}\n`);
-          EOF
+      - name: Report coverage
+        if: always()
+        uses: davelosert/vitest-coverage-report-action@v2
+        with:
+          name: Coverage
+          file-coverage-mode: changes
+          comment-on: pr
+          threshold-icons: '{"0":"🔴","80":"🟠","90":"🟢"}'
