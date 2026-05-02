@@ -8,7 +8,11 @@ const rootDir = process.cwd();
 const outputDir = path.join(rootDir, "website/docs/reference/generated");
 const indexDtsPath = path.join(rootDir, "packages/litsx/src/index.d.ts");
 const hooksPluginPath = path.join(rootDir, "packages/babel-preset-litsx/src/internal/transform-litsx-hooks.js");
-const runtimeIndexJsPath = path.join(rootDir, "packages/litsx/src/index.js");
+const runtimeDocSourcePaths = [
+  path.join(rootDir, "packages/litsx/src/effect-hooks.js"),
+  path.join(rootDir, "packages/litsx/src/host-hooks.js"),
+  path.join(rootDir, "packages/litsx/src/state-hooks.js"),
+];
 const errorBoundaryJsPath = path.join(rootDir, "packages/litsx/src/error-boundary.js");
 const suspenseBoundaryJsPath = path.join(rootDir, "packages/litsx/src/suspense-boundary.js");
 const suspenseListJsPath = path.join(rootDir, "packages/litsx/src/suspense-list.js");
@@ -111,6 +115,18 @@ function collectDocsFromSource(sourceFile, names) {
     const name = statement.name.text;
     if (!wanted.has(name)) continue;
     found.set(name, getJsDoc(statement));
+  }
+
+  return found;
+}
+
+function collectDocsFromSources(sourceFiles, names) {
+  const found = new Map();
+
+  for (const sourceFile of sourceFiles) {
+    for (const [name, docs] of collectDocsFromSource(sourceFile, names)) {
+      found.set(name, docs);
+    }
   }
 
   return found;
@@ -524,7 +540,9 @@ function buildPage(item, sourceFile) {
 }
 
 const sourceFile = readSourceFile(indexDtsPath);
-const runtimeIndexSource = readSourceFile(runtimeIndexJsPath, ts.ScriptKind.JS);
+const runtimeDocSources = runtimeDocSourcePaths.map((filePath) =>
+  readSourceFile(filePath, ts.ScriptKind.JS)
+);
 const errorBoundarySource = readSourceFile(errorBoundaryJsPath, ts.ScriptKind.JS);
 const suspenseBoundarySource = readSourceFile(suspenseBoundaryJsPath, ts.ScriptKind.JS);
 const suspenseListSource = readSourceFile(suspenseListJsPath, ts.ScriptKind.JS);
@@ -536,7 +554,7 @@ const primitives = ["ErrorBoundary", "SuspenseBoundary", "SuspenseList"];
 const names = [...new Set([...primitives, ...authorHookNames, ...staticApis, ...stylingApis])];
 const items = collectDeclarations(sourceFile, names);
 const docsMap = new Map([
-  ...collectDocsFromSource(runtimeIndexSource, [...authorHookNames, ...staticApis, ...stylingApis]),
+  ...collectDocsFromSources(runtimeDocSources, [...authorHookNames, ...staticApis, ...stylingApis]),
   ...collectDocsFromSource(errorBoundarySource, ["ErrorBoundary"]),
   ...collectDocsFromSource(suspenseBoundarySource, ["SuspenseBoundary"]),
   ...collectDocsFromSource(suspenseListSource, ["SuspenseList"]),

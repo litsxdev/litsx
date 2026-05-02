@@ -26,6 +26,7 @@
       "default": "./src/jsx-dev-runtime.js"
     },
     "./runtime-infrastructure": {
+      "types": "./src/runtime-infrastructure/index.d.ts",
       "import": "./src/runtime-infrastructure/index.js",
       "require": "./dist/runtime-infrastructure/index.cjs",
       "default": "./src/runtime-infrastructure/index.js"
