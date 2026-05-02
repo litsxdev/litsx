@@ -170,7 +170,7 @@ function createMinifyPlugin(module = true) {
       passes: 2,
     },
     format: {
-      comments: false,
+      comments: /@vite-ignore/,
     },
   });
 }

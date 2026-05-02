@@ -1,8 +1,8 @@
 import {
   ensureLitsxParserPlugins,
   prepareLitsxAuthoredInput,
-} from "../../compiler/src/authored-input.js";
-import { createVirtualLitsxJsxSource } from "../../jsx-authoring/src/index.js";
+} from "@litsx/compiler/authored-input";
+import { createVirtualLitsxJsxSource } from "@litsx/jsx-authoring";
 import { PLAYGROUND_TYPE_FILES } from "./virtual-types.js";
 const BABEL_STANDALONE_CDN_URL = "https://esm.sh/@babel/standalone@7.26.5?bundle";
 const TYPESCRIPT_CDN_URL = "https://esm.sh/typescript@5.8.3?bundle";
@@ -34,9 +34,9 @@ async function loadCompilerRuntime() {
   if (injectedCompilerRuntime) {
     const { Babel, typescript } = injectedCompilerRuntime;
     const [{ default: nativePreset, setTypescriptModule }, { default: reactCompatPreset }, { default: transformJsxHtmlTemplate }] = await Promise.all([
-      import("../../babel-preset-litsx/src/index.js"),
-      import("../../babel-preset-react-compat/src/index.js"),
-      import("../../babel-plugin-transform-jsx-html-template/src/index.js"),
+      import("@litsx/babel-preset-litsx"),
+      import("@litsx/babel-preset-react-compat"),
+      import("@litsx/babel-plugin-transform-jsx-html-template"),
     ]);
 
     setTypescriptModule(typescript);
@@ -61,11 +61,11 @@ async function loadCompilerRuntime() {
     { default: reactCompatPreset },
     { default: transformJsxHtmlTemplate },
   ] = await Promise.all([
-    import("../../babel-preset-litsx/src/index.js"),
-    import(BABEL_STANDALONE_CDN_URL),
-    import(TYPESCRIPT_CDN_URL),
-    import("../../babel-preset-react-compat/src/index.js"),
-    import("../../babel-plugin-transform-jsx-html-template/src/index.js"),
+    import("@litsx/babel-preset-litsx"),
+    import(/* @vite-ignore */ BABEL_STANDALONE_CDN_URL),
+    import(/* @vite-ignore */ TYPESCRIPT_CDN_URL),
+    import("@litsx/babel-preset-react-compat"),
+    import("@litsx/babel-plugin-transform-jsx-html-template"),
   ]);
 
   const Babel = normalizeModule(BabelStandaloneModule);

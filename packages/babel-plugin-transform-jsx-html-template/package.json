@@ -4,11 +4,12 @@
   "description": "Transforms JSX trees into lit-html template literals",
   "type": "module",
   "main": "./dist/index.cjs",
-  "module": "./dist/index.js",
+  "module": "./src/index.js",
   "exports": {
     ".": {
+      "import": "./src/index.js",
       "require": "./dist/index.cjs",
-      "import": "./dist/index.js"
+      "default": "./src/index.js"
     }
   },
   "files": [
@@ -48,7 +49,7 @@
     "@babel/core": "^7.26.5"
   },
   "scripts": {
-    "build": "../../node_modules/.bin/tsup src/index.js --format esm,cjs --out-dir dist --clean --external @babel/core --external @babel/types --external @babel/generator --external @babel/helper-plugin-utils --external @babel/plugin-syntax-jsx --external lit --external react --external typescript",
+    "build": "../../node_modules/.bin/tsup src/index.js --format cjs --out-dir dist --clean --external @babel/core --external @babel/types --external @babel/generator --external @babel/helper-plugin-utils --external @babel/plugin-syntax-jsx --external lit --external react --external typescript",
     "prepack": "yarn build"
   }
 }

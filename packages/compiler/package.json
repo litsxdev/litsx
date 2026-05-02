@@ -4,20 +4,20 @@
   "description": "Build-facing LitSX compilation facade with correct parser and sourcemap handling",
   "type": "module",
   "main": "./dist/index.cjs",
-  "module": "./dist/index.js",
+  "module": "./src/index.js",
   "types": "./src/index.d.ts",
   "exports": {
     ".": {
       "types": "./src/index.d.ts",
-      "import": "./dist/index.js",
+      "import": "./src/index.js",
       "require": "./dist/index.cjs",
-      "default": "./dist/index.js"
+      "default": "./src/index.js"
     },
     "./authored-input": {
       "types": "./src/authored-input.d.ts",
-      "import": "./dist/authored-input.js",
+      "import": "./src/authored-input.js",
       "require": "./dist/authored-input.cjs",
-      "default": "./dist/authored-input.js"
+      "default": "./src/authored-input.js"
     }
   },
   "files": [

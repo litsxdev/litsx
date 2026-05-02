@@ -31,6 +31,7 @@ export default {
   plugins: [
     nodeResolve({
       preferBuiltins: true,
+      exportConditions: ["import", "default"],
     }),
     commonjs(),
   ],

@@ -19,15 +19,17 @@
   },
   "type": "module",
   "main": "./dist/index.cjs",
-  "module": "./dist/index.js",
+  "module": "./src/index.js",
   "exports": {
     ".": {
-      "import": "./dist/index.js",
-      "require": "./dist/index.cjs"
+      "import": "./src/index.js",
+      "require": "./dist/index.cjs",
+      "default": "./src/index.js"
     },
     "./parser": {
-      "import": "./dist/parser.js",
-      "require": "./dist/parser.cjs"
+      "import": "./src/parser.js",
+      "require": "./dist/parser.cjs",
+      "default": "./src/parser.js"
     }
   },
   "dependencies": {

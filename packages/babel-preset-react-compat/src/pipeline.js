@@ -1,10 +1,10 @@
-import litsxPropTypes from "../../babel-plugin-litsx-proptypes/src/index.js";
-import transformJsxHtmlTemplate from "../../babel-plugin-transform-jsx-html-template/src/index.js";
-import transformLitsxScopedElements from "../../babel-plugin-transform-litsx-scoped-elements/src/index.js";
-import { normalizeTransformLitsxOptions } from "../../babel-preset-litsx/src/pipeline.js";
-import transformLitsxDomRefs from "../../babel-preset-litsx/src/internal/transform-litsx-dom-refs.js";
-import transformLitsxHooks from "../../babel-preset-litsx/src/internal/transform-litsx-hooks.js";
-import transformLitsxComponents from "../../babel-preset-litsx/src/internal/transform-litsx-components.js";
+import litsxPropTypes from "@litsx/babel-plugin-litsx-proptypes";
+import transformJsxHtmlTemplate from "@litsx/babel-plugin-transform-jsx-html-template";
+import transformLitsxScopedElements from "@litsx/babel-plugin-transform-litsx-scoped-elements";
+import { normalizeTransformLitsxOptions } from "@litsx/babel-preset-litsx/pipeline";
+import transformLitsxDomRefs from "@litsx/babel-preset-litsx/internal/transform-litsx-dom-refs";
+import transformLitsxHooks from "@litsx/babel-preset-litsx/internal/transform-litsx-hooks";
+import transformLitsxComponents from "@litsx/babel-preset-litsx/internal/transform-litsx-components";
 import reactAttributes from "./internal/react-attributes.js";
 import reactDomAttributes from "./internal/react-dom-attributes.js";
 import reactHooks from "./internal/react-hooks.js";

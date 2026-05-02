@@ -5,7 +5,7 @@ import { fileURLToPath } from "url";
 import {
   litsxJsxLanguage,
   litsxTsxLanguage,
-} from "../../../packages/vitepress/src/shiki-litsx-languages.js";
+} from "@litsx/vitepress/shiki-litsx-languages";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const syntaxesDir = path.resolve(__dirname, "../syntaxes");

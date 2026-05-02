@@ -4,11 +4,37 @@
   "description": "Canonical native Babel preset for LitSX-authored source",
   "type": "module",
   "main": "./dist/index.cjs",
-  "module": "./dist/index.js",
+  "module": "./src/index.js",
   "exports": {
     ".": {
-      "import": "./dist/index.js",
-      "require": "./dist/index.cjs"
+      "import": "./src/index.js",
+      "require": "./dist/index.cjs",
+      "default": "./src/index.js"
+    },
+    "./pipeline": {
+      "import": "./src/pipeline.js",
+      "require": "./dist/pipeline.cjs",
+      "default": "./src/pipeline.js"
+    },
+    "./internal/transform-litsx-components": {
+      "import": "./src/internal/transform-litsx-components.js",
+      "require": "./dist/internal/transform-litsx-components.cjs",
+      "default": "./src/internal/transform-litsx-components.js"
+    },
+    "./internal/transform-litsx-dom-refs": {
+      "import": "./src/internal/transform-litsx-dom-refs.js",
+      "require": "./dist/internal/transform-litsx-dom-refs.cjs",
+      "default": "./src/internal/transform-litsx-dom-refs.js"
+    },
+    "./internal/transform-litsx-hooks": {
+      "import": "./src/internal/transform-litsx-hooks.js",
+      "require": "./dist/internal/transform-litsx-hooks.cjs",
+      "default": "./src/internal/transform-litsx-hooks.js"
+    },
+    "./internal/transform-litsx-properties": {
+      "import": "./src/internal/transform-litsx-properties.js",
+      "require": "./dist/internal/transform-litsx-properties.cjs",
+      "default": "./src/internal/transform-litsx-properties.js"
     }
   },
   "files": [

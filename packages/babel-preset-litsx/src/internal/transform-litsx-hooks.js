@@ -1,4 +1,4 @@
-import { createRuntimeHooksTransform } from "../../../babel-plugin-shared-hooks/src/index.js";
+import { createRuntimeHooksTransform } from "@litsx/babel-plugin-shared-hooks";
 
 const RUNTIME_MODULE = "litsx";
 const IMPORT_SOURCES = [RUNTIME_MODULE];

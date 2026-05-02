@@ -47,24 +47,13 @@ export function createPackageRollupConfig({
   const plugins = [
     resolve({
       preferBuiltins: true,
+      exportConditions: ["import", "default"],
     }),
     json(),
     commonjs(),
   ];
 
   return [
-    {
-      input,
-      external,
-      plugins,
-      output: {
-        dir: "dist",
-        format: "esm",
-        entryFileNames: "[name].js",
-        chunkFileNames: "shared/[name]-[hash].js",
-        sourcemap: true,
-      },
-    },
     {
       input,
       external,

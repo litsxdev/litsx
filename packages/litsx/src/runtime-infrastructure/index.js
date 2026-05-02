@@ -2,7 +2,7 @@ import { ScopedElementsMixin } from "@open-wc/scoped-elements/lit-element.js";
 import {
   connectLightDomRegistry,
   disconnectLightDomRegistry,
-} from "../../../light-dom-registry/src/index.js";
+} from "@litsx/light-dom-registry";
 
 const DEDUPE_MIXIN_MARK = Symbol("litsx.dedupeMixinMark");
 const LIGHT_DOM_STYLE_ELEMENT = Symbol("litsx.lightDomStyleElement");

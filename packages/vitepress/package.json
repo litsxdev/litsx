@@ -15,6 +15,9 @@
     "./versions": {
       "default": "./src/versions.js"
     },
+    "./shiki-litsx-languages": {
+      "default": "./src/shiki-litsx-languages.js"
+    },
     "./styles.css": "./src/styles.css",
     "./theme/DocsVersionBanner": {
       "default": "./src/theme/DocsVersionBanner.js"

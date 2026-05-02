@@ -1,4 +1,4 @@
-import { transformLitsx } from "../../compiler/src/index.js";
+import { transformLitsx } from "@litsx/compiler";
 import path from "path";
 export { litsxVitePressMarkdown } from "./shiki-litsx-languages.js";
 

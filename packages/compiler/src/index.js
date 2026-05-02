@@ -2,16 +2,16 @@ import babelCore from "@babel/core";
 import {
   createLitsxPresetPlugins,
   detectLitsxSourceFeatures,
-} from "../../babel-preset-litsx/src/index.js";
-import { ensureTypescriptModule } from "../../babel-preset-litsx/src/internal/transform-litsx-properties.js";
-import { createLitsxTypecheckSession } from "../../typescript-plugin-litsx/src/typecheck.js";
+} from "@litsx/babel-preset-litsx";
+import { ensureTypescriptModule } from "@litsx/babel-preset-litsx/internal/transform-litsx-properties";
+import { createLitsxTypecheckSession } from "@litsx/typescript-plugin/typecheck";
 import {
   createStandaloneTsSession,
   normalizeFilePath,
-} from "../../typescript-session/src/index.js";
+} from "@litsx/typescript-session";
 import {
   patchLitAttributeSourcemap,
-} from "../../babel-plugin-transform-jsx-html-template/src/index.js";
+} from "@litsx/babel-plugin-transform-jsx-html-template";
 import {
   ensureLitsxParserPlugins,
   prepareLitsxAuthoredInput,

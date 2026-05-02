@@ -26,16 +26,18 @@
     "directory": "packages/babel-parser-litsx"
   },
   "main": "./dist/index.cjs",
-  "module": "./dist/index.js",
+  "module": "./src/index.mjs",
   "exports": {
     ".": {
-      "import": "./dist/index.js",
-      "require": "./dist/index.cjs"
+      "import": "./src/index.mjs",
+      "require": "./dist/index.cjs",
+      "default": "./src/index.mjs"
     }
   },
   "types": "./typings/babel-parser.d.ts",
   "files": [
     "dist",
+    "src",
     "README.md",
     "typings/babel-parser.d.ts"
   ],

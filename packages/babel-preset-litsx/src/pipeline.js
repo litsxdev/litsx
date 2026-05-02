@@ -1,5 +1,5 @@
-import transformJsxHtmlTemplate from "../../babel-plugin-transform-jsx-html-template/src/index.js";
-import transformLitsxScopedElements from "../../babel-plugin-transform-litsx-scoped-elements/src/index.js";
+import transformJsxHtmlTemplate from "@litsx/babel-plugin-transform-jsx-html-template";
+import transformLitsxScopedElements from "@litsx/babel-plugin-transform-litsx-scoped-elements";
 import transformLitsxDomRefs from "./internal/transform-litsx-dom-refs.js";
 import transformLitsxHooks from "./internal/transform-litsx-hooks.js";
 import transformLitsxComponents from "./internal/transform-litsx-components.js";

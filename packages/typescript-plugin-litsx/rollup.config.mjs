@@ -43,18 +43,6 @@ export default [
     plugins,
     output: {
       dir: "dist",
-      format: "esm",
-      entryFileNames: "[name].js",
-      chunkFileNames: "shared/[name]-[hash].js",
-      sourcemap: true,
-    },
-  },
-  {
-    input,
-    external,
-    plugins,
-    output: {
-      dir: "dist",
       format: "cjs",
       exports: "named",
       entryFileNames: "[name].cjs",

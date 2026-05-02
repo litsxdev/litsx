@@ -26,34 +26,35 @@
   },
   "type": "module",
   "main": "./tsserver-plugin.cjs",
-  "module": "./dist/index.js",
+  "module": "./src/index.js",
   "bin": {
     "litsx-tsc": "./dist/litsx-tsc.js"
   },
   "exports": {
     ".": {
       "require": "./tsserver-plugin.cjs",
-      "import": "./dist/index.js",
-      "default": "./dist/index.js"
+      "import": "./src/index.js",
+      "default": "./src/index.js"
     },
     "./authored-semantics": {
       "require": "./dist/authored-semantics.cjs",
-      "import": "./dist/authored-semantics.js",
-      "default": "./dist/authored-semantics.js"
+      "import": "./src/authored-semantics.js",
+      "default": "./src/authored-semantics.js"
     },
     "./virtual-source": {
       "require": "./dist/virtual-source.cjs",
-      "import": "./dist/virtual-source.js",
-      "default": "./dist/virtual-source.js"
+      "import": "./src/virtual-source.js",
+      "default": "./src/virtual-source.js"
     },
     "./typecheck": {
       "require": "./dist/typecheck.cjs",
-      "import": "./dist/typecheck.js",
-      "default": "./dist/typecheck.js"
+      "import": "./src/typecheck.js",
+      "default": "./src/typecheck.js"
     }
   },
   "files": [
     "dist",
+    "src",
     "tsserver-plugin.cjs",
     "README.md"
   ],

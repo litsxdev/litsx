@@ -2,7 +2,7 @@ import * as babelParser from "@babel/parser";
 import {
   getLitsxVirtualizationMetadata,
   parseWithLitsxVirtualization,
-} from "../../jsx-authoring/src/parser.js";
+} from "@litsx/jsx-authoring/parser";
 import { mergeLitsxWarnings } from "./warnings.js";
 
 function isNativeIntrinsicJsxName(nameNode) {

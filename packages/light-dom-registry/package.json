@@ -4,12 +4,12 @@
   "description": "Contextual light DOM registry runtime for LitSX element delegation",
   "type": "module",
   "main": "./dist/index.cjs",
-  "module": "./dist/index.js",
+  "module": "./src/index.js",
   "exports": {
     ".": {
-      "import": "./dist/index.js",
+      "import": "./src/index.js",
       "require": "./dist/index.cjs",
-      "default": "./dist/index.js"
+      "default": "./src/index.js"
     }
   },
   "files": [

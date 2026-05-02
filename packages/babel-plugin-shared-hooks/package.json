@@ -4,11 +4,12 @@
   "description": "Shared hook transform utilities used by the Litsx Babel plugin family",
   "type": "module",
   "main": "./dist/index.cjs",
-  "module": "./dist/index.js",
+  "module": "./src/index.js",
   "exports": {
     ".": {
-      "import": "./dist/index.js",
-      "require": "./dist/index.cjs"
+      "import": "./src/index.js",
+      "require": "./dist/index.cjs",
+      "default": "./src/index.js"
     }
   },
   "files": [

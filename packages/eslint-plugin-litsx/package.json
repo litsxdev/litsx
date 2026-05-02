@@ -4,15 +4,17 @@
   "description": "Official ESLint processor support for LitSX-authored syntax",
   "type": "module",
   "main": "./dist/index.cjs",
-  "module": "./dist/index.js",
+  "module": "./src/index.js",
   "exports": {
     ".": {
-      "import": "./dist/index.js",
-      "require": "./dist/index.cjs"
+      "import": "./src/index.js",
+      "require": "./dist/index.cjs",
+      "default": "./src/index.js"
     },
     "./processor": {
-      "import": "./dist/processor.js",
-      "require": "./dist/processor.cjs"
+      "import": "./src/processor.js",
+      "require": "./dist/processor.cjs",
+      "default": "./src/processor.js"
     }
   },
   "files": [

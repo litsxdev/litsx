@@ -3,12 +3,13 @@
   "version": "0.1.0",
   "description": "Lowers React propTypes assignments into native LitSX properties hoists",
   "main": "./dist/index.cjs",
-  "module": "./dist/index.js",
+  "module": "./src/index.js",
   "type": "module",
   "exports": {
     ".": {
-      "import": "./dist/index.js",
-      "require": "./dist/index.cjs"
+      "import": "./src/index.js",
+      "require": "./dist/index.cjs",
+      "default": "./src/index.js"
     }
   },
   "files": [
@@ -45,7 +46,7 @@
     "@babel/core": "^7.26.5"
   },
   "scripts": {
-    "build": "../../node_modules/.bin/tsup src/index.js --format esm,cjs --out-dir dist --clean --external @babel/core --external @babel/types --external @babel/generator --external @babel/helper-plugin-utils --external @babel/plugin-syntax-jsx --external lit --external react --external typescript",
+    "build": "../../node_modules/.bin/tsup src/index.js --format cjs --out-dir dist --clean --external @babel/core --external @babel/types --external @babel/generator --external @babel/helper-plugin-utils --external @babel/plugin-syntax-jsx --external lit --external react --external typescript",
     "prepack": "yarn build"
   }
 }

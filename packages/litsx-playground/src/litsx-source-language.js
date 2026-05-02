@@ -11,7 +11,7 @@ import {
 import { linter } from "@codemirror/lint";
 import { highlightTree, classHighlighter } from "@lezer/highlight";
 import { Parser } from "@lezer/common";
-import { createVirtualLitsxJsxSource, mapVirtualPositionToOriginal } from "../../jsx-authoring/src/index.js";
+import { createVirtualLitsxJsxSource, mapVirtualPositionToOriginal } from "@litsx/jsx-authoring";
 
 export const litsxSourceTheme = EditorView.theme({
   ".tok-keyword, .tok-keyword *": {

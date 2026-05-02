@@ -1,5 +1,5 @@
 import jsxSyntaxPlugin from "@babel/plugin-syntax-jsx";
-import { isLitElementSuperClass } from "../../babel-plugin-shared-hooks/src/index.js";
+import { isLitElementSuperClass } from "@litsx/babel-plugin-shared-hooks";
 
 let t;
 const SHADOW_MIXIN = "ShadowDomElementsMixin";

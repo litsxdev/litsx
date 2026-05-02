@@ -1,6 +1,6 @@
 import helperPluginUtils from "@babel/helper-plugin-utils";
 import jsxSyntaxPlugin from "@babel/plugin-syntax-jsx";
-import { isLitElementSuperClass } from "../../../babel-plugin-shared-hooks/src/index.js";
+import { isLitElementSuperClass } from "@litsx/babel-plugin-shared-hooks";
 
 const { declare } = helperPluginUtils;
 const RUNTIME_MODULE = "litsx";

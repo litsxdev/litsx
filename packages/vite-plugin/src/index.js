@@ -1,5 +1,5 @@
 import fs from "fs/promises";
-import { createLitsxCompilationSession } from "../../compiler/src/index.js";
+import { createLitsxCompilationSession } from "@litsx/compiler";
 
 function shouldTransform(id, include) {
   if (typeof include === "function") {

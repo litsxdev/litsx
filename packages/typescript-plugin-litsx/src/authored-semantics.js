@@ -7,7 +7,7 @@ import {
   mapOriginalPositionToVirtual,
   remapTextSpanToOriginal,
   remapVirtualText,
-} from "../../jsx-authoring/src/index.js";
+} from "@litsx/jsx-authoring";
 
 const EVENT_COMPLETIONS = [
   "click",
