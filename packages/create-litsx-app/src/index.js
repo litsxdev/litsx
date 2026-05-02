@@ -108,7 +108,7 @@ function createBasePackageJson(packageName) {
       "prettier": "^3.8.3",
       "prettier-plugin-litsx": PUBLISHED_PACKAGE_VERSIONS["prettier-plugin-litsx"],
       "typescript": "^5.9.3",
-      "vite": "^7.1.0"
+      "vite": "^7.3.2"
     }
   };
 }

@@ -41,7 +41,7 @@
     "directory": "packages/vite-plugin"
   },
   "peerDependencies": {
-    "vite": "^7.0.0"
+    "vite": "^7.3.2"
   },
   "dependencies": {
     "@litsx/compiler": "workspace:^"
