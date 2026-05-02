@@ -26,14 +26,6 @@
     "url": "https://github.com/litsxdev/litsx.git",
     "directory": "packages/vscode-litsx"
   },
-  "files": [
-    "dist",
-    "syntaxes",
-    "icon.png",
-    "LICENSE",
-    "README.md",
-    "package.json"
-  ],
   "scripts": {
     "build": "node ./scripts/build-grammars.mjs && ../../node_modules/.bin/rollup --config rollup.config.mjs",
     "package:vsix": "yarn build && node -e \"require('node:fs').rmSync('dist/vscode-litsx.vsix', { force: true })\" && ../../node_modules/.bin/vsce package --no-dependencies --out dist/vscode-litsx.vsix",
