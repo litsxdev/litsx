@@ -3,7 +3,7 @@
   "private": true,
   "displayName": "LitSX",
   "description": "VS Code syntax highlighting and workspace defaults for LitSX-authored .litsx and .litsx.jsx files.",
-  "version": "0.1.0",
+  "version": "0.0.0",
   "publisher": "litsx",
   "license": "Apache-2.0",
   "icon": "icon.png",

@@ -1,6 +1,6 @@
 {
   "name": "@litsx/babel-preset-litsx",
-  "version": "0.1.0",
+  "version": "0.0.0",
   "description": "Canonical native Babel preset for LitSX-authored source",
   "type": "module",
   "main": "./dist/index.cjs",
