@@ -27,7 +27,7 @@ function update(host) {
   }
 }
 
-describe("litsx effects controller transitions", () => {
+describe("litsx runtime transitions", () => {
   const originalRAF = globalThis.requestAnimationFrame;
 
   beforeAll(async () => {

@@ -1,7 +1,19 @@
 import { getController } from "./runtime-controller.js";
 import { useEvent } from "./effect-hooks.js";
-
-const INITIAL_ASYNC_STATE = Symbol("litsx.initialAsyncState");
+import {
+  startTransitionImpl,
+  useAsyncStateImpl,
+  useDeferredValueImpl,
+  useOptimisticImpl,
+  useTransitionImpl,
+} from "./state-async-hooks.js";
+import {
+  useCallbackRefImpl,
+  useExposeImpl,
+  useExternalStoreImpl,
+  useIdImpl,
+  useRefImpl,
+} from "./state-imperative-hooks.js";
 
 /**
  * Read the value from the previous render.
@@ -171,64 +183,14 @@ export function useControlledState(host, options) {
  * @returns {[any, (...args: any[]) => Promise<any>, { pending: boolean, error: unknown | null, reset: () => void }]}
  */
 export function useAsyncState(host, initialState, action) {
-  if (typeof action !== "function") {
-    throw new TypeError("useAsyncState expects an action function");
-  }
-
-  const [state, setState] = useState(host, initialState);
-  const [error, setError] = useState(host, null);
-  const [pending, beginTransition] = useTransition(host);
-  const initialStateRef = useRef(host, INITIAL_ASYNC_STATE);
-  const stateRef = useRef(host, state);
-  const latestRunRef = useRef(host, 0);
-
-  if (initialStateRef.current === INITIAL_ASYNC_STATE) {
-    initialStateRef.current = state;
-  }
-
-  stateRef.current = state;
-
-  const run = useEvent(host, (...args) => {
-    const runId = latestRunRef.current + 1;
-    latestRunRef.current = runId;
-    setError(null);
-
-    let result;
-    try {
-      result = beginTransition(() => action(stateRef.current, ...args));
-    } catch (nextError) {
-      if (runId === latestRunRef.current) {
-        setError(nextError);
-      }
-      return Promise.reject(nextError);
-    }
-
-    return Promise.resolve(result).then(
-      (nextState) => {
-        if (runId === latestRunRef.current) {
-          stateRef.current = nextState;
-          setError(null);
-          setState(nextState);
-        }
-        return nextState;
-      },
-      (nextError) => {
-        if (runId === latestRunRef.current) {
-          setError(nextError);
-        }
-        return Promise.reject(nextError);
-      }
-    );
-  });
-
-  const reset = useEvent(host, () => {
-    latestRunRef.current += 1;
-    stateRef.current = initialStateRef.current;
-    setError(null);
-    setState(initialStateRef.current);
-  });
-
-  return [state, run, { pending, error, reset }];
+  return useAsyncStateImpl(
+    host,
+    initialState,
+    action,
+    useState,
+    useTransition,
+    useRef
+  );
 }
 
 /**
@@ -256,37 +218,7 @@ export function useAsyncState(host, initialState, action) {
  * @returns {[any, (value: any) => void, () => void]}
  */
 export function useOptimistic(host, state, updateFn) {
-  const reducer = typeof updateFn === "function"
-    ? updateFn
-    : (_currentState, optimisticValue) => optimisticValue;
-  const baseStateRef = useRef(host, state);
-  const queueRef = useRef(host, []);
-  const [, forceRender] = useState(host, 0);
-
-  if (!Object.is(baseStateRef.current, state)) {
-    baseStateRef.current = state;
-    queueRef.current = [];
-  }
-
-  const addOptimistic = useEvent(host, (optimisticValue) => {
-    queueRef.current = [...queueRef.current, optimisticValue];
-    forceRender((version) => version + 1);
-  });
-
-  const resetOptimistic = useEvent(host, () => {
-    if (queueRef.current.length === 0) {
-      return;
-    }
-    queueRef.current = [];
-    forceRender((version) => version + 1);
-  });
-
-  const optimisticState = queueRef.current.reduce(
-    (currentState, optimisticValue) => reducer(currentState, optimisticValue),
-    state
-  );
-
-  return [optimisticState, addOptimistic, resetOptimistic];
+  return useOptimisticImpl(host, state, updateFn, useRef, useState);
 }
 
 /**
@@ -310,7 +242,7 @@ export function useOptimistic(host, state, updateFn) {
  * @returns {[boolean, (callback: () => any) => any]} A pending flag and a function that schedules non-urgent work.
  */
 export function useTransition(host) {
-  return getController(host).resolveTransition();
+  return useTransitionImpl(host);
 }
 
 /**
@@ -320,7 +252,7 @@ export function useTransition(host) {
  * @returns {any}
  */
 export function startTransition(host, callback) {
-  return getController(host).startTransition(callback);
+  return startTransitionImpl(host, callback);
 }
 
 /**
@@ -344,8 +276,7 @@ export function startTransition(host, callback) {
  * @returns {any} The deferred value currently exposed to render logic.
  */
 export function useDeferredValue(host, value, options) {
-  const slot = getController(host).resolveDeferredValue(value, options);
-  return slot.pending ? slot.current : slot.source;
+  return useDeferredValueImpl(host, value, options);
 }
 
 /**
@@ -370,7 +301,7 @@ export function useDeferredValue(host, value, options) {
  * @param {any} [initialValue]
  */
 export function useRef(host, initialValue) {
-  return getController(host).resolveMutableRef(initialValue);
+  return useRefImpl(host, initialValue);
 }
 
 /**
@@ -382,7 +313,7 @@ export function useRef(host, initialValue) {
  * @returns {string}
  */
 export function useId(host) {
-  return getController(host).resolveId();
+  return useIdImpl(host);
 }
 
 /**
@@ -393,20 +324,7 @@ export function useId(host) {
  * @param {ReadonlyArray<unknown>} [deps]
  */
 export function useCallbackRef(host, getTarget, callback, deps) {
-  if (typeof getTarget !== "function") {
-    throw new TypeError("useCallbackRef expects a getter function");
-  }
-  if (typeof callback !== "function") {
-    return;
-  }
-
-  const boundCallback = (node) => callback.call(host, node);
-
-  getController(host).registerImperative(
-    boundCallback,
-    () => getTarget.call(host) ?? null,
-    deps
-  );
+  return useCallbackRefImpl(host, getTarget, callback, deps);
 }
 
 /**
@@ -436,7 +354,7 @@ export function useCallbackRef(host, getTarget, callback, deps) {
  * @param {ReadonlyArray<unknown>} [deps] Reactive values that control when the handle should be recreated.
  */
 export function useExpose(host, ref, createHandle, deps) {
-  getController(host).registerImperative(ref, createHandle, deps);
+  return useExposeImpl(host, ref, createHandle, deps);
 }
 
 /**
@@ -465,15 +383,5 @@ export function useExpose(host, ref, createHandle, deps) {
  * @returns {any} The latest snapshot currently exposed by the external store.
  */
 export function useExternalStore(host, subscribe, getSnapshot, getServerSnapshot) {
-  if (typeof subscribe !== "function") {
-    throw new TypeError("useExternalStore requires a subscribe function.");
-  }
-  if (typeof getSnapshot !== "function") {
-    throw new TypeError("useExternalStore requires a getSnapshot function.");
-  }
-  return getController(host).resolveExternalStore(
-    subscribe,
-    getSnapshot,
-    getServerSnapshot
-  );
+  return useExternalStoreImpl(host, subscribe, getSnapshot, getServerSnapshot);
 }

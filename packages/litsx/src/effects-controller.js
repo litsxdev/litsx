@@ -1,8 +1,6 @@
-import { createStableId } from "./runtime-ids.js";
-import { normalizeDeps, shouldRerunRecord, haveDepsChanged } from "./runtime-deps.js";
+import { normalizeDeps } from "./runtime-deps.js";
 import { assignRef, cleanupRef } from "./runtime-refs.js";
-import { runCleanup } from "./runtime-cleanup.js";
-import { Priority, PriorityScheduler } from "./runtime-priority-scheduler.js";
+import { PriorityScheduler } from "./runtime-priority-scheduler.js";
 import { addAdoptedController } from "./runtime-adopted-controllers.js";
 import { createTransitionState, resetTransitionState } from "./runtime-transition-state.js";
 import {
@@ -10,6 +8,30 @@ import {
   createExternalStoreEffect,
   readExternalSnapshot,
 } from "./runtime-external-store.js";
+import {
+  buildEffectQueues,
+  cleanupDisconnectedEffects,
+  finalizeConnectedEffects,
+  registerConnectedEffect,
+  registerEffect,
+  resetAdoptedConnectedEffects,
+  runConnectedEffects,
+  runEffectQueue,
+} from "./runtime-effect-queues.js";
+import {
+  clearDeferredValues,
+  resolveDeferredValue,
+  scheduleDeferredFlush,
+} from "./runtime-deferred-values.js";
+import {
+  resolveCallback,
+  resolveEvent,
+  resolveId,
+  resolveMemo,
+  resolveMutableRef,
+  resolvePrevious,
+  resolveReducer,
+} from "./runtime-slot-resolvers.js";
 
 /**
  * @internal
@@ -81,111 +103,23 @@ export class EffectsController {
   }
 
   register(callback, deps, layout) {
-    const index = this.cursor;
-    const nextDeps = Array.isArray(deps) ? deps.slice() : null;
-    let record = this.effects[index];
-
-    if (!record) {
-      record = this.effects[index] = {
-        callback,
-        deps: nextDeps,
-        cleanup: undefined,
-        hasRun: false,
-        layout,
-        needsRun: true,
-      };
-    } else {
-      const prevDeps = record.deps;
-      const prevHasRun = record.hasRun;
-      record.callback = callback;
-      record.layout = layout;
-      record.needsRun = shouldRerunRecord(
-        { deps: prevDeps, hasRun: prevHasRun },
-        nextDeps
-      );
-      record.deps = nextDeps;
-      if (record.needsRun) {
-        record.hasRun = false;
-      }
-    }
-
-    this.cursor = index + 1;
-    return index;
+    return registerEffect(this, callback, deps, layout);
   }
 
   registerConnected(callback, deps) {
-    const index = this.connectedCursor;
-    const nextDeps = Array.isArray(deps) ? deps.slice() : [];
-    let record = this.connectedEffects[index];
-
-    if (!record) {
-      record = this.connectedEffects[index] = {
-        callback,
-        deps: nextDeps,
-        cleanup: undefined,
-        active: false,
-        needsRun: true,
-      };
-    } else {
-      const prevDeps = record.deps;
-      record.callback = callback;
-      record.needsRun = !record.active || haveDepsChanged(prevDeps, nextDeps);
-      record.deps = nextDeps;
-    }
-
-    this.connectedCursor = index + 1;
-    return index;
+    return registerConnectedEffect(this, callback, deps);
   }
 
   buildQueues() {
-    const count = Math.min(this.effects.length, this.cursor);
-    const layoutQueue = [];
-    const passiveQueue = [];
-
-    for (let index = 0; index < count; index += 1) {
-      const record = this.effects[index];
-      if (!record) continue;
-      const shouldRun = record.needsRun || !record.hasRun || record.deps === null;
-      if (!shouldRun) continue;
-      (record.layout ? layoutQueue : passiveQueue).push(record);
-    }
-
-    if (this.effects.length > count) {
-      for (let index = count; index < this.effects.length; index += 1) {
-        runCleanup(this.effects[index], this.host);
-      }
-      this.effects.length = count;
-    }
-
-    this.layoutQueue = layoutQueue;
-    this.passiveQueue = passiveQueue;
-    this.cursor = 0;
+    buildEffectQueues(this);
   }
 
   finalizeConnectedEffects() {
-    const count = Math.min(this.connectedEffects.length, this.connectedCursor);
-
-    if (this.connectedEffects.length > count) {
-      for (let index = count; index < this.connectedEffects.length; index += 1) {
-        const record = this.connectedEffects[index];
-        if (record?.active) {
-          runCleanup(record, this.host);
-        }
-      }
-      this.connectedEffects.length = count;
-    }
-
-    this.connectedCursor = 0;
+    finalizeConnectedEffects(this);
   }
 
   runQueue(queue) {
-    for (const record of queue) {
-      runCleanup(record, this.host);
-      const cleanup = record.callback.call(this.host);
-      record.cleanup = typeof cleanup === "function" ? cleanup : undefined;
-      record.hasRun = true;
-      record.needsRun = false;
-    }
+    runEffectQueue(this, queue);
   }
 
   runLayoutNow() {
@@ -209,18 +143,7 @@ export class EffectsController {
   }
 
   runConnectedEffects(force = false) {
-    for (const record of this.connectedEffects) {
-      if (!record) continue;
-      const shouldRun = force || record.needsRun || !record.active;
-      if (!shouldRun) continue;
-
-      runCleanup(record, this.host);
-
-      const cleanup = record.callback.call(this.host);
-      record.cleanup = typeof cleanup === "function" ? cleanup : undefined;
-      record.active = true;
-      record.needsRun = false;
-    }
+    runConnectedEffects(this, force);
   }
 
   hostUpdate() {}
@@ -246,20 +169,7 @@ export class EffectsController {
 
   hostDisconnected() {
     this.hostIsConnected = false;
-    for (const record of this.effects) {
-      runCleanup(record, this.host);
-      if (record) record.hasRun = false;
-    }
-
-    for (const record of this.connectedEffects) {
-      if (record?.active) {
-        runCleanup(record, this.host);
-      }
-      if (record) {
-        record.active = false;
-        record.needsRun = true;
-      }
-    }
+    cleanupDisconnectedEffects(this);
 
     this.layoutQueue = null;
     this.passiveQueue = null;
@@ -279,7 +189,7 @@ export class EffectsController {
     this.externalStores.length = 0;
     this.externalStoreCursor = 0;
     this.prevExternalStoreCount = 0;
-    this.clearDeferredValues();
+    clearDeferredValues(this);
     this.priorityQueue.clear();
   }
 
@@ -288,98 +198,24 @@ export class EffectsController {
       return;
     }
 
-    for (const record of this.connectedEffects) {
-      if (record?.active) {
-        runCleanup(record, this.host);
-      }
-      if (record) {
-        record.active = false;
-        record.needsRun = true;
-      }
-    }
-
+    resetAdoptedConnectedEffects(this);
     this.runConnectedEffects(true);
   }
 
   resolveMemo(factory, deps) {
-    const index = this.memoCursor;
-    const normalized = normalizeDeps(deps);
-    let slot = this.memos[index];
-
-    if (!slot) {
-      slot = this.memos[index] = {
-        deps: normalized,
-        value: factory(),
-      };
-    } else {
-      const shouldCompare = Array.isArray(normalized);
-      const depsChanged = shouldCompare ? haveDepsChanged(slot.deps, normalized) : true;
-      if (depsChanged) {
-        slot.value = factory();
-      }
-      slot.deps = normalized;
-    }
-
-    this.memoCursor = index + 1;
-    return slot.value;
+    return resolveMemo(this, factory, deps);
   }
 
   resolveCallback(callback, deps) {
-    const index = this.callbackCursor;
-    const normalized = normalizeDeps(deps);
-    let slot = this.callbacks[index];
-
-    if (!slot) {
-      slot = this.callbacks[index] = {
-        deps: normalized,
-        value: callback,
-      };
-    } else {
-      const shouldCompare = Array.isArray(normalized);
-      const depsChanged = shouldCompare ? haveDepsChanged(slot.deps, normalized) : true;
-      if (depsChanged) {
-        slot.value = callback;
-      }
-      slot.deps = normalized;
-    }
-
-    this.callbackCursor = index + 1;
-    return slot.value;
+    return resolveCallback(this, callback, deps);
   }
 
   resolveEvent(callback) {
-    const index = this.eventCursor;
-    let slot = this.events[index];
-
-    if (!slot) {
-      slot = this.events[index] = {
-        callback,
-        value: function stableEventCallback(...args) {
-          return slot.callback.apply(this, args);
-        },
-      };
-    } else {
-      slot.callback = callback;
-    }
-
-    this.eventCursor = index + 1;
-    return slot.value;
+    return resolveEvent(this, callback);
   }
 
   resolvePrevious(value, initialValue) {
-    const index = this.previousCursor;
-    let slot = this.previousValues[index];
-
-    if (!slot) {
-      slot = this.previousValues[index] = { value };
-      this.previousCursor = index + 1;
-      return initialValue;
-    }
-
-    const previousValue = slot.value;
-    slot.value = value;
-    this.previousCursor = index + 1;
-    return previousValue;
+    return resolvePrevious(this, value, initialValue);
   }
 
   resolveTransition() {
@@ -407,62 +243,15 @@ export class EffectsController {
   }
 
   resolveReducer(reducer, initialArg, init) {
-    const index = this.reducerCursor;
-    let slot = this.reducers[index];
-
-    if (!slot) {
-      const initialState = typeof init === "function" ? init(initialArg) : initialArg;
-
-      slot = {
-        state: initialState,
-        reducer,
-        dispatch: null,
-      };
-
-      slot.dispatch = (action) => {
-        const prevState = slot.state;
-        const nextState = slot.reducer(slot.state, action);
-        if (!Object.is(prevState, nextState)) {
-          slot.state = nextState;
-          this.host.requestUpdate?.();
-        }
-        return slot.state;
-      };
-
-      this.reducers[index] = slot;
-    }
-
-    slot.reducer = reducer;
-    this.reducerCursor = index + 1;
-    return [slot.state, slot.dispatch];
+    return resolveReducer(this, reducer, initialArg, init);
   }
 
   resolveMutableRef(initialValue) {
-    const index = this.mutableRefCursor;
-    let slot = this.mutableRefs[index];
-
-    if (!slot) {
-      slot = this.mutableRefs[index] = {
-        ref: { current: initialValue },
-      };
-    }
-
-    this.mutableRefCursor = index + 1;
-    return slot.ref;
+    return resolveMutableRef(this, initialValue);
   }
 
   resolveId() {
-    const index = this.idCursor;
-    let slot = this.ids[index];
-
-    if (!slot) {
-      slot = this.ids[index] = {
-        value: createStableId(),
-      };
-    }
-
-    this.idCursor = index + 1;
-    return slot.value;
+    return resolveId(this);
   }
 
   registerImperative(ref, createHandle, deps) {
@@ -540,71 +329,14 @@ export class EffectsController {
   }
 
   resolveDeferredValue(value, options) {
-    const index = this.deferredCursor || 0;
-    this.deferredCursor = index + 1;
-    let slot = this.deferredValues[index];
-
-    if (!slot) {
-      slot = this.deferredValues[index] = {
-        source: value,
-        current: value,
-        pending: false,
-        timer: null,
-        version: 0,
-        options: null,
-      };
-      return slot;
-    }
-
-    const hasChanged = !Object.is(slot.source, value);
-    slot.options = options || null;
-
-    if (hasChanged) {
-      slot.source = value;
-      slot.version += 1;
-      this.scheduleDeferredFlush(slot);
-    }
-
-    return slot;
+    return resolveDeferredValue(this, value, options);
   }
 
   scheduleDeferredFlush(slot) {
-    if (slot.timer != null) {
-      clearTimeout(slot.timer);
-      slot.timer = null;
-    }
-
-    const timeout =
-      slot.options && typeof slot.options.timeout === "number"
-        ? Math.max(0, slot.options.timeout)
-        : 0;
-
-    const token = slot.version;
-    slot.pending = true;
-
-    slot.timer = setTimeout(() => {
-      slot.timer = null;
-      if (slot.version !== token) {
-        return;
-      }
-      slot.current = slot.source;
-      slot.pending = false;
-      this.priorityQueue.enqueue({
-        priority: Priority.TRANSITION,
-        flush: () => this.host?.requestUpdate?.(),
-      });
-    }, timeout);
+    scheduleDeferredFlush(this, slot);
   }
 
   clearDeferredValues() {
-    if (!this.deferredValues?.length) return;
-    for (const slot of this.deferredValues) {
-      if (!slot) continue;
-      if (slot.timer != null) {
-        clearTimeout(slot.timer);
-        slot.timer = null;
-      }
-      slot.pending = false;
-    }
+    clearDeferredValues(this);
   }
 }
