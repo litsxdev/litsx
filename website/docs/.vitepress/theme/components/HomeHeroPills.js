@@ -7,7 +7,7 @@ const pills = [
     iconAlt: "TypeScript",
   },
   {
-    label: "Lightweight (~8.0 kB gzip)",
+    label: "Minimal runtime surface",
     iconMaskSrc: "/lightweight.svg",
   },
   {

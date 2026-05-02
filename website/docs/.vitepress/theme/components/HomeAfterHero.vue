@@ -51,6 +51,7 @@ import { jsxAuthoringExampleSource } from "./playground-example-source.js";
               <li>JSX as the language for building component trees</li>
               <li>Lit as the rendering foundation</li>
               <li>web components as the runtime and distribution model</li>
+              <li>tree-shakeable runtime primitives instead of a React runtime dependency</li>
               <li>less verbose UI authoring</li>
               <li>a more functional style of component composition</li>
             </ul>
