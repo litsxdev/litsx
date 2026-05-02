@@ -21,6 +21,6 @@
     "@litsx/vite-plugin": "workspace:^",
     "eslint": "^9.0.0",
     "typescript": "^5.9.3",
-    "vite": "^7.1.0"
+    "vite": "^8.0.3"
   }
 }
