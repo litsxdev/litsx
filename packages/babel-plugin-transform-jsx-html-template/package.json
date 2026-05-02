@@ -37,16 +37,16 @@
     "directory": "packages/babel-plugin-transform-jsx-html-template"
   },
   "peerDependencies": {
-    "@babel/core": ">=7"
+    "@babel/core": "^8.0.0-0"
   },
   "dependencies": {
-    "@babel/generator": "^7.29.1",
-    "@babel/helper-plugin-utils": "^7.28.6",
-    "@babel/plugin-syntax-jsx": "^7.28.6",
-    "@babel/types": "^7.29.0"
+    "@babel/generator": "^8.0.0-rc.4",
+    "@babel/helper-plugin-utils": "^8.0.0-rc.4",
+    "@babel/plugin-syntax-jsx": "^8.0.0-rc.4",
+    "@babel/types": "^8.0.0-rc.4"
   },
   "devDependencies": {
-    "@babel/core": "^7.29.0"
+    "@babel/core": "^8.0.0-rc.4"
   },
   "scripts": {
     "build": "../../node_modules/.bin/tsup src/index.js --format cjs --out-dir dist --clean --external @babel/core --external @babel/types --external @babel/generator --external @babel/helper-plugin-utils --external @babel/plugin-syntax-jsx --external lit --external react --external typescript",

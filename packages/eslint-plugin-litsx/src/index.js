@@ -48,10 +48,12 @@ const legacyParserOptions = {
   babelOptions: {
     babelrc: false,
     configFile: false,
-    plugins: [
-      "@babel/plugin-syntax-jsx",
-      ["@babel/plugin-syntax-typescript", { isTSX: true }],
-    ],
+    parserOpts: {
+      plugins: [
+        "jsx",
+        "typescript",
+      ],
+    },
   },
 };
 const flatLanguageOptions = {

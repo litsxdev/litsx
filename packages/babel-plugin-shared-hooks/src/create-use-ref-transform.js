@@ -463,7 +463,7 @@ export function createUseRefTransform({
   }
 
   return function useRefTransform(api) {
-    api.assertVersion(7);
+    api.assertVersion("^8.0.0-0");
     t = api.types;
 
     function transformHook(declaratorPath, classPath, state) {

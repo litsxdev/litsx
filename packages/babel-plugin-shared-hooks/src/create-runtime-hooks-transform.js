@@ -548,7 +548,7 @@ export function createRuntimeHooksTransform({
   const helperSet = new Set(helperNames);
 
   return function runtimeHooksTransform(api) {
-    api.assertVersion(7);
+    api.assertVersion("^8.0.0-0");
     const t = api.types;
 
     return {

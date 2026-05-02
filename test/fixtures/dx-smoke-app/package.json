@@ -19,7 +19,7 @@
     "@litsx/eslint-plugin": "workspace:^",
     "@litsx/typescript-plugin": "workspace:^",
     "@litsx/vite-plugin": "workspace:^",
-    "eslint": "^9.0.0",
+    "eslint": "^10.0.0",
     "typescript": "^6.0.0",
     "vite": "^8.0.3"
   }

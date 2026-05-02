@@ -63,11 +63,11 @@
     "directory": "packages/babel-preset-litsx"
   },
   "peerDependencies": {
-    "@babel/core": ">=7"
+    "@babel/core": "^8.0.0-0"
   },
   "dependencies": {
-    "@babel/helper-plugin-utils": "^7.28.6",
-    "@babel/plugin-syntax-jsx": "^7.28.6",
+    "@babel/helper-plugin-utils": "^8.0.0-rc.4",
+    "@babel/plugin-syntax-jsx": "^8.0.0-rc.4",
     "@litsx/babel-plugin-shared-hooks": "workspace:^",
     "@litsx/babel-plugin-transform-jsx-html-template": "workspace:^",
     "@litsx/babel-plugin-transform-litsx-scoped-elements": "workspace:^",

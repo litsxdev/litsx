@@ -37,13 +37,13 @@
     "directory": "packages/babel-plugin-litsx-proptypes"
   },
   "peerDependencies": {
-    "@babel/core": ">=7"
+    "@babel/core": "^8.0.0-0"
   },
   "dependencies": {
     "@litsx/prop-types": "^0.1.0"
   },
   "devDependencies": {
-    "@babel/core": "^7.29.0"
+    "@babel/core": "^8.0.0-rc.4"
   },
   "scripts": {
     "build": "../../node_modules/.bin/tsup src/index.js --format cjs --out-dir dist --clean --external @babel/core --external @babel/types --external @babel/generator --external @babel/helper-plugin-utils --external @babel/plugin-syntax-jsx --external lit --external react --external typescript",

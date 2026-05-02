@@ -127,7 +127,7 @@ export function patchLitAttributeSourcemap(code, map, mappings = []) {
 }
 
 export default function transformJsxHtmlTemplatePlugin(api) {
-  api.assertVersion?.(7);
+  api.assertVersion?.("^8.0.0-0");
   t = api.types;
   setTemplateTypes(t);
 

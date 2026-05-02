@@ -1,7 +1,5 @@
-import helperPluginUtils from "@babel/helper-plugin-utils";
+import { declare } from "@babel/helper-plugin-utils";
 import jsxSyntaxPlugin from "@babel/plugin-syntax-jsx";
-
-const { declare } = helperPluginUtils;
 
 const REACT_MODULES = new Set(["react", "@litsx/react"]);
 const RUNTIME_MODULE = "litsx/context";
@@ -269,7 +267,7 @@ function isIdentifierImportedFromReact(path, importedName, t) {
 }
 
 export default declare((api) => {
-  api.assertVersion(7);
+  api.assertVersion("^8.0.0-0");
   const t = api.types;
 
   function getCreateContextKind(calleePath, state) {

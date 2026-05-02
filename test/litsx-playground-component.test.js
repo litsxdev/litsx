@@ -1,7 +1,7 @@
 import assert from "assert";
 import fs from "fs";
 import path from "path";
-import babelCore from "@babel/core";
+import * as babelCore from "@babel/core";
 import { ensureSyntaxTree, foldable, syntaxTree } from "@codemirror/language";
 import parser from "../packages/babel-parser-litsx/src/index.mjs";
 import { PLAYGROUND_TYPE_FILES } from "../packages/litsx-playground/src/virtual-types.js";

@@ -1,6 +1,4 @@
-import helperPluginUtils from "@babel/helper-plugin-utils";
-
-const { declare } = helperPluginUtils;
+import { declare } from "@babel/helper-plugin-utils";
 
 const PROPERTY_VALUE_TAGS = new Set(["input", "textarea", "select"]);
 const DEFAULT_VALUE_PROPERTY_TAGS = new Set(["select"]);
@@ -240,7 +238,7 @@ function transformTemplateLiteral(quasi) {
 }
 
 export default declare((api) => {
-  api.assertVersion(7);
+  api.assertVersion("^8.0.0-0");
   const t = api.types;
 
   return {

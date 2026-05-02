@@ -72,7 +72,7 @@ export function createUseStateTransform({
   }
 
   return function useStateTransform(api, options = {}) {
-    api.assertVersion(7);
+    api.assertVersion("^8.0.0-0");
     const t = api.types;
 
     return {

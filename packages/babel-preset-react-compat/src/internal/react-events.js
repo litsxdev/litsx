@@ -1,6 +1,4 @@
-import helperPluginUtils from "@babel/helper-plugin-utils";
-
-const { declare } = helperPluginUtils;
+import { declare } from "@babel/helper-plugin-utils";
 const EVENT_ALIASES = new Map([
   ["doubleclick", { name: "dblclick" }],
   ["focus", { name: "focusin", capture: true }],
@@ -153,7 +151,7 @@ function transformTemplateLiteral(quasi, opts, t) {
 }
 
 export default declare((api, options) => {
-  api.assertVersion(7);
+  api.assertVersion("^8.0.0-0");
   const t = api.types;
 
   return {

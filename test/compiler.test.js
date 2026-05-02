@@ -1,5 +1,5 @@
 import assert from "assert";
-import babelCore from "@babel/core";
+import * as babelCore from "@babel/core";
 import fs from "fs";
 import { TraceMap, originalPositionFor } from "@jridgewell/trace-mapping";
 import os from "os";

@@ -1,6 +1,4 @@
-import helperPluginUtils from "@babel/helper-plugin-utils";
-
-const { declare } = helperPluginUtils;
+import { declare } from "@babel/helper-plugin-utils";
 
 const PROP_TYPES_MODULE = "prop-types";
 const PROP_TYPES_RUNTIME_MODULE = "@litsx/prop-types/runtime";
@@ -530,7 +528,7 @@ function findExistingPropertiesHoist(bodyPath, t) {
 }
 
 export default declare((api) => {
-  api.assertVersion(7);
+  api.assertVersion("^8.0.0-0");
   const t = api.types;
 
   return {

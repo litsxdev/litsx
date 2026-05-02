@@ -1,5 +1,5 @@
 import assert from "assert";
-import babelCore from "@babel/core";
+import * as babelCore from "@babel/core";
 import parser from "../packages/babel-parser-litsx/src/index.mjs";
 import { describe, it } from "vitest";
 import { createUseRefTransform } from "../packages/babel-plugin-shared-hooks/src/index.js";

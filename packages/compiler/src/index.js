@@ -1,4 +1,4 @@
-import babelCore from "@babel/core";
+import * as babelCore from "@babel/core";
 import {
   createLitsxPresetPlugins,
   detectLitsxSourceFeatures,

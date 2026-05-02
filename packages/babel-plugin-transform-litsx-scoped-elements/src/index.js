@@ -7,7 +7,7 @@ const LIGHT_BASE_MIXIN = "LightDomMixin";
 const LIGHT_MIXIN = "LightDomElementsMixin";
 
 export default function transformFunctionToClassPlugin(api) {
-  api.assertVersion(7);
+  api.assertVersion("^8.0.0-0");
   t = api.types;
 
   return {

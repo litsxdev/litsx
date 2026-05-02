@@ -56,13 +56,8 @@ function offsetToLineColumn(offset, lineStarts) {
 }
 
 async function createFlatESLint(options) {
-  const moduleNamespace = await import("eslint/use-at-your-own-risk");
-  const ctor =
-    moduleNamespace.FlatESLint ||
-    moduleNamespace.ESLint ||
-    moduleNamespace.default?.FlatESLint ||
-    moduleNamespace.default?.ESLint ||
-    moduleNamespace.default;
+  const { loadESLint } = await import("eslint");
+  const ctor = await loadESLint();
 
   if (typeof ctor !== "function") {
     throw new TypeError("FlatESLint constructor is not available");
@@ -72,10 +67,12 @@ async function createFlatESLint(options) {
 }
 
 async function createLegacyESLint(options) {
-  const moduleNamespace = await import("eslint/use-at-your-own-risk");
-  const ctor =
-    moduleNamespace.LegacyESLint ||
-    moduleNamespace.default?.LegacyESLint;
+  const { loadESLint } = await import("eslint");
+  const ctor = await loadESLint({ useFlatConfig: false });
+
+  if (ctor?.configType === "flat") {
+    return null;
+  }
 
   if (typeof ctor !== "function") {
     throw new TypeError("LegacyESLint constructor is not available");
@@ -241,14 +238,28 @@ describe("@litsx/eslint-plugin", () => {
   });
 
   it("supports legacy config as well", async () => {
+    const [legacyOverride] = plugin.configs["recommended-lint"].overrides;
     const eslint = await createLegacyESLint({
       cwd: process.cwd(),
-      useEslintrc: false,
+      overrideConfigFile: true,
       plugins: {
         "@litsx": plugin,
       },
-      overrideConfig: plugin.configs["recommended-lint"],
+      overrideConfig: {
+        plugins: ["@litsx"],
+        parser: legacyOverride.parser,
+        parserOptions: legacyOverride.parserOptions,
+        processor: legacyOverride.processor,
+        rules: legacyOverride.rules,
+      },
     });
+
+    if (!eslint) {
+      assert.equal(plugin.configs["recommended-lint"].plugins[0], "@litsx");
+      assert.equal(legacyOverride.processor, "@litsx/litsx");
+      assert.equal(legacyOverride.parser, "@babel/eslint-parser");
+      return;
+    }
 
     const [result] = await eslint.lintText(
       'function Card() { if (ready) { ^styles(`:host{display:block;}`); } return <div />; }',

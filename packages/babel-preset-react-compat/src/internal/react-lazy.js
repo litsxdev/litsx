@@ -1,13 +1,11 @@
-import helperPluginUtils from "@babel/helper-plugin-utils";
+import { declare } from "@babel/helper-plugin-utils";
 import jsxSyntaxPlugin from "@babel/plugin-syntax-jsx";
 import { isLitElementSuperClass } from "@litsx/babel-plugin-shared-hooks";
-
-const { declare } = helperPluginUtils;
 const RUNTIME_MODULE = "litsx";
 const INFRASTRUCTURE_MODULE = "litsx/runtime-infrastructure";
 
 export default declare((api) => {
-  api.assertVersion(7);
+  api.assertVersion("^8.0.0-0");
   const t = api.types;
 
   function toKebab(name) {
@@ -604,11 +602,15 @@ export default declare((api) => {
 
   function createExpressionFromJSXName(node) {
     if (t.isJSXIdentifier(node)) {
-      return t.identifier(node.name);
+      return t.isValidIdentifier(node.name) ? t.identifier(node.name) : null;
     }
     if (t.isJSXMemberExpression(node)) {
+      const objectExpression = createExpressionFromJSXName(node.object);
+      if (!objectExpression) {
+        return null;
+      }
       return t.memberExpression(
-        createExpressionFromJSXName(node.object),
+        objectExpression,
         t.identifier(node.property.name)
       );
     }

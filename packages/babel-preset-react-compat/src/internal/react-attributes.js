@@ -1,6 +1,4 @@
-import helperPluginUtils from "@babel/helper-plugin-utils";
-
-const { declare } = helperPluginUtils;
+import { declare } from "@babel/helper-plugin-utils";
 function transformAttribute(attrPath, t) {
   if (!attrPath.isJSXAttribute()) return false;
 
@@ -30,7 +28,7 @@ function transformTemplateLiteral(quasi) {
 }
 
 export default declare((api) => {
-  api.assertVersion(7);
+  api.assertVersion("^8.0.0-0");
   const t = api.types;
 
   return {

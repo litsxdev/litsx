@@ -7,7 +7,7 @@ export {
 } from "./pipeline.js";
 
 export default function litsxPreset(api, options = {}) {
-  api.assertVersion?.(7);
+  api.assertVersion?.("^8.0.0-0");
 
   return {
     plugins: createLitsxPresetPlugins(options),

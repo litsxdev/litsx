@@ -43,14 +43,14 @@
     "directory": "packages/eslint-plugin-litsx"
   },
   "peerDependencies": {
-    "eslint": "^8.57.0 || ^9.0.0",
+    "eslint": "^9.0.0 || ^10.0.0",
     "typescript": ">=5"
   },
   "dependencies": {
-    "@babel/core": "^7.29.0",
-    "@babel/eslint-parser": "^7.28.6",
-    "@babel/plugin-syntax-jsx": "^7.28.6",
-    "@babel/plugin-syntax-typescript": "^7.27.1",
+    "@babel/core": "^8.0.0-rc.4",
+    "@babel/eslint-parser": "^8.0.0-rc.4",
+    "@babel/plugin-syntax-jsx": "^8.0.0-rc.4",
+    "@babel/plugin-syntax-typescript": "^8.0.0-rc.4",
     "@litsx/typescript-plugin": "workspace:^"
   },
   "scripts": {

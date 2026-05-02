@@ -1,7 +1,6 @@
-import helperPluginUtils from "@babel/helper-plugin-utils";
+import { declare } from "@babel/helper-plugin-utils";
 
 let t;
-const { declare } = helperPluginUtils;
 
 const COMPONENT_WRAPPERS = new Map([
   [
@@ -215,7 +214,7 @@ export function getReactWrapperMetadata(callPath) {
 }
 
 export default declare((api) => {
-  api.assertVersion(7);
+  api.assertVersion("^8.0.0-0");
   setReactWrappersBabelTypes(api.types);
   return {
     name: "transform-react-wrappers",

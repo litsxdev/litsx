@@ -1,5 +1,5 @@
 import assert from "assert";
-import babelCore from "@babel/core";
+import * as babelCore from "@babel/core";
 import jsxPluginModule from "@babel/plugin-syntax-jsx";
 import parser from "../packages/babel-parser-litsx/src/index.mjs";
 import { beforeAll, describe, it } from "vitest";

@@ -20,6 +20,11 @@ export function isCustomHookFunction(path, t) {
   return typeof name === 'string' && /^use[A-Z0-9]/.test(name);
 }
 
+export function isComponentFunction(path, t) {
+  const name = getFunctionName(path, t);
+  return typeof name === 'string' && /^[A-Z]/.test(name);
+}
+
 export function inferHostIdentifier(path, t) {
   if (!path) return null;
   if (path.node.__litsxHostIdentifier) {
@@ -69,6 +74,14 @@ export function resolveHostInfo(callPath, t) {
     return {
       expression: t.identifier(hostId.name),
       type: HOST_TYPE_CUSTOM,
+      functionPath: funcPath,
+    };
+  }
+
+  if (isComponentFunction(funcPath, t)) {
+    return {
+      expression: t.thisExpression(),
+      type: HOST_TYPE_RENDER,
       functionPath: funcPath,
     };
   }

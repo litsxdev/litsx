@@ -59,7 +59,7 @@
     "README.md"
   ],
   "dependencies": {
-    "@babel/parser": "^7.29.3"
+    "@babel/parser": "^8.0.0-rc.4"
   },
   "peerDependencies": {
     "typescript": ">=5"

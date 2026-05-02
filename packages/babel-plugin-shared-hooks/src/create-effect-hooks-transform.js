@@ -187,7 +187,7 @@ export function createEffectHooksTransform({
   const importSourceSet = new Set(importSources);
 
   return function effectHooksTransform(api) {
-    api.assertVersion(7);
+    api.assertVersion("^8.0.0-0");
     const t = api.types;
 
     return {

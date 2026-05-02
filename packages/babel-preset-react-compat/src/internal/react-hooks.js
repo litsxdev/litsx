@@ -1,6 +1,4 @@
-import helperPluginUtils from "@babel/helper-plugin-utils";
-
-const { declare } = helperPluginUtils;
+import { declare } from "@babel/helper-plugin-utils";
 let t;
 
 const RUNTIME_MODULE = "litsx";
@@ -764,7 +762,7 @@ function ensureRuntimeImport(programPath, state) {
 }
 
 export default declare((api) => {
-  api.assertVersion(7);
+  api.assertVersion("^8.0.0-0");
   t = api.types;
 
   return {
