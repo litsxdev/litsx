@@ -40,8 +40,7 @@ These stay outside npm publication and are ignored by Changesets:
 - `@litsx/vitepress`
 
 `test/fixtures/dx-smoke-app` remains in the repository as a fixture for authored-source
-tests, but it is no longer part of the active Yarn workspaces graph or release
-machinery.
+tests and stays outside the active Yarn workspaces graph and release machinery.
 
 ## Contributor workflow
 
@@ -102,6 +101,7 @@ yarn release:publish
 - assumes custom-domain hosting at:
   - `https://litsx.dev/`
 - publishes `website/docs/public/CNAME` so the Pages artifact keeps the custom domain attached
+- can inject site analytics at build time through repository variables
 
 ### `Release`
 
@@ -137,6 +137,9 @@ Recommended repository setup:
 - require the `Release Validate / validate` job
 - enable GitHub Pages with source set to `GitHub Actions`
 - configure the custom domain `litsx.dev` in the repository Pages settings
+- if you want traffic analytics on the docs site, configure repository variables for one provider:
+  - `LITSX_ANALYTICS_PROVIDER=ga4` and `LITSX_GA_MEASUREMENT_ID=G-...`
+  - or `LITSX_ANALYTICS_PROVIDER=plausible`, `LITSX_PLAUSIBLE_DOMAIN=litsx.dev`, and optionally `LITSX_PLAUSIBLE_API_HOST=https://plausible.io`
 - optionally require reviewers on the `npm-release` environment
 - install the `changeset-bot` GitHub App so PRs get nudged when a changeset is missing
 

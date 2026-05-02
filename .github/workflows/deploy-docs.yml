@@ -18,6 +18,11 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      LITSX_ANALYTICS_PROVIDER: ${{ vars.LITSX_ANALYTICS_PROVIDER }}
+      LITSX_GA_MEASUREMENT_ID: ${{ vars.LITSX_GA_MEASUREMENT_ID }}
+      LITSX_PLAUSIBLE_DOMAIN: ${{ vars.LITSX_PLAUSIBLE_DOMAIN }}
+      LITSX_PLAUSIBLE_API_HOST: ${{ vars.LITSX_PLAUSIBLE_API_HOST }}
     steps:
       - uses: actions/checkout@v6
 

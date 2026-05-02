@@ -5,6 +5,7 @@ import { defaultDocsVersions } from "../../../../packages/vitepress/src/versions
 import "../../../../packages/vitepress/src/styles.css";
 import "./custom.css";
 import "./components/LitsxPlayground.tsx";
+import { registerSiteAnalytics } from "./analytics.js";
 import HomeAfterHero from "./components/HomeAfterHero.vue";
 import HomeHeroPills from "./components/HomeHeroPills.js";
 import NavExtrasFlyout from "./components/NavExtrasFlyout.vue";
@@ -23,7 +24,8 @@ export default {
       "home-features-after": () => h(HomeAfterHero),
     });
   },
-  enhanceApp({ app }) {
-    DefaultTheme.enhanceApp?.({ app });
+  enhanceApp({ app, router }) {
+    DefaultTheme.enhanceApp?.({ app, router });
+    registerSiteAnalytics(router);
   },
 };

@@ -9,6 +9,69 @@ import {
 const docsConfigDir = path.dirname(fileURLToPath(import.meta.url));
 const workspaceRoot = path.resolve(docsConfigDir, "../../..");
 
+function trimTrailingSlash(value) {
+  return typeof value === "string" ? value.replace(/\/+$/, "") : value;
+}
+
+function resolveAnalyticsConfig(env = process.env) {
+  const provider = env.LITSX_ANALYTICS_PROVIDER;
+
+  if (provider === "ga4" && env.LITSX_GA_MEASUREMENT_ID) {
+    return {
+      provider,
+      measurementId: env.LITSX_GA_MEASUREMENT_ID,
+    };
+  }
+
+  if (provider === "plausible" && env.LITSX_PLAUSIBLE_DOMAIN) {
+    return {
+      provider,
+      domain: env.LITSX_PLAUSIBLE_DOMAIN,
+      apiHost: trimTrailingSlash(env.LITSX_PLAUSIBLE_API_HOST) || "https://plausible.io",
+    };
+  }
+
+  return {
+    provider: null,
+  };
+}
+
+function createAnalyticsHeadEntries(analytics) {
+  if (analytics.provider === "ga4") {
+    return [
+      [
+        "script",
+        {
+          async: "",
+          src: `https://www.googletagmanager.com/gtag/js?id=${analytics.measurementId}`,
+        },
+      ],
+      [
+        "script",
+        {},
+        `window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}window.gtag=window.gtag||gtag;gtag('js',new Date());gtag('config','${analytics.measurementId}',{send_page_view:false});`,
+      ],
+    ];
+  }
+
+  if (analytics.provider === "plausible") {
+    return [
+      [
+        "script",
+        {
+          defer: "",
+          "data-domain": analytics.domain,
+          src: `${analytics.apiHost}/js/script.js`,
+        },
+      ],
+    ];
+  }
+
+  return [];
+}
+
+const analytics = resolveAnalyticsConfig();
+
 export default defineConfig({
   base: "/",
   title: "Litsx",
@@ -26,9 +89,13 @@ export default defineConfig({
         href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Montserrat:wght@700;800&display=swap",
       },
     ],
+    ...createAnalyticsHeadEntries(analytics),
   ],
   vite: {
     plugins: litsxVitePress({ workspaceRoot }),
+    define: {
+      __LITSX_ANALYTICS__: JSON.stringify(analytics),
+    },
   },
   markdown: litsxVitePressMarkdown(),
   vue: {
