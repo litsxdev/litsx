@@ -1989,18 +1989,18 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@litsx/babel-plugin-litsx-proptypes@npm:^0.1.0, @litsx/babel-plugin-litsx-proptypes@workspace:packages/babel-plugin-litsx-proptypes":
+"@litsx/babel-plugin-litsx-proptypes@npm:^0.0.0, @litsx/babel-plugin-litsx-proptypes@workspace:packages/babel-plugin-litsx-proptypes":
   version: 0.0.0-use.local
   resolution: "@litsx/babel-plugin-litsx-proptypes@workspace:packages/babel-plugin-litsx-proptypes"
   dependencies:
     "@babel/core": "npm:^7.29.0"
-    "@litsx/prop-types": "npm:^0.1.0"
+    "@litsx/prop-types": "npm:^0.0.0"
   peerDependencies:
     "@babel/core": ">=7"
   languageName: unknown
   linkType: soft
 
-"@litsx/babel-plugin-shared-hooks@npm:^0.1.0, @litsx/babel-plugin-shared-hooks@workspace:^, @litsx/babel-plugin-shared-hooks@workspace:packages/babel-plugin-shared-hooks":
+"@litsx/babel-plugin-shared-hooks@npm:^0.0.0, @litsx/babel-plugin-shared-hooks@workspace:^, @litsx/babel-plugin-shared-hooks@workspace:packages/babel-plugin-shared-hooks":
   version: 0.0.0-use.local
   resolution: "@litsx/babel-plugin-shared-hooks@workspace:packages/babel-plugin-shared-hooks"
   dependencies:
@@ -2011,7 +2011,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@litsx/babel-plugin-transform-jsx-html-template@npm:^0.1.0, @litsx/babel-plugin-transform-jsx-html-template@workspace:^, @litsx/babel-plugin-transform-jsx-html-template@workspace:packages/babel-plugin-transform-jsx-html-template":
+"@litsx/babel-plugin-transform-jsx-html-template@npm:^0.0.0, @litsx/babel-plugin-transform-jsx-html-template@workspace:^, @litsx/babel-plugin-transform-jsx-html-template@workspace:packages/babel-plugin-transform-jsx-html-template":
   version: 0.0.0-use.local
   resolution: "@litsx/babel-plugin-transform-jsx-html-template@workspace:packages/babel-plugin-transform-jsx-html-template"
   dependencies:
@@ -2025,19 +2025,19 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@litsx/babel-plugin-transform-litsx-scoped-elements@npm:^0.1.0, @litsx/babel-plugin-transform-litsx-scoped-elements@workspace:^, @litsx/babel-plugin-transform-litsx-scoped-elements@workspace:packages/babel-plugin-transform-litsx-scoped-elements":
+"@litsx/babel-plugin-transform-litsx-scoped-elements@npm:^0.0.0, @litsx/babel-plugin-transform-litsx-scoped-elements@workspace:^, @litsx/babel-plugin-transform-litsx-scoped-elements@workspace:packages/babel-plugin-transform-litsx-scoped-elements":
   version: 0.0.0-use.local
   resolution: "@litsx/babel-plugin-transform-litsx-scoped-elements@workspace:packages/babel-plugin-transform-litsx-scoped-elements"
   dependencies:
     "@babel/core": "npm:^7.29.0"
     "@babel/plugin-syntax-jsx": "npm:^7.28.6"
-    "@litsx/babel-plugin-shared-hooks": "npm:^0.1.0"
+    "@litsx/babel-plugin-shared-hooks": "npm:^0.0.0"
   peerDependencies:
     "@babel/core": ">=7"
   languageName: unknown
   linkType: soft
 
-"@litsx/babel-preset-litsx@npm:^0.1.0, @litsx/babel-preset-litsx@workspace:^, @litsx/babel-preset-litsx@workspace:packages/babel-preset-litsx":
+"@litsx/babel-preset-litsx@npm:^0.0.0, @litsx/babel-preset-litsx@workspace:^, @litsx/babel-preset-litsx@workspace:packages/babel-preset-litsx":
   version: 0.0.0-use.local
   resolution: "@litsx/babel-preset-litsx@workspace:packages/babel-preset-litsx"
   dependencies:
@@ -2059,11 +2059,11 @@ __metadata:
     "@babel/core": "npm:^7.29.0"
     "@babel/helper-plugin-utils": "npm:^7.28.6"
     "@babel/plugin-syntax-jsx": "npm:^7.28.6"
-    "@litsx/babel-plugin-litsx-proptypes": "npm:^0.1.0"
-    "@litsx/babel-plugin-shared-hooks": "npm:^0.1.0"
-    "@litsx/babel-plugin-transform-jsx-html-template": "npm:^0.1.0"
-    "@litsx/babel-plugin-transform-litsx-scoped-elements": "npm:^0.1.0"
-    "@litsx/babel-preset-litsx": "npm:^0.1.0"
+    "@litsx/babel-plugin-litsx-proptypes": "npm:^0.0.0"
+    "@litsx/babel-plugin-shared-hooks": "npm:^0.0.0"
+    "@litsx/babel-plugin-transform-jsx-html-template": "npm:^0.0.0"
+    "@litsx/babel-plugin-transform-litsx-scoped-elements": "npm:^0.0.0"
+    "@litsx/babel-preset-litsx": "npm:^0.0.0"
   peerDependencies:
     "@babel/core": ">=7"
   languageName: unknown
@@ -2128,7 +2128,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@litsx/prop-types@npm:^0.1.0, @litsx/prop-types@workspace:packages/prop-types":
+"@litsx/prop-types@npm:^0.0.0, @litsx/prop-types@workspace:packages/prop-types":
   version: 0.0.0-use.local
   resolution: "@litsx/prop-types@workspace:packages/prop-types"
   languageName: unknown
