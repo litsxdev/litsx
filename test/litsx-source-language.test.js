@@ -3,10 +3,10 @@
 import assert from "assert";
 import { EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
-import { forceLinting, forEachDiagnostic } from "@codemirror/lint";
 import { foldable, syntaxTree } from "@codemirror/language";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  buildLitsxSyntaxDiagnostics,
   litsxSourceHighlighting,
   litsxSourceSupport,
 } from "../packages/litsx-playground/src/litsx-source-language.js";
@@ -99,7 +99,7 @@ function Demo() {
     }
   });
 
-  it("reports syntax diagnostics for invalid authored source", async () => {
+  it("reports syntax diagnostics for invalid authored source", () => {
     const view = new EditorView({
       state: EditorState.create({
         doc: `
@@ -113,13 +113,7 @@ function Broken() {
     });
 
     try {
-      forceLinting(view);
-      await new Promise((resolve) => setTimeout(resolve, 0));
-
-      const diagnostics = [];
-      forEachDiagnostic(view.state, (diagnostic) => {
-        diagnostics.push(diagnostic);
-      });
+      const diagnostics = buildLitsxSyntaxDiagnostics(view);
 
       expect(diagnostics.length).toBeGreaterThan(0);
       expect(diagnostics[0].severity).toBe("error");

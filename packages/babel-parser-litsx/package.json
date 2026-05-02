@@ -46,16 +46,16 @@
   },
   "# dependencies": "This package doesn't actually have runtime dependencies. @babel/types is only needed for type definitions.",
   "dependencies": {
-    "@babel/parser": "^7.26.5",
-    "@babel/types": "^7.26.5",
+    "@babel/parser": "^7.29.3",
+    "@babel/types": "^7.29.0",
     "@litsx/jsx-authoring": "workspace:^"
   },
   "devDependencies": {
-    "@babel/code-frame": "^7.26.2",
-    "@babel/helper-check-duplicate-nodes": "^7.25.9",
-    "@babel/helper-fixtures": "^7.26.0",
+    "@babel/code-frame": "^7.29.0",
+    "@babel/helper-check-duplicate-nodes": "^7.28.6",
+    "@babel/helper-fixtures": "^7.28.6",
     "@babel/helper-string-parser": "^7.25.9",
-    "@babel/helper-validator-identifier": "^7.25.9",
+    "@babel/helper-validator-identifier": "^7.28.5",
     "charcodes": "^0.2.0"
   },
   "bin": "./dist/babel-parser.mjs",

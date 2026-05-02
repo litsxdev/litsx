@@ -383,7 +383,7 @@ export function createDefaultHoistFoldEffects(state) {
   return effects;
 }
 
-function buildLitsxSyntaxDiagnostics(view) {
+export function buildLitsxSyntaxDiagnostics(view) {
   const diagnostics = [];
   const tree = syntaxTree(view.state);
 

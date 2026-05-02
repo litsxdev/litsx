@@ -40,11 +40,11 @@
     "@babel/core": ">=7"
   },
   "dependencies": {
-    "@babel/plugin-syntax-jsx": "^7.26.5",
+    "@babel/plugin-syntax-jsx": "^7.28.6",
     "@litsx/babel-plugin-shared-hooks": "^0.1.0"
   },
   "devDependencies": {
-    "@babel/core": "^7.26.5"
+    "@babel/core": "^7.29.0"
   },
   "scripts": {
     "build": "../../node_modules/.bin/tsup src/index.js --format cjs --out-dir dist --clean --external @babel/core --external @babel/types --external @babel/generator --external @babel/helper-plugin-utils --external @babel/plugin-syntax-jsx --external lit --external react --external typescript",

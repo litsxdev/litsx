@@ -47,8 +47,8 @@
     "directory": "packages/compiler"
   },
   "dependencies": {
-    "@babel/core": "^7.26.5",
-    "@babel/parser": "^7.26.5",
+    "@babel/core": "^7.29.0",
+    "@babel/parser": "^7.29.3",
     "@litsx/babel-plugin-transform-jsx-html-template": "workspace:^",
     "@litsx/babel-preset-litsx": "workspace:^",
     "@litsx/jsx-authoring": "workspace:^",
