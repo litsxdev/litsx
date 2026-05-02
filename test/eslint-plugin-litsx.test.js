@@ -56,13 +56,32 @@ function offsetToLineColumn(offset, lineStarts) {
 }
 
 async function createFlatESLint(options) {
-  const { FlatESLint } = await import("eslint/use-at-your-own-risk");
-  return new FlatESLint(options);
+  const moduleNamespace = await import("eslint/use-at-your-own-risk");
+  const ctor =
+    moduleNamespace.FlatESLint ||
+    moduleNamespace.ESLint ||
+    moduleNamespace.default?.FlatESLint ||
+    moduleNamespace.default?.ESLint ||
+    moduleNamespace.default;
+
+  if (typeof ctor !== "function") {
+    throw new TypeError("FlatESLint constructor is not available");
+  }
+
+  return new ctor(options);
 }
 
 async function createLegacyESLint(options) {
-  const { LegacyESLint } = await import("eslint/use-at-your-own-risk");
-  return new LegacyESLint(options);
+  const moduleNamespace = await import("eslint/use-at-your-own-risk");
+  const ctor =
+    moduleNamespace.LegacyESLint ||
+    moduleNamespace.default?.LegacyESLint;
+
+  if (typeof ctor !== "function") {
+    throw new TypeError("LegacyESLint constructor is not available");
+  }
+
+  return new ctor(options);
 }
 
 describe("@litsx/eslint-plugin", () => {

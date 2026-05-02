@@ -1,20 +1,23 @@
 name: Release
 
 on:
-  push:
-    branches:
-      - main
+  workflow_run:
+    workflows:
+      - Release Validate
+    types:
+      - completed
 
 permissions:
   contents: read
 
 concurrency:
-  group: release-${{ github.workflow }}-${{ github.ref }}
+  group: release-${{ github.workflow }}-${{ github.event.workflow_run.head_branch || github.ref }}
   cancel-in-progress: true
 
 jobs:
   plan:
     name: Detect Pending Release
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main'
     runs-on: ubuntu-latest
     outputs:
       has_changesets: ${{ steps.pending.outputs.has_changesets }}
@@ -22,6 +25,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
         with:
+          ref: ${{ github.event.workflow_run.head_sha }}
           fetch-depth: 0
 
       - name: Setup Node.js
@@ -70,6 +74,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
         with:
+          ref: ${{ github.event.workflow_run.head_sha }}
           fetch-depth: 0
 
       - name: Setup Node.js
@@ -110,7 +115,7 @@ jobs:
             exit 0
           fi
           git commit -m "chore(release): version packages"
-          git push
+          git push origin HEAD:main
 
       - name: Publish packages
         env:
