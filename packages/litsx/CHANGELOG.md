@@ -1,5 +1,13 @@
 # litsx
 
+## 0.2.3
+
+### Patch Changes
+
+- Restore scoped element registration for shadow-root components when scoped
+  custom element registries are provided by the platform or by the
+  `@webcomponents/scoped-custom-element-registry` polyfill.
+
 ## 0.2.2
 
 ### Patch Changes
