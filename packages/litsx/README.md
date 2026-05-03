@@ -36,7 +36,7 @@ All helpers accept the Lit element instance as the first argument. The Babel tra
 
 ```js
 import { LitElement, html } from 'lit';
-import { prepareEffects, useAfterUpdate, useOnCommit } from 'litsx';
+import { prepareEffects, useAfterUpdate, useOnCommit } from '@litsx/litsx';
 
 class ClockDisplay extends LitElement {
   static properties = {
