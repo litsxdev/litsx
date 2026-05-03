@@ -7,7 +7,7 @@ Run a callback ref through the component lifecycle.
 ## Reference
 
 ```ts
-import { useCallbackRef } from "litsx";
+import { useCallbackRef } from "@litsx/litsx";
 ```
 
 ```ts

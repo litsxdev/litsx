@@ -166,7 +166,7 @@ describe("@litsx/babel-preset-react-compat", () => {
 
     assert.match(
       code,
-      /import \{ createContext, useContext, LitsxContextProviderElement as LitsxContextProvider \} from "litsx\/context";/
+      /import \{ createContext, useContext, LitsxContextProviderElement as LitsxContextProvider \} from "@litsx\/litsx\/context";/
     );
     assert.match(code, /const ThemeContext = createContext\("light"\);/);
     assert.match(code, /prepareEffects\(this\);/);
@@ -204,7 +204,7 @@ describe("@litsx/babel-preset-react-compat", () => {
 
     assert.match(
       code,
-      /import \{ createContext, renderContext, LitsxContextProviderElement as LitsxContextProvider \} from "litsx\/context";/
+      /import \{ createContext, renderContext, LitsxContextProviderElement as LitsxContextProvider \} from "@litsx\/litsx\/context";/
     );
     assert.match(code, /const ThemeContext = createContext\("light"\);/);
     assert.match(
@@ -298,8 +298,8 @@ describe("@litsx/babel-preset-react-compat", () => {
     const code = run(source);
 
     assert.match(code, /import \{ LitElement, html \} from "lit";/);
-    assert.match(code, /import \{[^}]*ensureLazyElement[^}]*ErrorBoundary[^}]*SuspenseBoundary[^}]*\} from "litsx"|import \{[^}]*ensureLazyElement[^}]*SuspenseBoundary[^}]*ErrorBoundary[^}]*\} from "litsx"|import \{[^}]*ErrorBoundary[^}]*ensureLazyElement[^}]*SuspenseBoundary[^}]*\} from "litsx"|import \{[^}]*SuspenseBoundary[^}]*ErrorBoundary[^}]*ensureLazyElement[^}]*\} from "litsx"/);
-    assert.match(code, /import \{ ShadowDomElementsMixin \} from "litsx\/runtime-infrastructure";/);
+    assert.match(code, /import \{[^}]*ensureLazyElement[^}]*ErrorBoundary[^}]*SuspenseBoundary[^}]*\} from "@litsx\/litsx"|import \{[^}]*ensureLazyElement[^}]*SuspenseBoundary[^}]*ErrorBoundary[^}]*\} from "@litsx\/litsx"|import \{[^}]*ErrorBoundary[^}]*ensureLazyElement[^}]*SuspenseBoundary[^}]*\} from "@litsx\/litsx"|import \{[^}]*SuspenseBoundary[^}]*ErrorBoundary[^}]*ensureLazyElement[^}]*\} from "@litsx\/litsx"/);
+    assert.match(code, /import \{ ShadowDomElementsMixin \} from "@litsx\/litsx\/runtime-infrastructure";/);
     assert.match(code, /const ResultsPanel = \(\) => import\("\.\/ResultsPanel\.js"\);/);
     assert.match(code, /ensureLazyElement\(this, "results-panel", ResultsPanel\);/);
     assert.match(code, /html`<error-boundary \.fallbackRenderer=\$\{\(\) => html`<p>Oops<\/p>`\} \.contentRenderer=\$\{\(\) => html`<suspense-boundary \.fallbackRenderer=\$\{\(\) => html`<p>Loading<\/p>`\} \.contentRenderer=\$\{\(\) => html`<results-panel value="ready"><\/results-panel>`\}><\/suspense-boundary>`\}><\/error-boundary>`;/);

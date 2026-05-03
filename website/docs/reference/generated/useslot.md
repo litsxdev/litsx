@@ -7,7 +7,7 @@ Read reactive projected nodes for one slot. Use this when authored code needs pr
 ## Reference
 
 ```ts
-import { useSlot } from "litsx";
+import { useSlot } from "@litsx/litsx";
 ```
 
 ```ts

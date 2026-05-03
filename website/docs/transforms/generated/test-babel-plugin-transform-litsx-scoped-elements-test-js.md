@@ -32,7 +32,7 @@ import { LitElement, html } from 'lit';
 #### Generated Output
 
 ```js
-import { ShadowDomElementsMixin } from "litsx/runtime-infrastructure";
+import { ShadowDomElementsMixin } from "@litsx/litsx/runtime-infrastructure";
 import { LitElement, html } from 'lit';
 import FancyButton from './FancyButton.js';
 class MyElement extends ShadowDomElementsMixin(LitElement) {
@@ -155,7 +155,7 @@ import { LitElement, html } from 'lit';
 #### Generated Output
 
 ```js
-import { ShadowDomElementsMixin } from "litsx/runtime-infrastructure";
+import { ShadowDomElementsMixin } from "@litsx/litsx/runtime-infrastructure";
 import { LitElement, html } from 'lit';
 import FancyButton from './FancyButton.js';
 class WithProperties extends ShadowDomElementsMixin(LitElement) {
@@ -256,7 +256,7 @@ This case records the authored input and the generated output as a living transf
 
 ```jsx
 import { LitElement } from 'lit';
-      import { ShadowDomElementsMixin } from 'litsx/runtime-infrastructure';
+      import { ShadowDomElementsMixin } from '@litsx/litsx/runtime-infrastructure';
       import FancyButton from './FancyButton.js';
 
       class ReadyElement extends LitElement {
@@ -270,7 +270,7 @@ import { LitElement } from 'lit';
 
 ```js
 import { LitElement } from 'lit';
-import { ShadowDomElementsMixin } from 'litsx/runtime-infrastructure';
+import { ShadowDomElementsMixin } from '@litsx/litsx/runtime-infrastructure';
 import FancyButton from './FancyButton.js';
 class ReadyElement extends ShadowDomElementsMixin(LitElement) {
   render() {
@@ -303,7 +303,7 @@ import FancyButton from './FancyButton.js';
 #### Generated Output
 
 ```js
-import { ShadowDomElementsMixin } from "litsx/runtime-infrastructure";
+import { ShadowDomElementsMixin } from "@litsx/litsx/runtime-infrastructure";
 import FancyButton from './FancyButton.js';
 class MixedElement extends ShadowDomElementsMixin(withTheme(LitElement)) {
   render() {
@@ -324,7 +324,7 @@ This case records the authored input and the generated output as a living transf
 #### Authored Input
 
 ```jsx
-import { ShadowDomElementsMixin } from 'litsx/runtime-infrastructure';
+import { ShadowDomElementsMixin } from '@litsx/litsx/runtime-infrastructure';
       import FancyButton from './FancyButton.js';
 
       class MixedElement extends withTheme(ShadowDomElementsMixin(LitElement)) {
@@ -337,7 +337,7 @@ import { ShadowDomElementsMixin } from 'litsx/runtime-infrastructure';
 #### Generated Output
 
 ```js
-import { ShadowDomElementsMixin } from 'litsx/runtime-infrastructure';
+import { ShadowDomElementsMixin } from '@litsx/litsx/runtime-infrastructure';
 import FancyButton from './FancyButton.js';
 class MixedElement extends withTheme(ShadowDomElementsMixin(LitElement)) {
   render() {
@@ -358,7 +358,7 @@ This case records the authored input and the generated output as a living transf
 #### Authored Input
 
 ```jsx
-import { LightDomMixin } from 'litsx/runtime-infrastructure';
+import { LightDomMixin } from '@litsx/litsx/runtime-infrastructure';
 
       class MixedLightCard extends withTheme(LightDomMixin(LitElement)) {
         render() {
@@ -372,7 +372,7 @@ import { LightDomMixin } from 'litsx/runtime-infrastructure';
 #### Generated Output
 
 ```js
-import { LightDomMixin } from 'litsx/runtime-infrastructure';
+import { LightDomMixin } from '@litsx/litsx/runtime-infrastructure';
 class MixedLightCard extends withTheme(LightDomMixin(LitElement)) {
   render() {
     return <div>ready</div>;
@@ -403,7 +403,7 @@ import { LitElement } from 'lit';
 #### Generated Output
 
 ```js
-import { ShadowDomElementsMixin } from "litsx/runtime-infrastructure";
+import { ShadowDomElementsMixin } from "@litsx/litsx/runtime-infrastructure";
 import { LitElement } from 'lit';
 import FancyButton from './FancyButton.js';
 class AttributedElement extends ShadowDomElementsMixin(LitElement) {
@@ -443,7 +443,7 @@ import { LitElement } from 'lit';
 #### Generated Output
 
 ```js
-import { ShadowDomElementsMixin } from "litsx/runtime-infrastructure";
+import { ShadowDomElementsMixin } from "@litsx/litsx/runtime-infrastructure";
 import { LitElement } from 'lit';
 export class ProfileChip extends LitElement {
   render() {
@@ -485,7 +485,7 @@ import { LitElement } from 'lit';
 #### Generated Output
 
 ```js
-import { ShadowDomElementsMixin } from "litsx/runtime-infrastructure";
+import { ShadowDomElementsMixin } from "@litsx/litsx/runtime-infrastructure";
 import { LitElement } from 'lit';
 export class TreeNode extends ShadowDomElementsMixin(LitElement) {
   render() {
@@ -552,7 +552,7 @@ This case shows the authored JSX/API surface and the normalized output produced 
 #### Authored Input
 
 ```jsx
-import { SuspenseBoundary } from 'litsx';
+import { SuspenseBoundary } from '@litsx\/litsx';
 
       export function Screen() {
         return (
@@ -568,7 +568,7 @@ import { SuspenseBoundary } from 'litsx';
 #### Generated Output
 
 ```js
-import { SuspenseBoundary } from 'litsx';
+import { SuspenseBoundary } from '@litsx\/litsx';
 export function Screen() {
   return <section>
             <SuspenseBoundary fallback={<span>loading</span>}>
@@ -588,7 +588,7 @@ This case shows the authored JSX/API surface and the normalized output produced 
 
 ```jsx
 import { keyed } from 'lit/directives/keyed.js';
-      import { SuspenseBoundary } from 'litsx';
+      import { SuspenseBoundary } from '@litsx\/litsx';
 
       export function Screen({ cycle }) {
         return (
@@ -607,7 +607,7 @@ import { keyed } from 'lit/directives/keyed.js';
 
 ```js
 import { keyed } from 'lit/directives/keyed.js';
-import { SuspenseBoundary } from 'litsx';
+import { SuspenseBoundary } from '@litsx\/litsx';
 export function Screen({
   cycle
 }) {
@@ -630,7 +630,7 @@ This case shows the authored JSX/API surface and the normalized output produced 
 ```jsx
 import { LitElement, html } from 'lit';
       import { keyed } from 'lit/directives/keyed.js';
-      import { SuspenseBoundary, SuspenseList } from 'litsx';
+      import { SuspenseBoundary, SuspenseList } from '@litsx\/litsx';
 
       class Screen extends LitElement {
         render() {

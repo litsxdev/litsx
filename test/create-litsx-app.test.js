@@ -41,7 +41,7 @@ describe("create-litsx-app", () => {
     const storySource = result.files.get("src/stories/status-pill.stories.litsx");
     const docsSource = result.files.get("src/stories/status-pill.docs.mdx");
 
-    assert.ok(packageJson.dependencies.litsx);
+    assert.ok(packageJson.dependencies["@litsx/litsx"]);
     assert.ok(packageJson.dependencies.lit);
     assert.ok(packageJson.devDependencies["@litsx/typescript-plugin"]);
     assert.ok(packageJson.devDependencies["@litsx/vite-plugin"]);
@@ -62,7 +62,7 @@ describe("create-litsx-app", () => {
     assert.match(jsconfig, /"allowArbitraryExtensions": true/);
     assert.match(jsconfig, /"allowJs": true/);
     assert.match(jsconfig, /"checkJs": true/);
-    assert.match(jsconfig, /"jsxImportSource": "litsx"/);
+    assert.match(jsconfig, /"jsxImportSource": "@litsx\/litsx"/);
     assert.match(eslintConfig, /@litsx\/eslint-plugin/);
     assert.match(eslintConfig, /recommended-flat/);
     assert.match(prettierConfig, /prettier-plugin-litsx/);
@@ -241,7 +241,7 @@ describe("create-litsx-app", () => {
   it("can rewrite scaffold dependencies to local workspace ranges for smoke testing", () => {
     const packageJson = {
       dependencies: {
-        litsx: "^0.1.0",
+        "@litsx/litsx": "^0.1.0",
         lit: "^3.2.1",
       },
       devDependencies: {
@@ -255,7 +255,7 @@ describe("create-litsx-app", () => {
 
     applyLocalWorkspaceOverrides(packageJson);
 
-    assert.strictEqual(packageJson.dependencies.litsx, "workspace:^");
+    assert.strictEqual(packageJson.dependencies["@litsx/litsx"], "workspace:^");
     assert.strictEqual(packageJson.dependencies.lit, "^3.2.1");
     assert.strictEqual(packageJson.devDependencies["@litsx/eslint-plugin"], "workspace:^");
     assert.strictEqual(packageJson.devDependencies["@litsx/typescript-plugin"], "workspace:^");

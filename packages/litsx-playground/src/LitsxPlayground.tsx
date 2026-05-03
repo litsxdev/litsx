@@ -6,7 +6,7 @@ import {
   useRef,
   useState,
   useStyle,
-} from "litsx";
+} from "@litsx/litsx";
 import {
   buildPreviewDocument,
   createFallbackPreviewDocument,

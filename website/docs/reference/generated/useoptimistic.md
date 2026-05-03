@@ -7,7 +7,7 @@ Apply an optimistic overlay on top of authoritative state. Think of useOptimisti
 ## Reference
 
 ```ts
-import { useOptimistic } from "litsx";
+import { useOptimistic } from "@litsx/litsx";
 ```
 
 ```ts

@@ -2,7 +2,7 @@ import { resolveHostInfo } from "./custom-hook-host.js";
 import { ensureRuntimeNamedImports } from "./runtime-imports.js";
 let t;
 
-const RUNTIME_MODULE = "litsx";
+const RUNTIME_MODULE = "@litsx/litsx";
 
 function ensureRuntimeImport(programPath, importedName, localName, t) {
   const runtimeImports = programPath

@@ -1,5 +1,5 @@
 export const counterExampleSource = `
-import { useState, useStyle } from "litsx";
+import { useState, useStyle } from "@litsx/litsx";
 
 type CounterProps = {
   title: string;
@@ -227,7 +227,7 @@ export function ProfileCard({
 `.trim();
 
 export const jsxAuthoringExampleSource = `
-import { useState } from "litsx";
+import { useState } from "@litsx/litsx";
 
 type ComposerProps = {
   name: string;
@@ -328,7 +328,7 @@ export function Composer({ name = "world" }: ComposerProps) {
 `.trim();
 
 export const litDirectivesExampleSource = `
-import { useState } from "litsx";
+import { useState } from "@litsx/litsx";
 import { keyed } from "lit/directives/keyed.js";
 import { repeat } from "lit/directives/repeat.js";
 import { when } from "lit/directives/when.js";
@@ -517,7 +517,7 @@ export function DirectiveInbox() {
 `.trim();
 
 export const stylingExampleSource = `
-import { useState, useStyle } from "litsx";
+import { useState, useStyle } from "@litsx/litsx";
 
 type AccentPanelProps = {
   title: string;
@@ -668,7 +668,7 @@ import {
   useOnCommit,
   useRef,
   useState,
-} from "litsx";
+} from "@litsx/litsx";
 
 type RuntimeCardProps = {
   label: string;
@@ -806,7 +806,7 @@ export function RuntimeCard({ label = "Runtime surface" }: RuntimeCardProps) {
 `.trim();
 
 export const controlledStateExampleSource = `
-import { useControlledState } from "litsx";
+import { useControlledState } from "@litsx/litsx";
 
 type DisclosureProps = {
   title: string;
@@ -916,7 +916,7 @@ export function Disclosure({
 
 export const errorBoundaryExampleSource = `
 import { keyed } from "lit/directives/keyed.js";
-import { ErrorBoundary, useState } from "litsx";
+import { ErrorBoundary, useState } from "@litsx/litsx";
 
 type BoundaryDemoProps = {
   title: string;
@@ -1074,7 +1074,7 @@ export function BoundaryDemo({ title = "Recoverable render failure" }: BoundaryD
 `.trim();
 
 export const staticExposeExampleSource = `
-import { useState } from "litsx";
+import { useState } from "@litsx/litsx";
 
 type Tone = "ocean" | "amber" | "rose";
 
@@ -1315,7 +1315,7 @@ export function StaticExposeDemo() {
 
 export const lightDomExampleSource = `
 import { LitElement, css, html } from "lit";
-import { LightDomElementsMixin, LightDomMixin } from "litsx/runtime-infrastructure";
+import { LightDomElementsMixin, LightDomMixin } from "@litsx/litsx/runtime-infrastructure";
 
 // Native Lit classes: these are the two concrete implementations that collide
 // on purpose under the same base tag, <profile-chip>.
@@ -1540,7 +1540,7 @@ export function LightDomPalette() {
 `.trim();
 
 export const lightDomStylingExampleSource = `
-import { useState } from "litsx";
+import { useState } from "@litsx/litsx";
 
 type LightDomPaletteProps = {
   title: string;
@@ -1697,7 +1697,7 @@ export function LightDomPalette({
 
 export const scopedElementsBaselineExampleSource = `
 import { LitElement, css, html } from "lit";
-import { useState } from "litsx";
+import { useState } from "@litsx/litsx";
 
 class StatusBadge extends LitElement {
   static properties = {
@@ -1842,7 +1842,7 @@ import {
   SuspenseList,
   useRef,
   useState,
-} from "litsx";
+} from "@litsx/litsx";
 
 function createProfileResource(name, role, delay, tone) {
   let status = "pending";
@@ -2230,7 +2230,7 @@ export function ReactContextDemo() {
 `.trim();
 
 export const nativeRefResolutionExampleSource = `
-import { useExpose, useRef, useState } from "litsx";
+import { useExpose, useRef, useState } from "@litsx/litsx";
 
 type InputApi = {
   focus(): void;
@@ -2485,7 +2485,7 @@ export function NativeRefResolutionDemo() {
 `.trim();
 
 export const useEmitExampleSource = `
-import { useEmit, useState } from "litsx";
+import { useEmit, useState } from "@litsx/litsx";
 
 function EventEmitterButton() {
   ^styles(\`
@@ -2610,7 +2610,7 @@ export function UseEmitDemo() {
 `.trim();
 
 export const useAsyncStateExampleSource = `
-import { useAsyncState } from "litsx";
+import { useAsyncState } from "@litsx/litsx";
 
 function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -2717,7 +2717,7 @@ export function UseAsyncStateDemo() {
 `.trim();
 
 export const useOptimisticExampleSource = `
-import { useOptimistic, useState } from "litsx";
+import { useOptimistic, useState } from "@litsx/litsx";
 
 export function UseOptimisticDemo() {
   ^styles(\`

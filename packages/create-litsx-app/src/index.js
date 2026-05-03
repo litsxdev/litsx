@@ -3,7 +3,7 @@ import path from "path";
 import { publishedPackageVersions } from "./published-package-versions.js";
 
 const LOCAL_WORKSPACE_PACKAGE_NAMES = [
-  "litsx",
+  "@litsx/litsx",
   "@litsx/eslint-plugin",
   "prettier-plugin-litsx",
   "@litsx/typescript-plugin",
@@ -91,7 +91,7 @@ function createBasePackageJson(packageName) {
     dependencies: {
       "@open-wc/scoped-elements": "^3.0.0",
       "lit": "^3.2.1",
-      "litsx": publishedPackageVersions.litsx,
+      "@litsx/litsx": publishedPackageVersions["@litsx/litsx"],
     },
     devDependencies: {
       "@litsx/eslint-plugin": publishedPackageVersions["@litsx/eslint-plugin"],
@@ -189,7 +189,7 @@ function createBaseFiles(packageName, className, includeStorybook) {
     "allowArbitraryExtensions": true,
     "checkJs": true,
     "jsx": "react-jsx",
-    "jsxImportSource": "litsx",
+    "jsxImportSource": "@litsx/litsx",
     "plugins": [
       {
         "name": "@litsx/typescript-plugin"
@@ -262,7 +262,7 @@ document.querySelector("#app").innerHTML = "<app-root></app-root>";
 function createAppProfileFiles(packageName, className) {
   const files = createBaseFiles(packageName, className, false);
 
-  files.set(`src/${packageName}.litsx`, `import { useState } from "litsx";
+  files.set(`src/${packageName}.litsx`, `import { useState } from "@litsx/litsx";
 
 export const ${className} = ({ title = "Hello LitSX" }) => {
   ^styles(\`
@@ -539,7 +539,7 @@ export const parameters = {
   },
 };
 `);
-  files.set(`src/${packageName}.litsx`, `import { SuspenseBoundary } from "litsx";
+  files.set(`src/${packageName}.litsx`, `import { SuspenseBoundary } from "@litsx/litsx";
 import { StatusPill } from "./components/status-pill.litsx";
 import { ButtonCard } from "./components/button-card.litsx";
 

@@ -1,3 +1,3 @@
-export * from "litsx";
-export * from "litsx/context";
-export * from "litsx/runtime-infrastructure";
+export * from "@litsx/litsx";
+export * from "@litsx/litsx/context";
+export * from "@litsx/litsx/runtime-infrastructure";

@@ -3,8 +3,8 @@ import jsxSyntaxPlugin from "@babel/plugin-syntax-jsx";
 import { isLitElementSuperClass } from "@litsx/babel-plugin-shared-hooks";
 
 const { declare } = helperPluginUtils;
-const RUNTIME_MODULE = "litsx";
-const INFRASTRUCTURE_MODULE = "litsx/runtime-infrastructure";
+const RUNTIME_MODULE = "@litsx/litsx";
+const INFRASTRUCTURE_MODULE = "@litsx/litsx/runtime-infrastructure";
 
 export default declare((api) => {
   api.assertVersion(7);

@@ -45,8 +45,8 @@ import { useRef, useEffect } from 'react';
 #### Generated Output
 
 ```js
-import { prepareEffects, useAfterUpdate, useRef, ErrorBoundary } from "litsx";
-import { LitsxStaticHoistsMixin, ShadowDomElementsMixin } from "litsx/runtime-infrastructure";
+import { prepareEffects, useAfterUpdate, useRef, ErrorBoundary } from "@litsx/litsx";
+import { LitsxStaticHoistsMixin, ShadowDomElementsMixin } from "@litsx/litsx/runtime-infrastructure";
 import { LitElement, html } from "lit";
 const _litsx_static_properties = Symbol("litsx.static.properties");
 import FancyButton from './FancyButton.js';
@@ -99,7 +99,7 @@ export const FilterForm = ({ query, enabled, onQueryChange, onEnabledChange }) =
 #### Generated Output
 
 ```js
-import { ErrorBoundary } from "litsx";
+import { ErrorBoundary } from "@litsx/litsx";
 import { LitElement, html } from "lit";
 export class FilterForm extends LitElement {
   static properties = {
@@ -144,7 +144,7 @@ export const AliasedEvents = ({ onFocus, onBlur, onDoubleClick }) => {
 #### Generated Output
 
 ```js
-import { ErrorBoundary } from "litsx";
+import { ErrorBoundary } from "@litsx/litsx";
 import { LitElement, html } from "lit";
 export class AliasedEvents extends LitElement {
   static properties = {
@@ -187,7 +187,7 @@ export const FilterForm = ({ query, onQueryChange }) => {
 #### Generated Output
 
 ```js
-import { ErrorBoundary } from "litsx";
+import { ErrorBoundary } from "@litsx/litsx";
 import { LitElement, html } from "lit";
 export class FilterForm extends LitElement {
   static properties = {
@@ -226,7 +226,7 @@ export const AliasedEvents = ({ onFocus, onBlur, onDoubleClick }) => {
 #### Generated Output
 
 ```js
-import { ErrorBoundary } from "litsx";
+import { ErrorBoundary } from "@litsx/litsx";
 import { LitElement, html } from "lit";
 export class AliasedEvents extends LitElement {
   static properties = {
@@ -282,10 +282,10 @@ import React, { createContext, useContext } from "react";
 #### Generated Output
 
 ```js
-import { ShadowDomElementsMixin } from "litsx/runtime-infrastructure";
-import { prepareEffects, ErrorBoundary } from "litsx";
+import { ShadowDomElementsMixin } from "@litsx/litsx/runtime-infrastructure";
+import { prepareEffects, ErrorBoundary } from "@litsx/litsx";
 import { LitElement, html } from "lit";
-import { createContext, useContext, LitsxContextProviderElement as LitsxContextProvider } from "litsx/context";
+import { createContext, useContext, LitsxContextProviderElement as LitsxContextProvider } from "@litsx/litsx/context";
 const ThemeContext = createContext("light");
 export class Toolbar extends LitElement {
   render() {
@@ -332,10 +332,10 @@ import { createContext } from "react";
 #### Generated Output
 
 ```js
-import { ShadowDomElementsMixin } from "litsx/runtime-infrastructure";
-import { ErrorBoundary } from "litsx";
+import { ShadowDomElementsMixin } from "@litsx/litsx/runtime-infrastructure";
+import { ErrorBoundary } from "@litsx/litsx";
 import { LitElement, html } from "lit";
-import { createContext, renderContext, LitsxContextProviderElement as LitsxContextProvider } from "litsx/context";
+import { createContext, renderContext, LitsxContextProviderElement as LitsxContextProvider } from "@litsx/litsx/context";
 const ThemeContext = createContext("light");
 export class App extends ShadowDomElementsMixin(LitElement) {
   render() {
@@ -374,9 +374,9 @@ import { createContext, useContext } from "react";
 #### Generated Output
 
 ```js
-import { prepareEffects, ErrorBoundary } from "litsx";
+import { prepareEffects, ErrorBoundary } from "@litsx/litsx";
 import { LitElement, html } from "lit";
-import { createContext, useContext } from "litsx/context";
+import { createContext, useContext } from "@litsx/litsx/context";
 const ThemeContext = createContext("light");
 function useThemeLabel(_host, prefix) {
   const theme = useContext(_host, ThemeContext);
@@ -412,7 +412,7 @@ import React, { forwardRef, memo } from "react";
 #### Generated Output
 
 ```js
-import { useCallbackRef, prepareEffects, ErrorBoundary } from "litsx";
+import { useCallbackRef, prepareEffects, ErrorBoundary } from "@litsx/litsx";
 import { LitElement, html } from "lit";
 export class CardShell extends LitElement {
   static properties = {
@@ -462,8 +462,8 @@ import FancyButton from './FancyButton.js';
 #### Generated Output
 
 ```js
-import { ShadowDomElementsMixin } from "litsx/runtime-infrastructure";
-import { ErrorBoundary } from "litsx";
+import { ShadowDomElementsMixin } from "@litsx/litsx/runtime-infrastructure";
+import { ErrorBoundary } from "@litsx/litsx";
 import { LitElement, html } from "lit";
 import FancyButton from './FancyButton.js';
 export class LightForm extends ShadowDomElementsMixin(LitElement) {
@@ -509,9 +509,9 @@ import { ErrorBoundary } from "react-error-boundary";
 #### Generated Output
 
 ```js
-import { ensureLazyElement, ErrorBoundary, SuspenseBoundary } from "litsx";
+import { ensureLazyElement, ErrorBoundary, SuspenseBoundary } from "@litsx/litsx";
 import { LitElement, html } from "lit";
-import { ShadowDomElementsMixin } from "litsx/runtime-infrastructure";
+import { ShadowDomElementsMixin } from "@litsx/litsx/runtime-infrastructure";
 const ResultsPanel = () => import("./ResultsPanel.js");
 export class SearchCard extends ShadowDomElementsMixin(LitElement) {
   render() {
@@ -545,7 +545,7 @@ import { useState } from "react";
 #### Generated Output
 
 ```js
-import { useState, prepareEffects, ErrorBoundary } from "litsx";
+import { useState, prepareEffects, ErrorBoundary } from "@litsx/litsx";
 import { LitElement, html } from "lit";
 export class Counter extends LitElement {
   render() {
@@ -570,7 +570,7 @@ import React, { useState } from "react";
 #### Generated Output
 
 ```js
-import { useState, prepareEffects, ErrorBoundary } from "litsx";
+import { useState, prepareEffects, ErrorBoundary } from "@litsx/litsx";
 import { LitElement, html } from "lit";
 import React from "react";
 export class Counter extends LitElement {

@@ -38,7 +38,7 @@ describe("@litsx/babel-plugin-shared-hooks createUseStateTransform", () => {
 
     const code = run(source);
 
-    assert.match(code, /import \{ useState, prepareEffects \} from "litsx";|import \{ prepareEffects, useState \} from "litsx";/);
+    assert.match(code, /import \{ useState, prepareEffects \} from "@litsx\/litsx";|import \{ prepareEffects, useState \} from "@litsx\/litsx";/);
     assert.match(code, /prepareEffects\(this\);/);
     assert.match(code, /const \[count, setCount\] = useState\(this, 1\);/);
     assert.doesNotMatch(code, /from 'react';|from "react";/);
@@ -81,7 +81,7 @@ describe("@litsx/babel-plugin-shared-hooks createUseStateTransform", () => {
   it("merges into an existing litsx runtime import instead of duplicating it", () => {
     const source = `
       import { LitElement } from 'lit';
-      import { useId } from 'litsx';
+      import { useId } from '@litsx/litsx';
       import { useState } from 'react';
 
       class Counter extends LitElement {
@@ -95,8 +95,8 @@ describe("@litsx/babel-plugin-shared-hooks createUseStateTransform", () => {
 
     const code = run(source);
 
-    assert.strictEqual((code.match(/from ['"]litsx['"];/g) || []).length, 1);
-    assert.match(code, /import \{[^}]*useState[^}]*prepareEffects[^}]*useId[^}]*\} from ['"]litsx['"]|import \{[^}]*useId[^}]*useState[^}]*prepareEffects[^}]*\} from ['"]litsx['"]|import \{[^}]*prepareEffects[^}]*useId[^}]*useState[^}]*\} from ['"]litsx['"]/);
+    assert.strictEqual((code.match(/from ['"]@litsx\/litsx['"];/g) || []).length, 1);
+    assert.match(code, /import \{[^}]*useState[^}]*prepareEffects[^}]*useId[^}]*\} from ['"]@litsx\/litsx['"]|import \{[^}]*useId[^}]*useState[^}]*prepareEffects[^}]*\} from ['"]@litsx\/litsx['"]|import \{[^}]*prepareEffects[^}]*useId[^}]*useState[^}]*\} from ['"]@litsx\/litsx['"]/);
   });
 
   it("rewrites namespace imports and does not duplicate prepareEffects when already present", () => {
@@ -134,7 +134,7 @@ describe("@litsx/babel-plugin-shared-hooks createUseStateTransform", () => {
   it("inserts a separate runtime import when litsx is already imported as a namespace", () => {
     const source = `
       import { LitElement } from 'lit';
-      import * as runtime from 'litsx';
+      import * as runtime from '@litsx/litsx';
       import { useState } from 'react';
 
       class Counter extends LitElement {
@@ -147,9 +147,9 @@ describe("@litsx/babel-plugin-shared-hooks createUseStateTransform", () => {
 
     const code = run(source);
 
-    assert.match(code, /import \* as runtime from 'litsx';|import \* as runtime from "litsx";/);
-    assert.strictEqual((code.match(/from ['"]litsx['"];/g) || []).length, 2);
-    assert.match(code, /import \{ useState, prepareEffects \} from ['"]litsx['"]|import \{ prepareEffects, useState \} from ['"]litsx['"]/);
+    assert.match(code, /import \* as runtime from '@litsx\/litsx';|import \* as runtime from "@litsx\/litsx";/);
+    assert.strictEqual((code.match(/from ['"]@litsx\/litsx['"];/g) || []).length, 2);
+    assert.match(code, /import \{ useState, prepareEffects \} from ['"]@litsx\/litsx['"]|import \{ prepareEffects, useState \} from ['"]@litsx\/litsx['"]/);
     assert.match(code, /const \[count\] = useState\(this, 0\);/);
   });
 
@@ -168,7 +168,7 @@ describe("@litsx/babel-plugin-shared-hooks createUseStateTransform", () => {
 
     const code = run(source);
 
-    assert.match(code, /import \{ useState, prepareEffects \} from "litsx";|import \{ prepareEffects, useState \} from "litsx";/);
+    assert.match(code, /import \{ useState, prepareEffects \} from "@litsx\/litsx";|import \{ prepareEffects, useState \} from "@litsx\/litsx";/);
     assert.strictEqual((code.match(/useState\(this, 0\)/g) || []).length, 1);
     assert.match(code, /prepareEffects\(this\);/);
     assert.doesNotMatch(code, /useState\(this, this, 0\)/);

@@ -88,7 +88,7 @@ describe("react compat internal useRef", () => {
       /import\s+\{[^}]*\buseRef\b[^}]*\}\s+from ['"]react['"]/,
       "useRef should be removed from the React import"
     );
-    assert.match(code, /import \{ useRef, useCallbackRef \} from "litsx";|import \{ useCallbackRef, useRef \} from "litsx";/);
+    assert.match(code, /import \{ useRef, useCallbackRef \} from "@litsx\/litsx";|import \{ useCallbackRef, useRef \} from "@litsx\/litsx";/);
     assert.match(code, /useEffect/, "other React imports should remain");
   });
 
@@ -196,7 +196,7 @@ describe("react compat internal useRef", () => {
       plugins: [plugin],
     });
 
-    assert.match(code, /import \{ useRef \} from "litsx";/);
+    assert.match(code, /import \{ useRef \} from "@litsx\/litsx";/);
     assert.match(code, /const latest = useRef\(this, 0\);/);
     assert.doesNotMatch(code, /import \{ useRef \} from 'react';|import \{ useRef \} from "react";/);
   });
@@ -219,7 +219,7 @@ describe("react compat internal useRef", () => {
       plugins: [plugin],
     });
 
-    assert.match(code, /import \{ useRef \} from "litsx";/);
+    assert.match(code, /import \{ useRef \} from "@litsx\/litsx";/);
     assert.match(code, /export function useLatest\(_[A-Za-z0-9]+, value\)/);
     assert.match(code, /const ref = useRef\(_[A-Za-z0-9]+\);/);
     assert.match(code, /ref\.current = value;/);
@@ -247,7 +247,7 @@ describe("react compat internal useRef", () => {
       generatorOpts: { decoratorsBeforeExport: true },
     });
 
-    assert.match(code, /import \{ useCallbackRef \} from "litsx";/);
+    assert.match(code, /import \{ useCallbackRef \} from "@litsx\/litsx";/);
     assert.match(
       code,
       /useCallbackRef\(this, \(\) => this\._ref\d*, node => this\.register\(node\)\);/
@@ -323,7 +323,7 @@ describe("react compat internal useRef", () => {
       plugins: [plugin],
     });
 
-    assert.match(code, /import \{ useRef, useCallbackRef \} from "litsx";|import \{ useCallbackRef, useRef \} from "litsx";/);
+    assert.match(code, /import \{ useRef, useCallbackRef \} from "@litsx\/litsx";|import \{ useCallbackRef, useRef \} from "@litsx\/litsx";/);
     assert.match(code, /const inputRef = useRef\(this, null\);/);
     assert.match(code, /useCallbackRef\(this, \(\) => this\._inputRefElement, node => inputRef\.current = node\);/);
     assert.match(code, /data-ref="_inputRefElement"/);

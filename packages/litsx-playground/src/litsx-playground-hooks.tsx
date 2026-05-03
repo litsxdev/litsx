@@ -1,5 +1,5 @@
 import { EditorView } from "@codemirror/view";
-import { useAfterUpdate, useOnConnect, useRef } from "litsx";
+import { useAfterUpdate, useOnConnect, useRef } from "@litsx/litsx";
 import {
   createEmittedEditorState,
   createSourceEditorState,

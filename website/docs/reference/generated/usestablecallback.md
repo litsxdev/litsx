@@ -7,7 +7,7 @@ Keep a callback stable until its dependencies change. Think of useStableCallback
 ## Reference
 
 ```ts
-import { useStableCallback } from "litsx";
+import { useStableCallback } from "@litsx/litsx";
 ```
 
 ```ts

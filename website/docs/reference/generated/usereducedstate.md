@@ -7,7 +7,7 @@ Manage local state with a reducer. Think of useReducedState as a way to centrali
 ## Reference
 
 ```ts
-import { useReducedState } from "litsx";
+import { useReducedState } from "@litsx/litsx";
 ```
 
 ```ts

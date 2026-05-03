@@ -1,5 +1,5 @@
 {
-  "name": "litsx",
+  "name": "@litsx/litsx",
   "version": "0.1.0",
   "description": "Native Litsx runtime primitives, JSX runtime entrypoints, and web component utilities",
   "type": "module",

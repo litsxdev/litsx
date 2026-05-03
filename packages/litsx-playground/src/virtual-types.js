@@ -49,7 +49,7 @@ export const PLAYGROUND_TYPE_FILES = {
     type Record<K extends keyof any, T> = { [P in K]: T };
   `,
   "/__litsx_virtual__/litsx.playground.d.ts": String.raw`
-    declare module "litsx" {
+    declare module "@litsx/litsx" {
       export type LitsxRenderable =
         | string
         | number

@@ -7,7 +7,7 @@ Keep an event callback identity stable while always calling the latest logic. Th
 ## Reference
 
 ```ts
-import { useEvent } from "litsx";
+import { useEvent } from "@litsx/litsx";
 ```
 
 ```ts

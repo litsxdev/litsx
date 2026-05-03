@@ -317,7 +317,7 @@ function cloneChild(child) {
         },
         exit(path, state) {
           for (const primitiveName of state.usedPrimitives) {
-            addNamedImport(path, "litsx", primitiveName);
+            addNamedImport(path, "@litsx/litsx", primitiveName);
           }
         },
       },

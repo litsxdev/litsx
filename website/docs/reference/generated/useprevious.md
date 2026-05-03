@@ -7,7 +7,7 @@ Read the value from the previous render. Think of usePrevious as the smallest wa
 ## Reference
 
 ```ts
-import { usePrevious } from "litsx";
+import { usePrevious } from "@litsx/litsx";
 ```
 
 ```ts

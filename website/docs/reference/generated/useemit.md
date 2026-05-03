@@ -7,7 +7,7 @@ Emit a CustomEvent from the current host without reaching for this.dispatchEvent
 ## Reference
 
 ```ts
-import { useEmit } from "litsx";
+import { useEmit } from "@litsx/litsx";
 ```
 
 ```ts

@@ -397,7 +397,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
     assert.match(code, /reflect: true/);
     assert.match(code, /payload: \{\s*attribute: false\s*\}/s);
     assert.match(code, /static get properties\(\)/);
-    assert.match(code, /from "litsx\/runtime-infrastructure"/);
+    assert.match(code, /from "@litsx\/litsx\/runtime-infrastructure"/);
     assert.match(code, /extends LitsxStaticHoistsMixin\(LitElement\)/);
     assert.match(code, /this\.__litsxMergeProperties\(/);
     assert.match(code, /this\.__litsxStatic\(_litsx_static_properties,\s*\(\)\s*=>/);
@@ -433,7 +433,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
 
     assert.match(code, /const _litsx_static_properties = Symbol\("litsx\.static\.properties"\);/);
     assert.match(code, /static get properties\(\)/);
-    assert.match(code, /from "litsx\/runtime-infrastructure"/);
+    assert.match(code, /from "@litsx\/litsx\/runtime-infrastructure"/);
     assert.match(code, /extends LitsxStaticHoistsMixin\(LitElement\)/);
     assert.match(code, /this\.__litsxStatic\(_litsx_static_properties,\s*\(\)\s*=>/);
     assert.match(code, /this\.__litsxMergeProperties\(/);
@@ -1568,7 +1568,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
       presets: [[nativePreset, { jsxTemplate: false }]],
     });
 
-    assert.match(code, /import \{ LightDomMixin \} from "litsx\/runtime-infrastructure";/);
+    assert.match(code, /import \{ LightDomMixin \} from "@litsx\/litsx\/runtime-infrastructure";/);
     assert.match(code, /class Card extends LightDomMixin\(LitElement\)/);
     assert.doesNotMatch(code, /createRenderRoot\(\)\s*\{\s*return this;\s*\}/s);
     assert.doesNotMatch(code, /static get lightDom\(\)/);
@@ -1675,7 +1675,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
 
   it("does not require static hoists to be imported from litsx", () => {
     const source = `
-      import { useState } from "litsx";
+      import { useState } from "@litsx/litsx";
 
       export function Card() {
         ^properties({
@@ -1702,7 +1702,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
 
     assert.doesNotMatch(code, /\^properties\(/);
     assert.doesNotMatch(code, /\^styles\(/);
-    assert.match(code, /import \{[^}]*useState[^}]*\} from ['"]litsx['"]/);
+    assert.match(code, /import \{[^}]*useState[^}]*\} from ['"]@litsx\/litsx['"]/);
   });
 
   it("rejects static hoists outside top-level component statements", () => {

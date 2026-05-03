@@ -7,7 +7,7 @@ Let expensive consumers lag behind a fast-changing value. Think of useDeferredVa
 ## Reference
 
 ```ts
-import { useDeferredValue } from "litsx";
+import { useDeferredValue } from "@litsx/litsx";
 ```
 
 ```ts

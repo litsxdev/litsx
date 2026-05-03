@@ -51,7 +51,7 @@ class MyElement extends LitElement {
 **Output (simplified)**
 
 ```js
-import { ShadowDomElementsMixin } from "litsx/runtime-infrastructure";
+import { ShadowDomElementsMixin } from "@litsx/litsx/runtime-infrastructure";
 import { LitElement, html } from "lit";
 import FancyButton from "./FancyButton.js";
 

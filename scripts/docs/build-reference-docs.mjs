@@ -169,7 +169,7 @@ function findInterface(sourceFile, name) {
 }
 
 function authoredImport(name) {
-  return `import { ${name} } from "litsx";`;
+  return `import { ${name} } from "@litsx/litsx";`;
 }
 
 function inferUsage(item) {

@@ -7,7 +7,7 @@ Manage a value that can be controlled from props or owned locally by the compone
 ## Reference
 
 ```ts
-import { useControlledState } from "litsx";
+import { useControlledState } from "@litsx/litsx";
 ```
 
 ```ts

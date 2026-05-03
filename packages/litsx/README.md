@@ -7,7 +7,7 @@
 
 Runtime helpers that back the Lit<sup>SX</sup> Babel transforms. The module bundles an `EffectsController` plus native effect helpers (`prepareEffects`, `useAfterUpdate`, `useOnCommit`) so rewritten components can schedule work in Lit terms.
 
-The package also exposes `litsx/jsx-runtime` and `litsx/jsx-dev-runtime` entrypoints so editors and TypeScript can treat Litsx as a first-class JSX runtime via `jsxImportSource: "litsx"`.
+The package also exposes `@litsx/litsx/jsx-runtime` and `@litsx/litsx/jsx-dev-runtime` entrypoints so editors and TypeScript can treat Litsx as a first-class JSX runtime via `jsxImportSource: "@litsx/litsx"`.
 
 ## What it provides
 
@@ -68,7 +68,7 @@ For editor and TypeScript support you can point JSX at `litsx` directly:
 {
   "compilerOptions": {
     "jsx": "react-jsx",
-    "jsxImportSource": "litsx"
+    "jsxImportSource": "@litsx/litsx"
   }
 }
 ```

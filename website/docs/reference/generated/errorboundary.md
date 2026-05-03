@@ -7,7 +7,7 @@ Catch synchronous render errors for one subtree and render fallback UI instead. 
 ## Reference
 
 ```ts
-import { ErrorBoundary } from "litsx";
+import { ErrorBoundary } from "@litsx/litsx";
 ```
 
 ```tsx

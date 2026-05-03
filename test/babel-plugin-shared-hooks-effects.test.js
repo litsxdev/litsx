@@ -9,7 +9,7 @@ const { transformFromAstSync } = babelCore;
 const plugin = createEffectHooksTransform({
   pluginName: "test-shared-hooks-effects",
   importSources: ["react"],
-  runtimeModule: "litsx",
+  runtimeModule: "@litsx/litsx",
 });
 
 function run(source) {
@@ -39,7 +39,7 @@ describe("@litsx/babel-plugin-shared-hooks createEffectHooksTransform", () => {
 
     const code = run(source);
 
-    assert.match(code, /import \{[^}]*prepareEffects[^}]*useAfterUpdate[^}]*useOnCommit[^}]*\} from "litsx"|import \{[^}]*prepareEffects[^}]*useOnCommit[^}]*useAfterUpdate[^}]*\} from "litsx"|import \{[^}]*useAfterUpdate[^}]*prepareEffects[^}]*useOnCommit[^}]*\} from "litsx"/);
+    assert.match(code, /import \{[^}]*prepareEffects[^}]*useAfterUpdate[^}]*useOnCommit[^}]*\} from "@litsx\/litsx"|import \{[^}]*prepareEffects[^}]*useOnCommit[^}]*useAfterUpdate[^}]*\} from "@litsx\/litsx"|import \{[^}]*useAfterUpdate[^}]*prepareEffects[^}]*useOnCommit[^}]*\} from "@litsx\/litsx"/);
     assert.match(code, /prepareEffects\(this\);/);
     assert.strictEqual((code.match(/prepareEffects\(this\);/g) || []).length, 1);
     assert.match(code, /useAfterUpdate\(this, \(\) => this\.sync\(\), \[this\.value\]\);/);

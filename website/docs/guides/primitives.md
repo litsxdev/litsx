@@ -12,7 +12,7 @@ These are the primitives that matter most when you write Lit<sup>sx</sup> direct
 
 The runtime also exposes helpers such as `ensureLazyElement(...)`, but those are supporting pieces. They are relevant for transforms and advanced integration, not for day-one authoring.
 
-`litsx/jsx-runtime` and `litsx/jsx-dev-runtime` are part of the tooling story, not the authored runtime surface. They matter for `jsxImportSource: "litsx"` and editor integration; see [Tooling](./tooling.md).
+`@litsx/litsx/jsx-runtime` and `@litsx/litsx/jsx-dev-runtime` are part of the tooling story, not the authored runtime surface. They matter for `jsxImportSource: "@litsx/litsx"` and editor integration; see [Tooling](./tooling.md).
 
 For everyday component work, the runtime surface also includes the hooks that model state, DOM access, and effect timing:
 

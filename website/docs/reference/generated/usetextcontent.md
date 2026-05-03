@@ -7,7 +7,7 @@ Read reactive text content projected into the current component. Use this when t
 ## Reference
 
 ```ts
-import { useTextContent } from "litsx";
+import { useTextContent } from "@litsx/litsx";
 ```
 
 ```ts

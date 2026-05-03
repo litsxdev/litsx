@@ -65,7 +65,7 @@ describe("LitsxPlayground docs component", () => {
     const source = fs.readFileSync(playgroundPath, "utf8");
     const code = transformDocsComponent(source, playgroundPath);
 
-    assert.match(code, /import \{ LitsxStaticHoistsMixin \} from "litsx\/runtime-infrastructure";/);
+    assert.match(code, /import \{ LitsxStaticHoistsMixin \} from "@litsx\/litsx\/runtime-infrastructure";/);
     assert.match(code, /export class LitsxPlayground extends LitsxStaticHoistsMixin\(LitElement\)/);
     assert.match(code, /customElements\.define\("litsx-playground", LitsxPlayground\)/);
     assert.match(code, /prepareEffects\(this\);/);
@@ -153,7 +153,7 @@ describe("LitsxPlayground docs component", () => {
   it("keeps preview height measurement inside the iframe runtime", () => {
     const source = fs.readFileSync(playgroundPreviewPath, "utf8");
 
-    assert.match(source, /"litsx\/runtime-infrastructure":/);
+    assert.match(source, /"@litsx\/litsx\/runtime-infrastructure":/);
     assert.match(source, /"@litsx\/light-dom-registry":/);
     assert.match(source, /"lit\/directives\/keyed\.js":/);
     assert.match(source, /"lit\/directives\/repeat\.js":/);

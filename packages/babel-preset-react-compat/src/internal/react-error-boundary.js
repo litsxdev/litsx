@@ -2,7 +2,7 @@ import helperPluginUtils from "@babel/helper-plugin-utils";
 import jsxSyntaxPlugin from "@babel/plugin-syntax-jsx";
 
 const { declare } = helperPluginUtils;
-const RUNTIME_MODULE = "litsx";
+const RUNTIME_MODULE = "@litsx/litsx";
 const RUNTIME_PRIMITIVE = "ErrorBoundary";
 const KEYED_MODULE = "lit/directives/keyed.js";
 

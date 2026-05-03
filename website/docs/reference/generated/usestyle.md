@@ -7,7 +7,7 @@ Apply a dynamic style property to the current component host. Think of useStyle 
 ## Reference
 
 ```ts
-import { useStyle } from "litsx";
+import { useStyle } from "@litsx/litsx";
 ```
 
 ```ts

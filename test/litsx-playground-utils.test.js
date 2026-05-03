@@ -40,7 +40,7 @@ describe("@litsx/playground utilities", () => {
     );
 
     assert.match(doc, /"litsx":/);
-    assert.match(doc, /"litsx\/context":/);
+    assert.match(doc, /"@litsx\/litsx\/context":/);
     assert.match(doc, /"@litsx\/light-dom-registry":/);
     assert.match(doc, /demo-preview/);
     assert.match(doc, /Preview export not found: Demo/);

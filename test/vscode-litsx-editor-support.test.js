@@ -133,7 +133,7 @@ describe("vscode-litsx editor support", () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-vscode-filter-"));
     const filePath = path.join(tempDir, "component.litsx");
     const sourceText = [
-      'import { useState } from "litsx";',
+      'import { useState } from "@litsx/litsx";',
       "export const Component = () => {",
       "  const [count] = useState(0);",
       "  return <input .valuee={count} @clcik={() => count.toFixed()} />;",
@@ -146,7 +146,7 @@ describe("vscode-litsx editor support", () => {
       JSON.stringify({
         compilerOptions: {
           jsx: "react-jsx",
-          jsxImportSource: "litsx",
+          jsxImportSource: "@litsx/litsx",
           target: "ES2022",
           module: "ESNext",
         },

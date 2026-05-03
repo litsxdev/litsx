@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 export const packageDirsByName = new Map([
-  ["litsx", "packages/litsx"],
+  ["@litsx/litsx", "packages/litsx"],
   ["@litsx/compiler", "packages/compiler"],
   ["@litsx/vite-plugin", "packages/vite-plugin"],
   ["@litsx/typescript-plugin", "packages/typescript-plugin-litsx"],

@@ -4,7 +4,7 @@ Lit<sup>sx</sup> has its own tooling stack for authoring JSX that targets Lit an
 
 - `@litsx/vite-plugin`
 - `@litsx/compiler`
-- `litsx/jsx-runtime` and `litsx/jsx-dev-runtime`
+- `@litsx/litsx/jsx-runtime` and `@litsx/litsx/jsx-dev-runtime`
 - `vscode-litsx`
 - `@litsx/typescript-plugin`
 - `create-litsx-app`
@@ -17,7 +17,7 @@ The baseline setup for a project is:
 - `@litsx/vite-plugin` for Vite-based compilation
 - `vscode-litsx` for editor highlighting and workspace defaults
 - `@litsx/typescript-plugin`
-- `jsxImportSource: "litsx"`
+- `jsxImportSource: "@litsx/litsx"`
 - `litsx-tsc` for CLI type-checking of authored Lit<sup>sx</sup> syntax
 - the scaffold from `create-litsx-app`
 

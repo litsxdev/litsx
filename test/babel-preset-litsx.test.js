@@ -74,7 +74,7 @@ describe("@litsx/babel-preset-litsx", () => {
     ].join("\n");
     const featureSource = [
       "import FancyButton from './FancyButton.js';",
-      "import { useRef, useState } from 'litsx';",
+      "import { useRef, useState } from '@litsx\/litsx';",
       "export function Greeting({ label }) {",
       "  const ref = useRef(null);",
       "  const [count] = useState(0);",
@@ -238,7 +238,7 @@ describe("@litsx/babel-preset-litsx", () => {
   it("covers a combined native preset path with static hoists, handlers, refs, and scoped elements", () => {
     const source = [
       "import FancyButton from './FancyButton.js';",
-      "import { useRef, useState } from 'litsx';",
+      "import { useRef, useState } from '@litsx\/litsx';",
       "type Props = { label: string; active: boolean };",
       "export function ActionCard({ label, active }: Props) {",
       "  const buttonRef = useRef(null);",
@@ -315,7 +315,7 @@ describe("@litsx/babel-preset-litsx", () => {
 
   it("lowers native useState through the canonical preset", () => {
     const source = [
-      "import { useState } from 'litsx';",
+      "import { useState } from '@litsx\/litsx';",
       "export function Counter() {",
       "  const [count, setCount] = useState(1);",
       "  return <button @click={() => setCount(count + 1)}>{count}</button>;",
@@ -335,7 +335,7 @@ describe("@litsx/babel-preset-litsx", () => {
     assert.match(result.code, /class Counter extends LitElement/);
     assert.match(
       result.code,
-      /import \{[^}]*useState[^}]*prepareEffects[^}]*\} from ['"]litsx['"]|import \{[^}]*prepareEffects[^}]*useState[^}]*\} from ['"]litsx['"]/
+      /import \{[^}]*useState[^}]*prepareEffects[^}]*\} from ['"]@litsx\/litsx['"]|import \{[^}]*prepareEffects[^}]*useState[^}]*\} from ['"]@litsx\/litsx['"]/
     );
     assert.match(result.code, /prepareEffects\(this\);/);
     assert.match(result.code, /const \[count, setCount\] = useState\(this, 1\);/);
@@ -344,7 +344,7 @@ describe("@litsx/babel-preset-litsx", () => {
 
   it("preserves sibling declarators around native useState through the preset", () => {
     const source = [
-      "import { useState } from 'litsx';",
+      "import { useState } from '@litsx\/litsx';",
       "export function Counter() {",
       "  const label = 'ok', [count, setCount] = useState(0);",
       "  setCount(count + 1);",
@@ -367,7 +367,7 @@ describe("@litsx/babel-preset-litsx", () => {
 
   it("threads host through local custom hooks that call native useState", () => {
     const source = [
-      "import { useState } from 'litsx';",
+      "import { useState } from '@litsx\/litsx';",
       "function useCounter(initial) {",
       "  const [value, setValue] = useState(initial);",
       "  return [value, setValue];",
@@ -396,7 +396,7 @@ describe("@litsx/babel-preset-litsx", () => {
 
   it("injects prepareEffects and host args for native effect hooks through the preset", () => {
     const source = [
-      "import { useAfterUpdate } from 'litsx';",
+      "import { useAfterUpdate } from '@litsx\/litsx';",
       "export function Counter() {",
       "  useAfterUpdate(() => {",
       "    this.flag = true;",
@@ -417,7 +417,7 @@ describe("@litsx/babel-preset-litsx", () => {
 
     assert.match(
       result.code,
-      /import \{[^}]*useAfterUpdate[^}]*prepareEffects[^}]*\} from ['"]litsx['"]|import \{[^}]*prepareEffects[^}]*useAfterUpdate[^}]*\} from ['"]litsx['"]/
+      /import \{[^}]*useAfterUpdate[^}]*prepareEffects[^}]*\} from ['"]@litsx\/litsx['"]|import \{[^}]*prepareEffects[^}]*useAfterUpdate[^}]*\} from ['"]@litsx\/litsx['"]/
     );
     assert.match(result.code, /prepareEffects\(this\);/);
     assert.match(result.code, /useAfterUpdate\(this, \(\) => \{\s*this\.flag = true;\s*}, \[]\);/s);
@@ -425,7 +425,7 @@ describe("@litsx/babel-preset-litsx", () => {
 
   it("threads host through native custom hooks in the preset", () => {
     const source = [
-      "import { useStableCallback, useAfterUpdate } from 'litsx';",
+      "import { useStableCallback, useAfterUpdate } from '@litsx\/litsx';",
       "function useCustom(flag) {",
       "  const callback = useStableCallback(() => flag, [flag]);",
       "  useAfterUpdate(() => flag && callback(), [flag, callback]);",
@@ -456,7 +456,7 @@ describe("@litsx/babel-preset-litsx", () => {
 
   it("injects host for native useEmit through the preset", () => {
     const source = [
-      "import { useEmit } from 'litsx';",
+      "import { useEmit } from '@litsx\/litsx';",
       "export function Counter() {",
       "  const emit = useEmit();",
       "  emit('change', this.value, { cancelable: true });",
@@ -481,7 +481,7 @@ describe("@litsx/babel-preset-litsx", () => {
 
   it("lowers native useRef DOM bindings through the canonical preset", () => {
     const source = [
-      "import { useRef } from 'litsx';",
+      "import { useRef } from '@litsx\/litsx';",
       "export function Counter() {",
       "  const buttonRef = useRef(null);",
       "  return <button ref={buttonRef}>Click</button>;",
@@ -498,9 +498,9 @@ describe("@litsx/babel-preset-litsx", () => {
       }
     );
 
-    assert.match(result.code, /import \{[^}]*useRef[^}]*\} from ['"]litsx['"]/);
-    assert.match(result.code, /import \{[^}]*useCallbackRef[^}]*\} from ['"]litsx['"]/);
-    assert.match(result.code, /import \{[^}]*prepareEffects[^}]*\} from ['"]litsx['"]/);
+    assert.match(result.code, /import \{[^}]*useRef[^}]*\} from ['"]@litsx\/litsx['"]/);
+    assert.match(result.code, /import \{[^}]*useCallbackRef[^}]*\} from ['"]@litsx\/litsx['"]/);
+    assert.match(result.code, /import \{[^}]*prepareEffects[^}]*\} from ['"]@litsx\/litsx['"]/);
     assert.match(result.code, /prepareEffects\(this\);/);
     assert.match(result.code, /const buttonRef = useRef\(this, null\);/);
     assert.match(result.code, /useCallbackRef\(this, \(\) => this\._buttonRefElement, node => buttonRef\.current = node\);/);
@@ -510,7 +510,7 @@ describe("@litsx/babel-preset-litsx", () => {
 
   it("keeps non-DOM native useRef bindings as mutable refs through the preset", () => {
     const source = [
-      "import { useRef } from 'litsx';",
+      "import { useRef } from '@litsx\/litsx';",
       "export function Counter() {",
       "  const workerRef = useRef(null);",
       "  workerRef.current = 'ok';",

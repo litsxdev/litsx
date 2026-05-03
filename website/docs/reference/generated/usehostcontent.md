@@ -7,7 +7,7 @@ Read reactive light DOM content from the current component. Use this when author
 ## Reference
 
 ```ts
-import { useHostContent } from "litsx";
+import { useHostContent } from "@litsx/litsx";
 ```
 
 ```ts

@@ -7,7 +7,7 @@ Run side effects after the host has committed its update. Use this for subscript
 ## Reference
 
 ```ts
-import { useAfterUpdate } from "litsx";
+import { useAfterUpdate } from "@litsx/litsx";
 ```
 
 ```ts

@@ -41,7 +41,7 @@ describe("@litsx/babel-plugin-shared-hooks createUseRefTransform", () => {
 
     const code = run(source);
 
-    assert.match(code, /import \{ useRef, useCallbackRef \} from "litsx";|import \{ useCallbackRef, useRef \} from "litsx";/);
+    assert.match(code, /import \{ useRef, useCallbackRef \} from "@litsx\/litsx";|import \{ useCallbackRef, useRef \} from "@litsx\/litsx";/);
     assert.match(code, /get _inputRefElement\(\)/);
     assert.match(code, /data-ref="_inputRefElement"/);
     assert.match(code, /const inputRef = useRef\(this, null\);/);
@@ -86,7 +86,7 @@ describe("@litsx/babel-plugin-shared-hooks createUseRefTransform", () => {
 
     const code = run(source);
 
-    assert.match(code, /import \{ useCallbackRef \} from "litsx";/);
+    assert.match(code, /import \{ useCallbackRef \} from "@litsx\/litsx";/);
     assert.match(code, /get _ref\(\)/);
     assert.match(code, /useCallbackRef\(this, \(\) => this\._ref, node => this\.register\(node\)\);/);
     assert.match(code, /html`<button data-ref="_ref">Click<\/button>`/);
@@ -138,7 +138,7 @@ describe("@litsx/babel-plugin-shared-hooks createUseRefTransform", () => {
   it("preserves already host-aware mutable refs and adds a separate runtime import after litsx namespaces", () => {
     const source = `
       import { LitElement } from 'lit';
-      import * as runtime from 'litsx';
+      import * as runtime from '@litsx/litsx';
       import { useRef } from 'react';
 
       class SearchInput extends LitElement {
@@ -151,11 +151,11 @@ describe("@litsx/babel-plugin-shared-hooks createUseRefTransform", () => {
 
     const code = run(source);
 
-    assert.match(code, /import \* as runtime from 'litsx';|import \* as runtime from "litsx";/);
-    assert.strictEqual((code.match(/from ['"]litsx['"];/g) || []).length, 2);
+    assert.match(code, /import \* as runtime from '@litsx\/litsx';|import \* as runtime from "@litsx\/litsx";/);
+    assert.strictEqual((code.match(/from ['"]@litsx\/litsx['"];/g) || []).length, 2);
     assert.strictEqual((code.match(/useRef\(this, null\)/g) || []).length, 1);
     assert.doesNotMatch(code, /useRef\(this, this, null\)/);
-    assert.match(code, /import \{ useRef, useCallbackRef \} from ['"]litsx['"]|import \{ useCallbackRef, useRef \} from ['"]litsx['"]/);
+    assert.match(code, /import \{ useRef, useCallbackRef \} from ['"]@litsx\/litsx['"]|import \{ useCallbackRef, useRef \} from ['"]@litsx\/litsx['"]/);
     assert.doesNotMatch(code, /import \{ useRef \} from 'react';|import \{ useRef \} from "react";/);
   });
 

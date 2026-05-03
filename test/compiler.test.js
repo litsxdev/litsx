@@ -389,7 +389,7 @@ describe("@litsx/compiler", () => {
     ].join("\n");
     const featureSource = [
       "import FancyButton from './FancyButton.js';",
-      "import { useRef, useState } from 'litsx';",
+      "import { useRef, useState } from '@litsx\/litsx';",
       "export function Counter({ label }) {",
       "  const ref = useRef(null);",
       "  const [count] = useState(0);",

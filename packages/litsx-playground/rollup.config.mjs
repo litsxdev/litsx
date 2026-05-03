@@ -19,8 +19,9 @@ const srcDir = path.join(configDir, "src");
 const distDir = path.join(configDir, "dist");
 const browserExternalPrefix = "\0browser-external:";
 const workspaceEntries = new Map([
-  ["litsx", path.join(configDir, "../litsx/src/index.js")],
-  ["litsx/runtime-infrastructure", path.join(configDir, "../litsx/src/runtime-infrastructure/index.js")],
+  ["@litsx/litsx", path.join(configDir, "../litsx/src/index.js")],
+  ["@litsx/litsx/context", path.join(configDir, "../litsx/src/context.js")],
+  ["@litsx/litsx/runtime-infrastructure", path.join(configDir, "../litsx/src/runtime-infrastructure/index.js")],
   [
     "@litsx/babel-plugin-transform-jsx-html-template",
     path.join(configDir, "../babel-plugin-transform-jsx-html-template/src/index.js"),

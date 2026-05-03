@@ -7,7 +7,7 @@ Expose a small imperative API through a ref. Think of useExpose as the way a com
 ## Reference
 
 ```ts
-import { useExpose } from "litsx";
+import { useExpose } from "@litsx/litsx";
 ```
 
 ```ts

@@ -7,7 +7,7 @@ Run setup when the host is connected to the DOM, and dispose it when the host di
 ## Reference
 
 ```ts
-import { useOnConnect } from "litsx";
+import { useOnConnect } from "@litsx/litsx";
 ```
 
 ```ts

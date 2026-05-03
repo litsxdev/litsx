@@ -64,7 +64,7 @@ describe("@litsx/babel-preset-react-compat suspense boundaries", () => {
     const code = run(source);
 
     assert.match(code, /class Screen extends ShadowDomElementsMixin\(LitElement\)/);
-    assert.match(code, /import \{[^}]*SuspenseBoundary[^}]*\} from ["']litsx["']/);
+    assert.match(code, /import \{[^}]*SuspenseBoundary[^}]*\} from ["']@litsx\/litsx["']/);
     assert.match(code, /static elements = \{[\s\S]*"suspense-boundary": SuspenseBoundary[\s\S]*\}/);
     assert.match(code, /<suspense-boundary/);
     assert.match(code, /\.fallbackRenderer=\{\(\)\s*=>\s*<span>loading<\/span>\}/);
@@ -92,7 +92,7 @@ describe("@litsx/babel-preset-react-compat suspense boundaries", () => {
 
     const code = run(source);
 
-    assert.match(code, /import \{[^}]*SuspenseList[^}]*SuspenseBoundary[^}]*\} from ["']litsx["']|import \{[^}]*SuspenseBoundary[^}]*SuspenseList[^}]*\} from ["']litsx["']/);
+    assert.match(code, /import \{[^}]*SuspenseList[^}]*SuspenseBoundary[^}]*\} from ["']@litsx\/litsx["']|import \{[^}]*SuspenseBoundary[^}]*SuspenseList[^}]*\} from ["']@litsx\/litsx["']/);
     assert.match(
       code,
       /static elements = \{[\s\S]*"suspense-boundary": SuspenseBoundary[\s\S]*"suspense-list": SuspenseList[\s\S]*\}|static elements = \{[\s\S]*"suspense-list": SuspenseList[\s\S]*"suspense-boundary": SuspenseBoundary[\s\S]*\}/
@@ -182,7 +182,7 @@ describe("@litsx/babel-preset-react-compat suspense boundaries", () => {
 
     assert.match(
       code,
-      /import \{[^}]*SuspenseList[^}]*SuspenseBoundary[^}]*\} from ["']litsx["']|import \{[^}]*SuspenseBoundary[^}]*SuspenseList[^}]*\} from ["']litsx["']/
+      /import \{[^}]*SuspenseList[^}]*SuspenseBoundary[^}]*\} from ["']@litsx\/litsx["']|import \{[^}]*SuspenseBoundary[^}]*SuspenseList[^}]*\} from ["']@litsx\/litsx["']/
     );
     assert.match(code, /<suspense-list revealOrder=['"]forwards['"]>/);
     assert.match(code, /<suspense-boundary/);
@@ -331,7 +331,7 @@ describe("@litsx/babel-preset-react-compat suspense boundaries", () => {
 
   it("moves only matching ensureLazyElement calls into suspense content renderers", () => {
     const source = [
-      "import { ensureLazyElement } from 'litsx';",
+      "import { ensureLazyElement } from '@litsx/litsx';",
       "import { Suspense } from 'react';",
       "",
       "const AlphaPanel = () => null;",
@@ -415,8 +415,8 @@ describe("@litsx/babel-preset-react-compat suspense boundaries", () => {
 
     const code = runFinal(source);
 
-    assert.match(code, /import \{[^}]*SuspenseBoundary[^}]*ErrorBoundary[^}]*\} from "litsx"|import \{[^}]*ErrorBoundary[^}]*SuspenseBoundary[^}]*\} from "litsx"/);
-    assert.match(code, /import \{ ShadowDomElementsMixin \} from "litsx\/runtime-infrastructure";/);
+    assert.match(code, /import \{[^}]*SuspenseBoundary[^}]*ErrorBoundary[^}]*\} from "@litsx\/litsx"|import \{[^}]*ErrorBoundary[^}]*SuspenseBoundary[^}]*\} from "@litsx\/litsx"/);
+    assert.match(code, /import \{ ShadowDomElementsMixin \} from "@litsx\/litsx\/runtime-infrastructure";/);
     assert.match(code, /return html`<suspense-boundary \.fallbackRenderer=\$\{\(\) => html`<span>loading<\/span>`\} \.contentRenderer=\$\{\(\) => html`<div>ready<\/div>`\}><\/suspense-boundary>`;/);
     assert.doesNotMatch(code, /<Suspense/);
   });
@@ -450,10 +450,10 @@ describe("@litsx/babel-preset-react-compat suspense boundaries", () => {
 
     assert.match(
       code,
-      /import \{[^}]*ensureLazyElement[^}]*ErrorBoundary[^}]*SuspenseBoundary[^}]*SuspenseList[^}]*\} from "litsx"|import \{[^}]*ensureLazyElement[^}]*ErrorBoundary[^}]*SuspenseList[^}]*SuspenseBoundary[^}]*\} from "litsx"|import \{[^}]*ErrorBoundary[^}]*SuspenseBoundary[^}]*SuspenseList[^}]*ensureLazyElement[^}]*\} from "litsx"/
+      /import \{[^}]*ensureLazyElement[^}]*ErrorBoundary[^}]*SuspenseBoundary[^}]*SuspenseList[^}]*\} from "@litsx\/litsx"|import \{[^}]*ensureLazyElement[^}]*ErrorBoundary[^}]*SuspenseList[^}]*SuspenseBoundary[^}]*\} from "@litsx\/litsx"|import \{[^}]*ErrorBoundary[^}]*SuspenseBoundary[^}]*SuspenseList[^}]*ensureLazyElement[^}]*\} from "@litsx\/litsx"/
     );
     assert.match(code, /import \{ LitElement, html \} from "lit";/);
-    assert.match(code, /import \{ ShadowDomElementsMixin \} from "litsx\/runtime-infrastructure";/);
+    assert.match(code, /import \{ ShadowDomElementsMixin \} from "@litsx\/litsx\/runtime-infrastructure";/);
     assert.match(code, /ensureLazyElement\(this, "alpha-panel", AlphaPanel\);/);
     assert.match(code, /<error-boundary/);
     assert.match(code, /<suspense-list revealOrder="forwards">/);

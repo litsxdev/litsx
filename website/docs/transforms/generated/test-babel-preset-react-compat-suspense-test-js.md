@@ -33,8 +33,8 @@ export const Screen = () => {
 #### Generated Output
 
 ```js
-import { ShadowDomElementsMixin } from "litsx/runtime-infrastructure";
-import { ErrorBoundary, SuspenseBoundary } from "litsx";
+import { ShadowDomElementsMixin } from "@litsx/litsx/runtime-infrastructure";
+import { ErrorBoundary, SuspenseBoundary } from "@litsx/litsx";
 import { LitElement, html } from "lit";
 export class Screen extends ShadowDomElementsMixin(LitElement) {
   render() {
@@ -74,8 +74,8 @@ export const Screen = () => {
 #### Generated Output
 
 ```js
-import { ShadowDomElementsMixin } from "litsx/runtime-infrastructure";
-import { ErrorBoundary, SuspenseBoundary, SuspenseList } from "litsx";
+import { ShadowDomElementsMixin } from "@litsx/litsx/runtime-infrastructure";
+import { ErrorBoundary, SuspenseBoundary, SuspenseList } from "@litsx/litsx";
 import { LitElement, html } from "lit";
 export class Screen extends ShadowDomElementsMixin(LitElement) {
   render() {
@@ -113,9 +113,9 @@ export const Screen = () => {
 #### Generated Output
 
 ```js
-import { ensureLazyElement, ErrorBoundary, SuspenseBoundary } from "litsx";
+import { ensureLazyElement, ErrorBoundary, SuspenseBoundary } from "@litsx/litsx";
 import { LitElement, html } from "lit";
-import { ShadowDomElementsMixin } from "litsx/runtime-infrastructure";
+import { ShadowDomElementsMixin } from "@litsx/litsx/runtime-infrastructure";
 const FancyButton = () => import('./FancyButton.js');
 export class Screen extends ShadowDomElementsMixin(LitElement) {
   render() {
@@ -159,9 +159,9 @@ export const Screen = () => {
 #### Generated Output
 
 ```js
-import { ensureLazyElement, ErrorBoundary, SuspenseBoundary, SuspenseList } from "litsx";
+import { ensureLazyElement, ErrorBoundary, SuspenseBoundary, SuspenseList } from "@litsx/litsx";
 import { LitElement, html } from "lit";
-import { ShadowDomElementsMixin } from "litsx/runtime-infrastructure";
+import { ShadowDomElementsMixin } from "@litsx/litsx/runtime-infrastructure";
 const AlphaPanel = () => import('./AlphaPanel.js');
 const BetaPanel = () => import('./BetaPanel.js');
 export class Screen extends ShadowDomElementsMixin(LitElement) {
@@ -202,8 +202,8 @@ export const Screen = () => {
 #### Generated Output
 
 ```js
-import { ShadowDomElementsMixin } from "litsx/runtime-infrastructure";
-import { ErrorBoundary, SuspenseBoundary, SuspenseList } from "litsx";
+import { ShadowDomElementsMixin } from "@litsx/litsx/runtime-infrastructure";
+import { ErrorBoundary, SuspenseBoundary, SuspenseList } from "@litsx/litsx";
 import { LitElement, html } from "lit";
 export class Screen extends ShadowDomElementsMixin(LitElement) {
   render() {
@@ -235,8 +235,8 @@ export const Screen = () => {
 #### Generated Output
 
 ```js
-import { ShadowDomElementsMixin } from "litsx/runtime-infrastructure";
-import { ErrorBoundary, SuspenseBoundary } from "litsx";
+import { ShadowDomElementsMixin } from "@litsx/litsx/runtime-infrastructure";
+import { ErrorBoundary, SuspenseBoundary } from "@litsx/litsx";
 import { LitElement, html } from "lit";
 export class Screen extends ShadowDomElementsMixin(LitElement) {
   render() {
@@ -274,8 +274,8 @@ export const Screen = () => {
 #### Generated Output
 
 ```js
-import { ShadowDomElementsMixin } from "litsx/runtime-infrastructure";
-import { ErrorBoundary, SuspenseBoundary } from "litsx";
+import { ShadowDomElementsMixin } from "@litsx/litsx/runtime-infrastructure";
+import { ErrorBoundary, SuspenseBoundary } from "@litsx/litsx";
 import { LitElement, html } from "lit";
 export class Screen extends ShadowDomElementsMixin(LitElement) {
   render() {
@@ -306,8 +306,8 @@ export const Screen = ({ readyView }) => {
 #### Generated Output
 
 ```js
-import { ShadowDomElementsMixin } from "litsx/runtime-infrastructure";
-import { ErrorBoundary, SuspenseBoundary } from "litsx";
+import { ShadowDomElementsMixin } from "@litsx/litsx/runtime-infrastructure";
+import { ErrorBoundary, SuspenseBoundary } from "@litsx/litsx";
 import { LitElement, html } from "lit";
 export class Screen extends ShadowDomElementsMixin(LitElement) {
   static properties = {
@@ -343,8 +343,8 @@ export const Screen = () => {
 #### Generated Output
 
 ```js
-import { ShadowDomElementsMixin } from "litsx/runtime-infrastructure";
-import { ErrorBoundary, SuspenseBoundary } from "litsx";
+import { ShadowDomElementsMixin } from "@litsx/litsx/runtime-infrastructure";
+import { ErrorBoundary, SuspenseBoundary } from "@litsx/litsx";
 import { LitElement, html } from "lit";
 export class Screen extends ShadowDomElementsMixin(LitElement) {
   render() {
@@ -375,8 +375,8 @@ export const Screen = () => {
 #### Generated Output
 
 ```js
-import { ShadowDomElementsMixin } from "litsx/runtime-infrastructure";
-import { ErrorBoundary, SuspenseBoundary } from "litsx";
+import { ShadowDomElementsMixin } from "@litsx/litsx/runtime-infrastructure";
+import { ErrorBoundary, SuspenseBoundary } from "@litsx/litsx";
 import { LitElement, html } from "lit";
 export class Screen extends ShadowDomElementsMixin(LitElement) {
   render() {
@@ -407,7 +407,7 @@ export const Screen = () => {
 #### Generated Output
 
 ```js
-import { ErrorBoundary } from "litsx";
+import { ErrorBoundary } from "@litsx/litsx";
 import { LitElement, html } from "lit";
 import * as UI from 'ui-kit';
 export class Screen extends LitElement {
@@ -442,8 +442,8 @@ export const Screen = () => {
 #### Generated Output
 
 ```js
-import { ShadowDomElementsMixin } from "litsx/runtime-infrastructure";
-import { ErrorBoundary, SuspenseBoundary, SuspenseList } from "litsx";
+import { ShadowDomElementsMixin } from "@litsx/litsx/runtime-infrastructure";
+import { ErrorBoundary, SuspenseBoundary, SuspenseList } from "@litsx/litsx";
 import { LitElement, html } from "lit";
 export class Screen extends ShadowDomElementsMixin(LitElement) {
   render() {
@@ -475,8 +475,8 @@ export const Screen = () => {
 #### Generated Output
 
 ```js
-import { ShadowDomElementsMixin } from "litsx/runtime-infrastructure";
-import { ErrorBoundary, SuspenseBoundary } from "litsx";
+import { ShadowDomElementsMixin } from "@litsx/litsx/runtime-infrastructure";
+import { ErrorBoundary, SuspenseBoundary } from "@litsx/litsx";
 import { LitElement, html } from "lit";
 export class Screen extends ShadowDomElementsMixin(LitElement) {
   render() {
@@ -497,7 +497,7 @@ This case records the authored input and the generated output as a living transf
 #### Authored Input
 
 ```jsx
-import { ensureLazyElement } from 'litsx';
+import { ensureLazyElement } from '@litsx/litsx';
 import { Suspense } from 'react';
 
 const AlphaPanel = () => null;
@@ -519,9 +519,9 @@ export const Screen = () => {
 #### Generated Output
 
 ```js
-import { ShadowDomElementsMixin } from "litsx/runtime-infrastructure";
+import { ShadowDomElementsMixin } from "@litsx/litsx/runtime-infrastructure";
 import { LitElement, html } from "lit";
-import { ensureLazyElement, ErrorBoundary, SuspenseBoundary } from 'litsx';
+import { ensureLazyElement, ErrorBoundary, SuspenseBoundary } from '@litsx/litsx';
 const AlphaPanel = () => null;
 const BetaPanel = () => null;
 export class Screen extends ShadowDomElementsMixin(LitElement) {
@@ -563,8 +563,8 @@ export const Screen = () => {
 #### Generated Output
 
 ```js
-import { ShadowDomElementsMixin } from "litsx/runtime-infrastructure";
-import { ErrorBoundary, SuspenseBoundary, SuspenseList } from "litsx";
+import { ShadowDomElementsMixin } from "@litsx/litsx/runtime-infrastructure";
+import { ErrorBoundary, SuspenseBoundary, SuspenseList } from "@litsx/litsx";
 import { LitElement, html } from "lit";
 export class Screen extends ShadowDomElementsMixin(LitElement) {
   render() {
@@ -600,8 +600,8 @@ export const Screen = () => {
 #### Generated Output
 
 ```js
-import { ShadowDomElementsMixin } from "litsx/runtime-infrastructure";
-import { ErrorBoundary, SuspenseBoundary } from "litsx";
+import { ShadowDomElementsMixin } from "@litsx/litsx/runtime-infrastructure";
+import { ErrorBoundary, SuspenseBoundary } from "@litsx/litsx";
 import { LitElement, html } from "lit";
 export class Screen extends ShadowDomElementsMixin(LitElement) {
   render() {
@@ -636,8 +636,8 @@ export const Screen = () => {
 #### Generated Output
 
 ```js
-import { ShadowDomElementsMixin } from "litsx/runtime-infrastructure";
-import { ErrorBoundary, SuspenseBoundary } from "litsx";
+import { ShadowDomElementsMixin } from "@litsx/litsx/runtime-infrastructure";
+import { ErrorBoundary, SuspenseBoundary } from "@litsx/litsx";
 import { LitElement, html } from "lit";
 export class Screen extends ShadowDomElementsMixin(LitElement) {
   render() {
@@ -684,9 +684,9 @@ export const Screen = () => {
 #### Generated Output
 
 ```js
-import { ensureLazyElement, ErrorBoundary, SuspenseBoundary, SuspenseList } from "litsx";
+import { ensureLazyElement, ErrorBoundary, SuspenseBoundary, SuspenseList } from "@litsx/litsx";
 import { LitElement, html } from "lit";
-import { ShadowDomElementsMixin } from "litsx/runtime-infrastructure";
+import { ShadowDomElementsMixin } from "@litsx/litsx/runtime-infrastructure";
 const AlphaPanel = () => import('./AlphaPanel.js');
 export class Screen extends ShadowDomElementsMixin(LitElement) {
   render() {

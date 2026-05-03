@@ -38,7 +38,7 @@ It does not provide:
 {
   "compilerOptions": {
     "jsx": "react-jsx",
-    "jsxImportSource": "litsx",
+    "jsxImportSource": "@litsx/litsx",
     "plugins": [
       { "name": "@litsx/typescript-plugin" }
     ]
@@ -52,7 +52,7 @@ For a workspace using the local package directly, the same shape works in `tscon
 {
   "compilerOptions": {
     "jsx": "react-jsx",
-    "jsxImportSource": "litsx",
+    "jsxImportSource": "@litsx/litsx",
     "plugins": [
       {
         "name": "@litsx/typescript-plugin"

@@ -18,7 +18,7 @@ function createLitsxInfrastructureImport(importedName) {
     [
       t.importSpecifier(t.identifier(importedName), t.identifier(importedName)),
     ],
-    t.stringLiteral("litsx/runtime-infrastructure")
+    t.stringLiteral("@litsx/litsx/runtime-infrastructure")
   );
 }
 
@@ -27,7 +27,7 @@ function createLitsxImport(importedName) {
     [
       t.importSpecifier(t.identifier(importedName), t.identifier(importedName)),
     ],
-    t.stringLiteral("litsx")
+    t.stringLiteral("@litsx/litsx")
   );
 }
 
@@ -59,7 +59,7 @@ function pruneUnusedLitsxStaticImports(programPath) {
 
   const bodyPaths = programPath.get("body");
   const litsxImports = bodyPaths.filter(
-    (path) => path.isImportDeclaration() && path.node.source.value === "litsx"
+    (path) => path.isImportDeclaration() && path.node.source.value === "@litsx/litsx"
   );
 
   litsxImports.forEach((importPath) => {
@@ -165,7 +165,7 @@ export function finalizeProgram(programPath, state) {
   if (state.__litsxNeedsStaticHoistsMixin) {
     const bodyPathsWithInternal = programPath.get("body");
     const internalImports = bodyPathsWithInternal.filter(
-      (n) => n.isImportDeclaration() && n.node.source.value === "litsx/runtime-infrastructure"
+      (n) => n.isImportDeclaration() && n.node.source.value === "@litsx/litsx/runtime-infrastructure"
     );
 
     let internalImported = false;
@@ -186,7 +186,7 @@ export function finalizeProgram(programPath, state) {
   if (state.__litsxNeedsLightDomMixin) {
     const bodyPathsWithInternal = programPath.get("body");
     const internalImports = bodyPathsWithInternal.filter(
-      (n) => n.isImportDeclaration() && n.node.source.value === "litsx/runtime-infrastructure"
+      (n) => n.isImportDeclaration() && n.node.source.value === "@litsx/litsx/runtime-infrastructure"
     );
 
     let internalImported = false;
@@ -207,7 +207,7 @@ export function finalizeProgram(programPath, state) {
   if (state.__litsxNeedsCallbackRef) {
     const bodyPathsWithLitsx = programPath.get("body");
     const litsxImports = bodyPathsWithLitsx.filter(
-      (n) => n.isImportDeclaration() && n.node.source.value === "litsx"
+      (n) => n.isImportDeclaration() && n.node.source.value === "@litsx/litsx"
     );
 
     let litsxImported = false;

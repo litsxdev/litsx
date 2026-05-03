@@ -1,4 +1,4 @@
-import { useStyle } from "litsx";
+import { useStyle } from "@litsx/litsx";
 
 declare const gap: number;
 declare const accent: string;
