@@ -35,6 +35,7 @@ describe("create-litsx-app", () => {
     const prettierConfig = result.files.get("prettier.config.js");
     const vscodeSettings = result.files.get(".vscode/settings.json");
     const viteConfig = result.files.get("vite.config.js");
+    const mainSource = result.files.get("src/main.js");
     const storybookMain = result.files.get(".storybook/main.js");
     const storybookPreview = result.files.get(".storybook/preview.js");
     const appSource = result.files.get("src/my-litsx-app.litsx");
@@ -42,6 +43,10 @@ describe("create-litsx-app", () => {
     const docsSource = result.files.get("src/stories/status-pill.docs.mdx");
 
     assert.ok(packageJson.dependencies["@litsx/litsx"]);
+    assert.strictEqual(
+      packageJson.dependencies["@webcomponents/scoped-custom-element-registry"],
+      "^0.0.10",
+    );
     assert.ok(packageJson.dependencies.lit);
     assert.ok(packageJson.devDependencies["@litsx/typescript-plugin"]);
     assert.ok(packageJson.devDependencies["@litsx/vite-plugin"]);
@@ -74,6 +79,8 @@ describe("create-litsx-app", () => {
     assert.doesNotMatch(JSON.stringify(packageJson.devDependencies), /@litsx\/babel-parser/);
     assert.match(viteConfig, /@litsx\/vite-plugin/);
     assert.match(viteConfig, /plugins: \[litsx\(\)\]/);
+    assert.match(mainSource, /import "@webcomponents\/scoped-custom-element-registry";/);
+    assert.match(mainSource, /import \{ MyLitsxApp \} from "\.\/my-litsx-app\.litsx";/);
     assert.ok(!result.files.has("tools/litsx-vite-plugin.js"));
     assert.match(storybookMain, /@storybook\/web-components-vite/);
     assert.match(storybookMain, /@storybook\/addon-docs/);
@@ -95,6 +102,7 @@ describe("create-litsx-app", () => {
     const result = renderProjectFiles("/tmp/my-litsx-app", { template: "app" });
     const packageJson = JSON.parse(result.files.get("package.json"));
     const appSource = result.files.get("src/my-litsx-app.litsx");
+    const mainSource = result.files.get("src/main.js");
     const readme = result.files.get("README.md");
     const eslintConfig = result.files.get("eslint.config.js");
     const prettierConfig = result.files.get("prettier.config.js");
@@ -109,6 +117,7 @@ describe("create-litsx-app", () => {
     assert.strictEqual(packageJson.scripts.format, "prettier --write .");
     assert.ok(!result.files.has(".storybook/main.js"));
     assert.ok(!result.files.has("src/stories/status-pill.stories.litsx"));
+    assert.match(mainSource, /import "@webcomponents\/scoped-custom-element-registry";/);
     assert.match(appSource, /Hello LitSX/);
     assert.match(appSource, /useState/);
     assert.match(appSource, /\^styles\(/);
@@ -130,6 +139,7 @@ describe("create-litsx-app", () => {
     const result = renderProjectFiles("/tmp/my-litsx-app", { template: "component" });
     const packageJson = JSON.parse(result.files.get("package.json"));
     const componentSource = result.files.get("src/my-litsx-app.litsx");
+    const mainSource = result.files.get("src/main.js");
     const readme = result.files.get("README.md");
 
     assert.strictEqual(result.template, "component");
@@ -141,6 +151,7 @@ describe("create-litsx-app", () => {
     assert.ok(result.files.has("src/components/button-card.litsx"));
     assert.ok(!result.files.has(".storybook/main.js"));
     assert.ok(!result.files.has("src/stories/status-pill.stories.litsx"));
+    assert.match(mainSource, /import "@webcomponents\/scoped-custom-element-registry";/);
     assert.match(componentSource, /ButtonCard/);
     assert.match(componentSource, /StatusPill/);
     assert.match(readme, /component-library structure/);

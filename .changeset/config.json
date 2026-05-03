@@ -7,9 +7,5 @@
   "access": "public",
   "baseBranch": "main",
   "updateInternalDependencies": "patch",
-  "ignore": [
-    "vscode-litsx",
-    "@litsx/playground",
-    "@litsx/vitepress"
-  ]
+  "ignore": []
 }
