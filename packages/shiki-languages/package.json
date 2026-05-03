@@ -1,6 +1,7 @@
 {
   "name": "@litsx/shiki-languages",
   "version": "0.0.0",
+  "private": true,
   "description": "Shared Shiki/TextMate language registrations for LitSX-authored TSX and JSX.",
   "author": "Litsx Team",
   "homepage": "https://github.com/litsxdev/litsx/tree/main/packages/shiki-languages",
@@ -8,10 +9,6 @@
     "url": "https://github.com/litsxdev/litsx/issues"
   },
   "license": "Apache-2.0",
-  "publishConfig": {
-    "access": "public",
-    "provenance": true
-  },
   "keywords": [
     "litsx",
     "shiki",

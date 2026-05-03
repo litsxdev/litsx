@@ -10,7 +10,6 @@ export const npmReleasePackages = [
   "packages/babel-parser-litsx",
   "packages/jsx-authoring",
   "packages/prop-types",
-  "packages/shiki-languages",
   "packages/babel-preset-litsx",
   "packages/babel-preset-react-compat",
   "packages/babel-plugin-transform-jsx-html-template",
@@ -20,4 +19,6 @@ export const npmReleasePackages = [
   "packages/typescript-session",
 ];
 
-export const excludedPrivatePackages = [];
+export const excludedPrivatePackages = [
+  "packages/shiki-languages",
+];
