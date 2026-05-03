@@ -288,6 +288,60 @@ export default [
   </text>
 </svg>
 `);
+  files.set("public/litsx-wordmark.svg", `<svg width="210" height="64" viewBox="0 0 210 64" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="LitSX">
+  <defs>
+    <linearGradient id="flameGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ff8a00"/>
+      <stop offset="50%" stop-color="#ff3d77"/>
+      <stop offset="100%" stop-color="#6a5cff"/>
+    </linearGradient>
+    <linearGradient id="middleFlameGradient" x1="15%" y1="5%" x2="90%" y2="100%">
+      <stop offset="0%" stop-color="#ffd166"/>
+      <stop offset="55%" stop-color="#ff6b6b"/>
+      <stop offset="100%" stop-color="#9b5cff"/>
+    </linearGradient>
+    <style>
+      .litsx-wordmark-text {
+        fill: #1a1a1a;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        .litsx-wordmark-text {
+          fill: #f3f4f6;
+        }
+      }
+    </style>
+  </defs>
+  <g transform="translate(2,8) scale(0.7)">
+    <path
+      d="M32 4 C38 14, 46 20, 46 34 C46 48, 38 58, 28 58 C18 58, 12 50, 12 40 C12 28, 20 20, 28 14 C30 10, 31 7, 32 4Z"
+      fill="url(#flameGradient)"
+    />
+    <path
+      d="M33 12 C37 19, 42 25, 42 35 C42 46, 35 54, 28 54 C21 54, 16 47, 16 39 C16 30, 23 24, 28 19 C31 16, 32 14, 33 12Z"
+      fill="url(#middleFlameGradient)"
+      opacity="0.72"
+    />
+    <path
+      d="M32 20 C35 25, 38 30, 38 36 C38 44, 33 50, 28 50 C24 50, 21 46, 21 40 C21 33, 25 28, 29 24 C31 22, 31.5 21, 32 20Z"
+      fill="white"
+      fill-opacity="0.22"
+    />
+  </g>
+  <text
+    class="litsx-wordmark-text"
+    x="44"
+    y="42"
+    font-family="Montserrat, sans-serif"
+    font-weight="700"
+    font-size="32"
+    letter-spacing="-0.5"
+  >
+    Lit
+    <tspan dx="-4" dy="-12" font-size="18">sx</tspan>
+  </text>
+</svg>
+`);
   files.set("src/main.js", `import "@webcomponents/scoped-custom-element-registry";
 import { ${className} } from "./${packageName}.litsx";
 import "./styles/tokens.css";
@@ -387,7 +441,7 @@ export const ${className} = ({ title = "Hello LitSX" }) => {
   return (
     <main class="shell">
       <div class="brand">
-        <img class="brandmark" src="/title.svg" alt="LitSX" />
+        <img class="brandmark" src="/litsx-wordmark.svg" alt="LitSX" />
         <span class="kicker">Authored web components</span>
       </div>
       <h1 class="title">{title}</h1>
@@ -469,7 +523,7 @@ export const ${className} = ({ title = "LitSX Components" }) => {
   return (
     <main class="shell">
       <div class="brand">
-        <img class="brandmark" src="/title.svg" alt="LitSX" />
+        <img class="brandmark" src="/litsx-wordmark.svg" alt="LitSX" />
         <span class="kicker">Starter component surface</span>
       </div>
       <header>
@@ -486,6 +540,34 @@ export const ${className} = ({ title = "LitSX Components" }) => {
 };
 `);
   files.set("src/components/status-pill.litsx", `export const StatusPill = ({ label = "idle", active = false, tone = "neutral" }) => {
+  ^styles(\`
+    :host {
+      display: inline-flex;
+    }
+
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 14px;
+      border-radius: var(--radius-pill);
+      border: 1px solid var(--color-border);
+      background: rgba(255, 253, 249, 0.88);
+      color: var(--color-neutral);
+      font-size: 0.875rem;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+    }
+
+    .status-pill[data-tone="positive"] {
+      color: var(--color-positive);
+    }
+
+    .status-pill[data-tone="warning"] {
+      color: var(--color-warning);
+    }
+  \`);
+
   return (
     <span class="status-pill" ?data-active={active} data-tone={tone}>
       {label}
@@ -497,6 +579,58 @@ export const ${className} = ({ title = "LitSX Components" }) => {
   title = "Component",
   description = "A reusable LitSX primitive.",
 }) => {
+  ^styles(\`
+    :host {
+      display: block;
+    }
+
+    .button-card {
+      padding: 30px;
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-panel);
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.72), transparent 120px),
+        var(--color-surface);
+      box-shadow: var(--shadow-panel);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .button-card::after {
+      content: "";
+      position: absolute;
+      inset: 0 auto auto 0;
+      width: 84px;
+      height: 4px;
+      background: linear-gradient(90deg, var(--color-accent), transparent);
+    }
+
+    .button-card h2 {
+      margin: 0 0 10px;
+      font-family: var(--font-display);
+      letter-spacing: -0.05em;
+      text-transform: uppercase;
+    }
+
+    .button-card p {
+      margin: 0 0 18px;
+      max-width: 38ch;
+      color: rgba(24, 32, 51, 0.72);
+      line-height: 1.6;
+    }
+
+    .button-card__cta {
+      border: 1px solid rgba(24, 32, 51, 0.08);
+      border-radius: 999px;
+      background: linear-gradient(135deg, var(--color-text), #303b55);
+      color: white;
+      padding: 12px 18px;
+      font: inherit;
+      cursor: pointer;
+      box-shadow: 0 14px 28px rgba(24, 32, 51, 0.16);
+    }
+  \`);
+
   return (
     <article class="button-card">
       <h2>{title}</h2>
@@ -709,7 +843,7 @@ export const ${className} = ({ title = "LitSX" }) => {
   return (
     <main class="shell">
       <div class="brand">
-        <img class="brandmark" src="/title.svg" alt="LitSX" />
+        <img class="brandmark" src="/litsx-wordmark.svg" alt="LitSX" />
         <span class="kicker">Design system starter</span>
       </div>
       <header>
@@ -735,6 +869,38 @@ export const ${className} = ({ title = "LitSX" }) => {
 };
 `);
   files.set("src/components/status-pill.litsx", `export const StatusPill = ({ label = "idle", active = false, tone = "neutral" }) => {
+  ^styles(\`
+    :host {
+      display: inline-flex;
+    }
+
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 14px;
+      border-radius: var(--radius-pill);
+      border: 1px solid var(--color-border);
+      background: rgba(255, 253, 248, 0.92);
+      color: var(--color-neutral);
+      font-size: 0.875rem;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+    }
+
+    .status-pill[data-tone="positive"] {
+      color: var(--color-positive);
+    }
+
+    .status-pill[data-tone="warning"] {
+      color: var(--color-warning);
+    }
+
+    .status-pill[data-active] {
+      box-shadow: 0 0 0 4px rgba(31, 122, 77, 0.08);
+    }
+  \`);
+
   return (
     <span class="status-pill" ?data-active={active} data-tone={tone}>
       {label}
@@ -746,6 +912,59 @@ export const ${className} = ({ title = "LitSX" }) => {
   title = "Component",
   description = "A documented LitSX building block.",
 }) => {
+  ^styles(\`
+    :host {
+      display: block;
+    }
+
+    .button-card {
+      padding: 32px;
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-panel);
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.72), transparent 120px),
+        var(--color-surface);
+      box-shadow: var(--shadow-panel);
+      margin-bottom: 28px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .button-card::after {
+      content: "";
+      position: absolute;
+      inset: 0 auto auto 0;
+      width: 120px;
+      height: 4px;
+      background: linear-gradient(90deg, var(--color-accent), transparent);
+    }
+
+    .button-card h2 {
+      margin: 0 0 10px;
+      font-family: var(--font-display);
+      letter-spacing: -0.06em;
+      text-transform: uppercase;
+    }
+
+    .button-card p {
+      margin: 0 0 18px;
+      max-width: 40ch;
+      color: rgba(21, 32, 51, 0.74);
+      line-height: 1.6;
+    }
+
+    .button-card__cta {
+      border: 1px solid rgba(21, 32, 51, 0.08);
+      border-radius: 999px;
+      background: linear-gradient(135deg, var(--color-text), #32405d);
+      color: white;
+      padding: 12px 18px;
+      font: inherit;
+      cursor: pointer;
+      box-shadow: 0 14px 28px rgba(20, 33, 61, 0.18);
+    }
+  \`);
+
   return (
     <article class="button-card">
       <h2>{title}</h2>
@@ -1012,11 +1231,11 @@ function createPackageJson(packageName, template, options = {}) {
     packageJson.scripts.storybook = "storybook dev -p 6006";
     packageJson.scripts["build-storybook"] = "storybook build";
     Object.assign(packageJson.devDependencies, {
-      "@storybook/addon-a11y": "^8.6.14",
-      "@storybook/addon-docs": "^8.6.14",
-      "@storybook/addon-essentials": "^8.6.14",
-      "@storybook/web-components-vite": "^8.6.14",
-      "storybook": "^8.6.14",
+      "@storybook/addon-a11y": "^10.3.0",
+      "@storybook/addon-docs": "^10.3.0",
+      "@storybook/addon-essentials": "^10.3.0",
+      "@storybook/web-components-vite": "^10.3.0",
+      "storybook": "^10.3.0",
     });
   }
 

@@ -42,6 +42,9 @@ describe("create-litsx-app", () => {
     const storySource = result.files.get("src/stories/status-pill.stories.litsx");
     const docsSource = result.files.get("src/stories/status-pill.docs.mdx");
     const titleLogo = result.files.get("public/title.svg");
+    const wordmarkLogo = result.files.get("public/litsx-wordmark.svg");
+    const statusPillSource = result.files.get("src/components/status-pill.litsx");
+    const buttonCardSource = result.files.get("src/components/button-card.litsx");
 
     assert.ok(packageJson.dependencies["@litsx/litsx"]);
     assert.strictEqual(
@@ -90,13 +93,16 @@ describe("create-litsx-app", () => {
     assert.match(storybookMain, /litsx\(\)/);
     assert.match(storybookPreview, /tokens\.css/);
     assert.match(appSource, /<SuspenseBoundary/);
-    assert.match(appSource, /src="\/title\.svg"/);
+    assert.match(appSource, /src="\/litsx-wordmark\.svg"/);
     assert.match(appSource, /@click/);
     assert.match(appSource, /\.label/);
     assert.match(appSource, /\.fallbackRenderer/);
     assert.match(appSource, /\.contentRenderer/);
     assert.match(appSource, /<ButtonCard/);
     assert.match(titleLogo, /aria-label="LitSX"/);
+    assert.match(wordmarkLogo, /flameGradient/);
+    assert.match(statusPillSource, /\^styles\(/);
+    assert.match(buttonCardSource, /\^styles\(/);
     assert.match(storySource, /Components\/StatusPill/);
     assert.doesNotMatch(storySource, /\{\.\.\.args\}/);
     assert.match(storySource, /label=\{args\.label\}/);
@@ -126,7 +132,7 @@ describe("create-litsx-app", () => {
     assert.ok(!result.files.has("src/stories/status-pill.stories.litsx"));
     assert.match(mainSource, /import "@webcomponents\/scoped-custom-element-registry";/);
     assert.match(appSource, /Hello LitSX/);
-    assert.match(appSource, /src="\/title\.svg"/);
+    assert.match(appSource, /src="\/litsx-wordmark\.svg"/);
     assert.match(appSource, /useState/);
     assert.match(appSource, /\^styles\(/);
     assert.match(appSource, /Count: \{count\}/);
@@ -149,6 +155,8 @@ describe("create-litsx-app", () => {
     const componentSource = result.files.get("src/my-litsx-app.litsx");
     const mainSource = result.files.get("src/main.js");
     const readme = result.files.get("README.md");
+    const statusPillSource = result.files.get("src/components/status-pill.litsx");
+    const buttonCardSource = result.files.get("src/components/button-card.litsx");
 
     assert.strictEqual(result.template, "component");
     assert.strictEqual(result.visualTests, false);
@@ -163,7 +171,9 @@ describe("create-litsx-app", () => {
     assert.match(mainSource, /import "@webcomponents\/scoped-custom-element-registry";/);
     assert.match(componentSource, /ButtonCard/);
     assert.match(componentSource, /StatusPill/);
-    assert.match(componentSource, /src="\/title\.svg"/);
+    assert.match(componentSource, /src="\/litsx-wordmark\.svg"/);
+    assert.match(statusPillSource, /\^styles\(/);
+    assert.match(buttonCardSource, /\^styles\(/);
     assert.match(readme, /component-library structure/);
     assert.match(readme, /eslint-plugin/);
   });
@@ -211,6 +221,7 @@ describe("create-litsx-app", () => {
     assert.ok(fs.existsSync(path.join(targetDir, "src", "stories", "status-pill.docs.mdx")));
     assert.ok(fs.existsSync(path.join(targetDir, "src", "styles", "tokens.css")));
     assert.ok(fs.existsSync(path.join(targetDir, "public", "title.svg")));
+    assert.ok(fs.existsSync(path.join(targetDir, "public", "litsx-wordmark.svg")));
   });
 
   it("refuses to scaffold into a non-empty directory", () => {
