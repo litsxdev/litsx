@@ -128,12 +128,26 @@ function assertPackOutput(packageDir) {
   }
 }
 
+function assertNoWorkspaceProtocols(packageDir, manifest) {
+  for (const field of ["dependencies", "devDependencies", "optionalDependencies", "peerDependencies"]) {
+    const dependencies = manifest[field];
+    if (!dependencies) continue;
+
+    for (const [packageName, versionRange] of Object.entries(dependencies)) {
+      if (typeof versionRange === "string" && versionRange.startsWith("workspace:")) {
+        fail(`${packageDir} must not publish workspace protocol dependency ${packageName}: ${versionRange}`);
+      }
+    }
+  }
+}
+
 for (const packageDir of npmReleasePackages) {
   const manifest = readJson(path.join(packageDir, "package.json"));
   if (manifest.private === true) {
     fail(`${packageDir} is still private`);
   }
   assertCommonManifestFields(packageDir, manifest);
+  assertNoWorkspaceProtocols(packageDir, manifest);
   assertFileList(packageDir, manifest);
   assertEntrypoints(packageDir, manifest);
   assertPackOutput(packageDir);

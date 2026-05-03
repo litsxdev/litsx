@@ -68,10 +68,10 @@
   "dependencies": {
     "@babel/helper-plugin-utils": "^7.28.6",
     "@babel/plugin-syntax-jsx": "^7.28.6",
-    "@litsx/babel-plugin-shared-hooks": "workspace:^",
-    "@litsx/babel-plugin-transform-jsx-html-template": "workspace:^",
-    "@litsx/babel-plugin-transform-litsx-scoped-elements": "workspace:^",
-    "@litsx/typescript-session": "workspace:^"
+    "@litsx/babel-plugin-shared-hooks": "^0.2.0",
+    "@litsx/babel-plugin-transform-jsx-html-template": "^0.2.0",
+    "@litsx/babel-plugin-transform-litsx-scoped-elements": "^0.2.0",
+    "@litsx/typescript-session": "^0.2.0"
   },
   "scripts": {
     "build": "../../node_modules/.bin/rollup --config rollup.config.mjs",

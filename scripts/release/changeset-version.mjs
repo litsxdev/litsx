@@ -13,3 +13,8 @@ execFileSync("node", ["scripts/release/sync-scaffold-package-versions.mjs"], {
   cwd: repoRoot,
   stdio: "inherit",
 });
+
+execFileSync("node", ["scripts/release/sync-public-package-dependencies.mjs"], {
+  cwd: repoRoot,
+  stdio: "inherit",
+});

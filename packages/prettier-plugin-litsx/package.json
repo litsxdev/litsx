@@ -42,8 +42,8 @@
     "prettier": "^3.0.0"
   },
   "dependencies": {
-    "@litsx/babel-parser": "workspace:^",
-    "@litsx/jsx-authoring": "workspace:^"
+    "@litsx/babel-parser": "^0.2.0",
+    "@litsx/jsx-authoring": "^0.2.0"
   },
   "scripts": {
     "build": "../../node_modules/.bin/rollup --config rollup.config.mjs",
