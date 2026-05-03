@@ -2,7 +2,6 @@
 
 [![Test](https://github.com/litsxdev/litsx/actions/workflows/test.yml/badge.svg)](https://github.com/litsxdev/litsx/actions/workflows/test.yml)
 [![Release Validate](https://github.com/litsxdev/litsx/actions/workflows/release-validate.yml/badge.svg)](https://github.com/litsxdev/litsx/actions/workflows/release-validate.yml)
-[![Deploy Docs](https://github.com/litsxdev/litsx/actions/workflows/deploy-docs.yml/badge.svg)](https://github.com/litsxdev/litsx/actions/workflows/deploy-docs.yml)
 [![Release](https://github.com/litsxdev/litsx/actions/workflows/release.yml/badge.svg)](https://github.com/litsxdev/litsx/actions/workflows/release.yml)
 [![Docs](https://img.shields.io/badge/docs-litsx.dev-0a7ea4)](https://litsx.dev/)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](./LICENSE)
