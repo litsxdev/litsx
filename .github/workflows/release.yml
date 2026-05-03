@@ -178,6 +178,10 @@ jobs:
         if: needs.plan.outputs.has_changesets == 'true'
         run: corepack yarn changeset:version
 
+      - name: Refresh lockfile after versioning
+        if: needs.plan.outputs.has_changesets == 'true'
+        run: corepack yarn install
+
       - name: Commit release version updates
         id: version_commit
         env:
