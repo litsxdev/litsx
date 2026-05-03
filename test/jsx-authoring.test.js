@@ -627,7 +627,7 @@ describe("@litsx/jsx-authoring", () => {
     assert.equal(result.code, source);
   });
 
-  it("detects Litsx-authored JSX before virtualization", () => {
+  it("detects LitSX-authored JSX before virtualization", () => {
     assert.strictEqual(looksLikeLitsxJsx(`<button @click={handleClick}></button>`), true);
     assert.strictEqual(looksLikeLitsxJsx(`const view = <button class="cta"></button>;`), false);
     assert.strictEqual(looksLikeLitsxJsx(`^styles(\`:host { display: block; }\`);`), true);

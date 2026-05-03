@@ -35,7 +35,7 @@ export interface LitsxBaseAttributes {
 export interface LitsxDomAttributes<Target = EventTarget> {
   /**
    * Reserved for future JSX-authored event typing.
-   * Litsx currently treats Lit listener syntax (`@event`) as a parser-level feature,
+   * LitSX currently treats Lit listener syntax (`@event`) as a parser-level feature,
    * so the public JSX type surface intentionally avoids React-style `onClick` props.
    */
   _currentTarget?: Target | undefined;

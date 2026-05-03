@@ -1,7 +1,7 @@
 {
   "name": "@litsx/babel-plugin-shared-hooks",
   "version": "0.2.1",
-  "description": "Shared hook transform utilities used by the Litsx Babel plugin family",
+  "description": "Shared hook transform utilities used by the LitSX Babel plugin family",
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./src/index.js",

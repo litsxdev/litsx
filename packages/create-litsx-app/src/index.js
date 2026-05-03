@@ -369,7 +369,7 @@ function createComponentProfileFiles(packageName, className) {
   files.set(`src/${packageName}.litsx`, `import { StatusPill } from "./components/status-pill.litsx";
 import { ButtonCard } from "./components/button-card.litsx";
 
-export const ${className} = ({ title = "Litsx Components" }) => {
+export const ${className} = ({ title = "LitSX Components" }) => {
   return (
     <main class="shell">
       <header>
@@ -379,7 +379,7 @@ export const ${className} = ({ title = "Litsx Components" }) => {
 
       <ButtonCard
         .title={"Component Library"}
-        .description={"A starter surface for reusable Litsx web components."}
+        .description={"A starter surface for reusable LitSX web components."}
       />
     </main>
   );
@@ -395,7 +395,7 @@ export const ${className} = ({ title = "Litsx Components" }) => {
 `);
   files.set("src/components/button-card.litsx", `export const ButtonCard = ({
   title = "Component",
-  description = "A reusable Litsx primitive.",
+  description = "A reusable LitSX primitive.",
 }) => {
   return (
     <article class="button-card">
@@ -496,7 +496,7 @@ Generated with \`create-litsx-app --template component\`.
 
 ## Included
 
-- Litsx + Lit runtime
+- LitSX + Lit runtime
 - Official \`@litsx/vite-plugin\` integration for authored LitSX source
 - Official \`@litsx/eslint-plugin\` linting preset
 - A starter component-library structure under \`src/components\`
@@ -543,7 +543,7 @@ export const parameters = {
 import { StatusPill } from "./components/status-pill.litsx";
 import { ButtonCard } from "./components/button-card.litsx";
 
-export const ${className} = ({ title = "Litsx" }) => {
+export const ${className} = ({ title = "LitSX" }) => {
   return (
     <main class="shell">
       <header>
@@ -553,7 +553,7 @@ export const ${className} = ({ title = "Litsx" }) => {
 
       <ButtonCard
         .title={"Design System"}
-        .description={"Reusable web components with Litsx-authored JSX."}
+        .description={"Reusable web components with LitSX-authored JSX."}
       />
 
       <SuspenseBoundary
@@ -578,7 +578,7 @@ export const ${className} = ({ title = "Litsx" }) => {
 `);
   files.set("src/components/button-card.litsx", `export const ButtonCard = ({
   title = "Component",
-  description = "A documented Litsx building block.",
+  description = "A documented LitSX building block.",
 }) => {
   return (
     <article class="button-card">
@@ -633,13 +633,13 @@ import * as StatusPillStories from "./status-pill.stories.litsx";
 
 # Status Pill
 
-The \`StatusPill\` component is a compact semantic label for system state. It is authored in Litsx JSX, rendered as a web component, and documented with Storybook MDX.
+The \`StatusPill\` component is a compact semantic label for system state. It is authored in LitSX JSX, rendered as a web component, and documented with Storybook MDX.
 
 <Canvas of={StatusPillStories.Default} />
 
 ## Design Notes
 
-- Uses authored Litsx bindings such as \`?active\`
+- Uses authored LitSX bindings such as \`?active\`
 - Fits design-system surfaces like dashboards, forms and navigation rails
 - Works well as a lightweight token-driven primitive
 
@@ -750,7 +750,7 @@ Generated with \`create-litsx-app --template design-system\`.
 
 ## Included
 
-- Litsx + Lit runtime
+- LitSX + Lit runtime
 - Official \`@litsx/vite-plugin\` integration for authored LitSX source
 - Official \`@litsx/eslint-plugin\` linting preset
 - Storybook for web components with MDX docs

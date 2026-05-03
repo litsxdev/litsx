@@ -19,7 +19,7 @@ if (helpRequested || !targetDirArg) {
 try {
   const result = createProject(targetDirArg, { template, visualTests });
   const packageManager = inferPackageManager(process.env.npm_config_user_agent);
-  console.log(`Created Litsx ${result.template} app in ${result.targetDir}${result.visualTests ? " with visual testing" : ""}`);
+  console.log(`Created LitSX ${result.template} app in ${result.targetDir}${result.visualTests ? " with visual testing" : ""}`);
   console.log("");
   console.log("Next steps:");
   for (const command of createNextStepCommands(targetDirArg, packageManager)) {

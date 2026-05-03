@@ -1,4 +1,4 @@
-![Litsx](https://litsx.dev/title.svg)
+![LitSX](https://litsx.dev/title.svg)
 
 [![Test](https://github.com/litsxdev/litsx/actions/workflows/test.yml/badge.svg)](https://github.com/litsxdev/litsx/actions/workflows/test.yml)
 [![Release Validate](https://github.com/litsxdev/litsx/actions/workflows/release-validate.yml/badge.svg)](https://github.com/litsxdev/litsx/actions/workflows/release-validate.yml)
@@ -6,7 +6,7 @@
 [![Docs](https://img.shields.io/badge/docs-litsx.dev-0a7ea4)](https://litsx.dev/)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](./LICENSE)
 
-Litsx is a Lit-first compiler and tooling workspace for authoring web components with modern JSX, static hoists, and an optional React-compat migration layer.
+LitSX is a Lit-first compiler and tooling workspace for authoring web components with modern JSX, static hoists, and an optional React-compat migration layer.
 
 This repository contains the runtime, Babel presets, authoring support, editor tooling, and scaffolding packages that make up the LitSX toolchain.
 

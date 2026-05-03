@@ -1,7 +1,7 @@
 {
   "name": "@litsx/babel-parser",
   "version": "0.2.1",
-  "description": "Babel parser adapter for Litsx-authored JSX",
+  "description": "Babel parser adapter for LitSX-authored JSX",
   "author": "LitX Team",
   "homepage": "https://github.com/litsxdev/litsx/tree/main/packages/babel-parser-litsx",
   "bugs": {

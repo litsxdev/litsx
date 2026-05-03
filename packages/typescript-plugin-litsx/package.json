@@ -1,8 +1,8 @@
 {
   "name": "@litsx/typescript-plugin",
   "version": "0.2.0",
-  "description": "TypeScript language-service support for Litsx JSX syntax",
-  "author": "Litsx Team",
+  "description": "TypeScript language-service support for LitSX JSX syntax",
+  "author": "LitSX Team",
   "homepage": "https://github.com/litsxdev/litsx/tree/main/packages/typescript-plugin-litsx",
   "bugs": {
     "url": "https://github.com/litsxdev/litsx/issues"

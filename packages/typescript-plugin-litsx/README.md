@@ -5,7 +5,7 @@
 [![CLI](https://img.shields.io/badge/entrypoint-plugin%20%2B%20CLI-8250df)](./package.json)
 [![Provenance](https://img.shields.io/badge/npm_provenance-enabled-2ea44f)](../../RELEASING.md)
 
-TypeScript language-service support for Litsx-authored JSX.
+TypeScript language-service support for LitSX-authored JSX.
 
 The plugin exists to make editor tooling tolerate Lit-flavoured JSX attributes such as:
 
@@ -15,7 +15,7 @@ The plugin exists to make editor tooling tolerate Lit-flavoured JSX attributes s
 
 ## Scope
 
-The plugin virtualizes prefixed JSX attribute names into TypeScript-safe names for the language service and then remaps the results back to the authored Litsx syntax.
+The plugin virtualizes prefixed JSX attribute names into TypeScript-safe names for the language service and then remaps the results back to the authored LitSX syntax.
 
 It provides:
 

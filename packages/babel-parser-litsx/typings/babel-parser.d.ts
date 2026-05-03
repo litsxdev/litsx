@@ -191,7 +191,7 @@ interface ParserOptions {
   sourceFileName?: string;
 
   /**
-   * Controls whether the Litsx parser adapter should generate virtualization sourcemap metadata.
+   * Controls whether the LitSX parser adapter should generate virtualization sourcemap metadata.
    * Defaults to true.
    */
   litsxSourceMap?: boolean;
