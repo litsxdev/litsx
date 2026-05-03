@@ -274,32 +274,51 @@ export const ${className} = ({ title = "Hello LitSX" }) => {
     .shell {
       max-width: 840px;
       margin: 0 auto;
-      padding: 48px 24px 96px;
+      padding: 56px 24px 104px;
+      position: relative;
+    }
+
+    .shell::before {
+      content: "";
+      position: absolute;
+      inset: 24px 0 auto;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--color-line), transparent);
     }
 
     .title {
       margin: 0;
       font-size: clamp(2.25rem, 4vw, 3.25rem);
-      line-height: 1;
-      letter-spacing: -0.04em;
+      line-height: 0.94;
+      letter-spacing: -0.06em;
+      text-transform: uppercase;
+      font-family: var(--font-display);
     }
 
     .lede {
       margin: 16px 0 0;
       max-width: 34rem;
-      color: #4b5563;
-      font-size: 1.05rem;
+      color: rgba(27, 34, 48, 0.76);
+      font-size: 1.08rem;
+      line-height: 1.6;
     }
 
     .cta {
-      margin-top: 24px;
-      border: 0;
+      margin-top: 28px;
+      border: 1px solid transparent;
       border-radius: 999px;
       padding: 12px 18px;
-      background: #1f2937;
+      background: linear-gradient(135deg, var(--color-text), #2f3c54);
       color: white;
       font: inherit;
       cursor: pointer;
+      box-shadow: 0 18px 36px rgba(27, 34, 48, 0.18);
+      transition: transform 160ms ease, box-shadow 160ms ease;
+    }
+
+    .cta:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 22px 42px rgba(27, 34, 48, 0.22);
     }
   \`);
 
@@ -320,17 +339,26 @@ export const ${className} = ({ title = "Hello LitSX" }) => {
 };
 `);
   files.set("src/styles/tokens.css", `:root {
-  --color-bg: #f5efe4;
-  --color-text: #1f2937;
-  --color-panel: #fffaf2;
-  --color-accent: #8c3d1f;
-  --radius-panel: 24px;
+  --color-bg: #f3ede3;
+  --color-bg-deep: #e4d7c3;
+  --color-text: #1b2230;
+  --color-panel: rgba(255, 249, 240, 0.88);
+  --color-line: rgba(27, 34, 48, 0.12);
+  --color-accent: #9e4b1f;
+  --color-accent-soft: rgba(158, 75, 31, 0.14);
+  --radius-panel: 28px;
+  --shadow-panel: 0 28px 80px rgba(27, 34, 48, 0.12);
+  --font-display: "Avenir Next Condensed", "Franklin Gothic Medium", "Arial Narrow", sans-serif;
+  --font-body: "Inter", "Segoe UI", sans-serif;
 }
 
 body {
   margin: 0;
-  font-family: "Inter", "Segoe UI", sans-serif;
-  background: linear-gradient(180deg, #fcf8f2 0%, #f1e7d8 100%);
+  font-family: var(--font-body);
+  background:
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.7), transparent 26%),
+    radial-gradient(circle at top right, rgba(158, 75, 31, 0.18), transparent 22%),
+    linear-gradient(180deg, var(--color-bg) 0%, var(--color-bg-deep) 100%);
   color: var(--color-text);
 }
 `);
@@ -410,29 +438,43 @@ export const ${className} = ({ title = "LitSX Components" }) => {
 };
 `);
   files.set("src/styles/tokens.css", `:root {
-  --color-bg: #f7f0e4;
-  --color-surface: #fffaf2;
-  --color-text: #1b263b;
-  --color-border: #d9c7a7;
-  --color-positive: #1f7a4d;
-  --color-warning: #a35a1a;
-  --color-neutral: #6b7280;
+  --color-bg: #efe5d4;
+  --color-surface: rgba(255, 249, 239, 0.9);
+  --color-surface-strong: #fffdf9;
+  --color-text: #182033;
+  --color-border: rgba(24, 32, 51, 0.12);
+  --color-positive: #1d7b54;
+  --color-warning: #b16124;
+  --color-neutral: #6a7282;
+  --color-accent: #c5531b;
   --radius-pill: 999px;
-  --radius-panel: 20px;
-  --shadow-panel: 0 16px 40px rgba(27, 38, 59, 0.08);
+  --radius-panel: 24px;
+  --shadow-panel: 0 24px 60px rgba(24, 32, 51, 0.12);
+  --font-display: "Avenir Next Condensed", "Franklin Gothic Medium", "Arial Narrow", sans-serif;
+  --font-body: "Inter", "Segoe UI", sans-serif;
 }
 
 body {
   margin: 0;
-  font-family: "Inter", "Segoe UI", sans-serif;
-  background: linear-gradient(180deg, #fcf8f2 0%, #f1e7d8 100%);
+  font-family: var(--font-body);
+  background:
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.72), transparent 24%),
+    radial-gradient(circle at top right, rgba(197, 83, 27, 0.18), transparent 18%),
+    linear-gradient(180deg, #f6f0e6 0%, var(--color-bg) 100%);
   color: var(--color-text);
 }
 
 .shell {
-  max-width: 920px;
+  max-width: 960px;
   margin: 0 auto;
-  padding: 48px 24px 96px;
+  padding: 56px 24px 104px;
+}
+
+.shell h1,
+.button-card h2 {
+  font-family: var(--font-display);
+  letter-spacing: -0.05em;
+  text-transform: uppercase;
 }
 
 .shell > header {
@@ -450,11 +492,11 @@ body {
   padding: 8px 14px;
   border-radius: var(--radius-pill);
   border: 1px solid var(--color-border);
-  background: rgba(255, 250, 242, 0.92);
+  background: rgba(255, 253, 249, 0.88);
   color: var(--color-neutral);
   font-size: 0.875rem;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.12em;
 }
 
 .status-pill[data-tone="positive"] {
@@ -466,21 +508,46 @@ body {
 }
 
 .button-card {
-  padding: 28px;
+  padding: 30px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-panel);
-  background: var(--color-surface);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.72), transparent 120px),
+    var(--color-surface);
   box-shadow: var(--shadow-panel);
+  position: relative;
+  overflow: hidden;
+}
+
+.button-card::after {
+  content: "";
+  position: absolute;
+  inset: 0 auto auto 0;
+  width: 84px;
+  height: 4px;
+  background: linear-gradient(90deg, var(--color-accent), transparent);
+}
+
+.button-card h2 {
+  margin: 0 0 10px;
+}
+
+.button-card p {
+  margin: 0 0 18px;
+  max-width: 38ch;
+  color: rgba(24, 32, 51, 0.72);
+  line-height: 1.6;
 }
 
 .button-card__cta {
-  border: 0;
+  border: 1px solid rgba(24, 32, 51, 0.08);
   border-radius: 999px;
-  background: var(--color-text);
+  background: linear-gradient(135deg, var(--color-text), #303b55);
   color: white;
   padding: 12px 18px;
   font: inherit;
   cursor: pointer;
+  box-shadow: 0 14px 28px rgba(24, 32, 51, 0.16);
 }
 `);
   files.set("README.md", `# ${packageName}
@@ -647,17 +714,20 @@ The \`StatusPill\` component is a compact semantic label for system state. It is
 <Controls of={StatusPillStories.Default} />
 `);
   files.set("src/styles/tokens.css", `:root {
-  --color-bg: #f6f2e8;
-  --color-surface: #fffaf0;
-  --color-text: #14213d;
-  --color-border: #d7c5a4;
+  --color-bg: #efe3cf;
+  --color-surface: rgba(255, 251, 245, 0.92);
+  --color-surface-strong: #fffdf8;
+  --color-text: #152033;
+  --color-border: rgba(21, 32, 51, 0.14);
   --color-positive: #1f7a4d;
-  --color-warning: #a35a1a;
+  --color-warning: #b66324;
   --color-neutral: #6b7280;
+  --color-accent: #cb5821;
+  --color-accent-soft: rgba(203, 88, 33, 0.14);
   --radius-pill: 999px;
-  --radius-panel: 20px;
-  --shadow-panel: 0 18px 50px rgba(20, 33, 61, 0.08);
-  --font-display: "Iowan Old Style", "Palatino Linotype", serif;
+  --radius-panel: 24px;
+  --shadow-panel: 0 26px 70px rgba(20, 33, 61, 0.12);
+  --font-display: "Avenir Next Condensed", "Franklin Gothic Medium", "Arial Narrow", sans-serif;
   --font-body: "Inter", "Segoe UI", sans-serif;
 }
 
@@ -665,15 +735,25 @@ body {
   margin: 0;
   font-family: var(--font-body);
   background:
-    radial-gradient(circle at top, rgba(214, 181, 120, 0.25), transparent 32%),
-    linear-gradient(180deg, #fbf7ef 0%, #f3ede2 100%);
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.74), transparent 24%),
+    radial-gradient(circle at top right, rgba(203, 88, 33, 0.2), transparent 20%),
+    linear-gradient(180deg, #f7f0e6 0%, var(--color-bg) 100%);
   color: var(--color-text);
 }
 
 .shell {
   max-width: 960px;
   margin: 0 auto;
-  padding: 48px 24px 96px;
+  padding: 56px 24px 104px;
+  position: relative;
+}
+
+.shell::before {
+  content: "";
+  position: absolute;
+  inset: 20px 24px auto;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--color-border), transparent);
 }
 
 .shell > header {
@@ -681,13 +761,21 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  margin-bottom: 32px;
+  margin-bottom: 36px;
+  flex-wrap: wrap;
 }
 
 .shell h1,
 .button-card h2 {
   font-family: var(--font-display);
-  letter-spacing: -0.03em;
+  letter-spacing: -0.06em;
+  text-transform: uppercase;
+}
+
+.shell h1 {
+  margin: 0;
+  font-size: clamp(2.8rem, 6vw, 4.8rem);
+  line-height: 0.92;
 }
 
 .status-pill {
@@ -697,11 +785,11 @@ body {
   padding: 8px 14px;
   border-radius: var(--radius-pill);
   border: 1px solid var(--color-border);
-  background: rgba(255, 250, 240, 0.92);
+  background: rgba(255, 253, 248, 0.92);
   color: var(--color-neutral);
   font-size: 0.875rem;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.12em;
 }
 
 .status-pill[data-tone="positive"] {
@@ -717,19 +805,54 @@ body {
 }
 
 .button-card {
-  padding: 28px;
+  padding: 32px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-panel);
-  background: var(--color-surface);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.72), transparent 120px),
+    var(--color-surface);
   box-shadow: var(--shadow-panel);
   margin-bottom: 28px;
+  position: relative;
+  overflow: hidden;
+}
+
+.button-card::after {
+  content: "";
+  position: absolute;
+  inset: 0 auto auto 0;
+  width: 120px;
+  height: 4px;
+  background: linear-gradient(90deg, var(--color-accent), transparent);
+}
+
+.button-card h2 {
+  margin: 0 0 10px;
+}
+
+.button-card p {
+  margin: 0 0 18px;
+  max-width: 40ch;
+  color: rgba(21, 32, 51, 0.74);
+  line-height: 1.6;
 }
 
 .button-card__cta {
-  border: 0;
+  border: 1px solid rgba(21, 32, 51, 0.08);
   border-radius: 999px;
-  background: var(--color-text);
+  background: linear-gradient(135deg, var(--color-text), #32405d);
   color: white;
+  padding: 12px 18px;
+  font: inherit;
+  cursor: pointer;
+  box-shadow: 0 14px 28px rgba(20, 33, 61, 0.18);
+}
+
+.shell > button {
+  border: 1px solid rgba(21, 32, 51, 0.08);
+  border-radius: 999px;
+  background: var(--color-surface-strong);
+  color: var(--color-text);
   padding: 12px 18px;
   font: inherit;
   cursor: pointer;

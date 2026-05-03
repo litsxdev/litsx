@@ -1405,6 +1405,34 @@ describe("litsx effects controller", () => {
     assert.strictEqual(ensureLazyElement(null, "fancy-button", FancyButtonElement), null);
   });
 
+  it("resolves scoped registries from the host root when nested boundaries do not carry registry directly", () => {
+    class FancyButtonElement {}
+    const registry = {
+      definitions: new Map(),
+      define(tag, ctor) {
+        this.definitions.set(tag, ctor);
+      },
+      get(tag) {
+        return this.definitions.get(tag);
+      },
+    };
+    const boundaryLikeHost = {
+      requestUpdate() {},
+      getRootNode() {
+        return { customElements: registry };
+      },
+    };
+
+    const registered = ensureLazyElement(
+      boundaryLikeHost,
+      "fancy-button",
+      FancyButtonElement,
+    );
+
+    assert.strictEqual(registered, FancyButtonElement);
+    assert.strictEqual(registry.get("fancy-button"), FancyButtonElement);
+  });
+
   it("validates lazy element tags and loader values", async () => {
     const host = new TestHost();
     const unhandled = [];

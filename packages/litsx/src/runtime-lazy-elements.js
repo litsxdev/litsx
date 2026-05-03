@@ -1,18 +1,47 @@
 const lazyElementCache = new WeakMap();
 
+function isUsableRegistry(registry) {
+  return Boolean(
+    registry &&
+    typeof registry.define === "function" &&
+    typeof registry.get === "function"
+  );
+}
+
+function getElementRegistryFromRoot(host) {
+  if (!host || typeof host.getRootNode !== "function") {
+    return null;
+  }
+
+  const root = host.getRootNode();
+  if (!root || typeof root !== "object") {
+    return null;
+  }
+
+  return (
+    root.registry ??
+    root.customElements ??
+    root.customElementRegistry ??
+    null
+  );
+}
+
 function getElementRegistry(host) {
   if (!host || typeof host !== "object") {
     return null;
   }
-  const registry = host.registry;
-  if (
-    !registry ||
-    typeof registry.define !== "function" ||
-    typeof registry.get !== "function"
-  ) {
-    return null;
+
+  const directRegistry = host.registry;
+  if (isUsableRegistry(directRegistry)) {
+    return directRegistry;
   }
-  return registry;
+
+  const rootRegistry = getElementRegistryFromRoot(host);
+  if (isUsableRegistry(rootRegistry)) {
+    return rootRegistry;
+  }
+
+  return null;
 }
 
 function isCustomElementConstructor(value) {
