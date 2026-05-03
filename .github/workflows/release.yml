@@ -7,6 +7,7 @@ on:
       - Release Validate
     types:
       - completed
+  workflow_dispatch:
 
 permissions:
   actions: read
@@ -19,7 +20,9 @@ concurrency:
 jobs:
   plan:
     name: Detect Ready Release
-    if: github.event.workflow_run.head_branch == 'main'
+    if: |
+      (github.event_name == 'workflow_run' && github.event.workflow_run.head_branch == 'main') ||
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     outputs:
       ready: ${{ steps.gate.outputs.ready }}
@@ -30,6 +33,16 @@ jobs:
         uses: actions/github-script@v8
         with:
           script: |
+            if (context.eventName === "workflow_dispatch") {
+              if (context.ref === "refs/heads/main") {
+                core.setOutput("ready", "true");
+                return;
+              }
+
+              core.setOutput("ready", "false");
+              return;
+            }
+
             const requiredWorkflows = ["Test", "Release Validate"];
             const { owner, repo } = context.repo;
             const branch = context.payload.workflow_run.head_branch;
@@ -64,27 +77,27 @@ jobs:
             core.setOutput("ready", "true");
 
       - name: Checkout repository
-        if: steps.gate.outputs.ready == 'true' && github.event.workflow_run.conclusion == 'success'
+        if: steps.gate.outputs.ready == 'true' && (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success')
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.sha || github.event.workflow_run.head_sha }}
           fetch-depth: 0
 
       - name: Setup Node.js
-        if: steps.gate.outputs.ready == 'true' && github.event.workflow_run.conclusion == 'success'
+        if: steps.gate.outputs.ready == 'true' && (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success')
         uses: actions/setup-node@v6
         with:
           node-version: 20
           package-manager-cache: false
 
       - name: Enable Yarn
-        if: steps.gate.outputs.ready == 'true' && github.event.workflow_run.conclusion == 'success'
+        if: steps.gate.outputs.ready == 'true' && (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success')
         run: |
           corepack enable
           corepack prepare yarn@4.10.3 --activate
 
       - name: Cache Yarn state
-        if: steps.gate.outputs.ready == 'true' && github.event.workflow_run.conclusion == 'success'
+        if: steps.gate.outputs.ready == 'true' && (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success')
         uses: actions/cache@v5
         with:
           path: |
@@ -95,12 +108,12 @@ jobs:
             ${{ runner.os }}-yarn4-
 
       - name: Install dependencies
-        if: steps.gate.outputs.ready == 'true' && github.event.workflow_run.conclusion == 'success'
+        if: steps.gate.outputs.ready == 'true' && (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success')
         run: corepack yarn install --immutable
 
       - name: Detect pending changesets
         id: pending
-        if: steps.gate.outputs.ready == 'true' && github.event.workflow_run.conclusion == 'success'
+        if: steps.gate.outputs.ready == 'true' && (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success')
         run: |
           if find .changeset -maxdepth 1 -name '*.md' ! -name 'README.md' -print -quit | grep -q .; then
             echo "has_changesets=true" >> "$GITHUB_OUTPUT"
@@ -111,7 +124,9 @@ jobs:
   publish:
     name: Publish Packages
     needs: plan
-    if: needs.plan.outputs.ready == 'true' && needs.plan.outputs.has_changesets == 'true'
+    if: |
+      needs.plan.outputs.ready == 'true' &&
+      (needs.plan.outputs.has_changesets == 'true' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     environment: npm-release
     permissions:
@@ -130,7 +145,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.sha || github.event.workflow_run.head_sha }}
           fetch-depth: 0
           token: ${{ steps.app-token.outputs.token }}
           persist-credentials: false
@@ -161,9 +176,11 @@ jobs:
         run: corepack yarn install --immutable
 
       - name: Materialize release versions
+        if: needs.plan.outputs.has_changesets == 'true'
         run: corepack yarn changeset:version
 
       - name: Commit release version updates
+        id: version_commit
         env:
           RELEASE_PUSH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
@@ -173,9 +190,15 @@ jobs:
           git add -A
           if git diff --cached --quiet; then
             echo "No version updates to commit"
+            echo "created_commit=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           git commit -m "chore(release): version packages [skip ci]"
+          echo "created_commit=true" >> "$GITHUB_OUTPUT"
+
+      - name: Push release version commit
+        if: steps.version_commit.outputs.created_commit == 'true'
+        run: git push origin HEAD:main
 
       - name: Publish packages
         env:
@@ -187,5 +210,5 @@ jobs:
       - name: Create package tags
         run: node scripts/release/create-release-tags.mjs
 
-      - name: Push release commit and tags
-        run: git push origin HEAD:main --tags
+      - name: Push release tags
+        run: git push origin --tags
