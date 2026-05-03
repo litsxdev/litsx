@@ -11,6 +11,7 @@ Litsx is a Lit-first compiler and tooling workspace for authoring web components
 This repository contains the runtime, Babel presets, authoring support, editor tooling, and scaffolding packages that make up the LitSX toolchain.
 
 The documentation site lives at [`litsx.dev`](https://litsx.dev/) and is maintained from the separate [`litsxdev/litsx.dev`](https://github.com/litsxdev/litsx.dev) repository.
+The VS Code extension lives in the separate [`litsxdev/vscode-litsx`](https://github.com/litsxdev/vscode-litsx) repository.
 
 ## Authored model
 

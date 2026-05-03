@@ -22,7 +22,6 @@ export const packageDirsByName = new Map([
   ["@litsx/babel-plugin-transform-litsx-scoped-elements", "packages/babel-plugin-transform-litsx-scoped-elements"],
   ["@litsx/babel-plugin-litsx-proptypes", "packages/babel-plugin-litsx-proptypes"],
   ["@litsx/babel-plugin-shared-hooks", "packages/babel-plugin-shared-hooks"],
-  ["vscode-litsx", "packages/vscode-litsx"],
   ["@litsx/typescript-session", "packages/typescript-session"],
 ]);
 

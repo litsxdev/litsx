@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { excludedPrivatePackages, npmReleasePackages, vscodeReleasePackage } from "./release-packages.mjs";
+import { excludedPrivatePackages, npmReleasePackages } from "./release-packages.mjs";
 
 const repoRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
 
@@ -171,37 +171,6 @@ if (prettierManifest.dependencies?.prettier) {
 const tsPluginManifest = readJson("packages/typescript-plugin-litsx/package.json");
 if (!tsPluginManifest.bin?.["litsx-tsc"]) {
   fail("packages/typescript-plugin-litsx must expose litsx-tsc");
-}
-
-const vscodeManifest = readJson(path.join(vscodeReleasePackage, "package.json"));
-if (vscodeManifest.private !== true) {
-  fail("packages/vscode-litsx must remain private and outside npm publication");
-}
-assertCommonManifestFields(vscodeReleasePackage, vscodeManifest);
-assertEntrypoints(vscodeReleasePackage, vscodeManifest);
-if (!vscodeManifest.publisher) {
-  fail("packages/vscode-litsx is missing publisher");
-}
-if (vscodeManifest.icon && !fileExists(path.join(vscodeReleasePackage, vscodeManifest.icon))) {
-  fail(`packages/vscode-litsx icon does not exist: ${vscodeManifest.icon}`);
-}
-for (const requiredFile of ["dist", "syntaxes", "icon.png", "LICENSE", "README.md", "package.json"]) {
-  if (!fileExists(path.join(vscodeReleasePackage, requiredFile))) {
-    fail(`packages/vscode-litsx is missing required packaged file: ${requiredFile}`);
-  }
-}
-if (!fileExists(path.join(vscodeReleasePackage, "LICENSE"))) {
-  fail("packages/vscode-litsx is missing a package-local LICENSE file");
-}
-if (!fileExists(path.join(vscodeReleasePackage, ".vscodeignore"))) {
-  fail("packages/vscode-litsx is missing .vscodeignore");
-}
-
-const vscodeReadme = fs.readFileSync(path.join(repoRoot, "packages/vscode-litsx/README.md"), "utf8");
-for (const snippet of [".litsx", ".litsx.jsx", "tsx", "jsx", "does not replace the full JavaScript or TypeScript language services"]) {
-  if (!vscodeReadme.includes(snippet)) {
-    fail(`packages/vscode-litsx/README.md is missing expected release wording: ${snippet}`);
-  }
 }
 
 const prettierReadme = fs.readFileSync(path.join(repoRoot, "packages/prettier-plugin-litsx/README.md"), "utf8");

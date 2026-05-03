@@ -20,7 +20,4 @@ export const npmReleasePackages = [
   "packages/typescript-session",
 ];
 
-export const vscodeReleasePackage = "packages/vscode-litsx";
-
-export const excludedPrivatePackages = [
-];
+export const excludedPrivatePackages = [];
