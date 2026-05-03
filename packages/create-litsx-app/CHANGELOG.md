@@ -1,5 +1,17 @@
 # create-litsx-app
 
+## 0.2.6
+
+### Patch Changes
+
+- 8a00d7c: Refresh the generated demo branding with the LitSX flame wordmark, a fuller
+  marketing-style visual treatment, and shadow-safe component styling for the
+  starter components.
+
+  Update the design-system scaffold to Storybook 10.x while keeping the generated
+  SuspenseBoundary usage on property bindings so the starter demo renders
+  correctly.
+
 ## 0.2.5
 
 ### Patch Changes
