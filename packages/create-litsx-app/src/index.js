@@ -811,7 +811,6 @@ export default {
   framework: "@storybook/web-components-vite",
   stories: ["../src/**/*.stories.@(js|jsx|litsx|mdx)", "../src/**/*.docs.mdx"],
   addons: [
-    "@storybook/addon-essentials",
     "@storybook/addon-docs",
     "@storybook/addon-a11y"
   ],
@@ -1231,11 +1230,10 @@ function createPackageJson(packageName, template, options = {}) {
     packageJson.scripts.storybook = "storybook dev -p 6006";
     packageJson.scripts["build-storybook"] = "storybook build";
     Object.assign(packageJson.devDependencies, {
-      "@storybook/addon-a11y": "^10.3.0",
-      "@storybook/addon-docs": "^10.3.0",
-      "@storybook/addon-essentials": "^10.3.0",
-      "@storybook/web-components-vite": "^10.3.0",
-      "storybook": "^10.3.0",
+      "@storybook/addon-a11y": "^9.1.5",
+      "@storybook/addon-docs": "^9.1.5",
+      "@storybook/web-components-vite": "^9.1.5",
+      "storybook": "^9.1.5",
     });
   }
 

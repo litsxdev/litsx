@@ -73,7 +73,7 @@ describe("@litsx/vite-plugin", () => {
     assert.strictEqual(ignored, null);
   }, 30000);
 
-  it("adds an optimizeDeps esbuild plugin that compiles LitSX-authored jsx during dependency scanning", async () => {
+  it("adds an optimizeDeps rolldown plugin that compiles LitSX-authored jsx during dependency scanning", async () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-vite-optimize-deps-"));
     const sourcePath = path.join(tempDir, "Counter.jsx");
     fs.writeFileSync(
@@ -98,24 +98,16 @@ describe("@litsx/vite-plugin", () => {
       .spyOn(compilerModule, "createLitsxCompilationSession")
       .mockReturnValue(session);
     const plugin = litsx();
-    const config = plugin.config({ optimizeDeps: { esbuildOptions: { plugins: [] } } });
-    const scanPlugin = config.optimizeDeps.esbuildOptions.plugins.at(-1);
-    const onLoad = vi.fn();
+    const config = plugin.config({ optimizeDeps: { rolldownOptions: { plugins: [] } } });
+    const scanPlugin = config.optimizeDeps.rolldownOptions.plugins.at(-1);
 
     try {
-      scanPlugin.setup({
-        onLoad,
-      });
-
       assert.strictEqual(scanPlugin.name, "litsx-optimize-deps");
-      assert.strictEqual(onLoad.mock.calls.length, 1);
-
-      const [, handler] = onLoad.mock.calls[0];
-      const result = await handler({ path: sourcePath });
+      const result = await scanPlugin.load(sourcePath);
 
       assert.ok(result);
-      assert.strictEqual(result.loader, "js");
-      assert.strictEqual(result.contents, "export const value = 1;");
+      assert.strictEqual(result.moduleType, "js");
+      assert.strictEqual(result.code, "export const value = 1;");
       assert.strictEqual(transformSync.mock.calls.length, 1);
       assert.strictEqual(transformSync.mock.calls[0][1].filename, sourcePath);
     } finally {
@@ -139,14 +131,11 @@ describe("@litsx/vite-plugin", () => {
     const plugin = litsx({
       include: /\.demo$/,
     });
-    const config = plugin.config({ optimizeDeps: { esbuildOptions: {} } });
-    const scanPlugin = config.optimizeDeps.esbuildOptions.plugins.at(-1);
-    const onLoad = vi.fn();
+    const config = plugin.config({ optimizeDeps: { rolldownOptions: {} } });
+    const scanPlugin = config.optimizeDeps.rolldownOptions.plugins.at(-1);
 
     try {
-      scanPlugin.setup({ onLoad });
-      const [, handler] = onLoad.mock.calls[0];
-      const result = await handler({ path: "/virtual/example.jsx" });
+      const result = await scanPlugin.load("/virtual/example.jsx");
 
       assert.strictEqual(result, null);
       assert.strictEqual(transformSync.mock.calls.length, 0);

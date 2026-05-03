@@ -64,6 +64,9 @@ describe("create-litsx-app", () => {
     assert.strictEqual(packageJson.scripts.typecheck, "litsx-tsc -p jsconfig.json --noEmit");
     assert.ok(packageJson.devDependencies["@storybook/web-components-vite"]);
     assert.ok(packageJson.devDependencies["@storybook/addon-docs"]);
+    assert.ok(packageJson.devDependencies["@storybook/addon-a11y"]);
+    assert.ok(!packageJson.devDependencies["@storybook/addon-essentials"]);
+    assert.strictEqual(packageJson.devDependencies.storybook, "^9.1.5");
     assert.ok(packageJson.devDependencies.storybook);
     assert.ok(packageJson.scripts.storybook);
     assert.ok(packageJson.scripts["build-storybook"]);
@@ -89,6 +92,8 @@ describe("create-litsx-app", () => {
     assert.ok(!result.files.has("tools/litsx-vite-plugin.js"));
     assert.match(storybookMain, /@storybook\/web-components-vite/);
     assert.match(storybookMain, /@storybook\/addon-docs/);
+    assert.match(storybookMain, /@storybook\/addon-a11y/);
+    assert.doesNotMatch(storybookMain, /@storybook\/addon-essentials/);
     assert.match(storybookMain, /@litsx\/vite-plugin/);
     assert.match(storybookMain, /litsx\(\)/);
     assert.match(storybookPreview, /tokens\.css/);

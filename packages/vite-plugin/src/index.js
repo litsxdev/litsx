@@ -105,27 +105,26 @@ export function litsx(options = {}) {
     return session;
   }
 
-  function createOptimizeDepsEsbuildPlugin() {
+  function createOptimizeDepsRolldownPlugin() {
     return {
       name: "litsx-optimize-deps",
-      setup(build) {
-        build.onLoad({ filter: /\.(?:[jt]sx|litsx(?:\.jsx)?)$/ }, async ({ path: filePath }) => {
-          if (!shouldTransform(filePath, include)) {
-            return null;
-          }
+      async load(filePath) {
+        if (!shouldTransform(filePath, include)) {
+          return null;
+        }
 
-          const source = await fs.readFile(filePath, "utf8");
-          const result = getSession().transformSync(source, {
-            ...compilerOptions,
-            filename: filePath,
-            sourceMaps: false,
-          });
-
-          return {
-            contents: result.code,
-            loader: "js",
-          };
+        const source = await fs.readFile(filePath, "utf8");
+        const result = getSession().transformSync(source, {
+          ...compilerOptions,
+          filename: filePath,
+          sourceMaps: false,
         });
+
+        return {
+          code: result.code,
+          map: null,
+          moduleType: "js",
+        };
       },
     };
   }
@@ -134,15 +133,15 @@ export function litsx(options = {}) {
     name: "litsx",
     enforce: "pre",
     config(userConfig) {
-      const esbuildOptions = userConfig.optimizeDeps?.esbuildOptions ?? {};
-      const existingPlugins = esbuildOptions.plugins ?? [];
+      const rolldownOptions = userConfig.optimizeDeps?.rolldownOptions ?? {};
+      const existingPlugins = rolldownOptions.plugins ?? [];
 
       return {
         optimizeDeps: {
           ...userConfig.optimizeDeps,
-          esbuildOptions: {
-            ...esbuildOptions,
-            plugins: [...existingPlugins, createOptimizeDepsEsbuildPlugin()],
+          rolldownOptions: {
+            ...rolldownOptions,
+            plugins: [...existingPlugins, createOptimizeDepsRolldownPlugin()],
           },
         },
       };
