@@ -1,5 +1,12 @@
 # create-litsx-app
 
+## 0.2.2
+
+### Patch Changes
+
+- 3b78d4e: Load the scoped custom element registry polyfill before booting generated apps so
+  scaffolded components using authored child imports render correctly in Vite.
+
 ## 0.2.1
 
 ### Patch Changes
