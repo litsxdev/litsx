@@ -1,5 +1,11 @@
 # @litsx/jsx-authoring
 
+## 0.2.1
+
+### Patch Changes
+
+- b7266d8: Publish internal public dependencies with semver ranges instead of `workspace:` and keep generated scaffold package versions aligned for npm installs.
+
 ## 0.2.0
 
 ### Minor Changes

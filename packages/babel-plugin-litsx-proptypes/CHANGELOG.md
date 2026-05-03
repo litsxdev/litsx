@@ -1,5 +1,13 @@
 # @litsx/babel-plugin-litsx-proptypes
 
+## 0.2.1
+
+### Patch Changes
+
+- b7266d8: Publish internal public dependencies with semver ranges instead of `workspace:` and keep generated scaffold package versions aligned for npm installs.
+- Updated dependencies [b7266d8]
+  - @litsx/prop-types@0.2.1
+
 ## 0.2.0
 
 ### Minor Changes

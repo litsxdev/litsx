@@ -1,6 +1,6 @@
 {
   "name": "@litsx/babel-plugin-litsx-proptypes",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Lowers React propTypes assignments into native LitSX properties hoists",
   "main": "./dist/index.cjs",
   "module": "./src/index.js",
@@ -40,7 +40,7 @@
     "@babel/core": ">=7"
   },
   "dependencies": {
-    "@litsx/prop-types": "^0.2.0"
+    "@litsx/prop-types": "^0.2.1"
   },
   "devDependencies": {
     "@babel/core": "^7.29.0"

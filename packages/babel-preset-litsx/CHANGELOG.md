@@ -1,5 +1,16 @@
 # @litsx/babel-preset-litsx
 
+## 0.2.1
+
+### Patch Changes
+
+- b7266d8: Publish internal public dependencies with semver ranges instead of `workspace:` and keep generated scaffold package versions aligned for npm installs.
+- Updated dependencies [b7266d8]
+  - @litsx/babel-plugin-shared-hooks@0.2.1
+  - @litsx/babel-plugin-transform-jsx-html-template@0.2.1
+  - @litsx/babel-plugin-transform-litsx-scoped-elements@0.2.1
+  - @litsx/typescript-session@0.2.1
+
 ## 0.2.0
 
 ### Minor Changes

@@ -1,6 +1,6 @@
 {
   "name": "@litsx/compiler",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Build-facing LitSX compilation facade with correct parser and sourcemap handling",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -49,10 +49,10 @@
   "dependencies": {
     "@babel/core": "^7.29.0",
     "@babel/parser": "^7.29.3",
-    "@litsx/babel-plugin-transform-jsx-html-template": "^0.2.0",
-    "@litsx/babel-preset-litsx": "^0.2.0",
-    "@litsx/jsx-authoring": "^0.2.0",
-    "@litsx/typescript-session": "^0.2.0"
+    "@litsx/babel-plugin-transform-jsx-html-template": "^0.2.1",
+    "@litsx/babel-preset-litsx": "^0.2.1",
+    "@litsx/jsx-authoring": "^0.2.1",
+    "@litsx/typescript-session": "^0.2.1"
   },
   "scripts": {
     "build": "../../node_modules/.bin/rollup --config rollup.config.mjs",
