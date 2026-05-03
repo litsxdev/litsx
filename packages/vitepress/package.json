@@ -41,7 +41,8 @@
     "vue": ">=3"
   },
   "dependencies": {
-    "@litsx/compiler": "workspace:^"
+    "@litsx/compiler": "workspace:^",
+    "@litsx/shiki-languages": "workspace:^"
   },
   "scripts": {
     "build": "node -e 'process.exit(0)'"

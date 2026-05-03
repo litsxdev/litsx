@@ -45,6 +45,10 @@
   "bugs": {
     "url": "https://github.com/litsxdev/litsx/issues"
   },
+  "dependencies": {
+    "@litsx/shiki-languages": "workspace:^",
+    "@litsx/typescript-plugin": "workspace:^"
+  },
   "contributes": {
     "commands": [
       {

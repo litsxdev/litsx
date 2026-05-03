@@ -7,6 +7,7 @@ import {
   litsxVitePress,
   litsxVitePressMarkdown,
 } from "../packages/vitepress/src/index.js";
+import { litsxCodeLanguages } from "../packages/shiki-languages/src/index.js";
 import {
   buildVersionPath,
   defineDocsVersions,
@@ -210,6 +211,7 @@ describe("@litsx/vitepress", () => {
     );
     assert.match(JSON.stringify(markdown.languages), /litsx-jsx-attributes/);
     assert.match(JSON.stringify(markdown.languages), /litsx-hoists/);
+    assert.deepStrictEqual(markdown.languages, litsxCodeLanguages());
   });
 
   it("loads LitSX-aware tsx highlighting without requiring external Shiki languages", async () => {

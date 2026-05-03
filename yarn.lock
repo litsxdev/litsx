@@ -2147,7 +2147,15 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@litsx/typescript-plugin@npm:^0.2.0, @litsx/typescript-plugin@workspace:packages/typescript-plugin-litsx":
+"@litsx/shiki-languages@workspace:^, @litsx/shiki-languages@workspace:packages/shiki-languages":
+  version: 0.0.0-use.local
+  resolution: "@litsx/shiki-languages@workspace:packages/shiki-languages"
+  dependencies:
+    shiki: "npm:^2.1.0"
+  languageName: unknown
+  linkType: soft
+
+"@litsx/typescript-plugin@npm:^0.2.0, @litsx/typescript-plugin@workspace:^, @litsx/typescript-plugin@workspace:packages/typescript-plugin-litsx":
   version: 0.0.0-use.local
   resolution: "@litsx/typescript-plugin@workspace:packages/typescript-plugin-litsx"
   dependencies:
@@ -2182,6 +2190,7 @@ __metadata:
   resolution: "@litsx/vitepress@workspace:packages/vitepress"
   dependencies:
     "@litsx/compiler": "workspace:^"
+    "@litsx/shiki-languages": "workspace:^"
   peerDependencies:
     vitepress: ">=1"
     vue: ">=3"
@@ -9626,6 +9635,9 @@ __metadata:
 "vscode-litsx@workspace:packages/vscode-litsx":
   version: 0.0.0-use.local
   resolution: "vscode-litsx@workspace:packages/vscode-litsx"
+  dependencies:
+    "@litsx/shiki-languages": "workspace:^"
+    "@litsx/typescript-plugin": "workspace:^"
   languageName: unknown
   linkType: soft
 

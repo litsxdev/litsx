@@ -1,10 +1,8 @@
 import fs from "fs";
 import path from "path";
 import { createRequire } from "module";
-import { fileURLToPath, pathToFileURL } from "url";
 
 const require = createRequire(import.meta.url);
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 let authoredModulePromise = null;
 let tsModule = null;
@@ -70,8 +68,7 @@ function normalizeFileName(fileName) {
 
 async function loadAuthoredModule() {
   if (!authoredModulePromise) {
-    const modulePath = path.resolve(__dirname, "../../typescript-plugin-litsx/src/virtual-source.js");
-    authoredModulePromise = import(pathToFileURL(modulePath).href);
+    authoredModulePromise = import("@litsx/typescript-plugin/virtual-source");
   }
 
   return authoredModulePromise;

@@ -1,6 +1,12 @@
 import { transformLitsx } from "@litsx/compiler";
 import path from "path";
-export { litsxVitePressMarkdown } from "./shiki-litsx-languages.js";
+import { litsxCodeLanguages } from "@litsx/shiki-languages";
+
+export function litsxVitePressMarkdown() {
+  return {
+    languages: litsxCodeLanguages(),
+  };
+}
 
 function defaultInclude(id) {
   return (

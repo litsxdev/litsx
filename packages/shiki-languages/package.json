@@ -1,0 +1,45 @@
+{
+  "name": "@litsx/shiki-languages",
+  "version": "0.0.0",
+  "description": "Shared Shiki/TextMate language registrations for LitSX-authored TSX and JSX.",
+  "author": "Litsx Team",
+  "homepage": "https://github.com/litsxdev/litsx/tree/main/packages/shiki-languages",
+  "bugs": {
+    "url": "https://github.com/litsxdev/litsx/issues"
+  },
+  "license": "Apache-2.0",
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "keywords": [
+    "litsx",
+    "shiki",
+    "textmate",
+    "syntax-highlighting",
+    "tsx",
+    "jsx"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/litsxdev/litsx.git",
+    "directory": "packages/shiki-languages"
+  },
+  "type": "module",
+  "main": "./src/index.js",
+  "exports": {
+    ".": {
+      "default": "./src/index.js"
+    }
+  },
+  "files": [
+    "src",
+    "README.md"
+  ],
+  "dependencies": {
+    "shiki": "^2.1.0"
+  },
+  "scripts": {
+    "build": "node -e 'process.exit(0)'"
+  }
+}
