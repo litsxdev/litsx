@@ -1,6 +1,6 @@
 {
   "name": "@litsx/jsx-authoring",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Shared authored JSX language utilities for Lit sx",
   "author": "LitX Team",
   "homepage": "https://github.com/litsxdev/litsx/tree/main/packages/jsx-authoring",

@@ -1,6 +1,6 @@
 {
   "name": "@litsx/light-dom-registry",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Contextual light DOM registry runtime for LitSX element delegation",
   "type": "module",
   "main": "./dist/index.cjs",
