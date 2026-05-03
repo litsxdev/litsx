@@ -180,6 +180,8 @@ jobs:
 
       - name: Refresh lockfile after versioning
         if: needs.plan.outputs.has_changesets == 'true'
+        env:
+          YARN_ENABLE_IMMUTABLE_INSTALLS: false
         run: corepack yarn install
 
       - name: Commit release version updates
