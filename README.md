@@ -1,4 +1,4 @@
-# Litsx
+![Litsx](https://litsx.dev/title.svg)
 
 [![Test](https://github.com/litsxdev/litsx/actions/workflows/test.yml/badge.svg)](https://github.com/litsxdev/litsx/actions/workflows/test.yml)
 [![Release Validate](https://github.com/litsxdev/litsx/actions/workflows/release-validate.yml/badge.svg)](https://github.com/litsxdev/litsx/actions/workflows/release-validate.yml)
@@ -8,7 +8,9 @@
 
 Litsx is a Lit-first compiler and tooling workspace for authoring web components with modern JSX, static hoists, and an optional React-compat migration layer.
 
-This repository contains the runtime, Babel presets, authoring support, playground, docs tooling, and scaffolding packages that make up the LitSX toolchain.
+This repository contains the runtime, Babel presets, authoring support, editor tooling, and scaffolding packages that make up the LitSX toolchain.
+
+The documentation site lives at [`litsx.dev`](https://litsx.dev/) and is maintained from the separate [`litsxdev/litsx.dev`](https://github.com/litsxdev/litsx.dev) repository.
 
 ## Authored model
 
@@ -50,11 +52,6 @@ Because plain `tsc` does not parse this authored syntax directly, editor support
 - [`packages/babel-plugin-shared-hooks`](./packages/babel-plugin-shared-hooks): shared transform helpers consumed by the public Babel packages
 - [`packages/typescript-session`](./packages/typescript-session): shared TypeScript session plumbing used by editor and type-check tooling
 
-### Internal workspace packages
-
-- [`packages/litsx-playground`](./packages/litsx-playground): embedded playground and preview runtime for docs and demos
-- [`packages/vitepress`](./packages/vitepress): docs integration and theme helpers
-
 ## Development
 
 Install dependencies:
@@ -75,12 +72,6 @@ Build the workspace:
 yarn build
 ```
 
-Build docs:
-
-```sh
-yarn docs:build
-```
-
 ## Focus
 
 The workspace focuses on:
@@ -90,6 +81,6 @@ The workspace focuses on:
 - authored syntax support for Lit-flavoured JSX and static hoists
 - editor support through `@litsx/typescript-plugin`
 - CLI type-checking through `litsx-tsc`
-- scaffolding, playground tooling, and docs infrastructure
+- scaffolding and editor tooling
 
 Each package directory contains its own `README.md` with package-specific details.

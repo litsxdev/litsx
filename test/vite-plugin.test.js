@@ -155,13 +155,10 @@ describe("@litsx/vite-plugin", () => {
     }
   });
 
-  it("supports the docs theme include filter used by VitePress", async () => {
+  it("supports custom function-based include filters", async () => {
     const plugin = litsx({
       include(id) {
-        return (
-          id.includes("/website/docs/.vitepress/theme/components/") &&
-          (id.endsWith(".jsx") || id.endsWith(".tsx"))
-        );
+        return id.includes("/custom-lit-components/") && (id.endsWith(".jsx") || id.endsWith(".tsx"));
       },
       sourceMaps: true,
     });
@@ -169,11 +166,11 @@ describe("@litsx/vite-plugin", () => {
 
     const transformed = await plugin.transform(
       source,
-      "/repo/website/docs/.vitepress/theme/components/counter.jsx"
+      "/repo/custom-lit-components/counter.jsx"
     );
     const ignored = await plugin.transform(
       source,
-      "/repo/website/docs/guides/counter.jsx"
+      "/repo/guides/counter.jsx"
     );
 
     assert.ok(transformed);

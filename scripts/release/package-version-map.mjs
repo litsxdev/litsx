@@ -12,7 +12,6 @@ export const packageDirsByName = new Map([
   ["@litsx/eslint-plugin", "packages/eslint-plugin-litsx"],
   ["create-litsx-app", "packages/create-litsx-app"],
   ["prettier-plugin-litsx", "packages/prettier-plugin-litsx"],
-  ["@litsx/playground", "packages/litsx-playground"],
   ["@litsx/light-dom-registry", "packages/light-dom-registry"],
   ["@litsx/babel-parser", "packages/babel-parser-litsx"],
   ["@litsx/jsx-authoring", "packages/jsx-authoring"],
@@ -24,7 +23,6 @@ export const packageDirsByName = new Map([
   ["@litsx/babel-plugin-litsx-proptypes", "packages/babel-plugin-litsx-proptypes"],
   ["@litsx/babel-plugin-shared-hooks", "packages/babel-plugin-shared-hooks"],
   ["vscode-litsx", "packages/vscode-litsx"],
-  ["@litsx/vitepress", "packages/vitepress"],
   ["@litsx/typescript-session", "packages/typescript-session"],
 ]);
 

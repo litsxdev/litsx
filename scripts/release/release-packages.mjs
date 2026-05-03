@@ -23,6 +23,4 @@ export const npmReleasePackages = [
 export const vscodeReleasePackage = "packages/vscode-litsx";
 
 export const excludedPrivatePackages = [
-  "packages/vitepress",
-  "packages/litsx-playground",
 ];

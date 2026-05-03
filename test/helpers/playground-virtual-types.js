@@ -1,4 +1,3 @@
-// Shared virtual type files for the LitSX playground compiler.
 export const PLAYGROUND_TYPE_FILES = {
   "/__litsx_virtual__/dom.playground.d.ts": String.raw`
     interface EventTarget {}

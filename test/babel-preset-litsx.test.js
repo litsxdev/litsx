@@ -7,7 +7,7 @@ import { beforeAll, describe, it } from "vitest";
 
 import parser from "../packages/babel-parser-litsx/src/index.mjs";
 import { interopDefault } from "./helpers/interop-default.js";
-import { PLAYGROUND_TYPE_FILES } from "../packages/litsx-playground/src/virtual-types.js";
+import { PLAYGROUND_TYPE_FILES } from "./helpers/playground-virtual-types.js";
 
 const { transformFromAstSync } = babelCore;
 
