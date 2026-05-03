@@ -1,6 +1,6 @@
 {
   "name": "create-litsx-app",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Scaffold a Litsx project with the recommended editor and build setup",
   "type": "module",
   "bin": "./dist/create-litsx-app.js",

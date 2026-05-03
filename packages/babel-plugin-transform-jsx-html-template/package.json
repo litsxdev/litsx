@@ -1,6 +1,6 @@
 {
   "name": "@litsx/babel-plugin-transform-jsx-html-template",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Transforms JSX trees into lit-html template literals",
   "type": "module",
   "main": "./dist/index.cjs",

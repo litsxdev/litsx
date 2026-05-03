@@ -1,5 +1,19 @@
 # @litsx/compiler
 
+## 0.2.0
+
+### Minor Changes
+
+- cef2428: Publish the scoped runtime as `@litsx/litsx` and realign the public package surface on `0.2.0`.
+
+### Patch Changes
+
+- Updated dependencies [cef2428]
+  - @litsx/jsx-authoring@0.2.0
+  - @litsx/babel-preset-litsx@0.2.0
+  - @litsx/babel-plugin-transform-jsx-html-template@0.2.0
+  - @litsx/typescript-session@0.2.0
+
 ## 0.1.0
 
 ### Minor Changes
