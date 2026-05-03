@@ -1,5 +1,15 @@
 # create-litsx-app
 
+## 0.2.5
+
+### Patch Changes
+
+- Refresh the generated demo branding with a LitSX wordmark, a full-screen
+  marketing-style background, and more polished starter surfaces.
+
+  Fix the default design-system template to pass `SuspenseBoundary` renderers as
+  property bindings so the boundary content actually renders.
+
 ## 0.2.4
 
 ### Patch Changes
