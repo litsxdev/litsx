@@ -3,11 +3,13 @@ name: Release
 on:
   workflow_run:
     workflows:
+      - Test
       - Release Validate
     types:
       - completed
 
 permissions:
+  actions: read
   contents: read
 
 concurrency:
@@ -16,30 +18,73 @@ concurrency:
 
 jobs:
   plan:
-    name: Detect Pending Release
-    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main'
+    name: Detect Ready Release
+    if: github.event.workflow_run.head_branch == 'main'
     runs-on: ubuntu-latest
     outputs:
+      ready: ${{ steps.gate.outputs.ready }}
       has_changesets: ${{ steps.pending.outputs.has_changesets }}
     steps:
+      - name: Wait for required workflows
+        id: gate
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const requiredWorkflows = ["Test", "Release Validate"];
+            const { owner, repo } = context.repo;
+            const branch = context.payload.workflow_run.head_branch;
+            const headSha = context.payload.workflow_run.head_sha;
+            const eventName = context.payload.workflow_run.event;
+
+            if (branch !== "main" || eventName !== "push") {
+              core.setOutput("ready", "false");
+              return;
+            }
+
+            for (const workflowName of requiredWorkflows) {
+              const { data } = await github.rest.actions.listWorkflowRunsForRepo({
+                owner,
+                repo,
+                branch,
+                event: eventName,
+                status: "completed",
+                per_page: 100,
+              });
+
+              const run = data.workflow_runs.find((candidate) =>
+                candidate.name === workflowName && candidate.head_sha === headSha,
+              );
+
+              if (!run || run.conclusion !== "success") {
+                core.setOutput("ready", "false");
+                return;
+              }
+            }
+
+            core.setOutput("ready", "true");
+
       - name: Checkout repository
+        if: steps.gate.outputs.ready == 'true' && github.event.workflow_run.conclusion == 'success'
         uses: actions/checkout@v6
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
           fetch-depth: 0
 
       - name: Setup Node.js
+        if: steps.gate.outputs.ready == 'true' && github.event.workflow_run.conclusion == 'success'
         uses: actions/setup-node@v6
         with:
           node-version: 20
           package-manager-cache: false
 
       - name: Enable Yarn
+        if: steps.gate.outputs.ready == 'true' && github.event.workflow_run.conclusion == 'success'
         run: |
           corepack enable
           corepack prepare yarn@4.10.3 --activate
 
       - name: Cache Yarn state
+        if: steps.gate.outputs.ready == 'true' && github.event.workflow_run.conclusion == 'success'
         uses: actions/cache@v5
         with:
           path: |
@@ -50,10 +95,12 @@ jobs:
             ${{ runner.os }}-yarn4-
 
       - name: Install dependencies
+        if: steps.gate.outputs.ready == 'true' && github.event.workflow_run.conclusion == 'success'
         run: corepack yarn install --immutable
 
       - name: Detect pending changesets
         id: pending
+        if: steps.gate.outputs.ready == 'true' && github.event.workflow_run.conclusion == 'success'
         run: |
           if find .changeset -maxdepth 1 -name '*.md' ! -name 'README.md' -print -quit | grep -q .; then
             echo "has_changesets=true" >> "$GITHUB_OUTPUT"
@@ -64,7 +111,7 @@ jobs:
   publish:
     name: Publish Packages
     needs: plan
-    if: needs.plan.outputs.has_changesets == 'true'
+    if: needs.plan.outputs.ready == 'true' && needs.plan.outputs.has_changesets == 'true'
     runs-on: ubuntu-latest
     environment: npm-release
     permissions:
