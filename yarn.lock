@@ -1222,7 +1222,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@lit/reactive-element@npm:^1.6.2 || ^2.1.0, @lit/reactive-element@npm:^2.1.0":
+"@lit/reactive-element@npm:^1.6.2 || ^2.1.0, @lit/reactive-element@npm:^2.1.0, @lit/reactive-element@npm:^2.1.2":
   version: 2.1.2
   resolution: "@lit/reactive-element@npm:2.1.2"
   dependencies:
@@ -1376,8 +1376,8 @@ __metadata:
   resolution: "@litsx/litsx@workspace:packages/litsx"
   dependencies:
     "@lit/context": "npm:^1.1.6"
+    "@lit/reactive-element": "npm:^2.1.2"
     "@litsx/light-dom-registry": "npm:^0.2.0"
-    "@open-wc/scoped-elements": "npm:^3.0.6"
     lit: "npm:^3.2.1"
   peerDependencies:
     lit: ">=3"

@@ -21,7 +21,7 @@ Internally it uses [`@litsx/compiler`](../compiler/README.md), so callers do not
 npm install -D @litsx/vite-plugin vite
 ```
 
-Your project will also need the usual runtime dependencies used by compiled LitSX output, such as `lit`, `litsx`, and `@open-wc/scoped-elements`, depending on the features you use.
+Your project will also need the usual runtime dependencies used by compiled LitSX output, such as `lit`, `@litsx/litsx`, and, when targeting browsers without native scoped registries, `@webcomponents/scoped-custom-element-registry`.
 
 ## Basic Usage
 

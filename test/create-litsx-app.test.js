@@ -47,6 +47,7 @@ describe("create-litsx-app", () => {
       packageJson.dependencies["@webcomponents/scoped-custom-element-registry"],
       "^0.0.10",
     );
+    assert.ok(!("@open-wc/scoped-elements" in packageJson.dependencies));
     assert.ok(packageJson.dependencies.lit);
     assert.ok(packageJson.devDependencies["@litsx/typescript-plugin"]);
     assert.ok(packageJson.devDependencies["@litsx/vite-plugin"]);
@@ -113,6 +114,7 @@ describe("create-litsx-app", () => {
     assert.strictEqual(result.visualTests, false);
     assert.ok(!packageJson.scripts.storybook);
     assert.ok(!packageJson.devDependencies.storybook);
+    assert.ok(!("@open-wc/scoped-elements" in packageJson.dependencies));
     assert.strictEqual(packageJson.scripts.lint, "eslint .");
     assert.strictEqual(packageJson.scripts.format, "prettier --write .");
     assert.ok(!result.files.has(".storybook/main.js"));
@@ -146,6 +148,7 @@ describe("create-litsx-app", () => {
     assert.strictEqual(result.visualTests, false);
     assert.ok(!packageJson.scripts.storybook);
     assert.ok(!packageJson.devDependencies.storybook);
+    assert.ok(!("@open-wc/scoped-elements" in packageJson.dependencies));
     assert.strictEqual(packageJson.scripts.lint, "eslint .");
     assert.ok(result.files.has("src/components/status-pill.litsx"));
     assert.ok(result.files.has("src/components/button-card.litsx"));

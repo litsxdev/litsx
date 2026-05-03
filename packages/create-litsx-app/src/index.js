@@ -90,7 +90,6 @@ function createBasePackageJson(packageName) {
     },
     dependencies: {
       "@webcomponents/scoped-custom-element-registry": "^0.0.10",
-      "@open-wc/scoped-elements": "^3.0.0",
       "lit": "^3.2.1",
       "@litsx/litsx": publishedPackageVersions["@litsx/litsx"],
     },

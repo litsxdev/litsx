@@ -22,12 +22,17 @@ export interface ShadowDomScopedElementsStatics {
   readonly scopedElements: Record<string, unknown>;
 }
 
+export interface ShadowDomElementsInstance {
+  registry: CustomElementRegistry | null;
+}
+
 export type ShadowDomElementsHost<TBase extends LitsxConstructor> =
   TBase & ShadowDomScopedElementsStatics;
 
 export declare function ShadowDomElementsMixin<TBase extends LitsxConstructor>(
   Base: TBase
-): ShadowDomElementsHost<TBase>;
+): LitsxConstructor<InstanceType<TBase> & ShadowDomElementsInstance> &
+  ShadowDomScopedElementsStatics;
 
 export interface LightDomHost {
   createRenderRoot(): this;

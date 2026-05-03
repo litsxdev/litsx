@@ -219,4 +219,132 @@ describe("litsx runtime infrastructure", () => {
 
     assert.strictEqual(MixedTwice, MixedOnce);
   });
+
+  it("creates scoped registries for shadow-dom hosts when the platform supports them", () => {
+    const originalCustomElementRegistry = globalThis.CustomElementRegistry;
+    const originalAttachShadow = Element.prototype.attachShadow;
+
+    class FakeRegistry {
+      constructor() {
+        this.definitions = new Map();
+      }
+
+      define(tagName, elementClass) {
+        if (this.definitions.has(tagName)) {
+          throw new Error(`duplicate definition: ${tagName}`);
+        }
+        this.definitions.set(tagName, elementClass);
+      }
+
+      get(tagName) {
+        return this.definitions.get(tagName);
+      }
+    }
+
+    globalThis.CustomElementRegistry = FakeRegistry;
+    Element.prototype.attachShadow = function attachShadow(init) {
+      const registry = init.registry ?? init.customElements ?? init.customElementRegistry ?? null;
+      const shadowRoot = {
+        host: this,
+        registry,
+        customElements: registry,
+        childNodes: [],
+        appendChild(node) {
+          this.childNodes.push(node);
+          return node;
+        },
+      };
+      Object.defineProperty(this, "shadowRoot", {
+        configurable: true,
+        value: shadowRoot,
+      });
+      return shadowRoot;
+    };
+
+    class DemoChild extends HTMLElement {}
+
+    class Base {
+      constructor() {
+        this.shadowRoot = null;
+      }
+
+      attachShadow(init) {
+        const registry = init.registry ?? init.customElements ?? init.customElementRegistry ?? null;
+        const shadowRoot = {
+          host: this,
+          registry,
+          customElements: registry,
+          childNodes: [],
+          appendChild(node) {
+            this.childNodes.push(node);
+            return node;
+          },
+        };
+        this.shadowRoot = shadowRoot;
+        return shadowRoot;
+      }
+
+      static elements = { "demo-child": DemoChild };
+      static elementStyles = [{ cssText: ".ready { color: red; }" }];
+      static shadowRootOptions = { mode: "open", delegatesFocus: true };
+
+      static finalize() {}
+    }
+
+    try {
+      const Host = ShadowDomElementsMixin(Base);
+      const host = new Host();
+      const root = host.createRenderRoot();
+      const secondHost = new Host();
+      const secondRoot = secondHost.createRenderRoot();
+
+      assert(root);
+      assert.strictEqual(root.registry, host.registry);
+      assert.strictEqual(host.registry.get("demo-child"), DemoChild);
+      assert.strictEqual(secondHost.registry, host.registry);
+      assert.strictEqual(secondRoot.registry, host.registry);
+      const adoptedStyles = root.adoptedStyleSheets ?? [];
+      if (adoptedStyles.length > 0) {
+        assert.equal(adoptedStyles.length, 1);
+      } else {
+        assert.equal(root.childNodes.length, 1);
+        assert.match(root.childNodes[0].textContent, /color: red/);
+      }
+    } finally {
+      globalThis.CustomElementRegistry = originalCustomElementRegistry;
+      Element.prototype.attachShadow = originalAttachShadow;
+    }
+  });
+
+  it("throws a clear error when scoped registries are unavailable", () => {
+    const originalCustomElementRegistry = globalThis.CustomElementRegistry;
+
+    class DemoChild extends HTMLElement {}
+    class Base {
+      constructor() {
+        this.shadowRoot = null;
+      }
+
+      attachShadow(init) {
+        this.shadowRoot = { init };
+        return this.shadowRoot;
+      }
+
+      static elements = { "demo-child": DemoChild };
+    }
+
+    try {
+      globalThis.CustomElementRegistry = undefined;
+
+      const Host = ShadowDomElementsMixin(Base);
+      const host = new Host();
+
+      assert.throws(
+        () => host.createRenderRoot(),
+        /requires native scoped custom element registries or the @webcomponents\/scoped-custom-element-registry polyfill/
+      );
+    } finally {
+      globalThis.CustomElementRegistry = originalCustomElementRegistry;
+    }
+  });
 });

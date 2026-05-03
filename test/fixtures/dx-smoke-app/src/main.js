@@ -1,3 +1,4 @@
+import "@webcomponents/scoped-custom-element-registry";
 import { DxSmokeApp } from "./dx-smoke-app.litsx";
 import "./styles/tokens.css";
 
