@@ -1,5 +1,6 @@
 import fs from "fs";
 import path from "path";
+import { publishedPackageVersions } from "./published-package-versions.js";
 
 const LOCAL_WORKSPACE_PACKAGE_NAMES = [
   "litsx",
@@ -8,14 +9,6 @@ const LOCAL_WORKSPACE_PACKAGE_NAMES = [
   "@litsx/typescript-plugin",
   "@litsx/vite-plugin",
 ];
-
-const PUBLISHED_PACKAGE_VERSIONS = {
-  "litsx": "^0.0.0",
-  "@litsx/eslint-plugin": "^0.0.0",
-  "@litsx/typescript-plugin": "^0.0.0",
-  "@litsx/vite-plugin": "^0.0.0",
-  "prettier-plugin-litsx": "^0.0.0"
-};
 export function inferPackageManager(userAgent = "") {
   if (typeof userAgent !== "string" || userAgent.length === 0) {
     return "npm";
@@ -98,15 +91,15 @@ function createBasePackageJson(packageName) {
     dependencies: {
       "@open-wc/scoped-elements": "^3.0.0",
       "lit": "^3.2.1",
-      "litsx": PUBLISHED_PACKAGE_VERSIONS.litsx,
+      "litsx": publishedPackageVersions.litsx,
     },
     devDependencies: {
-      "@litsx/eslint-plugin": PUBLISHED_PACKAGE_VERSIONS["@litsx/eslint-plugin"],
-      "@litsx/typescript-plugin": PUBLISHED_PACKAGE_VERSIONS["@litsx/typescript-plugin"],
-      "@litsx/vite-plugin": PUBLISHED_PACKAGE_VERSIONS["@litsx/vite-plugin"],
+      "@litsx/eslint-plugin": publishedPackageVersions["@litsx/eslint-plugin"],
+      "@litsx/typescript-plugin": publishedPackageVersions["@litsx/typescript-plugin"],
+      "@litsx/vite-plugin": publishedPackageVersions["@litsx/vite-plugin"],
       "eslint": "^9.0.0",
       "prettier": "^3.8.3",
-      "prettier-plugin-litsx": PUBLISHED_PACKAGE_VERSIONS["prettier-plugin-litsx"],
+      "prettier-plugin-litsx": publishedPackageVersions["prettier-plugin-litsx"],
       "typescript": "^6.0.0",
       "vite": "^8.0.3"
     }
