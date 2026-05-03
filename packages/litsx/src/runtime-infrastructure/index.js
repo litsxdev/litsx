@@ -275,6 +275,10 @@ export const ShadowDomElementsMixin = dedupeMixin((Base) =>
         [attachKey]: registry,
       };
       const shadowRoot = this.attachShadow(shadowRootOptions);
+      if (this.renderOptions && typeof shadowRoot.importNode === "function") {
+        this.renderOptions.creationScope = shadowRoot;
+        this.renderOptions.renderBefore ??= shadowRoot.firstChild;
+      }
       adoptStyles(shadowRoot, ctor.elementStyles ?? []);
       return shadowRoot;
     }

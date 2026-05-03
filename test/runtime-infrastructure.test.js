@@ -2,6 +2,7 @@
 
 import assert from "assert";
 import { describe, it } from "vitest";
+import { connectLightDomRegistry } from "../packages/light-dom-registry/src/index.js";
 import {
   LightDomElementsMixin,
   LightDomMixin,
@@ -316,6 +317,266 @@ describe("litsx runtime infrastructure", () => {
     }
   });
 
+  it("passes a scoped creationScope to Lit when shadow roots expose importNode", () => {
+    const originalCustomElementRegistry = globalThis.CustomElementRegistry;
+    const originalAttachShadow = Element.prototype.attachShadow;
+
+    class FakeRegistry {
+      define() {}
+      get() {
+        return undefined;
+      }
+    }
+
+    globalThis.CustomElementRegistry = FakeRegistry;
+    Element.prototype.attachShadow = function attachShadow(init) {
+      const registry = init.registry ?? init.customElements ?? init.customElementRegistry ?? null;
+      const shadowRoot = {
+        host: this,
+        registry,
+        customElements: registry,
+        firstChild: null,
+        importNode(node) {
+          return node;
+        },
+        appendChild() {},
+      };
+      Object.defineProperty(this, "shadowRoot", {
+        configurable: true,
+        value: shadowRoot,
+      });
+      return shadowRoot;
+    };
+
+    class Base {
+      constructor() {
+        this.shadowRoot = null;
+        this.renderOptions = {};
+      }
+
+      attachShadow(init) {
+        return Element.prototype.attachShadow.call(this, init);
+      }
+
+      static finalize() {}
+    }
+
+    try {
+      const Host = ShadowDomElementsMixin(Base);
+      const host = new Host();
+      const shadowRoot = host.createRenderRoot();
+
+      assert.strictEqual(host.renderOptions.creationScope, shadowRoot);
+    } finally {
+      globalThis.CustomElementRegistry = originalCustomElementRegistry;
+      Element.prototype.attachShadow = originalAttachShadow;
+    }
+  });
+
+  it("supports late scoped definitions through this.registry", () => {
+    const originalCustomElementRegistry = globalThis.CustomElementRegistry;
+    const originalAttachShadow = Element.prototype.attachShadow;
+
+    class FakeRegistry {
+      constructor() {
+        this.definitions = new Map();
+      }
+
+      define(tagName, elementClass) {
+        if (this.definitions.has(tagName)) {
+          throw new Error(`duplicate definition: ${tagName}`);
+        }
+        this.definitions.set(tagName, elementClass);
+      }
+
+      get(tagName) {
+        return this.definitions.get(tagName);
+      }
+    }
+
+    class Base {
+      constructor() {
+        this.shadowRoot = null;
+      }
+
+      attachShadow(init) {
+        const registry = init.registry ?? init.customElements ?? init.customElementRegistry ?? null;
+        const shadowRoot = { host: this, registry, customElements: registry, appendChild() {} };
+        this.shadowRoot = shadowRoot;
+        return shadowRoot;
+      }
+
+      static finalize() {}
+    }
+
+    class LazyChild extends HTMLElement {}
+
+    try {
+      globalThis.CustomElementRegistry = FakeRegistry;
+      Element.prototype.attachShadow = function attachShadow(init) {
+        const registry = init.registry ?? init.customElements ?? init.customElementRegistry ?? null;
+        const shadowRoot = { host: this, registry, customElements: registry, appendChild() {} };
+        Object.defineProperty(this, "shadowRoot", {
+          configurable: true,
+          value: shadowRoot,
+        });
+        return shadowRoot;
+      };
+
+      const Host = ShadowDomElementsMixin(Base);
+      const host = new Host();
+      host.createRenderRoot();
+
+      host.registry.define("lazy-child", LazyChild);
+
+      assert.strictEqual(host.registry.get("lazy-child"), LazyChild);
+    } finally {
+      globalThis.CustomElementRegistry = originalCustomElementRegistry;
+      Element.prototype.attachShadow = originalAttachShadow;
+    }
+  });
+
+  it("fails clearly when a shared scoped registry would need a different constructor for the same tag", () => {
+    const originalCustomElementRegistry = globalThis.CustomElementRegistry;
+    const originalAttachShadow = Element.prototype.attachShadow;
+
+    class FakeRegistry {
+      constructor() {
+        this.definitions = new Map();
+      }
+
+      define(tagName, elementClass) {
+        if (this.definitions.has(tagName)) {
+          throw new Error(`duplicate definition: ${tagName}`);
+        }
+        this.definitions.set(tagName, elementClass);
+      }
+
+      get(tagName) {
+        return this.definitions.get(tagName);
+      }
+    }
+
+    class FirstChild extends HTMLElement {}
+    class SecondChild extends HTMLElement {}
+
+    class Base {
+      constructor() {
+        this.shadowRoot = null;
+      }
+
+      attachShadow(init) {
+        const registry = init.registry ?? init.customElements ?? init.customElementRegistry ?? null;
+        const shadowRoot = { host: this, registry, customElements: registry, appendChild() {} };
+        this.shadowRoot = shadowRoot;
+        return shadowRoot;
+      }
+
+      static elements = {
+        "demo-child": FirstChild,
+      };
+
+      static finalize() {}
+    }
+
+    try {
+      globalThis.CustomElementRegistry = FakeRegistry;
+      Element.prototype.attachShadow = function attachShadow(init) {
+        const registry = init.registry ?? init.customElements ?? init.customElementRegistry ?? null;
+        const shadowRoot = { host: this, registry, customElements: registry, appendChild() {} };
+        Object.defineProperty(this, "shadowRoot", {
+          configurable: true,
+          value: shadowRoot,
+        });
+        return shadowRoot;
+      };
+
+      const Host = ShadowDomElementsMixin(Base);
+      new Host().createRenderRoot();
+      Host.elements = { "demo-child": SecondChild };
+
+      assert.throws(
+        () => new Host().createRenderRoot(),
+        /cannot redefine scoped element "demo-child" with a different constructor/
+      );
+    } finally {
+      globalThis.CustomElementRegistry = originalCustomElementRegistry;
+      Element.prototype.attachShadow = originalAttachShadow;
+    }
+  });
+
+  it("allows instance-level registry overrides instead of forcing the class cache", () => {
+    const originalCustomElementRegistry = globalThis.CustomElementRegistry;
+    const originalAttachShadow = Element.prototype.attachShadow;
+
+    class FakeRegistry {
+      constructor() {
+        this.definitions = new Map();
+      }
+
+      define(tagName, elementClass) {
+        if (this.definitions.has(tagName)) {
+          throw new Error(`duplicate definition: ${tagName}`);
+        }
+        this.definitions.set(tagName, elementClass);
+      }
+
+      get(tagName) {
+        return this.definitions.get(tagName);
+      }
+    }
+
+    class DemoChild extends HTMLElement {}
+
+    class Base {
+      constructor() {
+        this.shadowRoot = null;
+      }
+
+      attachShadow(init) {
+        const registry = init.registry ?? init.customElements ?? init.customElementRegistry ?? null;
+        const shadowRoot = { host: this, registry, customElements: registry, appendChild() {} };
+        this.shadowRoot = shadowRoot;
+        return shadowRoot;
+      }
+
+      static elements = {
+        "demo-child": DemoChild,
+      };
+
+      static finalize() {}
+    }
+
+    try {
+      globalThis.CustomElementRegistry = FakeRegistry;
+      Element.prototype.attachShadow = function attachShadow(init) {
+        const registry = init.registry ?? init.customElements ?? init.customElementRegistry ?? null;
+        const shadowRoot = { host: this, registry, customElements: registry, appendChild() {} };
+        Object.defineProperty(this, "shadowRoot", {
+          configurable: true,
+          value: shadowRoot,
+        });
+        return shadowRoot;
+      };
+
+      const Host = ShadowDomElementsMixin(Base);
+      const firstHost = new Host();
+      const secondHost = new Host();
+      firstHost.registry = new FakeRegistry();
+      secondHost.registry = new FakeRegistry();
+
+      firstHost.createRenderRoot();
+      secondHost.createRenderRoot();
+
+      assert.notStrictEqual(firstHost.registry, secondHost.registry);
+      assert.strictEqual(firstHost.registry.get("demo-child"), DemoChild);
+      assert.strictEqual(secondHost.registry.get("demo-child"), DemoChild);
+    } finally {
+      globalThis.CustomElementRegistry = originalCustomElementRegistry;
+      Element.prototype.attachShadow = originalAttachShadow;
+    }
+  });
+
   it("throws a clear error when scoped registries are unavailable", () => {
     const originalCustomElementRegistry = globalThis.CustomElementRegistry;
 
@@ -345,6 +606,102 @@ describe("litsx runtime infrastructure", () => {
       );
     } finally {
       globalThis.CustomElementRegistry = originalCustomElementRegistry;
+    }
+  });
+
+  it("lets shadow-dom and light-dom registries coexist in the same runtime", () => {
+    const lightChildTag = nextTag("litsx-runtime-light-child");
+    const shadowChildTag = nextTag("litsx-runtime-shadow-child");
+    const originalCustomElementRegistry = globalThis.CustomElementRegistry;
+    const originalAttachShadow = Element.prototype.attachShadow;
+
+    class FakeRegistry {
+      constructor() {
+        this.definitions = new Map();
+      }
+
+      define(tagName, elementClass) {
+        if (this.definitions.has(tagName)) {
+          throw new Error(`duplicate definition: ${tagName}`);
+        }
+        this.definitions.set(tagName, elementClass);
+      }
+
+      get(tagName) {
+        return this.definitions.get(tagName);
+      }
+    }
+
+    class LightChild extends HTMLElement {
+      constructor() {
+        super();
+        this.kind = "light";
+      }
+    }
+
+    class ShadowChild extends HTMLElement {}
+
+    class ShadowBase {
+      constructor() {
+        this.shadowRoot = null;
+      }
+
+      attachShadow(init) {
+        return Element.prototype.attachShadow.call(this, init);
+      }
+
+      static elements = {
+        [shadowChildTag]: ShadowChild,
+      };
+
+      static finalize() {}
+    }
+
+    try {
+      const lightHost = document.createElement("section");
+      connectLightDomRegistry(lightHost, {
+        [lightChildTag]: LightChild,
+      });
+      lightHost.innerHTML = `<${lightChildTag}></${lightChildTag}>`;
+      document.body.appendChild(lightHost);
+
+      const lightChild = lightHost.querySelector(lightChildTag);
+      assert(lightChild);
+      assert.strictEqual(Object.getPrototypeOf(lightChild), LightChild.prototype);
+      assert.strictEqual(lightHost.registry.get(lightChildTag), LightChild);
+
+      globalThis.CustomElementRegistry = FakeRegistry;
+      Element.prototype.attachShadow = function attachShadow(init) {
+        const registry = init.registry ?? init.customElements ?? init.customElementRegistry ?? null;
+        const shadowRoot = {
+          host: this,
+          registry,
+          customElements: registry,
+          childNodes: [],
+          appendChild(node) {
+            this.childNodes.push(node);
+            return node;
+          },
+        };
+        Object.defineProperty(this, "shadowRoot", {
+          configurable: true,
+          value: shadowRoot,
+        });
+        return shadowRoot;
+      };
+
+      const ShadowHost = ShadowDomElementsMixin(ShadowBase);
+      const shadowHost = new ShadowHost();
+      shadowHost.createRenderRoot();
+
+      assert.strictEqual(shadowHost.registry.get(shadowChildTag), ShadowChild);
+      assert.strictEqual(shadowHost.registry.get(lightChildTag), undefined);
+      assert.strictEqual(lightHost.registry.get(shadowChildTag), null);
+
+      lightHost.remove();
+    } finally {
+      globalThis.CustomElementRegistry = originalCustomElementRegistry;
+      Element.prototype.attachShadow = originalAttachShadow;
     }
   });
 });
