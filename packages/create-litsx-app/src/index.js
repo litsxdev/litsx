@@ -248,6 +248,46 @@ export default [
   "typescript.tsserver.useSeparateSyntaxServer": false
 }
 `);
+  files.set("public/title.svg", `<svg class="litsx-logo" width="144" height="40" viewBox="0 0 144 40" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="LitSX">
+  <defs>
+    <linearGradient id="sxGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="40%" stop-color="#6a5cff"/>
+      <stop offset="60%" stop-color="#ff3d77"/>
+      <stop offset="75%" stop-color="#ff8a00"/>
+    </linearGradient>
+  </defs>
+  <style>
+    .litsx-wordmark {
+      fill: #1a1a1a;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      .litsx-wordmark {
+        fill: #f3f4f6;
+      }
+    }
+  </style>
+
+  <text
+    class="litsx-wordmark"
+    x="0"
+    y="31"
+    font-family="Montserrat, Inter, ui-sans-serif, system-ui, sans-serif"
+    font-weight="800"
+    font-size="34"
+    letter-spacing="-0.045em">
+    Lit
+    <tspan
+      dx="-4"
+      dy="-13"
+      font-size="18"
+      letter-spacing="-0.02em"
+      fill="url(#sxGradient)">
+      sx
+    </tspan>
+  </text>
+</svg>
+`);
   files.set("src/main.js", `import "@webcomponents/scoped-custom-element-registry";
 import { ${className} } from "./${packageName}.litsx";
 import "./styles/tokens.css";
@@ -284,6 +324,26 @@ export const ${className} = ({ title = "Hello LitSX" }) => {
       inset: 24px 0 auto;
       height: 1px;
       background: linear-gradient(90deg, transparent, var(--color-line), transparent);
+    }
+
+    .brand {
+      display: inline-flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-bottom: 32px;
+    }
+
+    .brandmark {
+      width: 144px;
+      height: auto;
+      display: block;
+    }
+
+    .kicker {
+      font-size: 0.76rem;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: rgba(27, 34, 48, 0.58);
     }
 
     .title {
@@ -326,6 +386,10 @@ export const ${className} = ({ title = "Hello LitSX" }) => {
 
   return (
     <main class="shell">
+      <div class="brand">
+        <img class="brandmark" src="/title.svg" alt="LitSX" />
+        <span class="kicker">Authored web components</span>
+      </div>
       <h1 class="title">{title}</h1>
       <p class="lede">
         Edit <code>src/${packageName}.litsx</code> and click the button to confirm
@@ -354,11 +418,14 @@ export const ${className} = ({ title = "Hello LitSX" }) => {
 
 body {
   margin: 0;
+  min-height: 100vh;
   font-family: var(--font-body);
   background:
     radial-gradient(circle at top left, rgba(255, 255, 255, 0.7), transparent 26%),
     radial-gradient(circle at top right, rgba(158, 75, 31, 0.18), transparent 22%),
     linear-gradient(180deg, var(--color-bg) 0%, var(--color-bg-deep) 100%);
+  background-repeat: no-repeat;
+  background-size: cover;
   color: var(--color-text);
 }
 `);
@@ -401,6 +468,10 @@ import { ButtonCard } from "./components/button-card.litsx";
 export const ${className} = ({ title = "LitSX Components" }) => {
   return (
     <main class="shell">
+      <div class="brand">
+        <img class="brandmark" src="/title.svg" alt="LitSX" />
+        <span class="kicker">Starter component surface</span>
+      </div>
       <header>
         <h1>{title}</h1>
         <StatusPill .label={"preview"} ?active={true} tone={"positive"} />
@@ -456,11 +527,14 @@ export const ${className} = ({ title = "LitSX Components" }) => {
 
 body {
   margin: 0;
+  min-height: 100vh;
   font-family: var(--font-body);
   background:
     radial-gradient(circle at top left, rgba(255, 255, 255, 0.72), transparent 24%),
     radial-gradient(circle at top right, rgba(197, 83, 27, 0.18), transparent 18%),
     linear-gradient(180deg, #f6f0e6 0%, var(--color-bg) 100%);
+  background-repeat: no-repeat;
+  background-size: cover;
   color: var(--color-text);
 }
 
@@ -468,6 +542,26 @@ body {
   max-width: 960px;
   margin: 0 auto;
   padding: 56px 24px 104px;
+}
+
+.brand {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 28px;
+}
+
+.brandmark {
+  width: 144px;
+  height: auto;
+  display: block;
+}
+
+.kicker {
+  font-size: 0.76rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(24, 32, 51, 0.56);
 }
 
 .shell h1,
@@ -614,6 +708,10 @@ import { ButtonCard } from "./components/button-card.litsx";
 export const ${className} = ({ title = "LitSX" }) => {
   return (
     <main class="shell">
+      <div class="brand">
+        <img class="brandmark" src="/title.svg" alt="LitSX" />
+        <span class="kicker">Design system starter</span>
+      </div>
       <header>
         <h1>{title}</h1>
         <StatusPill .label={"ready"} ?active={true} />
@@ -625,8 +723,8 @@ export const ${className} = ({ title = "LitSX" }) => {
       />
 
       <SuspenseBoundary
-        fallback={<p>Loading boundary…</p>}
-        contentRenderer={() => <p>Boundary ready.</p>}
+        .fallbackRenderer={() => <p>Loading boundary…</p>}
+        .contentRenderer={() => <p>Boundary ready.</p>}
       />
 
       <button @click={() => console.log("hello from litsx")}>
@@ -733,11 +831,14 @@ The \`StatusPill\` component is a compact semantic label for system state. It is
 
 body {
   margin: 0;
+  min-height: 100vh;
   font-family: var(--font-body);
   background:
     radial-gradient(circle at top left, rgba(255, 255, 255, 0.74), transparent 24%),
     radial-gradient(circle at top right, rgba(203, 88, 33, 0.2), transparent 20%),
     linear-gradient(180deg, #f7f0e6 0%, var(--color-bg) 100%);
+  background-repeat: no-repeat;
+  background-size: cover;
   color: var(--color-text);
 }
 
@@ -754,6 +855,26 @@ body {
   inset: 20px 24px auto;
   height: 1px;
   background: linear-gradient(90deg, transparent, var(--color-border), transparent);
+}
+
+.brand {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 28px;
+}
+
+.brandmark {
+  width: 144px;
+  height: auto;
+  display: block;
+}
+
+.kicker {
+  font-size: 0.76rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(21, 32, 51, 0.56);
 }
 
 .shell > header {
