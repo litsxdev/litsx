@@ -90,25 +90,31 @@ describe("@litsx/compiler", () => {
 
     const result = transformLitsxSync(source, {
       filename: "/virtual/Demo.litsx",
+      jsxTemplate: false,
     });
 
     assert.doesNotMatch(result.code, /<GuideCard/);
     assert.match(result.code, /<guide-card/);
     assert.match(result.code, /"guide-card": GuideCard/);
     assert.match(result.code, /bindRendererContext/);
-    assert.match(result.code, /\.titleRenderer=\$\{bindRendererContext\(typeof this === "undefined" \? null : this,\s*\(\) => "y",\s*\{\s*projected: false\s*\}\)\}/);
-    assert.match(result.code, /\.contentRenderer=\$\{bindRendererContext\(typeof this === "undefined" \? null : this,\s*\(\) => html`<p>z<\/p>`,\s*\{\s*projected: false\s*\}\)\}/);
-    assert.match(result.code, /\.contentRenderer=\$\{bindRendererContext\(typeof this === "undefined" \? null : this,\s*\(\) => html`<guide-card[\s\S]*`,\s*\{\s*projected: true\s*\}\)\}/);
+    assert.doesNotMatch(result.code, /\.titleRenderer=\{bindRendererContext\(typeof this === "undefined" \? null : this,\s*\(\) => "y"\)\}/);
+    assert.doesNotMatch(result.code, /\.contentRenderer=\{bindRendererContext\(typeof this === "undefined" \? null : this,\s*\(\) => <p>z<\/p>\)\}/);
+    assert.match(result.code, /\.contentRenderer=\{bindRendererContext\(typeof this === "undefined" \? null : this,\s*\(\) => <guide-card[\s\S]*\/>\)\}/);
   }, 20000);
 
-  it("marks intrinsic-only renderers as inline and custom-element renderers as projected", () => {
+  it("binds only function props whose returned JSX needs component context", () => {
     const source = [
       'import { SuspenseBoundary } from "@litsx/litsx";',
+      'import { GuideCard } from "./guide-card.litsx";',
+      "const renderHeader = () => <p>plain</p>;",
+      "const renderPanel = () => <fancy-panel />;",
       "export const Demo = () => {",
       "  return (",
       "    <>",
-      '      <SuspenseBoundary .contentRenderer={() => <p>plain</p>} />',
-      '      <SuspenseBoundary .contentRenderer={() => <fancy-panel />} />',
+      '      <SuspenseBoundary .contentRenderer={renderHeader} />',
+      '      <guide-card .header={renderPanel} />',
+      '      <GuideCard .title={renderHeader} />',
+      '      <button .onclick={renderHeader}></button>',
       "    </>",
       "  );",
       "};",
@@ -116,10 +122,192 @@ describe("@litsx/compiler", () => {
 
     const result = transformLitsxSync(source, {
       filename: "/virtual/Demo.litsx",
+      jsxTemplate: false,
     });
 
-    assert.match(result.code, /bindRendererContext\(typeof this === "undefined" \? null : this,\s*\(\) => html`<p>plain<\/p>`,\s*\{\s*projected: false\s*\}\)/);
-    assert.match(result.code, /bindRendererContext\(typeof this === "undefined" \? null : this,\s*\(\) => html`<fancy-panel><\/fancy-panel>`,\s*\{\s*projected: true\s*\}\)/);
+    assert.doesNotMatch(result.code, /\.contentRenderer=\{bindRendererContext\(typeof this === "undefined" \? null : this,\s*renderHeader\)\}/);
+    assert.match(result.code, /\.header=\{bindRendererContext\(typeof this === "undefined" \? null : this,\s*renderPanel\)\}/);
+    assert.doesNotMatch(result.code, /\.title=\{bindRendererContext\(typeof this === "undefined" \? null : this,\s*renderHeader\)\}/);
+    assert.doesNotMatch(result.code, /\.onclick=\{bindRendererContext\(/);
+  }, 20000);
+
+  it("binds local helper references only when they transitively return component JSX", () => {
+    const source = [
+      "import { GuideCard } from './guide-card.litsx';",
+      "const renderPlain = () => <p>plain</p>;",
+      "const renderCard = () => <GuideCard />;",
+      "const wrapPlain = () => renderPlain();",
+      "const wrapCard = () => renderCard();",
+      "export const Demo = () => {",
+      "  return (",
+      "    <guide-card",
+      "      .plain={wrapPlain}",
+      "      .card={wrapCard}",
+      "    />",
+      "  );",
+      "};",
+    ].join("\n");
+
+    const result = transformLitsxSync(source, {
+      filename: "/virtual/Demo.litsx",
+      jsxTemplate: false,
+    });
+
+    assert.doesNotMatch(result.code, /\.plain=\{bindRendererContext\(/);
+    assert.match(result.code, /\.card=\{bindRendererContext\(typeof this === "undefined" \? null : this,\s*wrapCard\)\}/);
+  }, 20000);
+
+  it("does not include unrelated top-level helpers in static elements collection", () => {
+    const source = [
+      "import { GuideCard } from './guide-card.litsx';",
+      "import { LitsxButton } from './litsx-button.litsx';",
+      "function unusedHelper() {",
+      "  return <LitsxButton type=\"secondary\" label=\"unused\" />;",
+      "}",
+      "export function Demo() {",
+      "  return <GuideCard />;",
+      "}",
+    ].join("\n");
+
+    const result = transformLitsxSync(source, {
+      filename: "/virtual/Demo.litsx",
+      jsxTemplate: false,
+    });
+
+    assert.match(result.code, /static elements\s*=\s*\{[\s\S]*"guide-card": GuideCard[\s\S]*\}/);
+    assert.doesNotMatch(result.code, /"litsx-button": LitsxButton/);
+  }, 20000);
+
+  it("fails compilation when PascalCase JSX does not resolve to an import or local declaration", () => {
+    assert.throws(() => {
+      transformLitsxSync(
+        [
+          "export function Demo() {",
+          "  return <MissingThing />;",
+          "}",
+        ].join("\n"),
+        {
+          filename: "/virtual/Demo.litsx",
+        }
+      );
+    }, /Unknown LitSX component "MissingThing"/);
+  }, 20000);
+
+  it("materializes zero-arg inline render thunks in child position", () => {
+    const source = [
+      "export function Demo() {",
+      "  return <section>{() => <fancy-panel />}</section>;",
+      "}",
+    ].join("\n");
+
+    const result = transformLitsxSync(source, {
+      filename: "/virtual/Demo.litsx",
+    });
+
+    assert.match(result.code, /return html`<section>\$\{\(\(\) => html`<fancy-panel><\/fancy-panel>`\)\(\)\}<\/section>`;/);
+  }, 20000);
+
+  it("materializes zero-arg inline wrappers around local render helpers in child position", () => {
+    const source = [
+      "export function Demo() {",
+      "  const fn = () => <fancy-panel />;",
+      "  return <section>{() => fn()}</section>;",
+      "}",
+    ].join("\n");
+
+    const result = transformLitsxSync(source, {
+      filename: "/virtual/Demo.litsx",
+    });
+
+    assert.match(result.code, /fn\(\) \{\s*return html`<fancy-panel><\/fancy-panel>`;\s*\}/);
+    assert.match(result.code, /return html`<section>\$\{\(\(\) => this\.fn\(\)\)\(\)\}<\/section>`;/);
+  }, 20000);
+
+  it("keeps direct local render helper calls working in child position, including arguments", () => {
+    const source = [
+      "export function Demo() {",
+      "  const one = () => <fancy-panel />;",
+      "  const many = (a, b, c) => <fancy-panel data-a={a} data-b={b} data-c={c} />;",
+      "  return <section>{one()}{many(1, 2, 3)}</section>;",
+      "}",
+    ].join("\n");
+
+    const result = transformLitsxSync(source, {
+      filename: "/virtual/Demo.litsx",
+    });
+
+    assert.match(result.code, /one\(\) \{\s*return html`<fancy-panel><\/fancy-panel>`;\s*\}/);
+    assert.match(result.code, /many\(a, b, c\) \{\s*return html`<fancy-panel data-a="\$\{a\}" data-b="\$\{b\}" data-c="\$\{c\}"><\/fancy-panel>`;\s*\}/);
+    assert.match(result.code, /return html`<section>\$\{this\.one\(\)\}\$\{this\.many\(1, 2, 3\)\}<\/section>`;/);
+  }, 20000);
+
+  it("lowers capitalized JSX in lowercase helpers to equivalent html tags", () => {
+    const source = [
+      "import { LitsxButton } from './litsx-button.litsx';",
+      "function renderButtonHeader() {",
+      "  return <LitsxButton type=\"secondary\" label=\"Renderer returns component\" />;",
+      "}",
+      "export function Demo() {",
+      "  return <section>{renderButtonHeader()}</section>;",
+      "}",
+    ].join("\n");
+
+    const result = transformLitsxSync(source, {
+      filename: "/virtual/Demo.litsx",
+    });
+
+    assert.match(result.code, /function renderButtonHeader\(\) \{\s*return html`<litsx-button type="secondary" label="Renderer returns component"><\/litsx-button>`;\s*\}/);
+    assert.doesNotMatch(result.code, /html`\$\{LitsxButton\(/);
+  }, 20000);
+
+  it("lowers capitalized JSX in lowercase const helpers to equivalent html tags", () => {
+    const source = [
+      "import { LitsxButton } from './litsx-button.litsx';",
+      "const renderButtonHeader = () => {",
+      "  return <LitsxButton type=\"secondary\" label=\"Renderer returns component\" />;",
+      "};",
+      "export function Demo() {",
+      "  return <section>{renderButtonHeader()}</section>;",
+      "}",
+    ].join("\n");
+
+    const result = transformLitsxSync(source, {
+      filename: "/virtual/Demo.litsx",
+    });
+
+    assert.match(result.code, /const renderButtonHeader = \(\) => \{\s*return html`<litsx-button type="secondary" label="Renderer returns component"><\/litsx-button>`;\s*\};/);
+    assert.doesNotMatch(result.code, /html`\$\{LitsxButton\(/);
+  }, 20000);
+
+  it("materializes zero-arg inline thunks that return capitalized component JSX as equivalent html tags", () => {
+    const source = [
+      "import { LitsxButton } from './litsx-button.litsx';",
+      "export function Demo() {",
+      "  return <section>{() => <LitsxButton type=\"primary\" label=\"Inline thunk child\" />}</section>;",
+      "}",
+    ].join("\n");
+
+    const result = transformLitsxSync(source, {
+      filename: "/virtual/Demo.litsx",
+    });
+
+    assert.match(result.code, /return html`<section>\$\{\(\(\) => html`<litsx-button type="primary" label="Inline thunk child"><\/litsx-button>`\)\(\)\}<\/section>`;/);
+  }, 20000);
+
+  it("rewrites prop-backed renderer calls in JSX to renderRendererCall", () => {
+    const source = [
+      "export function Demo({ thunk }) {",
+      "  return <section>{thunk('alpha')}</section>;",
+      "}",
+    ].join("\n");
+
+    const result = transformLitsxSync(source, {
+      filename: "/virtual/Demo.litsx",
+      jsxTemplate: false,
+    });
+
+    assert.match(result.code, /import \{ renderRendererCall \} from "@litsx\/litsx\/internal\/runtime-render-context";/);
+    assert.match(result.code, /return <section>\{renderRendererCall\(this\.thunk, 'alpha'\)\}<\/section>;/);
   }, 20000);
 
   it("keeps lit-style attributes aligned in the final sourcemap", async () => {

@@ -171,7 +171,7 @@ describe("native wrapper utils internals", () => {
     );
   });
 
-  it("transforms exported functions and arrow components while honoring default export mode", () => {
+  it("transforms named capitalized exports, including default ones", () => {
     const named = parseModule(`
       export function Card() {
         return <div />;
@@ -240,7 +240,7 @@ describe("native wrapper utils internals", () => {
     );
   });
 
-  it("handles wrapped named and default exports and short-circuits unsupported cases", () => {
+  it("handles wrapped named/default capitalized exports and short-circuits unsupported cases", () => {
     const wrappedNamed = parseModule(`
       import { memo } from "react";
       function Inner() {

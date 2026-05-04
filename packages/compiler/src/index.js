@@ -1,4 +1,5 @@
 import babelCore from "@babel/core";
+import transformJsxHtmlTemplate from "@litsx/babel-plugin-transform-jsx-html-template";
 import {
   createLitsxPresetPlugins,
   detectLitsxSourceFeatures,
@@ -277,18 +278,36 @@ export function createLitsxTransformConfig(source, options = {}) {
     },
     profile,
   );
+  const shouldRunFinalTemplatePass = options.jsxTemplate !== false;
   const outputPlugins = normalizePluginList(options.outputPlugins);
+  const presetOptions = shouldRunFinalTemplatePass
+    ? {
+        ...memoizationOptions,
+        jsxTemplate: false,
+      }
+    : memoizationOptions;
   const presetPlugins = profilePhase(
     "preset-plugins",
-    () => getMemoizedPresetPlugins(memoizationOptions, sourceFeatures, compilationSession),
+    () => getMemoizedPresetPlugins(presetOptions, sourceFeatures, compilationSession),
     profile,
   );
+
+  const finalTemplatePlugins = shouldRunFinalTemplatePass
+    ? [
+        ...(options.jsxTemplateOptions && Object.keys(options.jsxTemplateOptions).length > 0
+          ? [[transformJsxHtmlTemplate, options.jsxTemplateOptions]]
+          : [transformJsxHtmlTemplate]),
+        ...outputPlugins,
+      ]
+    : [];
 
   return {
     filename,
     inputAst,
     authoredWarnings,
     profile,
+    shouldRunFinalTemplatePass,
+    finalTemplatePlugins,
     babelOptions: {
       filename,
       sourceFileName: filename,
@@ -297,10 +316,9 @@ export function createLitsxTransformConfig(source, options = {}) {
       inputSourceMap:
         options.sourceMaps === true ? virtualization?.map ?? undefined : undefined,
       sourceMaps: options.sourceMaps === true,
-      plugins: [
-        ...presetPlugins,
-        ...outputPlugins,
-      ],
+      plugins: shouldRunFinalTemplatePass
+        ? [...presetPlugins]
+        : [...presetPlugins, ...outputPlugins],
     },
   };
 }
@@ -366,34 +384,100 @@ export async function transformLitsx(source, options = {}) {
     const {
       inputAst,
       babelOptions,
+      shouldRunFinalTemplatePass,
+      finalTemplatePlugins,
       authoredWarnings,
       profile,
     } = createLitsxTransformConfig(source, nextOptions);
-    const result = await profilePhase(
+    const firstPassResult = await profilePhase(
       "babel-transform",
       () => transformFromAstAsync(inputAst, source, {
         ...babelOptions,
+        ast: shouldRunFinalTemplatePass,
         plugins: babelOptions.plugins,
       }),
       profile,
     );
+    const result = shouldRunFinalTemplatePass
+      ? await profilePhase(
+          "template-lowering",
+          async () => {
+            const secondPassResult = await transformFromAstAsync(
+              firstPassResult?.ast ?? inputAst,
+              firstPassResult?.code ?? source,
+              {
+                filename: babelOptions.filename,
+                sourceFileName: babelOptions.sourceFileName,
+                configFile: false,
+                babelrc: false,
+                inputSourceMap:
+                  options.sourceMaps === true ? firstPassResult?.map ?? undefined : undefined,
+                sourceMaps: options.sourceMaps === true,
+                plugins: finalTemplatePlugins,
+              }
+            );
+
+            return {
+              ...secondPassResult,
+              metadata: {
+                ...(firstPassResult?.metadata || {}),
+                ...(secondPassResult?.metadata || {}),
+              },
+            };
+          },
+          profile,
+        )
+      : firstPassResult;
     return finalizeTransformResult(result, nextOptions, authoredWarnings, profile);
   }
 
   const {
     inputAst,
     babelOptions,
+    shouldRunFinalTemplatePass,
+    finalTemplatePlugins,
     authoredWarnings,
     profile,
   } = createLitsxTransformConfig(source, options);
-  const result = await profilePhase(
+  const firstPassResult = await profilePhase(
     "babel-transform",
     () => transformFromAstAsync(inputAst, source, {
       ...babelOptions,
+      ast: shouldRunFinalTemplatePass,
       plugins: babelOptions.plugins,
     }),
     profile,
   );
+  const result = shouldRunFinalTemplatePass
+    ? await profilePhase(
+        "template-lowering",
+        async () => {
+          const secondPassResult = await transformFromAstAsync(
+            firstPassResult?.ast ?? inputAst,
+            firstPassResult?.code ?? source,
+            {
+              filename: babelOptions.filename,
+              sourceFileName: babelOptions.sourceFileName,
+              configFile: false,
+              babelrc: false,
+              inputSourceMap:
+                options.sourceMaps === true ? firstPassResult?.map ?? undefined : undefined,
+              sourceMaps: options.sourceMaps === true,
+              plugins: finalTemplatePlugins,
+            }
+          );
+
+          return {
+            ...secondPassResult,
+            metadata: {
+              ...(firstPassResult?.metadata || {}),
+              ...(secondPassResult?.metadata || {}),
+            },
+          };
+        },
+        profile,
+      )
+    : firstPassResult;
   return finalizeTransformResult(result, options, authoredWarnings, profile);
 }
 
@@ -410,28 +494,98 @@ export function transformLitsxSync(source, options = {}) {
     const {
       inputAst,
       babelOptions,
+      shouldRunFinalTemplatePass,
+      finalTemplatePlugins,
       authoredWarnings,
       profile,
     } = createLitsxTransformConfig(source, nextOptions);
-    const result = profilePhase(
+    const firstPassResult = profilePhase(
       "babel-transform",
-      () => transformFromAstSync(inputAst, source, babelOptions),
+      () => transformFromAstSync(inputAst, source, {
+        ...babelOptions,
+        ast: shouldRunFinalTemplatePass,
+      }),
       profile,
     );
+    const result = shouldRunFinalTemplatePass
+      ? profilePhase(
+          "template-lowering",
+          () => {
+            const secondPassResult = transformFromAstSync(
+              firstPassResult?.ast ?? inputAst,
+              firstPassResult?.code ?? source,
+              {
+                filename: babelOptions.filename,
+                sourceFileName: babelOptions.sourceFileName,
+                configFile: false,
+                babelrc: false,
+                inputSourceMap:
+                  options.sourceMaps === true ? firstPassResult?.map ?? undefined : undefined,
+                sourceMaps: options.sourceMaps === true,
+                plugins: finalTemplatePlugins,
+              }
+            );
+
+            return {
+              ...secondPassResult,
+              metadata: {
+                ...(firstPassResult?.metadata || {}),
+                ...(secondPassResult?.metadata || {}),
+              },
+            };
+          },
+          profile,
+        )
+      : firstPassResult;
     return finalizeTransformResult(result, nextOptions, authoredWarnings, profile);
   }
 
   const {
     inputAst,
     babelOptions,
+    shouldRunFinalTemplatePass,
+    finalTemplatePlugins,
     authoredWarnings,
     profile,
   } = createLitsxTransformConfig(source, options);
-  const result = profilePhase(
+  const firstPassResult = profilePhase(
     "babel-transform",
-    () => transformFromAstSync(inputAst, source, babelOptions),
+    () => transformFromAstSync(inputAst, source, {
+      ...babelOptions,
+      ast: shouldRunFinalTemplatePass,
+    }),
     profile,
   );
+  const result = shouldRunFinalTemplatePass
+    ? profilePhase(
+        "template-lowering",
+        () => {
+          const secondPassResult = transformFromAstSync(
+            firstPassResult?.ast ?? inputAst,
+            firstPassResult?.code ?? source,
+            {
+              filename: babelOptions.filename,
+              sourceFileName: babelOptions.sourceFileName,
+              configFile: false,
+              babelrc: false,
+              inputSourceMap:
+                options.sourceMaps === true ? firstPassResult?.map ?? undefined : undefined,
+              sourceMaps: options.sourceMaps === true,
+              plugins: finalTemplatePlugins,
+            }
+          );
+
+          return {
+            ...secondPassResult,
+            metadata: {
+              ...(firstPassResult?.metadata || {}),
+              ...(secondPassResult?.metadata || {}),
+            },
+          };
+        },
+        profile,
+      )
+    : firstPassResult;
   return finalizeTransformResult(result, options, authoredWarnings, profile);
 }
 

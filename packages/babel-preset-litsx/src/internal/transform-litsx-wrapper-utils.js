@@ -1,5 +1,14 @@
 let t;
 
+function isCapitalizedComponentName(name) {
+  if (typeof name !== "string" || name.length === 0) {
+    return false;
+  }
+
+  const first = name[0];
+  return first === first.toUpperCase() && first !== first.toLowerCase();
+}
+
 export function setWrapperUtilsBabelTypes(nextTypes) {
   t = nextTypes;
 }
@@ -67,6 +76,7 @@ export function maybeTransformWrappedVariableDeclarator({
     {
       ...resolvedPluginOptions,
       ...wrapperMeta.options,
+      state,
       typeResolver: state?.__litsxTypeResolver,
       warn: (warning) => {
         state?.__litsxWarnings?.push(warning);
@@ -129,12 +139,17 @@ export function handlePotentialComponentExport({
       exportName = declaration.declarations[0].id.name;
     }
 
+    if (exportName && !isCapitalizedComponentName(exportName)) {
+      return false;
+    }
+
     const classNode = transformFunction(
       declarationPath,
       exportPath.findParent((p) => p.isProgram()),
       exportName,
       {
         ...state?.__litsxResolvedPluginOptions,
+        state,
         typeResolver,
         warn: (warning) => {
           state?.__litsxWarnings?.push(warning);
@@ -170,6 +185,10 @@ export function handlePotentialComponentExport({
       : undefined;
     const programPath = exportPath.findParent((p) => p.isProgram());
 
+    if (exportName && !isCapitalizedComponentName(exportName)) {
+      return false;
+    }
+
     if (initPath.isCallExpression()) {
       const wrapperMeta = getWrapperMetadata(initPath);
       if (!wrapperMeta) return false;
@@ -184,6 +203,7 @@ export function handlePotentialComponentExport({
         {
           ...state?.__litsxResolvedPluginOptions,
           ...wrapperMeta.options,
+          state,
           typeResolver,
           warn: (warning) => {
             state?.__litsxWarnings?.push(warning);
@@ -196,7 +216,11 @@ export function handlePotentialComponentExport({
         exportPath.scope.removeBinding(exportName);
       }
 
-      exportPath.replaceWith(t.exportNamedDeclaration(classNode, []));
+      exportPath.replaceWith(
+        isDefault
+          ? t.exportDefaultDeclaration(classNode)
+          : t.exportNamedDeclaration(classNode, [])
+      );
       exportPath.requeue();
       pruneWrapperImports(wrapperMeta);
       updateTransformState?.(state, classNode);
@@ -217,6 +241,10 @@ export function handlePotentialComponentExport({
       ? wrapperMeta.functionPath.node.id.name
       : undefined;
 
+    if (!inferredName || !isCapitalizedComponentName(inferredName)) {
+      return false;
+    }
+
     const classNode = transformFunction(
       wrapperMeta.functionPath,
       programPath,
@@ -224,6 +252,7 @@ export function handlePotentialComponentExport({
       {
         ...state?.__litsxResolvedPluginOptions,
         ...wrapperMeta.options,
+        state,
         typeResolver,
         warn: (warning) => {
           state?.__litsxWarnings?.push(warning);

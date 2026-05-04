@@ -44,6 +44,15 @@ import {
 
 let t;
 
+function isCapitalizedComponentName(name) {
+  if (typeof name !== "string" || name.length === 0) {
+    return false;
+  }
+
+  const first = name[0];
+  return first === first.toUpperCase() && first !== first.toLowerCase();
+}
+
 export function createTransformFunctionToClassPlugin(defaultPluginOptions = {}) {
   return function transformFunctionToClassPlugin(_api, pluginOptions = {}) {
     ensureTypescriptModule();
@@ -76,6 +85,7 @@ export function createTransformFunctionToClassPlugin(defaultPluginOptions = {}) 
         this.__litsxNeedsStaticHoistsMixin = false;
         this.__litsxNeedsLightDomMixin = false;
         this.__litsxNeedsCallbackRef = false;
+        this.__litsxNeedsRendererCallImport = false;
         this.__litsxWarnings = [];
         this.__litsxResolvedPluginOptions = resolvedPluginOptions;
         this.__litsxTypeResolver = fileLikelyNeedsTypeResolver(this)
@@ -142,15 +152,21 @@ export function createTransformFunctionToClassPlugin(defaultPluginOptions = {}) 
             return;
           }
 
-          if (initPath && initPath.isArrowFunctionExpression() && !isInsideFunctionOrClass(varPath)) {
+          if (
+            initPath &&
+            initPath.isArrowFunctionExpression() &&
+            !isInsideFunctionOrClass(varPath) &&
+            t.isIdentifier(varPath.node.id) &&
+            isCapitalizedComponentName(varPath.node.id.name)
+          ) {
             const programPath = varPath.findParent((p) => p.isProgram());
-            const elementCandidates = collectElementCandidates(initPath, programPath);
             const classNode = transformFunction(
               initPath,
               programPath,
               varPath.node.id.name,
               {
                 ...resolvedPluginOptions,
+                state: this,
                 typeResolver: getTypeResolverForFunction(initPath, this),
                 warn: (warning) => {
                   this.__litsxWarnings.push(warning);
@@ -159,12 +175,6 @@ export function createTransformFunctionToClassPlugin(defaultPluginOptions = {}) 
             );
 
             if (!classNode) return;
-
-            if (elementCandidates.size) {
-              classNode._litsxElementCandidates &&= new Set(classNode._litsxElementCandidates);
-              const elementSet = classNode._litsxElementCandidates ||= new Set();
-              elementCandidates.forEach((candidate) => elementSet.add(candidate));
-            }
 
             const declarationPath = varPath.parentPath;
             if (!declarationPath.isVariableDeclaration()) return;
@@ -176,15 +186,21 @@ export function createTransformFunctionToClassPlugin(defaultPluginOptions = {}) 
           }
         },
         FunctionDeclaration(funcPath) {
-          if (!isInsideFunctionOrClass(funcPath)) {
+          if (
+            !funcPath.parentPath?.isExportNamedDeclaration?.() &&
+            !funcPath.parentPath?.isExportDefaultDeclaration?.() &&
+            !isInsideFunctionOrClass(funcPath) &&
+            funcPath.node.id &&
+            isCapitalizedComponentName(funcPath.node.id.name)
+          ) {
             const programPath = funcPath.findParent((p) => p.isProgram());
-            const elementCandidates = collectElementCandidates(funcPath, programPath);
             const classNode = transformFunction(
               funcPath,
               programPath,
               undefined,
               {
                 ...resolvedPluginOptions,
+                state: this,
                 typeResolver: getTypeResolverForFunction(funcPath, this),
                 warn: (warning) => {
                   this.__litsxWarnings.push(warning);
@@ -197,11 +213,6 @@ export function createTransformFunctionToClassPlugin(defaultPluginOptions = {}) 
             if (funcPath.node.id) {
               funcPath.scope.removeBinding(funcPath.node.id.name);
             }
-            if (elementCandidates.size) {
-              classNode._litsxElementCandidates &&= new Set(classNode._litsxElementCandidates);
-              const elementSet = classNode._litsxElementCandidates ||= new Set();
-              elementCandidates.forEach((candidate) => elementSet.add(candidate));
-            }
             funcPath.replaceWith(classNode);
             funcPath.requeue();
             updateTransformState(this, classNode);
@@ -213,6 +224,7 @@ export function createTransformFunctionToClassPlugin(defaultPluginOptions = {}) 
 }
 
 export default createTransformFunctionToClassPlugin();
+export { isCapitalizedComponentName };
 
 function getOrCreateModuleStaticHoistSymbol(programPath, hoistName) {
   let symbolMap = programPath.getData("__litsxStaticHoistSymbols");
@@ -353,6 +365,7 @@ function getTypeResolverForFunction(functionPath, state) {
 
 function transformFunction(functionPath, programPath, className, options = {}) {
   const { node } = functionPath;
+  const elementCandidates = collectElementCandidates(functionPath, programPath);
   const forwardRefOptions = options.forwardRef || null;
   let resolvedName = className;
   if (!resolvedName && node && node.id && t.isIdentifier(node.id)) {
@@ -384,7 +397,7 @@ function transformFunction(functionPath, programPath, className, options = {}) {
     ReturnStatement(returnPath) {
       if (t.isJSXElement(returnPath.node.argument)) {
         returnStatement = returnPath.node;
-        transformJSXExpressions(returnPath, bindings);
+        transformJSXExpressions(returnPath, bindings, options.state ?? null);
       }
     },
   });
@@ -466,7 +479,7 @@ function transformFunction(functionPath, programPath, className, options = {}) {
     createHandlerClassMember,
   });
 
-  return createComponentClass({
+  const classNode = createComponentClass({
     className,
     classMembers,
     hoistMembers,
@@ -477,6 +490,14 @@ function transformFunction(functionPath, programPath, className, options = {}) {
     needsUnsafeCss,
     needsCallbackRef,
   });
+
+  if (classNode && elementCandidates.size) {
+    classNode._litsxElementCandidates &&= new Set(classNode._litsxElementCandidates);
+    const elementSet = classNode._litsxElementCandidates ||= new Set();
+    elementCandidates.forEach((candidate) => elementSet.add(candidate));
+  }
+
+  return classNode;
 }
 
 function ensureClassIdentifier(classNode, fallbackName) {
@@ -514,36 +535,151 @@ function createNestedInitializerStatement(pattern, root, defaultValue, t) {
   ]);
 }
 
+function resolveTopLevelClassPathFromComponentTransform(nodePath) {
+  if (nodePath.isClassDeclaration()) {
+    return nodePath;
+  }
+
+  if (nodePath.isExportNamedDeclaration() || nodePath.isExportDefaultDeclaration()) {
+    const declarationPath = nodePath.get("declaration");
+    if (declarationPath?.isClassDeclaration()) {
+      return declarationPath;
+    }
+  }
+
+  return null;
+}
+
 function collectElementCandidates(functionPath, programPath) {
   const candidates = new Set();
   if (!programPath) return candidates;
 
-  const importNames = new Set();
+  const availableNames = new Set();
+  const helperPaths = new Map();
   programPath.get("body").forEach((nodePath) => {
-    if (!nodePath.isImportDeclaration()) return;
-    nodePath.node.specifiers.forEach((specifier) => {
-      if (specifier.local) {
-        importNames.add(specifier.local.name);
+    if (nodePath.isImportDeclaration()) {
+      nodePath.node.specifiers.forEach((specifier) => {
+        if (specifier.local) {
+          availableNames.add(specifier.local.name);
+        }
+      });
+      return;
+    }
+
+    const classPath = resolveTopLevelClassPathFromComponentTransform(nodePath);
+    if (classPath?.node?.id?.name) {
+      availableNames.add(classPath.node.id.name);
+      return;
+    }
+
+    if (nodePath.isFunctionDeclaration() && nodePath.node.id?.name) {
+      availableNames.add(nodePath.node.id.name);
+      helperPaths.set(nodePath.node.id.name, nodePath);
+      return;
+    }
+
+    if (!nodePath.isVariableDeclaration()) return;
+    nodePath.get("declarations").forEach((declaratorPath) => {
+      const declarator = declaratorPath.node;
+      if (!t.isIdentifier(declarator.id)) {
+        return;
+      }
+
+      availableNames.add(declarator.id.name);
+
+      const initPath = declaratorPath.get("init");
+      if (
+        initPath?.isArrowFunctionExpression?.() ||
+        initPath?.isFunctionExpression?.()
+      ) {
+        helperPaths.set(declarator.id.name, initPath);
       }
     });
   });
 
-  functionPath.traverse({
-    JSXOpeningElement(path) {
-      if (!path.node.name || path.node.name.type !== "JSXIdentifier") return;
-      const originalName = path.node.name.name;
-      if (!importNames.has(originalName)) return;
+  const helperCandidateCache = new Map();
 
-      path.node.__scopedOriginal = originalName;
-      candidates.add(originalName);
-    },
-    JSXClosingElement(path) {
-      if (!path.node.name || path.node.name.type !== "JSXIdentifier") return;
-      const originalName = path.node.name.name;
-      if (!importNames.has(originalName)) return;
-      path.node.__scopedOriginal = originalName;
-    },
-  });
+  function isCapitalizedName(name) {
+    if (typeof name !== "string" || name.length === 0) {
+      return false;
+    }
+
+    const first = name[0];
+    return first === first.toUpperCase() && first !== first.toLowerCase();
+  }
+
+  function toKebab(name) {
+    return name.replace(/([a-z])([A-Z])/g, "$1-$2").toLowerCase();
+  }
+
+  function maybeRewriteComponentName(nameNode, pathForErrors = null) {
+    if (!nameNode || nameNode.type !== "JSXIdentifier") return null;
+    const originalName = nameNode.__scopedOriginal || nameNode.name;
+    if (!isCapitalizedName(originalName)) return null;
+    if (!availableNames.has(originalName)) {
+      throw (pathForErrors?.buildCodeFrameError?.(
+        `Unknown LitSX component "${originalName}". Add an import or declare it in this module before using it in JSX.`
+      ) || new Error(
+        `Unknown LitSX component "${originalName}". Add an import or declare it in this module before using it in JSX.`
+      ));
+    }
+
+    nameNode.__scopedOriginal = originalName;
+    nameNode.name = toKebab(originalName);
+    return originalName;
+  }
+
+  function scanFunction(path, seen = new Set()) {
+    if (!path?.node) {
+      return new Set();
+    }
+
+    if (helperCandidateCache.has(path.node)) {
+      return new Set(helperCandidateCache.get(path.node));
+    }
+
+    if (seen.has(path.node)) {
+      return new Set();
+    }
+
+    const nextSeen = new Set(seen);
+    nextSeen.add(path.node);
+    const localCandidates = new Set();
+    const referencedHelpers = new Set();
+
+    path.traverse({
+      JSXOpeningElement(jsxPath) {
+        const candidate = maybeRewriteComponentName(jsxPath.node.name, jsxPath);
+        if (candidate) {
+          localCandidates.add(candidate);
+        }
+      },
+      JSXClosingElement(jsxPath) {
+        maybeRewriteComponentName(jsxPath.node.name, jsxPath);
+      },
+      Identifier(identifierPath) {
+        if (!identifierPath.isReferencedIdentifier()) {
+          return;
+        }
+
+        if (!helperPaths.has(identifierPath.node.name)) {
+          return;
+        }
+
+        referencedHelpers.add(identifierPath.node.name);
+      },
+    });
+
+    referencedHelpers.forEach((helperName) => {
+      const helperCandidates = scanFunction(helperPaths.get(helperName), nextSeen);
+      helperCandidates.forEach((candidate) => localCandidates.add(candidate));
+    });
+
+    helperCandidateCache.set(path.node, new Set(localCandidates));
+    return localCandidates;
+  }
+
+  scanFunction(functionPath).forEach((candidate) => candidates.add(candidate));
 
   return candidates;
 }

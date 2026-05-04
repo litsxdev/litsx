@@ -41,6 +41,7 @@ export function createReactCompatPresetPlugins(options = {}) {
     [reactWrappers, options.reactWrappers || {}],
     [reactContext, options.reactContext || {}],
     [litsxPropTypes, options.litsxPropTypes || {}],
+    [transformLitsxRendererProps, options.transformLitsxRendererProps || {}],
     [
       transformLitsxComponents,
       {
@@ -57,7 +58,6 @@ export function createReactCompatPresetPlugins(options = {}) {
     [reactErrorBoundary, options.reactErrorBoundary || {}],
     [reactSuspense, options.reactSuspense || {}],
     [transformLitsxScopedElements, options.transformLitsxScopedElements || {}],
-    [transformLitsxRendererProps, options.transformLitsxRendererProps || {}],
     [reactDomAttributes, options.reactDomAttributes || {}],
     [reactEvents, options.reactEvents || {}],
   ];

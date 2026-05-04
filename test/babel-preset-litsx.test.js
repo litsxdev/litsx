@@ -96,11 +96,11 @@ describe("@litsx/babel-preset-litsx", () => {
 
     assert.strictEqual(
       createLitsxPresetPlugins({}, detectLitsxSourceFeatures(plainSource, {})).length,
-      2,
+      3,
     );
     assert.strictEqual(
       createLitsxPresetPlugins({}, detectLitsxSourceFeatures(featureSource, {})).length,
-      5,
+      6,
     );
   });
 
@@ -120,6 +120,44 @@ describe("@litsx/babel-preset-litsx", () => {
     assert.match(result.code, /class Greeting extends LitElement/);
     assert.match(result.code, /return <button @click=\{save\}>\{this\.label\}<\/button>;/);
     assert.doesNotMatch(result.code, /html`/);
+  });
+
+  it("keeps top-level lowercase helpers as plain functions and only lowers their JSX", () => {
+    const source = [
+      "function renderHelperWithArgs(alpha, beta, gamma) {",
+      "  return <p>{alpha}{beta}{gamma}</p>;",
+      "}",
+      "export const Demo = () => {",
+      "  return <section>{renderHelperWithArgs('a', 'b', 'c')}</section>;",
+      "};",
+    ].join("\n");
+
+    const result = transformFromAstSync(parser.parse(source, { sourceType: "module" }), source, {
+      configFile: false,
+      babelrc: false,
+      presets: [[nativePreset, {}]],
+    });
+
+    assert.match(result.code, /function renderHelperWithArgs\(alpha, beta, gamma\) \{\s*return html`<p>\$\{alpha\}\$\{beta\}\$\{gamma\}<\/p>`;\s*\}/);
+    assert.match(result.code, /class Demo extends LitElement/);
+    assert.doesNotMatch(result.code, /class renderHelperWithArgs extends/);
+  });
+
+  it("does not promote named lowercase exports to authored components", () => {
+    const source = [
+      "export function renderHelper() {",
+      "  return <p>ok</p>;",
+      "}",
+    ].join("\n");
+
+    const result = transformFromAstSync(parser.parse(source, { sourceType: "module" }), source, {
+      configFile: false,
+      babelrc: false,
+      presets: [[nativePreset, {}]],
+    });
+
+    assert.match(result.code, /export function renderHelper\(\) \{\s*return html`<p>ok<\/p>`;\s*\}/);
+    assert.doesNotMatch(result.code, /class renderHelper extends/);
   });
 
   it("can be consumed through createLitsxPresetPlugins directly", () => {

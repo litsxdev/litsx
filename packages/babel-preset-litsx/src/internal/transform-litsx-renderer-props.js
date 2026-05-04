@@ -15,28 +15,6 @@ function createHostReferenceExpression() {
   );
 }
 
-function shouldBindRendererContext(rawName, expression) {
-  if (typeof rawName !== "string" || rawName[0] !== ".") {
-    return false;
-  }
-
-  if (!rawName.endsWith("Renderer")) {
-    return false;
-  }
-
-  return t.isArrowFunctionExpression(expression) || t.isFunctionExpression(expression);
-}
-
-function mergeProjectionDecisions(...decisions) {
-  if (decisions.includes("projected")) {
-    return "projected";
-  }
-  if (decisions.every((decision) => decision === "inline")) {
-    return "inline";
-  }
-  return "unknown";
-}
-
 function stringifyJsxName(nameNode) {
   if (t.isJSXIdentifier(nameNode)) {
     return nameNode.name;
@@ -55,146 +33,248 @@ function stringifyJsxName(nameNode) {
 
 function getTag(node) {
   const name = stringifyJsxName(node.name);
-  const isCapitalized = name.charAt(0) === name.charAt(0).toUpperCase();
-  const isComponent = !isCapitalized && node.name.type !== "JSXIdentifier";
+  const isCapitalized =
+    name.charAt(0) === name.charAt(0).toUpperCase() &&
+    name.charAt(0) !== name.charAt(0).toLowerCase();
+  const isComponent =
+    node.name.type !== "JSXIdentifier" || isCapitalized || name.includes("-");
   return { name, isComponent };
 }
 
-function analyzeJsxProjection(node) {
+function unwrapExpression(node) {
+  let current = node;
+
+  while (current) {
+    if (t.isParenthesizedExpression?.(current)) {
+      current = current.expression;
+      continue;
+    }
+
+    if (
+      t.isTSAsExpression?.(current) ||
+      t.isTSSatisfiesExpression?.(current) ||
+      t.isTypeCastExpression?.(current) ||
+      t.isTSNonNullExpression?.(current)
+    ) {
+      current = current.expression;
+      continue;
+    }
+
+    break;
+  }
+
+  return current;
+}
+
+function getFunctionNodeFromBinding(binding) {
+  if (!binding?.path) {
+    return null;
+  }
+
+  if (binding.path.isFunctionDeclaration()) {
+    return binding.path.node;
+  }
+
+  if (binding.path.isVariableDeclarator()) {
+    const init = unwrapExpression(binding.path.node.init);
+    if (t.isArrowFunctionExpression(init) || t.isFunctionExpression(init)) {
+      return init;
+    }
+  }
+
+  return null;
+}
+
+function mergeBooleanResults(results) {
+  return results.some(Boolean);
+}
+
+function jsxTreeNeedsRendererContext(node, scope, seenBindings = new Set()) {
+  if (!node) {
+    return false;
+  }
+
   if (t.isJSXFragment(node)) {
-    return mergeProjectionDecisions(
-      ...node.children.map(analyzeJsxProjectionChild)
+    return mergeBooleanResults(
+      node.children.map((child) => jsxChildNeedsRendererContext(child, scope, seenBindings))
     );
   }
 
   if (!t.isJSXElement(node)) {
-    return "unknown";
+    return false;
   }
 
-  const { name, isComponent } = getTag(node.openingElement);
-  if (isComponent || name.includes("-")) {
-    return "projected";
+  const { isComponent } = getTag(node.openingElement);
+  if (isComponent) {
+    return true;
   }
 
-  const childDecision = mergeProjectionDecisions(
-    ...node.children.map(analyzeJsxProjectionChild)
+  const childNeedsContext = mergeBooleanResults(
+    node.children.map((child) => jsxChildNeedsRendererContext(child, scope, seenBindings))
   );
 
-  const attributeDecision = mergeProjectionDecisions(
-    ...node.openingElement.attributes.map((attr) => {
-      if (attr.type !== "JSXAttribute" || !attr.value) {
-        return "inline";
+  if (childNeedsContext) {
+    return true;
+  }
+
+  return mergeBooleanResults(
+    node.openingElement.attributes.map((attr) => {
+      if (!t.isJSXAttribute(attr) || !t.isJSXExpressionContainer(attr.value)) {
+        return false;
       }
-      if (attr.value.type !== "JSXExpressionContainer") {
-        return "inline";
-      }
-      return analyzeRendererValueProjection(attr.value.expression);
+      return expressionNeedsRendererContext(attr.value.expression, scope, seenBindings);
     })
   );
-
-  return mergeProjectionDecisions("inline", childDecision, attributeDecision);
 }
 
-function analyzeJsxProjectionChild(child) {
-  if (t.isJSXText(child)) {
-    return "inline";
-  }
-  if (t.isJSXExpressionContainer(child)) {
-    return analyzeRendererValueProjection(child.expression);
-  }
+function jsxChildNeedsRendererContext(child, scope, seenBindings) {
   if (t.isJSXElement(child) || t.isJSXFragment(child)) {
-    return analyzeJsxProjection(child);
+    return jsxTreeNeedsRendererContext(child, scope, seenBindings);
   }
-  return "unknown";
+
+  if (t.isJSXExpressionContainer(child)) {
+    return expressionNeedsRendererContext(child.expression, scope, seenBindings);
+  }
+
+  return false;
 }
 
-function analyzeRendererBodyProjection(node) {
-  if (t.isBlockStatement(node)) {
-    const decisions = [];
-    for (const statement of node.body) {
-      if (t.isReturnStatement(statement)) {
-        decisions.push(analyzeRendererValueProjection(statement.argument));
-      } else if (t.isIfStatement(statement)) {
-        decisions.push(
-          mergeProjectionDecisions(
-            analyzeRendererBodyProjection(statement.consequent),
-            statement.alternate
-              ? analyzeRendererBodyProjection(statement.alternate)
-              : "inline"
-          )
-        );
-      }
-    }
-    return decisions.length > 0
-      ? mergeProjectionDecisions(...decisions)
-      : "inline";
+function functionBodyNeedsRendererContext(body, scope, seenBindings = new Set()) {
+  if (!body) {
+    return false;
   }
 
-  return analyzeRendererValueProjection(node);
+  if (t.isBlockStatement(body)) {
+    return mergeBooleanResults(
+      body.body.map((statement) => statementNeedsRendererContext(statement, scope, seenBindings))
+    );
+  }
+
+  return expressionNeedsRendererContext(body, scope, seenBindings);
 }
 
-function analyzeRendererValueProjection(node) {
-  if (!node) {
-    return "inline";
+function statementNeedsRendererContext(statement, scope, seenBindings) {
+  if (t.isReturnStatement(statement)) {
+    return expressionNeedsRendererContext(statement.argument, scope, seenBindings);
   }
 
-  if (t.isJSXElement(node) || t.isJSXFragment(node)) {
-    return analyzeJsxProjection(node);
+  if (t.isIfStatement(statement)) {
+    return mergeBooleanResults([
+      statementNeedsRendererContext(statement.consequent, scope, seenBindings),
+      statement.alternate
+        ? statementNeedsRendererContext(statement.alternate, scope, seenBindings)
+        : false,
+    ]);
   }
 
+  if (t.isBlockStatement(statement)) {
+    return functionBodyNeedsRendererContext(statement, scope, seenBindings);
+  }
+
+  return false;
+}
+
+function callExpressionNeedsRendererContext(node, scope, seenBindings) {
+  const callee = unwrapExpression(node.callee);
+  if (!t.isIdentifier(callee)) {
+    return false;
+  }
+
+  const binding = scope.getBinding(callee.name);
+  const functionNode = getFunctionNodeFromBinding(binding);
+  if (!functionNode) {
+    return false;
+  }
+
+  if (seenBindings.has(binding)) {
+    return false;
+  }
+
+  const nextSeenBindings = new Set(seenBindings);
+  nextSeenBindings.add(binding);
+  return functionBodyNeedsRendererContext(functionNode.body, binding.path.scope, nextSeenBindings);
+}
+
+function expressionNeedsRendererContext(node, scope, seenBindings = new Set()) {
+  const expression = unwrapExpression(node);
+  if (!expression) {
+    return false;
+  }
+
+  if (t.isJSXElement(expression) || t.isJSXFragment(expression)) {
+    return jsxTreeNeedsRendererContext(expression, scope, seenBindings);
+  }
+
+  if (t.isConditionalExpression(expression)) {
+    return mergeBooleanResults([
+      expressionNeedsRendererContext(expression.consequent, scope, seenBindings),
+      expressionNeedsRendererContext(expression.alternate, scope, seenBindings),
+    ]);
+  }
+
+  if (t.isLogicalExpression(expression)) {
+    return mergeBooleanResults([
+      expressionNeedsRendererContext(expression.left, scope, seenBindings),
+      expressionNeedsRendererContext(expression.right, scope, seenBindings),
+    ]);
+  }
+
+  if (t.isSequenceExpression(expression)) {
+    return mergeBooleanResults(
+      expression.expressions.map((part) => expressionNeedsRendererContext(part, scope, seenBindings))
+    );
+  }
+
+  if (t.isArrayExpression(expression)) {
+    return mergeBooleanResults(
+      expression.elements.filter(Boolean).map((part) => expressionNeedsRendererContext(part, scope, seenBindings))
+    );
+  }
+
+  if (t.isCallExpression(expression)) {
+    return callExpressionNeedsRendererContext(expression, scope, seenBindings);
+  }
+
+  return false;
+}
+
+function isBindableFunctionReference(expressionPath) {
+  const expression = unwrapExpression(expressionPath.node);
   if (
-    t.isStringLiteral(node) ||
-    t.isNumericLiteral(node) ||
-    t.isBooleanLiteral(node) ||
-    t.isNullLiteral(node) ||
-    t.isTemplateLiteral(node)
+    t.isArrowFunctionExpression(expression) ||
+    t.isFunctionExpression(expression)
   ) {
-    return "inline";
+    return functionBodyNeedsRendererContext(expression.body, expressionPath.scope);
   }
 
-  if (t.isIdentifier(node, { name: "undefined" })) {
-    return "inline";
+  if (t.isIdentifier(expression)) {
+    const binding = expressionPath.scope.getBinding(expression.name);
+    const functionNode = getFunctionNodeFromBinding(binding);
+    if (!functionNode) {
+      return false;
+    }
+    return functionBodyNeedsRendererContext(functionNode.body, binding.path.scope, new Set([binding]));
   }
 
-  if (t.isParenthesizedExpression?.(node)) {
-    return analyzeRendererValueProjection(node.expression);
+  return false;
+}
+
+function shouldBindRendererContext(attributePath, rawName, expressionPath) {
+  if (typeof rawName !== "string" || rawName[0] !== ".") {
+    return false;
   }
 
-  if (t.isTSAsExpression?.(node) || t.isTSSatisfiesExpression?.(node) || t.isTypeCastExpression?.(node)) {
-    return analyzeRendererValueProjection(node.expression);
+  const openingElement = attributePath.parentPath;
+  if (!openingElement?.isJSXOpeningElement()) {
+    return false;
   }
 
-  if (t.isConditionalExpression(node)) {
-    return mergeProjectionDecisions(
-      analyzeRendererValueProjection(node.consequent),
-      analyzeRendererValueProjection(node.alternate)
-    );
+  const { isComponent } = getTag(openingElement.node);
+  if (!isComponent) {
+    return false;
   }
 
-  if (t.isLogicalExpression(node)) {
-    return mergeProjectionDecisions(
-      analyzeRendererValueProjection(node.left),
-      analyzeRendererValueProjection(node.right)
-    );
-  }
-
-  if (t.isSequenceExpression(node)) {
-    return mergeProjectionDecisions(
-      ...node.expressions.map(analyzeRendererValueProjection)
-    );
-  }
-
-  if (t.isArrayExpression(node)) {
-    return mergeProjectionDecisions(
-      ...node.elements.filter(Boolean).map(analyzeRendererValueProjection)
-    );
-  }
-
-  if (t.isUnaryExpression(node) && node.operator === "void") {
-    return "inline";
-  }
-
-  return "unknown";
+  return isBindableFunctionReference(expressionPath);
 }
 
 function ensureRendererBindingImport(programPath) {
@@ -257,27 +337,21 @@ export default function transformLitsxRendererProps(api) {
         }
 
         const rawName = decodeVirtualAttributeName(node.name.name) ?? node.name.name;
-        const expression = node.value.expression;
-        if (!shouldBindRendererContext(rawName, expression)) {
+        const expressionPath = path.get("value.expression");
+        if (!expressionPath?.node) {
+          return;
+        }
+
+        if (!shouldBindRendererContext(path, rawName, expressionPath)) {
           return;
         }
 
         state.__litsxNeedsRendererBindingImport = true;
-        const projected = analyzeRendererBodyProjection(
-          expression.body ?? expression
-        ) !== "inline";
-
         node.value.expression = t.callExpression(
           t.identifier("bindRendererContext"),
           [
             createHostReferenceExpression(),
-            expression,
-            t.objectExpression([
-              t.objectProperty(
-                t.identifier("projected"),
-                t.booleanLiteral(projected)
-              ),
-            ]),
+            expressionPath.node,
           ]
         );
       },

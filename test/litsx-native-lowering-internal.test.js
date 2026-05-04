@@ -912,7 +912,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
     assert.doesNotMatch(code, /this\.props\./);
   });
 
-  it("converts default exported named function declarations", () => {
+  it("converts default exported named function declarations when the name is capitalized", () => {
     const source = `
       export default function Greeting({ message }) {
         return <div>{message}</div>;

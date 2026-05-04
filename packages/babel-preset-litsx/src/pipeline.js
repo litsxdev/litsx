@@ -56,6 +56,7 @@ function shouldIncludeFeaturePlugin(sourceFeatures, key) {
 
 export function createLitsxPresetPlugins(options = {}, sourceFeatures = null) {
   const plugins = [
+    [transformLitsxRendererProps, options.transformLitsxRendererProps || {}],
     [transformLitsxComponents, normalizeTransformLitsxOptions(options)],
   ];
 
@@ -70,8 +71,6 @@ export function createLitsxPresetPlugins(options = {}, sourceFeatures = null) {
   if (shouldIncludeFeaturePlugin(sourceFeatures, "scopedElements")) {
     plugins.push([transformLitsxScopedElements, options.transformLitsxScopedElements || {}]);
   }
-
-  plugins.push([transformLitsxRendererProps, options.transformLitsxRendererProps || {}]);
 
   if (options.jsxTemplate !== false) {
     if (options.jsxTemplateOptions && Object.keys(options.jsxTemplateOptions).length > 0) {

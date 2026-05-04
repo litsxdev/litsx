@@ -22,6 +22,15 @@ function createLitsxInfrastructureImport(importedName) {
   );
 }
 
+function createLitsxInternalRuntimeImport(importedName) {
+  return t.importDeclaration(
+    [
+      t.importSpecifier(t.identifier(importedName), t.identifier(importedName)),
+    ],
+    t.stringLiteral("@litsx/litsx/internal/runtime-render-context")
+  );
+}
+
 function createLitsxImport(importedName) {
   return t.importDeclaration(
     [
@@ -222,6 +231,29 @@ export function finalizeProgram(programPath, state) {
 
     if (!litsxImported) {
       programPath.unshiftContainer("body", createLitsxImport("useCallbackRef"));
+    }
+  }
+
+  if (state.__litsxNeedsRendererCallImport) {
+    const bodyPathsWithInternalRuntime = programPath.get("body");
+    const internalRuntimeImports = bodyPathsWithInternalRuntime.filter(
+      (n) =>
+        n.isImportDeclaration() &&
+        n.node.source.value === "@litsx/litsx/internal/runtime-render-context"
+    );
+
+    let internalRuntimeImported = false;
+    internalRuntimeImports.some((importPath) => {
+      if (ensureNamedImport(importPath, "renderRendererCall")) {
+        internalRuntimeImported = true;
+        return true;
+      }
+
+      return false;
+    });
+
+    if (!internalRuntimeImported) {
+      programPath.unshiftContainer("body", createLitsxInternalRuntimeImport("renderRendererCall"));
     }
   }
 

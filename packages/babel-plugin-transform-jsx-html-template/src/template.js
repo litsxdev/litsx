@@ -171,6 +171,21 @@ function lowerEmbeddedJsx(node, opts) {
   return node;
 }
 
+function materializeChildExpression(node, opts) {
+  const expression = lowerEmbeddedJsx(node, opts);
+
+  if (
+    (t.isArrowFunctionExpression(expression) || t.isFunctionExpression(expression)) &&
+    expression.params.length === 0 &&
+    expression.async !== true &&
+    expression.generator !== true
+  ) {
+    return t.callExpression(expression, []);
+  }
+
+  return expression;
+}
+
 function stringifyJsxName(nameNode) {
   if (t.isJSXIdentifier(nameNode)) {
     return nameNode.name;
@@ -187,11 +202,27 @@ function stringifyJsxName(nameNode) {
   return "unknown";
 }
 
+function toKebab(name) {
+  return name.replace(/([a-z])([A-Z])/g, "$1-$2").toLowerCase();
+}
+
 function getTag(node) {
-  const name = stringifyJsxName(node.name);
-  const isCapitalized = name.charAt(0) === name.charAt(0).toUpperCase();
-  const isComponent = !isCapitalized && node.name.type !== "JSXIdentifier";
-  return { name, isComponent };
+  if (t.isJSXIdentifier(node.name)) {
+    const originalName = node.name.name;
+    const isCapitalized =
+      originalName.charAt(0) === originalName.charAt(0).toUpperCase() &&
+      originalName.charAt(0) !== originalName.charAt(0).toLowerCase();
+
+    return {
+      name: isCapitalized ? toKebab(originalName) : originalName,
+      isComponent: false,
+    };
+  }
+
+  return {
+    name: stringifyJsxName(node.name),
+    isComponent: true,
+  };
 }
 
 function isVoidHtmlTagName(name) {
@@ -328,7 +359,7 @@ const transforms = {
   },
   JSXExpressionContainer({ node, strings, keys }, opts) {
     if (node.expression.type === "JSXEmptyExpression") return;
-    addKey(strings, keys, lowerEmbeddedJsx(node.expression, opts));
+    addKey(strings, keys, materializeChildExpression(node.expression, opts));
   },
   JSXFragment({ node, strings, keys }, opts) {
     node.children.forEach((child) =>
