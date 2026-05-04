@@ -128,6 +128,28 @@ export function clearProjectedRendererRegion(owner, slotName, render) {
   render(nothing, host);
 }
 
+export function syncRendererHost(
+  host,
+  rendered,
+  {
+    render,
+    visible = true,
+  }
+) {
+  if (!host || typeof render !== "function") {
+    return;
+  }
+
+  syncProjectedHostRegistry(host, rendered?.context ?? null);
+  host.hidden = !visible;
+  renderWithRendererContext(
+    render,
+    host,
+    visible ? rendered?.value ?? nothing : nothing,
+    rendered?.context ?? null,
+  );
+}
+
 export function renderRendererRegion(
   owner,
   slotName,

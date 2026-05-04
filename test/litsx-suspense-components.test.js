@@ -287,7 +287,9 @@ describe("litsx suspense components", () => {
 
     assert.strictEqual(boundary.showing, "hidden");
     assert.strictEqual(boundary.phase, "hidden");
-    assert.strictEqual(rendered, nothing);
+    assert.notStrictEqual(rendered, nothing);
+    assert.match(templateSource(rendered), /data-litsx-suspense-region="fallback"/);
+    assert.match(templateSource(rendered), /data-litsx-suspense-region="content"/);
   });
 
   it('renders fallback instead of content when revealOrder "together" is blocked by another pending boundary', () => {

@@ -1,24 +1,9 @@
 import { LitElement, html, nothing } from "lit";
 import { render as renderLightDom } from "lit/html.js";
 import {
-  clearProjectedRendererRegion,
   invokeRenderer,
-  renderRendererRegion,
+  syncRendererHost,
 } from "./runtime-render-context.js";
-
-const CONTENT_SLOT = "content";
-const FALLBACK_SLOT = "fallback";
-
-function asProjectedRenderer(rendered) {
-  if (!rendered) {
-    return rendered;
-  }
-
-  return {
-    ...rendered,
-    projected: true,
-  };
-}
 
 function isThenable(value) {
   return (
@@ -44,7 +29,7 @@ function reportAsyncError(error) {
  * @usage Prefer several small boundaries over one large catch-all boundary when different areas of the UI can resolve independently.
  * @behavior The boundary renders fallback content while the wrapped subtree is pending.
  * @behavior Once the subtree resolves, the boundary can coordinate its reveal with a parent SuspenseList.
- * @behavior SuspenseBoundary projects fallback and content through slots so authored subtrees keep the render context of the host that declared them.
+ * @behavior SuspenseBoundary renders fallback and content in light DOM wrappers so authored subtrees keep the render context of the host that declared them.
  * @behavior The fallback is part of the authored component tree, so it can use the same JSX patterns and styling approach as the rest of the component.
  * @mentalModel A SuspenseBoundary says: this part of the tree may pause, and this is the UI that should stand in while it catches up.
  * @pitfall Avoid wrapping large unrelated sections in a single boundary. Smaller, focused boundaries usually produce clearer fallbacks and better reveal behavior.
@@ -80,6 +65,10 @@ export class SuspenseBoundary extends LitElement {
     this._displayValue = nothing;
     this._lastFallback = nothing;
     this._lastFallbackRender = null;
+    this._contentVisible = true;
+    this._fallbackVisible = false;
+    this._contentHostState = null;
+    this._fallbackHostState = null;
     this._suspenseList = null;
     this._revealToken = 0;
     this._isRevealing = false;
@@ -88,7 +77,7 @@ export class SuspenseBoundary extends LitElement {
   }
 
   createRenderRoot() {
-    return super.createRenderRoot();
+    return this;
   }
 
   connectedCallback() {
@@ -113,8 +102,6 @@ export class SuspenseBoundary extends LitElement {
     this._revealToken += 1;
     this._isRevealing = false;
     this.clearRevealTimeout();
-    clearProjectedRendererRegion(this, CONTENT_SLOT, renderLightDom);
-    clearProjectedRendererRegion(this, FALLBACK_SLOT, renderLightDom);
   }
 
   render() {
@@ -134,7 +121,6 @@ export class SuspenseBoundary extends LitElement {
         context: contentContext,
         projected: contentProjected,
       };
-      const projectedContentRender = asProjectedRenderer(contentRender);
       const contentDisposition = this._suspenseList
         ? this._suspenseList.getContentDisposition(this)
         : "content";
@@ -149,7 +135,6 @@ export class SuspenseBoundary extends LitElement {
         context: fallbackContext,
         projected: fallbackProjected,
       };
-      const projectedFallbackRender = asProjectedRenderer(fallbackRender);
 
       this._pendingPromise = null;
       this._lastContent = content;
@@ -162,67 +147,36 @@ export class SuspenseBoundary extends LitElement {
         this._lastFallbackRender = fallbackRender;
         this.showing = "fallback";
         this.phase = "blocked";
-        const fallbackView = renderRendererRegion(
-          this,
-          FALLBACK_SLOT,
-          projectedFallbackRender,
-          {
-            render: renderLightDom,
-            visible: true,
-          }
-        );
-        renderRendererRegion(this, CONTENT_SLOT, projectedContentRender, {
-          render: renderLightDom,
-          visible: false,
-        });
+        this._contentHostState = contentRender;
+        this._fallbackHostState = fallbackRender;
+        this._contentVisible = false;
+        this._fallbackVisible = true;
         this.notifyListState();
-        return html`<div part="fallback" data-showing="fallback">${fallbackView}</div>`;
+        return this.renderHosts();
       }
 
       if (contentDisposition === "hidden") {
         this._displayValue = nothing;
         this.showing = "hidden";
         this.phase = "hidden";
-        renderRendererRegion(this, CONTENT_SLOT, contentRender, {
-          render: renderLightDom,
-          markerAttribute: "data-litsx-suspense-slot-host",
-          visible: false,
-        });
-        renderRendererRegion(this, FALLBACK_SLOT, fallbackRender, {
-          render: renderLightDom,
-          markerAttribute: "data-litsx-suspense-slot-host",
-          visible: false,
-        });
+        this._contentHostState = contentRender;
+        this._fallbackHostState = fallbackRender;
+        this._contentVisible = false;
+        this._fallbackVisible = false;
         this.notifyListState();
-        return nothing;
+        return this.renderHosts();
       }
 
       if (this._isRevealing) {
         this._displayValue = content;
         this.showing = "content";
         this.phase = "revealing";
-        const fallbackView = renderRendererRegion(
-          this,
-          FALLBACK_SLOT,
-          asProjectedRenderer(this._lastFallbackRender ?? fallbackRender),
-          {
-            render: renderLightDom,
-            visible: true,
-          }
-        );
-        const contentView = renderRendererRegion(this, CONTENT_SLOT, projectedContentRender, {
-          render: renderLightDom,
-          visible: true,
-        });
+        this._contentHostState = contentRender;
+        this._fallbackHostState = this._lastFallbackRender ?? fallbackRender;
+        this._contentVisible = true;
+        this._fallbackVisible = true;
         this.notifyListState();
-        return html`
-          <div part="fallback" data-showing="fallback" data-phase="revealing">
-            ${fallbackView}
-          </div>
-          <div part="content" data-showing="content" data-phase="revealing">
-            ${contentView}
-          </div>
-        `;
+        return this.renderHosts();
       }
 
       if (
@@ -233,44 +187,23 @@ export class SuspenseBoundary extends LitElement {
         this._displayValue = content;
         this.showing = "content";
         this.phase = "revealing";
-        const fallbackView = renderRendererRegion(
-          this,
-          FALLBACK_SLOT,
-          asProjectedRenderer(this._lastFallbackRender ?? fallbackRender),
-          {
-            render: renderLightDom,
-            visible: true,
-          }
-        );
-        const contentView = renderRendererRegion(this, CONTENT_SLOT, projectedContentRender, {
-          render: renderLightDom,
-          visible: true,
-        });
+        this._contentHostState = contentRender;
+        this._fallbackHostState = this._lastFallbackRender ?? fallbackRender;
+        this._contentVisible = true;
+        this._fallbackVisible = true;
         this.notifyListState();
-        return html`
-          <div part="fallback" data-showing="fallback" data-phase="revealing">
-            ${fallbackView}
-          </div>
-          <div part="content" data-showing="content" data-phase="revealing">
-            ${contentView}
-          </div>
-        `;
+        return this.renderHosts();
       }
 
       this._displayValue = content;
       this.showing = "content";
       this.phase = "content";
-      const contentView = renderRendererRegion(this, CONTENT_SLOT, projectedContentRender, {
-        render: renderLightDom,
-        visible: true,
-      });
-      renderRendererRegion(this, FALLBACK_SLOT, projectedFallbackRender, {
-        render: renderLightDom,
-        visible: false,
-      });
+      this._contentHostState = contentRender;
+      this._fallbackHostState = fallbackRender;
+      this._contentVisible = true;
+      this._fallbackVisible = false;
       this.notifyListState();
-
-      return html`<div part="content" data-showing="content">${contentView}</div>`;
+      return this.renderHosts();
     } catch (thrown) {
       if (!isThenable(thrown)) {
         reportAsyncError(thrown);
@@ -290,7 +223,6 @@ export class SuspenseBoundary extends LitElement {
         context: fallbackContext,
         projected: fallbackProjected,
       };
-      const projectedFallbackRender = asProjectedRenderer(fallbackRender);
 
       this.pending = true;
       this._lastFallback = fallback;
@@ -303,53 +235,69 @@ export class SuspenseBoundary extends LitElement {
         this._displayValue = fallback;
         this.showing = "fallback";
         this.phase = "pending";
-        renderRendererRegion(this, CONTENT_SLOT, asProjectedRenderer(this._lastContentRender), {
-          render: renderLightDom,
-          visible: false,
-        });
-        const fallbackView = renderRendererRegion(this, FALLBACK_SLOT, projectedFallbackRender, {
-          render: renderLightDom,
-          visible: true,
-        });
+        this._contentHostState = this._lastContentRender;
+        this._fallbackHostState = fallbackRender;
+        this._contentVisible = false;
+        this._fallbackVisible = true;
         this.notifyListState();
-        return html`<div part="fallback" data-showing="fallback">${fallbackView}</div>`;
+        return this.renderHosts();
       }
 
       if (disposition === "collapsed" && this.resolved) {
         this._displayValue = this._lastContent;
         this.showing = "content";
         this.phase = "content";
-        const contentView = renderRendererRegion(
-          this,
-          CONTENT_SLOT,
-          asProjectedRenderer(this._lastContentRender),
-          {
-            render: renderLightDom,
-            visible: true,
-          }
-        );
-        renderRendererRegion(this, FALLBACK_SLOT, projectedFallbackRender, {
-          render: renderLightDom,
-          visible: false,
-        });
+        this._contentHostState = this._lastContentRender;
+        this._fallbackHostState = fallbackRender;
+        this._contentVisible = true;
+        this._fallbackVisible = false;
         this.notifyListState();
-        return html`<div part="content" data-showing="content">${contentView}</div>`;
+        return this.renderHosts();
       }
 
       this._displayValue = nothing;
       this.showing = "hidden";
       this.phase = "hidden";
-      renderRendererRegion(this, CONTENT_SLOT, asProjectedRenderer(this._lastContentRender), {
-        render: renderLightDom,
-        visible: false,
-      });
-      renderRendererRegion(this, FALLBACK_SLOT, projectedFallbackRender, {
-        render: renderLightDom,
-        visible: false,
-      });
+      this._contentHostState = this._lastContentRender;
+      this._fallbackHostState = fallbackRender;
+      this._contentVisible = false;
+      this._fallbackVisible = false;
       this.notifyListState();
-      return nothing;
+      return this.renderHosts();
     }
+  }
+
+  updated() {
+    const contentHost = this.querySelector('[data-litsx-suspense-region="content"]');
+    const fallbackHost = this.querySelector('[data-litsx-suspense-region="fallback"]');
+
+    syncRendererHost(contentHost, this._contentHostState, {
+      render: renderLightDom,
+      visible: this._contentVisible,
+    });
+    syncRendererHost(fallbackHost, this._fallbackHostState, {
+      render: renderLightDom,
+      visible: this._fallbackVisible,
+    });
+  }
+
+  renderHosts() {
+    return html`
+      <div
+        part="fallback"
+        data-litsx-suspense-region="fallback"
+        data-showing="fallback"
+        ?hidden=${!this._fallbackVisible}
+        data-phase=${this.phase}
+      ></div>
+      <div
+        part="content"
+        data-litsx-suspense-region="content"
+        data-showing="content"
+        ?hidden=${!this._contentVisible}
+        data-phase=${this.phase}
+      ></div>
+    `;
   }
 
   beginReveal() {
