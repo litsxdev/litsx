@@ -5,12 +5,4 @@ const packageDir = fileURLToPath(new URL(".", import.meta.url));
 
 export default createPackageRollupConfig({
   packageDir,
-  input: {
-    index: "src/index.js",
-    "jsx-runtime": "src/jsx-runtime.js",
-    "jsx-dev-runtime": "src/jsx-dev-runtime.js",
-    context: "src/context.js",
-    "runtime-render-context": "src/runtime-render-context.js",
-    "runtime-infrastructure/index": "src/runtime-infrastructure/index.js",
-  },
 });
