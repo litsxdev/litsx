@@ -1,6 +1,6 @@
 {
   "name": "@litsx/litsx",
-  "version": "0.2.4",
+  "version": "0.3.0",
   "description": "Native LitSX runtime primitives, JSX runtime entrypoints, and web component utilities",
   "type": "module",
   "main": "./dist/index.cjs",

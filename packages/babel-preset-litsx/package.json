@@ -1,6 +1,6 @@
 {
   "name": "@litsx/babel-preset-litsx",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Canonical native Babel preset for LitSX-authored source",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -74,7 +74,7 @@
     "@babel/helper-plugin-utils": "^7.28.6",
     "@babel/plugin-syntax-jsx": "^7.28.6",
     "@litsx/babel-plugin-shared-hooks": "^0.2.1",
-    "@litsx/babel-plugin-transform-jsx-html-template": "^0.2.1",
+    "@litsx/babel-plugin-transform-jsx-html-template": "^0.3.0",
     "@litsx/babel-plugin-transform-litsx-scoped-elements": "^0.2.1",
     "@litsx/typescript-session": "^0.2.1"
   },
