@@ -1,11 +1,12 @@
-import { html, nothing } from "lit";
+import { nothing } from "lit";
+import { render as renderLightDom } from "lit/html.js";
+import { Directive, PartType, directive } from "lit/directive.js";
 import {
   connectLightDomRegistry,
   withLightDomCreationContext,
 } from "@litsx/light-dom-registry";
 
 const RENDERER_CONTEXT = Symbol("litsx.rendererContext");
-const PROJECTED_RENDERER_HOSTS = Symbol("litsx.projectedRendererHosts");
 
 function captureCreationScope(host) {
   if (!host || typeof host !== "object") {
@@ -21,34 +22,6 @@ function captureCreationScope(host) {
   }
 
   return null;
-}
-
-function ensureProjectedHostMap(owner) {
-  if (!owner[PROJECTED_RENDERER_HOSTS]) {
-    owner[PROJECTED_RENDERER_HOSTS] = new Map();
-  }
-  return owner[PROJECTED_RENDERER_HOSTS];
-}
-
-function ensureProjectedHost(owner, slotName) {
-  const documentRef = owner?.ownerDocument ?? globalThis.document;
-  if (!documentRef || typeof documentRef.createElement !== "function") {
-    return null;
-  }
-
-  const hostMap = ensureProjectedHostMap(owner);
-  let host = hostMap.get(slotName) ?? null;
-  if (host?.isConnected) {
-    return host;
-  }
-
-  host = documentRef.createElement("div");
-  host.slot = slotName;
-  host.hidden = true;
-  host.style.display = "contents";
-  owner.appendChild(host);
-  hostMap.set(slotName, host);
-  return host;
 }
 
 function getContextualElements(context) {
@@ -79,7 +52,8 @@ export function bindRendererContext(host, renderer, options = {}) {
   const creationScope = captureCreationScope(contextHost);
   const projected = Boolean(options?.projected);
 
-  const boundRenderer = (...args) => renderer(...args);
+  const boundRenderer = (...args) =>
+    withLightDomCreationContext(contextHost, () => renderer(...args));
   Object.defineProperty(boundRenderer, RENDERER_CONTEXT, {
     value: {
       host: contextHost,
@@ -118,16 +92,6 @@ export function renderWithRendererContext(render, container, value, context, opt
     }));
 }
 
-export function clearProjectedRendererRegion(owner, slotName, render) {
-  const host = owner?.[PROJECTED_RENDERER_HOSTS]?.get(slotName) ?? null;
-  if (!host) {
-    return;
-  }
-
-  host.hidden = true;
-  render(nothing, host);
-}
-
 export function syncRendererHost(
   host,
   rendered,
@@ -150,35 +114,48 @@ export function syncRendererHost(
   );
 }
 
-export function renderRendererRegion(
-  owner,
-  slotName,
-  rendered,
-  {
-    render,
-    visible = true,
-  }
-) {
-  if (!rendered?.projected) {
-    clearProjectedRendererRegion(owner, slotName, render);
-    return visible ? rendered?.value ?? nothing : nothing;
+class RendererCallDirective extends Directive {
+  constructor(partInfo) {
+    super(partInfo);
+    if (partInfo.type !== PartType.CHILD) {
+      throw new Error("renderRendererCall can only be used in child expressions");
+    }
+    this._host = null;
   }
 
-  const host = ensureProjectedHost(owner, slotName);
-  if (!host) {
-    return visible ? rendered?.value ?? nothing : nothing;
+  render() {
+    return nothing;
   }
 
-  syncProjectedHostRegistry(host, rendered.context);
-  host.hidden = !visible;
-  renderWithRendererContext(
-    render,
-    host,
-    visible ? rendered.value : nothing,
-    rendered.context,
-  );
+  update(part, [renderer, ...args]) {
+    if (!this._host) {
+      const documentRef =
+        part?.options?.host?.ownerDocument ??
+        globalThis.document;
+      if (!documentRef || typeof documentRef.createElement !== "function") {
+        return nothing;
+      }
 
-  return visible
-    ? html`<slot name="${slotName}"></slot>`
-    : nothing;
+      this._host = documentRef.createElement("div");
+      this._host.style.display = "contents";
+    }
+
+    const rendered = invokeRenderer(renderer, ...args);
+    syncRendererHost(this._host, rendered, {
+      render: renderLightDom,
+      visible: true,
+    });
+
+    return this._host;
+  }
+
+  disconnected() {
+    if (!this._host) {
+      return;
+    }
+
+    renderLightDom(nothing, this._host);
+  }
 }
+
+export const renderRendererCall = directive(RendererCallDirective);

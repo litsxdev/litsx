@@ -1,24 +1,9 @@
 import { LitElement, html, nothing } from "lit";
 import { render as renderLightDom } from "lit/html.js";
 import {
-  clearProjectedRendererRegion,
   invokeRenderer,
-  renderRendererRegion,
+  syncRendererHost,
 } from "./runtime-render-context.js";
-
-const CONTENT_SLOT = "content";
-const FALLBACK_SLOT = "fallback";
-
-function asProjectedRenderer(rendered) {
-  if (!rendered) {
-    return rendered;
-  }
-
-  return {
-    ...rendered,
-    projected: true,
-  };
-}
 
 function isThenable(value) {
   return (
@@ -38,7 +23,7 @@ function isThenable(value) {
  * @behavior The boundary catches synchronous render errors from its content renderer and switches to fallback mode.
  * @behavior Once it has failed, the boundary stays latched on fallback until the instance is replaced.
  * @behavior Thenables are not treated as errors. They are rethrown so SuspenseBoundary can continue to own asynchronous reveal.
- * @behavior ErrorBoundary projects content and fallback through slots so renderer props keep the declaration-time authored context.
+ * @behavior ErrorBoundary renders fallback and content in light DOM wrappers so authored subtrees keep the render context of the host that declared them.
  * @mentalModel An ErrorBoundary says: if this part of the tree throws, show this fallback instead and keep the rest of the UI alive.
  * @pitfall Do not expect the boundary to retry automatically after failure. Replace the instance through identity when you want a fresh attempt.
  * @pitfall Keep fallback UI focused on recovery. It should explain failure or provide a next action, not silently hide the problem.
@@ -63,16 +48,14 @@ export class ErrorBoundary extends LitElement {
     this.onError = null;
     this.fallbackRenderer = null;
     this.contentRenderer = null;
+    this._contentHostState = null;
+    this._fallbackHostState = null;
+    this._contentVisible = true;
+    this._fallbackVisible = false;
   }
 
   createRenderRoot() {
-    return super.createRenderRoot();
-  }
-
-  disconnectedCallback() {
-    super.disconnectedCallback();
-    clearProjectedRendererRegion(this, CONTENT_SLOT, renderLightDom);
-    clearProjectedRendererRegion(this, FALLBACK_SLOT, renderLightDom);
+    return this;
   }
 
   renderFallback() {
@@ -84,20 +67,16 @@ export class ErrorBoundary extends LitElement {
       this.fallbackRenderer,
       this.error,
     );
-    renderRendererRegion(this, CONTENT_SLOT, null, {
-      render: renderLightDom,
-      visible: false,
-    });
-    const fallbackView = renderRendererRegion(this, FALLBACK_SLOT, asProjectedRenderer({
+    this._contentHostState = null;
+    this._fallbackHostState = {
       value: fallback,
       context: fallbackContext,
       projected: fallbackProjected,
-    }), {
-      render: renderLightDom,
-      visible: true,
-    });
+    };
+    this._contentVisible = false;
+    this._fallbackVisible = true;
 
-    return html`<div part="fallback" data-showing="fallback">${fallbackView}</div>`;
+    return this.renderHosts();
   }
 
   render() {
@@ -116,19 +95,15 @@ export class ErrorBoundary extends LitElement {
 
       this.error = null;
       this.failed = false;
-      renderRendererRegion(this, FALLBACK_SLOT, null, {
-        render: renderLightDom,
-        visible: false,
-      });
-      const contentView = renderRendererRegion(this, CONTENT_SLOT, asProjectedRenderer({
+      this._fallbackHostState = null;
+      this._contentHostState = {
         value: content,
         context: contentContext,
         projected: contentProjected,
-      }), {
-        render: renderLightDom,
-        visible: true,
-      });
-      return html`<div part="content" data-showing="content">${contentView}</div>`;
+      };
+      this._contentVisible = true;
+      this._fallbackVisible = false;
+      return this.renderHosts();
     } catch (thrown) {
       if (isThenable(thrown)) {
         throw thrown;
@@ -148,6 +123,37 @@ export class ErrorBoundary extends LitElement {
 
       return this.renderFallback();
     }
+  }
+
+  updated() {
+    const contentHost = this.querySelector('[data-litsx-error-region="content"]');
+    const fallbackHost = this.querySelector('[data-litsx-error-region="fallback"]');
+
+    syncRendererHost(contentHost, this._contentHostState, {
+      render: renderLightDom,
+      visible: this._contentVisible,
+    });
+    syncRendererHost(fallbackHost, this._fallbackHostState, {
+      render: renderLightDom,
+      visible: this._fallbackVisible,
+    });
+  }
+
+  renderHosts() {
+    return html`
+      <div
+        part="fallback"
+        data-litsx-error-region="fallback"
+        data-showing="fallback"
+        ?hidden=${!this._fallbackVisible}
+      ></div>
+      <div
+        part="content"
+        data-litsx-error-region="content"
+        data-showing="content"
+        ?hidden=${!this._contentVisible}
+      ></div>
+    `;
   }
 }
 
