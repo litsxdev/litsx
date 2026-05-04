@@ -74,6 +74,54 @@ describe("@litsx/compiler", () => {
     assert.match(result.code, /@click=\$\{save\}/);
   }, 20000);
 
+  it("lowers authored JSX inside suspense content renderers", () => {
+    const source = [
+      'import { SuspenseBoundary } from "@litsx/litsx";',
+      'import { GuideCard } from "./guide-card.litsx";',
+      "export const Demo = () => {",
+      "  return (",
+      "    <SuspenseBoundary",
+      "      .fallbackRenderer={() => null}",
+      '      .contentRenderer={() => <GuideCard .eyebrow={"x"} .titleRenderer={() => "y"} .contentRenderer={() => <p>z</p>} />}',
+      "    />",
+      "  );",
+      "};",
+    ].join("\n");
+
+    const result = transformLitsxSync(source, {
+      filename: "/virtual/Demo.litsx",
+    });
+
+    assert.doesNotMatch(result.code, /<GuideCard/);
+    assert.match(result.code, /<guide-card/);
+    assert.match(result.code, /"guide-card": GuideCard/);
+    assert.match(result.code, /bindRendererContext/);
+    assert.match(result.code, /\.titleRenderer=\$\{bindRendererContext\(typeof this === "undefined" \? null : this,\s*\(\) => "y",\s*\{\s*projected: false\s*\}\)\}/);
+    assert.match(result.code, /\.contentRenderer=\$\{bindRendererContext\(typeof this === "undefined" \? null : this,\s*\(\) => html`<p>z<\/p>`,\s*\{\s*projected: false\s*\}\)\}/);
+    assert.match(result.code, /\.contentRenderer=\$\{bindRendererContext\(typeof this === "undefined" \? null : this,\s*\(\) => html`<guide-card[\s\S]*`,\s*\{\s*projected: true\s*\}\)\}/);
+  }, 20000);
+
+  it("marks intrinsic-only renderers as inline and custom-element renderers as projected", () => {
+    const source = [
+      'import { SuspenseBoundary } from "@litsx/litsx";',
+      "export const Demo = () => {",
+      "  return (",
+      "    <>",
+      '      <SuspenseBoundary .contentRenderer={() => <p>plain</p>} />',
+      '      <SuspenseBoundary .contentRenderer={() => <fancy-panel />} />',
+      "    </>",
+      "  );",
+      "};",
+    ].join("\n");
+
+    const result = transformLitsxSync(source, {
+      filename: "/virtual/Demo.litsx",
+    });
+
+    assert.match(result.code, /bindRendererContext\(typeof this === "undefined" \? null : this,\s*\(\) => html`<p>plain<\/p>`,\s*\{\s*projected: false\s*\}\)/);
+    assert.match(result.code, /bindRendererContext\(typeof this === "undefined" \? null : this,\s*\(\) => html`<fancy-panel><\/fancy-panel>`,\s*\{\s*projected: true\s*\}\)/);
+  }, 20000);
+
   it("keeps lit-style attributes aligned in the final sourcemap", async () => {
     const source = [
       "export function Counter(){",

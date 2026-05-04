@@ -1,4 +1,24 @@
 import { LitElement, html, nothing } from "lit";
+import { render as renderLightDom } from "lit/html.js";
+import {
+  clearProjectedRendererRegion,
+  invokeRenderer,
+  renderRendererRegion,
+} from "./runtime-render-context.js";
+
+const CONTENT_SLOT = "content";
+const FALLBACK_SLOT = "fallback";
+
+function asProjectedRenderer(rendered) {
+  if (!rendered) {
+    return rendered;
+  }
+
+  return {
+    ...rendered,
+    projected: true,
+  };
+}
 
 function isThenable(value) {
   return (
@@ -18,7 +38,7 @@ function isThenable(value) {
  * @behavior The boundary catches synchronous render errors from its content renderer and switches to fallback mode.
  * @behavior Once it has failed, the boundary stays latched on fallback until the instance is replaced.
  * @behavior Thenables are not treated as errors. They are rethrown so SuspenseBoundary can continue to own asynchronous reveal.
- * @behavior ErrorBoundary works in light DOM, so surrounding layout and typography styles can continue to flow through the boundary naturally.
+ * @behavior ErrorBoundary projects content and fallback through slots so renderer props keep the declaration-time authored context.
  * @mentalModel An ErrorBoundary says: if this part of the tree throws, show this fallback instead and keep the rest of the UI alive.
  * @pitfall Do not expect the boundary to retry automatically after failure. Replace the instance through identity when you want a fresh attempt.
  * @pitfall Keep fallback UI focused on recovery. It should explain failure or provide a next action, not silently hide the problem.
@@ -46,16 +66,38 @@ export class ErrorBoundary extends LitElement {
   }
 
   createRenderRoot() {
-    return this;
+    return super.createRenderRoot();
+  }
+
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    clearProjectedRendererRegion(this, CONTENT_SLOT, renderLightDom);
+    clearProjectedRendererRegion(this, FALLBACK_SLOT, renderLightDom);
   }
 
   renderFallback() {
-    const fallback =
-      typeof this.fallbackRenderer === "function"
-        ? this.fallbackRenderer(this.error)
-        : nothing;
+    const {
+      value: fallback = nothing,
+      context: fallbackContext = null,
+      projected: fallbackProjected = false,
+    } = invokeRenderer(
+      this.fallbackRenderer,
+      this.error,
+    );
+    renderRendererRegion(this, CONTENT_SLOT, null, {
+      render: renderLightDom,
+      visible: false,
+    });
+    const fallbackView = renderRendererRegion(this, FALLBACK_SLOT, asProjectedRenderer({
+      value: fallback,
+      context: fallbackContext,
+      projected: fallbackProjected,
+    }), {
+      render: renderLightDom,
+      visible: true,
+    });
 
-    return html`<div part="fallback" data-showing="fallback">${fallback}</div>`;
+    return html`<div part="fallback" data-showing="fallback">${fallbackView}</div>`;
   }
 
   render() {
@@ -64,23 +106,39 @@ export class ErrorBoundary extends LitElement {
     }
 
     try {
-      const content =
-        typeof this.contentRenderer === "function"
-          ? this.contentRenderer()
-          : nothing;
+      const {
+        value: content = nothing,
+        context: contentContext = null,
+        projected: contentProjected = false,
+      } = invokeRenderer(
+        this.contentRenderer,
+      );
 
       this.error = null;
       this.failed = false;
-      return html`<div part="content" data-showing="content">${content}</div>`;
+      renderRendererRegion(this, FALLBACK_SLOT, null, {
+        render: renderLightDom,
+        visible: false,
+      });
+      const contentView = renderRendererRegion(this, CONTENT_SLOT, asProjectedRenderer({
+        value: content,
+        context: contentContext,
+        projected: contentProjected,
+      }), {
+        render: renderLightDom,
+        visible: true,
+      });
+      return html`<div part="content" data-showing="content">${contentView}</div>`;
     } catch (thrown) {
       if (isThenable(thrown)) {
         throw thrown;
       }
 
+      const shouldNotify = !this.failed;
       this.failed = true;
       this.error = thrown;
 
-      if (typeof this.onError === "function") {
+      if (shouldNotify && typeof this.onError === "function") {
         try {
           this.onError(thrown);
         } catch (callbackError) {

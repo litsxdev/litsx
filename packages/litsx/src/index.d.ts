@@ -128,7 +128,17 @@ export declare class ErrorBoundary extends LitElement {
   failed: boolean;
   error: unknown;
   onError: ((error: unknown) => void) | null;
+  /**
+   * Renderer props declared by a parent keep the parent's authored render context.
+   * LitSX may project renderer output through slots when the subtree contains custom elements,
+   * and render it inline when the subtree is intrinsic-only.
+   */
   fallbackRenderer: ((error: unknown) => unknown) | null;
+  /**
+   * Renderer props declared by a parent keep the parent's authored render context.
+   * LitSX may project renderer output through slots when the subtree contains custom elements,
+   * and render it inline when the subtree is intrinsic-only.
+   */
   contentRenderer: (() => unknown) | null;
 }
 
@@ -140,7 +150,17 @@ export declare class SuspenseBoundary extends LitElement {
   resolved: boolean;
   showing: string;
   phase: string;
+  /**
+   * Renderer props declared by a parent keep the parent's authored render context.
+   * LitSX may project renderer output through slots when the subtree contains custom elements,
+   * and render it inline when the subtree is intrinsic-only.
+   */
   fallbackRenderer: (() => unknown) | null;
+  /**
+   * Renderer props declared by a parent keep the parent's authored render context.
+   * LitSX may project renderer output through slots when the subtree contains custom elements,
+   * and render it inline when the subtree is intrinsic-only.
+   */
   contentRenderer: (() => unknown) | null;
 }
 

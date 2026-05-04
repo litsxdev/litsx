@@ -613,6 +613,14 @@ function getRuntime() {
     getStandInDefinition(tagName) {
       return standInDefinitionByTag.get(String(tagName).toLowerCase()) ?? null;
     },
+    withCreationContext(scope, callback) {
+      creationContext.push(scope ?? document);
+      try {
+        return callback();
+      } finally {
+        creationContext.pop();
+      }
+    },
   };
 
   window[RUNTIME_KEY] = runtime;
@@ -680,3 +688,11 @@ export function disconnectLightDomRegistry(host) {
   }
 }
 
+export function withLightDomCreationContext(scope, callback) {
+  const runtime = getRuntime();
+  if (!runtime || typeof callback !== "function") {
+    return typeof callback === "function" ? callback() : undefined;
+  }
+
+  return runtime.withCreationContext(scope, callback);
+}

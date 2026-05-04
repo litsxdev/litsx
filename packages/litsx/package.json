@@ -31,6 +31,11 @@
       "require": "./dist/runtime-infrastructure/index.cjs",
       "default": "./src/runtime-infrastructure/index.js"
     },
+    "./internal/runtime-render-context": {
+      "import": "./src/runtime-render-context.js",
+      "require": "./dist/runtime-render-context.cjs",
+      "default": "./src/runtime-render-context.js"
+    },
     "./context": {
       "types": "./src/context.d.ts",
       "import": "./src/context.js",

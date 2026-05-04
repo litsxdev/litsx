@@ -94,4 +94,5 @@ describe("litsx error boundary components", () => {
     assert.strictEqual(boundary.failed, false);
     assert.match(templateSource(content), /part="content"/);
   });
+
 });

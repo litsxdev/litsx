@@ -5,6 +5,7 @@ import { normalizeTransformLitsxOptions } from "@litsx/babel-preset-litsx/pipeli
 import transformLitsxDomRefs from "@litsx/babel-preset-litsx/internal/transform-litsx-dom-refs";
 import transformLitsxHooks from "@litsx/babel-preset-litsx/internal/transform-litsx-hooks";
 import transformLitsxComponents from "@litsx/babel-preset-litsx/internal/transform-litsx-components";
+import transformLitsxRendererProps from "@litsx/babel-preset-litsx/internal/transform-litsx-renderer-props";
 import reactAttributes from "./internal/react-attributes.js";
 import reactDomAttributes from "./internal/react-dom-attributes.js";
 import reactHooks from "./internal/react-hooks.js";
@@ -56,6 +57,7 @@ export function createReactCompatPresetPlugins(options = {}) {
     [reactErrorBoundary, options.reactErrorBoundary || {}],
     [reactSuspense, options.reactSuspense || {}],
     [transformLitsxScopedElements, options.transformLitsxScopedElements || {}],
+    [transformLitsxRendererProps, options.transformLitsxRendererProps || {}],
     [reactDomAttributes, options.reactDomAttributes || {}],
     [reactEvents, options.reactEvents || {}],
   ];

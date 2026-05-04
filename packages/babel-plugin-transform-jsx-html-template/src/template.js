@@ -131,6 +131,46 @@ function addKey(strings, keys, key) {
   keys.push(key);
 }
 
+function createJsxReplacement(node, opts) {
+  const hasTagOption = Object.prototype.hasOwnProperty.call(opts || {}, "tag");
+  const tag = hasTagOption ? opts.tag : "html";
+
+  if (tag) {
+    return createTaggedTemplate(node, opts, tag);
+  }
+
+  return buildTemplate(node, opts);
+}
+
+function lowerEmbeddedJsx(node, opts) {
+  if (!node || typeof node !== "object") {
+    return node;
+  }
+
+  if (t.isJSXElement(node) || t.isJSXFragment(node)) {
+    return createJsxReplacement(node, opts);
+  }
+
+  const visitorKeys = t.VISITOR_KEYS?.[node.type];
+  if (!visitorKeys) {
+    return node;
+  }
+
+  for (const key of visitorKeys) {
+    const value = node[key];
+    if (Array.isArray(value)) {
+      node[key] = value.map((child) => lowerEmbeddedJsx(child, opts));
+      continue;
+    }
+
+    if (value && typeof value === "object") {
+      node[key] = lowerEmbeddedJsx(value, opts);
+    }
+  }
+
+  return node;
+}
+
 function stringifyJsxName(nameNode) {
   if (t.isJSXIdentifier(nameNode)) {
     return nameNode.name;
@@ -158,24 +198,27 @@ function isVoidHtmlTagName(name) {
   return VOID_HTML_TAGS.has(String(name).toLowerCase());
 }
 
-function createComponent(node) {
+function createComponent(node, opts = {}) {
   const attributes = t.objectExpression(
     node.openingElement.attributes.map((attr) => {
       if (attr.type === "JSXSpreadAttribute") {
         return t.spreadElement(attr.argument);
       }
 
+      const rawName = decodeVirtualAttributeName(attr.name.name) ?? attr.name.name;
       const value = attr.value
         ? attr.value.expression || attr.value
         : t.booleanLiteral(true);
+      const nextValue = attr.value?.type === "JSXExpressionContainer"
+        ? lowerEmbeddedJsx(value, opts)
+        : value;
 
-      const rawName = decodeVirtualAttributeName(attr.name.name) ?? attr.name.name;
       const isValidIdentifier = /^[$_a-zA-Z][$_a-zA-Z0-9]*$/.test(rawName);
       const key = isValidIdentifier
         ? t.identifier(rawName)
         : t.stringLiteral(rawName);
 
-      return t.objectProperty(key, value);
+      return t.objectProperty(key, nextValue);
     })
   );
 
@@ -215,7 +258,7 @@ const transforms = {
     const { name, isComponent } = getTag(node.openingElement);
 
     if (isComponent) {
-      addKey(strings, keys, createComponent(node));
+      addKey(strings, keys, createComponent(node, opts));
       return;
     }
 
@@ -235,7 +278,7 @@ const transforms = {
 
         if (attr.value) {
           if (attr.value.type === "JSXExpressionContainer") {
-            addKey(strings, keys, attr.value.expression);
+            addKey(strings, keys, lowerEmbeddedJsx(attr.value.expression, opts));
           } else if (attr.value.type === "StringLiteral") {
             addKey(strings, keys, t.stringLiteral(attr.value.value));
           } else {
@@ -253,7 +296,7 @@ const transforms = {
       if (attr.value) {
         addString(strings, keys, '="', attr.name, attr.value);
         if (attr.value.type === "JSXExpressionContainer") {
-          addKey(strings, keys, attr.value.expression);
+          addKey(strings, keys, lowerEmbeddedJsx(attr.value.expression, opts));
         } else {
           addString(strings, keys, attr.value.value, attr.value);
         }
@@ -283,9 +326,9 @@ const transforms = {
   JSXText({ node, strings, keys }) {
     addString(strings, keys, node.value, node);
   },
-  JSXExpressionContainer({ node, strings, keys }) {
+  JSXExpressionContainer({ node, strings, keys }, opts) {
     if (node.expression.type === "JSXEmptyExpression") return;
-    addKey(strings, keys, node.expression);
+    addKey(strings, keys, lowerEmbeddedJsx(node.expression, opts));
   },
   JSXFragment({ node, strings, keys }, opts) {
     node.children.forEach((child) =>

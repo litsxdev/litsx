@@ -116,6 +116,29 @@ describe("@litsx/vite-plugin", () => {
     }
   });
 
+  it("dedupes the lit package family in Vite resolve config", () => {
+    const plugin = litsx();
+    const config = plugin.config({
+      resolve: {
+        dedupe: ["foo", "lit"],
+      },
+      optimizeDeps: {
+        rolldownOptions: {
+          plugins: [],
+        },
+      },
+    });
+
+    assert.deepStrictEqual(config.resolve.dedupe, [
+      "foo",
+      "lit",
+      "lit-html",
+      "lit-element",
+      "@lit/reactive-element",
+      "@lit/context",
+    ]);
+  });
+
   it("skips optimizeDeps transforms for files outside the include filter", async () => {
     const transformSync = vi.fn();
     const session = {

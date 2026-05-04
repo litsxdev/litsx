@@ -1,6 +1,14 @@
 import fs from "fs/promises";
 import { createLitsxCompilationSession } from "@litsx/compiler";
 
+const LIT_DEDUPE_PACKAGES = [
+  "lit",
+  "lit-html",
+  "lit-element",
+  "@lit/reactive-element",
+  "@lit/context",
+];
+
 function shouldTransform(id, include) {
   if (typeof include === "function") {
     return include(id);
@@ -87,6 +95,13 @@ function createLitsxPluginError(error, id, source) {
   };
 }
 
+function mergeDedupe(existing = []) {
+  return Array.from(new Set([
+    ...(Array.isArray(existing) ? existing : []),
+    ...LIT_DEDUPE_PACKAGES,
+  ]));
+}
+
 export function litsx(options = {}) {
   const {
     include,
@@ -135,8 +150,13 @@ export function litsx(options = {}) {
     config(userConfig) {
       const rolldownOptions = userConfig.optimizeDeps?.rolldownOptions ?? {};
       const existingPlugins = rolldownOptions.plugins ?? [];
+      const existingResolve = userConfig.resolve ?? {};
 
       return {
+        resolve: {
+          ...existingResolve,
+          dedupe: mergeDedupe(existingResolve.dedupe),
+        },
         optimizeDeps: {
           ...userConfig.optimizeDeps,
           rolldownOptions: {
