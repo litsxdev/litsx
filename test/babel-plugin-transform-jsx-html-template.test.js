@@ -168,10 +168,10 @@ describe("@litsx/babel-plugin-transform-jsx-html-template", () => {
     });
 
     assert.match(code, /import\s+{\s*html\s*}\s+from\s+['"]lit['"];?/);
-    assert.match(code, /<FancyButton/);
+    assert.match(code, /<fancy-button/);
     assert.match(code, /foo="bar"/);
     assert.match(code, /baz="\$\{value\}"/);
-    assert.match(code, /<\/FancyButton>`/);
+    assert.match(code, /<\/fancy-button>`/);
   });
 
   it("supports bare boolean attributes without values", () => {

@@ -115,7 +115,7 @@ describe("react compat internal lazy", () => {
     );
     assert.match(
       code,
-      /<suspense-boundary[\s\S]*\.fallbackRenderer=\{\(\)\s*=>\s*<span>loading<\/span>\}[\s\S]*\.contentRenderer=\{\(\)\s*=>\s*\{[\s\S]*ensureLazyElement\(this,\s*"fancy-button",\s*FancyButton\);[\s\S]*return <fancy-button label=['"]Save['"] \/>;[\s\S]*\}\}[\s\S]*><\/suspense-boundary>/s
+      /<suspense-boundary[\s\S]*\.fallbackRenderer=\{\(\)\s*=>\s*<span>loading<\/span>\}[\s\S]*\.contentRenderer=\{bindRendererContext\([\s\S]*?\(\)\s*=>\s*\{[\s\S]*ensureLazyElement\(this,\s*"fancy-button",\s*FancyButton\);[\s\S]*return <fancy-button label=['"]Save['"] \/>;[\s\S]*\}\)\}[\s\S]*><\/suspense-boundary>/s
     );
     assert.doesNotMatch(
       code,
@@ -168,6 +168,32 @@ describe("react compat internal lazy", () => {
     const code = run(source);
 
     assert.match(code, /const PrimaryAction = resolveImport\(role\);/);
+    assert.match(
+      code,
+      /ensureLazyElement\(this,\s*"primary-action",\s*PrimaryAction\);/
+    );
+    assert.match(code, /return <primary-action \/>;/);
+  });
+
+  it("supports component-scope aliases that point at lazy bindings", () => {
+    const source = [
+      "import { lazy } from 'react';",
+      "",
+      "const FancyButton = lazy(() => import('./FancyButton.js'));",
+      "",
+      "export const Screen = () => {",
+      "  const PrimaryAction = FancyButton;",
+      "  return <PrimaryAction />;",
+      "};",
+    ].join("\n");
+
+    const code = run(source);
+
+    assert.match(
+      code,
+      /const FancyButton = \(\) => import\(['"]\.\/FancyButton\.js['"]\);/
+    );
+    assert.match(code, /const PrimaryAction = FancyButton;/);
     assert.match(
       code,
       /ensureLazyElement\(this,\s*"primary-action",\s*PrimaryAction\);/
@@ -555,7 +581,7 @@ describe("react compat internal lazy", () => {
     );
     assert.match(
       code,
-      /<suspense-boundary[\s\S]*\.contentRenderer=\{\(\)\s*=>\s*\{[\s\S]*ensureLazyElement\(this,\s*"primary-action",\s*PrimaryAction\);[\s\S]*return <primary-action \/>;[\s\S]*\}\}[\s\S]*><\/suspense-boundary>/s
+      /<suspense-boundary[\s\S]*\.contentRenderer=\{bindRendererContext\([\s\S]*?\(\)\s*=>\s*\{[\s\S]*ensureLazyElement\(this,\s*"primary-action",\s*PrimaryAction\);[\s\S]*return <primary-action \/>;[\s\S]*\}\)\}[\s\S]*><\/suspense-boundary>/s
     );
   });
 

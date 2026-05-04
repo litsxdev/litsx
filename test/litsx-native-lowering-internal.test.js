@@ -83,7 +83,7 @@ describe("@litsx/babel-preset-litsx native lowering internals", () => {
       "const SearchPanel = (props) => {",
       "  return (",
       "    <section>",
-      "      <WidgetBox ref={props.ref} />",
+      "      <widget-box ref={props.ref} />",
       "      <input ref={props.ref} />",
       "    </section>",
       "  );",
@@ -97,7 +97,7 @@ describe("@litsx/babel-preset-litsx native lowering internals", () => {
       code,
       /static properties = \{[\s\S]*ref: \{[\s\S]*type: String[\s\S]*attribute: false/s
     );
-    assert.match(code, /<WidgetBox ref=\{this\.ref\} \/>/);
+    assert.match(code, /<widget-box ref=\{this\.ref\} \/>/);
     assert.match(code, /<input data-ref="_refElement" \/>/);
     const useCallbackRefMatches = code.match(/useCallbackRef\(this, \(\) => this\.renderRoot\?\./g) || [];
     assert.strictEqual(useCallbackRefMatches.length, 1);

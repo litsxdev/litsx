@@ -271,6 +271,28 @@ export default declare((api) => {
     ]);
   }
 
+  function unwrapContentRendererExpression(path) {
+    if (path.isArrowFunctionExpression()) {
+      return path;
+    }
+
+    if (!path.isCallExpression()) {
+      return null;
+    }
+
+    const args = path.get("arguments");
+    if (args.length === 0) {
+      return null;
+    }
+
+    const candidate = args[args.length - 1];
+    if (candidate?.isArrowFunctionExpression()) {
+      return candidate;
+    }
+
+    return null;
+  }
+
   function moveRequirementsIntoSuspenseBoundaries(renderPath, requirements) {
     if (requirements.size === 0) {
       return;
@@ -293,9 +315,6 @@ export default declare((api) => {
         );
 
         if (!contentRendererAttr) return;
-        if (!t.isArrowFunctionExpression(contentRendererAttr.value.expression)) {
-          return;
-        }
 
         const contentRendererPath = path
           .get("attributes")
@@ -309,8 +328,10 @@ export default declare((api) => {
 
         if (!contentRendererPath) return;
 
-        const expressionPath = contentRendererPath.get("value.expression");
-        if (!expressionPath.isArrowFunctionExpression()) return;
+        const expressionPath = unwrapContentRendererExpression(
+          contentRendererPath.get("value.expression")
+        );
+        if (!expressionPath) return;
 
         const tags = collectRenderedTagsFromNode(expressionPath.node.body);
         const moved = [];
@@ -604,7 +625,7 @@ export default declare((api) => {
 
   function createExpressionFromJSXName(node) {
     if (t.isJSXIdentifier(node)) {
-      return t.identifier(node.name);
+      return t.identifier(node.__scopedOriginal || node.name);
     }
     if (t.isJSXMemberExpression(node)) {
       return t.memberExpression(

@@ -21,6 +21,11 @@
       "require": "./dist/internal/transform-litsx-components.cjs",
       "default": "./src/internal/transform-litsx-components.js"
     },
+    "./internal/transform-litsx-renderer-props": {
+      "import": "./src/internal/transform-litsx-renderer-props.js",
+      "require": "./dist/internal/transform-litsx-renderer-props.cjs",
+      "default": "./src/internal/transform-litsx-renderer-props.js"
+    },
     "./internal/transform-litsx-dom-refs": {
       "import": "./src/internal/transform-litsx-dom-refs.js",
       "require": "./dist/internal/transform-litsx-dom-refs.cjs",

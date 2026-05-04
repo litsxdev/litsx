@@ -365,7 +365,7 @@ function getTypeResolverForFunction(functionPath, state) {
 
 function transformFunction(functionPath, programPath, className, options = {}) {
   const { node } = functionPath;
-  const elementCandidates = collectElementCandidates(functionPath, programPath);
+  const elementCandidates = collectElementCandidates(functionPath, programPath, options);
   const forwardRefOptions = options.forwardRef || null;
   let resolvedName = className;
   if (!resolvedName && node && node.id && t.isIdentifier(node.id)) {
@@ -535,40 +535,36 @@ function createNestedInitializerStatement(pattern, root, defaultValue, t) {
   ]);
 }
 
-function resolveTopLevelClassPathFromComponentTransform(nodePath) {
-  if (nodePath.isClassDeclaration()) {
-    return nodePath;
-  }
-
-  if (nodePath.isExportNamedDeclaration() || nodePath.isExportDefaultDeclaration()) {
-    const declarationPath = nodePath.get("declaration");
-    if (declarationPath?.isClassDeclaration()) {
-      return declarationPath;
-    }
-  }
-
-  return null;
-}
-
-function collectElementCandidates(functionPath, programPath) {
+function collectElementCandidates(functionPath, programPath, options = {}) {
   const candidates = new Set();
   if (!programPath) return candidates;
+  programPath.scope.crawl();
+  const compatPascalNames =
+    programPath.getData("__litsxCompatPascalNames") || new Set();
 
   const availableNames = new Set();
   const helperPaths = new Map();
   programPath.get("body").forEach((nodePath) => {
     if (nodePath.isImportDeclaration()) {
       nodePath.node.specifiers.forEach((specifier) => {
-        if (specifier.local) {
+        if (specifier.local?.name) {
           availableNames.add(specifier.local.name);
         }
       });
       return;
     }
 
-    const classPath = resolveTopLevelClassPathFromComponentTransform(nodePath);
-    if (classPath?.node?.id?.name) {
-      availableNames.add(classPath.node.id.name);
+    if (nodePath.isClassDeclaration() && nodePath.node.id?.name) {
+      availableNames.add(nodePath.node.id.name);
+      return;
+    }
+
+    if (
+      (nodePath.isExportNamedDeclaration() || nodePath.isExportDefaultDeclaration()) &&
+      nodePath.get("declaration")?.isClassDeclaration?.() &&
+      nodePath.node.declaration?.id?.name
+    ) {
+      availableNames.add(nodePath.node.declaration.id.name);
       return;
     }
 
@@ -612,11 +608,25 @@ function collectElementCandidates(functionPath, programPath) {
     return name.replace(/([a-z])([A-Z])/g, "$1-$2").toLowerCase();
   }
 
+  function isProgramLevelBinding(binding) {
+    return binding?.scope?.path?.isProgram?.() === true;
+  }
+
   function maybeRewriteComponentName(nameNode, pathForErrors = null) {
     if (!nameNode || nameNode.type !== "JSXIdentifier") return null;
     const originalName = nameNode.__scopedOriginal || nameNode.name;
     if (!isCapitalizedName(originalName)) return null;
-    if (!availableNames.has(originalName)) {
+    const binding = pathForErrors?.scope?.getBinding?.(originalName) || null;
+    if (!binding) {
+      if (availableNames.has(originalName)) {
+        return originalName;
+      }
+      if (compatPascalNames.has(originalName)) {
+        return null;
+      }
+      if (options?.allowUnknownPascalCase === true) {
+        return null;
+      }
       throw (pathForErrors?.buildCodeFrameError?.(
         `Unknown LitSX component "${originalName}". Add an import or declare it in this module before using it in JSX.`
       ) || new Error(
@@ -624,8 +634,10 @@ function collectElementCandidates(functionPath, programPath) {
       ));
     }
 
-    nameNode.__scopedOriginal = originalName;
-    nameNode.name = toKebab(originalName);
+    if (!isProgramLevelBinding(binding)) {
+      return null;
+    }
+
     return originalName;
   }
 

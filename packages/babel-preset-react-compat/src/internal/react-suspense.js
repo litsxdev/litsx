@@ -7,6 +7,16 @@ export default declare((api) => {
   api.assertVersion(7);
   const t = api.types;
 
+  function registerCompatPascalName(programPath, localName) {
+    if (!programPath || typeof localName !== "string" || localName.length === 0) {
+      return;
+    }
+
+    const names = programPath.getData("__litsxCompatPascalNames") || new Set();
+    names.add(localName);
+    programPath.setData("__litsxCompatPascalNames", names);
+  }
+
   function addNamedImport(programPath, source, importedName) {
     const bodyPaths = programPath.get("body");
 
@@ -323,6 +333,7 @@ function cloneChild(child) {
       },
       ImportDeclaration(path, state) {
         if (path.node.source.value !== "react") return;
+        const programPath = path.findParent((entry) => entry.isProgram());
 
         const remainingSpecifiers = [];
         let mutated = false;
@@ -333,6 +344,7 @@ function cloneChild(child) {
               ? specifier.imported.name
               : null;
             if (importedName === "Suspense" || importedName === "SuspenseList") {
+              registerCompatPascalName(programPath, specifier.local.name);
               state.suspenseLocalNames.set(specifier.local.name, importedName);
               mutated = true;
               continue;

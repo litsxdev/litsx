@@ -302,7 +302,7 @@ describe("@litsx/babel-preset-react-compat", () => {
     assert.match(code, /import \{ ShadowDomElementsMixin \} from "@litsx\/litsx\/runtime-infrastructure";/);
     assert.match(code, /const ResultsPanel = \(\) => import\("\.\/ResultsPanel\.js"\);/);
     assert.match(code, /ensureLazyElement\(this, "results-panel", ResultsPanel\);/);
-    assert.match(code, /html`<error-boundary \.fallbackRenderer=\$\{\(\) => html`<p>Oops<\/p>`\} \.contentRenderer=\$\{\(\) => html`<suspense-boundary \.fallbackRenderer=\$\{\(\) => html`<p>Loading<\/p>`\} \.contentRenderer=\$\{\(\) => html`<results-panel value="ready"><\/results-panel>`\}><\/suspense-boundary>`\}><\/error-boundary>`;/);
+    assert.match(code, /html`<error-boundary \.fallbackRenderer=\$\{\(\) => html`<p>Oops<\/p>`\} \.contentRenderer=\$\{bindRendererContext\([\s\S]*?\(\) => html`<suspense-boundary \.fallbackRenderer=\$\{\(\) => html`<p>Loading<\/p>`\} \.contentRenderer=\$\{bindRendererContext\([\s\S]*?\(\) => html`<results-panel value="ready"><\/results-panel>`\)\}><\/suspense-boundary>`\)\}><\/error-boundary>`;/);
     assert.match(code, /static elements = \{[\s\S]*"error-boundary": ErrorBoundary[\s\S]*"suspense-boundary": SuspenseBoundary[\s\S]*\}|static elements = \{[\s\S]*"suspense-boundary": SuspenseBoundary[\s\S]*"error-boundary": ErrorBoundary[\s\S]*\}/);
     assert.doesNotMatch(code, /<ErrorBoundary/);
     assert.doesNotMatch(code, /<Suspense/);
@@ -376,6 +376,19 @@ describe("@litsx/babel-preset-react-compat", () => {
     assert.throws(
       () => run(source),
       /Consumer requires a function child/
+    );
+  });
+
+  it("errors on truly undeclared PascalCase JSX", () => {
+    const source = `
+      export function BrokenPanel() {
+        return <MissingThing />;
+      }
+    `;
+
+    assert.throws(
+      () => run(source, { preset: { jsxTemplate: false } }),
+      /Unknown LitSX component "MissingThing"/
     );
   });
 });

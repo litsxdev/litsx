@@ -30,7 +30,7 @@ function isPropBackedCallee(node, localNames) {
     !node.computed &&
     t.isIdentifier(node.object)
   ) {
-    return localNames.includes(node.object.name);
+    return localNames.includes(node.object.name) && node.object.name === "props";
   }
 
   return false;

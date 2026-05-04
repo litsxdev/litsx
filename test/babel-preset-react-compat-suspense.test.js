@@ -122,7 +122,7 @@ describe("@litsx/babel-preset-react-compat suspense boundaries", () => {
 
     assert.match(
       code,
-      /\.contentRenderer=\{\(\)\s*=>\s*\{[\s\S]*ensureLazyElement\(this,\s*"fancy-button",\s*FancyButton\);[\s\S]*return <fancy-button \/>;[\s\S]*\}\}/s
+      /\.contentRenderer=\{bindRendererContext\([\s\S]*?\(\)\s*=>\s*\{[\s\S]*ensureLazyElement\(this,\s*"fancy-button",\s*FancyButton\);[\s\S]*return <fancy-button \/>;[\s\S]*\}\)\}/s
     );
     assert.doesNotMatch(
       code,
@@ -155,11 +155,11 @@ describe("@litsx/babel-preset-react-compat suspense boundaries", () => {
 
     assert.match(
       code,
-      /<suspense-boundary[\s\S]*\.contentRenderer=\{\(\)\s*=>\s*\{[\s\S]*ensureLazyElement\(this,\s*"alpha-panel",\s*AlphaPanel\);[\s\S]*return <alpha-panel \/>;[\s\S]*\}\}[\s\S]*<\/suspense-boundary>/s
+      /<suspense-boundary[\s\S]*\.contentRenderer=\{bindRendererContext\([\s\S]*?\(\)\s*=>\s*\{[\s\S]*ensureLazyElement\(this,\s*"alpha-panel",\s*AlphaPanel\);[\s\S]*return <alpha-panel \/>;[\s\S]*\}\)\}[\s\S]*<\/suspense-boundary>/s
     );
     assert.match(
       code,
-      /<suspense-boundary[\s\S]*\.contentRenderer=\{\(\)\s*=>\s*\{[\s\S]*ensureLazyElement\(this,\s*"beta-panel",\s*BetaPanel\);[\s\S]*return <beta-panel \/>;[\s\S]*\}\}[\s\S]*<\/suspense-boundary>/s
+      /<suspense-boundary[\s\S]*\.contentRenderer=\{bindRendererContext\([\s\S]*?\(\)\s*=>\s*\{[\s\S]*ensureLazyElement\(this,\s*"beta-panel",\s*BetaPanel\);[\s\S]*return <beta-panel \/>;[\s\S]*\}\)\}[\s\S]*<\/suspense-boundary>/s
     );
   });
 
@@ -354,7 +354,7 @@ describe("@litsx/babel-preset-react-compat suspense boundaries", () => {
 
     assert.match(
       code,
-      /\.contentRenderer=\{\(\)\s*=>\s*\{[\s\S]*ensureLazyElement\(this,\s*'alpha-panel',\s*AlphaPanel\);[\s\S]*return <alpha-panel \/>;[\s\S]*\}\}/s
+      /\.contentRenderer=\{bindRendererContext\([\s\S]*?\(\)\s*=>\s*\{[\s\S]*ensureLazyElement\(this,\s*'alpha-panel',\s*AlphaPanel\);[\s\S]*return <alpha-panel \/>;[\s\S]*\}\)\}/s
     );
     assert.match(code, /ensureLazyElement\(this,\s*'beta-panel',\s*BetaPanel\);/);
   });

@@ -10,6 +10,16 @@ export default declare((api) => {
   api.assertVersion(7);
   const t = api.types;
 
+  function registerCompatPascalName(programPath, localName) {
+    if (!programPath || typeof localName !== "string" || localName.length === 0) {
+      return;
+    }
+
+    const names = programPath.getData("__litsxCompatPascalNames") || new Set();
+    names.add(localName);
+    programPath.setData("__litsxCompatPascalNames", names);
+  }
+
   function addNamedImport(programPath, source, importedName) {
     const bodyPaths = programPath.get("body");
 
@@ -239,6 +249,7 @@ export default declare((api) => {
         },
       },
       ImportDeclaration(path, state) {
+        const programPath = path.findParent((entry) => entry.isProgram());
         const source = path.node.source.value;
         const isReactSource =
           source === "react" ||
@@ -259,6 +270,7 @@ export default declare((api) => {
               ? specifier.imported.name
               : null;
             if (importedName === "ErrorBoundary") {
+              registerCompatPascalName(programPath, specifier.local.name);
               state.boundaryLocalNames.add(specifier.local.name);
               mutated = true;
               return;
