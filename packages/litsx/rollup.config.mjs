@@ -10,6 +10,7 @@ export default createPackageRollupConfig({
     "jsx-runtime": "src/jsx-runtime.js",
     "jsx-dev-runtime": "src/jsx-dev-runtime.js",
     context: "src/context.js",
+    "runtime-render-context": "src/runtime-render-context.js",
     "runtime-infrastructure/index": "src/runtime-infrastructure/index.js",
   },
 });
