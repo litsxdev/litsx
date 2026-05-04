@@ -342,6 +342,7 @@ export default [
   </text>
 </svg>
 `);
+  files.set("public/flame_512.png", fs.readFileSync(new URL("./assets/flame_512.png", import.meta.url)));
   files.set("src/main.js", `import "@webcomponents/scoped-custom-element-registry";
 import { ${className} } from "./${packageName}.litsx";
 import "./styles/tokens.css";
@@ -358,81 +359,36 @@ function createAppProfileFiles(packageName, className) {
   const files = createBaseFiles(packageName, className, false);
 
   files.set(`src/${packageName}.litsx`, `import { useState } from "@litsx/litsx";
+import { LitsxHero } from "./components/litsx-hero.litsx";
 
-export const ${className} = ({ title = "Hello LitSX" }) => {
+export const ${className} = () => {
   ^styles(\`
-    :host {
-      display: block;
-    }
-
+    :host { display: block; }
     .shell {
-      max-width: 840px;
+      max-width: 960px;
       margin: 0 auto;
-      padding: 56px 24px 104px;
+      padding: 28px 24px 104px;
       position: relative;
     }
-
-    .shell::before {
-      content: "";
-      position: absolute;
-      inset: 24px 0 auto;
-      height: 1px;
-      background: linear-gradient(90deg, transparent, var(--color-line), transparent);
+    .counter {
+      margin: 8px auto 0;
+      max-width: 960px;
+      padding: 0 30px;
     }
-
-    .brand {
-      display: inline-flex;
-      flex-direction: column;
-      gap: 10px;
-      margin-bottom: 32px;
-    }
-
-    .brandmark {
-      width: 144px;
-      height: auto;
-      display: block;
-    }
-
-    .kicker {
-      font-size: 0.76rem;
-      letter-spacing: 0.16em;
-      text-transform: uppercase;
-      color: rgba(27, 34, 48, 0.58);
-    }
-
-    .title {
-      margin: 0;
-      font-size: clamp(2.25rem, 4vw, 3.25rem);
-      line-height: 0.94;
-      letter-spacing: -0.06em;
-      text-transform: uppercase;
-      font-family: var(--font-display);
-    }
-
-    .lede {
-      margin: 16px 0 0;
-      max-width: 34rem;
-      color: rgba(27, 34, 48, 0.76);
-      font-size: 1.08rem;
-      line-height: 1.6;
-    }
-
     .cta {
-      margin-top: 28px;
       border: 1px solid transparent;
       border-radius: 999px;
       padding: 12px 18px;
-      background: linear-gradient(135deg, var(--color-text), #2f3c54);
+      background: linear-gradient(135deg, var(--color-text), #32405d);
       color: white;
       font: inherit;
       cursor: pointer;
-      box-shadow: 0 18px 36px rgba(27, 34, 48, 0.18);
+      box-shadow: 0 18px 36px rgba(21, 32, 51, 0.18);
       transition: transform 160ms ease, box-shadow 160ms ease;
     }
-
     .cta:hover {
       transform: translateY(-1px);
-      box-shadow: 0 22px 42px rgba(27, 34, 48, 0.22);
+      box-shadow: 0 22px 42px rgba(21, 32, 51, 0.22);
     }
   \`);
 
@@ -440,33 +396,327 @@ export const ${className} = ({ title = "Hello LitSX" }) => {
 
   return (
     <main class="shell">
-      <div class="brand">
-        <img class="brandmark" src="/litsx-wordmark.svg" alt="LitSX" />
-        <span class="kicker">Authored web components</span>
+      <LitsxHero
+        eyebrow={"Authored web components"}
+        tagline={"Web components with a sharper authoring experience. Less ceremony. More signal."}
+        primaryLabel={"Getting Started"}
+        secondaryLabel={"View on GitHub"}
+      />
+      <div class="counter">
+        <button class="cta" @click={() => setCount((value) => value + 1)}>
+          Count: {count}
+        </button>
       </div>
-      <h1 class="title">{title}</h1>
-      <p class="lede">
-        Edit <code>src/${packageName}.litsx</code> and click the button to confirm
-        authored LitSX is running.
-      </p>
-      <button class="cta" @click={() => setCount((value) => value + 1)}>
-        Count: {count}
-      </button>
     </main>
   );
 };
 `);
+  files.set("src/components/litsx-button.litsx", `export const LitsxButton = ({
+  type = "secondary",
+  label = "",
+}) => {
+  ^styles(\`
+    :host { display: block; flex-shrink: 0; padding: 6px; }
+    button {
+      display: inline-block;
+      border: 1px solid transparent;
+      border-radius: 12px;
+      min-width: 168px;
+      min-height: 52px;
+      padding: 0 20px;
+      line-height: 52px;
+      font-size: 14px;
+      text-align: center;
+      font-weight: 600;
+      white-space: nowrap;
+      color: #111827;
+      background:
+        linear-gradient(180deg, rgba(239, 242, 247, 0.98), rgba(222, 228, 236, 0.98));
+      background-origin: border-box;
+      box-shadow:
+        inset 0 0 0 1px rgba(21, 32, 51, 0.16),
+        inset 0 1px 0 rgba(255, 255, 255, 0.76),
+        0 12px 28px rgba(21, 32, 51, 0.12);
+      overflow: hidden;
+      transition: transform 0.2s ease, box-shadow 0.2s ease, color 0.25s, border-color 0.25s, background-color 0.25s;
+      font-family: var(--litsx-font-family-base);
+      cursor: pointer;
+    }
+    button.primary {
+      color: var(--litsx-button-brand-text);
+      border-color: transparent;
+      background-image: linear-gradient(135deg, var(--litsx-flame-a), var(--litsx-flame-b), var(--litsx-flame-c));
+      background-origin: border-box;
+      box-shadow: 0 14px 32px color-mix(in srgb, var(--litsx-c-brand-1) 28%, transparent);
+    }
+  \`);
+  return <button class={type === "primary" ? "primary" : ""}>{label}</button>;
+};
+`);
+  files.set("src/components/litsx-hero.litsx", `import { useEmit } from "@litsx/litsx";
+import { LitsxButton } from "./litsx-button.litsx";
+
+export const LitsxHero = ({
+  eyebrow = "Authored web components",
+  tagline = "Web components with a sharper authoring experience. Less ceremony. More signal.",
+  primaryLabel = "Getting Started",
+  secondaryLabel = "View on GitHub",
+}) => {
+  const emit = useEmit();
+  ^styles(\`
+    :host {
+      display: block;
+    }
+
+    .LitsxHero {
+      padding: 48px 24px 48px;
+    }
+
+    .container {
+      display: flex;
+      flex-direction: column;
+      margin: 0 auto;
+      max-width: 1152px;
+      text-align: center;
+    }
+
+    .main {
+      position: relative;
+      z-index: 10;
+      order: 2;
+      flex-grow: 1;
+      flex-shrink: 0;
+    }
+
+    .eyebrow {
+      margin: 0 0 18px;
+      color: var(--litsx-c-text-2);
+      font-family: var(--litsx-font-family-base);
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+
+    .heading {
+      margin: 0;
+      width: fit-content;
+      margin: 0 auto;
+    }
+
+    .heading-mark {
+      display: block;
+      width: min(100%, 280px);
+      height: auto;
+    }
+
+    .tagline {
+      margin: 0 auto;
+      padding-top: 8px;
+      max-width: 392px;
+      line-height: 28px;
+      font-size: 18px;
+      font-weight: 500;
+      white-space: pre-wrap;
+      color: var(--litsx-c-text-2);
+      font-family: var(--litsx-font-family-base);
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      margin: -6px;
+      padding-top: 24px;
+    }
+
+    .image {
+      order: 1;
+      margin: -76px -24px -48px;
+    }
+
+    .image-container {
+      position: relative;
+      margin: 0 auto;
+      width: 320px;
+      height: 320px;
+    }
+
+    .image-bg {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      border-radius: 50%;
+      width: 192px;
+      height: 192px;
+      background-image: var(--litsx-home-hero-image-background-image);
+      filter: var(--litsx-home-hero-image-filter);
+      transform: translate(-50%, -50%);
+    }
+
+    .image-src {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      max-width: 192px;
+      max-height: 192px;
+      transform: translate(-50%, -50%);
+    }
+
+    @media (min-width: 640px) {
+      .LitsxHero {
+        padding: 80px 48px 64px;
+      }
+
+      .heading-mark {
+        width: min(100%, 360px);
+      }
+
+      .tagline {
+        padding-top: 12px;
+        max-width: 576px;
+        line-height: 32px;
+        font-size: 20px;
+      }
+
+      .actions {
+        padding-top: 32px;
+      }
+
+      .image {
+        margin: -108px -24px -48px;
+      }
+
+      .image-container {
+        width: 392px;
+        height: 392px;
+      }
+
+      .image-bg {
+        width: 256px;
+        height: 256px;
+      }
+
+      .image-src {
+        max-width: 256px;
+        max-height: 256px;
+      }
+    }
+
+    @media (min-width: 960px) {
+      .LitsxHero {
+        padding: 80px 64px 64px;
+      }
+
+      .container {
+        flex-direction: row;
+      }
+
+      .main {
+        order: 1;
+        width: calc((100% / 3) * 2);
+        max-width: 592px;
+      }
+
+      .container,
+      .tagline,
+      .heading {
+        text-align: left;
+      }
+
+      .heading {
+        margin: 0;
+      }
+
+      .heading-mark {
+        width: max(100%, 392px);
+      }
+
+      .tagline {
+        margin: 0;
+        line-height: 36px;
+        font-size: 24px;
+      }
+
+      .actions {
+        justify-content: flex-start;
+      }
+
+      .image {
+        flex-grow: 1;
+        order: 2;
+        margin: 0;
+        min-height: 100%;
+      }
+
+      .image-container {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        width: 100%;
+        height: 100%;
+        transform: translate(-32px, -32px);
+      }
+
+      .image-bg {
+        width: 320px;
+        height: 320px;
+      }
+
+      .image-src {
+        max-width: 320px;
+        max-height: 320px;
+      }
+    }
+  \`);
+  return (
+    <section class="LitsxHero">
+      <div class="container">
+        <div class="main">
+          <p class="eyebrow">{eyebrow}</p>
+          <h1 class="heading">
+            <img class="heading-mark" src="/title.svg" alt="LitSX" />
+          </h1>
+          <p class="tagline">{tagline}</p>
+          <div class="actions">
+            <LitsxButton
+              type="primary"
+              label={primaryLabel}
+              @click={() => emit("primary-action")}
+            />
+            <LitsxButton
+              type="secondary"
+              label={secondaryLabel}
+              @click={() => emit("secondary-action")}
+            />
+          </div>
+        </div>
+        <div class="image">
+          <div class="image-container">
+            <div class="image-bg"></div>
+            <img class="image-src" src="/flame_512.png" alt="" />
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+};
+`);
   files.set("src/styles/tokens.css", `:root {
-  --color-bg: #f3ede3;
-  --color-bg-deep: #e4d7c3;
-  --color-text: #1b2230;
-  --color-panel: rgba(255, 249, 240, 0.88);
-  --color-line: rgba(27, 34, 48, 0.12);
-  --color-accent: #9e4b1f;
-  --color-accent-soft: rgba(158, 75, 31, 0.14);
-  --radius-panel: 28px;
-  --shadow-panel: 0 28px 80px rgba(27, 34, 48, 0.12);
-  --font-display: "Avenir Next Condensed", "Franklin Gothic Medium", "Arial Narrow", sans-serif;
+  --litsx-c-brand-1: #f05a28;
+  --litsx-c-brand-2: #ff7446;
+  --litsx-flame-a: #ff8a00;
+  --litsx-flame-b: #ff3d77;
+  --litsx-flame-c: #6a5cff;
+  --litsx-button-brand-text: #fff7f2;
+  --litsx-c-text-1: #152033;
+  --litsx-c-text-2: rgba(21, 32, 51, 0.76);
+  --litsx-font-family-base: "Inter", "Segoe UI", sans-serif;
+  --litsx-home-hero-image-background-image:
+    linear-gradient(135deg, rgba(255, 138, 0, 0.28), rgba(255, 61, 119, 0.22), rgba(106, 92, 255, 0.24));
+  --litsx-home-hero-image-filter: blur(56px);
+  --color-bg: #ffffff;
+  --color-text: #152033;
   --font-body: "Inter", "Segoe UI", sans-serif;
 }
 
@@ -475,9 +725,9 @@ body {
   min-height: 100vh;
   font-family: var(--font-body);
   background:
-    radial-gradient(circle at top left, rgba(255, 255, 255, 0.7), transparent 26%),
-    radial-gradient(circle at top right, rgba(158, 75, 31, 0.18), transparent 22%),
-    linear-gradient(180deg, var(--color-bg) 0%, var(--color-bg-deep) 100%);
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.74), transparent 24%),
+    radial-gradient(circle at top right, rgba(203, 88, 33, 0.1), transparent 20%),
+    linear-gradient(180deg, #ffffff 0%, var(--color-bg) 100%);
   background-repeat: no-repeat;
   background-size: cover;
   color: var(--color-text);
@@ -516,146 +766,583 @@ Generated with \`create-litsx-app --template app\`.
 function createComponentProfileFiles(packageName, className) {
   const files = createBaseFiles(packageName, className, false);
 
-  files.set(`src/${packageName}.litsx`, `import { StatusPill } from "./components/status-pill.litsx";
-import { ButtonCard } from "./components/button-card.litsx";
+  files.set(`src/${packageName}.litsx`, `import { LitsxHero } from "./components/litsx-hero.litsx";
+import { StarterGuide } from "./components/starter-guide.litsx";
 
-export const ${className} = ({ title = "LitSX Components" }) => {
-  return (
-    <main class="shell">
-      <div class="brand">
-        <img class="brandmark" src="/litsx-wordmark.svg" alt="LitSX" />
-        <span class="kicker">Starter component surface</span>
-      </div>
-      <header>
-        <h1>{title}</h1>
-        <StatusPill .label={"preview"} ?active={true} tone={"positive"} />
-      </header>
-
-      <ButtonCard
-        .title={"Component Library"}
-        .description={"A starter surface for reusable LitSX web components."}
-      />
-    </main>
-  );
-};
-`);
-  files.set("src/components/status-pill.litsx", `export const StatusPill = ({ label = "idle", active = false, tone = "neutral" }) => {
+export const ${className} = () => {
   ^styles(\`
-    :host {
-      display: inline-flex;
-    }
-
-    .status-pill {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      padding: 8px 14px;
-      border-radius: var(--radius-pill);
-      border: 1px solid var(--color-border);
-      background: rgba(255, 253, 249, 0.88);
-      color: var(--color-neutral);
-      font-size: 0.875rem;
-      text-transform: uppercase;
-      letter-spacing: 0.12em;
-    }
-
-    .status-pill[data-tone="positive"] {
-      color: var(--color-positive);
-    }
-
-    .status-pill[data-tone="warning"] {
-      color: var(--color-warning);
+    :host { display: block; }
+    .shell {
+      max-width: 960px;
+      margin: 0 auto;
+      padding-top: 28px;
+      padding-bottom: 28px;
+      position: relative;
     }
   \`);
 
   return (
-    <span class="status-pill" ?data-active={active} data-tone={tone}>
-      {label}
-    </span>
+    <main class="shell">
+      <LitsxHero
+        eyebrow={"Design system starter"}
+        tagline={"Web components with a sharper authoring experience. Less ceremony. More signal."}
+        primaryLabel={"Getting Started"}
+        secondaryLabel={"View on GitHub"}
+        @primary-action={() => {
+          window.open("https://litsx.dev/getting-started", "_blank", "noopener,noreferrer");
+        }}
+        @secondary-action={() => {
+          window.open("https://github.com/litsxdev/litsx", "_blank", "noopener,noreferrer");
+        }}
+      />
+      <StarterGuide />
+    </main>
   );
 };
 `);
-  files.set("src/components/button-card.litsx", `export const ButtonCard = ({
-  title = "Component",
-  description = "A reusable LitSX primitive.",
+  files.set("src/components/guide-card.litsx", `export const GuideCard = ({
+  eyebrow = "",
+  titleRenderer = null,
+  contentRenderer = null,
 }) => {
+  ^styles(\`
+    :host { display: block; }
+    .guide-card {
+      padding: 24px;
+      border: 1px solid rgba(21, 32, 51, 0.08);
+      border-radius: 24px;
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.78), transparent 140px),
+        rgba(255, 250, 245, 0.96);
+      box-shadow: 0 18px 48px rgba(21, 32, 51, 0.08);
+      animation: guide-card-enter 280ms ease both;
+    }
+    .guide-card__eyebrow {
+      margin: 0 0 10px;
+      color: var(--litsx-c-text-2);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+    .guide-card h2 {
+      margin: 0 0 12px;
+      color: var(--litsx-c-text-1);
+      font-family: var(--litsx-font-family-base);
+      font-size: 1.25rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      line-height: 1.2;
+    }
+    .guide-card p { margin: 0; color: var(--litsx-c-text-2); line-height: 1.65; }
+    .guide-card a { color: var(--litsx-c-brand-1); text-decoration: none; font-weight: 600; }
+    .guide-card a:hover { color: var(--litsx-c-brand-2); text-decoration: underline; }
+    .guide-card ul { margin: 16px 0 0; padding-left: 18px; color: var(--litsx-c-text-2); line-height: 1.65; }
+    .guide-card li + li { margin-top: 8px; }
+    .guide-card code {
+      border-radius: 8px;
+      padding: 2px 8px;
+      background: rgba(21, 32, 51, 0.06);
+      color: var(--litsx-c-text-1);
+      font-family: "SFMono-Regular", "SFMono-Regular", ui-monospace, monospace;
+      font-size: 0.92em;
+    }
+    @keyframes guide-card-enter {
+      from { opacity: 0; transform: translateY(14px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+  \`);
+
+  return (
+    <article class="guide-card">
+      <p class="guide-card__eyebrow">{eyebrow}</p>
+      <h2>{titleRenderer()}</h2>
+      {contentRenderer()}
+    </article>
+  );
+};
+`);
+  files.set("src/components/litsx-button.litsx", `export const LitsxButton = ({
+  type = "secondary",
+  label = "",
+}) => {
+  ^styles(\`
+    :host { display: block; flex-shrink: 0; padding: 6px; }
+    button {
+      display: inline-block;
+      border: 1px solid transparent;
+      border-radius: 12px;
+      min-width: 168px;
+      min-height: 52px;
+      padding: 0 20px;
+      line-height: 52px;
+      font-size: 14px;
+      text-align: center;
+      font-weight: 600;
+      white-space: nowrap;
+      color: #111827;
+      background:
+        linear-gradient(180deg, rgba(239, 242, 247, 0.98), rgba(222, 228, 236, 0.98));
+      background-origin: border-box;
+      box-shadow:
+        inset 0 0 0 1px rgba(21, 32, 51, 0.16),
+        inset 0 1px 0 rgba(255, 255, 255, 0.76),
+        0 12px 28px rgba(21, 32, 51, 0.12);
+      overflow: hidden;
+      transition: transform 0.2s ease, box-shadow 0.2s ease, color 0.25s, border-color 0.25s, background-color 0.25s;
+      font-family: var(--litsx-font-family-base);
+      cursor: pointer;
+    }
+    button:hover {
+      transform: scale(1.03);
+      box-shadow:
+        inset 0 0 0 1px rgba(21, 32, 51, 0.22),
+        inset 0 1px 0 rgba(255, 255, 255, 0.95),
+        0 16px 30px rgba(21, 32, 51, 0.12);
+    }
+    button:active {
+      transform: scale(0.99);
+      box-shadow:
+        inset 0 0 0 1px rgba(21, 32, 51, 0.18),
+        inset 0 2px 10px rgba(21, 32, 51, 0.12),
+        0 8px 18px rgba(21, 32, 51, 0.06);
+    }
+    button.primary {
+      color: var(--litsx-button-brand-text);
+      border-color: transparent;
+      background-image: linear-gradient(135deg, var(--litsx-flame-a), var(--litsx-flame-b), var(--litsx-flame-c));
+      background-origin: border-box;
+      box-shadow: 0 14px 32px color-mix(in srgb, var(--litsx-c-brand-1) 28%, transparent);
+    }
+    button.primary:hover {
+      box-shadow: 0 18px 38px color-mix(in srgb, var(--litsx-c-brand-1) 32%, transparent);
+    }
+    button.primary:active {
+      box-shadow:
+        inset 0 2px 10px rgba(0, 0, 0, 0.18),
+        0 10px 22px color-mix(in srgb, var(--litsx-c-brand-1) 18%, transparent);
+    }
+  \`);
+
+  return <button class={type === "primary" ? "primary" : ""}>{label}</button>;
+};
+`);
+  files.set("src/components/litsx-hero.litsx", `import { useEmit } from "@litsx/litsx";
+import { LitsxButton } from "./litsx-button.litsx";
+
+export const LitsxHero = ({
+  eyebrow = "Authored web components",
+  tagline = "Web components with a sharper authoring experience. Less ceremony. More signal.",
+  primaryLabel = "Getting Started",
+  secondaryLabel = "View on GitHub",
+}) => {
+  const emit = useEmit();
+
   ^styles(\`
     :host {
       display: block;
     }
 
-    .button-card {
-      padding: 30px;
-      border: 1px solid var(--color-border);
-      border-radius: var(--radius-panel);
-      background:
-        linear-gradient(180deg, rgba(255, 255, 255, 0.72), transparent 120px),
-        var(--color-surface);
-      box-shadow: var(--shadow-panel);
+    .LitsxHero {
+      padding: 48px 24px 48px;
+    }
+
+    .container {
+      display: flex;
+      flex-direction: column;
+      margin: 0 auto;
+      max-width: 1152px;
+      text-align: center;
+    }
+
+    .main {
       position: relative;
-      overflow: hidden;
+      z-index: 10;
+      order: 2;
+      flex-grow: 1;
+      flex-shrink: 0;
     }
 
-    .button-card::after {
-      content: "";
-      position: absolute;
-      inset: 0 auto auto 0;
-      width: 84px;
-      height: 4px;
-      background: linear-gradient(90deg, var(--color-accent), transparent);
-    }
-
-    .button-card h2 {
-      margin: 0 0 10px;
-      font-family: var(--font-display);
-      letter-spacing: -0.05em;
+    .eyebrow {
+      margin: 0 0 18px;
+      color: var(--litsx-c-text-2);
+      font-family: var(--litsx-font-family-base);
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 0.14em;
       text-transform: uppercase;
     }
 
-    .button-card p {
-      margin: 0 0 18px;
-      max-width: 38ch;
-      color: rgba(24, 32, 51, 0.72);
-      line-height: 1.6;
+    .heading {
+      margin: 0;
+      width: fit-content;
+      margin: 0 auto;
     }
 
-    .button-card__cta {
-      border: 1px solid rgba(24, 32, 51, 0.08);
-      border-radius: 999px;
-      background: linear-gradient(135deg, var(--color-text), #303b55);
-      color: white;
-      padding: 12px 18px;
-      font: inherit;
-      cursor: pointer;
-      box-shadow: 0 14px 28px rgba(24, 32, 51, 0.16);
+    .heading-mark {
+      display: block;
+      width: min(100%, 280px);
+      height: auto;
+    }
+
+    .tagline {
+      margin: 0 auto;
+      padding-top: 8px;
+      max-width: 392px;
+      line-height: 28px;
+      font-size: 18px;
+      font-weight: 500;
+      white-space: pre-wrap;
+      color: var(--litsx-c-text-2);
+      font-family: var(--litsx-font-family-base);
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      margin: -6px;
+      padding-top: 24px;
+    }
+
+    .image {
+      order: 1;
+      margin: -76px -24px -48px;
+    }
+
+    .image-container {
+      position: relative;
+      margin: 0 auto;
+      width: 320px;
+      height: 320px;
+    }
+
+    .image-bg {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      border-radius: 50%;
+      width: 192px;
+      height: 192px;
+      background-image: var(--litsx-home-hero-image-background-image);
+      filter: var(--litsx-home-hero-image-filter);
+      transform: translate(-50%, -50%);
+    }
+
+    .image-src {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      max-width: 192px;
+      max-height: 192px;
+      transform: translate(-50%, -50%);
+    }
+
+    @media (min-width: 640px) {
+      .LitsxHero {
+        padding: 80px 48px 64px;
+      }
+
+      .heading-mark {
+        width: min(100%, 360px);
+      }
+
+      .tagline {
+        padding-top: 12px;
+        max-width: 576px;
+        line-height: 32px;
+        font-size: 20px;
+      }
+
+      .actions {
+        padding-top: 32px;
+      }
+
+      .image {
+        margin: -108px -24px -48px;
+      }
+
+      .image-container {
+        width: 392px;
+        height: 392px;
+      }
+
+      .image-bg {
+        width: 256px;
+        height: 256px;
+      }
+
+      .image-src {
+        max-width: 256px;
+        max-height: 256px;
+      }
+    }
+
+    @media (min-width: 960px) {
+      .LitsxHero {
+        padding: 80px 64px 64px;
+      }
+
+      .container {
+        flex-direction: row;
+      }
+
+      .main {
+        order: 1;
+        width: calc((100% / 3) * 2);
+        max-width: 592px;
+      }
+
+      .container,
+      .tagline,
+      .heading {
+        text-align: left;
+      }
+
+      .heading {
+        margin: 0;
+      }
+
+      .heading-mark {
+        width: max(100%, 392px);
+      }
+
+      .tagline {
+        margin: 0;
+        line-height: 36px;
+        font-size: 24px;
+      }
+
+      .actions {
+        justify-content: flex-start;
+      }
+
+      .image {
+        flex-grow: 1;
+        order: 2;
+        margin: 0;
+        min-height: 100%;
+      }
+
+      .image-container {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        width: 100%;
+        height: 100%;
+        transform: translate(-32px, -32px);
+      }
+
+      .image-bg {
+        width: 320px;
+        height: 320px;
+      }
+
+      .image-src {
+        max-width: 320px;
+        max-height: 320px;
+      }
     }
   \`);
 
   return (
-    <article class="button-card">
-      <h2>{title}</h2>
-      <p>{description}</p>
-      <button class="button-card__cta" @click={() => console.log(title)}>
-        Inspect component
-      </button>
-    </article>
+    <section class="LitsxHero">
+      <div class="container">
+        <div class="main">
+          <p class="eyebrow">{eyebrow}</p>
+          <h1 class="heading"><img class="heading-mark" src="/title.svg" alt="LitSX" /></h1>
+          <p class="tagline">{tagline}</p>
+          <div class="actions">
+            <LitsxButton type="primary" label={primaryLabel} @click={() => emit("primary-action")} />
+            <LitsxButton type="secondary" label={secondaryLabel} @click={() => emit("secondary-action")} />
+          </div>
+        </div>
+        <div class="image">
+          <div class="image-container">
+            <div class="image-bg"></div>
+            <img class="image-src" src="/flame_512.png" alt="" />
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+};
+`);
+  files.set("src/components/starter-guide.litsx", `import { SuspenseBoundary, SuspenseList, useOnConnect, useState } from "@litsx/litsx";
+import { GuideCard } from "./guide-card.litsx";
+
+const pendingSteps = new Map();
+
+function createDeferred() {
+  let resolve = null;
+  const promise = new Promise((nextResolve) => {
+    resolve = nextResolve;
+  });
+  return { promise, resolve };
+}
+
+function suspendUntil(stepIndex, revealedCount) {
+  if (revealedCount > stepIndex) {
+    return;
+  }
+
+  let pending = pendingSteps.get(stepIndex);
+  if (!pending) {
+    pending = createDeferred();
+    pendingSteps.set(stepIndex, pending);
+  }
+
+  throw pending.promise;
+}
+
+export const StarterGuide = () => {
+  const delays = [180, 220, 240];
+  const [revealedCount, setRevealedCount] = useState(0);
+
+  if (revealedCount > 0) {
+    for (const [stepIndex, deferred] of pendingSteps) {
+      if (stepIndex < revealedCount) {
+        pendingSteps.delete(stepIndex);
+        deferred.resolve?.();
+      }
+    }
+  }
+
+  useOnConnect(() => {
+    const [firstDelay = 0, ...remainingDelays] = delays;
+    let intervalId = null;
+
+    const firstTimeoutId = setTimeout(() => {
+      setRevealedCount((count) => count + 1);
+
+      if (remainingDelays.length === 0) {
+        return;
+      }
+
+      let intervalIndex = 0;
+      intervalId = setInterval(() => {
+        setRevealedCount((count) => count + 1);
+        intervalIndex += 1;
+        if (intervalIndex >= remainingDelays.length) {
+          clearInterval(intervalId);
+          intervalId = null;
+        }
+      }, remainingDelays[0]);
+    }, firstDelay);
+
+    return () => {
+      clearTimeout(firstTimeoutId);
+      if (intervalId != null) {
+        clearInterval(intervalId);
+      }
+    };
+  }, []);
+
+  ^styles(\`
+    :host {
+      display: block;
+    }
+
+    .guide {
+      margin-top: 32px;
+    }
+
+    .guide-list {
+      display: grid;
+      gap: 18px;
+    }
+
+    @media (min-width: 860px) {
+      .guide-list {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+    }
+  \`);
+
+  return (
+    <section class="guide" aria-label="Getting started with LitSX">
+      <SuspenseList class="guide-list" reveal-order="forwards" tail="hidden">
+        <SuspenseBoundary
+          .fallbackRenderer={() => null}
+          .contentRenderer={() => {
+            suspendUntil(0, revealedCount);
+            return (
+              <GuideCard
+                .eyebrow={"Getting started"}
+                .titleRenderer={() => <><code>src/${packageName}.litsx</code>, then open <code>Getting Started</code></>}
+                .contentRenderer={() => (
+                  <p>
+                    That host is the authored entry surface for the scaffold. Keep layout and flow there,
+                    and move reusable UI into focused components under <code>src/components</code>. The
+                    docs path to pair with that first edit is <a href="https://litsx.dev/" target="_blank" rel="noreferrer">the docs home</a>,
+                    so the local files and the framework mental model line up immediately.
+                  </p>
+                )}
+              />
+            );
+          }}
+        />
+
+        <SuspenseBoundary
+          .fallbackRenderer={() => null}
+          .contentRenderer={() => {
+            suspendUntil(1, revealedCount);
+            return (
+              <GuideCard
+                .eyebrow={"Authored model"}
+                .titleRenderer={() => <>Read <code>Authored Model</code> while you learn LitSX bindings</>}
+                .contentRenderer={() => (
+                  <p>
+                    Reach for <code>@click</code>, <code>.value</code>, <code>?disabled</code> and
+                    <code> ^styles(...)</code> directly in authored JSX so component intent stays close
+                    to markup. The <a href="https://github.com/litsxdev/litsx" target="_blank" rel="noreferrer">repository overview</a> explains
+                    why LitSX source is not just generic TSX with helper imports.
+                  </p>
+                )}
+              />
+            );
+          }}
+        />
+
+        <SuspenseBoundary
+          .fallbackRenderer={() => null}
+          .contentRenderer={() => {
+            suspendUntil(2, revealedCount);
+            return (
+              <GuideCard
+                .eyebrow={"Tooling flow"}
+                .titleRenderer={() => "Pair the tooling docs with your daily loop"}
+                .contentRenderer={() => (
+                  <ul>
+                    <li><code>npm run dev</code> while reading the <a href="https://github.com/litsxdev/litsx/tree/main/packages/vite-plugin" target="_blank" rel="noreferrer">Vite plugin</a> package docs</li>
+                    <li><code>npm run lint</code> next to the <a href="https://github.com/litsxdev/litsx/tree/main/packages/eslint-plugin-litsx" target="_blank" rel="noreferrer">ESLint plugin</a> package docs</li>
+                    <li><code>npm run storybook</code> once the public surface is ready to document</li>
+                    <li>Keep MDX docs close to stories under <code>src/stories</code></li>
+                  </ul>
+                )}
+              />
+            );
+          }}
+        />
+      </SuspenseList>
+    </section>
   );
 };
 `);
   files.set("src/styles/tokens.css", `:root {
-  --color-bg: #efe5d4;
-  --color-surface: rgba(255, 249, 239, 0.9);
-  --color-surface-strong: #fffdf9;
-  --color-text: #182033;
-  --color-border: rgba(24, 32, 51, 0.12);
-  --color-positive: #1d7b54;
-  --color-warning: #b16124;
-  --color-neutral: #6a7282;
-  --color-accent: #c5531b;
-  --radius-pill: 999px;
-  --radius-panel: 24px;
-  --shadow-panel: 0 24px 60px rgba(24, 32, 51, 0.12);
-  --font-display: "Avenir Next Condensed", "Franklin Gothic Medium", "Arial Narrow", sans-serif;
+  --litsx-c-brand-1: #f05a28;
+  --litsx-c-brand-2: #ff7446;
+  --litsx-flame-a: #ff8a00;
+  --litsx-flame-b: #ff3d77;
+  --litsx-flame-c: #6a5cff;
+  --litsx-button-brand-text: #fff7f2;
+  --litsx-c-text-1: #152033;
+  --litsx-c-text-2: rgba(21, 32, 51, 0.76);
+  --litsx-home-hero-image-background-image:
+    linear-gradient(135deg, rgba(255, 138, 0, 0.28), rgba(255, 61, 119, 0.22), rgba(106, 92, 255, 0.24));
+  --litsx-home-hero-image-filter: blur(56px);
+  --color-bg: #ffffff;
+  --color-text: #152033;
   --font-body: "Inter", "Segoe UI", sans-serif;
 }
 
@@ -664,118 +1351,12 @@ body {
   min-height: 100vh;
   font-family: var(--font-body);
   background:
-    radial-gradient(circle at top left, rgba(255, 255, 255, 0.72), transparent 24%),
-    radial-gradient(circle at top right, rgba(197, 83, 27, 0.18), transparent 18%),
-    linear-gradient(180deg, #f6f0e6 0%, var(--color-bg) 100%);
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.74), transparent 24%),
+    radial-gradient(circle at top right, rgba(203, 88, 33, 0.1), transparent 20%),
+    linear-gradient(180deg, #ffffff 0%, var(--color-bg) 100%);
   background-repeat: no-repeat;
   background-size: cover;
   color: var(--color-text);
-}
-
-.shell {
-  max-width: 960px;
-  margin: 0 auto;
-  padding: 56px 24px 104px;
-}
-
-.brand {
-  display: inline-flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-bottom: 28px;
-}
-
-.brandmark {
-  width: 144px;
-  height: auto;
-  display: block;
-}
-
-.kicker {
-  font-size: 0.76rem;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: rgba(24, 32, 51, 0.56);
-}
-
-.shell h1,
-.button-card h2 {
-  font-family: var(--font-display);
-  letter-spacing: -0.05em;
-  text-transform: uppercase;
-}
-
-.shell > header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 32px;
-}
-
-.status-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 14px;
-  border-radius: var(--radius-pill);
-  border: 1px solid var(--color-border);
-  background: rgba(255, 253, 249, 0.88);
-  color: var(--color-neutral);
-  font-size: 0.875rem;
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-}
-
-.status-pill[data-tone="positive"] {
-  color: var(--color-positive);
-}
-
-.status-pill[data-tone="warning"] {
-  color: var(--color-warning);
-}
-
-.button-card {
-  padding: 30px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-panel);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.72), transparent 120px),
-    var(--color-surface);
-  box-shadow: var(--shadow-panel);
-  position: relative;
-  overflow: hidden;
-}
-
-.button-card::after {
-  content: "";
-  position: absolute;
-  inset: 0 auto auto 0;
-  width: 84px;
-  height: 4px;
-  background: linear-gradient(90deg, var(--color-accent), transparent);
-}
-
-.button-card h2 {
-  margin: 0 0 10px;
-}
-
-.button-card p {
-  margin: 0 0 18px;
-  max-width: 38ch;
-  color: rgba(24, 32, 51, 0.72);
-  line-height: 1.6;
-}
-
-.button-card__cta {
-  border: 1px solid rgba(24, 32, 51, 0.08);
-  border-radius: 999px;
-  background: linear-gradient(135deg, var(--color-text), #303b55);
-  color: white;
-  padding: 12px 18px;
-  font: inherit;
-  cursor: pointer;
-  box-shadow: 0 14px 28px rgba(24, 32, 51, 0.16);
 }
 `);
   files.set("README.md", `# ${packageName}
@@ -796,24 +1377,21 @@ Generated with \`create-litsx-app --template component\`.
 - Official \`@litsx/vite-plugin\` integration for authored LitSX source
 - Official \`@litsx/eslint-plugin\` linting preset
 - A starter component-library structure under \`src/components\`
-- Shared tokens CSS for design-system work without Storybook overhead
+- Shared hero, guide and button primitives without Storybook overhead
 `);
 
   return files;
 }
 
 function createDesignSystemProfileFiles(packageName, className) {
-  const files = createBaseFiles(packageName, className, true);
+  const files = createComponentProfileFiles(packageName, className);
 
   files.set(".storybook/main.js", `import { litsx } from "@litsx/vite-plugin";
 
 export default {
   framework: "@storybook/web-components-vite",
   stories: ["../src/**/*.stories.@(js|jsx|litsx|mdx)", "../src/**/*.docs.mdx"],
-  addons: [
-    "@storybook/addon-docs",
-    "@storybook/addon-a11y"
-  ],
+  addons: ["@storybook/addon-docs", "@storybook/addon-a11y"],
   async viteFinal(config) {
     return {
       ...config,
@@ -825,377 +1403,81 @@ export default {
   files.set(".storybook/preview.js", `import "../src/styles/tokens.css";
 
 export const parameters = {
-  controls: {
-    expanded: true,
-  },
+  controls: { expanded: true },
   layout: "centered",
-  docs: {
-    toc: true,
-  },
+  docs: { toc: true },
 };
 `);
-  files.set(`src/${packageName}.litsx`, `import { SuspenseBoundary } from "@litsx/litsx";
-import { StatusPill } from "./components/status-pill.litsx";
-import { ButtonCard } from "./components/button-card.litsx";
-
-export const ${className} = ({ title = "LitSX" }) => {
-  return (
-    <main class="shell">
-      <div class="brand">
-        <img class="brandmark" src="/litsx-wordmark.svg" alt="LitSX" />
-        <span class="kicker">Design system starter</span>
-      </div>
-      <header>
-        <h1>{title}</h1>
-        <StatusPill .label={"ready"} ?active={true} />
-      </header>
-
-      <ButtonCard
-        .title={"Design System"}
-        .description={"Reusable web components with LitSX-authored JSX."}
-      />
-
-      <SuspenseBoundary
-        .fallbackRenderer={() => <p>Loading boundary…</p>}
-        .contentRenderer={() => <p>Boundary ready.</p>}
-      />
-
-      <button @click={() => console.log("hello from litsx")}>
-        Click me
-      </button>
-    </main>
-  );
-};
-`);
-  files.set("src/components/status-pill.litsx", `export const StatusPill = ({ label = "idle", active = false, tone = "neutral" }) => {
-  ^styles(\`
-    :host {
-      display: inline-flex;
-    }
-
-    .status-pill {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      padding: 8px 14px;
-      border-radius: var(--radius-pill);
-      border: 1px solid var(--color-border);
-      background: rgba(255, 253, 248, 0.92);
-      color: var(--color-neutral);
-      font-size: 0.875rem;
-      text-transform: uppercase;
-      letter-spacing: 0.12em;
-    }
-
-    .status-pill[data-tone="positive"] {
-      color: var(--color-positive);
-    }
-
-    .status-pill[data-tone="warning"] {
-      color: var(--color-warning);
-    }
-
-    .status-pill[data-active] {
-      box-shadow: 0 0 0 4px rgba(31, 122, 77, 0.08);
-    }
-  \`);
-
-  return (
-    <span class="status-pill" ?data-active={active} data-tone={tone}>
-      {label}
-    </span>
-  );
-};
-`);
-  files.set("src/components/button-card.litsx", `export const ButtonCard = ({
-  title = "Component",
-  description = "A documented LitSX building block.",
-}) => {
-  ^styles(\`
-    :host {
-      display: block;
-    }
-
-    .button-card {
-      padding: 32px;
-      border: 1px solid var(--color-border);
-      border-radius: var(--radius-panel);
-      background:
-        linear-gradient(180deg, rgba(255, 255, 255, 0.72), transparent 120px),
-        var(--color-surface);
-      box-shadow: var(--shadow-panel);
-      margin-bottom: 28px;
-      position: relative;
-      overflow: hidden;
-    }
-
-    .button-card::after {
-      content: "";
-      position: absolute;
-      inset: 0 auto auto 0;
-      width: 120px;
-      height: 4px;
-      background: linear-gradient(90deg, var(--color-accent), transparent);
-    }
-
-    .button-card h2 {
-      margin: 0 0 10px;
-      font-family: var(--font-display);
-      letter-spacing: -0.06em;
-      text-transform: uppercase;
-    }
-
-    .button-card p {
-      margin: 0 0 18px;
-      max-width: 40ch;
-      color: rgba(21, 32, 51, 0.74);
-      line-height: 1.6;
-    }
-
-    .button-card__cta {
-      border: 1px solid rgba(21, 32, 51, 0.08);
-      border-radius: 999px;
-      background: linear-gradient(135deg, var(--color-text), #32405d);
-      color: white;
-      padding: 12px 18px;
-      font: inherit;
-      cursor: pointer;
-      box-shadow: 0 14px 28px rgba(20, 33, 61, 0.18);
-    }
-  \`);
-
-  return (
-    <article class="button-card">
-      <h2>{title}</h2>
-      <p>{description}</p>
-      <button class="button-card__cta" @click={() => console.log(title)}>
-        Inspect component
-      </button>
-    </article>
-  );
-};
-`);
-  files.set("src/stories/status-pill.stories.litsx", `import { StatusPill } from "../components/status-pill.litsx";
+  files.set("src/stories/litsx-button.stories.litsx", `import { LitsxButton } from "../components/litsx-button.litsx";
 
 const meta = {
-  title: "Components/StatusPill",
-  render: (args) => (
-    <StatusPill
-      label={args.label}
-      active={args.active}
-      tone={args.tone}
-    />
+  title: "Components/LitsxButton",
+  render: ({ label = "View on GitHub", type = "secondary" } = {}) => (
+    <LitsxButton .label={label} .type={type} />
   ),
-  args: {
-    label: "Ready",
-    active: true,
-    tone: "positive",
-  },
-  argTypes: {
-    tone: {
-      control: "select",
-      options: ["neutral", "positive", "warning"],
-    },
-  },
 };
 
 export default meta;
 
-export const Default = {};
+export const Secondary = {
+  args: { label: "View on GitHub", type: "secondary" },
+};
 
-export const Warning = {
-  args: {
-    label: "Degraded",
-    tone: "warning",
-  },
+export const Primary = {
+  args: { label: "Getting Started", type: "primary" },
 };
 `);
-  files.set("src/stories/status-pill.docs.mdx", `import { Meta, Canvas, Controls } from "@storybook/blocks";
-import * as StatusPillStories from "./status-pill.stories.litsx";
+  files.set("src/stories/litsx-hero.stories.litsx", `import { LitsxHero } from "../components/litsx-hero.litsx";
 
-<Meta of={StatusPillStories} />
+const meta = {
+  title: "Marketing/LitsxHero",
+  render: ({
+    eyebrow = "Design system starter",
+    tagline = "Web components with a sharper authoring experience. Less ceremony. More signal.",
+    primaryLabel = "Getting Started",
+    secondaryLabel = "View on GitHub",
+  } = {}) => (
+    <div style="max-width: 960px; margin: 0 auto;">
+      <LitsxHero
+        .eyebrow={eyebrow}
+        .tagline={tagline}
+        .primaryLabel={primaryLabel}
+        .secondaryLabel={secondaryLabel}
+      />
+    </div>
+  ),
+};
 
-# Status Pill
-
-The \`StatusPill\` component is a compact semantic label for system state. It is authored in LitSX JSX, rendered as a web component, and documented with Storybook MDX.
-
-<Canvas of={StatusPillStories.Default} />
-
-## Design Notes
-
-- Uses authored LitSX bindings such as \`?active\`
-- Fits design-system surfaces like dashboards, forms and navigation rails
-- Works well as a lightweight token-driven primitive
-
-<Controls of={StatusPillStories.Default} />
+export default meta;
+export const Default = {};
 `);
-  files.set("src/styles/tokens.css", `:root {
-  --color-bg: #efe3cf;
-  --color-surface: rgba(255, 251, 245, 0.92);
-  --color-surface-strong: #fffdf8;
-  --color-text: #152033;
-  --color-border: rgba(21, 32, 51, 0.14);
-  --color-positive: #1f7a4d;
-  --color-warning: #b66324;
-  --color-neutral: #6b7280;
-  --color-accent: #cb5821;
-  --color-accent-soft: rgba(203, 88, 33, 0.14);
-  --radius-pill: 999px;
-  --radius-panel: 24px;
-  --shadow-panel: 0 26px 70px rgba(20, 33, 61, 0.12);
-  --font-display: "Avenir Next Condensed", "Franklin Gothic Medium", "Arial Narrow", sans-serif;
-  --font-body: "Inter", "Segoe UI", sans-serif;
-}
+  files.set("src/stories/starter-guide.stories.litsx", `import { StarterGuide } from "../components/starter-guide.litsx";
 
-body {
-  margin: 0;
-  min-height: 100vh;
-  font-family: var(--font-body);
-  background:
-    radial-gradient(circle at top left, rgba(255, 255, 255, 0.74), transparent 24%),
-    radial-gradient(circle at top right, rgba(203, 88, 33, 0.2), transparent 20%),
-    linear-gradient(180deg, #f7f0e6 0%, var(--color-bg) 100%);
-  background-repeat: no-repeat;
-  background-size: cover;
-  color: var(--color-text);
-}
+const meta = {
+  title: "Getting Started/StarterGuide",
+  render: () => <StarterGuide />,
+};
 
-.shell {
-  max-width: 960px;
-  margin: 0 auto;
-  padding: 56px 24px 104px;
-  position: relative;
-}
+export default meta;
+export const Default = {};
+`);
+  files.set("src/stories/starter-guide.docs.mdx", `import { Meta, Canvas } from "@storybook/blocks";
+import * as StarterGuideStories from "./starter-guide.stories.litsx";
 
-.shell::before {
-  content: "";
-  position: absolute;
-  inset: 20px 24px auto;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, var(--color-border), transparent);
-}
+<Meta of={StarterGuideStories} />
 
-.brand {
-  display: inline-flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-bottom: 28px;
-}
+# Starter Guide
 
-.brandmark {
-  width: 144px;
-  height: auto;
-  display: block;
-}
+The \`StarterGuide\` component demonstrates LitSX suspense primitives in a way that is useful to a new project owner: it reveals the first files, bindings and commands worth learning in a fresh scaffold.
 
-.kicker {
-  font-size: 0.76rem;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: rgba(21, 32, 51, 0.56);
-}
+<Canvas of={StarterGuideStories.Default} />
 
-.shell > header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 36px;
-  flex-wrap: wrap;
-}
+## What it shows
 
-.shell h1,
-.button-card h2 {
-  font-family: var(--font-display);
-  letter-spacing: -0.06em;
-  text-transform: uppercase;
-}
-
-.shell h1 {
-  margin: 0;
-  font-size: clamp(2.8rem, 6vw, 4.8rem);
-  line-height: 0.92;
-}
-
-.status-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 14px;
-  border-radius: var(--radius-pill);
-  border: 1px solid var(--color-border);
-  background: rgba(255, 253, 248, 0.92);
-  color: var(--color-neutral);
-  font-size: 0.875rem;
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-}
-
-.status-pill[data-tone="positive"] {
-  color: var(--color-positive);
-}
-
-.status-pill[data-tone="warning"] {
-  color: var(--color-warning);
-}
-
-.status-pill[data-active] {
-  box-shadow: 0 0 0 4px rgba(31, 122, 77, 0.08);
-}
-
-.button-card {
-  padding: 32px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-panel);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.72), transparent 120px),
-    var(--color-surface);
-  box-shadow: var(--shadow-panel);
-  margin-bottom: 28px;
-  position: relative;
-  overflow: hidden;
-}
-
-.button-card::after {
-  content: "";
-  position: absolute;
-  inset: 0 auto auto 0;
-  width: 120px;
-  height: 4px;
-  background: linear-gradient(90deg, var(--color-accent), transparent);
-}
-
-.button-card h2 {
-  margin: 0 0 10px;
-}
-
-.button-card p {
-  margin: 0 0 18px;
-  max-width: 40ch;
-  color: rgba(21, 32, 51, 0.74);
-  line-height: 1.6;
-}
-
-.button-card__cta {
-  border: 1px solid rgba(21, 32, 51, 0.08);
-  border-radius: 999px;
-  background: linear-gradient(135deg, var(--color-text), #32405d);
-  color: white;
-  padding: 12px 18px;
-  font: inherit;
-  cursor: pointer;
-  box-shadow: 0 14px 28px rgba(20, 33, 61, 0.18);
-}
-
-.shell > button {
-  border: 1px solid rgba(21, 32, 51, 0.08);
-  border-radius: 999px;
-  background: var(--color-surface-strong);
-  color: var(--color-text);
-  padding: 12px 18px;
-  font: inherit;
-  cursor: pointer;
-}
+- ordered reveal with \`SuspenseList\`
+- focused loading states with \`SuspenseBoundary\`
+- component-owned styling with \`^styles(...)\`
+- onboarding copy that points directly at the generated project structure
 `);
   files.set("README.md", `# ${packageName}
 
@@ -1217,7 +1499,7 @@ Generated with \`create-litsx-app --template design-system\`.
 - Official \`@litsx/vite-plugin\` integration for authored LitSX source
 - Official \`@litsx/eslint-plugin\` linting preset
 - Storybook for web components with MDX docs
-- A starter design-system component and story
+- Starter hero, guide and button primitives with matching stories
 `);
 
   return files;
@@ -1296,7 +1578,11 @@ export function createProject(targetDir, options = {}) {
   for (const [relativePath, contents] of files) {
     const destination = path.join(absoluteTargetDir, relativePath);
     fs.mkdirSync(path.dirname(destination), { recursive: true });
-    fs.writeFileSync(destination, contents, "utf8");
+    if (Buffer.isBuffer(contents)) {
+      fs.writeFileSync(destination, contents);
+    } else {
+      fs.writeFileSync(destination, contents, "utf8");
+    }
   }
 
   return {
