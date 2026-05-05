@@ -1,118 +1,20 @@
 import helperPluginUtils from "@babel/helper-plugin-utils";
 import jsxSyntaxPlugin from "@babel/plugin-syntax-jsx";
+import {
+  addNamedImport,
+  attributeValueToExpression,
+  buildChildrenExpression,
+  createComponentElement,
+  createRendererAttribute,
+  registerCompatPascalName,
+  setReactCompatSharedBabelTypes,
+} from "./react-compat-shared.js";
 
 const { declare } = helperPluginUtils;
 
 export default declare((api) => {
   api.assertVersion(7);
   const t = api.types;
-
-  function registerCompatPascalName(programPath, localName) {
-    if (!programPath || typeof localName !== "string" || localName.length === 0) {
-      return;
-    }
-
-    const names = programPath.getData("__litsxCompatPascalNames") || new Set();
-    names.add(localName);
-    programPath.setData("__litsxCompatPascalNames", names);
-  }
-
-  function addNamedImport(programPath, source, importedName) {
-    const bodyPaths = programPath.get("body");
-
-    for (const bodyPath of bodyPaths) {
-      if (!bodyPath.isImportDeclaration()) continue;
-      if (bodyPath.node.source.value !== source) continue;
-
-      const hasSpecifier = bodyPath.node.specifiers.some(
-        (specifier) =>
-          t.isImportSpecifier(specifier) &&
-          t.isIdentifier(specifier.imported, { name: importedName })
-      );
-
-      if (!hasSpecifier) {
-        bodyPath.pushContainer(
-          "specifiers",
-          t.importSpecifier(t.identifier(importedName), t.identifier(importedName))
-        );
-      }
-      return;
-    }
-
-    programPath.unshiftContainer(
-      "body",
-      t.importDeclaration(
-        [t.importSpecifier(t.identifier(importedName), t.identifier(importedName))],
-        t.stringLiteral(source)
-      )
-    );
-  }
-
-function attributeValueToExpression(value) {
-  if (!value) {
-    return t.booleanLiteral(true);
-  }
-  if (t.isJSXExpressionContainer(value)) {
-    if (!value.expression || t.isJSXEmptyExpression(value.expression)) {
-      return t.booleanLiteral(true);
-    }
-    return t.cloneNode(value.expression, true);
-  }
-  if (t.isStringLiteral(value) || t.isNumericLiteral(value)) {
-    return t.cloneNode(value, true);
-  }
-    return t.cloneNode(value, true);
-  }
-
-function filterChildren(children) {
-  return children.filter((child) => {
-    if (t.isJSXText(child)) {
-      return child.value.replace(/\s+/g, "").length > 0;
-    }
-    return !(
-      t.isJSXExpressionContainer(child) &&
-      (child.expression == null || t.isJSXEmptyExpression(child.expression))
-    );
-  });
-}
-
-function cloneChild(child) {
-  if (
-    t.isJSXExpressionContainer(child) &&
-    (child.expression == null || t.isJSXEmptyExpression(child.expression))
-  ) {
-    return null;
-  }
-  return t.cloneNode(child, true);
-}
-
-  function buildChildrenExpression(children) {
-    const filtered = filterChildren(children).map(cloneChild).filter(Boolean);
-
-    if (filtered.length === 0) {
-      return null;
-    }
-
-    if (filtered.length === 1) {
-      const single = filtered[0];
-      if (t.isJSXExpressionContainer(single)) {
-        return t.cloneNode(single.expression, true);
-      }
-      if (t.isJSXElement(single) || t.isJSXFragment(single)) {
-        return single;
-      }
-      if (t.isJSXText(single)) {
-        return t.stringLiteral(single.value);
-      }
-      return single;
-    }
-
-    return t.jsxFragment(
-      t.jsxOpeningFragment(),
-      t.jsxClosingFragment(),
-      filtered
-    );
-  }
 
   function getSuspenseKind(nameNode, state) {
     if (!nameNode) return null;
@@ -148,24 +50,6 @@ function cloneChild(child) {
     }
 
     return null;
-  }
-
-  function createRendererAttribute(name, expression) {
-    return t.jsxAttribute(
-      t.jsxIdentifier(`.${name}`),
-      t.jsxExpressionContainer(expression)
-    );
-  }
-
-  function createComponentElement(name, attributes, children = []) {
-    const element = t.jsxElement(
-      t.jsxOpeningElement(t.jsxIdentifier(name), attributes, false),
-      t.jsxClosingElement(t.jsxIdentifier(name)),
-      children,
-      false
-    );
-    element._litsxSuspenseTransformed = true;
-    return element;
   }
 
   function findRenderMethod(path) {
@@ -295,7 +179,7 @@ function cloneChild(child) {
         t.arrowFunctionExpression([], fallbackExpression)
       ),
       createRendererAttribute("contentRenderer", contentRenderer),
-    ]);
+    ], [], "_litsxSuspenseTransformed");
   }
 
   function createSuspenseListElement(path) {
@@ -311,7 +195,8 @@ function cloneChild(child) {
     return createComponentElement(
       "SuspenseList",
       attributes.map((attr) => t.cloneNode(attr, true)),
-      node.children.map((child) => t.cloneNode(child, true))
+      node.children.map((child) => t.cloneNode(child, true)),
+      "_litsxSuspenseTransformed"
     );
   }
 
@@ -321,6 +206,7 @@ function cloneChild(child) {
     visitor: {
       Program: {
         enter(_, state) {
+          setReactCompatSharedBabelTypes(t);
           state.suspenseLocalNames = new Map();
           state.reactNamespaceNames = new Set();
           state.usedPrimitives = new Set();
