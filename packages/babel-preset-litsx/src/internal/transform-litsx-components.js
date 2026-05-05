@@ -22,9 +22,6 @@ import {
   setWrapperUtilsBabelTypes,
 } from "./transform-litsx-wrapper-utils.js";
 import {
-  createComponentInstanceRefSyncStatement,
-  hasRefProp,
-  lowerForwardedElementRefs,
   setRefsBabelTypes,
 } from "./transform-litsx-refs.js";
 import {
@@ -33,10 +30,19 @@ import {
   setClassGenerationBabelTypes,
 } from "./transform-litsx-class-generation.js";
 import {
-  replaceParamReferences,
   setParamRewriteBabelTypes,
-  transformJSXExpressions,
 } from "./transform-litsx-param-rewrites.js";
+import {
+  setRendererCallsBabelTypes,
+} from "./transform-litsx-renderer-calls.js";
+import {
+  getAnnotatedElementCandidates,
+  setElementCandidatesBabelTypes,
+} from "./transform-litsx-element-candidates.js";
+import {
+  prepareComponentRender,
+  setRenderBodyBabelTypes,
+} from "./transform-litsx-render-body.js";
 import {
   finalizeProgram,
   setProgramBabelTypes,
@@ -64,6 +70,9 @@ export function createTransformFunctionToClassPlugin(defaultPluginOptions = {}) 
     setRefsBabelTypes(t);
     setClassGenerationBabelTypes(t);
     setParamRewriteBabelTypes(t);
+    setRendererCallsBabelTypes(t);
+    setElementCandidatesBabelTypes(t);
+    setRenderBodyBabelTypes(t);
     setProgramBabelTypes(t);
     const resolvedPluginOptions = {
       ...defaultPluginOptions,
@@ -365,8 +374,7 @@ function getTypeResolverForFunction(functionPath, state) {
 
 function transformFunction(functionPath, programPath, className, options = {}) {
   const { node } = functionPath;
-  const elementCandidates = collectElementCandidates(functionPath, programPath, options);
-  const forwardRefOptions = options.forwardRef || null;
+  const elementCandidates = getAnnotatedElementCandidates(functionPath, programPath, options);
   let resolvedName = className;
   if (!resolvedName && node && node.id && t.isIdentifier(node.id)) {
     resolvedName = node.id.name;
@@ -392,19 +400,21 @@ function transformFunction(functionPath, programPath, className, options = {}) {
   assertStaticHoistsStayTopLevel(functionPath);
   collectNativeClassNameWarnings(functionPath, options.warn, options);
 
-  let returnStatement;
-  functionPath.traverse({
-    ReturnStatement(returnPath) {
-      if (t.isJSXElement(returnPath.node.argument)) {
-        returnStatement = returnPath.node;
-        transformJSXExpressions(returnPath, bindings, options.state ?? null);
-      }
-    },
-  });
+  const renderPreparation = prepareComponentRender(
+    functionPath,
+    node,
+    propertyNames,
+    bindings,
+    nestedInitializers,
+    options
+  );
 
-  if (!returnStatement) return;
+  if (!renderPreparation?.returnStatement) return;
 
-  const capturedPropAliasStatements = replaceParamReferences(functionPath, bindings, propertyNames);
+  const {
+    needsCallbackRef,
+    prefixStatements,
+  } = renderPreparation;
 
   const usedNames = new Set([
     ...Object.keys(functionPath.scope.bindings || {}),
@@ -414,41 +424,12 @@ function transformFunction(functionPath, programPath, className, options = {}) {
   ]);
 
   const handlerInfos = processHandlers(functionPath, usedNames);
-
   const renderStatements = t.isBlockStatement(node.body)
     ? [...node.body.body]
     : [t.returnStatement(node.body)];
 
-  const resolvedRefPropName = forwardRefOptions?.propName ||
-    (propertyNames.has("ref") || hasRefProp(functionPath) ? "ref" : null);
-  let needsCallbackRef = false;
-
-  if (resolvedRefPropName) {
-    renderStatements.unshift(
-      ...lowerForwardedElementRefs(functionPath, resolvedRefPropName)
-    );
-    needsCallbackRef = renderStatements.some(
-      (statement) =>
-        t.isExpressionStatement(statement) &&
-        t.isCallExpression(statement.expression) &&
-        t.isIdentifier(statement.expression.callee, { name: "useCallbackRef" })
-    ) || needsCallbackRef;
-  }
-
-  if (resolvedRefPropName && !forwardRefOptions) {
-    renderStatements.unshift(createComponentInstanceRefSyncStatement());
-    needsCallbackRef = true;
-  }
-
-  if (capturedPropAliasStatements.length > 0) {
-    renderStatements.unshift(...capturedPropAliasStatements);
-  }
-
-  if (nestedInitializers.length > 0) {
-    const initializerStatements = nestedInitializers.map(({ pattern, root, defaultValue }) =>
-      createNestedInitializerStatement(pattern, root, defaultValue, t)
-    );
-    renderStatements.unshift(...initializerStatements);
+  if (prefixStatements.length > 0) {
+    renderStatements.unshift(...prefixStatements);
   }
 
   const classMembers = [];
@@ -512,186 +493,4 @@ function ensureClassIdentifier(classNode, fallbackName) {
   const identifier = t.identifier(safeName);
   classNode.id = identifier;
   return identifier;
-}
-
-function createThisMemberExpression(propName) {
-  return t.memberExpression(t.thisExpression(), t.identifier(propName));
-}
-
-function createNestedInitializerStatement(pattern, root, defaultValue, t) {
-  const rootAccess = createThisMemberExpression(root);
-  let sourceExpression = rootAccess;
-
-  if (defaultValue) {
-    sourceExpression = t.logicalExpression(
-      "??",
-      t.cloneNode(rootAccess),
-      t.cloneNode(defaultValue)
-    );
-  }
-
-  return t.variableDeclaration("const", [
-    t.variableDeclarator(t.cloneNode(pattern), sourceExpression),
-  ]);
-}
-
-function collectElementCandidates(functionPath, programPath, options = {}) {
-  const candidates = new Set();
-  if (!programPath) return candidates;
-  programPath.scope.crawl();
-  const compatPascalNames =
-    programPath.getData("__litsxCompatPascalNames") || new Set();
-
-  const availableNames = new Set();
-  const helperPaths = new Map();
-  programPath.get("body").forEach((nodePath) => {
-    if (nodePath.isImportDeclaration()) {
-      nodePath.node.specifiers.forEach((specifier) => {
-        if (specifier.local?.name) {
-          availableNames.add(specifier.local.name);
-        }
-      });
-      return;
-    }
-
-    if (nodePath.isClassDeclaration() && nodePath.node.id?.name) {
-      availableNames.add(nodePath.node.id.name);
-      return;
-    }
-
-    if (
-      (nodePath.isExportNamedDeclaration() || nodePath.isExportDefaultDeclaration()) &&
-      nodePath.get("declaration")?.isClassDeclaration?.() &&
-      nodePath.node.declaration?.id?.name
-    ) {
-      availableNames.add(nodePath.node.declaration.id.name);
-      return;
-    }
-
-    if (nodePath.isFunctionDeclaration() && nodePath.node.id?.name) {
-      availableNames.add(nodePath.node.id.name);
-      helperPaths.set(nodePath.node.id.name, nodePath);
-      return;
-    }
-
-    if (!nodePath.isVariableDeclaration()) return;
-    nodePath.get("declarations").forEach((declaratorPath) => {
-      const declarator = declaratorPath.node;
-      if (!t.isIdentifier(declarator.id)) {
-        return;
-      }
-
-      availableNames.add(declarator.id.name);
-
-      const initPath = declaratorPath.get("init");
-      if (
-        initPath?.isArrowFunctionExpression?.() ||
-        initPath?.isFunctionExpression?.()
-      ) {
-        helperPaths.set(declarator.id.name, initPath);
-      }
-    });
-  });
-
-  const helperCandidateCache = new Map();
-
-  function isCapitalizedName(name) {
-    if (typeof name !== "string" || name.length === 0) {
-      return false;
-    }
-
-    const first = name[0];
-    return first === first.toUpperCase() && first !== first.toLowerCase();
-  }
-
-  function toKebab(name) {
-    return name.replace(/([a-z])([A-Z])/g, "$1-$2").toLowerCase();
-  }
-
-  function isProgramLevelBinding(binding) {
-    return binding?.scope?.path?.isProgram?.() === true;
-  }
-
-  function maybeRewriteComponentName(nameNode, pathForErrors = null) {
-    if (!nameNode || nameNode.type !== "JSXIdentifier") return null;
-    const originalName = nameNode.__scopedOriginal || nameNode.name;
-    if (!isCapitalizedName(originalName)) return null;
-    const binding = pathForErrors?.scope?.getBinding?.(originalName) || null;
-    if (!binding) {
-      if (availableNames.has(originalName)) {
-        return originalName;
-      }
-      if (compatPascalNames.has(originalName)) {
-        return null;
-      }
-      if (options?.allowUnknownPascalCase === true) {
-        return null;
-      }
-      throw (pathForErrors?.buildCodeFrameError?.(
-        `Unknown LitSX component "${originalName}". Add an import or declare it in this module before using it in JSX.`
-      ) || new Error(
-        `Unknown LitSX component "${originalName}". Add an import or declare it in this module before using it in JSX.`
-      ));
-    }
-
-    if (!isProgramLevelBinding(binding)) {
-      return null;
-    }
-
-    return originalName;
-  }
-
-  function scanFunction(path, seen = new Set()) {
-    if (!path?.node) {
-      return new Set();
-    }
-
-    if (helperCandidateCache.has(path.node)) {
-      return new Set(helperCandidateCache.get(path.node));
-    }
-
-    if (seen.has(path.node)) {
-      return new Set();
-    }
-
-    const nextSeen = new Set(seen);
-    nextSeen.add(path.node);
-    const localCandidates = new Set();
-    const referencedHelpers = new Set();
-
-    path.traverse({
-      JSXOpeningElement(jsxPath) {
-        const candidate = maybeRewriteComponentName(jsxPath.node.name, jsxPath);
-        if (candidate) {
-          localCandidates.add(candidate);
-        }
-      },
-      JSXClosingElement(jsxPath) {
-        maybeRewriteComponentName(jsxPath.node.name, jsxPath);
-      },
-      Identifier(identifierPath) {
-        if (!identifierPath.isReferencedIdentifier()) {
-          return;
-        }
-
-        if (!helperPaths.has(identifierPath.node.name)) {
-          return;
-        }
-
-        referencedHelpers.add(identifierPath.node.name);
-      },
-    });
-
-    referencedHelpers.forEach((helperName) => {
-      const helperCandidates = scanFunction(helperPaths.get(helperName), nextSeen);
-      helperCandidates.forEach((candidate) => localCandidates.add(candidate));
-    });
-
-    helperCandidateCache.set(path.node, new Set(localCandidates));
-    return localCandidates;
-  }
-
-  scanFunction(functionPath).forEach((candidate) => candidates.add(candidate));
-
-  return candidates;
 }
