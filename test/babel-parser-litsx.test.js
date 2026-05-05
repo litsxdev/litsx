@@ -1,4 +1,8 @@
 import assert from "assert";
+import fs from "fs";
+import os from "os";
+import path from "path";
+import { spawnSync } from "child_process";
 import parser from "../packages/babel-parser-litsx/src/index.mjs";
 
 describe("@litsx/babel-parser", () => {
@@ -148,6 +152,48 @@ describe("@litsx/babel-parser", () => {
 
     const ast = parser.parse("const view = <main />;", {});
     assert.strictEqual(ast.program.body[0].declarations[0].init.openingElement.name.name, "main");
+  });
+
+  it("runs the CLI and prints parsed AST JSON for a valid file", () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-parser-cli-"));
+    const filePath = path.join(tempDir, "view.litsx");
+
+    try {
+      fs.writeFileSync(filePath, "const view = <button .label={text} />;\n");
+
+      const result = spawnSync(process.execPath, [
+        path.resolve("packages/babel-parser-litsx/src/cli.mjs"),
+        filePath,
+      ], {
+        cwd: process.cwd(),
+        encoding: "utf8",
+      });
+
+      assert.strictEqual(result.status, 0, result.stderr);
+      assert.strictEqual(result.stderr, "");
+
+      const parsed = JSON.parse(result.stdout);
+      const declaration = parsed.program.body[0];
+      assert.strictEqual(declaration.type, "VariableDeclaration");
+      assert.strictEqual(
+        declaration.declarations[0].init.openingElement.attributes[0].name.name,
+        ".label",
+      );
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("fails the CLI when no filename is provided", () => {
+    const result = spawnSync(process.execPath, [
+      path.resolve("packages/babel-parser-litsx/src/cli.mjs"),
+    ], {
+      cwd: process.cwd(),
+      encoding: "utf8",
+    });
+
+    assert.strictEqual(result.status, 1);
+    assert.match(result.stderr, /no filename specified/);
   });
 
 });

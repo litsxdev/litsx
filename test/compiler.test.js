@@ -310,6 +310,158 @@ describe("@litsx/compiler", () => {
     assert.match(result.code, /return <section>\{renderRendererCall\(this\.thunk, 'alpha'\)\}<\/section>;/);
   }, 20000);
 
+  it("binds renderer props that accept host-provided args and return component JSX", () => {
+    const source = [
+      "import { LitsxButton } from './litsx-button.litsx';",
+      "export function ProbeHost({ itemRenderer }) {",
+      "  return <section>{itemRenderer('alpha')}</section>;",
+      "}",
+      "export function Demo() {",
+      "  return <ProbeHost .itemRenderer={(label) => <LitsxButton type=\"primary\" label={label} />} />;",
+      "}",
+    ].join("\n");
+
+    const result = transformLitsxSync(source, {
+      filename: "/virtual/Demo.litsx",
+    });
+
+    assert.match(result.code, /\.itemRenderer=\$\{bindRendererContext\(typeof this === "undefined" \? null : this,\s*label => html`<litsx-button type="primary" label="\$\{label\}"><\/litsx-button>`\)\}/);
+    assert.match(result.code, /return html`<section>\$\{renderRendererCall\(this\.itemRenderer, 'alpha'\)\}<\/section>`;/);
+    assert.match(result.code, /"litsx-button": LitsxButton/);
+  }, 20000);
+
+  it("binds transitive renderer helpers that return component JSX through wrapper functions", () => {
+    const source = [
+      "import { LitsxButton } from './litsx-button.litsx';",
+      "function renderHeader() {",
+      "  return <LitsxButton type=\"secondary\" label=\"Projected\" />;",
+      "}",
+      "function wrapHeader() {",
+      "  return renderHeader();",
+      "}",
+      "export function Card({ header }) {",
+      "  return <section>{header()}</section>;",
+      "}",
+      "export function Demo() {",
+      "  return <Card .header={wrapHeader} />;",
+      "}",
+    ].join("\n");
+
+    const result = transformLitsxSync(source, {
+      filename: "/virtual/Demo.litsx",
+    });
+
+    assert.match(result.code, /function renderHeader\(\) \{\s*return html`<litsx-button type="secondary" label="Projected"><\/litsx-button>`;\s*\}/);
+    assert.match(result.code, /\.header=\$\{bindRendererContext\(typeof this === "undefined" \? null : this,\s*wrapHeader\)\}/);
+    assert.match(result.code, /return html`<section>\$\{renderRendererCall\(this\.header\)\}<\/section>`;/);
+    assert.match(result.code, /"litsx-button": LitsxButton/);
+  }, 20000);
+
+  it("keeps renderer projection working in light DOM components", () => {
+    const source = [
+      "export function Card({ header }) {",
+      "  ^lightDom();",
+      "  return <section>{header()}</section>;",
+      "}",
+      "export function Demo() {",
+      "  return <Card .header={() => <fancy-panel />} />;",
+      "}",
+    ].join("\n");
+
+    const result = transformLitsxSync(source, {
+      filename: "/virtual/Demo.litsx",
+    });
+
+    assert.match(result.code, /class Card extends LightDomMixin\(LitElement\)/);
+    assert.match(result.code, /\.header=\$\{bindRendererContext\(typeof this === "undefined" \? null : this,\s*\(\) => html`<fancy-panel><\/fancy-panel>`\)\}/);
+    assert.match(result.code, /return html`<section>\$\{renderRendererCall\(this\.header\)\}<\/section>`;/);
+  }, 20000);
+
+  it("keeps renderer context through multiple container components", () => {
+    const source = [
+      "import { LitsxButton } from './litsx-button.litsx';",
+      "export function Card({ header }) {",
+      "  return <section>{header()}</section>;",
+      "}",
+      "export function Middle({ header }) {",
+      "  return <Card .header={header} />;",
+      "}",
+      "function renderHeader() {",
+      "  return <LitsxButton type=\"secondary\" label=\"Deep\" />;",
+      "}",
+      "export function Outer() {",
+      "  return <Middle .header={renderHeader} />;",
+      "}",
+    ].join("\n");
+
+    const result = transformLitsxSync(source, {
+      filename: "/virtual/Demo.litsx",
+    });
+
+    assert.match(result.code, /<middle \.header=\$\{bindRendererContext\(typeof this === "undefined" \? null : this,\s*renderHeader\)\}><\/middle>/);
+    assert.match(result.code, /<card \.header=\$\{this\.header\}><\/card>/);
+    assert.match(result.code, /return html`<section>\$\{renderRendererCall\(this\.header\)\}<\/section>`;/);
+    assert.match(result.code, /"litsx-button": LitsxButton/);
+  }, 20000);
+
+  it("supports slots and renderer props on the same component", () => {
+    const source = [
+      "import { LitsxButton } from './litsx-button.litsx';",
+      "export function Shell({ header }) {",
+      "  ^lightDom();",
+      "  return <section><header>{header()}</header><slot /></section>;",
+      "}",
+      "export function Demo() {",
+      "  return <Shell .header={() => <LitsxButton type=\"primary\" label=\"Mixed\" />}>Body</Shell>;",
+      "}",
+    ].join("\n");
+
+    const result = transformLitsxSync(source, {
+      filename: "/virtual/Demo.litsx",
+    });
+
+    assert.match(result.code, /class Shell extends LightDomMixin\(LitElement\)/);
+    assert.match(result.code, /<shell \.header=\$\{bindRendererContext\(typeof this === "undefined" \? null : this,\s*\(\) => html`<litsx-button type="primary" label="Mixed"><\/litsx-button>`\)\}>Body<\/shell>/);
+    assert.match(result.code, /return html`<section><header>\$\{renderRendererCall\(this\.header\)\}<\/header><slot><\/slot><\/section>`;/);
+    assert.match(result.code, /"litsx-button": LitsxButton/);
+  }, 20000);
+
+  it("does not rewrite ordinary callback props as renderer calls", () => {
+    const source = [
+      "export function Worker({ onResolve }) {",
+      "  return <section>{[1, 2, 3].map(onResolve)}</section>;",
+      "}",
+    ].join("\n");
+
+    const result = transformLitsxSync(source, {
+      filename: "/virtual/Demo.litsx",
+      jsxTemplate: false,
+    });
+
+    assert.doesNotMatch(result.code, /renderRendererCall/);
+    assert.match(result.code, /return <section>\{\[1, 2, 3\]\.map\(this\.onResolve\)\}<\/section>;/);
+  }, 20000);
+
+  it("lowers renderer props that return mixed fragments with components", () => {
+    const source = [
+      "import { LitsxButton } from './litsx-button.litsx';",
+      "export function Card({ header }) {",
+      "  return <section>{header()}</section>;",
+      "}",
+      "export function Demo() {",
+      "  return <Card .header={() => <><span>Lead</span><LitsxButton type=\"secondary\" label=\"Tail\" /></>} />;",
+      "}",
+    ].join("\n");
+
+    const result = transformLitsxSync(source, {
+      filename: "/virtual/Demo.litsx",
+    });
+
+    assert.match(result.code, /\.header=\$\{bindRendererContext\(typeof this === "undefined" \? null : this,\s*\(\) => html`<span>Lead<\/span><litsx-button type="secondary" label="Tail"><\/litsx-button>`\)\}/);
+    assert.match(result.code, /return html`<section>\$\{renderRendererCall\(this\.header\)\}<\/section>`;/);
+    assert.match(result.code, /"litsx-button": LitsxButton/);
+  }, 20000);
+
   it("keeps lit-style attributes aligned in the final sourcemap", async () => {
     const source = [
       "export function Counter(){",
