@@ -157,6 +157,111 @@ describe("@litsx/compiler", () => {
     assert.match(result.code, /\.card=\{bindRendererContext\(typeof this === "undefined" \? null : this,\s*wrapCard\)\}/);
   }, 20000);
 
+  it("binds imported helper references when they transitively return component JSX from another file", () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-imported-renderer-"));
+
+    try {
+      const rootFile = path.join(tempDir, "demo.litsx");
+      const helperFile = path.join(tempDir, "renderers.js");
+      const buttonFile = path.join(tempDir, "litsx-button.litsx");
+
+      fs.writeFileSync(
+        helperFile,
+        [
+          "import { LitsxButton } from './litsx-button.litsx';",
+          "export function renderHeader() {",
+          "  return <LitsxButton label='Save' />;",
+          "}",
+        ].join("\n")
+      );
+
+      fs.writeFileSync(
+        buttonFile,
+        [
+          "export const LitsxButton = ({ label = '' }) => {",
+          "  return <button>{label}</button>;",
+          "};",
+        ].join("\n")
+      );
+
+      const source = [
+        "import { renderHeader } from './renderers.js';",
+        "export const Demo = () => {",
+        "  return <guide-card .header={renderHeader} />;",
+        "};",
+      ].join("\n");
+
+      const result = transformLitsxSync(source, {
+        filename: rootFile,
+        jsxTemplate: false,
+      });
+
+      assert.match(result.code, /import \{ renderHeader \} from ['"]\.\/renderers\.js['"]/);
+      assert.match(result.code, /import \{ LitsxButton(?: as __litsxImportedLitsxButton1)? \} from ['"]\.\/litsx-button\.litsx['"]/);
+      assert.match(result.code, /\.header=\{bindRendererContext\(typeof this === "undefined" \? null : this,\s*renderHeader\)\}/);
+      assert.match(result.code, /static elements\s*=\s*\{[\s\S]*"litsx-button": (?:LitsxButton|__litsxImportedLitsxButton1)[\s\S]*\}/);
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  }, 20000);
+
+  it("follows imported helper chains across multiple files for renderer analysis", () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-imported-renderer-chain-"));
+
+    try {
+      const rootFile = path.join(tempDir, "demo.litsx");
+      const middleFile = path.join(tempDir, "renderers.js");
+      const leafFile = path.join(tempDir, "deep-renderers.js");
+      const buttonFile = path.join(tempDir, "litsx-button.litsx");
+
+      fs.writeFileSync(
+        middleFile,
+        [
+          "import { wrapHeader } from './deep-renderers.js';",
+          "export { wrapHeader };",
+        ].join("\n")
+      );
+
+      fs.writeFileSync(
+        leafFile,
+        [
+          "import { LitsxButton } from './litsx-button.litsx';",
+          "export const wrapHeader = () => renderHeader();",
+          "function renderHeader() {",
+          "  return <LitsxButton label='Chain' />;",
+          "}",
+        ].join("\n")
+      );
+
+      fs.writeFileSync(
+        buttonFile,
+        [
+          "export const LitsxButton = ({ label = '' }) => {",
+          "  return <button>{label}</button>;",
+          "};",
+        ].join("\n")
+      );
+
+      const source = [
+        "import { wrapHeader } from './renderers.js';",
+        "export const Demo = () => {",
+        "  return <guide-card .header={wrapHeader} />;",
+        "};",
+      ].join("\n");
+
+      const result = transformLitsxSync(source, {
+        filename: rootFile,
+        jsxTemplate: false,
+      });
+
+      assert.match(result.code, /\.header=\{bindRendererContext\(typeof this === "undefined" \? null : this,\s*wrapHeader\)\}/);
+      assert.match(result.code, /import \{ LitsxButton(?: as __litsxImportedLitsxButton1)? \} from ['"]\.\/litsx-button\.litsx['"]/);
+      assert.match(result.code, /static elements\s*=\s*\{[\s\S]*"litsx-button": (?:LitsxButton|__litsxImportedLitsxButton1)[\s\S]*\}/);
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  }, 20000);
+
   it("does not include unrelated top-level helpers in static elements collection", () => {
     const source = [
       "import { GuideCard } from './guide-card.litsx';",

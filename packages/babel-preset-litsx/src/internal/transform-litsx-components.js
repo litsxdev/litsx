@@ -37,6 +37,7 @@ import {
 } from "./transform-litsx-renderer-calls.js";
 import {
   getAnnotatedElementCandidates,
+  getAnnotatedImportedElementCandidates,
   setElementCandidatesBabelTypes,
 } from "./transform-litsx-element-candidates.js";
 import {
@@ -375,6 +376,7 @@ function getTypeResolverForFunction(functionPath, state) {
 function transformFunction(functionPath, programPath, className, options = {}) {
   const { node } = functionPath;
   const elementCandidates = getAnnotatedElementCandidates(functionPath, programPath, options);
+  const importedElementCandidates = getAnnotatedImportedElementCandidates(functionPath, programPath, options);
   let resolvedName = className;
   if (!resolvedName && node && node.id && t.isIdentifier(node.id)) {
     resolvedName = node.id.name;
@@ -476,6 +478,20 @@ function transformFunction(functionPath, programPath, className, options = {}) {
     classNode._litsxElementCandidates &&= new Set(classNode._litsxElementCandidates);
     const elementSet = classNode._litsxElementCandidates ||= new Set();
     elementCandidates.forEach((candidate) => elementSet.add(candidate));
+  }
+
+  if (classNode && importedElementCandidates.length > 0) {
+    classNode._litsxImportedElementCandidates ||= [];
+    importedElementCandidates.forEach((candidate) => {
+      if (!classNode._litsxImportedElementCandidates.some(
+        (entry) =>
+          entry.sourceFile === candidate.sourceFile &&
+          entry.importedName === candidate.importedName &&
+          entry.tagName === candidate.tagName
+      )) {
+        classNode._litsxImportedElementCandidates.push(candidate);
+      }
+    });
   }
 
   return classNode;

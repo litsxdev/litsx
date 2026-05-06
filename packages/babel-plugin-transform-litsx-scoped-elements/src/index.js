@@ -1,5 +1,7 @@
 import jsxSyntaxPlugin from "@babel/plugin-syntax-jsx";
 import { isLitElementSuperClass } from "@litsx/babel-plugin-shared-hooks";
+import path from "node:path";
+import { normalizeFilePath } from "@litsx/typescript-session";
 
 let t;
 const SHADOW_MIXIN = "ShadowDomElementsMixin";
@@ -16,14 +18,13 @@ export default function transformFunctionToClassPlugin(api) {
     visitor: {
       Program: {
         exit(programPath) {
-          const availableMap = buildAvailableMap(programPath);
           programPath.get("body").forEach((nodePath) => {
             const classPath = resolveTopLevelClassPath(nodePath);
             if (!classPath) return;
             if (!isLitElementSuperClass(classPath.node.superClass, t)) return;
             if (classPath.node._elementsTransformed) return;
 
-            const transformed = transformClass(classPath, programPath, availableMap);
+            const transformed = transformClass(classPath, programPath);
             if (transformed) {
               classPath.node._elementsTransformed = true;
             }
@@ -49,14 +50,24 @@ function resolveTopLevelClassPath(nodePath) {
   return null;
 }
 
-function transformClass(classPath, programPath, availableMap) {
+function transformClass(classPath, programPath) {
   const { node } = classPath;
   const precomputedCandidates = new Set(node._litsxElementCandidates || []);
+  const importedCandidates = [...(node._litsxImportedElementCandidates || [])];
   const needsElementsRegistry = Boolean(node._needsElementsRegistry);
   const lightDomRequested = Boolean(node._litsxLightDom);
   delete node._litsxElementCandidates;
+  delete node._litsxImportedElementCandidates;
   delete node._needsElementsRegistry;
   delete node._litsxLightDom;
+
+  const filename = normalizeFilePath(programPath.hub.file?.opts?.filename || "");
+  if (importedCandidates.length > 0 && filename) {
+    const localNames = ensureImportedElementCandidates(programPath, filename, importedCandidates);
+    localNames.forEach((localName) => precomputedCandidates.add(localName));
+  }
+
+  const availableMap = buildAvailableMap(programPath);
 
   const {
     elements: detectedElements,
@@ -191,6 +202,80 @@ function ensureRuntimeInfrastructureImport(programPath, importName) {
     [t.importSpecifier(t.identifier(importName), t.identifier(importName))],
     t.stringLiteral("@litsx/litsx/runtime-infrastructure")
   ));
+}
+
+function createRelativeModuleSpecifier(fromFilename, targetFilename) {
+  const fromDir = path.dirname(fromFilename);
+  let relativePath = normalizeFilePath(path.relative(fromDir, targetFilename));
+  if (!relativePath.startsWith(".") && !relativePath.startsWith("/")) {
+    relativePath = `./${relativePath}`;
+  }
+  return relativePath;
+}
+
+function ensureUniqueLocalName(programPath, baseName) {
+  programPath.scope.crawl();
+  if (!programPath.scope.hasBinding(baseName)) {
+    return baseName;
+  }
+
+  let index = 1;
+  while (programPath.scope.hasBinding(`__litsxImported${baseName}${index}`)) {
+    index += 1;
+  }
+
+  return `__litsxImported${baseName}${index}`;
+}
+
+function ensureImportedElementCandidates(programPath, fromFilename, importedCandidates) {
+  const localNames = [];
+
+  importedCandidates.forEach((candidate) => {
+    const sourceValue = createRelativeModuleSpecifier(fromFilename, candidate.sourceFile);
+    const importDeclarations = programPath.get("body").filter(
+      (nodePath) =>
+        nodePath.isImportDeclaration() &&
+        nodePath.node.source.value === sourceValue
+    );
+
+    for (const importPath of importDeclarations) {
+      const matchingSpecifier = importPath.node.specifiers.find((specifier) => {
+        if (candidate.importedName === "default") {
+          return t.isImportDefaultSpecifier(specifier);
+        }
+        return (
+          t.isImportSpecifier(specifier) &&
+          t.isIdentifier(specifier.imported, { name: candidate.importedName })
+        );
+      });
+
+      if (matchingSpecifier?.local?.name) {
+        localNames.push(matchingSpecifier.local.name);
+        return;
+      }
+    }
+
+    const localName = ensureUniqueLocalName(programPath, candidate.originalName);
+    const specifier = candidate.importedName === "default"
+      ? t.importDefaultSpecifier(t.identifier(localName))
+      : t.importSpecifier(
+          t.identifier(localName),
+          t.identifier(candidate.importedName)
+        );
+
+    if (importDeclarations[0]) {
+      importDeclarations[0].node.specifiers.push(specifier);
+    } else {
+      programPath.unshiftContainer(
+        "body",
+        t.importDeclaration([specifier], t.stringLiteral(sourceValue))
+      );
+    }
+
+    localNames.push(localName);
+  });
+
+  return localNames;
 }
 
 function hasNamedImport(programPath, moduleName, importName) {

@@ -1,7 +1,21 @@
 import helperPluginUtils from "@babel/helper-plugin-utils";
+import babelTraverse from "@babel/traverse";
 import jsxSyntaxPlugin from "@babel/plugin-syntax-jsx";
+import parser from "@litsx/babel-parser";
+import fs from "node:fs";
+import path from "node:path";
+import { normalizeFilePath } from "@litsx/typescript-session";
 
 const { declare } = helperPluginUtils;
+const traverse = babelTraverse.default || babelTraverse;
+const IMPORT_RESOLUTION_EXTENSIONS = [
+  ".litsx",
+  ".litsx.jsx",
+  ".jsx",
+  ".js",
+  ".tsx",
+  ".ts",
+];
 
 let t;
 
@@ -17,6 +31,92 @@ function isInsideFunctionOrClass(path) {
       p.isArrowFunctionExpression() ||
       p.isClassDeclaration()
   );
+}
+
+function isRelativeSpecifier(value) {
+  return typeof value === "string" && (
+    value.startsWith("./") ||
+    value.startsWith("../") ||
+    value.startsWith("/")
+  );
+}
+
+function createEmptyCandidateResult() {
+  return {
+    localCandidates: new Set(),
+    importedCandidates: new Map(),
+  };
+}
+
+function cloneCandidateResult(result) {
+  return {
+    localCandidates: new Set(result?.localCandidates || []),
+    importedCandidates: new Map(result?.importedCandidates || []),
+  };
+}
+
+function mergeCandidateResults(target, source) {
+  source.localCandidates.forEach((candidate) => target.localCandidates.add(candidate));
+  source.importedCandidates.forEach((candidate, key) => {
+    if (!target.importedCandidates.has(key)) {
+      target.importedCandidates.set(key, candidate);
+    }
+  });
+}
+
+function toImportRecordKey(record) {
+  return `${record.sourceFile}:${record.importedName}:${record.tagName}`;
+}
+
+function toRelativeModuleSpecifier(fromFilename, targetFilename) {
+  const fromDir = path.dirname(fromFilename);
+  let relativePath = normalizeFilePath(path.relative(fromDir, targetFilename));
+
+  if (!relativePath.startsWith(".") && !relativePath.startsWith("/")) {
+    relativePath = `./${relativePath}`;
+  }
+
+  return relativePath;
+}
+
+function hasSupportedExtension(filePath) {
+  return IMPORT_RESOLUTION_EXTENSIONS.some((extension) => filePath.endsWith(extension));
+}
+
+function resolveImportSource(fromFilename, sourceValue, context) {
+  if (!fromFilename || !isRelativeSpecifier(sourceValue)) {
+    return null;
+  }
+
+  const cacheKey = `${normalizeFilePath(fromFilename)}::${sourceValue}`;
+  if (context.resolvedImportCache.has(cacheKey)) {
+    return context.resolvedImportCache.get(cacheKey);
+  }
+
+  const basePath = normalizeFilePath(path.resolve(path.dirname(fromFilename), sourceValue));
+  const candidates = [];
+
+  if (hasSupportedExtension(basePath)) {
+    candidates.push(basePath);
+  } else {
+    IMPORT_RESOLUTION_EXTENSIONS.forEach((extension) => {
+      candidates.push(`${basePath}${extension}`);
+    });
+    IMPORT_RESOLUTION_EXTENSIONS.forEach((extension) => {
+      candidates.push(normalizeFilePath(path.join(basePath, `index${extension}`)));
+    });
+  }
+
+  const resolved = candidates.find((candidatePath) => {
+    try {
+      return fs.existsSync(candidatePath) && fs.statSync(candidatePath).isFile();
+    } catch {
+      return false;
+    }
+  }) || null;
+
+  context.resolvedImportCache.set(cacheKey, resolved);
+  return resolved;
 }
 
 function getOrCreateAvailableNames(programPath) {
@@ -55,6 +155,28 @@ function getOrCreateAvailableNames(programPath) {
       return;
     }
 
+    if (
+      (nodePath.isExportNamedDeclaration() || nodePath.isExportDefaultDeclaration()) &&
+      nodePath.get("declaration")?.isFunctionDeclaration?.() &&
+      nodePath.node.declaration?.id?.name
+    ) {
+      availableNames.add(nodePath.node.declaration.id.name);
+      return;
+    }
+
+    if (
+      (nodePath.isExportNamedDeclaration() || nodePath.isExportDefaultDeclaration()) &&
+      nodePath.get("declaration")?.isVariableDeclaration?.()
+    ) {
+      nodePath.get("declaration.declarations").forEach((declaratorPath) => {
+        const declarator = declaratorPath.node;
+        if (t.isIdentifier(declarator.id)) {
+          availableNames.add(declarator.id.name);
+        }
+      });
+      return;
+    }
+
     if (!nodePath.isVariableDeclaration()) return;
     nodePath.get("declarations").forEach((declaratorPath) => {
       const declarator = declaratorPath.node;
@@ -81,6 +203,36 @@ function getOrCreateHelperPaths(programPath) {
       return;
     }
 
+    if (
+      (nodePath.isExportNamedDeclaration() || nodePath.isExportDefaultDeclaration()) &&
+      nodePath.get("declaration")?.isFunctionDeclaration?.() &&
+      nodePath.node.declaration?.id?.name
+    ) {
+      helperPaths.set(nodePath.node.declaration.id.name, nodePath.get("declaration"));
+      return;
+    }
+
+    if (
+      (nodePath.isExportNamedDeclaration() || nodePath.isExportDefaultDeclaration()) &&
+      nodePath.get("declaration")?.isVariableDeclaration?.()
+    ) {
+      nodePath.get("declaration.declarations").forEach((declaratorPath) => {
+        const declarator = declaratorPath.node;
+        if (!t.isIdentifier(declarator.id)) {
+          return;
+        }
+
+        const initPath = declaratorPath.get("init");
+        if (
+          initPath?.isArrowFunctionExpression?.() ||
+          initPath?.isFunctionExpression?.()
+        ) {
+          helperPaths.set(declarator.id.name, initPath);
+        }
+      });
+      return;
+    }
+
     if (!nodePath.isVariableDeclaration()) return;
     nodePath.get("declarations").forEach((declaratorPath) => {
       const declarator = declaratorPath.node;
@@ -100,6 +252,171 @@ function getOrCreateHelperPaths(programPath) {
 
   programPath.setData("__litsxHelperPaths", helperPaths);
   return helperPaths;
+}
+
+function buildModuleAnalysis(programPath, filename, context) {
+  const availableNames = getOrCreateAvailableNames(programPath);
+  const helperPaths = getOrCreateHelperPaths(programPath);
+  const importBindings = new Map();
+  const exportBindings = new Map();
+
+  programPath.get("body").forEach((nodePath) => {
+    if (nodePath.isImportDeclaration()) {
+      const sourceValue = nodePath.node.source.value;
+      const resolvedSource = resolveImportSource(filename, sourceValue, context);
+
+      nodePath.node.specifiers.forEach((specifier) => {
+        if (!specifier.local?.name) {
+          return;
+        }
+
+        let importedName = null;
+        if (specifier.type === "ImportDefaultSpecifier") {
+          importedName = "default";
+        } else if (specifier.type === "ImportSpecifier") {
+          importedName = specifier.imported?.name ?? specifier.imported?.value ?? null;
+        } else if (specifier.type === "ImportNamespaceSpecifier") {
+          importedName = "*";
+        }
+
+        importBindings.set(specifier.local.name, {
+          localName: specifier.local.name,
+          importedName,
+          sourceValue,
+          resolvedSource,
+        });
+      });
+
+      return;
+    }
+
+    if (nodePath.isExportNamedDeclaration()) {
+      const declarationPath = nodePath.get("declaration");
+      if (declarationPath?.node) {
+        if (declarationPath.isFunctionDeclaration() || declarationPath.isClassDeclaration()) {
+          const localName = declarationPath.node.id?.name;
+          if (localName) {
+            exportBindings.set(localName, { localName });
+          }
+        } else if (declarationPath.isVariableDeclaration()) {
+          declarationPath.get("declarations").forEach((declaratorPath) => {
+            const localName = declaratorPath.node.id?.name;
+            if (localName) {
+              exportBindings.set(localName, { localName });
+            }
+          });
+        }
+      }
+
+      nodePath.get("specifiers").forEach((specifierPath) => {
+        const exportedName =
+          specifierPath.node.exported?.name ?? specifierPath.node.exported?.value ?? null;
+        if (!exportedName) {
+          return;
+        }
+
+        const sourceValue = nodePath.node.source?.value ?? null;
+        if (sourceValue) {
+          const localName =
+            specifierPath.node.local?.name ?? specifierPath.node.local?.value ?? exportedName;
+          exportBindings.set(exportedName, {
+            reexportSource: resolveImportSource(filename, sourceValue, context),
+            importedName: localName === "default" ? "default" : localName,
+          });
+          return;
+        }
+
+        const localName =
+          specifierPath.node.local?.name ?? specifierPath.node.local?.value ?? null;
+        if (localName) {
+          exportBindings.set(exportedName, { localName });
+        }
+      });
+
+      return;
+    }
+
+    if (!nodePath.isExportDefaultDeclaration()) {
+      return;
+    }
+
+    const declarationPath = nodePath.get("declaration");
+    if (declarationPath.isIdentifier()) {
+      exportBindings.set("default", { localName: declarationPath.node.name });
+      return;
+    }
+
+    if (
+      declarationPath.isFunctionDeclaration() ||
+      declarationPath.isClassDeclaration()
+    ) {
+      const localName = declarationPath.node.id?.name;
+      if (localName) {
+        exportBindings.set("default", { localName });
+      } else {
+        exportBindings.set("default", { path: declarationPath });
+      }
+      return;
+    }
+
+    if (
+      declarationPath.isArrowFunctionExpression() ||
+      declarationPath.isFunctionExpression()
+    ) {
+      exportBindings.set("default", { path: declarationPath });
+    }
+  });
+
+  return {
+    filename,
+    programPath,
+    availableNames,
+    helperPaths,
+    importBindings,
+    exportBindings,
+    compatPascalNames: new Set(),
+  };
+}
+
+function getOrCreateModuleAnalysis(filename, context) {
+  const normalizedFilename = normalizeFilePath(filename);
+  if (!normalizedFilename) {
+    return null;
+  }
+
+  if (context.moduleAnalysisCache.has(normalizedFilename)) {
+    return context.moduleAnalysisCache.get(normalizedFilename);
+  }
+
+  let source;
+  try {
+    source = fs.readFileSync(normalizedFilename, "utf8");
+  } catch {
+    return null;
+  }
+
+  let programPath = null;
+  try {
+    const ast = parser.parse(source, { sourceType: "module" });
+    traverse(ast, {
+      Program(path) {
+        if (!programPath) {
+          programPath = path;
+          path.scope.crawl();
+        }
+      },
+    });
+  } catch {
+    return null;
+  }
+
+  if (!programPath) {
+    return null;
+  }
+
+  const analysis = buildModuleAnalysis(programPath, normalizedFilename, context);
+  context.moduleAnalysisCache.set(normalizedFilename, analysis);
+  return analysis;
 }
 
 function isCapitalizedName(name) {
@@ -145,78 +462,296 @@ function validateComponentName(nameNode, pathForErrors, context) {
   return originalName;
 }
 
-function collectCandidates(functionPath, programPath, options = {}) {
-  const candidates = new Set();
-  if (!programPath || !functionPath?.node) return candidates;
+function resolveImportedHelper(moduleAnalysis, helperName, context, seen = new Set()) {
+  const importInfo = moduleAnalysis.importBindings.get(helperName);
+  if (!importInfo?.resolvedSource || importInfo.importedName === "*") {
+    return null;
+  }
+
+  const visitedKey = `${moduleAnalysis.filename}:${helperName}:${importInfo.resolvedSource}:${importInfo.importedName}`;
+  if (seen.has(visitedKey)) {
+    return null;
+  }
+  const nextSeen = new Set(seen);
+  nextSeen.add(visitedKey);
+
+  const importedModule = getOrCreateModuleAnalysis(importInfo.resolvedSource, context);
+  if (!importedModule) {
+    return null;
+  }
+
+  return resolveExportedHelper(importedModule, importInfo.importedName, context, nextSeen);
+}
+
+function resolveExportedHelper(moduleAnalysis, exportedName, context, seen = new Set()) {
+  const exportInfo = moduleAnalysis.exportBindings.get(exportedName);
+  if (!exportInfo) {
+    return null;
+  }
+
+  if (exportInfo.path?.node) {
+    return {
+      moduleAnalysis,
+      path: exportInfo.path,
+    };
+  }
+
+  if (exportInfo.localName) {
+    const helperPath = moduleAnalysis.helperPaths.get(exportInfo.localName);
+    if (!helperPath?.node) {
+      if (moduleAnalysis.importBindings.has(exportInfo.localName)) {
+        return resolveImportedHelper(moduleAnalysis, exportInfo.localName, context, seen);
+      }
+      return null;
+    }
+    return {
+      moduleAnalysis,
+      path: helperPath,
+    };
+  }
+
+  if (exportInfo.reexportSource) {
+    const reexportedModule = getOrCreateModuleAnalysis(exportInfo.reexportSource, context);
+    if (!reexportedModule) {
+      return null;
+    }
+    return resolveExportedHelper(
+      reexportedModule,
+      exportInfo.importedName,
+      context,
+      seen
+    );
+  }
+
+  return null;
+}
+
+function resolveImportedElementRequirement(candidateName, moduleAnalysis, context, rootFilename) {
+  const binding = moduleAnalysis.programPath.scope.getBinding(candidateName);
+  if (!binding || !isProgramLevelBinding(binding)) {
+    return null;
+  }
+
+  if (
+    binding.path.isImportSpecifier?.() ||
+    binding.path.isImportDefaultSpecifier?.()
+  ) {
+    const importInfo = moduleAnalysis.importBindings.get(candidateName);
+    if (!importInfo?.resolvedSource || importInfo.importedName === "*") {
+      return null;
+    }
+
+    return {
+      sourceFile: importInfo.resolvedSource,
+      importedName: importInfo.importedName,
+      originalName: candidateName,
+      tagName: candidateName.replace(/([a-z])([A-Z])/g, "$1-$2").toLowerCase(),
+      rootFilename,
+    };
+  }
+
+  const exportInfo =
+    moduleAnalysis.exportBindings.get(candidateName) ||
+    moduleAnalysis.exportBindings.get("default");
+  if (!exportInfo) {
+    throw new Error(
+      `Imported renderer helper transitively renders "${candidateName}" from "${moduleAnalysis.filename}", but that symbol is not exported and cannot be added to static elements in "${rootFilename}".`
+    );
+  }
+
+  const importedName = exportInfo.localName === candidateName
+    ? candidateName
+    : [...moduleAnalysis.exportBindings.entries()].find(
+        ([, entry]) => entry.localName === candidateName
+      )?.[0] ?? null;
+
+  if (!importedName) {
+    throw new Error(
+      `Imported renderer helper transitively renders "${candidateName}" from "${moduleAnalysis.filename}", but that symbol cannot be resolved as an importable export for "${rootFilename}".`
+    );
+  }
+
+  return {
+    sourceFile: moduleAnalysis.filename,
+    importedName,
+    originalName: candidateName,
+    tagName: candidateName.replace(/([a-z])([A-Z])/g, "$1-$2").toLowerCase(),
+    rootFilename,
+  };
+}
+
+function collectCandidateResult(functionPath, programPath, options = {}) {
+  const result = createEmptyCandidateResult();
+  if (!programPath || !functionPath?.node) return result;
   programPath.scope.crawl();
 
+  const rootFilename = normalizeFilePath(
+    options.filename || programPath.hub.file?.opts?.filename || ""
+  );
   const helperCandidateCache =
-    programPath.getData("__litsxHelperCandidateCache") || new Map();
+    programPath.getData("__litsxHelperCandidateCache") || new WeakMap();
   programPath.setData("__litsxHelperCandidateCache", helperCandidateCache);
-  const availableNames = getOrCreateAvailableNames(programPath);
-  const helperPaths = getOrCreateHelperPaths(programPath);
-  const compatPascalNames =
-    programPath.getData("__litsxCompatPascalNames") || new Set();
-  const context = {
-    availableNames,
-    helperPaths,
-    compatPascalNames,
-    options,
-    helperCandidateCache,
+  const moduleAnalysisCache =
+    programPath.getData("__litsxImportedModuleAnalyses") || new Map();
+  programPath.setData("__litsxImportedModuleAnalyses", moduleAnalysisCache);
+  const resolvedImportCache =
+    programPath.getData("__litsxResolvedImports") || new Map();
+  programPath.setData("__litsxResolvedImports", resolvedImportCache);
+
+  const rootModule = {
+    filename: rootFilename,
+    programPath,
+    availableNames: getOrCreateAvailableNames(programPath),
+    helperPaths: getOrCreateHelperPaths(programPath),
+    compatPascalNames: programPath.getData("__litsxCompatPascalNames") || new Set(),
+    importBindings: new Map(),
+    exportBindings: new Map(),
   };
 
-  function scanFunction(path, seen = new Set()) {
+  programPath.get("body").forEach((nodePath) => {
+    if (!nodePath.isImportDeclaration()) {
+      return;
+    }
+
+    const sourceValue = nodePath.node.source.value;
+    const resolvedSource = resolveImportSource(rootFilename, sourceValue, {
+      moduleAnalysisCache,
+      resolvedImportCache,
+    });
+
+    nodePath.node.specifiers.forEach((specifier) => {
+      if (!specifier.local?.name) {
+        return;
+      }
+
+      let importedName = null;
+      if (specifier.type === "ImportDefaultSpecifier") {
+        importedName = "default";
+      } else if (specifier.type === "ImportSpecifier") {
+        importedName = specifier.imported?.name ?? specifier.imported?.value ?? null;
+      } else if (specifier.type === "ImportNamespaceSpecifier") {
+        importedName = "*";
+      }
+
+      rootModule.importBindings.set(specifier.local.name, {
+        localName: specifier.local.name,
+        importedName,
+        sourceValue,
+        resolvedSource,
+      });
+    });
+  });
+
+  const context = {
+    rootFilename,
+    rootModule,
+    options,
+    helperCandidateCache,
+    moduleAnalysisCache,
+    resolvedImportCache,
+  };
+
+  function scanFunction(path, moduleAnalysis, seen = new Set()) {
     if (!path?.node) {
-      return new Set();
+      return createEmptyCandidateResult();
     }
 
     if (context.helperCandidateCache.has(path.node)) {
-      return new Set(context.helperCandidateCache.get(path.node));
+      return cloneCandidateResult(context.helperCandidateCache.get(path.node));
     }
 
     if (seen.has(path.node)) {
-      return new Set();
+      return createEmptyCandidateResult();
     }
 
     const nextSeen = new Set(seen);
     nextSeen.add(path.node);
-    const localCandidates = new Set();
-    const referencedHelpers = new Set();
+    const localResult = createEmptyCandidateResult();
+    const referencedHelpers = [];
+    const scanContext = {
+      availableNames: moduleAnalysis.availableNames,
+      helperPaths: moduleAnalysis.helperPaths,
+      compatPascalNames: moduleAnalysis.compatPascalNames,
+      options,
+    };
 
     path.traverse({
       JSXOpeningElement(jsxPath) {
-        const candidate = validateComponentName(jsxPath.node.name, jsxPath, context);
+        const candidate = validateComponentName(jsxPath.node.name, jsxPath, scanContext);
         if (candidate) {
-          localCandidates.add(candidate);
+          if (moduleAnalysis.filename === context.rootFilename) {
+            localResult.localCandidates.add(candidate);
+          } else {
+            const requirement = resolveImportedElementRequirement(
+              candidate,
+              moduleAnalysis,
+              context,
+              context.rootFilename
+            );
+            if (requirement) {
+              localResult.importedCandidates.set(
+                toImportRecordKey(requirement),
+                requirement
+              );
+            }
+          }
         }
       },
       JSXClosingElement(jsxPath) {
-        validateComponentName(jsxPath.node.name, jsxPath, context);
+        validateComponentName(jsxPath.node.name, jsxPath, scanContext);
       },
       Identifier(identifierPath) {
         if (!identifierPath.isReferencedIdentifier()) {
           return;
         }
 
-        if (!context.helperPaths.has(identifierPath.node.name)) {
+        if (moduleAnalysis.helperPaths.has(identifierPath.node.name)) {
+          referencedHelpers.push({
+            moduleAnalysis,
+            path: moduleAnalysis.helperPaths.get(identifierPath.node.name),
+          });
           return;
         }
 
-        referencedHelpers.add(identifierPath.node.name);
+        const binding = identifierPath.scope.getBinding(identifierPath.node.name);
+        if (!binding) {
+          return;
+        }
+
+        if (
+          !binding.path.isImportSpecifier?.() &&
+          !binding.path.isImportDefaultSpecifier?.()
+        ) {
+          return;
+        }
+
+        const resolvedHelper = resolveImportedHelper(
+          moduleAnalysis,
+          identifierPath.node.name,
+          context
+        );
+        if (!resolvedHelper?.path?.node) {
+          return;
+        }
+
+        referencedHelpers.push(resolvedHelper);
       },
     });
 
-    referencedHelpers.forEach((helperName) => {
-      const helperCandidates = scanFunction(context.helperPaths.get(helperName), nextSeen);
-      helperCandidates.forEach((candidate) => localCandidates.add(candidate));
+    referencedHelpers.forEach((helperEntry) => {
+      const helperCandidates = scanFunction(
+        helperEntry.path,
+        helperEntry.moduleAnalysis,
+        nextSeen
+      );
+      mergeCandidateResults(localResult, helperCandidates);
     });
 
-    context.helperCandidateCache.set(path.node, new Set(localCandidates));
-    return localCandidates;
+    context.helperCandidateCache.set(path.node, cloneCandidateResult(localResult));
+    return localResult;
   }
 
-  scanFunction(functionPath).forEach((candidate) => candidates.add(candidate));
-  return candidates;
+  return scanFunction(functionPath, rootModule);
 }
 
 export function getAnnotatedElementCandidates(path, programPath, options = {}) {
@@ -224,7 +759,183 @@ export function getAnnotatedElementCandidates(path, programPath, options = {}) {
     return new Set(path.node._litsxElementCandidates);
   }
 
-  return collectCandidates(path, programPath, options);
+  return collectCandidateResult(path, programPath, options).localCandidates;
+}
+
+export function getAnnotatedImportedElementCandidates(path, programPath, options = {}) {
+  if (Array.isArray(path?.node?._litsxImportedElementCandidates)) {
+    return [...path.node._litsxImportedElementCandidates];
+  }
+
+  return [...collectCandidateResult(path, programPath, options).importedCandidates.values()];
+}
+
+export function importedBindingNeedsRendererContext(programPath, localName, options = {}) {
+  if (!programPath?.node || !localName) {
+    return false;
+  }
+
+  programPath.scope.crawl();
+  const rootFilename = normalizeFilePath(
+    options.filename || programPath.hub.file?.opts?.filename || ""
+  );
+  const helperCandidateCache =
+    programPath.getData("__litsxHelperCandidateCache") || new WeakMap();
+  programPath.setData("__litsxHelperCandidateCache", helperCandidateCache);
+  const moduleAnalysisCache =
+    programPath.getData("__litsxImportedModuleAnalyses") || new Map();
+  programPath.setData("__litsxImportedModuleAnalyses", moduleAnalysisCache);
+  const resolvedImportCache =
+    programPath.getData("__litsxResolvedImports") || new Map();
+  programPath.setData("__litsxResolvedImports", resolvedImportCache);
+
+  const rootModule = {
+    filename: rootFilename,
+    programPath,
+    availableNames: getOrCreateAvailableNames(programPath),
+    helperPaths: getOrCreateHelperPaths(programPath),
+    compatPascalNames: programPath.getData("__litsxCompatPascalNames") || new Set(),
+    importBindings: new Map(),
+    exportBindings: new Map(),
+  };
+
+  programPath.get("body").forEach((nodePath) => {
+    if (!nodePath.isImportDeclaration()) {
+      return;
+    }
+
+    const sourceValue = nodePath.node.source.value;
+    const resolvedSource = resolveImportSource(rootFilename, sourceValue, {
+      moduleAnalysisCache,
+      resolvedImportCache,
+    });
+
+    nodePath.node.specifiers.forEach((specifier) => {
+      if (!specifier.local?.name) {
+        return;
+      }
+
+      let importedName = null;
+      if (specifier.type === "ImportDefaultSpecifier") {
+        importedName = "default";
+      } else if (specifier.type === "ImportSpecifier") {
+        importedName = specifier.imported?.name ?? specifier.imported?.value ?? null;
+      } else if (specifier.type === "ImportNamespaceSpecifier") {
+        importedName = "*";
+      }
+
+      rootModule.importBindings.set(specifier.local.name, {
+        localName: specifier.local.name,
+        importedName,
+        sourceValue,
+        resolvedSource,
+      });
+    });
+  });
+
+  const context = {
+    rootFilename,
+    rootModule,
+    options,
+    helperCandidateCache,
+    moduleAnalysisCache,
+    resolvedImportCache,
+  };
+
+  const resolvedHelper = resolveImportedHelper(rootModule, localName, context);
+  if (!resolvedHelper?.path?.node) {
+    return false;
+  }
+
+  function scanFunction(path, moduleAnalysis, seen = new Set()) {
+    if (!path?.node) {
+      return false;
+    }
+
+    const cacheKey = path.node;
+    if (context.helperCandidateCache.has(cacheKey)) {
+      const cached = context.helperCandidateCache.get(cacheKey);
+      return cached.localCandidates.size > 0 || cached.importedCandidates.size > 0;
+    }
+
+    if (seen.has(path.node)) {
+      return false;
+    }
+
+    const nextSeen = new Set(seen);
+    nextSeen.add(path.node);
+    let needsContext = false;
+    const referencedHelpers = [];
+    const scanContext = {
+      availableNames: moduleAnalysis.availableNames,
+      helperPaths: moduleAnalysis.helperPaths,
+      compatPascalNames: moduleAnalysis.compatPascalNames,
+      options,
+    };
+
+    path.traverse({
+      JSXOpeningElement(jsxPath) {
+        const candidate = validateComponentName(jsxPath.node.name, jsxPath, scanContext);
+        if (candidate) {
+          needsContext = true;
+        }
+      },
+      JSXClosingElement(jsxPath) {
+        validateComponentName(jsxPath.node.name, jsxPath, scanContext);
+      },
+      Identifier(identifierPath) {
+        if (!identifierPath.isReferencedIdentifier()) {
+          return;
+        }
+
+        if (moduleAnalysis.helperPaths.has(identifierPath.node.name)) {
+          referencedHelpers.push({
+            moduleAnalysis,
+            path: moduleAnalysis.helperPaths.get(identifierPath.node.name),
+          });
+          return;
+        }
+
+        const binding = identifierPath.scope.getBinding(identifierPath.node.name);
+        if (
+          !binding ||
+          (
+            !binding.path.isImportSpecifier?.() &&
+            !binding.path.isImportDefaultSpecifier?.()
+          )
+        ) {
+          return;
+        }
+
+        const importedHelper = resolveImportedHelper(
+          moduleAnalysis,
+          identifierPath.node.name,
+          context
+        );
+        if (importedHelper?.path?.node) {
+          referencedHelpers.push(importedHelper);
+        }
+      },
+    });
+
+    if (!needsContext) {
+      needsContext = referencedHelpers.some((helperEntry) =>
+        scanFunction(helperEntry.path, helperEntry.moduleAnalysis, nextSeen)
+      );
+    }
+
+    context.helperCandidateCache.set(cacheKey, needsContext
+      ? {
+          localCandidates: new Set(["__context"]),
+          importedCandidates: new Map(),
+        }
+      : createEmptyCandidateResult()
+    );
+
+    return needsContext;
+  }
+
+  return scanFunction(resolvedHelper.path, resolvedHelper.moduleAnalysis);
 }
 
 export default declare((api) => {
@@ -240,7 +951,9 @@ export default declare((api) => {
           path.scope.crawl();
           path.setData("__litsxAvailableNames", null);
           path.setData("__litsxHelperPaths", null);
-          path.setData("__litsxHelperCandidateCache", new Map());
+          path.setData("__litsxHelperCandidateCache", new WeakMap());
+          path.setData("__litsxImportedModuleAnalyses", new Map());
+          path.setData("__litsxResolvedImports", new Map());
         },
       },
       FunctionDeclaration: {
@@ -250,11 +963,16 @@ export default declare((api) => {
           }
 
           const programPath = path.findParent((entry) => entry.isProgram());
-          path.node._litsxElementCandidates = collectCandidates(
+          const result = collectCandidateResult(
             path,
             programPath,
-            state.opts || {}
+            {
+              ...(state.opts || {}),
+              filename: state.file?.opts?.filename || "",
+            }
           );
+          path.node._litsxElementCandidates = result.localCandidates;
+          path.node._litsxImportedElementCandidates = [...result.importedCandidates.values()];
         },
       },
       ArrowFunctionExpression: {
@@ -264,11 +982,16 @@ export default declare((api) => {
           }
 
           const programPath = path.findParent((entry) => entry.isProgram());
-          path.node._litsxElementCandidates = collectCandidates(
+          const result = collectCandidateResult(
             path,
             programPath,
-            state.opts || {}
+            {
+              ...(state.opts || {}),
+              filename: state.file?.opts?.filename || "",
+            }
           );
+          path.node._litsxElementCandidates = result.localCandidates;
+          path.node._litsxImportedElementCandidates = [...result.importedCandidates.values()];
         },
       },
       FunctionExpression: {
@@ -278,11 +1001,16 @@ export default declare((api) => {
           }
 
           const programPath = path.findParent((entry) => entry.isProgram());
-          path.node._litsxElementCandidates = collectCandidates(
+          const result = collectCandidateResult(
             path,
             programPath,
-            state.opts || {}
+            {
+              ...(state.opts || {}),
+              filename: state.file?.opts?.filename || "",
+            }
           );
+          path.node._litsxElementCandidates = result.localCandidates;
+          path.node._litsxImportedElementCandidates = [...result.importedCandidates.values()];
         },
       },
     },

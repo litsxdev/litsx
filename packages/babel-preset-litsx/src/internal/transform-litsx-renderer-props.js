@@ -1,5 +1,6 @@
 import jsxSyntaxPlugin from "@babel/plugin-syntax-jsx";
 import { decodeVirtualAttributeName } from "@litsx/jsx-authoring";
+import { importedBindingNeedsRendererContext } from "./transform-litsx-element-candidates.js";
 
 let t;
 
@@ -238,7 +239,7 @@ function expressionNeedsRendererContext(node, scope, seenBindings = new Set()) {
   return false;
 }
 
-function isBindableFunctionReference(expressionPath) {
+function isBindableFunctionReference(expressionPath, options = {}) {
   const expression = unwrapExpression(expressionPath.node);
   if (
     t.isArrowFunctionExpression(expression) ||
@@ -251,7 +252,12 @@ function isBindableFunctionReference(expressionPath) {
     const binding = expressionPath.scope.getBinding(expression.name);
     const functionNode = getFunctionNodeFromBinding(binding);
     if (!functionNode) {
-      return false;
+      const programPath = expressionPath.findParent((entry) => entry.isProgram?.());
+      return importedBindingNeedsRendererContext(
+        programPath,
+        expression.name,
+        options
+      );
     }
     return functionBodyNeedsRendererContext(functionNode.body, binding.path.scope, new Set([binding]));
   }
@@ -259,7 +265,7 @@ function isBindableFunctionReference(expressionPath) {
   return false;
 }
 
-function shouldBindRendererContext(attributePath, rawName, expressionPath) {
+function shouldBindRendererContext(attributePath, rawName, expressionPath, options = {}) {
   if (typeof rawName !== "string" || rawName[0] !== ".") {
     return false;
   }
@@ -274,7 +280,7 @@ function shouldBindRendererContext(attributePath, rawName, expressionPath) {
     return false;
   }
 
-  return isBindableFunctionReference(expressionPath);
+  return isBindableFunctionReference(expressionPath, options);
 }
 
 function ensureRendererBindingImport(programPath) {
@@ -342,7 +348,9 @@ export default function transformLitsxRendererProps(api) {
           return;
         }
 
-        if (!shouldBindRendererContext(path, rawName, expressionPath)) {
+        if (!shouldBindRendererContext(path, rawName, expressionPath, {
+          filename: state.file?.opts?.filename || "",
+        })) {
           return;
         }
 
