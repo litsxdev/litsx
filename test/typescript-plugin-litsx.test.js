@@ -2959,6 +2959,66 @@ describe("@litsx/typescript-plugin", () => {
     });
   });
 
+  it("reuses cached typecheck diagnostics when project files have not changed", () => {
+    let getPreEmitDiagnosticsMock = null;
+    return withMockedTypeScript((tsModule) => {
+      const getPreEmitDiagnostics = vi.fn(() => []);
+      getPreEmitDiagnosticsMock = getPreEmitDiagnostics;
+      return {
+        ...tsModule,
+        getPreEmitDiagnostics,
+        sys: {
+          ...tsModule.sys,
+          getModifiedTime(fileName) {
+            if (fileName === "/virtual/one.tsx") {
+              return new Date(1);
+            }
+            return tsModule.sys.getModifiedTime?.(fileName);
+          },
+          readFile(fileName) {
+            if (fileName === "/virtual/one.tsx") {
+              return "const view = <button onClick={save} />;";
+            }
+            return tsModule.sys.readFile(fileName);
+          },
+        },
+      };
+    }, ({ runLitsxTypecheck: mockedRunLitsxTypecheck }) => {
+      const existingSession = {
+        parsedCommandLine: {
+          errors: [],
+          fileNames: ["/virtual/one.tsx"],
+          projectVersion: "1",
+        },
+        virtualizationState: {
+          getVirtualizedText(_fileName, sourceText) {
+            return sourceText;
+          },
+          get() {
+            return null;
+          },
+        },
+        diagnosticsCacheKey: null,
+        diagnosticsCacheResult: null,
+        projectSession: {
+          refresh() {},
+          readFile() {
+            return "const view = <button onClick={save} />;";
+          },
+          setOverlayFile() {},
+          clearOverlayFile() {},
+          getProgram() {
+            return { mocked: true };
+          },
+        },
+      };
+
+      assert.strictEqual(mockedRunLitsxTypecheck(existingSession), 0);
+      assert.strictEqual(mockedRunLitsxTypecheck(existingSession), 0);
+      assert.strictEqual(getPreEmitDiagnosticsMock.mock.calls.length, 1);
+    });
+  });
+
   it("filters virtual attribute completions and remaps diagnostics", () => {
     const source = `
           const view = <button @click={handleClick} />;

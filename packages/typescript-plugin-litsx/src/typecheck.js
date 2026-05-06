@@ -393,6 +393,8 @@ function createTypecheckSession(parsedCommandLine, projectSession = null) {
     parsedCommandLine,
     sessionKey: parsedCommandLine.__litsxSessionKey,
     virtualizationState,
+    diagnosticsCacheKey: null,
+    diagnosticsCacheResult: null,
     projectSession: projectSession || getOrCreateProjectTsSession(parsedCommandLine.__litsxSessionKey, {
       typescript: ts,
       parsedCommandLine,
@@ -409,6 +411,8 @@ function getTypecheckSession(parsedCommandLine, projectSession = null) {
     cached.parsedCommandLine = parsedCommandLine;
     if (projectSession) {
       cached.projectSession = projectSession;
+      cached.diagnosticsCacheKey = null;
+      cached.diagnosticsCacheResult = null;
     }
     cached.projectSession.refresh({
       parsedCommandLine,
@@ -427,6 +431,14 @@ function getTypecheckSession(parsedCommandLine, projectSession = null) {
 export function createLitsxTypecheckSession(rawArgs = process.argv.slice(2), options = {}) {
   const parsedCommandLine = resolveParsedCommandLine(rawArgs);
   return getTypecheckSession(parsedCommandLine, options.projectSession);
+}
+
+function createDiagnosticsCacheKey(session) {
+  const parsedCommandLine = session.parsedCommandLine;
+  const fileVersions = parsedCommandLine.fileNames.map((fileName) => (
+    `${fileName}:${getFileVersion(fileName) ?? "missing"}`
+  ));
+  return `${parsedCommandLine.projectVersion || "unknown"}\0${fileVersions.join("\0")}`;
 }
 
 function runTypecheckSession(session) {
@@ -466,6 +478,23 @@ function runTypecheckSession(session) {
     () => session.projectSession.getProgram(),
   );
 
+  const diagnosticsCacheKey = profilePhase(
+    "typescript-typecheck",
+    "diagnostic-cache-key",
+    () => createDiagnosticsCacheKey(session),
+  );
+
+  if (
+    session.diagnosticsCacheKey === diagnosticsCacheKey &&
+    session.diagnosticsCacheResult
+  ) {
+    const cachedResult = session.diagnosticsCacheResult;
+    if (cachedResult.output) {
+      process.stderr.write(cachedResult.output);
+    }
+    return cachedResult.exitCode;
+  }
+
   const diagnostics = profilePhase(
     "typescript-typecheck",
     "diagnostics",
@@ -478,9 +507,19 @@ function runTypecheckSession(session) {
     if (output) {
       process.stderr.write(output);
     }
+    session.diagnosticsCacheKey = diagnosticsCacheKey;
+    session.diagnosticsCacheResult = {
+      exitCode: 1,
+      output,
+    };
     return 1;
   }
 
+  session.diagnosticsCacheKey = diagnosticsCacheKey;
+  session.diagnosticsCacheResult = {
+    exitCode: 0,
+    output: "",
+  };
   return 0;
 }
 
