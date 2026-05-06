@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { excludedPrivatePackages, npmReleasePackages } from "./release-packages.mjs";
+import { excludedPrivatePackages, npmReleasePackages } from "./release-packages.js";
 
 const repoRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
 

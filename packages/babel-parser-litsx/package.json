@@ -26,12 +26,12 @@
     "directory": "packages/babel-parser-litsx"
   },
   "main": "./dist/index.cjs",
-  "module": "./src/index.mjs",
+  "module": "./src/index.js",
   "exports": {
     ".": {
-      "import": "./src/index.mjs",
+      "import": "./src/index.js",
       "require": "./dist/index.cjs",
-      "default": "./src/index.mjs"
+      "default": "./src/index.js"
     }
   },
   "types": "./typings/babel-parser.d.ts",
@@ -58,10 +58,10 @@
     "@babel/helper-validator-identifier": "^7.28.5",
     "charcodes": "^0.2.0"
   },
-  "bin": "./dist/babel-parser.mjs",
+  "bin": "./dist/babel-parser.js",
   "type": "module",
   "scripts": {
-    "build": "../../node_modules/.bin/rollup --config rollup.config.mjs",
+    "build": "../../node_modules/.bin/rollup --config rollup.config.js",
     "prepack": "yarn build"
   }
 }

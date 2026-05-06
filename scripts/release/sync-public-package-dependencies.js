@@ -1,8 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { readPackageVersion, packageDirsByName } from "./package-version-map.mjs";
-import { npmReleasePackages } from "./release-packages.mjs";
+import { readPackageVersion, packageDirsByName } from "./package-version-map.js";
+import { npmReleasePackages } from "./release-packages.js";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const dependencyFields = ["dependencies", "devDependencies", "optionalDependencies", "peerDependencies"];

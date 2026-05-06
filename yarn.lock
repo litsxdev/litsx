@@ -1149,7 +1149,7 @@ __metadata:
     "@litsx/jsx-authoring": "npm:^0.2.1"
     charcodes: "npm:^0.2.0"
   bin:
-    babel-parser: ./dist/babel-parser.mjs
+    babel-parser: ./dist/babel-parser.js
   languageName: unknown
   linkType: soft
 

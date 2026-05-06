@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { createProject } from "../../packages/create-litsx-app/src/index.js";
-import { createCaretVersionMap } from "./package-version-map.mjs";
+import { createCaretVersionMap } from "./package-version-map.js";
 
 const templates = ["app", "component", "design-system"];
 const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-release-scaffold-"));

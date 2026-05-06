@@ -5,7 +5,7 @@ import babelTraverse from "@babel/traverse";
 import fs from "fs";
 import os from "os";
 import path from "path";
-import parser from "../packages/babel-parser-litsx/src/index.mjs";
+import parser from "../packages/babel-parser-litsx/src/index.js";
 import elementCandidatesPlugin, {
   getAnnotatedElementCandidates,
   getAnnotatedImportedElementCandidates,

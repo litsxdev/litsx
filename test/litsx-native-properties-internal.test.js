@@ -2,7 +2,7 @@ import assert from "assert";
 import babelTypes from "@babel/types";
 import traverseModule from "@babel/traverse";
 import { beforeAll } from "vitest";
-import parser from "../packages/babel-parser-litsx/src/index.mjs";
+import parser from "../packages/babel-parser-litsx/src/index.js";
 import {
   createPropertyConfig,
   createPropertyValue,

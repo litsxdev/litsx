@@ -42,7 +42,7 @@
     "directory": "packages/prop-types"
   },
   "scripts": {
-    "build": "../../node_modules/.bin/rollup --config rollup.config.mjs",
+    "build": "../../node_modules/.bin/rollup --config rollup.config.js",
     "prepack": "yarn build"
   }
 }

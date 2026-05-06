@@ -1,5 +1,5 @@
 import fs from "node:fs";
-import parser from "./index.mjs";
+import parser from "./index.js";
 
 const filename = process.argv[2];
 

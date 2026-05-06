@@ -4,7 +4,7 @@ import os from "os";
 import path from "path";
 import { describe, it } from "vitest";
 
-import parser from "../packages/babel-parser-litsx/src/index.mjs";
+import parser from "../packages/babel-parser-litsx/src/index.js";
 import {
   ensureLitsxParserPlugins,
   prepareLitsxAuthoredInput,

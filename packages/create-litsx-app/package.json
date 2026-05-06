@@ -40,7 +40,7 @@
     "directory": "packages/create-litsx-app"
   },
   "scripts": {
-    "build": "node ../../scripts/release/sync-scaffold-package-versions.mjs && ../../node_modules/.bin/rollup --config rollup.config.mjs",
+    "build": "node ../../scripts/release/sync-scaffold-package-versions.js && ../../node_modules/.bin/rollup --config rollup.config.js",
     "prepack": "yarn build"
   }
 }

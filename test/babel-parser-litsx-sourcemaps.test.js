@@ -3,7 +3,7 @@ import babelCore from "@babel/core";
 import { TraceMap, originalPositionFor } from "@jridgewell/trace-mapping";
 import parser, {
   getLitsxVirtualizationMetadata,
-} from "../packages/babel-parser-litsx/src/index.mjs";
+} from "../packages/babel-parser-litsx/src/index.js";
 import { beforeAll, describe, it } from "vitest";
 import { interopDefault } from "./helpers/interop-default.js";
 

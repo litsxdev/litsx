@@ -3,7 +3,7 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 import { spawnSync } from "child_process";
-import parser from "../packages/babel-parser-litsx/src/index.mjs";
+import parser from "../packages/babel-parser-litsx/src/index.js";
 
 describe("@litsx/babel-parser", () => {
   it("parses lit-html prefixed attributes", () => {
@@ -162,7 +162,7 @@ describe("@litsx/babel-parser", () => {
       fs.writeFileSync(filePath, "const view = <button .label={text} />;\n");
 
       const result = spawnSync(process.execPath, [
-        path.resolve("packages/babel-parser-litsx/src/cli.mjs"),
+        path.resolve("packages/babel-parser-litsx/src/cli.js"),
         filePath,
       ], {
         cwd: process.cwd(),
@@ -186,7 +186,7 @@ describe("@litsx/babel-parser", () => {
 
   it("fails the CLI when no filename is provided", () => {
     const result = spawnSync(process.execPath, [
-      path.resolve("packages/babel-parser-litsx/src/cli.mjs"),
+      path.resolve("packages/babel-parser-litsx/src/cli.js"),
     ], {
       cwd: process.cwd(),
       encoding: "utf8",

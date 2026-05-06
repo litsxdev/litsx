@@ -9,12 +9,12 @@ execFileSync("./node_modules/.bin/changeset", ["version"], {
   stdio: "inherit",
 });
 
-execFileSync("node", ["scripts/release/sync-scaffold-package-versions.mjs"], {
+execFileSync("node", ["scripts/release/sync-scaffold-package-versions.js"], {
   cwd: repoRoot,
   stdio: "inherit",
 });
 
-execFileSync("node", ["scripts/release/sync-public-package-dependencies.mjs"], {
+execFileSync("node", ["scripts/release/sync-public-package-dependencies.js"], {
   cwd: repoRoot,
   stdio: "inherit",
 });

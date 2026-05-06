@@ -139,19 +139,11 @@ function resolveCliInputCandidate(packageDir, entry) {
     path.join(packageDir, "src", outputBase),
   ];
 
-  if (sourceCandidates[0].endsWith(".mjs")) {
-    sourceCandidates.push(sourceCandidates[0].replace(/\.mjs$/, ".js"));
-  } else if (sourceCandidates[0].endsWith(".js")) {
-    sourceCandidates.push(sourceCandidates[0].replace(/\.js$/, ".mjs"));
-  }
-
   if (entry.name) {
     sourceCandidates.push(path.join(packageDir, "src", `${entry.name}.js`));
-    sourceCandidates.push(path.join(packageDir, "src", `${entry.name}.mjs`));
   }
 
   sourceCandidates.push(path.join(packageDir, "src", "cli.js"));
-  sourceCandidates.push(path.join(packageDir, "src", "cli.mjs"));
 
   const matched = sourceCandidates.find((candidate) => fs.existsSync(candidate));
   if (!matched) {

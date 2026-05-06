@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { performance } from "node:perf_hooks";
 import babelCore from "@babel/core";
-import parser from "../../packages/babel-parser-litsx/src/index.mjs";
+import parser from "../../packages/babel-parser-litsx/src/index.js";
 import nativePreset from "../../packages/babel-preset-litsx/src/index.js";
 
 const { transformFromAstSync } = babelCore;

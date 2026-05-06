@@ -54,7 +54,7 @@
     "@litsx/typescript-plugin": "^0.2.0"
   },
   "scripts": {
-    "build": "../../node_modules/.bin/rollup --config rollup.config.mjs",
+    "build": "../../node_modules/.bin/rollup --config rollup.config.js",
     "prepack": "yarn build"
   }
 }

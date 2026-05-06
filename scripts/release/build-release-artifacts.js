@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { npmReleasePackages } from "./release-packages.mjs";
+import { npmReleasePackages } from "./release-packages.js";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const artifactsRoot = path.join(repoRoot, ".release-artifacts");
