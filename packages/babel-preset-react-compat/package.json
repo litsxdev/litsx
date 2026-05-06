@@ -1,6 +1,6 @@
 {
   "name": "@litsx/babel-preset-react-compat",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Canonical React compatibility pipeline for migrating React-authored source onto LitSX",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -47,7 +47,7 @@
     "@litsx/babel-plugin-shared-hooks": "^0.2.0",
     "@litsx/babel-plugin-transform-jsx-html-template": "^0.3.0",
     "@litsx/babel-plugin-transform-litsx-scoped-elements": "^0.2.0",
-    "@litsx/babel-preset-litsx": "^0.3.0"
+    "@litsx/babel-preset-litsx": "^0.4.0"
   },
   "devDependencies": {
     "@babel/core": "^7.29.0"
