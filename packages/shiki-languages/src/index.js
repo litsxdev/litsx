@@ -51,15 +51,19 @@ function getLitsxAttributeNameScope(prefixPattern) {
       return "entity.other.attribute-name.property.litsx";
     case "\\?":
       return "entity.other.attribute-name.boolean.litsx";
+    /* c8 ignore next 2 -- defensive fallback for unsupported internal prefixes */
     default:
       return "entity.other.attribute-name.litsx";
   }
 }
 
 function allowQuestionMarkAttributes(pattern) {
-  return typeof pattern === "string"
-    ? pattern.replaceAll("(?=((<\\s*)|(\\s+))(?!\\?)|\\/?>)", "(?=((<\\s*)|(\\s+))|\\/?>)")
-    : pattern;
+  if (typeof pattern === "string") {
+    return pattern.replaceAll("(?=((<\\s*)|(\\s+))(?!\\?)|\\/?>)", "(?=((<\\s*)|(\\s+))|\\/?>)");
+  }
+
+  /* c8 ignore next -- grammar begin/end patterns are strings in supported registrations */
+  return pattern;
 }
 
 function createLitsxTagAttributeRule(registration, prefixPattern) {
@@ -212,6 +216,7 @@ function createLitsxAwareLanguage(registration) {
     },
   };
 
+  /* c8 ignore next 9 -- supported Shiki JSX grammars always expose jsx-tag patterns */
   if (grammar.repository["jsx-tag"]) {
     grammar.repository["jsx-tag"].begin = allowQuestionMarkAttributes(grammar.repository["jsx-tag"].begin);
     if (Array.isArray(grammar.repository["jsx-tag"].patterns)) {
@@ -223,6 +228,7 @@ function createLitsxAwareLanguage(registration) {
     }
   }
 
+  /* c8 ignore next 8 -- supported Shiki JSX grammars always expose jsx-tag-in-expression */
   if (grammar.repository["jsx-tag-in-expression"]) {
     grammar.repository["jsx-tag-in-expression"].begin = allowQuestionMarkAttributes(
       grammar.repository["jsx-tag-in-expression"].begin,
@@ -232,6 +238,7 @@ function createLitsxAwareLanguage(registration) {
     );
   }
 
+  /* c8 ignore next 6 -- supported Shiki JSX grammars always expose jsx-tag-attributes */
   if (grammar.repository["jsx-tag-attributes"]?.patterns) {
     grammar.repository["jsx-tag-attributes"].patterns = [
       { include: "#litsx-jsx-tag-attribute" },
@@ -239,6 +246,7 @@ function createLitsxAwareLanguage(registration) {
     ];
   }
 
+  /* c8 ignore next 6 -- supported Shiki grammars always expose expression patterns */
   if (grammar.repository.expression?.patterns) {
     grammar.repository.expression.patterns = [
       { include: "#litsx-styles-css" },
@@ -247,6 +255,7 @@ function createLitsxAwareLanguage(registration) {
     ];
   }
 
+  /* c8 ignore next 6 -- supported Shiki grammars always expose expressionWithoutIdentifiers */
   if (grammar.repository["expressionWithoutIdentifiers"]?.patterns) {
     grammar.repository["expressionWithoutIdentifiers"].patterns = [
       { include: "#litsx-styles-css" },

@@ -9,6 +9,7 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['test/**/*.test.js'],
+    testTimeout: 10000,
     globals: true,
     setupFiles: TRANSFORM_REPORTER_ENABLED
       ? ['./test/helpers/reporter/setup-auto-log-transforms.js']

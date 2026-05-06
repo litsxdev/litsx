@@ -38,6 +38,13 @@ describe("@litsx/shiki-languages", () => {
     assert.deepStrictEqual(stylesRule.patterns, [{ include: "#litsx-css-root" }]);
     assert.ok(litsxTsxLanguage.repository["litsx-css-root"]);
     assert.ok(litsxJsxLanguage.repository["litsx-css-root"]);
+    assert.ok(
+      Object.keys(litsxTsxLanguage.repository).some((key) => key.startsWith("litsx-css-"))
+    );
+    assert.match(
+      JSON.stringify(litsxTsxLanguage.repository["litsx-css-root"]),
+      /#litsx-css-/
+    );
   });
 
   it("does not mutate the base Shiki registrations when building LitSX-aware variants", () => {
@@ -83,5 +90,37 @@ describe("@litsx/shiki-languages", () => {
     } finally {
       highlighter.dispose();
     }
+  });
+
+  it("keeps question-mark JSX tags parsable and specializes embedded punctuation by language", () => {
+    const tsxEvaluated = litsxTsxLanguage.repository["litsx-jsx-evaluated-code"];
+    const jsxEvaluated = litsxJsxLanguage.repository["litsx-jsx-evaluated-code"];
+
+    assert.ok(
+      litsxTsxLanguage.repository["jsx-tag"].begin.includes(
+        "(?=((<\\s*)|(\\s+))|\\/?>)"
+      )
+    );
+    assert.ok(
+      litsxTsxLanguage.repository["jsx-tag-in-expression"].begin.includes(
+        "(?=((<\\s*)|(\\s+))|\\/?>)"
+      )
+    );
+    assert.strictEqual(
+      tsxEvaluated.beginCaptures[0].name,
+      "punctuation.section.embedded.begin.tsx"
+    );
+    assert.strictEqual(
+      jsxEvaluated.beginCaptures[0].name,
+      "punctuation.section.embedded.begin.js.jsx"
+    );
+    assert.strictEqual(
+      litsxTsxLanguage.repository["litsx-jsx-tag-event-attribute"].beginCaptures[2].name,
+      "entity.other.attribute-name.event.litsx"
+    );
+    assert.strictEqual(
+      litsxTsxLanguage.repository["litsx-jsx-tag-prop-attribute"].beginCaptures[2].name,
+      "entity.other.attribute-name.property.litsx"
+    );
   });
 });
