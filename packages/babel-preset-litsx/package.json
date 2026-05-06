@@ -71,9 +71,9 @@
     "@babel/core": ">=7"
   },
   "dependencies": {
-    "@babel/traverse": "^7.28.5",
     "@babel/helper-plugin-utils": "^7.28.6",
     "@babel/plugin-syntax-jsx": "^7.28.6",
+    "@babel/traverse": "^7.28.5",
     "@litsx/babel-parser": "^0.2.1",
     "@litsx/babel-plugin-shared-hooks": "^0.2.1",
     "@litsx/babel-plugin-transform-jsx-html-template": "^0.3.0",
