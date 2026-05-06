@@ -11,6 +11,7 @@ const NATIVE_TRANSFORM_OPTION_KEYS = [
   "inMemoryFiles",
   "typescriptSession",
   "suppressNativeClassNameWarning",
+  "__litsxCompilationSession",
 ];
 
 const HOOK_FEATURE_PATTERN = /\b(?:useOnConnect|useAfterUpdate|useOnCommit|useMemoValue|useStableCallback|useEvent|useEmit|usePrevious|useReducedState|useState|useControlledState|useAsyncState|useOptimistic|useExpose|useExternalStore|useHost|useHostContent|useSlot|useTextContent|useTransition|useDeferredValue|useStyle|useRef|useCallbackRef)\b/;

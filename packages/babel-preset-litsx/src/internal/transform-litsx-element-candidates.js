@@ -727,6 +727,7 @@ function collectCandidateResult(functionPath, programPath, options = {}) {
   const result = createEmptyCandidateResult();
   if (!programPath || !functionPath?.node) return result;
   programPath.scope.crawl();
+  const compilationSession = options.__litsxCompilationSession || null;
 
   const rootFilename = normalizeFilePath(
     options.filename || programPath.hub.file?.opts?.filename || ""
@@ -735,10 +736,14 @@ function collectCandidateResult(functionPath, programPath, options = {}) {
     programPath.getData("__litsxHelperCandidateCache") || new WeakMap();
   programPath.setData("__litsxHelperCandidateCache", helperCandidateCache);
   const moduleAnalysisCache =
-    programPath.getData("__litsxImportedModuleAnalyses") || new Map();
+    compilationSession?.importedModuleAnalysisCache ||
+    programPath.getData("__litsxImportedModuleAnalyses") ||
+    new Map();
   programPath.setData("__litsxImportedModuleAnalyses", moduleAnalysisCache);
   const resolvedImportCache =
-    programPath.getData("__litsxResolvedImports") || new Map();
+    compilationSession?.resolvedImportCache ||
+    programPath.getData("__litsxResolvedImports") ||
+    new Map();
   programPath.setData("__litsxResolvedImports", resolvedImportCache);
 
   const rootModule = {
@@ -920,6 +925,7 @@ export function importedBindingNeedsRendererContext(programPath, localName, opti
   }
 
   programPath.scope.crawl();
+  const compilationSession = options.__litsxCompilationSession || null;
   const rootFilename = normalizeFilePath(
     options.filename || programPath.hub.file?.opts?.filename || ""
   );
@@ -927,10 +933,14 @@ export function importedBindingNeedsRendererContext(programPath, localName, opti
     programPath.getData("__litsxHelperCandidateCache") || new WeakMap();
   programPath.setData("__litsxHelperCandidateCache", helperCandidateCache);
   const moduleAnalysisCache =
-    programPath.getData("__litsxImportedModuleAnalyses") || new Map();
+    compilationSession?.importedModuleAnalysisCache ||
+    programPath.getData("__litsxImportedModuleAnalyses") ||
+    new Map();
   programPath.setData("__litsxImportedModuleAnalyses", moduleAnalysisCache);
   const resolvedImportCache =
-    programPath.getData("__litsxResolvedImports") || new Map();
+    compilationSession?.resolvedImportCache ||
+    programPath.getData("__litsxResolvedImports") ||
+    new Map();
   programPath.setData("__litsxResolvedImports", resolvedImportCache);
 
   const rootModule = {
