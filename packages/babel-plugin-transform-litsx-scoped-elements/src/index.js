@@ -231,7 +231,7 @@ function ensureImportedElementCandidates(programPath, fromFilename, importedCand
   const localNames = [];
 
   importedCandidates.forEach((candidate) => {
-    const sourceValue = createRelativeModuleSpecifier(fromFilename, candidate.sourceFile);
+    const sourceValue = candidate.sourceSpecifier || createRelativeModuleSpecifier(fromFilename, candidate.sourceFile);
     const importDeclarations = programPath.get("body").filter(
       (nodePath) =>
         nodePath.isImportDeclaration() &&

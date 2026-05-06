@@ -262,6 +262,135 @@ describe("@litsx/compiler", () => {
     }
   }, 20000);
 
+  it("preserves bare package specifiers when imported helpers render package components", () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-imported-renderer-node-modules-"));
+
+    try {
+      const rootFile = path.join(tempDir, "demo.litsx");
+      const helperFile = path.join(tempDir, "renderers.js");
+      const packageDir = path.join(tempDir, "node_modules", "@acme", "ui");
+
+      fs.mkdirSync(packageDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(packageDir, "package.json"),
+        JSON.stringify({
+          name: "@acme/ui",
+          type: "module",
+          exports: "./index.js",
+        }, null, 2)
+      );
+      fs.writeFileSync(
+        path.join(packageDir, "index.js"),
+        [
+          "export const FancyButton = ({ label = '' }) => {",
+          "  return <button>{label}</button>;",
+          "};",
+        ].join("\n")
+      );
+      fs.writeFileSync(
+        helperFile,
+        [
+          "import { FancyButton } from '@acme/ui';",
+          "export function renderHeader() {",
+          "  return <FancyButton label='Pkg' />;",
+          "}",
+        ].join("\n")
+      );
+
+      const source = [
+        "import { renderHeader } from './renderers.js';",
+        "export const Demo = () => {",
+        "  return <guide-card .header={renderHeader} />;",
+        "};",
+      ].join("\n");
+
+      const result = transformLitsxSync(source, {
+        filename: rootFile,
+        jsxTemplate: false,
+      });
+
+      assert.match(result.code, /import \{ FancyButton(?: as __litsxImportedFancyButton1)? \} from ['"]@acme\/ui['"]/);
+      assert.match(result.code, /\.header=\{bindRendererContext\(typeof this === "undefined" \? null : this,\s*renderHeader\)\}/);
+      assert.match(result.code, /static elements\s*=\s*\{[\s\S]*"fancy-button": (?:FancyButton|__litsxImportedFancyButton1)[\s\S]*\}/);
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  }, 20000);
+
+  it("resolves alias specifiers for imported renderer helpers and preserves the alias import", () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-imported-renderer-alias-"));
+
+    try {
+      const srcDir = path.join(tempDir, "src");
+      const componentsDir = path.join(srcDir, "components");
+      fs.mkdirSync(componentsDir, { recursive: true });
+
+      const rootFile = path.join(srcDir, "demo.litsx");
+      const helperFile = path.join(srcDir, "renderers.js");
+      const buttonFile = path.join(componentsDir, "litsx-button.litsx");
+      const tsconfigFile = path.join(tempDir, "tsconfig.json");
+
+      fs.writeFileSync(
+        tsconfigFile,
+        JSON.stringify({
+          compilerOptions: {
+            target: "ESNext",
+            module: "ESNext",
+            moduleResolution: "Bundler",
+            jsx: "preserve",
+            allowJs: true,
+            baseUrl: ".",
+            paths: {
+              "@/*": ["src/*"],
+            },
+          },
+          include: ["src/**/*"],
+        }, null, 2)
+      );
+
+      fs.writeFileSync(
+        helperFile,
+        [
+          "import { LitsxButton } from '@/components/litsx-button.litsx';",
+          "export const renderHeader = () => <LitsxButton label='Alias' />;",
+        ].join("\n")
+      );
+
+      fs.writeFileSync(
+        buttonFile,
+        [
+          "export const LitsxButton = ({ label = '' }) => {",
+          "  return <button>{label}</button>;",
+          "};",
+        ].join("\n")
+      );
+
+      const session = createLitsxCompilationSession({
+        projectPath: tsconfigFile,
+      });
+
+      const source = [
+        "import { renderHeader } from './renderers.js';",
+        "export const Demo = () => {",
+        "  return <guide-card .header={renderHeader} />;",
+        "};",
+      ].join("\n");
+
+      const result = session.transformSync(source, {
+        filename: rootFile,
+        jsxTemplate: false,
+      });
+
+      assert.match(result.code, /import \{ LitsxButton(?: as __litsxImportedLitsxButton1)? \} from ['"]@\/components\/litsx-button\.litsx['"]/);
+      assert.match(result.code, /\.header=\{bindRendererContext\(typeof this === "undefined" \? null : this,\s*renderHeader\)\}/);
+      assert.match(result.code, /static elements\s*=\s*\{[\s\S]*"litsx-button": (?:LitsxButton|__litsxImportedLitsxButton1)[\s\S]*\}/);
+
+      session.dispose();
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  }, 20000);
+
   it("does not include unrelated top-level helpers in static elements collection", () => {
     const source = [
       "import { GuideCard } from './guide-card.litsx';",

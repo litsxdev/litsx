@@ -5,6 +5,7 @@ import parser from "@litsx/babel-parser";
 import fs from "node:fs";
 import path from "node:path";
 import { normalizeFilePath } from "@litsx/typescript-session";
+import { ensureTypescriptModule } from "./transform-litsx-properties.js";
 
 const { declare } = helperPluginUtils;
 const traverse = babelTraverse.default || babelTraverse;
@@ -16,6 +17,16 @@ const IMPORT_RESOLUTION_EXTENSIONS = [
   ".tsx",
   ".ts",
 ];
+const DEFAULT_MODULE_RESOLUTION_OPTIONS = {
+  moduleResolution: 100,
+  allowJs: true,
+  checkJs: false,
+  jsx: 1,
+  target: 99,
+  module: 99,
+  esModuleInterop: true,
+  allowSyntheticDefaultImports: true,
+};
 
 let t;
 
@@ -84,39 +95,167 @@ function hasSupportedExtension(filePath) {
 }
 
 function resolveImportSource(fromFilename, sourceValue, context) {
-  if (!fromFilename || !isRelativeSpecifier(sourceValue)) {
-    return null;
-  }
-
   const cacheKey = `${normalizeFilePath(fromFilename)}::${sourceValue}`;
   if (context.resolvedImportCache.has(cacheKey)) {
     return context.resolvedImportCache.get(cacheKey);
   }
 
-  const basePath = normalizeFilePath(path.resolve(path.dirname(fromFilename), sourceValue));
-  const candidates = [];
-
-  if (hasSupportedExtension(basePath)) {
-    candidates.push(basePath);
-  } else {
-    IMPORT_RESOLUTION_EXTENSIONS.forEach((extension) => {
-      candidates.push(`${basePath}${extension}`);
-    });
-    IMPORT_RESOLUTION_EXTENSIONS.forEach((extension) => {
-      candidates.push(normalizeFilePath(path.join(basePath, `index${extension}`)));
-    });
-  }
-
-  const resolved = candidates.find((candidatePath) => {
+  const existingFile = (candidatePath) => {
     try {
       return fs.existsSync(candidatePath) && fs.statSync(candidatePath).isFile();
     } catch {
       return false;
     }
-  }) || null;
+  };
+
+  const resolveWithExtensions = (basePath) => {
+    const normalizedBasePath = normalizeFilePath(basePath);
+    const candidates = [];
+
+    if (hasSupportedExtension(normalizedBasePath)) {
+      candidates.push(normalizedBasePath);
+    } else {
+      IMPORT_RESOLUTION_EXTENSIONS.forEach((extension) => {
+        candidates.push(`${normalizedBasePath}${extension}`);
+      });
+      IMPORT_RESOLUTION_EXTENSIONS.forEach((extension) => {
+        candidates.push(normalizeFilePath(path.join(normalizedBasePath, `index${extension}`)));
+      });
+    }
+
+    return candidates.find(existingFile) || null;
+  };
+
+  const resolvePathAlias = () => {
+    const compilerOptions = context.getCompilerOptions?.(fromFilename) || {};
+    const baseUrl = compilerOptions.baseUrl
+      ? normalizeFilePath(
+          path.isAbsolute(compilerOptions.baseUrl)
+            ? compilerOptions.baseUrl
+            : path.resolve(path.dirname(fromFilename), compilerOptions.baseUrl)
+        )
+      : normalizeFilePath(path.dirname(fromFilename));
+    const pathMappings = compilerOptions.paths || {};
+
+    for (const [pattern, substitutions] of Object.entries(pathMappings)) {
+      const starIndex = pattern.indexOf("*");
+      const isStarPattern = starIndex !== -1;
+      const prefix = isStarPattern ? pattern.slice(0, starIndex) : pattern;
+      const suffix = isStarPattern ? pattern.slice(starIndex + 1) : "";
+
+      if (isStarPattern) {
+        if (!sourceValue.startsWith(prefix) || !sourceValue.endsWith(suffix)) {
+          continue;
+        }
+      } else if (sourceValue !== pattern) {
+        continue;
+      }
+
+      const wildcardValue = isStarPattern
+        ? sourceValue.slice(prefix.length, sourceValue.length - suffix.length)
+        : "";
+
+      for (const substitution of substitutions || []) {
+        const substituted = isStarPattern
+          ? substitution.replace("*", wildcardValue)
+          : substitution;
+        const candidateBase = path.isAbsolute(substituted)
+          ? substituted
+          : path.join(baseUrl, substituted);
+        const resolvedPath = resolveWithExtensions(candidateBase);
+        if (resolvedPath) {
+          return resolvedPath;
+        }
+      }
+    }
+
+    return null;
+  };
+
+  let resolved = null;
+  if (fromFilename && isRelativeSpecifier(sourceValue)) {
+    resolved = resolveWithExtensions(
+      path.resolve(path.dirname(fromFilename), sourceValue)
+    );
+  } else if (fromFilename) {
+    resolved = resolvePathAlias();
+    if (!resolved) {
+      const ts = ensureTypescriptModule();
+      const compilerOptions = context.getCompilerOptions?.(fromFilename) || DEFAULT_MODULE_RESOLUTION_OPTIONS;
+      const moduleResolutionHost = context.getModuleResolutionHost?.(fromFilename) || ts.sys;
+      try {
+        const resolution = ts.resolveModuleName(
+          sourceValue,
+          normalizeFilePath(fromFilename),
+          compilerOptions,
+          moduleResolutionHost
+        );
+        const resolvedFileName = resolution?.resolvedModule?.resolvedFileName;
+        if (resolvedFileName) {
+          resolved = resolveWithExtensions(resolvedFileName) || normalizeFilePath(resolvedFileName);
+        }
+      } catch {
+        resolved = null;
+      }
+    }
+  }
 
   context.resolvedImportCache.set(cacheKey, resolved);
   return resolved;
+}
+
+function createCompilerContextResolver(options = {}) {
+  const providedTypescriptSession =
+    options?.typescriptSession?.projectSession || options?.typescriptSession || null;
+
+  const compilerOptionsCache = new Map();
+  const moduleResolutionHostCache = new Map();
+
+  function getProgramForFile(filename) {
+    if (!providedTypescriptSession?.getProgram || !filename) {
+      return null;
+    }
+
+    try {
+      if (providedTypescriptSession.kind === "project") {
+        return providedTypescriptSession.getProgram();
+      }
+
+      if (providedTypescriptSession.kind === "standalone") {
+        return providedTypescriptSession.getProgram(normalizeFilePath(filename));
+      }
+    } catch {
+      return null;
+    }
+
+    return null;
+  }
+
+  return {
+    getCompilerOptions(filename) {
+      const cacheKey = normalizeFilePath(filename);
+      if (compilerOptionsCache.has(cacheKey)) {
+        return compilerOptionsCache.get(cacheKey);
+      }
+
+      const program = getProgramForFile(filename);
+      const compilerOptions = program?.getCompilerOptions?.() || DEFAULT_MODULE_RESOLUTION_OPTIONS;
+      compilerOptionsCache.set(cacheKey, compilerOptions);
+      return compilerOptions;
+    },
+    getModuleResolutionHost(filename) {
+      const cacheKey = normalizeFilePath(filename);
+      if (moduleResolutionHostCache.has(cacheKey)) {
+        return moduleResolutionHostCache.get(cacheKey);
+      }
+
+      const ts = ensureTypescriptModule();
+      const program = getProgramForFile(filename);
+      const host = providedTypescriptSession?.host || ts.sys;
+      moduleResolutionHostCache.set(cacheKey, host);
+      return host;
+    },
+  };
 }
 
 function getOrCreateAvailableNames(programPath) {
@@ -543,6 +682,9 @@ function resolveImportedElementRequirement(candidateName, moduleAnalysis, contex
 
     return {
       sourceFile: importInfo.resolvedSource,
+      sourceSpecifier: isRelativeSpecifier(importInfo.sourceValue)
+        ? null
+        : importInfo.sourceValue,
       importedName: importInfo.importedName,
       originalName: candidateName,
       tagName: candidateName.replace(/([a-z])([A-Z])/g, "$1-$2").toLowerCase(),
@@ -573,6 +715,7 @@ function resolveImportedElementRequirement(candidateName, moduleAnalysis, contex
 
   return {
     sourceFile: moduleAnalysis.filename,
+    sourceSpecifier: null,
     importedName,
     originalName: candidateName,
     tagName: candidateName.replace(/([a-z])([A-Z])/g, "$1-$2").toLowerCase(),
@@ -649,6 +792,7 @@ function collectCandidateResult(functionPath, programPath, options = {}) {
     helperCandidateCache,
     moduleAnalysisCache,
     resolvedImportCache,
+    ...createCompilerContextResolver(options),
   };
 
   function scanFunction(path, moduleAnalysis, seen = new Set()) {
@@ -840,6 +984,7 @@ export function importedBindingNeedsRendererContext(programPath, localName, opti
     helperCandidateCache,
     moduleAnalysisCache,
     resolvedImportCache,
+    ...createCompilerContextResolver(options),
   };
 
   const resolvedHelper = resolveImportedHelper(rootModule, localName, context);
