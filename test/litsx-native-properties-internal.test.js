@@ -146,6 +146,52 @@ describe("native properties internals", () => {
     assert.strictEqual(resolver.filename, "/__litsx_virtual__/inline-input.tsx");
   });
 
+  it("handles direct runtime injection, nullish property configs, and external resolver sessions", () => {
+    const actualTypescript = ensureTypescriptModule();
+    assert.strictEqual(setTypescriptModule(actualTypescript), actualTypescript);
+
+    const bareConfig = createPropertyConfig();
+    const bareValue = createPropertyValue(bareConfig, false);
+    assert.strictEqual(bareValue.properties.length, 0);
+
+    const externalType = createPropertyConfig(babelTypes.identifier("Number"), { attribute: false });
+    const externalValue = createPropertyValue(externalType, false);
+    assert.strictEqual(externalValue.properties[0].value.name, "Number");
+    assert.strictEqual(externalValue.properties[1].value.value, false);
+
+    const tsRuntime = ensureTypescriptModule();
+    const fakeSession = {
+      getTypeResolver(filename, source) {
+        return {
+          filename,
+          sourceFile: tsRuntime.createSourceFile(filename, source, tsRuntime.ScriptTarget.ESNext, true, tsRuntime.ScriptKind.TSX),
+          checker: {},
+        };
+      },
+    };
+
+    const resolver = createTypeResolver("/virtual/external.tsx", "export const Demo = () => <div />;", {
+      typescriptSession: fakeSession,
+    });
+
+    assert(resolver);
+    assert.strictEqual(resolver.filename, "/virtual/external.tsx");
+    assert.ok(resolver.checkerTypeConfigCache instanceof WeakMap);
+    assert.ok(resolver.checkerPropertyMapByTypeCache instanceof WeakMap);
+  });
+
+  it("returns null when external sessions fail to resolve types", () => {
+    const resolver = createTypeResolver("/virtual/fail.tsx", "export const Demo = () => <div />;", {
+      typescriptSession: {
+        getTypeResolver() {
+          throw new Error("boom");
+        },
+      },
+    });
+
+    assert.strictEqual(resolver, null);
+  });
+
   it("extracts props from typed aliases, opaque props access, forwardRef, and nested patterns", () => {
     const source = `
       type AliasProps = {
@@ -552,5 +598,153 @@ describe("native properties internals", () => {
     assert.strictEqual(propertyEntries.recursive.type, "Object");
     assert.strictEqual(propertyEntries.tuple.type, "Array");
     assert.strictEqual(propertyEntries.entries.type, "Array");
+  });
+
+  it("covers array-pattern object bindings and opaque props warnings without locations", () => {
+    const source = `
+      function Card(
+        {
+          pair: [first, second] = [1, 2],
+          aliases: [aliasOne, aliasTwo],
+          ref,
+        },
+        props
+      ) {
+        return <article>{first}{second}{aliasOne}{aliasTwo}{ref?.current}{props.title}</article>;
+      }
+    `;
+
+    const { functionPath, programPath } = getFunctionAndProgramPaths(source, ["jsx"]);
+    const warnings = [];
+
+    functionPath.traverse({
+      MemberExpression(path) {
+        if (babelTypes.isIdentifier(path.node.object, { name: "props" })) {
+          path.node.loc = null;
+        }
+      },
+    });
+
+    const result = extractProperties(functionPath, programPath, {
+      warn(entry) {
+        warnings.push(entry);
+      },
+    });
+
+    const propertyEntries = Object.fromEntries(
+      result.properties.map((prop) => [
+        prop.key.name,
+        Object.fromEntries(
+          prop.value.properties.map((entry) => [
+            entry.key.name,
+            entry.value.type === "Identifier" ? entry.value.name : entry.value.value,
+          ])
+        ),
+      ])
+    );
+
+    assert.strictEqual(propertyEntries.pair.type, "Array");
+    assert.strictEqual(propertyEntries.aliases.type, "Array");
+    assert.strictEqual(propertyEntries.ref.type, "Object");
+    assert.strictEqual(propertyEntries.ref.attribute, false);
+    assert.strictEqual(result.bindings.get("ref"), "ref");
+    assert.strictEqual(result.nestedInitializers.length, 2);
+    assert.strictEqual(result.nestedInitializers[0].root, "pair");
+    assert.strictEqual(result.nestedInitializers[1].root, "aliases");
+
+    assert.strictEqual(propertyEntries.title.type, "String");
+    assert.strictEqual(warnings.length, 1);
+    assert.strictEqual(warnings[0].propName, "title");
+    assert.strictEqual(warnings[0].line, null);
+    assert.strictEqual(warnings[0].column, null);
+  });
+
+  it("treats top-level ref assignment params as non-attribute object props", () => {
+    const source = `
+      function Card(ref = null) {
+        return <article>{String(ref)}</article>;
+      }
+    `;
+
+    const { functionPath, programPath } = getFunctionAndProgramPaths(source, ["jsx"]);
+    const result = extractProperties(functionPath, programPath, {});
+    const propertyEntries = Object.fromEntries(
+      result.properties.map((prop) => [
+        prop.key.name,
+        Object.fromEntries(
+          prop.value.properties.map((entry) => [
+            entry.key.name,
+            entry.value.type === "Identifier" ? entry.value.name : entry.value.value,
+          ])
+        ),
+      ])
+    );
+
+    assert.strictEqual(propertyEntries.ref.type, "Object");
+    assert.strictEqual(propertyEntries.ref.attribute, false);
+    assert.strictEqual(result.defaults.get("ref").type, "NullLiteral");
+  });
+
+  it("resolves object-pattern type aliases, intersections, interfaces, and mapped types", () => {
+    const source = `
+      interface BaseProps {
+        title: string;
+      }
+
+      type ExtraProps = {
+        ready: boolean;
+      };
+
+      type AliasProps = BaseProps & ExtraProps;
+      type DynamicMap<T> = { [K in keyof T]: T[K] };
+
+      function AliasCard({ title, ready }: AliasProps) {
+        return <article>{title}{String(ready)}</article>;
+      }
+
+      function MapCard({ meta }: DynamicMap<{ meta: string }>) {
+        return <article>{meta}</article>;
+      }
+    `;
+
+    const { ast, programPath } = getFunctionAndProgramPaths(source, ["typescript", "jsx"]);
+    const functions = [];
+
+    traverse(ast, {
+      FunctionDeclaration(path) {
+        functions.push(path);
+      },
+    });
+
+    const [aliasCardPath, mapCardPath] = functions;
+    const aliasResult = extractProperties(aliasCardPath, programPath, {});
+    const mapResult = extractProperties(mapCardPath, programPath, {});
+
+    const aliasEntries = Object.fromEntries(
+      aliasResult.properties.map((prop) => [
+        prop.key.name,
+        Object.fromEntries(
+          prop.value.properties.map((entry) => [
+            entry.key.name,
+            entry.value.type === "Identifier" ? entry.value.name : entry.value.value,
+          ])
+        ),
+      ])
+    );
+    const mapEntries = Object.fromEntries(
+      mapResult.properties.map((prop) => [
+        prop.key.name,
+        Object.fromEntries(
+          prop.value.properties.map((entry) => [
+            entry.key.name,
+            entry.value.type === "Identifier" ? entry.value.name : entry.value.value,
+          ])
+        ),
+      ])
+    );
+
+    assert.strictEqual(aliasEntries.title.type, "String");
+    assert.strictEqual(aliasEntries.ready.type, "Boolean");
+    assert.strictEqual(mapEntries.meta.type, "String");
   });
 });

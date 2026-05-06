@@ -582,4 +582,47 @@ describe("react compat internal hooks", () => {
     assert.doesNotMatch(code, /prepareEffects\(this\);/);
     assert.match(code, /from 'react';|from "react";/);
   });
+
+  it("rewrites namespace effect hooks and leaves native runtime calls untouched", () => {
+    const source = [
+      "import * as React from 'react';",
+      "import { LitElement } from 'lit';",
+      "import { useAfterUpdate } from '@litsx/litsx';",
+      "",
+      "class NamespaceEffects extends LitElement {",
+      "  render() {",
+      "    React.useEffect(() => this.requestUpdate(), [this.value]);",
+      "    useAfterUpdate(this, () => this.requestUpdate(), [this.value]);",
+      "    return null;",
+      "  }",
+      "}",
+    ].join("\n");
+
+    const code = run(source);
+
+    assert.match(code, /useAfterUpdate\(this, \(\) => this\.requestUpdate\(\), \[this\.value\]\);/);
+    assert.strictEqual((code.match(/useAfterUpdate\(this, \(\) => this\.requestUpdate\(\), \[this\.value\]\);/g) || []).length, 2);
+    assert.match(code, /prepareEffects\(this\);/);
+  });
+
+  it("leaves unsupported runtime-like hook calls untouched when their arguments are invalid", () => {
+    const source = [
+      "import { LitElement } from 'lit';",
+      "import { useEffect, useMemo } from 'react';",
+      "",
+      "class InvalidRuntimeCalls extends LitElement {",
+      "  render() {",
+      "    useEffect(() => this.requestUpdate(), deps);",
+      "    return useMemo();",
+      "  }",
+      "}",
+    ].join("\n");
+
+    const code = run(source);
+
+    assert.match(code, /useEffect\(\(\) => this\.requestUpdate\(\), deps\);/);
+    assert.match(code, /return useMemo\(\);/);
+    assert.doesNotMatch(code, /useAfterUpdate\(this,/);
+    assert.doesNotMatch(code, /useMemoValue\(this,/);
+  });
 });

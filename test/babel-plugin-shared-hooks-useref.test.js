@@ -26,6 +26,25 @@ function run(source, parserOptions = {}) {
 }
 
 describe("@litsx/babel-plugin-shared-hooks createUseRefTransform", () => {
+  it("validates required options", () => {
+    assert.throws(() => createUseRefTransform({}), /requires importSource/);
+    assert.throws(
+      () => createUseRefTransform({
+        importSource: [],
+        hookName: "useRef",
+        pluginName: "x",
+      }),
+      /requires importSource/
+    );
+    assert.throws(
+      () => createUseRefTransform({
+        importSource: "react",
+        pluginName: "x",
+      }),
+      /requires importSource, hookName, and pluginName/
+    );
+  });
+
   it("rewrites mutable DOM refs with a runtime ref import, getter, and data-ref attribute", () => {
     const source = `
       import { LitElement } from 'lit';
@@ -172,5 +191,148 @@ describe("@litsx/babel-plugin-shared-hooks createUseRefTransform", () => {
       () => run(source),
       /unsupported useRef\(\) usage outside a render method or custom hook/
     );
+  });
+
+  it("errors when a module mixes lowered and unresolved useRef calls from the same import", () => {
+    const source = `
+      import { LitElement } from 'lit';
+      import { useRef } from 'react';
+
+      function plainUtility() {
+        return useRef(null);
+      }
+
+      class SearchInput extends LitElement {
+        render() {
+          const inputRef = useRef(null);
+          return <input ref={inputRef} />;
+        }
+      }
+    `;
+
+    assert.throws(
+      () => run(source),
+      /unsupported useRef\(\) usage outside a render method or custom hook/
+    );
+  });
+
+  it("supports alternate hook names and can skip mutable lowering when only managed DOM refs are enabled", () => {
+    const managedOnlyPlugin = createUseRefTransform({
+      importSource: "react",
+      hookNames: ["useManagedRef"],
+      pluginName: "test-shared-hooks-useref-managed-only",
+      onlyManagedDomRefs: true,
+    });
+
+    const source = `
+      import { LitElement } from 'lit';
+      import { useManagedRef } from 'react';
+
+      class SearchInput extends LitElement {
+        render() {
+          const inputRef = useManagedRef(null);
+          return <input ref={inputRef} />;
+        }
+      }
+    `;
+
+    const ast = parser.parse(source, { sourceType: "module" });
+    const result = transformFromAstSync(ast, source, {
+      configFile: false,
+      babelrc: false,
+      plugins: [managedOnlyPlugin],
+    });
+    const code = result.code;
+
+    assert.match(code, /data-ref="_inputRefElement"/);
+    assert.match(code, /import \{ useRef as useManagedRef, useCallbackRef \} from "@litsx\/litsx";|import \{ useCallbackRef, useRef as useManagedRef \} from "@litsx\/litsx";/);
+    assert.match(code, /useManagedRef\(this, null\);/);
+    assert.match(code, /useCallbackRef\(this, \(\) => this\._inputRefElement, node => inputRef\.current = node\);/);
+  });
+
+  it("preserves unresolved template ref expressions that are not authored as ref attributes", () => {
+    const source = `
+      import { LitElement, html } from 'lit';
+      import { useRef } from 'react';
+
+      class SearchInput extends LitElement {
+        render() {
+          const inputRef = useRef(null);
+          return html\`<button class="\${inputRef}">Click</button>\`;
+        }
+      }
+    `;
+
+    const code = run(source);
+
+    assert.match(code, /html`<button class="\$\{inputRef\}">Click<\/button>`/);
+    assert.doesNotMatch(code, /data-ref=/);
+    assert.match(code, /const inputRef = useRef\(this, null\);/);
+  });
+
+  it("keeps callback refs on components as .ref bindings", () => {
+    const source = `
+      import { LitElement } from 'lit';
+
+      class SearchInput extends LitElement {
+        render() {
+          return <FancyButton ref={node => this.register(node)} />;
+        }
+
+        register(node) {
+          this._node = node;
+        }
+      }
+    `;
+
+    const code = run(source);
+
+    assert.match(code, /\.ref=\{node => this\.register\(node\)\}/);
+    assert.doesNotMatch(code, /data-ref=/);
+    assert.doesNotMatch(code, /useCallbackRef/);
+  });
+
+  it("ignores template callbacks that are not attached to ref attributes", () => {
+    const source = `
+      import { LitElement, html } from 'lit';
+
+      class SearchInput extends LitElement {
+        render() {
+          return html\`<button data-handler=\${node => this.register(node)}>Click</button>\`;
+        }
+
+        register(node) {
+          this._node = node;
+        }
+      }
+    `;
+
+    const code = run(source);
+
+    assert.match(code, /data-handler=\$\{node => this\.register\(node\)\}/);
+    assert.doesNotMatch(code, /useCallbackRef/);
+    assert.doesNotMatch(code, /data-ref=/);
+  });
+
+  it("leaves callback refs inside class expressions untouched when no class declaration host exists", () => {
+    const source = `
+      import { html } from 'lit';
+
+      export const SearchInput = class extends BaseElement {
+        render() {
+          return html\`<button ref=\${node => this.register(node)}>Click</button>\`;
+        }
+
+        register(node) {
+          this._node = node;
+        }
+      }
+    `;
+
+    const code = run(source);
+
+    assert.match(code, /ref=\$\{node => this\.register\(node\)\}/);
+    assert.doesNotMatch(code, /data-ref=/);
+    assert.doesNotMatch(code, /useCallbackRef/);
   });
 });

@@ -177,6 +177,37 @@ describe("@litsx/babel-plugin-shared-hooks createRuntimeHooksTransform", () => {
     assert.match(code, /prepareEffects\(this\);/);
   });
 
+  it("collapses duplicate default and namespace runtime imports after rewriting source modules", () => {
+    const source = `
+      import ReactDefault from "react";
+      import RuntimeDefault from "@litsx/litsx";
+      import * as ReactNs from "react";
+      import * as RuntimeNs from "@litsx/litsx";
+
+      class Card {
+        render() {
+          ReactDefault.useAfterUpdate(() => this.sync(), []);
+          ReactNs.useOnCommit(() => this.measure(), []);
+          return RuntimeDefault && RuntimeNs;
+        }
+      }
+    `;
+
+    const code = run(source);
+
+    assert.strictEqual((code.match(/import [^;]+ from "@litsx\/litsx";/g) || []).length, 2);
+    assert.match(
+      code,
+      /import ReactDefault, \* as ReactNs from "@litsx\/litsx";|import \* as ReactNs, ReactDefault from "@litsx\/litsx";/
+    );
+    assert.doesNotMatch(code, /import RuntimeDefault from/);
+    assert.doesNotMatch(code, /import \* as RuntimeNs from/);
+    assert.match(
+      code,
+      /import \{[^}]*prepareEffects[^}]*useAfterUpdate[^}]*useOnCommit[^}]*\} from "@litsx\/litsx";|import \{[^}]*useAfterUpdate[^}]*prepareEffects[^}]*useOnCommit[^}]*\} from "@litsx\/litsx";/
+    );
+  });
+
   it("rewrites namespace custom hooks from non-blocked imports and injects runtime helpers into the existing import", () => {
     const source = `
       import { useAfterUpdate } from "@litsx/litsx";

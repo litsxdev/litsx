@@ -149,6 +149,20 @@ describe("@litsx/babel-plugin-shared-hooks helpers", () => {
         ],
       });
     }, /React-style event props are not allowed/);
+
+    transformFromAstSync(parseModule("const view = <button @click={save} data-id='x' />;"), "", {
+      configFile: false,
+      babelrc: false,
+      plugins: [
+        () => ({
+          visitor: {
+            Program(path) {
+              assertNoReactEventAttributes(path, t, "React-style event props are not allowed.");
+            },
+          },
+        }),
+      ],
+    });
   });
 
   it("bridges local custom hooks that call useState and rewrites render call sites", () => {
@@ -210,6 +224,77 @@ describe("@litsx/babel-plugin-shared-hooks helpers", () => {
     assert.match(code, /const \[count, setCount\] = useState\(_host, initial\);/);
     assert.match(code, /connectedCallback\(\) \{\s*return useCounter\(1\);/s);
     assert.match(code, /makeCounter\(2\);/);
+    assert.match(code, /return useCounter\(this, 1\);/);
+  });
+
+  it("keeps pre-hosted local useState calls unchanged when no runtime import rewrite is needed", () => {
+    const source = `
+      import { useId } from "@litsx/litsx";
+      import { useState as useReactState } from "react";
+
+      const useCounter = (_host, initial) => {
+        const id = useId();
+        const [count, setCount] = useReactState(_host, initial);
+        return [id, count, setCount];
+      };
+
+      class Counter {
+        render() {
+          return useCounter(this, 1);
+        }
+      }
+    `;
+
+    const ast = parseModule(source);
+    const result = transformFromAstSync(ast, source, {
+      configFile: false,
+      babelrc: false,
+      plugins: [
+        () => ({
+          visitor: {
+            Program(programPath) {
+              const state = {};
+              initializeUseStateCustomHookBridge(state);
+
+              programPath.traverse({
+                ImportDeclaration(path) {
+                  collectUseStateImports(path, state, {
+                    importSources: ["react", "@litsx/litsx"],
+                  });
+                },
+              });
+
+              programPath.traverse({
+                VariableDeclarator(path) {
+                  const initPath = path.get("init");
+                  if (initPath?.isArrowFunctionExpression()) {
+                    transformLocalUseStateCustomHook(initPath, state, t);
+                  }
+                },
+              });
+
+              programPath.traverse({
+                ClassDeclaration(classPath) {
+                  injectCustomHookHostArguments(classPath, state, t);
+                },
+              });
+
+              finalizeUseStateImports(programPath, state, t, {
+                importSources: ["react", "@litsx/litsx"],
+                runtimeModule: "@litsx/litsx",
+              });
+            },
+          },
+        }),
+      ],
+    });
+
+    const code = result.code;
+
+    assert.match(code, /import \{ useId \} from "@litsx\/litsx";/);
+    assert.match(code, /import \{ useState as useReactState \} from "react";/);
+    assert.match(code, /const useCounter = \(_host, initial\) => \{/);
+    assert.match(code, /useReactState\(_host, initial\);/);
     assert.match(code, /return useCounter\(this, 1\);/);
   });
 

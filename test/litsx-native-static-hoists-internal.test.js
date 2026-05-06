@@ -353,6 +353,37 @@ describe("native static hoists internals", () => {
       classMembers.map((member) => member.key.name),
       ["properties", "styles"]
     );
+    assert.strictEqual(classMembers[1].value.type, "TaggedTemplateExpression");
+  });
+
+  it("creates array-backed static style members when multiple legacy styles are present", () => {
+    const source = `
+      function Card() {
+        staticStyles(":host { color: red; }");
+        staticStyles(":host { display: block; }");
+        return <div>ready</div>;
+      }
+    `;
+
+    const { programPath, functionPath } = getFunctionContext(source);
+    const classMembers = [];
+
+    const result = processStaticHoists({
+      functionPath,
+      node: functionPath.node,
+      renderStatements: [...functionPath.node.body.body],
+      programPath,
+      propertiesStatic: [],
+      classMembers,
+      options: {},
+      getOrCreateModuleStaticHoistSymbol: createStaticSymbolFactory(),
+    });
+
+    assert.strictEqual(result.needsStaticHoistsMixin, false);
+    assert.strictEqual(classMembers.length, 1);
+    assert.strictEqual(classMembers[0].key.name, "styles");
+    assert.strictEqual(classMembers[0].value.type, "ArrayExpression");
+    assert.strictEqual(classMembers[0].value.elements.length, 2);
   });
 
   it("resolves generic hoists and merges legacy styles and properties into hoisted getters", () => {
@@ -522,5 +553,32 @@ describe("native static hoists internals", () => {
         getOrCreateModuleStaticHoistSymbol: createStaticSymbolFactory(),
       });
     }, /\^expose\(\.\.\.\) values must be functions\./);
+
+    const multiStylesResolverSource = `
+      function Card() {
+        staticStyles(":host { color: red; }");
+        staticStyles(":host { display: block; }");
+        ^styles(":host { background: blue; }");
+        return <div>ready</div>;
+      }
+    `;
+    const {
+      programPath: multiStylesResolverProgramPath,
+      functionPath: multiStylesResolverFunctionPath,
+    } = getFunctionContext(multiStylesResolverSource);
+    const multiStylesResult = processStaticHoists({
+      functionPath: multiStylesResolverFunctionPath,
+      node: multiStylesResolverFunctionPath.node,
+      renderStatements: [...multiStylesResolverFunctionPath.node.body.body],
+      programPath: multiStylesResolverProgramPath,
+      propertiesStatic: [],
+      classMembers: [],
+      options: {},
+      getOrCreateModuleStaticHoistSymbol: createStaticSymbolFactory(),
+    });
+    const stylesGetter = multiStylesResult.hoistMembers.find((member) => member.key.name === "styles");
+    const stylesResolver = stylesGetter.body.body[0].argument.arguments[1].body;
+    assert.strictEqual(stylesResolver.right.type, "ArrayExpression");
+    assert.strictEqual(stylesResolver.right.elements.length, 2);
   });
 });

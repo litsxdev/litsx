@@ -23,6 +23,21 @@ function run(source) {
 }
 
 describe("@litsx/babel-plugin-shared-hooks createEffectHooksTransform", () => {
+  it("validates required options", () => {
+    assert.throws(() => createEffectHooksTransform({}), /requires pluginName/);
+    assert.throws(
+      () => createEffectHooksTransform({ pluginName: "x" }),
+      /requires importSources/
+    );
+    assert.throws(
+      () => createEffectHooksTransform({
+        pluginName: "x",
+        importSources: ["react"],
+      }),
+      /requires runtimeModule/
+    );
+  });
+
   it("rewrites useEffect and useLayoutEffect and injects prepareEffects exactly once", () => {
     const source = [
       "import { LitElement } from 'lit';",
@@ -86,6 +101,51 @@ describe("@litsx/babel-plugin-shared-hooks createEffectHooksTransform", () => {
     assert.match(code, /useEffect\(\(\) => this\.sync\(\), \[\.\.\.this\.deps\]\);/);
     assert.doesNotMatch(code, /prepareEffects\(this\);/);
     assert.doesNotMatch(code, /useAfterUpdate\(/);
+    assert.match(code, /import \{ useEffect \} from 'react';|import \{ useEffect \} from "react";/);
+  });
+
+  it("rewrites effects without dependency arrays and merges into an existing runtime import", () => {
+    const source = [
+      "import { LitElement } from 'lit';",
+      "import { useId } from '@litsx/litsx';",
+      "import { useEffect } from 'react';",
+      "",
+      "class EffectsCard extends LitElement {",
+      "  render() {",
+      "    const id = useId();",
+      "    useEffect(() => this.sync());",
+      "    return id;",
+      "  }",
+      "}",
+    ].join("\n");
+
+    const code = run(source);
+
+    assert.strictEqual((code.match(/from ['"]@litsx\/litsx['"];/g) || []).length, 1);
+    assert.match(
+      code,
+      /import \{[^}]*useId[^}]*prepareEffects[^}]*useAfterUpdate[^}]*\} from ['"]@litsx\/litsx['"]|import \{[^}]*prepareEffects[^}]*useAfterUpdate[^}]*useId[^}]*\} from ['"]@litsx\/litsx['"]|import \{[^}]*useId[^}]*useAfterUpdate[^}]*prepareEffects[^}]*\} from ['"]@litsx\/litsx['"]/
+    );
+    assert.match(code, /useAfterUpdate\(this, \(\) => this\.sync\(\)\);/);
+  });
+
+  it("leaves non-expression effect calls untouched", () => {
+    const source = [
+      "import { LitElement } from 'lit';",
+      "import { useEffect } from 'react';",
+      "",
+      "class EffectsCard extends LitElement {",
+      "  render() {",
+      "    const effect = useEffect(() => this.sync(), []);",
+      "    return effect;",
+      "  }",
+      "}",
+    ].join("\n");
+
+    const code = run(source);
+
+    assert.match(code, /const effect = useEffect\(\(\) => this\.sync\(\), \[]\);/);
+    assert.doesNotMatch(code, /prepareEffects\(this\);/);
     assert.match(code, /import \{ useEffect \} from 'react';|import \{ useEffect \} from "react";/);
   });
 });

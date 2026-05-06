@@ -431,6 +431,52 @@ describe("@litsx/eslint-plugin", () => {
     assert.equal(createMessageDedupKey({ severity: 2, message: "x", line: 3 }), "2|x|3");
   });
 
+  it("covers remap helper fallbacks for empty line tables, replacement tails, and removed fixes", () => {
+    const virtualization = {
+      toolingPreambleLength: 2,
+      replacements: [
+        {
+          start: 4,
+          end: 7,
+          replacement: "__x__",
+        },
+      ],
+    };
+    const state = {
+      virtualization,
+      originalLineStarts: [],
+      virtualLineStarts: [0],
+    };
+
+    assert.deepStrictEqual(offsetToLineColumn(3, []), { line: 1, column: 1 });
+    assert.equal(lineColumnToOffset(0, 0, []), 0);
+    assert.equal(remapVirtualOffsetToOriginal(20, virtualization), 16);
+
+    assert.deepStrictEqual(mapOriginalSpanToVirtual(6, 0, virtualization), {
+      start: 6,
+      end: 11,
+    });
+    assert.deepStrictEqual(mapOriginalSpanToVirtual(1, 5, virtualization), {
+      start: 3,
+      end: 11,
+    });
+
+    const remapped = remapLintMessage({
+      message: "remove fix",
+      line: 1,
+      column: 4,
+      endColumn: 5,
+      fix: { range: [6, 7], text: "x" },
+      suggestions: [
+        { desc: "drop", fix: { range: [6, 7], text: "x" } },
+        null,
+      ],
+    }, state);
+
+    assert.ok(!("fix" in remapped));
+    assert.deepStrictEqual(remapped.suggestions, [{ desc: "drop", fix: null }, null]);
+  });
+
   it("covers lint state helpers and processor branches around missing state and deduping", () => {
     assert.deepStrictEqual(computeLintLineStarts("a\nb"), [0, 2]);
 
@@ -494,6 +540,56 @@ describe("@litsx/eslint-plugin", () => {
         noFixReports.push(payload);
       },
     });
+
+    const nativeClassnameReports = [];
+    noNativeClassname.create({
+      ...context,
+      sourceCode: {
+        text: 'const view = <button className="cta" />;',
+      },
+      report(payload) {
+        nativeClassnameReports.push(payload);
+      },
+    }).Program();
+
+    assert.equal(nativeClassnameReports.length, 1);
+    assert.deepStrictEqual(nativeClassnameReports[0].fix({
+      replaceTextRange(range, text) {
+        return { range, text };
+      },
+    }), {
+      range: [21, 30],
+      text: "class",
+    });
+
+    const nativeClassnameNoFixReports = [];
+    setLintState("/virtual/native-classname-no-fix.jsx", {
+      ...createLintState('const view = <button className="cta" />;', "/virtual/native-classname-no-fix.jsx"),
+      authoredIssues: [{
+        kind: "native-classname",
+        message: "native classname",
+        start: 21,
+        length: 9,
+        fix: null,
+      }],
+    });
+    noNativeClassname.create({
+      ...context,
+      filename: "/virtual/native-classname-no-fix.jsx",
+      sourceCode: {
+        text: 'const view = <button className="cta" />;',
+      },
+      report(payload) {
+        nativeClassnameNoFixReports.push(payload);
+      },
+    }).Program();
+
+    assert.equal(nativeClassnameNoFixReports.length, 1);
+    assert.equal(nativeClassnameNoFixReports[0].fix({
+      replaceTextRange() {
+        throw new Error("should not be called");
+      },
+    }), null);
   });
 
   it("covers configurable static hoist rule branches directly", () => {

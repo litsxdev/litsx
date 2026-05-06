@@ -23,6 +23,25 @@ function run(source) {
 }
 
 describe("@litsx/babel-plugin-shared-hooks createUseStateTransform", () => {
+  it("validates required options", () => {
+    assert.throws(() => createUseStateTransform({}), /requires importSource/);
+    assert.throws(
+      () => createUseStateTransform({
+        importSource: [],
+        hookName: "useState",
+        pluginName: "x",
+      }),
+      /requires importSource/
+    );
+    assert.throws(
+      () => createUseStateTransform({
+        importSource: "react",
+        pluginName: "x",
+      }),
+      /requires importSource, hookName, and pluginName/
+    );
+  });
+
   it("rewrites useState calls to host-aware runtime state and injects prepareEffects", () => {
     const source = `
       import { LitElement } from 'lit';
@@ -184,5 +203,44 @@ describe("@litsx/babel-plugin-shared-hooks createUseStateTransform", () => {
     `;
 
     assert.throws(() => run(source), /unable to resolve host for useState inside custom hook/);
+  });
+
+  it("rejects React-style event attributes in render by default", () => {
+    const source = `
+      import { LitElement } from 'lit';
+      import { useState } from 'react';
+
+      class Counter extends LitElement {
+        render() {
+          const [count] = useState(0);
+          return <button onClick={() => count}>Save</button>;
+        }
+      }
+    `;
+
+    assert.throws(() => run(source), /React-style event attributes are not allowed/);
+  });
+
+  it("inserts fallback runtime imports when an existing runtime import only provides a namespace", () => {
+    const source = `
+      import * as runtime from '@litsx/litsx';
+      import React from 'react';
+
+      class Counter {
+        render() {
+          const [count] = React.useState(this, 0);
+          return String(runtime) + count;
+        }
+      }
+    `;
+
+    const code = run(source);
+
+    assert.match(code, /import \* as runtime from '@litsx\/litsx';|import \* as runtime from "@litsx\/litsx";/);
+    assert.match(
+      code,
+      /import \{ useState, prepareEffects \} from ['"]@litsx\/litsx['"]|import \{ prepareEffects, useState \} from ['"]@litsx\/litsx['"]/
+    );
+    assert.strictEqual((code.match(/prepareEffects\(this\);/g) || []).length, 1);
   });
 });

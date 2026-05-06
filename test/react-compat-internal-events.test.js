@@ -276,4 +276,32 @@ describe("react compat internal events", () => {
       /@focusout=\{\{\s*handleEvent: handler,\s*passive: true,\s*capture: true\s*\}\}/
     );
   });
+
+  it("ignores JSX spread attributes and malformed template tails", () => {
+    const spreadSource = `const view = <button {...props} onClick={handler}></button>;`;
+    const spreadAst = parser.parse(spreadSource, { sourceType: "module" });
+
+    const { code: spreadCode } = transformFromAstSync(spreadAst, spreadSource, {
+      configFile: false,
+      babelrc: false,
+      plugins: [plugin],
+    });
+
+    assert.match(spreadCode, /\{\.\.\.props\}/);
+    assert.match(spreadCode, /@click=\{handler\}/);
+
+    const templateSource = "const view = html`<button onClick=${handleClick}`;";
+    const templateAst = parser.parse(templateSource, { sourceType: "module" });
+    const quasi = templateAst.program.body[0].declarations[0].init.quasi;
+    quasi.quasis.pop();
+
+    const { code: templateCode } = transformFromAstSync(templateAst, templateSource, {
+      configFile: false,
+      babelrc: false,
+      plugins: [plugin],
+    });
+
+    assert.match(templateCode, /onClick=/);
+    assert.doesNotMatch(templateCode, /@click/);
+  });
 });
