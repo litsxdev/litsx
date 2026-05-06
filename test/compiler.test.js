@@ -1003,6 +1003,45 @@ describe("@litsx/compiler", () => {
     }
   }, 20_000);
 
+  it("clears compiler caches and overlay state when invalidating and disposing a session", () => {
+    const session = createLitsxCompilationSession({
+      transformOptions: {
+        jsxTemplate: false,
+      },
+    });
+
+    const invalidateSpy = vi.spyOn(session.typescriptSession, "invalidate");
+    const clearOverlaySpy = vi.spyOn(session.typescriptSession, "clearOverlayFiles");
+
+    session.sourceFeaturesCache.set("/virtual/a:src", {});
+    session.authoredInputCache.set("/virtual/a:src", {});
+    session.invalidate();
+
+    assert.strictEqual(session.sourceFeaturesCache.size, 0);
+    assert.strictEqual(session.authoredInputCache.size, 0);
+    assert.deepStrictEqual(invalidateSpy.mock.calls[0], [{ host: true }]);
+
+    session.dispose();
+
+    expect(clearOverlaySpy).toHaveBeenCalledTimes(1);
+    assert.strictEqual(session.typescriptSession, null);
+  }, 20_000);
+
+  it("invalidates the whole TypeScript session for authored source file extensions", () => {
+    const session = createLitsxCompilationSession();
+    const invalidateSpy = vi.spyOn(session.typescriptSession, "invalidate");
+
+    session.sourceFeaturesCache.set("/virtual/demo.litsx:src", {});
+    session.authoredInputCache.set("/virtual/demo.litsx:src", {});
+    session.invalidate(["/virtual/demo.litsx"]);
+
+    assert.strictEqual(session.sourceFeaturesCache.size, 0);
+    assert.strictEqual(session.authoredInputCache.size, 0);
+    expect(invalidateSpy).toHaveBeenCalledWith();
+
+    session.dispose();
+  }, 20_000);
+
   it("memoizes preset plugins per feature set for the same options object", () => {
     const plainSource = [
       "export const Counter = ({ label }) => {",

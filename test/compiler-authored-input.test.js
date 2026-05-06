@@ -1,4 +1,7 @@
 import assert from "assert";
+import fs from "fs";
+import os from "os";
+import path from "path";
 import { describe, it } from "vitest";
 
 import parser from "../packages/babel-parser-litsx/src/index.mjs";
@@ -9,6 +12,7 @@ import {
 import {
   createLitsxTransformConfig,
 } from "../packages/compiler/src/index.js";
+import { createLitsxCompilationSession, transformLitsx } from "../packages/compiler/src/index.js";
 
 describe("compiler authored input helpers", () => {
   it("normalizes parser plugins from filenames and JSX requirements", () => {
@@ -118,5 +122,87 @@ describe("compiler authored input helpers", () => {
     assert.strictEqual(result.babelOptions.inputSourceMap, undefined);
     assert.strictEqual(result.babelOptions.sourceMaps, true);
     assert.ok(Array.isArray(result.babelOptions.plugins));
+  });
+
+  it("reuses feature and authored-input caches inside a compilation session", () => {
+    const source = "export const Example = () => <button class='cta'>Save</button>;";
+    const session = createLitsxCompilationSession({
+      transformOptions: {
+        jsxTemplate: false,
+      },
+    });
+
+    try {
+      const first = createLitsxTransformConfig(source, {
+        filename: "/virtual/Example.jsx",
+        __litsxCompilationSession: session,
+      });
+      const second = createLitsxTransformConfig(source, {
+        filename: "/virtual/Example.jsx",
+        __litsxCompilationSession: session,
+      });
+
+      assert.strictEqual(first.inputAst, second.inputAst);
+      assert.strictEqual(first.filename, second.filename);
+    } finally {
+      session.dispose();
+    }
+  });
+
+  it("runs the async compiler path without the final template pass", async () => {
+    const result = await transformLitsx(
+      "export const Example = () => <button>Save</button>;",
+      {
+        filename: "/virtual/Example.jsx",
+        jsxTemplate: false,
+      }
+    );
+
+    assert.match(result.code, /export const Example = \(\) => <button>Save<\/button>;/);
+    assert.strictEqual(result.map, null);
+  });
+
+  it("creates project-backed compilation sessions and defaults getTypecheckSession to the project path", () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-compiler-project-"));
+
+    try {
+      const tsconfigPath = path.join(tempDir, "tsconfig.json");
+      fs.writeFileSync(tsconfigPath, JSON.stringify({
+        compilerOptions: {
+          allowJs: true,
+          jsx: "preserve",
+          module: "esnext",
+          target: "esnext",
+        },
+        include: ["src/**/*"],
+      }));
+
+      const session = createLitsxCompilationSession({
+        projectPath: tsconfigPath,
+        transformOptions: { jsxTemplate: false },
+      });
+
+      try {
+        const typecheck = session.getTypecheckSession();
+        assert.strictEqual(typecheck.projectSession, session.typescriptSession);
+        assert.strictEqual(session.projectPath, tsconfigPath);
+      } finally {
+        session.dispose();
+      }
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("builds final-template plugin arrays when jsx template options are provided", () => {
+    const source = "export const Example = () => <button class='cta'>Save</button>;";
+    const config = createLitsxTransformConfig(source, {
+      filename: "/virtual/Example.jsx",
+      jsxTemplateOptions: { preserveComments: true },
+      outputPlugins: [() => ({ visitor: {} })],
+    });
+
+    assert.strictEqual(config.shouldRunFinalTemplatePass, true);
+    assert.strictEqual(config.finalTemplatePlugins.length, 2);
   });
 });
