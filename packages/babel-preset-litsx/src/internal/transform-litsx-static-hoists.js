@@ -16,10 +16,17 @@ function isLightDomHoist(statement) {
   if (!t.isIdentifier(statement.expression.callee, { name: "__litsx_static_lightDom" })) {
     return false;
   }
-  if (statement.expression.arguments.length !== 0) {
-    throw new Error("^lightDom() does not accept arguments.");
+
+  const args = statement.expression.arguments;
+  if (args.length === 0) {
+    return true;
   }
-  return true;
+
+  if (args.length === 1 && t.isBooleanLiteral(args[0], { value: true })) {
+    return true;
+  }
+
+  throw new Error("static lightDom = true only accepts the literal value true.");
 }
 
 function createStaticHoistGetter(name, symbolId, expression) {
@@ -97,11 +104,11 @@ function getStaticPropsExpression(statement) {
 
   const [argument] = statement.expression.arguments;
   if (isHoistedProperties && (t.isFunctionExpression(argument) || t.isArrowFunctionExpression(argument))) {
-    throw new Error("^properties(...) only accepts an object literal with static Lit property options.");
+    throw new Error("static properties = ... only accepts an object literal with static Lit property options.");
   }
 
   if (!t.isObjectExpression(argument)) {
-    throw new Error("^properties(...) only accepts an object literal with static Lit property options.");
+    throw new Error("static properties = ... only accepts an object literal with static Lit property options.");
   }
 
   return isHoistedProperties ? {
@@ -146,7 +153,7 @@ function normalizeStaticPropOverrideValue(value) {
   }
 
   throw new Error(
-    "^properties(...) values must be Lit property option objects or constructor references."
+    "static properties = ... values must be Lit property option objects or constructor references."
   );
 }
 
@@ -157,12 +164,12 @@ function mergeStaticPropertyObject(targetNode, overrideObject) {
 
   overrideObject.properties.forEach((property) => {
     if (!t.isObjectProperty(property) && !t.isObjectMethod(property)) {
-      throw new Error("^properties(...) only accepts plain object members.");
+      throw new Error("static properties = ... only accepts plain object members.");
     }
 
     const keyName = getStaticPropertyName(property.key);
     if (!keyName) {
-      throw new Error("^properties(...) property option names must be static identifiers or strings.");
+      throw new Error("static properties = ... property option names must be static identifiers or strings.");
     }
 
     const existing = targetNode.value.properties.find(
@@ -194,12 +201,12 @@ function mergeStaticPropsIntoProperties(propertiesStatic, staticProps) {
   staticProps.forEach((optionsObject) => {
     optionsObject.properties.forEach((property) => {
       if (!t.isObjectProperty(property)) {
-        throw new Error("^properties(...) only accepts plain object properties.");
+        throw new Error("static properties = ... only accepts plain object properties.");
       }
 
       const keyName = getStaticPropertyName(property.key);
       if (!keyName) {
-        throw new Error("^properties(...) property names must be static identifiers or strings.");
+        throw new Error("static properties = ... property names must be static identifiers or strings.");
       }
 
       const existing = propertyMap.get(keyName);
@@ -302,7 +309,7 @@ function getStaticStylesExpression(statement, functionPath) {
   const [argument] = statement.expression.arguments;
 
   if (isHoistedStyles && (t.isFunctionExpression(argument) || t.isArrowFunctionExpression(argument))) {
-    throw new Error("^styles(...) only accepts static values. Move dynamic values to useStyle(...) or CSS custom properties.");
+    throw new Error("static styles = ... only accepts static values. Move dynamic values to useStyle(...) or CSS custom properties.");
   }
 
   const template = normalizeStylesTemplate(
@@ -310,7 +317,7 @@ function getStaticStylesExpression(statement, functionPath) {
     functionPath
   );
   if (!template) {
-    throw new Error("^styles(...) only accepts static values. Move dynamic values to useStyle(...) or CSS custom properties.");
+    throw new Error("static styles = ... only accepts static values. Move dynamic values to useStyle(...) or CSS custom properties.");
   }
 
   const expression = t.taggedTemplateExpression(t.identifier("css"), template);
@@ -335,7 +342,7 @@ function getStaticHoistExpression(statement, functionPath) {
   }
 
   if (statement.expression.arguments.length !== 1) {
-    throw new Error(`^${name}(...) expects exactly one argument.`);
+    throw new Error(`static ${name} = ... expects exactly one argument.`);
   }
 
   const [argument] = statement.expression.arguments;
@@ -347,15 +354,15 @@ function getStaticHoistExpression(statement, functionPath) {
       };
     }
 
-    throw new Error("^expose(...) only accepts an object literal.");
+    throw new Error("static expose = ... only accepts an object literal.");
   }
 
   if (t.isFunctionExpression(argument) || t.isArrowFunctionExpression(argument)) {
-    throw new Error(`^${name}(...) only accepts a direct static value.`);
+    throw new Error(`static ${name} = ... only accepts a direct static value.`);
   }
 
   if (!isStaticStylesExpression(argument, functionPath)) {
-    throw new Error(`^${name}(...) only accepts a direct static value.`);
+    throw new Error(`static ${name} = ... only accepts a direct static value.`);
   }
 
   return {
@@ -379,7 +386,7 @@ function normalizeExposeHoistExpression(expression) {
     };
   }
 
-  throw new Error("^expose(...) only accepts an object literal.");
+  throw new Error("static expose = ... only accepts an object literal.");
 }
 
 function createExposeClassMethod(property) {
@@ -390,12 +397,12 @@ function createExposeClassMethod(property) {
 
 function normalizeExposePropertyToClassMethod(property) {
   if (t.isSpreadElement(property)) {
-    throw new Error("^expose(...) does not accept spread elements.");
+    throw new Error("static expose = ... does not accept spread elements.");
   }
 
   if (t.isObjectMethod(property)) {
     if (property.kind !== "method") {
-      throw new Error("^expose(...) only accepts plain methods.");
+      throw new Error("static expose = ... only accepts plain methods.");
     }
 
     return t.classMethod(
@@ -408,12 +415,12 @@ function normalizeExposePropertyToClassMethod(property) {
   }
 
   if (!t.isObjectProperty(property)) {
-    throw new Error("^expose(...) only accepts plain methods.");
+    throw new Error("static expose = ... only accepts plain methods.");
   }
 
   const value = property.value;
   if (!t.isFunctionExpression(value) && !t.isArrowFunctionExpression(value)) {
-    throw new Error("^expose(...) values must be functions.");
+    throw new Error("static expose = ... values must be functions.");
   }
 
   const body = t.isBlockStatement(value.body)
@@ -451,7 +458,7 @@ export function assertStaticHoistsStayTopLevel(functionPath) {
 
       const macroName = callPath.node.callee.name.slice("__litsx_static_".length);
       throw callPath.buildCodeFrameError(
-        `^${macroName}(...) must appear as a top-level statement in the component body.`
+        `static ${macroName} = ... must appear as a top-level statement in the component body.`
       );
     },
   });
@@ -662,8 +669,12 @@ export function processStaticHoists({
     }
   }
 
-  if (lightDomRequested && staticHoists.some((entry) => entry.name === "shadowRootOptions")) {
-    throw new Error("^lightDom() cannot be combined with ^shadowRootOptions(...).");
+  if (lightDomRequested) {
+    for (let index = staticHoists.length - 1; index >= 0; index -= 1) {
+      if (staticHoists[index]?.name === "shadowRootOptions") {
+        staticHoists.splice(index, 1);
+      }
+    }
   }
 
   if (staticProps.length > 0) {

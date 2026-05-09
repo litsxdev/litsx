@@ -1,11 +1,11 @@
 import type { CardProps } from "./shared-types";
 
 export function SharedCard(props: CardProps) {
-  ^properties<CardProps>({
+  static properties = {
     active: { reflect: true },
     payload: { attribute: false },
     onSelect: { attribute: false },
-  });
+  };
 
   return (
     <article>

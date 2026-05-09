@@ -92,10 +92,10 @@ describe("@litsx/babel-parser", () => {
   it("parses hoisted static macros after authored preprocessing", () => {
     const source = `
       function Card() {
-        ^styles(\`:host { display: block; }\`);
-        ^properties({ active: { reflect: true } });
-        ^shadowRootOptions({ delegatesFocus: true });
-        ^lightDom();
+        static styles = \`:host { display: block; }\`;
+        static properties = { active: { reflect: true } };
+        static shadowRootOptions = { delegatesFocus: true };
+        static lightDom = true;
         return <div />;
       }
     `;
@@ -113,7 +113,7 @@ describe("@litsx/babel-parser", () => {
     const source = `
       function Card() {
         // component-owned stylesheet
-        ^styles(\`:host { display: block; }\`);
+        static styles = \`:host { display: block; }\`;
         return <div />;
       }
     `;

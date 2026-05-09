@@ -261,7 +261,7 @@ describe("@litsx/babel-plugin-transform-litsx-scoped-elements", () => {
       import FancyButton from './FancyButton.js';
 
       function LightScreen() {
-        ^lightDom();
+        static lightDom = true;
         return <FancyButton />;
       }
     `;
@@ -278,7 +278,7 @@ describe("@litsx/babel-plugin-transform-litsx-scoped-elements", () => {
   it("uses LightDomMixin for light DOM components without element dependencies", () => {
     const source = `
       function LightCard() {
-        ^lightDom();
+        static lightDom = true;
         return <div>ready</div>;
       }
     `;
@@ -476,7 +476,7 @@ describe("@litsx/babel-plugin-transform-litsx-scoped-elements", () => {
       import ProfileChip from './profile/ProfileChip.js';
 
       export function FirstScreen() {
-        ^lightDom();
+        static lightDom = true;
         return <ProfileChip />;
       }
     `;
@@ -485,7 +485,7 @@ describe("@litsx/babel-plugin-transform-litsx-scoped-elements", () => {
       import ProfileChip from '../shared/ProfileChip.js';
 
       export function SecondScreen() {
-        ^lightDom();
+        static lightDom = true;
         return <ProfileChip />;
       }
     `;
@@ -510,12 +510,12 @@ describe("@litsx/babel-plugin-transform-litsx-scoped-elements", () => {
       import ProfileChip from './profile/ProfileChip.js';
 
       export function FirstScreen() {
-        ^lightDom();
+        static lightDom = true;
         return <ProfileChip />;
       }
 
       export function SecondScreen() {
-        ^lightDom();
+        static lightDom = true;
         return <ProfileChip />;
       }
     `;

@@ -4,7 +4,7 @@ export const DxSmokeAppJsx = ({ title = "Hello LitSX" }) => {
   const [count, setCount] = useState(0);
   const [items, setItems] = useState(["alpha", "beta", "gamma"]);
 
-  ^styles(`
+  static styles = `
     :host {
       display: block;
     }
@@ -25,7 +25,7 @@ export const DxSmokeAppJsx = ({ title = "Hello LitSX" }) => {
       font: inherit;
       cursor: pointer;
     }
-  `);
+  `;
 
   return (
     <main class="shell">

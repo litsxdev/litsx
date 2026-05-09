@@ -31,8 +31,8 @@ export default {
           return;
         }
 
-        const authoredName = decodeVirtualStaticHoistName(node.callee.name);
-        const macroName = authoredName?.slice(1) ?? "";
+        const macroName = node.callee.name.slice("__litsx_static_".length);
+        const authoredName = decodeVirtualStaticHoistName(node.callee.name) ?? `static ${macroName}`;
 
         if (NATIVE_STATIC_HOISTS.has(macroName) || allow.has(macroName)) {
           return;
@@ -40,7 +40,7 @@ export default {
 
         context.report({
           node,
-          message: `Unknown static hoist "${authoredName ?? node.callee.name}(...)". If this is project-specific, add it to the rule allowlist.`,
+          message: `Unknown static hoist "${authoredName} = ...". If this is project-specific, add it to the rule allowlist.`,
         });
       },
     };

@@ -94,6 +94,23 @@ describe("@litsx/babel-preset-litsx", () => {
       scopedElements: true,
     });
 
+    assert.deepStrictEqual(
+      detectLitsxSourceFeatures(
+        [
+          "export function Greeting() {",
+          "  static lightDom = true;",
+          "  return <div>ready</div>;",
+          "}",
+        ].join("\n"),
+        {},
+      ),
+      {
+        hooks: false,
+        domRefs: false,
+        scopedElements: true,
+      },
+    );
+
     assert.strictEqual(
       createLitsxPresetPlugins({}, detectLitsxSourceFeatures(plainSource, {})).length,
       3,
@@ -281,8 +298,8 @@ describe("@litsx/babel-preset-litsx", () => {
       "export function ActionCard({ label, active }: Props) {",
       "  const buttonRef = useRef(null);",
       "  const [count, setCount] = useState(0);",
-      "  ^styles(`:host { display: block; }`);",
-      "  ^properties<Props>({ active: { reflect: true } });",
+      "  static styles = `:host { display: block; }`;",
+      "  static properties = { active: { reflect: true } };",
       "  return <FancyButton ref={buttonRef} .label={label} @click={() => setCount(count + 1)}>{active ? count : 0}</FancyButton>;",
       "}",
     ].join("\n");

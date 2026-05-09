@@ -74,7 +74,7 @@ The `virtual-source` entrypoint exposes the standalone source virtualization hel
 
 ## CLI Typecheck
 
-If a project wants CLI type-checking for authored syntax such as `@click`, `.value`, `?disabled`, or `^styles(...)`, use the virtualized wrapper instead of calling plain `tsc` directly:
+If a project wants CLI type-checking for authored syntax such as `@click`, `.value`, `?disabled`, or `static styles = ...`, use the virtualized wrapper instead of calling plain `tsc` directly:
 
 ```sh
 litsx-tsc -p tsconfig.json --noEmit

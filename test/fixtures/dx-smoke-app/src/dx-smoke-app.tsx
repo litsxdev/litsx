@@ -8,7 +8,7 @@ export const DxSmokeApp = ({ title = "Hello LitSX" }: DxSmokeAppProps) => {
   const [count, setCount] = useState(0);
   const [items, setItems] = useState(["alpha", "beta", "gamma"]);
 
-  ^styles(`
+  static styles = `
     :host {
       display: block;
     }
@@ -29,7 +29,7 @@ export const DxSmokeApp = ({ title = "Hello LitSX" }: DxSmokeAppProps) => {
       font: inherit;
       cursor: pointer;
     }
-  `);
+  `;
 
   return (
     <main class="shell">

@@ -49,7 +49,7 @@ function createScenario() {
     "const value = 'ready';",
     "function handleClick() {}",
     "function Demo() {",
-    "  ^styles(`:host { display: block; }`);",
+    "  static styles = `:host { display: block; }`;",
     "  return <button @click={handleClick} .value={value} ?disabled={false}>{value}</button>;",
     "}",
   ].join("\n");

@@ -8,7 +8,7 @@ function MyComponent() {
   }, [this.title, this.color]);
 
   // Estilos estáticos
-  ^styles(`
+  static styles = `
     :host {
       display: block;
     }
@@ -16,7 +16,7 @@ function MyComponent() {
     p {
       color: var(--dynamic-color, black);
     }
-  `);
+  `;
 
   return (
     <div>

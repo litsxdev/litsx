@@ -78,7 +78,7 @@ describe("@litsx/vite-plugin", () => {
     const sourcePath = path.join(tempDir, "Counter.jsx");
     fs.writeFileSync(
       sourcePath,
-      'export const Counter = () => { ^styles(`:host { display: block; }`); return <button @click={save}>Hi</button>; };',
+      'export const Counter = () => { static styles = `:host { display: block; }`; return <button @click={save}>Hi</button>; };',
       "utf8",
     );
 

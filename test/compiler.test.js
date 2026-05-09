@@ -594,7 +594,7 @@ describe("@litsx/compiler", () => {
   it("keeps renderer projection working in light DOM components", () => {
     const source = [
       "export function Card({ header }) {",
-      "  ^lightDom();",
+      "  static lightDom = true;",
       "  return <section>{header()}</section>;",
       "}",
       "export function Demo() {",
@@ -642,7 +642,7 @@ describe("@litsx/compiler", () => {
     const source = [
       "import { LitsxButton } from './litsx-button.litsx';",
       "export function Shell({ header }) {",
-      "  ^lightDom();",
+      "  static lightDom = true;",
       "  return <section><header>{header()}</header><slot /></section>;",
       "}",
       "export function Demo() {",
@@ -815,6 +815,24 @@ describe("@litsx/compiler", () => {
     assert.strictEqual(result.metadata.litsxWarnings.length, 1);
     assert.strictEqual(result.metadata.litsxWarnings[0].code, 91016);
     assert.match(result.metadata.litsxWarnings[0].message, /migration wrapper only/);
+  }, 20000);
+
+  it("surfaces metadata warnings when legacy caret static hoists are authored", () => {
+    const source = [
+      "export const Counter = () => {",
+      "  ^styles(`:host { display: block; }`);",
+      "  return <button>Save</button>;",
+      "};",
+    ].join("\n");
+
+    const result = transformLitsxSync(source, {
+      filename: "/virtual/Counter.jsx",
+    });
+
+    assert.ok(Array.isArray(result.metadata.litsxWarnings));
+    assert.ok(result.metadata.litsxWarnings.some((warning) => warning.code === 91020));
+    assert.ok(result.metadata.litsxWarnings.some((warning) => /deprecated/.test(warning.message)));
+    assert.ok(result.metadata.litsxWarnings.some((warning) => /Prefer "static styles = \.\.\."/.test(warning.message)));
   }, 20000);
 
   it("runs outputPlugins after the native preset pipeline", () => {

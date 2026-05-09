@@ -360,7 +360,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
     assert.match(code, /onSelect: \{\s*type: Object,\s*attribute: false\s*\}/s);
   });
 
-  it("merges ^properties overrides into inferred static properties", () => {
+  it("merges static properties overrides into inferred static properties", () => {
     const source = `
       type CardProps = {
         title: string;
@@ -370,11 +370,11 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
       };
 
       function Card(props: CardProps) {
-        ^properties<CardProps>({
+        static properties = {
           active: { reflect: true },
           payload: { attribute: false },
           onSelect: { attribute: false }
-        });
+        };
 
         return <article>{props.title}</article>;
       }
@@ -401,11 +401,10 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
     assert.match(code, /extends LitsxStaticHoistsMixin\(LitElement\)/);
     assert.match(code, /this\.__litsxMergeProperties\(/);
     assert.match(code, /this\.__litsxStatic\(_litsx_static_properties,\s*\(\)\s*=>/);
-    assert.doesNotMatch(code, /\^properties</);
-    assert.doesNotMatch(code, /\^properties\(/);
+    assert.doesNotMatch(code, /static properties = \{/);
   });
 
-  it("hoists ^properties into a memoized static getter that merges inferred props", () => {
+  it("hoists static properties into a memoized static getter that merges inferred props", () => {
     const source = `
       type CardProps = {
         title: string;
@@ -413,9 +412,9 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
       };
 
       function Card(props: CardProps) {
-        ^properties({
+        static properties = {
           active: { reflect: true },
-        });
+        };
 
         return <article>{props.title}</article>;
       }
@@ -886,13 +885,13 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
     assert.match(code, /this\.count/);
   });
 
-  it("rewrites props member access to component properties when ^properties declares them", () => {
+  it("rewrites props member access to component properties when static properties declares them", () => {
     const source = `
       export function Playground(props) {
-        ^properties({
+        static properties = {
           source: String,
           exportName: String,
-        });
+        };
 
         return <section>{props.source} {props.exportName}</section>;
       }
@@ -1462,10 +1461,10 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
     assert.match(code, /onClick=\{this\.handleClick2\}/);
   });
 
-  it("lifts ^styles(...) into a static Lit stylesheet", () => {
+  it("lifts static styles into a static Lit stylesheet", () => {
     const source = `
       const Panel = ({ accent }) => {
-        ^styles(\`
+        static styles = \`
           :host {
             display: block;
           }
@@ -1473,7 +1472,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
           .panel {
             color: var(--accent);
           }
-        \`);
+        \`;
 
         useStyle("--accent", accent);
 
@@ -1491,14 +1490,14 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
     assert.match(code, /import \{[^}]*LitElement[^}]*css[^}]*\} from ['"]lit['"]/);
     assert.match(code, /static get styles\(\)/);
     assert.match(code, /css`[\s\S]*:host \{[\s\S]*display: block;[\s\S]*\.panel \{[\s\S]*color: var\(--accent\);[\s\S]*`/);
-    assert.doesNotMatch(code, /\^styles\(/);
+    assert.doesNotMatch(code, /static styles = /);
     assert.match(code, /useStyle\(this, "--accent", this\.accent\);/);
   });
 
-  it("hoists ^styles into a memoized static getter", () => {
+  it("hoists static styles into a memoized static getter", () => {
     const source = `
       const Panel = ({ accent }) => {
-        ^styles(\`
+        static styles = \`
           :host {
             display: block;
           }
@@ -1506,7 +1505,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
           .panel {
             color: var(--accent);
           }
-        \`);
+        \`;
 
         useStyle("--accent", accent);
 
@@ -1524,15 +1523,15 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
     assert.match(code, /const _litsx_static_styles = Symbol\("litsx\.static\.styles"\);/);
     assert.match(code, /static get styles\(\)/);
     assert.match(code, /css`[\s\S]*display: block;[\s\S]*color: var\(--accent\);[\s\S]*`/);
-    assert.doesNotMatch(code, /\^styles/);
+    assert.doesNotMatch(code, /static styles = /);
   });
 
-  it("hoists arbitrary ^name macros into memoized static getters", () => {
+  it("hoists arbitrary static name assignments into memoized static getters", () => {
     const source = `
       function Card() {
-        ^shadowRootOptions({
+        static shadowRootOptions = {
           delegatesFocus: true,
-        });
+        };
 
         return <div>ready</div>;
       }
@@ -1552,10 +1551,10 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
     assert.match(code, /delegatesFocus: true/);
   });
 
-  it("lowers ^lightDom() to LightDomMixin", () => {
+  it("lowers static lightDom to LightDomMixin", () => {
     const source = `
       function Card() {
-        ^lightDom();
+        static lightDom = true;
 
         return <div>ready</div>;
       }
@@ -1574,11 +1573,11 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
     assert.doesNotMatch(code, /static get lightDom\(\)/);
   });
 
-  it("rejects ^lightDom() when combined with ^shadowRootOptions(...)", () => {
+  it("ignores static shadowRootOptions when static lightDom is present", () => {
     const source = `
       function Card() {
-        ^lightDom();
-        ^shadowRootOptions({ delegatesFocus: true });
+        static lightDom = true;
+        static shadowRootOptions = { delegatesFocus: true };
 
         return <div>ready</div>;
       }
@@ -1586,26 +1585,28 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
 
     const inputAst = parser.parse(source, { sourceType: "module", plugins: ["typescript"] });
 
-    assert.throws(() => {
-      transformFromAstSync(inputAst, source, {
-        configFile: false,
-        babelrc: false,
-        presets: [[nativePreset, { jsxTemplate: false }]],
-      });
-    }, /\^lightDom\(\) cannot be combined with \^shadowRootOptions\(\.\.\.\)\./);
+    const { code } = transformFromAstSync(inputAst, source, {
+      configFile: false,
+      babelrc: false,
+      presets: [[nativePreset, { jsxTemplate: false }]],
+    });
+
+    assert.match(code, /class Card extends LightDomMixin\(LitElement\)/);
+    assert.doesNotMatch(code, /static get shadowRootOptions\(\)/);
+    assert.doesNotMatch(code, /_litsx_static_shadowRootOptions/);
   });
 
-  it("lowers ^expose object literals into static class methods", () => {
+  it("lowers static expose object literals into static class methods", () => {
     const source = `
       function Registry() {
-        ^expose({
+        static expose = {
           canHandle(type) {
             return type === "dialog";
           },
           createConfig() {
             return { modal: true };
           },
-        });
+        };
 
         return <div>ready</div>;
       }
@@ -1627,10 +1628,10 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
     assert.doesNotMatch(code, /_litsx_static_expose/);
   });
 
-  it("rejects parent-based ^expose factories", () => {
+  it("rejects parent-based static expose factories", () => {
     const source = `
       function Registry() {
-        ^expose((parent) => ({
+        static expose = ((parent) => ({
           canHandle(type) {
             return parent.canHandle?.(type) || type === "dialog";
           },
@@ -1648,13 +1649,13 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
         babelrc: false,
         presets: [[nativePreset, { jsxTemplate: false }]],
       });
-    }, /\^expose\(\.\.\.\) only accepts an object literal\./);
+    }, /static expose = \.\.\. only accepts an object literal\./);
   });
 
   it("rejects parent-based generic hoist factories", () => {
     const source = `
       function Card() {
-        ^shadowRootOptions((parent) => ({
+        static shadowRootOptions = ((parent) => ({
           ...parent.shadowRootOptions,
           delegatesFocus: true,
         }));
@@ -1670,7 +1671,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
         babelrc: false,
         presets: [[nativePreset, { jsxTemplate: false }]],
       });
-    }, /\^shadowRootOptions\(\.\.\.\) only accepts a direct static value\./);
+    }, /static shadowRootOptions = \.\.\. only accepts a direct static value\./);
   });
 
   it("does not require static hoists to be imported from litsx", () => {
@@ -1678,15 +1679,15 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
       import { useState } from "@litsx/litsx";
 
       export function Card() {
-        ^properties({
+        static properties = {
           title: String,
-        });
+        };
 
-        ^styles(\`
+        static styles = \`
           :host {
             display: block;
           }
-        \`);
+        \`;
 
         const [count] = useState(0);
         return <div>{count}</div>;
@@ -1700,8 +1701,8 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
       presets: [[nativePreset, { jsxTemplate: false }]],
     });
 
-    assert.doesNotMatch(code, /\^properties\(/);
-    assert.doesNotMatch(code, /\^styles\(/);
+    assert.doesNotMatch(code, /static properties = \{/);
+    assert.doesNotMatch(code, /static styles = /);
     assert.match(code, /import \{[^}]*useState[^}]*\} from ['"]@litsx\/litsx['"]/);
   });
 
@@ -1709,7 +1710,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
     const source = `
       function Card({ ready }) {
         if (ready) {
-          ^styles(\`:host { display: block; }\`);
+          static styles = \`:host { display: block; }\`;
         }
 
         return <div>ready</div>;
@@ -1724,7 +1725,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
         babelrc: false,
         presets: [[nativePreset, { jsxTemplate: false }]],
       });
-    }, /\^styles\(\.\.\.\) must appear as a top-level statement in the component body\./);
+    }, /static styles = \.\.\. must appear as a top-level statement in the component body\./);
   });
 
   it("preserves static module-level interpolations inside css tagged styles", () => {
@@ -1733,12 +1734,12 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
       const borderRule = "1px solid var(--border-color)";
 
       const Panel = () => {
-        ^styles(\`
+        static styles = \`
           .panel {
             border-radius: \${radius};
             border: \${borderRule};
           }
-        \`);
+        \`;
 
         return <section class="panel">panel</section>;
       };
@@ -1763,7 +1764,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
       const hostStyles = \`gap: \${gap};\`;
 
       const Card = () => {
-        ^styles(\`:host { \${hostStyles} }\`);
+        static styles = \`:host { \${hostStyles} }\`;
         return <section>card</section>;
       };
     `;
@@ -1780,17 +1781,17 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
     assert.match(code, /css`:host \{ \$\{unsafeCSS\(hostStyles\)\} \}`/);
   });
 
-  it("rejects ^styles interpolations that depend on component scope", () => {
+  it("rejects static styles interpolations that depend on component scope", () => {
     const source = `
       const Panel = ({ accent }) => {
         const borderRule = accent;
 
-        ^styles(\`
+        static styles = \`
           .panel {
             color: \${accent};
             border-color: \${borderRule};
           }
-        \`);
+        \`;
 
         return <section class="panel">panel</section>;
       };
@@ -1804,21 +1805,21 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
         babelrc: false,
         presets: [[nativePreset, { jsxTemplate: false }]],
       });
-    }, /\^styles\(\.\.\.\) only accepts static values|\^styles\(\) only accepts static values/);
+    }, /static styles = \.\.\. only accepts static values/);
   });
 
-  it("rejects ^styles interpolations that read props members directly", () => {
+  it("rejects static styles interpolations that read props members directly", () => {
     const source = `
       export function Panel(props) {
-        ^properties({
+        static properties = {
           accent: String,
-        });
+        };
 
-        ^styles(\`
+        static styles = \`
           .panel {
             color: \${props.accent};
           }
-        \`);
+        \`;
 
         return <section class="panel">{props.accent}</section>;
       }
@@ -1832,19 +1833,19 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
         babelrc: false,
         presets: [[nativePreset, { jsxTemplate: false }]],
       });
-    }, /\^styles\(\.\.\.\) only accepts static values|\^styles\(\) only accepts static values/);
+    }, /static styles = \.\.\. only accepts static values/);
   });
 
-  it("rejects ^styles interpolations that read aliases from props members", () => {
+  it("rejects static styles interpolations that read aliases from props members", () => {
     const source = `
       export function Panel(props) {
         const accentColor = props.accent;
 
-        ^styles(\`
+        static styles = \`
           .panel {
             color: \${accentColor};
           }
-        \`);
+        \`;
 
         return <section class="panel">{props.accent}</section>;
       }
@@ -1858,7 +1859,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
         babelrc: false,
         presets: [[nativePreset, { jsxTemplate: false }]],
       });
-    }, /\^styles\(\.\.\.\) only accepts static values|\^styles\(\) only accepts static values/);
+    }, /static styles = \.\.\. only accepts static values/);
   });
 
   it("rejects locally constant aliases declared inside the component body", () => {
@@ -1866,11 +1867,11 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
       const Panel = ({ radius }) => {
         const localRadius = \`\${radius}px\`;
 
-        ^styles(\`
+        static styles = \`
           .panel {
             border-radius: \${localRadius};
           }
-        \`);
+        \`;
 
         return <section class="panel">panel</section>;
       };
@@ -1884,7 +1885,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
         babelrc: false,
         presets: [[nativePreset, { jsxTemplate: false }]],
       });
-    }, /\^styles\(\.\.\.\) only accepts static values|\^styles\(\) only accepts static values/);
+    }, /static styles = \.\.\. only accepts static values/);
   });
 
 });

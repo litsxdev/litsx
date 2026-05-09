@@ -12,7 +12,7 @@ Automatically wires the Lit<sup>sx</sup> element mixins for LitElement classes s
 - Finds JSX tags that correspond to imported components and rewrites them to kebab-case custom elements.
 - Injects a static `elements` map with the detected components.
 - Wraps shadow DOM components in `ShadowDomElementsMixin`, which resolves `elements` through native or polyfilled scoped custom element registries.
-- Wraps `^lightDom()` components in `LightDomElementsMixin`, which uses the light DOM registry runtime.
+- Wraps `static lightDom = true` components in `LightDomElementsMixin`, which uses the light DOM registry runtime.
 - Adds the required runtime-infrastructure import only when at least one element dependency is discovered, keeping untouched classes minimal.
 - Updates matching closing tags and leaves unrelated JSX nodes unchanged.
 - Detects scoped usage inside `html` tagged template literals as well, ensuring templates converted by the JSX plugin still register components.

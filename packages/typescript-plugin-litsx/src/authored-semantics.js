@@ -82,7 +82,15 @@ const STATIC_HOIST_DOCUMENTATION_BY_NAME = {
   "^properties": "LitSX static properties hoist. Declare reactive property metadata before render-time statements.",
   "^shadowRootOptions": "LitSX static shadow root options hoist. Declare shadow root configuration before render-time statements.",
   "^lightDom": "LitSX static light DOM hoist. Declare light DOM rendering before render-time statements.",
+  "static styles": "LitSX static style hoist. Declare component-scoped styles before render-time statements.",
+  "static properties": "LitSX static properties hoist. Declare reactive property metadata before render-time statements.",
+  "static shadowRootOptions": "LitSX static shadow root options hoist. Declare shadow root configuration before render-time statements.",
+  "static lightDom": "LitSX static light DOM hoist. Declare light DOM rendering before render-time statements.",
 };
+
+function formatStaticHoistAuthoredName(macroName) {
+  return `static ${macroName}`;
+}
 
 function scanStaticHoistParens(sourceText, start) {
   let depth = 0;
@@ -169,6 +177,27 @@ function findClosestAttributeSuggestion(prefix, localName, candidates = []) {
 export function inferLitsxStaticHoistInfoAtPosition(sourceText, position) {
   if (typeof sourceText !== "string" || typeof position !== "number") {
     return null;
+  }
+
+  const staticMatch = Array.from(
+    sourceText.matchAll(/(?:^|[;{}]\s*)(static\s+([A-Za-z$_][A-Za-z0-9$_]*)\s*=)/gm),
+  ).find((match) => {
+    const start = match.index + match[0].lastIndexOf(match[1]);
+    const end = start + match[1].length;
+    return position >= start && position <= end;
+  });
+
+  if (staticMatch) {
+    const start = staticMatch.index + staticMatch[0].lastIndexOf(staticMatch[1]);
+    const name = `static ${staticMatch[2]}`;
+
+    return {
+      name,
+      start,
+      length: name.length,
+      documentation: STATIC_HOIST_DOCUMENTATION_BY_NAME[name]
+        ?? `LitSX static hoist ${name} = .... Declare it before render-time statements in the component body.`,
+    };
   }
 
   let caretIndex = sourceText.lastIndexOf("^", position);
@@ -318,6 +347,34 @@ function createOriginalIssue(virtualization, config) {
   };
 }
 
+function collectDeprecatedCaretStaticHoistIssues(virtualization) {
+  const issues = [];
+
+  for (const replacement of virtualization?.replacements ?? []) {
+    if (
+      typeof replacement?.originalName !== "string" ||
+      !replacement.originalName.startsWith("^")
+    ) {
+      continue;
+    }
+
+    const macroName = replacement.originalName.slice(1);
+    issues.push({
+      kind: "deprecated-static-hoist-syntax",
+      severity: "warning",
+      code: 91020,
+      message:
+        `Legacy static hoist syntax "${replacement.originalName}(...)" is deprecated. ` +
+        `Prefer "static ${macroName} = ...".`,
+      start: replacement.start ?? 0,
+      length: replacement.originalName.length,
+      fix: null,
+    });
+  }
+
+  return issues;
+}
+
 function collectStaticHoistIssues(ast, virtualization) {
   const issues = [];
   const seenSingletonHoists = new Map();
@@ -343,8 +400,8 @@ function collectStaticHoistIssues(ast, virtualization) {
       node.callee.name.startsWith("__litsx_static_") &&
       nextFunctionBody
     ) {
-      const authoredName = decodeVirtualStaticHoistName(node.callee.name) ?? `^${node.callee.name.slice("__litsx_static_".length)}`;
-      const macroName = authoredName.slice(1);
+      const macroName = node.callee.name.slice("__litsx_static_".length);
+      const authoredName = decodeVirtualStaticHoistName(node.callee.name) ?? formatStaticHoistAuthoredName(macroName);
       const statement = parent?.type === "ExpressionStatement" ? parent : null;
       const enclosingBlock = parent?.type === "ExpressionStatement" ? functionBody : null;
       const isTopLevelStatement = statement && enclosingBlock?.body?.includes(statement);
@@ -357,7 +414,7 @@ function collectStaticHoistIssues(ast, virtualization) {
             code: 91007,
             start: node.start ?? 0,
             length: Math.max(0, (node.end ?? node.start ?? 0) - (node.start ?? 0)),
-            message: `LitSX static hoists such as ${authoredName}(...) must appear as a top-level statement in the component body.`,
+            message: `LitSX static hoists such as ${authoredName} = ... must appear as a top-level statement in the component body.`,
           })
         );
       }
@@ -371,7 +428,7 @@ function collectStaticHoistIssues(ast, virtualization) {
               code: 91009,
               start: node.start ?? 0,
               length: Math.max(0, (node.end ?? node.start ?? 0) - (node.start ?? 0)),
-              message: `Duplicate static hoist "${authoredName}(...)" found. Native LitSX hoists such as ${authoredName}(...) should only be declared once per component.`,
+              message: `Duplicate static hoist "${authoredName} = ..." found. Native LitSX hoists such as ${authoredName} = ... should only be declared once per component.`,
             })
           );
         } else {
@@ -398,6 +455,28 @@ function collectStaticHoistIssues(ast, virtualization) {
   }
 
   visit(ast.program ?? ast, null, null);
+
+  if (
+    seenSingletonHoists.has("lightDom") &&
+    seenSingletonHoists.has("shadowRootOptions")
+  ) {
+    const shadowRootOptionsHoist = seenSingletonHoists.get("shadowRootOptions");
+    issues.push(
+      createOriginalIssue(virtualization, {
+        kind: "ignored-static-hoist",
+        severity: "warning",
+        code: 91019,
+        start: shadowRootOptionsHoist.start ?? 0,
+        length: Math.max(
+          0,
+          (shadowRootOptionsHoist.end ?? shadowRootOptionsHoist.start ?? 0) -
+            (shadowRootOptionsHoist.start ?? 0),
+        ),
+        message: 'static shadowRootOptions = ... is ignored when static lightDom = true.',
+      }),
+    );
+  }
+
   return issues;
 }
 
@@ -635,7 +714,7 @@ function collectPropsAccessIssues(ast, virtualization) {
             code: 91018,
             start: child.start ?? 0,
             length: Math.max(0, (child.end ?? child.start ?? 0) - (child.start ?? 0)),
-            message: `Falling back to String for prop "${propName}" inferred from opaque props access. Prefer destructuring, TypeScript types, or ^properties(...) for stronger property metadata.`,
+            message: `Falling back to String for prop "${propName}" inferred from opaque props access. Prefer destructuring, TypeScript types, or static properties = ... for stronger property metadata.`,
           }));
         }
       }
@@ -674,14 +753,15 @@ function collectHoistsFirstIssues(ast, virtualization) {
 
       if (isHoistStatement) {
         if (sawNonHoistStatement) {
-          const authoredName = decodeVirtualStaticHoistName(statement.expression.callee.name) ?? "^unknown";
+          const macroName = statement.expression.callee.name.slice("__litsx_static_".length);
+          const authoredName = decodeVirtualStaticHoistName(statement.expression.callee.name) ?? formatStaticHoistAuthoredName(macroName);
           issues.push(createOriginalIssue(virtualization, {
             kind: "require-top-level-hoists-first",
             severity: "warning",
             code: 91015,
             start: statement.expression.start ?? statement.start ?? 0,
             length: Math.max(0, ((statement.expression.end ?? statement.end ?? statement.expression.start ?? statement.start ?? 0) - (statement.expression.start ?? statement.start ?? 0))),
-            message: `Place static hoists such as ${authoredName}(...) before render-time statements in the component body for clearer LitSX structure.`,
+            message: `Place static hoists such as ${authoredName} = ... before render-time statements in the component body for clearer LitSX structure.`,
           }));
         }
         continue;
@@ -820,6 +900,7 @@ export function collectLitsxAuthoredIssues(sourceText, options = {}) {
 
   const issues = [];
   const attributes = collectJsxAttributes(ast);
+  issues.push(...collectDeprecatedCaretStaticHoistIssues(virtualization));
   issues.push(...collectStaticHoistIssues(ast, virtualization));
   issues.push(...collectReactMemoIssues(ast, virtualization));
   issues.push(...collectReactCompatSurfaceIssues(ast, virtualization));

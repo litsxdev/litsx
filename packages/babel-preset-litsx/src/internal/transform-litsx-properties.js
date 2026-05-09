@@ -1117,7 +1117,7 @@ export function extractProperties(functionPath, programPath, options = {}) {
       if (!propertyMap.has(propName) && warn) {
         warn({
           code: 91018,
-          message: `Falling back to String for prop "${propName}" inferred from opaque props access. Prefer destructuring, TypeScript types, or ^properties(...) for stronger property metadata.`,
+          message: `Falling back to String for prop "${propName}" inferred from opaque props access. Prefer destructuring, TypeScript types, or static properties = ... for stronger property metadata.`,
           propName,
           localName: bindingName,
           line: memberPath.node.loc?.start?.line ?? null,

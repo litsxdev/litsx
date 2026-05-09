@@ -18,10 +18,10 @@ The VS Code extension lives in the separate [`litsxdev/vscode-litsx`](https://gi
 LitSX source is not just generic TSX with helper imports. The authored model includes:
 
 - Lit-flavoured JSX bindings such as `@event`, `.prop`, and `?attr`
-- static hoists such as `^styles(...)`, `^properties(...)`, `^shadowRootOptions(...)`, and other direct `^name(...)` declarations
-- `^expose(...)` for static class methods
+- static hoists such as `static styles = ...`, `static properties = ...`, `static shadowRootOptions = ...`, and other direct `static name = ...` declarations
+- `static expose = ...` for static class methods
 
-Generic `^name(...)` hoists lower to memoized static getters on the generated class. `^expose(...)` is the exception: it lowers to real static methods.
+Generic `static name = ...` hoists lower to memoized static getters on the generated class. `static expose = ...` is the exception: it lowers to real static methods.
 
 Because plain `tsc` does not parse this authored syntax directly, editor support comes from `@litsx/typescript-plugin` and CLI type-checking comes from `litsx-tsc`.
 

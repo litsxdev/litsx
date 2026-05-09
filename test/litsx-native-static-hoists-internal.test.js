@@ -68,26 +68,26 @@ describe("native static hoists internals", () => {
 
         staticStyles(":host { color: red; }");
 
-        ^properties({
+        static properties = {
           title: String,
           count: { reflect: true },
           payload: { type: Object, attribute: false },
-        });
+        };
 
-        ^styles(\`
+        static styles = \`
           :host {
             gap: \${gap};
           }
-        \`);
+        \`;
 
-        ^shadowRootOptions({ delegatesFocus: true });
+        static shadowRootOptions = { delegatesFocus: true };
 
-        ^expose({
+        static expose = {
           ping() {
             return "pong";
           },
           compute: (value) => value + 1,
-        });
+        };
 
         return <div>ready</div>;
       }
@@ -162,7 +162,7 @@ describe("native static hoists internals", () => {
   it("accepts top-level hoists and rejects nested ones", () => {
     const okSource = `
       function Card() {
-        ^styles(":host { display: block; }");
+        static styles = ":host { display: block; }";
         return <div>ok</div>;
       }
     `;
@@ -175,7 +175,7 @@ describe("native static hoists internals", () => {
     const badSource = `
       function Card() {
         if (ready) {
-          ^styles(":host { display: block; }");
+          static styles = ":host { display: block; }";
         }
 
         return <div>bad</div>;
@@ -191,7 +191,7 @@ describe("native static hoists internals", () => {
   it("rejects dynamic hoists and invalid expose payloads", () => {
     const dynamicStylesSource = `
       function Card() {
-        ^styles(() => ":host { display: block; }");
+        static styles = (() => ":host { display: block; }");
         return <div>ready</div>;
       }
     `;
@@ -210,13 +210,13 @@ describe("native static hoists internals", () => {
         options: {},
         getOrCreateModuleStaticHoistSymbol: createStaticSymbolFactory(),
       });
-    }, /\^styles\(\.\.\.\) only accepts static values/);
+    }, /static styles = \.\.\. only accepts static values/);
 
     const badExposeSource = `
       function Card() {
-        ^expose({
+        static expose = {
           ...helpers,
-        });
+        };
         return <div>ready</div>;
       }
     `;
@@ -235,7 +235,7 @@ describe("native static hoists internals", () => {
         options: {},
         getOrCreateModuleStaticHoistSymbol: createStaticSymbolFactory(),
       });
-    }, /\^expose\(\.\.\.\) does not accept spread elements\./);
+    }, /static expose = \.\.\. does not accept spread elements\./);
 
     const invalidPropertyOverrideSource = `
       function Card() {
@@ -260,11 +260,11 @@ describe("native static hoists internals", () => {
         options: {},
         getOrCreateModuleStaticHoistSymbol: createStaticSymbolFactory(),
       });
-    }, /\^properties\(\.\.\.\) values must be Lit property option objects or constructor references\./);
+    }, /static properties = \.\.\. values must be Lit property option objects or constructor references\./);
 
     const invalidPropertiesHoistSource = `
       function Card() {
-        ^properties(() => ({
+        static properties = (() => ({
           title: String,
         }));
         return <div>ready</div>;
@@ -285,32 +285,33 @@ describe("native static hoists internals", () => {
         options: {},
         getOrCreateModuleStaticHoistSymbol: createStaticSymbolFactory(),
       });
-    }, /\^properties\(\.\.\.\) only accepts an object literal/);
+    }, /static properties = \.\.\. only accepts an object literal/);
   });
 
-  it("rejects combining light DOM with shadowRootOptions hoists", () => {
+  it("ignores shadowRootOptions hoists when light DOM is requested", () => {
     const source = `
       function Card() {
-        ^lightDom();
-        ^shadowRootOptions({ delegatesFocus: true });
+        static lightDom = true;
+        static shadowRootOptions = { delegatesFocus: true };
         return <div>ready</div>;
       }
     `;
 
     const { programPath, functionPath } = getFunctionContext(source);
 
-    assert.throws(() => {
-      processStaticHoists({
-        functionPath,
-        node: functionPath.node,
-        renderStatements: [...functionPath.node.body.body],
-        programPath,
-        propertiesStatic: [],
-        classMembers: [],
-        options: {},
-        getOrCreateModuleStaticHoistSymbol: createStaticSymbolFactory(),
-      });
-    }, /\^lightDom\(\) cannot be combined with \^shadowRootOptions\(\.\.\.\)\./);
+    const result = processStaticHoists({
+      functionPath,
+      node: functionPath.node,
+      renderStatements: [...functionPath.node.body.body],
+      programPath,
+      propertiesStatic: [],
+      classMembers: [],
+      options: {},
+      getOrCreateModuleStaticHoistSymbol: createStaticSymbolFactory(),
+    });
+
+    assert.strictEqual(result.lightDomRequested, true);
+    assert.ok(!result.hoistMembers.some((member) => member.key.name === "shadowRootOptions"));
   });
 
   it("creates direct static class members for legacy hoists and respects default light DOM mode", () => {
@@ -395,11 +396,11 @@ describe("native static hoists internals", () => {
           count: Number,
         });
         staticStyles(baseStyles);
-        ^properties({
+        static properties = {
           title: String,
-        });
-        ^styles(":host { display: block; }");
-        ^shadowRootOptions({ delegatesFocus: true });
+        };
+        static styles = ":host { display: block; }";
+        static shadowRootOptions = { delegatesFocus: true };
         return <div>ready</div>;
       }
     `;
@@ -445,7 +446,7 @@ describe("native static hoists internals", () => {
   it("rejects invalid lightDom, generic hoist, and expose method forms", () => {
     const lightDomSource = `
       function Card() {
-        ^lightDom("bad");
+        __litsx_static_lightDom("bad");
         return <div>ready</div>;
       }
     `;
@@ -462,11 +463,11 @@ describe("native static hoists internals", () => {
         options: {},
         getOrCreateModuleStaticHoistSymbol: createStaticSymbolFactory(),
       });
-    }, /\^lightDom\(\) does not accept arguments\./);
+    }, /static lightDom = true only accepts the literal value true\./);
 
     const genericAritySource = `
       function Card() {
-        ^shadowRootOptions({ mode: "open" }, { delegatesFocus: true });
+        __litsx_static_shadowRootOptions({ mode: "open" }, { delegatesFocus: true });
         return <div>ready</div>;
       }
     `;
@@ -483,11 +484,11 @@ describe("native static hoists internals", () => {
         options: {},
         getOrCreateModuleStaticHoistSymbol: createStaticSymbolFactory(),
       });
-    }, /\^shadowRootOptions\(\.\.\.\) expects exactly one argument\./);
+    }, /static shadowRootOptions = \.\.\. expects exactly one argument\./);
 
     const genericDynamicSource = `
       function Card() {
-        ^shadowRootOptions(factory());
+        static shadowRootOptions = factory();
         return <div>ready</div>;
       }
     `;
@@ -504,15 +505,15 @@ describe("native static hoists internals", () => {
         options: {},
         getOrCreateModuleStaticHoistSymbol: createStaticSymbolFactory(),
       });
-    }, /\^shadowRootOptions\(\.\.\.\) only accepts a direct static value\./);
+    }, /static shadowRootOptions = \.\.\. only accepts a direct static value\./);
 
     const exposeGetterSource = `
       function Card() {
-        ^expose({
+        static expose = {
           get value() {
             return 1;
           },
-        });
+        };
         return <div>ready</div>;
       }
     `;
@@ -529,13 +530,13 @@ describe("native static hoists internals", () => {
         options: {},
         getOrCreateModuleStaticHoistSymbol: createStaticSymbolFactory(),
       });
-    }, /\^expose\(\.\.\.\) only accepts plain methods\./);
+    }, /static expose = \.\.\. only accepts plain methods\./);
 
     const exposeValueSource = `
       function Card() {
-        ^expose({
+        static expose = {
           value: 1,
-        });
+        };
         return <div>ready</div>;
       }
     `;
@@ -552,13 +553,13 @@ describe("native static hoists internals", () => {
         options: {},
         getOrCreateModuleStaticHoistSymbol: createStaticSymbolFactory(),
       });
-    }, /\^expose\(\.\.\.\) values must be functions\./);
+    }, /static expose = \.\.\. values must be functions\./);
 
     const multiStylesResolverSource = `
       function Card() {
         staticStyles(":host { color: red; }");
         staticStyles(":host { display: block; }");
-        ^styles(":host { background: blue; }");
+        static styles = ":host { background: blue; }";
         return <div>ready</div>;
       }
     `;

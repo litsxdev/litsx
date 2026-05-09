@@ -319,24 +319,26 @@ describe("integration: parser + all plugins", () => {
     assert.doesNotMatch(code, /ShadowDomElementsMixin/);
   });
 
-  it("rejects forcing light DOM when a component also hoists shadowRootOptions", () => {
+  it("ignores shadowRootOptions when forcing light DOM", () => {
     const source = `
       export const ConflictingPanel = () => {
-        ^shadowRootOptions({ delegatesFocus: true });
+        static shadowRootOptions = { delegatesFocus: true };
+        static lightDom = true;
         return <div>ready</div>;
       };
     `;
 
     const ast = parser.parse(source, { sourceType: "module" });
 
-    assert.throws(() => {
-      transformFromAstSync(ast, source, {
-        configFile: false,
-        babelrc: false,
-        presets: [[REACT_COMPAT_PRESET, { domMode: "light", jsxTemplate: false }]],
-        generatorOpts: { decoratorsBeforeExport: true },
-      });
-    }, /\^lightDom\(\) cannot be combined with \^shadowRootOptions\(\.\.\.\)\./);
+    const { code } = transformFromAstSync(ast, source, {
+      configFile: false,
+      babelrc: false,
+      presets: [[REACT_COMPAT_PRESET, { domMode: "light", jsxTemplate: false }]],
+      generatorOpts: { decoratorsBeforeExport: true },
+    });
+
+    assert.match(code, /class ConflictingPanel extends LightDomMixin\(LitElement\)/);
+    assert.doesNotMatch(code, /static get shadowRootOptions\(\)/);
   });
 
   it("keeps hook-heavy React-authored components aligned with the LitSX runtime", () => {

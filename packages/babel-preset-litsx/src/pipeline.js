@@ -17,7 +17,7 @@ const NATIVE_TRANSFORM_OPTION_KEYS = [
 const HOOK_FEATURE_PATTERN = /\b(?:useOnConnect|useAfterUpdate|useOnCommit|useMemoValue|useStableCallback|useEvent|useEmit|usePrevious|useReducedState|useState|useControlledState|useAsyncState|useOptimistic|useExpose|useExternalStore|useHost|useHostContent|useSlot|useTextContent|useTransition|useDeferredValue|useStyle|useRef|useCallbackRef)\b/;
 const REF_FEATURE_PATTERN = /\buseRef\b|\bref\s*=/;
 const SCOPED_ELEMENTS_PATTERN = /<\s*(?:[A-Z][\w.]*(?=[\s/>])|[a-z][\w]*-[\w-]*(?=[\s/>]))/;
-const LIGHT_DOM_PATTERN = /\^lightDom\b/;
+const LIGHT_DOM_PATTERN = /\^lightDom\b|static\s+lightDom\s*=\s*true\b/;
 
 export function normalizeTransformLitsxOptions(options = {}) {
   const transformLitsxOptions = {

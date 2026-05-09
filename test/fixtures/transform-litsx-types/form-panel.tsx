@@ -1,11 +1,11 @@
 import type { FormProps } from "./form-types";
 
 export function FormPanel(props: FormProps) {
-  ^properties<FormProps>({
+  static properties = {
     disabled: { reflect: true },
     onSubmit: { attribute: false },
     metadata: { attribute: false },
-  });
+  };
 
   return (
     <form data-theme={props.theme}>

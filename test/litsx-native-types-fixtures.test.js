@@ -33,7 +33,7 @@ beforeAll(async () => {
 });
 
 describe("@litsx/babel-preset-litsx typed fixtures", () => {
-  it("resolves imported utility types and merges ^properties overrides", () => {
+  it("resolves imported utility types and merges static properties overrides", () => {
     const code = transformFixture("shared-card.tsx");
 
     assert.match(code, /static get properties\(\)/);
@@ -70,7 +70,7 @@ describe("@litsx/babel-preset-litsx typed fixtures", () => {
     assert.match(code, /hasChanged\(value, oldValue\)/);
   }, TEST_TIMEOUT);
 
-  it("resolves composed utility types and merges ^properties over inferred fields", () => {
+  it("resolves composed utility types and merges static properties over inferred fields", () => {
     const code = transformFixture("form-panel.tsx");
 
     assert.match(code, /static get properties\(\)/);

@@ -21,10 +21,10 @@ The plugin preserves LitSX-authored syntax directly:
 - `@event`
 - `.prop`
 - `?attr`
-- `^styles(...)`
-- `^properties(...)`
+- `static styles = ...`
+- `static properties = ...`
 
-Static `^styles(\`...\`)` templates are formatted as real CSS when they do not
+Static `static styles = \`...\`;` templates are formatted as real CSS when they do not
 contain `${...}` interpolations.
 
 ## Install
@@ -58,7 +58,7 @@ Recommended configuration:
 
 ## Notes
 
-- `^styles(\`...\`)` is formatted with Prettier's CSS parser only when the
+- `static styles = \`...\`;` is formatted with Prettier's CSS parser only when the
   template is fully static.
 - Templates with `${...}` expressions are preserved without CSS reflow.
 - `*.tsx` and `*.jsx` compatibility formatting is intentionally out of scope

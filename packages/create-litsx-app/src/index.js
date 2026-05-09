@@ -362,7 +362,7 @@ function createAppProfileFiles(packageName, className) {
 import { LitsxHero } from "./components/litsx-hero.litsx";
 
 export const ${className} = () => {
-  ^styles(\`
+  static styles = \`
     :host { display: block; }
     .shell {
       max-width: 960px;
@@ -390,7 +390,7 @@ export const ${className} = () => {
       transform: translateY(-1px);
       box-shadow: 0 22px 42px rgba(21, 32, 51, 0.22);
     }
-  \`);
+  \`;
 
   const [count, setCount] = useState(0);
 
@@ -415,7 +415,7 @@ export const ${className} = () => {
   type = "secondary",
   label = "",
 }) => {
-  ^styles(\`
+  static styles = \`
     :host { display: block; flex-shrink: 0; padding: 6px; }
     button {
       display: inline-block;
@@ -449,7 +449,7 @@ export const ${className} = () => {
       background-origin: border-box;
       box-shadow: 0 14px 32px color-mix(in srgb, var(--litsx-c-brand-1) 28%, transparent);
     }
-  \`);
+  \`;
   return <button class={type === "primary" ? "primary" : ""}>{label}</button>;
 };
 `);
@@ -463,7 +463,7 @@ export const LitsxHero = ({
   secondaryLabel = "View on GitHub",
 }) => {
   const emit = useEmit();
-  ^styles(\`
+  static styles = \`
     :host {
       display: block;
     }
@@ -757,7 +757,7 @@ Generated with \`create-litsx-app --template app\`.
 - authored LitSX JSX
 - \`@click\` event binding
 - local state with \`useState(...)\`
-- component-owned styling with \`^styles(...)\`
+- component-owned styling with \`static styles = ...\`
 `);
 
   return files;
@@ -770,7 +770,7 @@ function createComponentProfileFiles(packageName, className) {
 import { StarterGuide } from "./components/starter-guide.litsx";
 
 export const ${className} = () => {
-  ^styles(\`
+  static styles = \`
     :host { display: block; }
     .shell {
       max-width: 960px;
@@ -779,7 +779,7 @@ export const ${className} = () => {
       padding-bottom: 28px;
       position: relative;
     }
-  \`);
+  \`;
 
   return (
     <main class="shell">
@@ -805,7 +805,7 @@ export const ${className} = () => {
   titleRenderer = null,
   contentRenderer = null,
 }) => {
-  ^styles(\`
+  static styles = \`
     :host { display: block; }
     .guide-card {
       padding: 24px;
@@ -851,7 +851,7 @@ export const ${className} = () => {
       from { opacity: 0; transform: translateY(14px); }
       to { opacity: 1; transform: translateY(0); }
     }
-  \`);
+  \`;
 
   return (
     <article class="guide-card">
@@ -866,7 +866,7 @@ export const ${className} = () => {
   type = "secondary",
   label = "",
 }) => {
-  ^styles(\`
+  static styles = \`
     :host { display: block; flex-shrink: 0; padding: 6px; }
     button {
       display: inline-block;
@@ -922,7 +922,7 @@ export const ${className} = () => {
         inset 0 2px 10px rgba(0, 0, 0, 0.18),
         0 10px 22px color-mix(in srgb, var(--litsx-c-brand-1) 18%, transparent);
     }
-  \`);
+  \`;
 
   return <button class={type === "primary" ? "primary" : ""}>{label}</button>;
 };
@@ -938,7 +938,7 @@ export const LitsxHero = ({
 }) => {
   const emit = useEmit();
 
-  ^styles(\`
+  static styles = \`
     :host {
       display: block;
     }
@@ -1238,7 +1238,7 @@ export const StarterGuide = () => {
     };
   }, []);
 
-  ^styles(\`
+  static styles = \`
     :host {
       display: block;
     }
@@ -1294,7 +1294,7 @@ export const StarterGuide = () => {
                 .contentRenderer={() => (
                   <p>
                     Reach for <code>@click</code>, <code>.value</code>, <code>?disabled</code> and
-                    <code> ^styles(...)</code> directly in authored JSX so component intent stays close
+                    <code> static styles = ...</code> directly in authored JSX so component intent stays close
                     to markup. The <a href="https://github.com/litsxdev/litsx" target="_blank" rel="noreferrer">repository overview</a> explains
                     why LitSX source is not just generic TSX with helper imports.
                   </p>
@@ -1476,7 +1476,7 @@ The \`StarterGuide\` component demonstrates LitSX suspense primitives in a way t
 
 - ordered reveal with \`SuspenseList\`
 - focused loading states with \`SuspenseBoundary\`
-- component-owned styling with \`^styles(...)\`
+- component-owned styling with \`static styles = ...\`
 - onboarding copy that points directly at the generated project structure
 `);
   files.set("README.md", `# ${packageName}

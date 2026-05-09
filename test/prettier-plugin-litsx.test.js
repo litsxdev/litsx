@@ -29,38 +29,38 @@ async function formatWithOptions(parser, source, extraOptions = {}) {
 
 describe("prettier-plugin-litsx", () => {
   it("formats .litsx authored bindings and static hoists without virtual names", async () => {
-    const source = `export const App=({title}:{title:string})=>{^properties({open:{type:Boolean}});return <button class="cta" @click={()=>{}} .value={title} ?disabled={false}>{title}</button>;};`;
+    const source = `export const App=({title}:{title:string})=>{static properties={open:{type:Boolean}};return <button class="cta" @click={()=>{}} .value={title} ?disabled={false}>{title}</button>;};`;
 
     const formatted = await formatWith("litsx", source);
 
     assert.match(formatted, /export const App = \(\{ title \}: \{ title: string \}\) => \{/);
-    assert.match(formatted, /\^properties\(\{ open: \{ type: Boolean \} \}\);/);
+    assert.match(formatted, /static properties = \{ open: \{ type: Boolean \} \};/);
     assert.match(formatted, /@click=\{\(\) => \{\}\}/);
     assert.match(formatted, /\.value=\{title\}/);
     assert.match(formatted, /\?disabled=\{false\}/);
     assert.doesNotMatch(formatted, /__litsx_/);
   });
 
-  it("formats ^styles static templates as CSS in .litsx files", async () => {
-    const source = `export const App=()=>{^styles(\`:host{display:block;color:red;}button,.cta{margin:0 auto;padding:12px 18px;}\`);return <button class="cta" />;};`;
+  it("formats static styles templates as CSS in .litsx files", async () => {
+    const source = `export const App=()=>{static styles=\`:host{display:block;color:red;}button,.cta{margin:0 auto;padding:12px 18px;}\`;return <button class="cta" />;};`;
 
     const formatted = await formatWith("litsx", source);
 
-    assert.match(formatted, /\^styles\(`\n/);
+    assert.match(formatted, /static styles = `\n/);
     assert.match(formatted, /display: block;/);
     assert.match(formatted, /color: red;/);
     assert.match(formatted, /margin: 0 auto;/);
     assert.match(formatted, /padding: 12px 18px;/);
   });
 
-  it("formats empty and multiline ^styles templates with tab indentation when requested", async () => {
+  it("formats empty and multiline static styles templates with tab indentation when requested", async () => {
     const source = `export const App = () => {
-\t^styles(\`
+\tstatic styles = \`
 .card{display:block;}
 
 button{padding:4px;}
-\t\`);
-\t^styles(\`\`);
+\t\`;
+\tstatic styles = \`\`;
 \treturn <button />;
 };
 `;
@@ -69,18 +69,18 @@ button{padding:4px;}
       useTabs: true,
     });
 
-    assert.match(formatted, /\^styles\(`\n\t\t\.card \{/);
+    assert.match(formatted, /static styles = `\n\t\t\.card \{/);
     assert.match(formatted, /\n\t\tbutton \{/);
-    assert.match(formatted, /\n\t\t\}\n\t`\);/);
-    assert.match(formatted, /\^styles\(``\);/);
+    assert.match(formatted, /\n\t\t\}\n\t`;/);
+    assert.match(formatted, /static styles = ``;/);
   });
 
-  it("preserves interpolated ^styles templates without crashing", async () => {
-    const source = `export const App=({color}:{color:string})=>{^styles(\`:host{color:\${color};display:block;}\`);return <button />;};`;
+  it("preserves interpolated static styles templates without crashing", async () => {
+    const source = `export const App=({color}:{color:string})=>{static styles=\`:host{color:\${color};display:block;}\`;return <button />;};`;
 
     const formatted = await formatWith("litsx", source);
 
-    assert.match(formatted, /\^styles\(`:host\{color:\$\{color\};display:block;\}`\);/);
+    assert.match(formatted, /static styles = `:host\{color:\$\{color\};display:block;\}`;/);
     assert.match(formatted, /\$\{color\}/);
   });
 
@@ -95,7 +95,7 @@ button{padding:4px;}
   });
 
   it("is idempotent for already formatted authored source", async () => {
-    const source = `export const App = ({ title }: { title: string }) => {\n  ^styles(\`\n    :host {\n      display: block;\n    }\n  \`);\n  return <button @click={() => {}} .value={title}>{title}</button>;\n};\n`;
+    const source = `export const App = ({ title }: { title: string }) => {\n  static styles = \`\n    :host {\n      display: block;\n    }\n  \`;\n  return <button @click={() => {}} .value={title}>{title}</button>;\n};\n`;
 
     const once = await formatWith("litsx", source);
     const twice = await formatWith("litsx", once);
@@ -114,7 +114,7 @@ button{padding:4px;}
     const parserInstance = plugin.parsers.litsx;
     const printer = plugin.printers[parserInstance.astFormat];
     const ast = parserInstance.parse(
-      "export const App=()=>{^styles(`:host{display:block;}`);return <button />;};",
+      "export const App=()=>{static styles=`:host{display:block;}`;return <button />;};",
       { filepath: "/virtual/App.litsx" },
     );
     const embed = printer.embed({ node: ast }, {
@@ -128,6 +128,7 @@ button{padding:4px;}
     assert.strictEqual(typeof embed, "function");
     const formatted = await embed();
     assert.match(formatted, /export const App = \(\) => \{/);
+    assert.match(formatted, /static styles = `\n/);
     assert.match(formatted, /display: block;/);
   });
 

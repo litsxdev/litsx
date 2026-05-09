@@ -75,7 +75,7 @@ describe("@litsx/shiki-languages", () => {
       const html = highlighter.codeToHtml(
         [
           "export function Card() {",
-          "  ^styles(`button { color: red; }`);",
+          "  static styles = `button { color: red; }`;",
           "  return <button .value={count} ?disabled={busy} @click={save}>Save</button>;",
           "}",
         ].join("\n"),
@@ -83,7 +83,7 @@ describe("@litsx/shiki-languages", () => {
       );
 
       assert.match(html, /vp-code|shiki/);
-      assert.match(html, /\^(?:<\/span><span[^>]*>)?styles/);
+      assert.match(html, /static(?:<\/span><span[^>]*>)?\s+(?:<\/span><span[^>]*>)?styles/);
       assert.match(html, /\.(?:<\/span><span[^>]*>)?value/);
       assert.match(html, /\?(?:<\/span><span[^>]*>)?disabled/);
       assert.match(html, /@(?:<\/span><span[^>]*>)?click/);

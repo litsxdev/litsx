@@ -82,15 +82,15 @@ describe("@litsx/babel-plugin-litsx-proptypes", function () {
     assert.match(code, /strictMeta: \{\s*type: Object,\s*attribute: false,\s*\.\.\.[A-Za-z0-9_]+\(\{\s*title: String\s*\}\)\s*\}/s);
   });
 
-  it("merges generated compat metadata into existing authored ^properties hoists", () => {
+  it("merges generated compat metadata into existing authored static properties hoists", () => {
     const source = `
       import PropTypes from "prop-types";
 
       export function SearchCard(props) {
-        ^properties({
+        static properties = {
           title: { reflect: true },
           onSelect: { attribute: false },
-        });
+        };
 
         return <article>{props.title}</article>;
       }
@@ -306,11 +306,11 @@ describe("@litsx/babel-plugin-litsx-proptypes", function () {
       import PropTypes from "prop-types";
 
       export function SearchCard(props) {
-        ^properties({
+        static properties = {
           ...sharedProperties,
           subtitle: { reflect: true },
           title: { reflect: true },
-        });
+        };
 
         return <article>{props.title}</article>;
       }
@@ -378,10 +378,10 @@ describe("@litsx/babel-plugin-litsx-proptypes", function () {
       import PropTypes from "prop-types";
 
       export function SearchCard(props) {
-        ^properties({
+        static properties = {
           title: forwardedTitle,
           [dynamicKey]: runtimeDescriptor,
-        });
+        };
 
         return <article>{props.title}</article>;
       }

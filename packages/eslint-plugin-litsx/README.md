@@ -85,6 +85,6 @@ Today that means:
 
 ## Notes
 
-- The plugin is designed to work with LitSX-authored forms such as `@click`, `.value`, `?disabled`, and `^styles(...)`.
+- The plugin is designed to work with LitSX-authored forms such as `@click`, `.value`, `?disabled`, and `static styles = ...`.
 - Processor mode means lint messages are reported on the original source even though ESLint parses a virtualized version internally.
 - Prettier support is still a separate gap; this package only covers linting.

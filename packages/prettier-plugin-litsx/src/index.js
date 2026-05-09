@@ -107,36 +107,229 @@ function walk(node, visitor) {
   }
 }
 
-function collectStaticStylesTemplates(authoredText, mode) {
-  const ast = parser.parse(authoredText, {
-    sourceType: "module",
-    plugins: getParserPlugins(mode),
-  });
+function isWhitespace(char) {
+  return char === " " || char === "\t" || char === "\n" || char === "\r";
+}
+
+function scanQuotedString(sourceText, start, quote) {
+  let index = start + 1;
+
+  while (index < sourceText.length) {
+    const char = sourceText[index];
+    if (char === "\\") {
+      index += 2;
+      continue;
+    }
+    if (char === quote) {
+      return index + 1;
+    }
+    index += 1;
+  }
+
+  return index;
+}
+
+function scanLineComment(sourceText, start) {
+  let index = start + 2;
+  while (index < sourceText.length && sourceText[index] !== "\n") {
+    index += 1;
+  }
+  return index;
+}
+
+function scanBlockComment(sourceText, start) {
+  let index = start + 2;
+  while (index < sourceText.length) {
+    if (sourceText[index] === "*" && sourceText[index + 1] === "/") {
+      return index + 2;
+    }
+    index += 1;
+  }
+  return index;
+}
+
+function scanTemplateLiteral(sourceText, start) {
+  let index = start + 1;
+
+  while (index < sourceText.length) {
+    const char = sourceText[index];
+    if (char === "\\") {
+      index += 2;
+      continue;
+    }
+    if (char === "`") {
+      return index + 1;
+    }
+    if (char === "$" && sourceText[index + 1] === "{") {
+      index = scanBalancedParens(sourceText, index + 1, "{", "}");
+      continue;
+    }
+    index += 1;
+  }
+
+  return index;
+}
+
+function scanBalancedParens(sourceText, start, openChar = "(", closeChar = ")") {
+  let depth = 0;
+  let index = start;
+
+  while (index < sourceText.length) {
+    const char = sourceText[index];
+    const next = sourceText[index + 1];
+
+    if (char === "'" || char === "\"") {
+      index = scanQuotedString(sourceText, index, char);
+      continue;
+    }
+
+    if (char === "`") {
+      index = scanTemplateLiteral(sourceText, index);
+      continue;
+    }
+
+    if (char === "/" && next === "/") {
+      index = scanLineComment(sourceText, index);
+      continue;
+    }
+
+    if (char === "/" && next === "*") {
+      index = scanBlockComment(sourceText, index);
+      continue;
+    }
+
+    if (char === openChar) {
+      depth += 1;
+      index += 1;
+      continue;
+    }
+
+    if (char === closeChar) {
+      depth -= 1;
+      index += 1;
+      if (depth <= 0) {
+        return index;
+      }
+      continue;
+    }
+
+    index += 1;
+  }
+
+  return index;
+}
+
+function remapVirtualStaticHoists(authoredText) {
+  let index = 0;
+  let output = "";
+
+  while (index < authoredText.length) {
+    if (!authoredText.startsWith("static ", index)) {
+      output += authoredText[index];
+      index += 1;
+      continue;
+    }
+
+    let nameStart = index + "static ".length;
+    let nameEnd = nameStart;
+    while (/[A-Za-z0-9$_]/.test(authoredText[nameEnd] || "")) {
+      nameEnd += 1;
+    }
+
+    if (nameEnd === nameStart) {
+      output += authoredText[index];
+      index += 1;
+      continue;
+    }
+
+    let next = nameEnd;
+    while (isWhitespace(authoredText[next])) {
+      next += 1;
+    }
+
+    if (authoredText[next] !== "(") {
+      output += authoredText[index];
+      index += 1;
+      continue;
+    }
+
+    const callEnd = scanBalancedParens(authoredText, next);
+    let statementEnd = callEnd;
+    while (isWhitespace(authoredText[statementEnd])) {
+      statementEnd += 1;
+    }
+    if (authoredText[statementEnd] === ";") {
+      statementEnd += 1;
+    }
+
+    const hoistName = authoredText.slice(nameStart, nameEnd);
+    const argumentText = authoredText.slice(next + 1, callEnd - 1);
+    const replacement =
+      hoistName === "lightDom" && argumentText.trim().length === 0
+        ? `static ${hoistName} = true;`
+        : `static ${hoistName} = ${argumentText};`;
+
+    output += replacement;
+    index = statementEnd;
+  }
+
+  return output;
+}
+
+function collectStaticStylesTemplates(authoredText) {
   const templates = [];
 
-  walk(ast.program ?? ast, (node) => {
-    if (
-      node?.type === "CallExpression" &&
-      node.callee?.type === "Identifier" &&
-      node.callee.name === "__litsx_static_styles" &&
-      node.arguments?.length === 1
-    ) {
-      const [firstArg] = node.arguments;
-      if (
-        firstArg?.type === "TemplateLiteral" &&
-        firstArg.expressions?.length === 0 &&
-        typeof firstArg.start === "number" &&
-        typeof firstArg.end === "number"
-      ) {
-        templates.push({
-          callStart: node.start,
-          callEnd: node.end,
-          contentStart: firstArg.start + 1,
-          contentEnd: firstArg.end - 1,
-        });
-      }
+  let index = 0;
+  while (index < authoredText.length) {
+    const matchIndex = authoredText.indexOf("static styles", index);
+    if (matchIndex === -1) {
+      break;
     }
-  });
+
+    let cursor = matchIndex + "static styles".length;
+    while (isWhitespace(authoredText[cursor])) {
+      cursor += 1;
+    }
+
+    if (authoredText[cursor] !== "=") {
+      index = cursor;
+      continue;
+    }
+
+    cursor += 1;
+    while (isWhitespace(authoredText[cursor])) {
+      cursor += 1;
+    }
+
+    if (authoredText[cursor] !== "`") {
+      index = cursor;
+      continue;
+    }
+
+    const templateEnd = scanTemplateLiteral(authoredText, cursor);
+    const rawTemplate = authoredText.slice(cursor, templateEnd);
+    if (rawTemplate.includes("${")) {
+      index = templateEnd;
+      continue;
+    }
+
+    let statementEnd = templateEnd;
+    while (isWhitespace(authoredText[statementEnd])) {
+      statementEnd += 1;
+    }
+    if (authoredText[statementEnd] === ";") {
+      statementEnd += 1;
+    }
+
+    templates.push({
+      callStart: matchIndex,
+      callEnd: statementEnd,
+      contentStart: cursor + 1,
+      contentEnd: templateEnd - 1,
+    });
+
+    index = statementEnd;
+  }
 
   return templates;
 }
@@ -160,8 +353,8 @@ async function formatEmbeddedStyles(authoredText, mode, options) {
     const indent = getLineIndent(authoredText, template.callStart);
     const innerIndent = `${indent}${getIndentUnit(options)}`;
     const replacement = formattedCss.length === 0
-      ? "^styles(``)"
-      : `^styles(\`\n${indentBlock(formattedCss, innerIndent)}\n${indent}\`)`;
+      ? "static styles = ``;"
+      : `static styles = \`\n${indentBlock(formattedCss, innerIndent)}\n${indent}\`;`;
 
     replacements.push({
       start: template.callStart,
@@ -194,7 +387,7 @@ async function formatLitsxDocument(node, options) {
     node.virtualSource.code,
     buildNestedOptions(options, targetParser, BABEL_PLUGINS),
   );
-  const remapped = remapVirtualText(formattedVirtual);
+  const remapped = remapVirtualStaticHoists(remapVirtualText(formattedVirtual));
   return formatEmbeddedStyles(remapped, node.mode, options);
 }
 

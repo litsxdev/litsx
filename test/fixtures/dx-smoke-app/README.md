@@ -21,4 +21,4 @@ Generated with `create-litsx-app --template app`.
 - authored LitSX JSX
 - `@click` event binding
 - local state with `useState(...)`
-- component-owned styling with `^styles(...)`
+- component-owned styling with `static styles = ...`

@@ -12,7 +12,7 @@ Generated projects come preconfigured for authored LitSX syntax such as:
 - `@click`
 - `.prop`
 - `?attr`
-- static hoists like `^styles(...)`
+- static hoists like `static styles = ...`
 
 The official authoring posture is:
 
@@ -49,7 +49,7 @@ That path gives you the smallest scaffold with:
 - authored LitSX source in `src/<app>.litsx`
 - `@click` event binding
 - local state with `useState(...)`
-- component-owned styling with `^styles(...)`
+- component-owned styling with `static styles = ...`
 - `eslint.config.js` wired to `@litsx/eslint-plugin`
 
 ## What It Generates
@@ -142,7 +142,7 @@ The scaffold also wires Storybook through the Vite builder, so LitSX authored st
 
 ## Why the Scaffold Uses `.litsx`
 
-Plain `tsc` still does not parse LitSX-authored forms such as `@click` or `^styles(...)` natively, and VS Code's built-in JSX grammars do not understand LitSX-authored attrs and hoists cleanly.
+Plain `tsc` still does not parse LitSX-authored forms such as `@click` or `static styles = ...` natively, and VS Code's built-in JSX grammars do not understand LitSX-authored attrs and hoists cleanly.
 
 That is why generated projects use:
 
@@ -153,7 +153,7 @@ That is why generated projects use:
 
 This keeps the developer experience aligned with LitSX syntax while giving LitSX its own authored source format instead of patching standard JSX in place.
 
-LitSX ships an official ESLint integration for authored syntax such as `@click`, `.value`, and `^styles(...)`:
+LitSX ships an official ESLint integration for authored syntax such as `@click`, `.value`, and `static styles = ...`:
 
 - `@litsx/eslint-plugin`
 

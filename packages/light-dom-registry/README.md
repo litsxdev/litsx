@@ -5,7 +5,7 @@
 [![Module](https://img.shields.io/badge/module-ESM%20%2B%20CJS-0366d6)](./package.json)
 [![Provenance](https://img.shields.io/badge/npm_provenance-enabled-2ea44f)](../../RELEASING.md)
 
-Runtime support for contextual element resolution in LitSX `^lightDom()` components.
+Runtime support for contextual element resolution in LitSX `static lightDom = true` components.
 
 ## Attribution
 
@@ -13,12 +13,12 @@ Runtime support for contextual element resolution in LitSX `^lightDom()` compone
 
 ## What It Does
 
-`@litsx/light-dom-registry` lets `^lightDom()` components keep clean base tags while still using different implementations for the same tag name in different light DOM subtrees.
+`@litsx/light-dom-registry` lets `static lightDom = true` components keep clean base tags while still using different implementations for the same tag name in different light DOM subtrees.
 
 It does that by:
 
 - registering one global stand-in proxy per tag on `window.customElements`
-- attaching a contextual registry to each `^lightDom()` host
+- attaching a contextual registry to each `static lightDom = true` host
 - resolving the nearest host registry when a proxy instance is created or connected
 - upgrading the real element in place, without adding a visible wrapper child
 
@@ -60,7 +60,7 @@ Two different light DOM hosts can use the same tag base and still resolve differ
 import { LitElement } from "lit";
 
 export function AdminScreen() {
-  ^lightDom();
+  static lightDom = true;
   return <profile-chip />;
 }
 
@@ -69,7 +69,7 @@ AdminScreen.elements = {
 };
 
 export function GuestScreen() {
-  ^lightDom();
+  static lightDom = true;
   return <profile-chip />;
 }
 
@@ -160,4 +160,4 @@ The closest host context wins.
 
 If the base tag is already registered globally to a constructor that does not belong to this runtime, the registry throws instead of falling back to a suffixed tag.
 
-That is deliberate. `^lightDom()` is preserving the authored tag, not generating an alternative global name.
+That is deliberate. `static lightDom = true` is preserving the authored tag, not generating an alternative global name.

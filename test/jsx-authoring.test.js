@@ -158,8 +158,8 @@ describe("@litsx/jsx-authoring", () => {
   it("keeps editor-oriented static hoists length-stable for source parsing", () => {
     const source = `
       export function Card() {
-        ^properties({ active: { reflect: true } });
-        ^styles(\`:host { display: block; }\`);
+        static properties = { active: { reflect: true } };
+        static styles = \`:host { display: block; }\`;
         return <button @click={handleClick}>ready</button>;
       }
     `;
@@ -168,16 +168,80 @@ describe("@litsx/jsx-authoring", () => {
       strategy: "editor",
     });
 
-    assert.match(result.code, /\$properties\(/);
-    assert.match(result.code, /\$styles\(`/);
+    assert.match(result.code, /const \$properties = \{/);
+    assert.match(result.code, /const \$styles = `/);
     assert.match(result.code, /eclick/);
     assert.strictEqual(result.code.length, source.length);
+  });
+
+  it("virtualizes static hoist assignments into internal compiler calls", () => {
+    const source = `
+      export function Card() {
+        static properties = { active: { reflect: true } };
+        static styles = \`:host { display: block; }\`;
+        return <div />;
+      }
+    `;
+
+    const result = createVirtualLitsxJsxSource(source, {
+      plugins: ["typescript"],
+    });
+
+    assert.match(result.code, /__litsx_static_properties\(\{ active: \{ reflect: true \} \}\);/);
+    assert.match(result.code, /__litsx_static_styles\(`:host \{ display: block; \}`\);/);
+  });
+
+  it("does not rewrite valid class static fields while still virtualizing authored function hoists", () => {
+    const source = `
+      class ExistingElement extends LitElement {
+        static properties = { active: { type: Boolean } };
+        static styles = css\`:host { display: block; }\`;
+        static analyticsTag = "existing";
+      }
+
+      export function Card() {
+        static properties = { open: { reflect: true } };
+        static styles = \`:host { color: red; }\`;
+        static analyticsTag = "card";
+        return <div />;
+      }
+    `;
+
+    const result = createVirtualLitsxJsxSource(source, {
+      plugins: ["typescript"],
+    });
+
+    assert.match(result.code, /class ExistingElement extends LitElement \{/);
+    assert.match(result.code, /static properties = \{\s*active: \{\s*type: Boolean\s*\}\s*\};/);
+    assert.match(result.code, /static styles = css`:host \{ display: block; \}`;/);
+    assert.match(result.code, /static analyticsTag = "existing";/);
+    assert.match(result.code, /__litsx_static_properties\(\{ open: \{ reflect: true \} \}\);/);
+    assert.match(result.code, /__litsx_static_styles\(`:host \{ color: red; \}`\);/);
+    assert.match(result.code, /__litsx_static_analyticsTag\("card"\);/);
+  });
+
+  it("keeps class static fields untouched in editor mode", () => {
+    const source = `
+      class ExistingElement extends LitElement {
+        static properties = { active: { type: Boolean } };
+        static styles = css\`:host { display: block; }\`;
+        static customThing = buildThing();
+      }
+    `;
+
+    const result = createVirtualLitsxJsxSource(source, {
+      strategy: "editor",
+      plugins: ["typescript"],
+    });
+
+    assert.equal(result.code, source);
+    assert.deepStrictEqual(result.replacements, []);
   });
 
   it("does not virtualize removed authored mixin syntax", () => {
     const source = `
       mixin Selectable() {
-        ^styles(\`:host { display: block; }\`);
+        static styles = \`:host { display: block; }\`;
         return <div />;
       }
     `;
@@ -311,7 +375,7 @@ describe("@litsx/jsx-authoring", () => {
     assert.equal(decodeVirtualAttributeName("not_virtual"), null);
     assert.equal(decodeVirtualStaticHoistName("styles"), null);
     assert.equal(remapVirtualText(42), 42);
-    assert.equal(decodeVirtualStaticHoistName("__litsx_static_styles"), "^styles");
+    assert.equal(decodeVirtualStaticHoistName("__litsx_static_styles"), "static styles");
 
     assert.equal(mapOriginalPositionToVirtual(source.indexOf("@click") + 2, replacements), source.indexOf("@click"));
     assert.deepStrictEqual(
@@ -509,11 +573,11 @@ describe("@litsx/jsx-authoring", () => {
     const source = `
       export function Card() {
         // comment before macro
-        ^properties({ active: { reflect: true } });
+        static properties = { active: { reflect: true } };
         /*
          * block comment before macro
          */
-        ^styles(\`:host { display: block; }\`);
+        static styles = \`:host { display: block; }\`;
         ^mixins(Selectable);
         return <div />;
       }
@@ -523,8 +587,8 @@ describe("@litsx/jsx-authoring", () => {
       strategy: "editor",
     });
 
-    assert.match(result.code, /\$properties\(/);
-    assert.match(result.code, /\$styles\(/);
+    assert.match(result.code, /const \$properties = \{/);
+    assert.match(result.code, /const \$styles = `/);
     assert.match(result.code, /\^mixins\(Selectable\)/);
   });
 
@@ -535,9 +599,10 @@ describe("@litsx/jsx-authoring", () => {
     assert.equal(encodeVirtualAttributeName("class"), "class");
     assert.equal(
       remapVirtualText("__litsx_static_styles __litsx_event_click"),
-      "^styles @click",
+      "static styles @click",
     );
 
+    assert.equal(looksLikeLitsxJsx("  static styles = `:host {}`;"), true);
     assert.equal(looksLikeLitsxJsx("  ^styles(`:host {}`);"), true);
     assert.equal(looksLikeLitsxJsx("value ^ styles"), false);
 
@@ -630,6 +695,8 @@ describe("@litsx/jsx-authoring", () => {
   it("detects LitSX-authored JSX before virtualization", () => {
     assert.strictEqual(looksLikeLitsxJsx(`<button @click={handleClick}></button>`), true);
     assert.strictEqual(looksLikeLitsxJsx(`const view = <button class="cta"></button>;`), false);
+    assert.strictEqual(looksLikeLitsxJsx(`function Card(){\n  static styles = \`:host { display: block; }\`;\n}`), true);
+    assert.strictEqual(looksLikeLitsxJsx(`function Card(){\n  static properties = {};\n  return null;\n}`), true);
     assert.strictEqual(looksLikeLitsxJsx(`^styles(\`:host { display: block; }\`);`), true);
     assert.strictEqual(looksLikeLitsxJsx(`function Card(){ return null; }\n^properties({});`), true);
   });

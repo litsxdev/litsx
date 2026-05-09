@@ -93,7 +93,7 @@ describe("@litsx/typescript-plugin", () => {
       const Card = memo(function Card(props) {
         const value = props.title;
         const ready = true;
-        ^styles(\`:host { display: block; }\`);
+        static styles = \`:host { display: block; }\`;
         return (
           <label htmlFor="field">
             <input defaultValue="a" defaultChecked dangerouslySetInnerHTML={{ __html: value }} />
@@ -124,12 +124,12 @@ describe("@litsx/typescript-plugin", () => {
   it("infers static hoist and attribute completion metadata from authored source", () => {
     const source = `
       function Card() {
-        ^styles(\`:host { display: block; }\`);
+        static styles = \`:host { display: block; }\`;
         return <input @fo .va ?di />;
       }
     `;
 
-    const hoistPosition = source.indexOf("^styles") + 3;
+    const hoistPosition = source.indexOf("static styles") + 4;
     const hoistInfo = inferLitsxStaticHoistInfoAtPosition(source, hoistPosition);
     assert.deepStrictEqual(
       {
@@ -138,9 +138,9 @@ describe("@litsx/typescript-plugin", () => {
         length: hoistInfo?.length,
       },
       {
-        name: "^styles",
-        start: source.indexOf("^styles"),
-        length: "^styles".length,
+        name: "static styles",
+        start: source.indexOf("static styles"),
+        length: "static styles".length,
       },
     );
     assert.match(hoistInfo?.documentation ?? "", /static style hoist/i);
@@ -201,14 +201,14 @@ describe("@litsx/typescript-plugin", () => {
 
     const unknownHoistSource = `
       function Card() {
-        ^customThing({ mode: "open" });
+        static customThing = { mode: "open" };
       }
     `;
     const unknownHoist = inferLitsxStaticHoistInfoAtPosition(
       unknownHoistSource,
-      unknownHoistSource.indexOf("^customThing") + 5,
+      unknownHoistSource.indexOf("static customThing") + 8,
     );
-    assert.match(unknownHoist?.documentation ?? "", /static hoist \^customThing/i);
+    assert.match(unknownHoist?.documentation ?? "", /static hoist static customThing/i);
     assert.strictEqual(
       inferLitsxStaticHoistInfoAtPosition("const broken = ^styles;", "const broken = ^styles;".indexOf("^styles") + 1),
       null,
@@ -225,11 +225,11 @@ describe("@litsx/typescript-plugin", () => {
       const broken = ^ styles();
       const unfinished = ^styles value;
       function Card() {
-        ^styles(\`:host { display: block; }\`);
+        static styles = \`:host { display: block; }\`;
       }
     `;
 
-    const validStart = source.lastIndexOf("^styles");
+    const validStart = source.lastIndexOf("static styles");
     assert.strictEqual(
       inferLitsxStaticHoistInfoAtPosition(source, source.indexOf("^styles()") + 2),
       null,
@@ -245,9 +245,9 @@ describe("@litsx/typescript-plugin", () => {
     assert.deepStrictEqual(
       inferLitsxStaticHoistInfoAtPosition(source, validStart + 2),
       {
-        name: "^styles",
+        name: "static styles",
         start: validStart,
-        length: "^styles".length,
+        length: "static styles".length,
         documentation: "LitSX static style hoist. Declare component-scoped styles before render-time statements.",
       },
     );
@@ -270,8 +270,8 @@ describe("@litsx/typescript-plugin", () => {
   it("reports duplicate static hoists and avoids duplicate opaque prop warnings for the same prop", () => {
     const issues = collectLitsxAuthoredIssues(`
       const Card = (props) => {
-        ^styles(\`:host { display: block; }\`);
-        ^styles(\`:host { color: red; }\`);
+        static styles = \`:host { display: block; }\`;
+        static styles = \`:host { color: red; }\`;
         return <div>{props.title}{props.title}</div>;
       };
     `, { channel: "all" });
@@ -309,7 +309,7 @@ describe("@litsx/typescript-plugin", () => {
       Card = React.memo((props) => {
         const message = props.title;
         const ready = true;
-        ^lightDom();
+        static lightDom = true;
         return <div>{message}{ready ? props.title : null}</div>;
       }, () => true);
     `, { channel: "all" });
@@ -323,13 +323,13 @@ describe("@litsx/typescript-plugin", () => {
       let AssignedCard;
       AssignedCard = function AssignedCard(props) {
         const label = props.title;
-        ^lightDom();
+        static lightDom = true;
         return <div>{label}</div>;
       };
 
       const ArrowCard = (props) => {
         const theme = props.theme;
-        ^shadowRootOptions({ mode: "open" });
+        static shadowRootOptions = { mode: "open" };
         return <div>{theme}</div>;
       };
     `, { channel: "all" });
@@ -337,6 +337,32 @@ describe("@litsx/typescript-plugin", () => {
     assert.ok(issues.some((issue) => issue.code === 91014));
     assert.ok(issues.some((issue) => issue.code === 91018));
     assert.ok(issues.some((issue) => issue.code === 91015));
+  });
+
+  it("warns that static shadowRootOptions is ignored when static lightDom is present", () => {
+    const issues = collectLitsxAuthoredIssues(`
+      function Card() {
+        static lightDom = true;
+        static shadowRootOptions = { mode: "open" };
+        return <div>ready</div>;
+      }
+    `, { channel: "all" });
+
+    assert.ok(issues.some((issue) => issue.code === 91019));
+    assert.ok(issues.some((issue) => issue.code === 91019 && /ignored when static lightDom = true/.test(issue.message)));
+  });
+
+  it("warns that legacy caret static hoists are deprecated", () => {
+    const issues = collectLitsxAuthoredIssues(`
+      function Card() {
+        ^styles(\`:host { display: block; }\`);
+        return <div>ready</div>;
+      }
+    `, { channel: "all" });
+
+    assert.ok(issues.some((issue) => issue.code === 91020));
+    assert.ok(issues.some((issue) => issue.code === 91020 && /deprecated/.test(issue.message)));
+    assert.ok(issues.some((issue) => issue.code === 91020 && /Prefer "static styles = \.\.\."/.test(issue.message)));
   });
 
   it("ignores opaque prop access checks for non-component functions and non-identifier params", () => {
@@ -469,7 +495,7 @@ describe("@litsx/typescript-plugin", () => {
     const source = `
       function Card({ ready }) {
         if (ready) {
-          ^styles(\`:host { display: block; }\`);
+          static styles = \`:host { display: block; }\`;
         }
 
         return <div>ready</div>;
@@ -492,8 +518,8 @@ describe("@litsx/typescript-plugin", () => {
   it("does not report authored diagnostics for top-level static hoists", () => {
     const source = `
       function Card() {
-        ^styles(\`:host { display: block; }\`);
-        ^shadowRootOptions({ mode: "open" });
+        static styles = \`:host { display: block; }\`;
+        static shadowRootOptions = { mode: "open" };
         return <div>ready</div>;
       }
     `;
@@ -514,10 +540,10 @@ describe("@litsx/typescript-plugin", () => {
     assert.strictEqual(remapVirtualText(text), text);
   });
 
-  it("declares ^lightDom() without an argument in tooling virtual source", () => {
+  it("declares static lightDom in tooling virtual source", () => {
     const source = `
       function Card() {
-        ^lightDom();
+        static lightDom = true;
         return <div />;
       }
     `;
@@ -532,8 +558,8 @@ describe("@litsx/typescript-plugin", () => {
   it("uses JS-safe tooling stubs for static hoists in jsx files", () => {
     const source = `
       function Card() {
-        ^styles(\`:host { display: block; }\`);
-        ^lightDom();
+        static styles = \`:host { display: block; }\`;
+        static lightDom = true;
         return <div />;
       }
     `;
@@ -856,7 +882,7 @@ describe("@litsx/typescript-plugin", () => {
   it("maps authored positions through tooling preambles and remaps tooling spans back", () => {
     const source = `
       function Card() {
-        ^styles(\`:host { display: block; }\`);
+        static styles = \`:host { display: block; }\`;
         return <button @click={handleClick}>{label}</button>;
       }
     `;
@@ -892,7 +918,7 @@ describe("@litsx/typescript-plugin", () => {
   it("remaps tooling spans when start and length are omitted", () => {
     const source = `
       function Card() {
-        ^styles(\`:host { display: block; }\`);
+        static styles = \`:host { display: block; }\`;
         return <button @click={handleClick}>{label}</button>;
       }
     `;
@@ -1621,7 +1647,7 @@ describe("@litsx/typescript-plugin", () => {
       });
 
       assert.ok(issues.some((issue) => issue.code === 91014));
-      assert.ok(issues.some((issue) => issue.code === 91015 && /\^customThing/.test(issue.message)));
+      assert.ok(issues.some((issue) => issue.code === 91015 && /static customThing/.test(issue.message)));
       assert.ok(issues.some((issue) => issue.code === 91018));
       assert.ok(issues.some((issue) => issue.code === 91006 && !/Did you mean/.test(issue.message)));
       assert.ok(issues.some((issue) => issue.code === 91004 && !/Did you mean/.test(issue.message)));
@@ -1760,7 +1786,7 @@ describe("@litsx/typescript-plugin", () => {
 
       assert.strictEqual(issues.filter((issue) => issue.code === 91014).length, 1);
       assert.strictEqual(issues.filter((issue) => issue.code === 91018).length, 1);
-      assert.ok(issues.some((issue) => issue.code === 91015 && /\^customThing/.test(issue.message)));
+      assert.ok(issues.some((issue) => issue.code === 91015 && /static customThing/.test(issue.message)));
       assert.ok(issues.some((issue) => issue.code === 91016));
       assert.ok(issues.some((issue) => issue.code === 91006 && !/Did you mean/.test(issue.message)));
       assert.ok(issues.some((issue) => issue.code === 91004 && !/Did you mean/.test(issue.message)));
@@ -2024,7 +2050,7 @@ describe("@litsx/typescript-plugin", () => {
       filePath,
       `
         export const Card = ({ title = "Smoke" }) => {
-          ^styles(\`:host { display: block; }\`);
+          static styles = \`:host { display: block; }\`;
           return <button>{title}</button>;
         };
       `,
@@ -3562,7 +3588,7 @@ describe("@litsx/typescript-plugin", () => {
   it("provides synthetic quick info for static hoists without exposing tooling stubs", () => {
     const source = `
       export const Card = () => {
-        ^styles(\`:host { display: block; }\`);
+        static styles = \`:host { display: block; }\`;
         return <div />;
       };
     `;
@@ -3627,14 +3653,14 @@ describe("@litsx/typescript-plugin", () => {
       },
     });
 
-    const quickInfo = wrapped.getQuickInfoAtPosition("/virtual/hoist-hover.tsx", source.indexOf("^styles") + 2);
+    const quickInfo = wrapped.getQuickInfoAtPosition("/virtual/hoist-hover.tsx", source.indexOf("static styles") + 2);
 
     assert.ok(quickInfo);
     assert.deepStrictEqual(quickInfo.textSpan, {
-      start: source.indexOf("^styles"),
-      length: "^styles".length,
+      start: source.indexOf("static styles"),
+      length: "static styles".length,
     });
-    assert.strictEqual(quickInfo.displayParts[0].text, "^styles");
+    assert.strictEqual(quickInfo.displayParts[0].text, "static styles");
     assert.match(quickInfo.documentation[0].text, /static style hoist/i);
   });
 

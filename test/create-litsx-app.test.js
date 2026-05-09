@@ -169,7 +169,7 @@ describe("create-litsx-app", () => {
     assert.match(mainSource, /import "@webcomponents\/scoped-custom-element-registry";/);
     assert.match(appSource, /<LitsxHero/);
     assert.match(appSource, /useState/);
-    assert.match(appSource, /\^styles\(/);
+    assert.match(appSource, /static styles = /);
     assert.match(appSource, /Count: \{count\}/);
     assert.doesNotMatch(appSource, /SuspenseBoundary/);
     assert.doesNotMatch(appSource, /ButtonCard/);
@@ -205,7 +205,7 @@ describe("create-litsx-app", () => {
     assert.match(mainSource, /import "@webcomponents\/scoped-custom-element-registry";/);
     assert.match(componentSource, /<LitsxHero/);
     assert.match(componentSource, /<StarterGuide/);
-    assert.match(componentSource, /\^styles\(/);
+    assert.match(componentSource, /static styles = /);
     assert.doesNotMatch(componentSource, /ButtonCard/);
     assert.doesNotMatch(componentSource, /StatusPill/);
     assert.match(heroSource, /View on GitHub/);

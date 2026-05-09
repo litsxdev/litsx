@@ -7,13 +7,13 @@
 
 React `propTypes` compatibility for Lit<sup>SX</sup>.
 
-This plugin is part of the React-compat migration surface. Its job is to take React-style `Component.propTypes = { ... }` assignments and lower them into native LitSX `^properties(...)` hoists so the rest of the LitSX pipeline can handle them normally.
+This plugin is part of the React-compat migration surface. Its job is to take React-style `Component.propTypes = { ... }` assignments and lower them into native LitSX `static properties = ...` hoists so the rest of the LitSX pipeline can handle them normally.
 
 ## What it does
 
 - Finds `Component.propTypes = { ... }` assignments on React-authored function components.
-- Rewrites them to internal `__litsx_static_properties({...})` hoists, which are the lowered form of native `^properties(...)`.
-- Preserves explicit authored `^properties(...)` as the stronger override layer when both are present.
+- Rewrites them to internal `__litsx_static_properties({...})` hoists, which are the lowered form of native `static properties = ...`.
+- Preserves explicit authored `static properties = ...` as the stronger override layer when both are present.
 - Imports compat runtime helpers from `@litsx/prop-types/runtime` for React forms such as `oneOf`, `shape`, `exact`, `arrayOf`, `oneOfType`, and `isRequired`.
 - Removes the original `propTypes` assignment and prunes unused `prop-types` imports.
 
@@ -81,5 +81,5 @@ After that, the native LitSX transform pipeline turns the hoist into the final s
 ## Scope
 
 - Canonical input is the React `prop-types` package.
-- Canonical output is native LitSX `^properties(...)` semantics.
+- Canonical output is native LitSX `static properties = ...` semantics.
 - This plugin belongs in migration/compat flows, not in native LitSX authoring guidance.

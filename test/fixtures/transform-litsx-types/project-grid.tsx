@@ -1,11 +1,11 @@
 import type { ProjectGridProps } from "./project-grid-types";
 
 export function ProjectGrid(props: ProjectGridProps) {
-  ^properties<ProjectGridProps>({
+  static properties = {
     selectedId: { attribute: "selected-id", reflect: true },
     onSelect: { attribute: false },
     page: { attribute: false },
-  });
+  };
 
   return (
     <section>

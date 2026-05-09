@@ -18,7 +18,7 @@ This preset wires the supported React compatibility pipeline in a fixed order:
 5. React lazy and React suspense lowering
 6. Native LitSX suspense lowering
 7. React-style error boundaries
-8. React `propTypes` compat lowering to native `^properties(...)`
+8. React `propTypes` compat lowering to native `static properties = ...`
 9. scoped elements
 10. React DOM/form attribute compatibility
 11. React event lowering
@@ -27,7 +27,7 @@ That ordering makes compatibility for React 19-style `ref` props, `forwardRef(..
 
 This preset is the supported public entrypoint for React migration. React event aliasing, effect lowering, wrapper lowering, ref handling, and other migration stages are internal to the preset.
 
-`propTypes` support here should be read as migration compatibility only. Native LitSX authoring should use TypeScript prop inference or explicit `^properties(...)` hoists instead of `Component.propTypes = { ... }`.
+`propTypes` support here should be read as migration compatibility only. Native LitSX authoring should use TypeScript prop inference or explicit `static properties = ...` hoists instead of `Component.propTypes = { ... }`.
 
 React context support here should also be read as migration compatibility only. It lowers onto `@lit/context` through the LitSX runtime surface; it is not a native LitSX authoring primitive.
 

@@ -5,12 +5,12 @@ type BannerProps = {
 };
 
 export function Banner({ tone = "info", open = true, message }: BannerProps) {
-  ^properties({
+  static properties = {
     open: { reflect: true },
     tone: { reflect: true },
-  });
+  };
 
-  ^styles((parent: { styles: unknown }) => [
+  static styles = ((parent: { styles: unknown }) => [
     parent.styles,
     `
       :host {

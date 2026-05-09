@@ -1,7 +1,7 @@
 import type { ResourceCardProps } from "./domain-index";
 
 export function ResourceCard(props: ResourceCardProps) {
-  ^properties<ResourceCardProps>({
+  static properties = {
     resourceId: { attribute: "resource-id", useDefault: true },
     status: { reflect: true },
     metadata: {
@@ -18,7 +18,7 @@ export function ResourceCard(props: ResourceCardProps) {
         return value !== oldValue;
       },
     },
-  });
+  };
 
   return (
     <article data-status={props.status}>
