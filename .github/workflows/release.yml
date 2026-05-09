@@ -209,7 +209,7 @@ jobs:
         run: corepack yarn release:publish
 
       - name: Create package tags
-        run: node scripts/release/create-release-tags.mjs
+        run: node scripts/release/create-release-tags.js
 
       - name: Push release tags
         run: git push origin --tags
