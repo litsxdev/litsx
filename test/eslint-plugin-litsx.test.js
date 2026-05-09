@@ -251,7 +251,7 @@ describe("@litsx/eslint-plugin", () => {
     });
 
     const [result] = await eslint.lintText(
-      'function Card() { if (ready) { ^styles(`:host{display:block;}`); } return <div />; }',
+      'function Card() { if (ready) { static styles = `:host{display:block;}`; } return <div />; }',
       { filePath: "example.jsx" },
     );
 
@@ -268,7 +268,7 @@ describe("@litsx/eslint-plugin", () => {
     });
 
     const [result] = await eslint.lintText(
-      'function Card() { ^styles(`:host{display:block;}`); ^styles(`:host{color:red;}`); return <div />; }',
+      'function Card() { static styles = `:host{display:block;}`; static styles = `:host{color:red;}`; return <div />; }',
       { filePath: "example.jsx" },
     );
 
@@ -306,7 +306,7 @@ describe("@litsx/eslint-plugin", () => {
     });
 
     const [result] = await eslint.lintText(
-      'function Card(props) { const title = props.title; ^styles(`:host{display:block;}`); return <div>{title}</div>; }',
+      'function Card(props) { const title = props.title; static styles = `:host{display:block;}`; return <div>{title}</div>; }',
       { filePath: "example.jsx" },
     );
 
@@ -334,7 +334,7 @@ describe("@litsx/eslint-plugin", () => {
     });
 
     const [result] = await eslint.lintText(
-      'function Card() { ^analyticsTag({ section: "hero" }); return <div />; }',
+      'function Card() { static analyticsTag = { section: "hero" }; return <div />; }',
       { filePath: "example.jsx" },
     );
 
