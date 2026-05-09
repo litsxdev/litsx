@@ -1,5 +1,12 @@
 # @litsx/babel-preset-react-compat
 
+## 0.2.3
+
+### Patch Changes
+
+- Updated dependencies [4a81cd6]
+  - @litsx/babel-preset-litsx@0.5.0
+
 ## 0.2.2
 
 ### Patch Changes

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.2
+
+### Patch Changes
+
+- Updated dependencies [4a81cd6]
+  - @litsx/jsx-authoring@0.3.0
+
 ## 0.2.1
 
 ### Patch Changes
