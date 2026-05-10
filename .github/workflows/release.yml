@@ -213,3 +213,69 @@ jobs:
 
       - name: Push release tags
         run: git push origin --tags
+
+      - name: Build GitHub release payload
+        run: |
+          mkdir -p .release-artifacts
+          node scripts/release/build-github-release.js > .release-artifacts/github-release.json
+
+      - name: Create GitHub release
+        uses: actions/github-script@v8
+        with:
+          github-token: ${{ steps.app-token.outputs.token }}
+          script: |
+            const fs = require("node:fs");
+            const release = JSON.parse(
+              fs.readFileSync(".release-artifacts/github-release.json", "utf8"),
+            );
+
+            if (!Array.isArray(release.packages) || release.packages.length === 0) {
+              core.info("No published packages detected for this release commit");
+              return;
+            }
+
+            const { owner, repo } = context.repo;
+
+            let existingRelease = null;
+            try {
+              const result = await github.rest.repos.getReleaseByTag({
+                owner,
+                repo,
+                tag: release.tagName,
+              });
+              existingRelease = result.data;
+            } catch (error) {
+              if (error.status !== 404) {
+                throw error;
+              }
+            }
+
+            const payload = {
+              owner,
+              repo,
+              tag_name: release.tagName,
+              target_commitish: release.targetCommitish,
+              name: release.name,
+              body: release.body,
+              draft: false,
+              prerelease: false,
+              make_latest: "true",
+            };
+
+            if (existingRelease) {
+              await github.rest.repos.updateRelease({
+                owner,
+                repo,
+                release_id: existingRelease.id,
+                name: payload.name,
+                body: payload.body,
+                draft: payload.draft,
+                prerelease: payload.prerelease,
+                make_latest: payload.make_latest,
+              });
+              core.info(`Updated GitHub release ${release.tagName}`);
+              return;
+            }
+
+            await github.rest.repos.createRelease(payload);
+            core.info(`Created GitHub release ${release.tagName}`);
