@@ -103,6 +103,30 @@ describe("@litsx/babel-plugin-shared-hooks createRuntimeHooksTransform", () => {
     assert.match(code, /prepareEffects\(this\);/);
   });
 
+  it("reuses an existing host-like first parameter in local custom hooks", () => {
+    const source = `
+      import { useAfterUpdate } from "@litsx/litsx";
+
+      const useCounterEffects = (host, count) => {
+        useAfterUpdate(() => syncCount(count), []);
+      };
+
+      class Card {
+        render() {
+          useCounterEffects(this.count);
+          return this.count;
+        }
+      }
+    `;
+
+    const code = run(source);
+
+    assert.match(code, /const useCounterEffects = \(host, count\) => \{/);
+    assert.match(code, /useAfterUpdate\(host, \(\) => syncCount\(count\), \[]\);/);
+    assert.match(code, /useCounterEffects\(this, this\.count\);/);
+    assert.strictEqual((code.match(/prepareEffects/g) || []).length, 2);
+  });
+
   it("does not rewrite blocked custom hooks imported from react namespaces or existing host-aware calls", () => {
     const source = `
       import * as ReactRuntime from "react";
@@ -145,6 +169,29 @@ describe("@litsx/babel-plugin-shared-hooks createRuntimeHooksTransform", () => {
       /import \{ prepareEffects, useStyle \} from "@litsx\/litsx";|import \{ useStyle, prepareEffects \} from "@litsx\/litsx";/
     );
     assert.match(code, /runtime\.useStyle\(this, "--accent", this\.accent\);/);
+    assert.match(code, /prepareEffects\(this\);/);
+  });
+
+  it("does not duplicate an existing prepareEffects import", () => {
+    const source = `
+      import { prepareEffects, useAfterUpdate } from "@litsx/litsx";
+
+      class Card {
+        render() {
+          useAfterUpdate(() => this.sync(), []);
+          return this.value;
+        }
+      }
+    `;
+
+    const code = run(source);
+
+    assert.strictEqual((code.match(/prepareEffects/g) || []).length, 2);
+    assert.match(
+      code,
+      /import \{ prepareEffects, useAfterUpdate \} from "@litsx\/litsx";|import \{ useAfterUpdate, prepareEffects \} from "@litsx\/litsx";/
+    );
+    assert.match(code, /useAfterUpdate\(this, \(\) => this\.sync\(\), \[]\);/);
     assert.match(code, /prepareEffects\(this\);/);
   });
 
@@ -267,5 +314,74 @@ describe("@litsx/babel-plugin-shared-hooks createRuntimeHooksTransform", () => {
     assert.doesNotMatch(untouchedCode, /prepareEffects/);
     assert.match(untouchedCode, /import \{ useAfterUpdate \} from "@litsx\/litsx";/);
     assert.match(untouchedCode, /useAfterUpdate\(\(\) => this\.sync\(\), \[]\);/);
+  });
+
+  it("adds prepareEffects when render only uses local custom hooks and no imports exist yet", () => {
+    const source = `
+      function useCounterEffects() {
+        return measure();
+      }
+
+      class Card {
+        render() {
+          useCounterEffects();
+          return this.value;
+        }
+      }
+    `;
+
+    const code = run(source);
+
+    assert.match(code, /import \{ prepareEffects \} from "@litsx\/litsx";/);
+    assert.match(code, /function useCounterEffects\(_host\) \{/);
+    assert.match(code, /useCounterEffects\(this\);/);
+    assert.match(code, /prepareEffects\(this\);/);
+  });
+
+  it("rewrites function-expression custom hooks declared in variable initializers", () => {
+    const source = `
+      import { useAfterUpdate } from "@litsx/litsx";
+
+      const useCounterEffects = function () {
+        useAfterUpdate(() => syncCount(), []);
+      };
+
+      class Card {
+        render() {
+          useCounterEffects();
+          return this.value;
+        }
+      }
+    `;
+
+    const code = run(source);
+
+    assert.match(code, /const useCounterEffects = function \(_host\) \{/);
+    assert.match(code, /useAfterUpdate\(_host, \(\) => syncCount\(\), \[]\);/);
+    assert.match(code, /useCounterEffects\(this\);/);
+  });
+
+  it("merges rewritten runtime default and namespace imports even when no named helpers are needed", () => {
+    const source = `
+      import ReactDefault from "react";
+      import RuntimeDefault from "@litsx/litsx";
+      import * as ReactNs from "react";
+      import * as RuntimeNs from "@litsx/litsx";
+
+      class Card {
+        render() {
+          return ReactDefault || RuntimeDefault || ReactNs || RuntimeNs;
+        }
+      }
+    `;
+
+    const code = run(source);
+
+    assert.strictEqual((code.match(/from "@litsx\/litsx";/g) || []).length, 1);
+    assert.match(
+      code,
+      /import ReactDefault, \* as ReactNs from "@litsx\/litsx";|import \* as ReactNs, ReactDefault from "@litsx\/litsx";/
+    );
+    assert.doesNotMatch(code, /prepareEffects/);
   });
 });

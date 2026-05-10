@@ -7,6 +7,7 @@ import {
   createLightDomRegistry,
   disconnectLightDomRegistry,
   ensureLightDomProxy,
+  withLightDomCreationContext,
 } from "../packages/light-dom-registry/src/index.js";
 
 let tagCounter = 0;
@@ -130,6 +131,23 @@ describe("@litsx/light-dom-registry", () => {
     assert.strictEqual(registry.getName(CardElement), tagName);
     assert.deepStrictEqual(registry.entries(), [[tagName, CardElement]]);
     assert.strictEqual(await registry.whenDefined(tagName), CardElement);
+  });
+
+  it("reuses pending whenDefined promises until the definition arrives", async () => {
+    const tagName = nextTag();
+    const host = document.createElement("section");
+    const registry = createLightDomRegistry(host, {});
+
+    const first = registry.whenDefined(tagName);
+    const second = registry.whenDefined(tagName);
+
+    assert.strictEqual(first, second);
+
+    class CardElement extends HTMLElement {}
+    registry.define(tagName, CardElement);
+
+    assert.strictEqual(await first, CardElement);
+    assert.strictEqual(registry.getName(class extends HTMLElement {}), null);
   });
 
   it("disconnects the public host registry handle without destroying the internal registry", () => {
@@ -417,6 +435,24 @@ describe("@litsx/light-dom-registry", () => {
     host.remove();
   });
 
+  it("returns null names for unknown constructors and resolves pending whenDefined only once", async () => {
+    const tagName = nextTag();
+    const host = document.createElement("section");
+    const registry = createLightDomRegistry(host, {});
+
+    const pending = registry.whenDefined(tagName);
+    const repeated = registry.whenDefined(tagName);
+    assert.strictEqual(pending, repeated);
+
+    class PlainElement extends HTMLElement {}
+    class UnknownElement extends HTMLElement {}
+
+    registry.define(tagName, PlainElement);
+
+    assert.strictEqual(await pending, PlainElement);
+    assert.strictEqual(registry.getName(UnknownElement), null);
+  });
+
   it("supports scoped registries from shadow roots and newable registered constructors", () => {
     const tagName = nextTag();
     const host = document.createElement("section");
@@ -478,6 +514,33 @@ describe("@litsx/light-dom-registry", () => {
     host.remove();
   });
 
+  it("propagates scoped creation context through element innerHTML", () => {
+    const tagName = nextTag();
+    const host = document.createElement("section");
+    const container = document.createElement("div");
+
+    class InnerHtmlElement extends HTMLElement {
+      connectedCallback() {
+        this.connected = true;
+      }
+    }
+
+    connectLightDomRegistry(host, {
+      [tagName]: InnerHtmlElement,
+    });
+    host.appendChild(container);
+    document.body.appendChild(host);
+
+    container.innerHTML = `<${tagName}></${tagName}>`;
+
+    const element = container.querySelector(tagName);
+    assert(element);
+    assert.strictEqual(Object.getPrototypeOf(element), InnerHtmlElement.prototype);
+    assert.equal(element.connected, true);
+
+    host.remove();
+  });
+
   it("ignores adopted and disconnect callbacks on unresolved stand-ins", () => {
     const tagName = nextTag();
     const standIn = ensureLightDomProxy(tagName);
@@ -489,6 +552,32 @@ describe("@litsx/light-dom-registry", () => {
 
     assert.doesNotThrow(() => standIn.prototype.adoptedCallback.call(element, "doc"));
     assert.doesNotThrow(() => standIn.prototype.disconnectedCallback.call(element));
+
+    host.remove();
+  });
+
+  it("notifies pending registries when unresolved stand-ins disconnect", () => {
+    const tagName = nextTag();
+    const host = document.createElement("section");
+    const registry = createLightDomRegistry(host, {});
+    const standIn = ensureLightDomProxy(tagName);
+    const calls = [];
+
+    host.innerHTML = `<${tagName}></${tagName}>`;
+    document.body.appendChild(host);
+
+    const element = host.firstElementChild;
+    registry._upgradeWhenDefined = (...args) => {
+      calls.push(args);
+    };
+
+    standIn.prototype.connectedCallback.call(element);
+    standIn.prototype.disconnectedCallback.call(element);
+
+    assert.deepStrictEqual(calls, [
+      [element, tagName, true],
+      [element, tagName, false],
+    ]);
 
     host.remove();
   });
@@ -516,6 +605,27 @@ describe("@litsx/light-dom-registry", () => {
     assert.strictEqual(registry.resolve(tagName).standInClass, customElements.get(tagName));
 
     host.remove();
+  });
+
+  it("creates scoped elements through withLightDomCreationContext", () => {
+    const tagName = nextTag();
+    const host = document.createElement("section");
+
+    class ContextElement extends HTMLElement {
+      constructor() {
+        super();
+        this.kind = "context";
+      }
+    }
+
+    connectLightDomRegistry(host, {
+      [tagName]: ContextElement,
+    });
+
+    const element = withLightDomCreationContext(host, () => document.createElement(tagName));
+
+    assert.strictEqual(Object.getPrototypeOf(element), ContextElement.prototype);
+    assert.strictEqual(element.kind, "context");
   });
 
   it("propagates scoped creation context through shadow-root element factories and importNode", () => {
@@ -551,5 +661,46 @@ describe("@litsx/light-dom-registry", () => {
     }
 
     host.remove();
+  });
+
+  it("propagates scoped creation context through shadow-root innerHTML", () => {
+    const tagName = nextTag();
+    const host = document.createElement("section");
+    const shadowRoot = host.attachShadow({ mode: "open" });
+
+    class ShadowInnerHtmlElement extends HTMLElement {
+      connectedCallback() {
+        this.connected = true;
+      }
+    }
+
+    const registry = createLightDomRegistry(host, {
+      [tagName]: ShadowInnerHtmlElement,
+    });
+    shadowRoot.customElements = registry;
+    shadowRoot.innerHTML = `<${tagName}></${tagName}>`;
+    document.body.appendChild(host);
+
+    const element = shadowRoot.querySelector(tagName);
+    assert(element);
+    assert.strictEqual(Object.getPrototypeOf(element), ShadowInnerHtmlElement.prototype);
+    assert.equal(element.connected, true);
+
+    host.remove();
+  });
+
+  it("uses the ambient creation context when creating scoped elements without a rooted node", () => {
+    const tagName = nextTag();
+    const host = document.createElement("section");
+
+    class AmbientContextElement extends HTMLElement {}
+
+    connectLightDomRegistry(host, {
+      [tagName]: AmbientContextElement,
+    });
+
+    const element = withLightDomCreationContext(host, () => document.createElement(tagName));
+
+    assert.strictEqual(Object.getPrototypeOf(element), AmbientContextElement.prototype);
   });
 });

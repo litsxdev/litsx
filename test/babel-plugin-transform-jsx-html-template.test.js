@@ -394,6 +394,64 @@ describe("@litsx/babel-plugin-transform-jsx-html-template", () => {
     assert.match(code, /const view = svg`<div>\$\{label\}<\/div>`;/);
   });
 
+  it("does not duplicate an existing custom tagged import from lit", () => {
+    const source = [
+      'import { LitElement, svg } from "lit";',
+      'const view = <div>{label}</div>;',
+    ].join("\n");
+
+    const ast = parser.parse(source, { sourceType: "module" });
+    const { code } = transformFromAstSync(ast, source, {
+      configFile: false,
+      babelrc: false,
+      plugins: [[plugin, { tag: "svg" }]],
+    });
+
+    assert.strictEqual((code.match(/import \{ LitElement, svg \} from "lit";/g) || []).length, 1);
+    assert.match(code, /const view = svg`<div>\$\{label\}<\/div>`;/);
+  });
+
+  it("adds a separate tagged import when lit is imported as a namespace", () => {
+    const source = [
+      'import * as lit from "lit";',
+      'const view = <div>{label}</div>;',
+    ].join("\n");
+
+    const ast = parser.parse(source, { sourceType: "module" });
+    const { code } = transformFromAstSync(ast, source, {
+      configFile: false,
+      babelrc: false,
+      plugins: [[plugin, { tag: "svg" }]],
+    });
+
+    assert.match(code, /import \* as lit from "lit";/);
+    assert.match(code, /import \{ svg \} from "lit";/);
+    assert.match(code, /const view = svg`<div>\$\{label\}<\/div>`;/);
+  });
+
+  it("ignores lit attribute sourcemap metadata whose generated needle is missing", () => {
+    const inputMap = {
+      version: 3,
+      file: "view.js",
+      sources: ["/virtual/view.tsx"],
+      sourcesContent: ["const view = <button />;"],
+      names: [],
+      mappings: "AAAA",
+    };
+
+    const patched = patchLitAttributeSourcemap("const view = html``;", inputMap, [{
+      source: "/virtual/view.tsx",
+      line: 1,
+      column: 13,
+      generatedNeedle: ".value",
+      generatedOffset: 0,
+    }]);
+
+    assert.deepStrictEqual(patched.sources, inputMap.sources);
+    assert.deepStrictEqual(patched.sourcesContent, inputMap.sourcesContent);
+    assert.strictEqual(patched.file, inputMap.file);
+  });
+
   it("creates component calls for namespaced components and spread props", () => {
     const expr = parser.parseExpression("<x:button {...props} data-id=\"cta\" disabled />", {
       plugins: ["jsx"],

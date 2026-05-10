@@ -84,6 +84,17 @@ button{padding:4px;}
     assert.match(formatted, /\$\{color\}/);
   });
 
+  it("formats multiple static style templates in one document and leaves non-template styles intact", async () => {
+    const source = `export const App=()=>{static styles=\`:host{display:block;}\`;static styles=themeStyles;static styles=\`button{padding:4px;}\`;return <button />;};`;
+
+    const formatted = await formatWith("litsx", source);
+
+    assert.match(formatted, /static styles = `\n\s+:host \{/);
+    assert.match(formatted, /static styles = themeStyles;/);
+    assert.match(formatted, /static styles = `\n\s+button \{/);
+    assert.strictEqual((formatted.match(/static styles = `/g) ?? []).length, 2);
+  });
+
   it("formats .litsx.jsx sources without TypeScript syntax", async () => {
     const source = `export const App=({title})=>{return <button @click={()=>{}} .value={title} ?disabled={false}>{title}</button>;};`;
 
@@ -132,6 +143,28 @@ button{padding:4px;}
     assert.match(formatted, /display: block;/);
   });
 
+  it("exposes an async root embed printer for litsx-jsx documents", async () => {
+    const parserInstance = plugin.parsers["litsx-jsx"];
+    const printer = plugin.printers[parserInstance.astFormat];
+    const ast = parserInstance.parse(
+      "export const App=({title})=>{static styles=`button{padding:4px;}`;return <button .value={title}>{title}</button>;};",
+      { filepath: "/virtual/App.litsx.jsx" },
+    );
+    const embed = printer.embed({ node: ast }, {
+      parser: "litsx-jsx",
+      plugins: [plugin],
+      semi: true,
+      tabWidth: 2,
+      useTabs: false,
+    });
+
+    assert.strictEqual(typeof embed, "function");
+    const formatted = await embed();
+    assert.match(formatted, /export const App = \(\{ title \}\) => \{/);
+    assert.match(formatted, /static styles = `\n/);
+    assert.doesNotMatch(formatted, /title: string/);
+  });
+
   it("exposes a single root parser and printer for the authored ast surface", () => {
     const parserInstance = plugin.parsers.litsx;
     const printer = plugin.printers[parserInstance.astFormat];
@@ -148,6 +181,123 @@ button{padding:4px;}
     assert.strictEqual(printer.embed({ node: { type: "OtherNode" } }, {}), null);
   });
 
+  it("returns an empty string from the root printer print hook", () => {
+    const parserInstance = plugin.parsers.litsx;
+    const printer = plugin.printers[parserInstance.astFormat];
+
+    assert.strictEqual(printer.print(), "");
+  });
+
+  it("formats real static styles hoists while ignoring lookalikes in strings and comments", async () => {
+    const source = `export const App=()=>{const label="static styles";/* static styles */static styles=\`:host{display:block;}\`;static styles=themeStyles;
+return <button>{label}</button>;};`;
+
+    const formatted = await formatWith("litsx", source);
+
+    assert.match(formatted, /const label = "static styles";/);
+    assert.match(formatted, /\/\* static styles \*\//);
+    assert.match(formatted, /static styles = `\n\s+:host \{/);
+    assert.match(formatted, /static styles = themeStyles;/);
+  });
+
+  it("formats root nodes that do not contain embeddable static styles", async () => {
+    const parserInstance = plugin.parsers["litsx-jsx"];
+    const printer = plugin.printers[parserInstance.astFormat];
+    const embed = printer.embed({
+      node: {
+        type: "LitsxDocument",
+        mode: "litsx-jsx",
+        virtualSource: {
+          code: "export const App = ({ title }) => { return <button>{title}</button>; };",
+        },
+      },
+    }, {
+      parser: "litsx-jsx",
+      plugins: [plugin],
+      semi: true,
+      tabWidth: 2,
+      useTabs: false,
+    });
+
+    const formatted = await embed();
+
+    assert.match(formatted, /export const App = \(\{ title \}\) => \{/);
+    assert.doesNotMatch(formatted, /static styles =/);
+  });
+
+  it("remaps virtual static hoist call forms back to assignment syntax", async () => {
+    const printer = plugin.printers[plugin.parsers.litsx.astFormat];
+    const embed = printer.embed({
+      node: {
+        type: "LitsxDocument",
+        mode: "litsx",
+        virtualSource: {
+          code: "export const App = () => { __litsx_static_lightDom(); __litsx_static_analyticsTag(\"card\"); return <button />; };",
+        },
+      },
+    }, {
+      parser: "litsx",
+      plugins: [plugin],
+      semi: true,
+      tabWidth: 2,
+      useTabs: false,
+    });
+
+    const formatted = await embed();
+
+    assert.match(formatted, /static lightDom = true;/);
+    assert.match(formatted, /static analyticsTag = "card";/);
+  });
+
+  it("remaps virtual static hoist calls even with nested comments and template expressions", async () => {
+    const printer = plugin.printers[plugin.parsers.litsx.astFormat];
+    const embed = printer.embed({
+      node: {
+        type: "LitsxDocument",
+        mode: "litsx",
+        virtualSource: {
+          code: "export const App = () => { __litsx_static_styles(`:host { color: ${theme /* comment */}; }`); return <button />; };",
+        },
+      },
+    }, {
+      parser: "litsx",
+      plugins: [plugin],
+      semi: true,
+      tabWidth: 2,
+      useTabs: false,
+    });
+
+    const formatted = await embed();
+
+    assert.match(formatted, /static styles = `:host \{ color: \$\{theme \/\* comment \*\/\}; \}`;/);
+  });
+
+  it("surfaces reserved virtual-name collisions from root nodes", async () => {
+    const parserInstance = plugin.parsers.litsx;
+    const printer = plugin.printers[parserInstance.astFormat];
+    const embed = printer.embed({
+      node: {
+        type: "LitsxDocument",
+        mode: "litsx",
+        virtualSource: {
+          code: "export const App = () => <button />;",
+          collision: true,
+        },
+      },
+    }, {
+      parser: "litsx",
+      plugins: [plugin],
+      semi: true,
+      tabWidth: 2,
+      useTabs: false,
+    });
+
+    await assert.rejects(
+      () => embed(),
+      /reserved internal __litsx_\* names/,
+    );
+  });
+
   it("does not claim plain tsx or jsx file extensions", () => {
     const extensions = plugin.languages.flatMap((language) => language.extensions ?? []);
 
@@ -155,5 +305,10 @@ button{padding:4px;}
     assert.ok(extensions.includes(".litsx.jsx"));
     assert.ok(!extensions.includes(".tsx"));
     assert.ok(!extensions.includes(".jsx"));
+  });
+
+  it("falls back gracefully for parser location helpers on falsy nodes", () => {
+    assert.strictEqual(plugin.parsers.litsx.locStart(null), 0);
+    assert.strictEqual(plugin.parsers.litsx.locEnd(null), 0);
   });
 });

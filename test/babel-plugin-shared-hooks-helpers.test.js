@@ -629,6 +629,62 @@ describe("@litsx/babel-plugin-shared-hooks helpers", () => {
     assert.doesNotMatch(result.code, /from "react";/);
   });
 
+  it("ignores default and namespace imports when collecting useState locals", () => {
+    const ast = parseModule(`
+      import React, * as ReactNs from "react";
+      import { useState as useReactState } from "react";
+      useReactState;
+      React;
+      ReactNs;
+    `);
+    const state = {
+      sourceUseStateLocals: new Set(),
+      runtimeUseStateLocals: new Set(),
+      localCustomHooks: new Set(),
+    };
+
+    transformFromAstSync(ast, "", {
+      configFile: false,
+      babelrc: false,
+      plugins: [() => ({
+        visitor: {
+          Program(programPath) {
+            programPath.get("body").forEach((path) => {
+              if (path.isImportDeclaration()) {
+                collectUseStateImports(path, state, { importSources: ["react"] });
+              }
+            });
+          },
+        },
+      })],
+    });
+
+    assert.deepStrictEqual(Array.from(state.sourceUseStateLocals), ["useReactState"]);
+  });
+
+  it("leaves custom hooks unchanged when they do not call a collected useState local", () => {
+    const source = `
+      import * as React from "react";
+
+      function useCounter(initial) {
+        return React.useState(initial);
+      }
+
+      class Counter {
+        render() {
+          return useCounter(1);
+        }
+      }
+    `;
+
+    const code = runUseStateCustomHookBridge(source);
+
+    assert.match(code, /function useCounter\(initial\)/);
+    assert.match(code, /return React\.useState\(initial\);/);
+    assert.match(code, /return useCounter\(1\);/);
+    assert.doesNotMatch(code, /from "@litsx\/litsx"/);
+  });
+
   it("removes emptied source imports and inserts runtime useState before other imports", () => {
     const ast = parseModule(`
       import { useState as useReactState } from "react";
@@ -665,5 +721,86 @@ describe("@litsx/babel-plugin-shared-hooks helpers", () => {
       /^import \{ useState as useReactState \} from "@litsx\/litsx";\s+import \{ html \} from "lit";/s,
     );
     assert.doesNotMatch(result.code, /from "react";/);
+  });
+
+  it("can insert a runtime useState import into files that start without any imports", () => {
+    const ast = parseModule(`
+      const value = 1;
+      value;
+    `);
+    const state = {
+      sourceUseStateLocals: new Set(),
+      runtimeUseStateLocals: new Set(["useState"]),
+      localCustomHooks: new Set(),
+    };
+
+    const result = transformFromAstSync(ast, "", {
+      configFile: false,
+      babelrc: false,
+      plugins: [() => ({
+        visitor: {
+          Program(programPath) {
+            finalizeUseStateImports(programPath, state, t, {
+              importSources: ["react"],
+              runtimeModule: "@litsx/litsx",
+            });
+          },
+        },
+      })],
+    });
+
+    assert.match(result.code, /^import \{ useState \} from "@litsx\/litsx";\s+const value = 1;/s);
+  });
+
+  it("keeps existing runtime useState specifiers without duplication", () => {
+    const ast = parseModule(`
+      import { useState } from "@litsx/litsx";
+      useState;
+    `);
+    const state = {
+      sourceUseStateLocals: new Set(["useState"]),
+      runtimeUseStateLocals: new Set(["useState"]),
+      localCustomHooks: new Set(),
+    };
+
+    const result = transformFromAstSync(ast, "", {
+      configFile: false,
+      babelrc: false,
+      plugins: [() => ({
+        visitor: {
+          Program(programPath) {
+            finalizeUseStateImports(programPath, state, t, {
+              importSources: ["react", "@litsx/litsx"],
+              runtimeModule: "@litsx/litsx",
+            });
+          },
+        },
+      })],
+    });
+
+    assert.strictEqual((result.code.match(/import \{ useState \} from "@litsx\/litsx";/g) || []).length, 1);
+  });
+
+  it("ignores non-identifier render calls when injecting custom-hook host arguments", () => {
+    const source = `
+      import { useState } from "react";
+
+      function useCounter(initial) {
+        const [count, setCount] = useState(initial);
+        return [count, setCount];
+      }
+
+      class Counter {
+        render() {
+          return hooks.useCounter(1);
+        }
+      }
+    `;
+
+    const code = runUseStateCustomHookBridge(source);
+
+    assert.match(code, /function useCounter\(_host, initial\)/);
+    assert.match(code, /return hooks\.useCounter\(1\);/);
+    assert.doesNotMatch(code, /hooks\.useCounter\(this, 1\)/);
   });
 });
