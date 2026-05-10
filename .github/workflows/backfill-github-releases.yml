@@ -34,6 +34,7 @@ jobs:
   backfill:
     name: Backfill GitHub Releases
     runs-on: ubuntu-latest
+    environment: npm-release
     steps:
       - name: Create release app token
         id: app-token
