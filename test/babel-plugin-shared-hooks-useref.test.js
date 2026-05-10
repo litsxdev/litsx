@@ -88,6 +88,26 @@ describe("@litsx/babel-plugin-shared-hooks createUseRefTransform", () => {
     assert.doesNotMatch(code, /data-ref="_buttonRefElement"/);
   });
 
+  it("treats namespaced component refs as .ref bindings too", () => {
+    const source = `
+      import { LitElement } from 'lit';
+      import { useRef } from 'react';
+
+      class TypedRefs extends LitElement {
+        render() {
+          const buttonRef = useRef(null);
+          return <UI.Button ref={buttonRef} .label={this.label}>{this.count}</UI.Button>;
+        }
+      }
+    `;
+
+    const code = run(source);
+
+    assert.match(code, /\.ref=\{buttonRef\}/);
+    assert.doesNotMatch(code, /data-ref="_buttonRefElement"/);
+    assert.doesNotMatch(code, /get _buttonRefElement\(\)/);
+  });
+
   it("supports callback refs inside html templates", () => {
     const source = `
       import { LitElement, html } from 'lit';
@@ -109,6 +129,33 @@ describe("@litsx/babel-plugin-shared-hooks createUseRefTransform", () => {
     assert.match(code, /get _ref\(\)/);
     assert.match(code, /useCallbackRef\(this, \(\) => this\._ref, node => this\.register\(node\)\);/);
     assert.match(code, /html`<button data-ref="_ref">Click<\/button>`/);
+  });
+
+  it("aliases the runtime callback helper when useCallbackRef is already bound in module scope", () => {
+    const source = `
+      import { LitElement } from 'lit';
+
+      const useCallbackRef = Symbol('local');
+
+      class CallbackRef extends LitElement {
+        render() {
+          return html\`<button ref="\${node => this.register(node)}">Click</button>\`;
+        }
+
+        register(node) {
+          this._node = node;
+        }
+      }
+    `;
+
+    const code = run(source);
+
+    assert.match(
+      code,
+      /import \{ useCallbackRef as _useCallbackRef \} from "@litsx\/litsx";/
+    );
+    assert.match(code, /_useCallbackRef\(this, \(\) => this\._ref, node => this\.register\(node\)\);/);
+    assert.match(code, /const useCallbackRef = Symbol\(['"]local['"]\);/);
   });
 
   it("supports bare html ref bindings and avoids duplicating an existing getter", () => {
@@ -216,6 +263,83 @@ describe("@litsx/babel-plugin-shared-hooks createUseRefTransform", () => {
     );
   });
 
+  it("removes unused useRef imports when no live references remain", () => {
+    const source = `
+      import { useRef } from 'react';
+
+      const value = 1;
+      export { value };
+    `;
+
+    const code = run(source);
+
+    assert.doesNotMatch(code, /useRef/);
+    assert.match(code, /const value = 1;/);
+  });
+
+  it("allows mixed lowered and unresolved runtime-native useRef calls without enforcement", () => {
+    const runtimePlugin = createUseRefTransform({
+      importSource: "@litsx/litsx",
+      hookName: "useRef",
+      pluginName: "test-shared-hooks-useref-runtime-native",
+    });
+
+    const source = `
+      import { LitElement } from 'lit';
+      import { useRef } from '@litsx/litsx';
+
+      function plainUtility() {
+        return useRef(null);
+      }
+
+      class SearchInput extends LitElement {
+        render() {
+          const inputRef = useRef(null);
+          return <input ref={inputRef} />;
+        }
+      }
+    `;
+
+    const ast = parser.parse(source, { sourceType: "module" });
+    const result = transformFromAstSync(ast, source, {
+      configFile: false,
+      babelrc: false,
+      plugins: [runtimePlugin],
+    });
+    const code = result.code;
+
+    assert.match(code, /function plainUtility\(\) \{\s*return useRef\(null\);/);
+    assert.match(code, /const inputRef = useRef\(this, null\);/);
+    assert.match(code, /data-ref="_inputRefElement"/);
+  });
+
+  it("allows unresolved runtime-native useRef references when none of them can be lowered", () => {
+    const runtimePlugin = createUseRefTransform({
+      importSource: "@litsx/litsx",
+      hookName: "useRef",
+      pluginName: "test-shared-hooks-useref-runtime-native-unresolved",
+    });
+
+    const source = `
+      import { useRef } from '@litsx/litsx';
+
+      function plainUtility() {
+        return useRef;
+      }
+    `;
+
+    const ast = parser.parse(source, { sourceType: "module" });
+    const result = transformFromAstSync(ast, source, {
+      configFile: false,
+      babelrc: false,
+      plugins: [runtimePlugin],
+    });
+    const code = result.code;
+
+    assert.match(code, /import \{ useRef \} from ['"]@litsx\/litsx['"];/);
+    assert.match(code, /return useRef;/);
+  });
+
   it("supports alternate hook names and can skip mutable lowering when only managed DOM refs are enabled", () => {
     const managedOnlyPlugin = createUseRefTransform({
       importSource: "react",
@@ -248,6 +372,34 @@ describe("@litsx/babel-plugin-shared-hooks createUseRefTransform", () => {
     assert.match(code, /import \{ useRef as useManagedRef, useCallbackRef \} from "@litsx\/litsx";|import \{ useCallbackRef, useRef as useManagedRef \} from "@litsx\/litsx";/);
     assert.match(code, /useManagedRef\(this, null\);/);
     assert.match(code, /useCallbackRef\(this, \(\) => this\._inputRefElement, node => inputRef\.current = node\);/);
+  });
+
+  it("surfaces unresolved host errors after queueing pending mutable ref calls", () => {
+    const runtimePlugin = createUseRefTransform({
+      importSource: "@litsx/litsx",
+      hookName: "useRef",
+      pluginName: "test-shared-hooks-useref-runtime-native-pending-error",
+    });
+
+    const source = `
+      import { useRef } from '@litsx/litsx';
+
+      function plainUtility() {
+        const valueRef = useRef(null);
+        return valueRef.current;
+      }
+    `;
+
+    const ast = parser.parse(source, { sourceType: "module" });
+
+    assert.throws(
+      () => transformFromAstSync(ast, source, {
+        configFile: false,
+        babelrc: false,
+        plugins: [runtimePlugin],
+      }),
+      /unable to resolve host for useRef inside custom hook/,
+    );
   });
 
   it("preserves unresolved template ref expressions that are not authored as ref attributes", () => {
@@ -290,6 +442,29 @@ describe("@litsx/babel-plugin-shared-hooks createUseRefTransform", () => {
     assert.match(code, /\.ref=\{node => this\.register\(node\)\}/);
     assert.doesNotMatch(code, /data-ref=/);
     assert.doesNotMatch(code, /useCallbackRef/);
+  });
+
+  it("lowers callback refs on DOM JSX elements inside render methods", () => {
+    const source = `
+      import { LitElement } from 'lit';
+
+      class SearchInput extends LitElement {
+        render() {
+          return <input ref={node => this.register(node)} />;
+        }
+
+        register(node) {
+          this._node = node;
+        }
+      }
+    `;
+
+    const code = run(source);
+
+    assert.match(code, /import \{ useCallbackRef \} from "@litsx\/litsx";/);
+    assert.match(code, /get _ref\(\)/);
+    assert.match(code, /data-ref="_ref"/);
+    assert.match(code, /useCallbackRef\(this, \(\) => this\._ref, node => this\.register\(node\)\);/);
   });
 
   it("ignores template callbacks that are not attached to ref attributes", () => {

@@ -724,7 +724,16 @@ export function createUseRefTransform({
             }
 
             if (state.callbackRuntimeNeeded) {
-              ensureRuntimeNamedImports(programPath, RUNTIME_MODULE, ["useCallbackRef"], t);
+              if (state.callbackRuntimeLocalName === "useCallbackRef") {
+                ensureRuntimeNamedImports(programPath, RUNTIME_MODULE, ["useCallbackRef"], t);
+              } else {
+                ensureRuntimeImport(
+                  programPath,
+                  "useCallbackRef",
+                  state.callbackRuntimeLocalName,
+                  t
+                );
+              }
             }
           },
         },
