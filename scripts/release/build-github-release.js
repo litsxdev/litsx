@@ -5,6 +5,9 @@ import { fileURLToPath } from "node:url";
 import { npmReleasePackages } from "./release-packages.js";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
+const requestedRefArg = process.argv.find((arg) => arg.startsWith("--ref="));
+const releaseRef = requestedRefArg ? requestedRefArg.slice("--ref=".length) : "HEAD";
+const previousRef = `${releaseRef}^`;
 
 function readJsonAtGitRef(ref, filePath) {
   const content = execFileSync("git", ["show", `${ref}:${filePath}`], {
@@ -16,12 +19,24 @@ function readJsonAtGitRef(ref, filePath) {
 }
 
 function readCurrentJson(filePath) {
-  return JSON.parse(fs.readFileSync(path.join(repoRoot, filePath), "utf8"));
+  if (releaseRef === "HEAD") {
+    return JSON.parse(fs.readFileSync(path.join(repoRoot, filePath), "utf8"));
+  }
+
+  return readJsonAtGitRef(releaseRef, filePath);
 }
 
 function tryReadCurrentText(filePath) {
   try {
-    return fs.readFileSync(path.join(repoRoot, filePath), "utf8");
+    if (releaseRef === "HEAD") {
+      return fs.readFileSync(path.join(repoRoot, filePath), "utf8");
+    }
+
+    return execFileSync("git", ["show", `${releaseRef}:${filePath}`], {
+      cwd: repoRoot,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    });
   } catch {
     return null;
   }
@@ -58,7 +73,7 @@ function getChangedPackages() {
   for (const packageDir of npmReleasePackages) {
     const packageJsonPath = `${packageDir}/package.json`;
     const currentPackage = readCurrentJson(packageJsonPath);
-    const previousPackage = readJsonAtGitRef("HEAD^", packageJsonPath);
+    const previousPackage = readJsonAtGitRef(previousRef, packageJsonPath);
 
     if (currentPackage.version === previousPackage.version) {
       continue;
@@ -83,7 +98,7 @@ function getChangedPackages() {
 }
 
 function getReleaseCommitSha() {
-  return execFileSync("git", ["rev-parse", "HEAD"], {
+  return execFileSync("git", ["rev-parse", releaseRef], {
     cwd: repoRoot,
     encoding: "utf8",
     stdio: ["ignore", "pipe", "ignore"],
@@ -91,52 +106,20 @@ function getReleaseCommitSha() {
 }
 
 function getReleaseCommitDate() {
-  return execFileSync("git", ["show", "-s", "--format=%cs", "HEAD"], {
+  return execFileSync("git", ["show", "-s", "--format=%cs", releaseRef], {
     cwd: repoRoot,
     encoding: "utf8",
     stdio: ["ignore", "pipe", "ignore"],
   }).trim();
 }
 
-function getPreviousReleaseCommitSha() {
-  try {
-    const previous = execFileSync(
-      "git",
-      [
-        "log",
-        "--grep=^chore\\(release\\): version packages \\[skip ci\\]$",
-        "--format=%H",
-        "-n",
-        "2",
-      ],
-      {
-        cwd: repoRoot,
-        encoding: "utf8",
-        stdio: ["ignore", "pipe", "ignore"],
-      },
-    )
-      .trim()
-      .split("\n")
-      .filter(Boolean);
-
-    return previous[1] ?? null;
-  } catch {
-    return null;
-  }
-}
-
-function buildReleaseBody(changes, previousReleaseSha) {
+function buildReleaseBody(changes) {
   const lines = [];
 
   lines.push("## Published packages");
   lines.push("");
   for (const change of changes) {
     lines.push(`- \`${change.name}@${change.version}\``);
-  }
-
-  if (previousReleaseSha) {
-    lines.push("");
-    lines.push(`Previous release commit: \`${previousReleaseSha.slice(0, 7)}\``);
   }
 
   const packagesWithNotes = changes.filter((change) => change.notes);
@@ -160,15 +143,13 @@ const changes = getChangedPackages();
 const releaseCommitSha = getReleaseCommitSha();
 const releaseCommitDate = getReleaseCommitDate();
 const shortSha = releaseCommitSha.slice(0, 7);
-const previousReleaseSha = getPreviousReleaseCommitSha();
 
 const releaseData = {
   tagName: `release-${shortSha}`,
   targetCommitish: releaseCommitSha,
   name: `LitSX release ${releaseCommitDate}`,
-  body: buildReleaseBody(changes, previousReleaseSha),
+  body: buildReleaseBody(changes),
   commitSha: releaseCommitSha,
-  previousReleaseCommitSha: previousReleaseSha,
   packages: changes.map(({ name, version, packageDir, tagName }) => ({
     name,
     version,
