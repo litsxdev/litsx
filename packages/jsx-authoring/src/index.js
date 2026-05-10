@@ -45,10 +45,6 @@ function encodeEditorVirtualAttributeName(name) {
   return `${encodedPrefix}${Array.from(localName, sanitizeIdentifierTailChar).join("")}`;
 }
 
-function encodeEditorStaticHoistName(originalName, macroName) {
-  return `$${macroName}`;
-}
-
 function encodeEditorStaticHoistAssignment(name) {
   return `const $${name} = `;
 }
@@ -599,50 +595,9 @@ export function remapVirtualText(text) {
 export function looksLikeLitsxJsx(sourceText) {
   return (
     /<[\w.-]+[^>]*\s(?:[@.?][\w:-]+)/m.test(sourceText) ||
-    /(?:^|[;{}]\s*)\^[A-Za-z$_][A-Za-z0-9$_]*/m.test(sourceText) ||
-    /^\s*\^[A-Za-z$_][A-Za-z0-9$_]*/m.test(sourceText) ||
     /(?:^|[;{}]\s*)static\s+[A-Za-z$_][A-Za-z0-9$_]*\s*=/m.test(sourceText) ||
     /^\s*static\s+[A-Za-z$_][A-Za-z0-9$_]*\s*=/m.test(sourceText)
   );
-}
-
-function isLikelyStaticMacroStart(sourceText, index) {
-  const next = sourceText[index + 1];
-  if (!MACRO_NAME_START_CHAR.test(next || "")) {
-    return false;
-  }
-
-  const prefix = trimTrailingWhitespaceAndComments(sourceText.slice(0, index));
-  if (!prefix) {
-    return true;
-  }
-
-  const previousChar = prefix[prefix.length - 1];
-  return previousChar === ";" || previousChar === "{" || previousChar === "}";
-}
-
-function scanStaticMacro(sourceText, start, replacements, encodeMacroName) {
-  let index = start + 1;
-
-  while (index < sourceText.length && MACRO_NAME_CHAR.test(sourceText[index])) {
-    index += 1;
-  }
-
-  const originalName = sourceText.slice(start, index);
-  const macroName = originalName.slice(1);
-
-  if (macroName === "mixins") {
-    return index;
-  }
-
-  replacements.push({
-    start,
-    end: index,
-    originalName,
-    replacement: encodeMacroName(originalName, macroName),
-  });
-
-  return index;
 }
 
 function isLikelyStaticHoistAssignmentStart(sourceText, index) {
@@ -832,10 +787,6 @@ export function createVirtualLitsxJsxSource(sourceText, options = {}) {
     strategy === "editor"
       ? encodeEditorVirtualAttributeName
       : encodeVirtualAttributeName;
-  const encodeMacroName =
-    strategy === "editor"
-      ? encodeEditorStaticHoistName
-      : (_originalName, macroName) => `__litsx_static_${macroName}`;
 
   if (!sourceText || typeof sourceText !== "string") {
     return {
@@ -894,11 +845,6 @@ export function createVirtualLitsxJsxSource(sourceText, options = {}) {
 
     if (char === "<" && isLikelyJsxTagStart(sourceText, index)) {
       index = scanJsxElement(sourceText, index, replacements, encodeAttributeName);
-      continue;
-    }
-
-    if (char === "^" && isLikelyStaticMacroStart(sourceText, index)) {
-      index = scanStaticMacro(sourceText, index, replacements, encodeMacroName);
       continue;
     }
 

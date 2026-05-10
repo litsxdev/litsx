@@ -569,7 +569,7 @@ describe("@litsx/jsx-authoring", () => {
     assert.equal(ast, null);
   });
 
-  it("virtualizes static macros after comments and preserves ^mixins", () => {
+  it("virtualizes static hoist assignments after comments and leaves unrelated carets untouched", () => {
     const source = `
       export function Card() {
         // comment before macro
@@ -578,7 +578,7 @@ describe("@litsx/jsx-authoring", () => {
          * block comment before macro
          */
         static styles = \`:host { display: block; }\`;
-        ^mixins(Selectable);
+        const next = count ^ scale;
         return <div />;
       }
     `;
@@ -589,7 +589,7 @@ describe("@litsx/jsx-authoring", () => {
 
     assert.match(result.code, /const \$properties = \{/);
     assert.match(result.code, /const \$styles = `/);
-    assert.match(result.code, /\^mixins\(Selectable\)/);
+    assert.match(result.code, /count \^ scale/);
   });
 
   it("covers helper exports and top-level macro detection edge cases", () => {
@@ -603,14 +603,7 @@ describe("@litsx/jsx-authoring", () => {
     );
 
     assert.equal(looksLikeLitsxJsx("  static styles = `:host {}`;"), true);
-    assert.equal(looksLikeLitsxJsx("  ^styles(`:host {}`);"), true);
     assert.equal(looksLikeLitsxJsx("value ^ styles"), false);
-
-    const falseMacroStart = createVirtualLitsxJsxSource("const value = count ^styles;", {
-      strategy: "editor",
-    });
-    assert.equal(falseMacroStart.code, "const value = count ^styles;");
-    assert.deepStrictEqual(falseMacroStart.replacements, []);
   });
 
   it("virtualizes authored attributes nested inside comments, templates, and closures in JSX expressions", () => {
@@ -697,8 +690,6 @@ describe("@litsx/jsx-authoring", () => {
     assert.strictEqual(looksLikeLitsxJsx(`const view = <button class="cta"></button>;`), false);
     assert.strictEqual(looksLikeLitsxJsx(`function Card(){\n  static styles = \`:host { display: block; }\`;\n}`), true);
     assert.strictEqual(looksLikeLitsxJsx(`function Card(){\n  static properties = {};\n  return null;\n}`), true);
-    assert.strictEqual(looksLikeLitsxJsx(`^styles(\`:host { display: block; }\`);`), true);
-    assert.strictEqual(looksLikeLitsxJsx(`function Card(){ return null; }\n^properties({});`), true);
   });
 
   it("decodes virtual attribute names back to authored syntax", () => {

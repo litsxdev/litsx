@@ -209,21 +209,13 @@ describe("@litsx/typescript-plugin", () => {
       unknownHoistSource.indexOf("static customThing") + 8,
     );
     assert.match(unknownHoist?.documentation ?? "", /static hoist static customThing/i);
-    assert.strictEqual(
-      inferLitsxStaticHoistInfoAtPosition("const broken = ^styles;", "const broken = ^styles;".indexOf("^styles") + 1),
-      null,
-    );
-    assert.strictEqual(
-      inferLitsxStaticHoistInfoAtPosition("const broken = ^styles()", "const broken = ^styles()".indexOf("^styles") + 2),
-      null,
-    );
   });
 
   it("rejects malformed static hoist probes before a valid hoist match", () => {
     const source = `
-      const invalid = value^styles();
-      const broken = ^ styles();
-      const unfinished = ^styles value;
+      const invalid = staticstyles;
+      const broken = static styles value;
+      const unfinished = static styles;
       function Card() {
         static styles = \`:host { display: block; }\`;
       }
@@ -231,15 +223,15 @@ describe("@litsx/typescript-plugin", () => {
 
     const validStart = source.lastIndexOf("static styles");
     assert.strictEqual(
-      inferLitsxStaticHoistInfoAtPosition(source, source.indexOf("^styles()") + 2),
+      inferLitsxStaticHoistInfoAtPosition(source, source.indexOf("staticstyles") + 2),
       null,
     );
     assert.strictEqual(
-      inferLitsxStaticHoistInfoAtPosition(source, source.indexOf("^ styles") + 1),
+      inferLitsxStaticHoistInfoAtPosition(source, source.indexOf("static styles value") + 8),
       null,
     );
     assert.strictEqual(
-      inferLitsxStaticHoistInfoAtPosition(source, source.indexOf("^styles value") + 3),
+      inferLitsxStaticHoistInfoAtPosition(source, source.indexOf("static styles;") + 8),
       null,
     );
     assert.deepStrictEqual(
@@ -352,17 +344,16 @@ describe("@litsx/typescript-plugin", () => {
     assert.ok(issues.some((issue) => issue.code === 91019 && /ignored when static lightDom = true/.test(issue.message)));
   });
 
-  it("warns that legacy caret static hoists are deprecated", () => {
+  it("documents static styles hoists in authored diagnostics", () => {
     const issues = collectLitsxAuthoredIssues(`
       function Card() {
-        ^styles(\`:host { display: block; }\`);
+        static styles = \`:host { display: block; }\`;
         return <div>ready</div>;
       }
     `, { channel: "all" });
 
-    assert.ok(issues.some((issue) => issue.code === 91020));
-    assert.ok(issues.some((issue) => issue.code === 91020 && /deprecated/.test(issue.message)));
-    assert.ok(issues.some((issue) => issue.code === 91020 && /Prefer "static styles = \.\.\."/.test(issue.message)));
+    assert.ok(!issues.some((issue) => issue.code === 91020));
+    assert.ok(!issues.some((issue) => /deprecated/.test(issue.message)));
   });
 
   it("ignores opaque prop access checks for non-component functions and non-identifier params", () => {

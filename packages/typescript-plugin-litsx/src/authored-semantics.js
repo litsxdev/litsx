@@ -78,10 +78,6 @@ const SINGLETON_STATIC_HOISTS = new Set([
 ]);
 
 const STATIC_HOIST_DOCUMENTATION_BY_NAME = {
-  "^styles": "LitSX static style hoist. Declare component-scoped styles before render-time statements.",
-  "^properties": "LitSX static properties hoist. Declare reactive property metadata before render-time statements.",
-  "^shadowRootOptions": "LitSX static shadow root options hoist. Declare shadow root configuration before render-time statements.",
-  "^lightDom": "LitSX static light DOM hoist. Declare light DOM rendering before render-time statements.",
   "static styles": "LitSX static style hoist. Declare component-scoped styles before render-time statements.",
   "static properties": "LitSX static properties hoist. Declare reactive property metadata before render-time statements.",
   "static shadowRootOptions": "LitSX static shadow root options hoist. Declare shadow root configuration before render-time statements.",
@@ -90,34 +86,6 @@ const STATIC_HOIST_DOCUMENTATION_BY_NAME = {
 
 function formatStaticHoistAuthoredName(macroName) {
   return `static ${macroName}`;
-}
-
-function scanStaticHoistParens(sourceText, start) {
-  let depth = 0;
-  let index = start;
-
-  while (index < sourceText.length) {
-    const char = sourceText[index];
-
-    if (char === "(") {
-      depth += 1;
-      index += 1;
-      continue;
-    }
-
-    if (char === ")") {
-      depth -= 1;
-      index += 1;
-      if (depth <= 0) {
-        return index;
-      }
-      continue;
-    }
-
-    index += 1;
-  }
-
-  return index;
 }
 
 function levenshteinDistance(left, right) {
@@ -197,63 +165,6 @@ export function inferLitsxStaticHoistInfoAtPosition(sourceText, position) {
       length: name.length,
       documentation: STATIC_HOIST_DOCUMENTATION_BY_NAME[name]
         ?? `LitSX static hoist ${name} = .... Declare it before render-time statements in the component body.`,
-    };
-  }
-
-  let caretIndex = sourceText.lastIndexOf("^", position);
-  while (caretIndex >= 0) {
-    const nextChar = sourceText[caretIndex + 1];
-    if (!/[A-Za-z$_]/.test(nextChar || "")) {
-      caretIndex = sourceText.lastIndexOf("^", caretIndex - 1);
-      continue;
-    }
-
-    let previousIndex = caretIndex - 1;
-    while (previousIndex >= 0 && /[ \t\r\n]/.test(sourceText[previousIndex])) {
-      previousIndex -= 1;
-    }
-
-    if (previousIndex >= 0) {
-      const previousChar = sourceText[previousIndex];
-      if (previousChar !== ";" && previousChar !== "{" && previousChar !== "}") {
-        caretIndex = sourceText.lastIndexOf("^", caretIndex - 1);
-        continue;
-      }
-    }
-
-    let index = caretIndex + 1;
-    while (index < sourceText.length && /[A-Za-z0-9$_]/.test(sourceText[index])) {
-      index += 1;
-    }
-
-    if (index === caretIndex + 1) {
-      caretIndex = sourceText.lastIndexOf("^", caretIndex - 1);
-      continue;
-    }
-
-    const name = sourceText.slice(caretIndex, index);
-    let next = index;
-    while (next < sourceText.length && /[ \t\r\n]/.test(sourceText[next])) {
-      next += 1;
-    }
-
-    if (sourceText[next] !== "(") {
-      caretIndex = sourceText.lastIndexOf("^", caretIndex - 1);
-      continue;
-    }
-
-    const end = scanStaticHoistParens(sourceText, next);
-    if (position < caretIndex || position > end) {
-      caretIndex = sourceText.lastIndexOf("^", caretIndex - 1);
-      continue;
-    }
-
-    return {
-      name,
-      start: caretIndex,
-      length: name.length,
-      documentation: STATIC_HOIST_DOCUMENTATION_BY_NAME[name]
-        ?? `LitSX static hoist ${name}(...). Declare it before render-time statements in the component body.`,
     };
   }
 
@@ -345,34 +256,6 @@ function createOriginalIssue(virtualization, config) {
     length: span?.length ?? 0,
     fix: config.fix ?? null,
   };
-}
-
-function collectDeprecatedCaretStaticHoistIssues(virtualization) {
-  const issues = [];
-
-  for (const replacement of virtualization?.replacements ?? []) {
-    if (
-      typeof replacement?.originalName !== "string" ||
-      !replacement.originalName.startsWith("^")
-    ) {
-      continue;
-    }
-
-    const macroName = replacement.originalName.slice(1);
-    issues.push({
-      kind: "deprecated-static-hoist-syntax",
-      severity: "warning",
-      code: 91020,
-      message:
-        `Legacy static hoist syntax "${replacement.originalName}(...)" is deprecated. ` +
-        `Prefer "static ${macroName} = ...".`,
-      start: replacement.start ?? 0,
-      length: replacement.originalName.length,
-      fix: null,
-    });
-  }
-
-  return issues;
 }
 
 function collectStaticHoistIssues(ast, virtualization) {
@@ -900,7 +783,6 @@ export function collectLitsxAuthoredIssues(sourceText, options = {}) {
 
   const issues = [];
   const attributes = collectJsxAttributes(ast);
-  issues.push(...collectDeprecatedCaretStaticHoistIssues(virtualization));
   issues.push(...collectStaticHoistIssues(ast, virtualization));
   issues.push(...collectReactMemoIssues(ast, virtualization));
   issues.push(...collectReactCompatSurfaceIssues(ast, virtualization));

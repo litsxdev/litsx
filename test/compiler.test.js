@@ -817,10 +817,10 @@ describe("@litsx/compiler", () => {
     assert.match(result.metadata.litsxWarnings[0].message, /migration wrapper only/);
   }, 20000);
 
-  it("surfaces metadata warnings when legacy caret static hoists are authored", () => {
+  it("accepts static hoist assignments without surfacing deprecation warnings", () => {
     const source = [
       "export const Counter = () => {",
-      "  ^styles(`:host { display: block; }`);",
+      "  static styles = `:host { display: block; }`;",
       "  return <button>Save</button>;",
       "};",
     ].join("\n");
@@ -830,9 +830,7 @@ describe("@litsx/compiler", () => {
     });
 
     assert.ok(Array.isArray(result.metadata.litsxWarnings));
-    assert.ok(result.metadata.litsxWarnings.some((warning) => warning.code === 91020));
-    assert.ok(result.metadata.litsxWarnings.some((warning) => /deprecated/.test(warning.message)));
-    assert.ok(result.metadata.litsxWarnings.some((warning) => /Prefer "static styles = \.\.\."/.test(warning.message)));
+    assert.ok(!result.metadata.litsxWarnings.some((warning) => warning.code === 91020));
   }, 20000);
 
   it("runs outputPlugins after the native preset pipeline", () => {

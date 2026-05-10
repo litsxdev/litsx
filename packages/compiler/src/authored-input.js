@@ -141,49 +141,6 @@ function collectReactMemoWarnings(ast) {
   return warnings;
 }
 
-function positionFromIndex(sourceText, index) {
-  let line = 1;
-  let column = 0;
-
-  for (let cursor = 0; cursor < index; cursor += 1) {
-    if (sourceText[cursor] === "\n") {
-      line += 1;
-      column = 0;
-      continue;
-    }
-
-    column += 1;
-  }
-
-  return { line, column };
-}
-
-function collectDeprecatedCaretStaticHoistWarnings(source, virtualization) {
-  const warnings = [];
-
-  for (const replacement of virtualization?.replacements ?? []) {
-    if (
-      typeof replacement?.originalName !== "string" ||
-      !replacement.originalName.startsWith("^")
-    ) {
-      continue;
-    }
-
-    const { line, column } = positionFromIndex(source, replacement.start ?? 0);
-    const macroName = replacement.originalName.slice(1);
-    warnings.push({
-      code: 91020,
-      message:
-        `Legacy static hoist syntax "${replacement.originalName}(...)" is deprecated. ` +
-        `Prefer "static ${macroName} = ...".`,
-      line,
-      column,
-    });
-  }
-
-  return warnings;
-}
-
 function normalizeParserPlugins(filename, parserPlugins = []) {
   if (Array.isArray(parserPlugins) && parserPlugins.length > 0) {
     return parserPlugins;
@@ -243,10 +200,7 @@ export function prepareLitsxAuthoredInput(
   const virtualization = getLitsxVirtualizationMetadata(virtualizedAst);
   const authoredWarnings = mergeLitsxWarnings(
     collectNativeClassNameWarnings(virtualizedAst),
-    [
-      ...collectReactMemoWarnings(virtualizedAst),
-      ...collectDeprecatedCaretStaticHoistWarnings(source, virtualization),
-    ],
+    collectReactMemoWarnings(virtualizedAst),
     { filename }
   );
   const authoringPlugins = normalizePluginList(options.authoringPlugins);
