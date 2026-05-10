@@ -22,20 +22,100 @@ on:
         required: true
         default: false
         type: boolean
+      all_releases:
+        description: "Required for non-dry-run backfills without a specific ref."
+        required: true
+        default: false
+        type: boolean
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: backfill-github-releases-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-  backfill:
+  preview:
+    name: Preview GitHub Releases
+    if: inputs.dry_run == true
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          package-manager-cache: false
+
+      - name: Enable Yarn
+        run: |
+          corepack enable
+          corepack prepare yarn@4.10.3 --activate
+
+      - name: Cache Yarn state
+        uses: actions/cache@v5
+        with:
+          path: |
+            .yarn/install-state.gz
+            .yarn-cache
+          key: ${{ runner.os }}-yarn4-${{ hashFiles('yarn.lock', '.yarnrc.yml', 'package.json') }}
+          restore-keys: |
+            ${{ runner.os }}-yarn4-
+
+      - name: Install dependencies
+        run: corepack yarn install --immutable
+
+      - name: Preview backfill plan
+        env:
+          INPUT_REF: ${{ inputs.ref }}
+          INPUT_UPDATE: ${{ inputs.update }}
+          INPUT_INCLUDE_EMPTY: ${{ inputs.include_empty }}
+        run: |
+          set -euo pipefail
+
+          args=("--dry-run")
+
+          if [ -n "${INPUT_REF}" ]; then
+            args+=("--ref=${INPUT_REF}")
+          fi
+
+          if [ "${INPUT_UPDATE}" = "true" ]; then
+            args+=("--update")
+          fi
+
+          if [ "${INPUT_INCLUDE_EMPTY}" = "true" ]; then
+            args+=("--include-empty")
+          fi
+
+          node scripts/release/backfill-github-releases.js "${args[@]}"
+
+  apply:
     name: Backfill GitHub Releases
+    if: inputs.dry_run == false
     runs-on: ubuntu-latest
     environment: npm-release
+    permissions:
+      contents: write
     steps:
+      - name: Validate execution scope
+        env:
+          INPUT_REF: ${{ inputs.ref }}
+          INPUT_ALL_RELEASES: ${{ inputs.all_releases }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${INPUT_REF}" ] && [ "${INPUT_ALL_RELEASES}" != "true" ]; then
+            echo "Non-dry-run backfill without a specific ref requires all_releases=true."
+            exit 1
+          fi
+
       - name: Create release app token
         id: app-token
         uses: actions/create-github-app-token@v3
@@ -78,7 +158,6 @@ jobs:
         run: corepack yarn install --immutable
 
       - name: Create and push global release tags
-        if: inputs.dry_run == false
         env:
           RELEASE_PUSH_TOKEN: ${{ steps.app-token.outputs.token }}
           INPUT_REF: ${{ inputs.ref }}
@@ -129,7 +208,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
           INPUT_REF: ${{ inputs.ref }}
-          INPUT_DRY_RUN: ${{ inputs.dry_run }}
           INPUT_UPDATE: ${{ inputs.update }}
           INPUT_INCLUDE_EMPTY: ${{ inputs.include_empty }}
         run: |
@@ -139,10 +217,6 @@ jobs:
 
           if [ -n "${INPUT_REF}" ]; then
             args+=("--ref=${INPUT_REF}")
-          fi
-
-          if [ "${INPUT_DRY_RUN}" = "true" ]; then
-            args+=("--dry-run")
           fi
 
           if [ "${INPUT_UPDATE}" = "true" ]; then
