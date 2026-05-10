@@ -1,0 +1,95 @@
+name: Backfill GitHub Releases
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Optional release commit SHA to backfill. Leave empty to process all release commits."
+        required: false
+        type: string
+      dry_run:
+        description: "Preview the GitHub releases without creating or updating them."
+        required: true
+        default: true
+        type: boolean
+      update:
+        description: "Update existing GitHub releases if they already exist."
+        required: true
+        default: false
+        type: boolean
+      include_empty:
+        description: "Include release commits that do not publish npmReleasePackages."
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+concurrency:
+  group: backfill-github-releases-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  backfill:
+    name: Backfill GitHub Releases
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          package-manager-cache: false
+
+      - name: Enable Yarn
+        run: |
+          corepack enable
+          corepack prepare yarn@4.10.3 --activate
+
+      - name: Cache Yarn state
+        uses: actions/cache@v5
+        with:
+          path: |
+            .yarn/install-state.gz
+            .yarn-cache
+          key: ${{ runner.os }}-yarn4-${{ hashFiles('yarn.lock', '.yarnrc.yml', 'package.json') }}
+          restore-keys: |
+            ${{ runner.os }}-yarn4-
+
+      - name: Install dependencies
+        run: corepack yarn install --immutable
+
+      - name: Backfill GitHub releases
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          INPUT_REF: ${{ inputs.ref }}
+          INPUT_DRY_RUN: ${{ inputs.dry_run }}
+          INPUT_UPDATE: ${{ inputs.update }}
+          INPUT_INCLUDE_EMPTY: ${{ inputs.include_empty }}
+        run: |
+          set -euo pipefail
+
+          args=()
+
+          if [ -n "${INPUT_REF}" ]; then
+            args+=("--ref=${INPUT_REF}")
+          fi
+
+          if [ "${INPUT_DRY_RUN}" = "true" ]; then
+            args+=("--dry-run")
+          fi
+
+          if [ "${INPUT_UPDATE}" = "true" ]; then
+            args+=("--update")
+          fi
+
+          if [ "${INPUT_INCLUDE_EMPTY}" = "true" ]; then
+            args+=("--include-empty")
+          fi
+
+          node scripts/release/backfill-github-releases.js "${args[@]}"
