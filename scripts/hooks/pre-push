@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(git rev-parse --show-toplevel)"
+cd "$repo_root"
+
+upstream_ref="$(git rev-parse --abbrev-ref --symbolic-full-name @{upstream} 2>/dev/null || true)"
+if [[ -n "$upstream_ref" ]]; then
+  merge_base="$(git merge-base HEAD "$upstream_ref" 2>/dev/null || true)"
+else
+  merge_base=""
+fi
+
+if [[ -n "$merge_base" ]]; then
+  changed_files="$(git diff --name-only "${merge_base}...HEAD")"
+else
+  changed_files="$(git diff-tree --no-commit-id --name-only -r HEAD)"
+fi
+
+should_run="0"
+while IFS= read -r file; do
+  case "$file" in
+    .changeset/*|packages/*/package.json|scripts/release/*)
+      should_run="1"
+      break
+      ;;
+  esac
+done <<< "$changed_files"
+
+if [[ "$should_run" != "1" ]]; then
+  exit 0
+fi
+
+echo "pre-push: running release preflight"
+yarn release:preflight-local

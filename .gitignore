@@ -141,3 +141,6 @@ website/docs/.vitepress/cache/
 
 # Local DX smoke harness
 packages/dx-smoke-app/
+
+# Local release preflight snapshots
+.changeset/preflight-status.json
