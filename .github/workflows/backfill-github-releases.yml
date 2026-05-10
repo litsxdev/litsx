@@ -76,6 +76,34 @@ jobs:
       - name: Install dependencies
         run: corepack yarn install --immutable
 
+      - name: Build GitHub release payload
+        if: inputs.dry_run == false && inputs.ref != ''
+        run: |
+          mkdir -p .release-artifacts
+          node scripts/release/build-github-release.js --ref="${{ inputs.ref }}" > .release-artifacts/github-release.json
+
+      - name: Create and push global release tag
+        if: inputs.dry_run == false && inputs.ref != ''
+        env:
+          RELEASE_PUSH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          node -e 'const fs=require("fs"); const release=JSON.parse(fs.readFileSync(".release-artifacts/github-release.json","utf8")); process.stdout.write(`${release.tagName}\n${release.targetCommitish}\n`);' > .release-artifacts/github-release-tag.txt
+          mapfile -t release_tag_parts < .release-artifacts/github-release-tag.txt
+          tag_name="${release_tag_parts[0]}"
+          target_sha="${release_tag_parts[1]}"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote set-url origin "https://x-access-token:${RELEASE_PUSH_TOKEN}@github.com/${{ github.repository }}.git"
+
+          if git rev-parse -q --verify "refs/tags/${tag_name}" >/dev/null; then
+            echo "Tag ${tag_name} already exists locally"
+          else
+            git tag -a "${tag_name}" "${target_sha}" -m "${tag_name}"
+          fi
+
+          git push origin "refs/tags/${tag_name}"
+
       - name: Backfill GitHub releases
         env:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
