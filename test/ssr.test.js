@@ -13,7 +13,7 @@ import { useId, useRef, useState, useExternalStore } from "../packages/core/src/
 import {
   bindRendererContext,
   renderRendererCall,
-} from "../packages/litsx/src/runtime-render-context.js";
+} from "../packages/core/src/rendering.js";
 import {
   LitsxContextProviderElement,
   createContext,
