@@ -22,6 +22,7 @@
     "packages/prettier-plugin-litsx",
     "packages/prop-types",
     "packages/shiki-languages",
+    "packages/ssr-client",
     "packages/typescript",
     "packages/typescript-session",
     "packages/vite-plugin"
