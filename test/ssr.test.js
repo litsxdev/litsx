@@ -140,6 +140,11 @@ describe("@litsx/ssr", () => {
     assert.strictEqual(result.renderHydrationData(), "");
   });
 
+  it("accepts promised renderable values", async () => {
+    const result = await renderToString(Promise.resolve(html`<main>ready</main>`));
+    assert.match(result.html, /<main>ready<\/main>/);
+  });
+
   it("resolves context-provider values during SSR without extra hydration payload", async () => {
     const ThemeContext = createContext("light");
 

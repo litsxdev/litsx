@@ -56,6 +56,11 @@ import {
   setProgramBabelTypes,
 } from "./transform-litsx-program.js";
 import { createStableIdentity } from "./stable-identity.js";
+import {
+  isDefaultExportServerComponentPath,
+  isServerComponentBindingName,
+  setServerComponentBabelTypes,
+} from "./transform-litsx-server-components.js";
 
 let t;
 
@@ -84,6 +89,7 @@ export function createTransformFunctionToClassPlugin(defaultPluginOptions = {}) 
     setStaticIrBabelTypes(t);
     setRenderBodyBabelTypes(t);
     setProgramBabelTypes(t);
+    setServerComponentBabelTypes(t);
     const resolvedPluginOptions = {
       ...defaultPluginOptions,
       ...pluginOptions,
@@ -138,6 +144,10 @@ export function createTransformFunctionToClassPlugin(defaultPluginOptions = {}) 
           });
         },
         ExportDefaultDeclaration(exportPath) {
+          if (isDefaultExportServerComponentPath(exportPath)) {
+            return;
+          }
+
           handlePotentialComponentExport({
             exportPath,
             state: this,
@@ -175,11 +185,16 @@ export function createTransformFunctionToClassPlugin(defaultPluginOptions = {}) 
           if (
             initPath &&
             initPath.isArrowFunctionExpression() &&
+            initPath.node.async !== true &&
             !isInsideFunctionOrClass(varPath) &&
             t.isIdentifier(varPath.node.id) &&
             isCapitalizedComponentName(varPath.node.id.name)
           ) {
             const programPath = varPath.findParent((p) => p.isProgram());
+            if (isServerComponentBindingName(programPath, varPath.node.id.name)) {
+              return;
+            }
+
             const classNode = transformFunction(
               initPath,
               programPath,
@@ -207,6 +222,7 @@ export function createTransformFunctionToClassPlugin(defaultPluginOptions = {}) 
         },
         FunctionDeclaration(funcPath) {
           if (
+            funcPath.node.async !== true &&
             !funcPath.parentPath?.isExportNamedDeclaration?.() &&
             !funcPath.parentPath?.isExportDefaultDeclaration?.() &&
             !isInsideFunctionOrClass(funcPath) &&
@@ -214,6 +230,10 @@ export function createTransformFunctionToClassPlugin(defaultPluginOptions = {}) 
             isCapitalizedComponentName(funcPath.node.id.name)
           ) {
             const programPath = funcPath.findParent((p) => p.isProgram());
+            if (isServerComponentBindingName(programPath, funcPath.node.id.name)) {
+              return;
+            }
+
             const classNode = transformFunction(
               funcPath,
               programPath,
