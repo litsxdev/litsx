@@ -216,7 +216,7 @@ function createBaseFiles(packageName, className, includeStorybook) {
 import { defineConfig } from "vite";
 
 export default defineConfig({
-  plugins: [litsx()],
+  plugins: [litsx({ sourceMaps: true })],
 });
 `);
   files.set("eslint.config.js", `import litsx from "@litsx/eslint-plugin";
@@ -1395,7 +1395,7 @@ export default {
   async viteFinal(config) {
     return {
       ...config,
-      plugins: [...(config.plugins ?? []), litsx()],
+      plugins: [...(config.plugins ?? []), litsx({ sourceMaps: true })],
     };
   },
 };

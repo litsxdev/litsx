@@ -89,7 +89,7 @@ describe("create-litsx-app", () => {
     assert.match(jsconfig, /"name": "@litsx\/typescript-plugin"/);
     assert.doesNotMatch(JSON.stringify(packageJson.devDependencies), /@litsx\/babel-parser/);
     assert.match(viteConfig, /@litsx\/vite-plugin/);
-    assert.match(viteConfig, /plugins: \[litsx\(\)\]/);
+    assert.match(viteConfig, /plugins: \[litsx\(\{ sourceMaps: true \}\)\]/);
     assert.match(mainSource, /import "@webcomponents\/scoped-custom-element-registry";/);
     assert.match(mainSource, /import \{ MyLitsxApp \} from "\.\/my-litsx-app\.litsx";/);
     assert.ok(!result.files.has("tools/litsx-vite-plugin.js"));
@@ -98,7 +98,7 @@ describe("create-litsx-app", () => {
     assert.match(storybookMain, /@storybook\/addon-a11y/);
     assert.doesNotMatch(storybookMain, /@storybook\/addon-essentials/);
     assert.match(storybookMain, /@litsx\/vite-plugin/);
-    assert.match(storybookMain, /litsx\(\)/);
+    assert.match(storybookMain, /litsx\(\{ sourceMaps: true \}\)/);
     assert.match(storybookPreview, /tokens\.css/);
     assert.match(appSource, /<LitsxHero/);
     assert.match(appSource, /<StarterGuide/);
