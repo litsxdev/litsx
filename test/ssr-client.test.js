@@ -75,6 +75,33 @@ describe("@litsx/ssr-client", () => {
     });
   });
 
+  it("reads the structured root hydration payload emitted by @litsx/ssr", async () => {
+    const {
+      LITSX_HYDRATION_DATA_SCRIPT_ID,
+      readHydrationData,
+    } = await import("../packages/ssr-client/src/index.js");
+    const payload = {
+      version: 1,
+      roots: [
+        {
+          id: "litsx-root-0",
+          tagName: "product-card",
+          moduleId: "/src/ProductCard.litsx",
+        },
+      ],
+    };
+    const documentRef = {
+      getElementById(id) {
+        if (id === LITSX_HYDRATION_DATA_SCRIPT_ID) {
+          return { textContent: JSON.stringify(payload) };
+        }
+        return null;
+      },
+    };
+
+    assert.deepStrictEqual(readHydrationData(documentRef), payload);
+  });
+
   it("hydrates a document by reading client imports from the default script tag", async () => {
     const {
       hydrateDocument,
