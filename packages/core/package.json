@@ -37,6 +37,11 @@
       "require": "./dist/rendering.cjs",
       "default": "./src/rendering.js"
     },
+    "./internal/runtime-scoped-ssr": {
+      "import": "./src/runtime-scoped-ssr.js",
+      "require": "./dist/runtime-scoped-ssr.cjs",
+      "default": "./src/runtime-scoped-ssr.js"
+    },
     "./context": {
       "types": "./src/context.d.ts",
       "import": "./src/context.js",
@@ -73,6 +78,7 @@
     "lit": ">=3"
   },
   "dependencies": {
+    "@lit-labs/ssr": "^4.0.0",
     "@lit/context": "^1.1.6",
     "@lit/reactive-element": "^2.1.2",
     "@litsx/scoped-registry-shim": "^0.2.6"
