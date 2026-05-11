@@ -1,11 +1,18 @@
 import { adoptStyles } from "@lit/reactive-element";
 import { nothing } from "lit";
+import { isTemplateResult } from "lit/directive-helpers.js";
 import { render as renderLightDom } from "lit/html.js";
 import { Directive, PartType, directive } from "lit/directive.js";
 import {
   createLightDomRegistry,
   withLightDomCreationContext,
 } from "@litsx/scoped-registry-shim";
+import {
+  __isLitsxScopedTemplate,
+  __isLitsxServerComponentCall,
+  LITSX_SSR_CONTEXT,
+} from "./elements/index.js";
+import { getCurrentSsrCustomElementInstanceStack } from "./runtime-ssr-state.js";
 
 /**
  * Rendering helpers used by LitSX transforms when authored JSX passes renderer
@@ -37,6 +44,50 @@ function isShadowRootContainer(value) {
     (typeof ShadowRoot !== "undefined" && value instanceof ShadowRoot) ||
     value?.[RENDERER_SHADOW_CONTAINER] === true
   );
+}
+
+function resolveRendererSsrValue(value) {
+  if (__isLitsxServerComponentCall(value) || __isLitsxScopedTemplate(value)) {
+    throw new Error(
+      "SSR renderer props must return a renderable TemplateResult, not a server component call or scoped template."
+    );
+  }
+
+  if (isTemplateResult(value)) {
+    const values = value.values.map((entry) => resolveRendererSsrValue(entry));
+    return {
+      ...value,
+      values,
+    };
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((entry) => resolveRendererSsrValue(entry));
+  }
+
+  return value;
+}
+
+function resolveRendererSsrValueWithContext(value, ssrContext) {
+  if (!ssrContext) {
+    return value;
+  }
+
+  if (isTemplateResult(value)) {
+    const values = value.values.map((entry) =>
+      resolveRendererSsrValueWithContext(entry, ssrContext)
+    );
+    return {
+      ...value,
+      values,
+    };
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((entry) => resolveRendererSsrValueWithContext(entry, ssrContext));
+  }
+
+  return resolveRendererSsrValue(value);
 }
 
 function captureCreationScope(host) {
@@ -456,19 +507,27 @@ class RendererCallDirective extends Directive {
   }
 
   render() {
-    return nothing;
+    const [renderer, ...args] = arguments;
+    const rendered = invokeRenderer(renderer, ...args);
+    const currentSsrEntry = getCurrentSsrCustomElementInstanceStack()?.at(-1) ?? null;
+    const currentSsrHost = currentSsrEntry?.element ?? currentSsrEntry ?? null;
+    const ssrContext = currentSsrHost?.[LITSX_SSR_CONTEXT]?.context ?? null;
+
+    return resolveRendererSsrValueWithContext(rendered.value, ssrContext);
   }
 
   update(part, [renderer, ...args]) {
     if (!this._host) {
-      const documentRef =
-        part?.options?.host?.ownerDocument ??
-        globalThis.document;
+      const documentRef = part?.options?.host?.ownerDocument ?? null;
       if (!documentRef || typeof documentRef.createElement !== "function") {
         return nothing;
       }
 
       this._host = documentRef.createElement("div");
+      if (!this._host || typeof this._host !== "object") {
+        return nothing;
+      }
+      this._host.style ??= {};
       this._host.style.display = "contents";
     }
 
