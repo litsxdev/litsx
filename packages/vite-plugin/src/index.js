@@ -33,6 +33,14 @@ function toProjectRelativeModuleId(moduleId, root) {
   return normalizeSlashes(path.relative(normalizedRoot, normalizedModuleId));
 }
 
+/**
+ * Create an asset resolver suitable for `@litsx/ssr` results in Vite
+ * environments.
+ *
+ * In dev it converts source module ids under `root` into browser-facing module
+ * URLs such as `/src/components/ProductCard.litsx`. In build it can map those
+ * module ids through a Vite manifest to the emitted asset file.
+ */
 export function createLitsxViteAssetResolver({
   root = process.cwd(),
   manifest = null,
