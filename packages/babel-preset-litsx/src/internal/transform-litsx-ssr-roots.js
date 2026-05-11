@@ -1,5 +1,8 @@
 import jsxSyntaxPlugin from "@babel/plugin-syntax-jsx";
-import { isServerComponentBindingName } from "./transform-litsx-server-components.js";
+import {
+  assertValidServerComponentReference,
+  isServerComponentBindingName,
+} from "./transform-litsx-server-components.js";
 import {
   buildAvailableMap,
   buildServerComponentPropsObject,
@@ -56,6 +59,17 @@ export default function transformLitsxSsrRoots(api) {
 
             if (firstArgument.isJSXElement()) {
               const openingName = firstArgument.get("openingElement.name");
+              if (openingName.isJSXIdentifier()) {
+                assertValidServerComponentReference(
+                  openingName,
+                  programPath,
+                  {
+                    ...sharedOptions,
+                    requireDefaultExport: true,
+                  },
+                );
+              }
+
               if (
                 openingName.isJSXIdentifier() &&
                 isServerComponentBindingName(
