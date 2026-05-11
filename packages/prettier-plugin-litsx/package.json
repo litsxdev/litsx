@@ -2,6 +2,7 @@
   "name": "prettier-plugin-litsx",
   "version": "0.3.0",
   "description": "Official Prettier plugin for LitSX-authored source",
+  "author": "LitSX Team",
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./src/index.js",
@@ -25,7 +26,7 @@
     "typescript"
   ],
   "license": "Apache-2.0",
-  "homepage": "https://github.com/litsxdev/litsx/tree/main/packages/prettier-plugin-litsx",
+  "homepage": "https://litsx.dev/",
   "bugs": {
     "url": "https://github.com/litsxdev/litsx/issues"
   },

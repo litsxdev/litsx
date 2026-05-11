@@ -4,7 +4,7 @@
   "private": true,
   "description": "Shared Shiki/TextMate language registrations for LitSX-authored TSX and JSX.",
   "author": "LitSX Team",
-  "homepage": "https://github.com/litsxdev/litsx/tree/main/packages/shiki-languages",
+  "homepage": "https://litsx.dev/",
   "bugs": {
     "url": "https://github.com/litsxdev/litsx/issues"
   },

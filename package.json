@@ -74,7 +74,7 @@
     "release:publish": "yarn release:check && yarn release:smoke:scaffolds && yarn release:test && yarn changeset:publish",
     "release:test": "vitest run test/create-litsx-app.test.js test/prettier-plugin-litsx.test.js test/shiki-languages.test.js test/typescript-plugin-litsx.test.js test/vite-plugin.test.js test/compiler.test.js test/compiler-authored-input.test.js"
   },
-  "author": "",
+  "author": "LitSX Team",
   "license": "Apache-2.0",
   "description": ""
 }

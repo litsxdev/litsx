@@ -2,6 +2,7 @@
   "name": "create-litsx-app",
   "version": "0.4.0",
   "description": "Scaffold a LitSX project with the recommended editor and build setup",
+  "author": "LitSX Team",
   "type": "module",
   "bin": "./dist/create-litsx-app.js",
   "main": "./dist/index.cjs",
@@ -26,7 +27,7 @@
     "jsx"
   ],
   "license": "Apache-2.0",
-  "homepage": "https://github.com/litsxdev/litsx/tree/main/packages/create-litsx-app",
+  "homepage": "https://litsx.dev/",
   "bugs": {
     "url": "https://github.com/litsxdev/litsx/issues"
   },

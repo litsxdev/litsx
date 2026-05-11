@@ -2,6 +2,7 @@
   "name": "@litsx/compiler",
   "version": "0.5.0",
   "description": "Build-facing LitSX compilation facade with correct parser and sourcemap handling",
+  "author": "LitSX Team",
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./src/index.js",
@@ -33,7 +34,7 @@
     "jsx"
   ],
   "license": "Apache-2.0",
-  "homepage": "https://github.com/litsxdev/litsx/tree/main/packages/compiler",
+  "homepage": "https://litsx.dev/",
   "bugs": {
     "url": "https://github.com/litsxdev/litsx/issues"
   },

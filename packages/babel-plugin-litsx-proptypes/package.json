@@ -2,6 +2,7 @@
   "name": "@litsx/babel-plugin-litsx-proptypes",
   "version": "0.2.1",
   "description": "Lowers React propTypes assignments into native LitSX properties hoists",
+  "author": "LitSX Team",
   "main": "./dist/index.cjs",
   "module": "./src/index.js",
   "type": "module",
@@ -23,7 +24,7 @@
     "prop-types"
   ],
   "license": "Apache-2.0",
-  "homepage": "https://github.com/litsxdev/litsx/tree/main/packages/babel-plugin-litsx-proptypes",
+  "homepage": "https://litsx.dev/",
   "bugs": {
     "url": "https://github.com/litsxdev/litsx/issues"
   },
