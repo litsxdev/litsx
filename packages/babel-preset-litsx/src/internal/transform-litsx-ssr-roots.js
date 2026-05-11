@@ -23,9 +23,13 @@ export default function transformLitsxSsrRoots(api) {
     name: "transform-litsx-ssr-roots",
     inherits: jsxSyntaxPlugin.default || jsxSyntaxPlugin,
     visitor: {
-      Program(programPath) {
+      Program(programPath, state) {
         const availableMap = buildAvailableMap(programPath);
         const renderToStringBindings = collectSsrRenderBindings(programPath);
+        const sharedOptions = {
+          ...(state.opts || {}),
+          filename: programPath.hub.file?.opts?.filename || "",
+        };
 
         if (renderToStringBindings.size === 0) {
           return;
@@ -57,9 +61,7 @@ export default function transformLitsxSsrRoots(api) {
                 isServerComponentBindingName(
                   programPath,
                   openingName.node.name,
-                  {
-                    filename: programPath.hub.file?.opts?.filename || "",
-                  },
+                  sharedOptions,
                 )
               ) {
                 firstArgument.replaceWith(
