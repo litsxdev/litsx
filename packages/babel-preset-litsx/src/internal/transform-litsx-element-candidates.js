@@ -1191,6 +1191,65 @@ export function importedBindingNeedsRendererContext(programPath, localName, opti
   return scanFunction(resolvedHelper.path, resolvedHelper.moduleAnalysis);
 }
 
+export function getImportedBindingModuleAnalysis(programPath, localName, options = {}) {
+  if (!programPath?.node || !localName) {
+    return null;
+  }
+
+  programPath.scope.crawl();
+  const compilationSession = options.__litsxCompilationSession || null;
+  const rootFilename = normalizeFilePath(
+    options.filename || programPath.hub.file?.opts?.filename || ""
+  );
+  const moduleAnalysisCache =
+    compilationSession?.importedModuleAnalysisCache ||
+    programPath.getData("__litsxImportedModuleAnalyses") ||
+    new Map();
+  programPath.setData("__litsxImportedModuleAnalyses", moduleAnalysisCache);
+  const resolvedImportCache =
+    compilationSession?.resolvedImportCache ||
+    programPath.getData("__litsxResolvedImports") ||
+    new Map();
+  programPath.setData("__litsxResolvedImports", resolvedImportCache);
+
+  const binding = programPath.scope.getBinding(localName);
+  if (!binding?.path?.node) {
+    return null;
+  }
+
+  if (
+    !binding.path.isImportSpecifier?.() &&
+    !binding.path.isImportDefaultSpecifier?.() &&
+    !binding.path.isImportNamespaceSpecifier?.()
+  ) {
+    return null;
+  }
+
+  const sourceValue = binding.path.parent?.source?.value ?? null;
+  const context = {
+    rootFilename,
+    moduleAnalysisCache,
+    resolvedImportCache,
+    ...createCompilerContextResolver(options),
+  };
+  const resolvedSource = resolveImportSource(rootFilename, sourceValue, context);
+  if (!resolvedSource) {
+    return null;
+  }
+
+  return {
+    localName,
+    sourceValue,
+    resolvedSource,
+    importedName: binding.path.isImportDefaultSpecifier()
+      ? "default"
+      : binding.path.isImportNamespaceSpecifier()
+        ? "*"
+        : binding.path.node.imported?.name ?? binding.path.node.imported?.value ?? null,
+    moduleAnalysis: getOrCreateModuleAnalysis(resolvedSource, context),
+  };
+}
+
 export default declare((api) => {
   api.assertVersion(7);
   t = api.types;
