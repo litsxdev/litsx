@@ -72,6 +72,8 @@ export function createComponentClass({
   needsCss,
   needsUnsafeCss,
   needsCallbackRef = false,
+  needsModuleIdMetadata = false,
+  moduleId = null,
 }) {
   const classNode = t.classDeclaration(
     t.identifier(className),
@@ -104,5 +106,16 @@ export function createComponentClass({
   classNode._needsCss = needsCss;
   classNode._needsUnsafeCss = needsUnsafeCss;
   classNode._needsCallbackRef = needsCallbackRef;
+  classNode._needsModuleIdMetadata = needsModuleIdMetadata;
+
+  if (needsModuleIdMetadata) {
+    const moduleIdProperty = t.classProperty(
+      t.identifier("LITSX_MODULE_ID"),
+      t.stringLiteral(moduleId ?? ""),
+    );
+    moduleIdProperty.static = true;
+    moduleIdProperty.computed = true;
+    classNode.body.body.unshift(moduleIdProperty);
+  }
   return classNode;
 }
