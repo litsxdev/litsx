@@ -66,6 +66,35 @@ Default behavior:
 - returns `{ code, map }`
 - delegates compilation to `@litsx/compiler`
 
+### `createLitsxViteAssetResolver(options?)`
+
+Creates an `assetResolver(moduleId)` function suitable for passing to
+`@litsx/ssr`.
+
+Use it when SSR output needs stable client module URLs:
+
+```js
+import { createLitsxViteAssetResolver, litsx } from "@litsx/vite-plugin";
+import { renderToString } from "@litsx/ssr";
+
+const assetResolver = createLitsxViteAssetResolver({
+  root: process.cwd(),
+  manifest,
+  base: "/",
+});
+
+const result = await renderToString(<ProductCard .product={product} />, {
+  assetResolver,
+});
+```
+
+Behavior:
+
+- in dev, resolves source module ids under `root` to browser-facing paths
+- in build, resolves those module ids through the Vite manifest when available
+- falls back to the incoming `moduleId` when it cannot make the path
+  project-relative
+
 ## Options
 
 `@litsx/vite-plugin` accepts all `@litsx/compiler` options except `filename`, which is supplied from the Vite module id.
@@ -174,6 +203,7 @@ It does not:
 - own docs-site-specific module resolution
 - provide Rollup or esbuild plugins
 - replace runtime dependencies such as `lit` or `litsx`
+- render HTML by itself; pair it with `@litsx/ssr` for scoped server rendering
 
 ## Stability
 

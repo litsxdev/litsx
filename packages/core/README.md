@@ -9,6 +9,8 @@ Runtime helpers that back the Lit<sup>SX</sup> Babel transforms. The module bund
 
 The package also exposes `@litsx/core/jsx-runtime` and `@litsx/core/jsx-dev-runtime` entrypoints so editors and TypeScript can treat LitSX as a first-class JSX runtime via `jsxImportSource: "@litsx/core"`.
 
+SSR support used by [`@litsx/ssr`](../ssr/README.md) also lives here: scoped-template metadata, scoped custom-element lookup for nested `static elements`, and the SSR-safe effects controller selected when a host is rendered with SSR context. Most applications should use `@litsx/ssr` rather than importing those internals directly.
+
 ## What it provides
 
 - `EffectsController`: a Lit `ReactiveController` implementation that tracks hook registrations, dependency arrays, effect queues, transitions, refs, and external-store subscriptions per host instance.
