@@ -89,7 +89,15 @@ npx create-litsx-app my-design-system --template design-system --visual-tests
 
 ## Templates
 
-### `design-system` (default)
+### `app` (default)
+
+Includes:
+
+- the same starter home layout as the design-system scaffold
+- shared hero, guide and button primitives
+- no Storybook setup
+
+### `design-system`
 
 Includes:
 
@@ -104,14 +112,6 @@ Includes:
 
 - component-library structure under `src/components`
 - shared design tokens
-- no Storybook setup
-
-### `app`
-
-Includes:
-
-- a lighter Vite application scaffold
-- runtime wiring only
 - no Storybook setup
 
 ## Optional Flags

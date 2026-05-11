@@ -356,10 +356,10 @@ document.querySelector("#app").innerHTML = "<app-root></app-root>";
 }
 
 function createAppProfileFiles(packageName, className) {
-  const files = createBaseFiles(packageName, className, false);
+  const files = createComponentProfileFiles(packageName, className);
 
-  files.set(`src/${packageName}.litsx`, `import { useState } from "@litsx/litsx";
-import { LitsxHero } from "./components/litsx-hero.litsx";
+  files.set(`src/${packageName}.litsx`, `import { LitsxHero } from "./components/litsx-hero.litsx";
+import { StarterGuide } from "./components/starter-guide.litsx";
 
 export const ${className} = () => {
   static styles = \`
@@ -367,371 +367,30 @@ export const ${className} = () => {
     .shell {
       max-width: 960px;
       margin: 0 auto;
-      padding: 28px 24px 104px;
+      padding-top: 28px;
+      padding-bottom: 28px;
       position: relative;
     }
-    .counter {
-      margin: 8px auto 0;
-      max-width: 960px;
-      padding: 0 30px;
-    }
-    .cta {
-      border: 1px solid transparent;
-      border-radius: 999px;
-      padding: 12px 18px;
-      background: linear-gradient(135deg, var(--color-text), #32405d);
-      color: white;
-      font: inherit;
-      cursor: pointer;
-      box-shadow: 0 18px 36px rgba(21, 32, 51, 0.18);
-      transition: transform 160ms ease, box-shadow 160ms ease;
-    }
-    .cta:hover {
-      transform: translateY(-1px);
-      box-shadow: 0 22px 42px rgba(21, 32, 51, 0.22);
-    }
   \`;
-
-  const [count, setCount] = useState(0);
 
   return (
     <main class="shell">
       <LitsxHero
-        eyebrow={"Authored web components"}
+        eyebrow={"Application starter"}
         tagline={"Web components with a sharper authoring experience. Less ceremony. More signal."}
         primaryLabel={"Getting Started"}
         secondaryLabel={"View on GitHub"}
+        @primary-action={() => {
+          window.open("https://litsx.dev/getting-started", "_blank", "noopener,noreferrer");
+        }}
+        @secondary-action={() => {
+          window.open("https://github.com/litsxdev/litsx", "_blank", "noopener,noreferrer");
+        }}
       />
-      <div class="counter">
-        <button class="cta" @click={() => setCount((value) => value + 1)}>
-          Count: {count}
-        </button>
-      </div>
+      <StarterGuide />
     </main>
   );
 };
-`);
-  files.set("src/components/litsx-button.litsx", `export const LitsxButton = ({
-  type = "secondary",
-  label = "",
-}) => {
-  static styles = \`
-    :host { display: block; flex-shrink: 0; padding: 6px; }
-    button {
-      display: inline-block;
-      border: 1px solid transparent;
-      border-radius: 12px;
-      min-width: 168px;
-      min-height: 52px;
-      padding: 0 20px;
-      line-height: 52px;
-      font-size: 14px;
-      text-align: center;
-      font-weight: 600;
-      white-space: nowrap;
-      color: #111827;
-      background:
-        linear-gradient(180deg, rgba(239, 242, 247, 0.98), rgba(222, 228, 236, 0.98));
-      background-origin: border-box;
-      box-shadow:
-        inset 0 0 0 1px rgba(21, 32, 51, 0.16),
-        inset 0 1px 0 rgba(255, 255, 255, 0.76),
-        0 12px 28px rgba(21, 32, 51, 0.12);
-      overflow: hidden;
-      transition: transform 0.2s ease, box-shadow 0.2s ease, color 0.25s, border-color 0.25s, background-color 0.25s;
-      font-family: var(--litsx-font-family-base);
-      cursor: pointer;
-    }
-    button.primary {
-      color: var(--litsx-button-brand-text);
-      border-color: transparent;
-      background-image: linear-gradient(135deg, var(--litsx-flame-a), var(--litsx-flame-b), var(--litsx-flame-c));
-      background-origin: border-box;
-      box-shadow: 0 14px 32px color-mix(in srgb, var(--litsx-c-brand-1) 28%, transparent);
-    }
-  \`;
-  return <button class={type === "primary" ? "primary" : ""}>{label}</button>;
-};
-`);
-  files.set("src/components/litsx-hero.litsx", `import { useEmit } from "@litsx/litsx";
-import { LitsxButton } from "./litsx-button.litsx";
-
-export const LitsxHero = ({
-  eyebrow = "Authored web components",
-  tagline = "Web components with a sharper authoring experience. Less ceremony. More signal.",
-  primaryLabel = "Getting Started",
-  secondaryLabel = "View on GitHub",
-}) => {
-  const emit = useEmit();
-  static styles = \`
-    :host {
-      display: block;
-    }
-
-    .LitsxHero {
-      padding: 48px 24px 48px;
-    }
-
-    .container {
-      display: flex;
-      flex-direction: column;
-      margin: 0 auto;
-      max-width: 1152px;
-      text-align: center;
-    }
-
-    .main {
-      position: relative;
-      z-index: 10;
-      order: 2;
-      flex-grow: 1;
-      flex-shrink: 0;
-    }
-
-    .eyebrow {
-      margin: 0 0 18px;
-      color: var(--litsx-c-text-2);
-      font-family: var(--litsx-font-family-base);
-      font-size: 14px;
-      font-weight: 600;
-      letter-spacing: 0.14em;
-      text-transform: uppercase;
-    }
-
-    .heading {
-      margin: 0;
-      width: fit-content;
-      margin: 0 auto;
-    }
-
-    .heading-mark {
-      display: block;
-      width: min(100%, 280px);
-      height: auto;
-    }
-
-    .tagline {
-      margin: 0 auto;
-      padding-top: 8px;
-      max-width: 392px;
-      line-height: 28px;
-      font-size: 18px;
-      font-weight: 500;
-      white-space: pre-wrap;
-      color: var(--litsx-c-text-2);
-      font-family: var(--litsx-font-family-base);
-    }
-
-    .actions {
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: center;
-      margin: -6px;
-      padding-top: 24px;
-    }
-
-    .image {
-      order: 1;
-      margin: -76px -24px -48px;
-    }
-
-    .image-container {
-      position: relative;
-      margin: 0 auto;
-      width: 320px;
-      height: 320px;
-    }
-
-    .image-bg {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      border-radius: 50%;
-      width: 192px;
-      height: 192px;
-      background-image: var(--litsx-home-hero-image-background-image);
-      filter: var(--litsx-home-hero-image-filter);
-      transform: translate(-50%, -50%);
-    }
-
-    .image-src {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      max-width: 192px;
-      max-height: 192px;
-      transform: translate(-50%, -50%);
-    }
-
-    @media (min-width: 640px) {
-      .LitsxHero {
-        padding: 80px 48px 64px;
-      }
-
-      .heading-mark {
-        width: min(100%, 360px);
-      }
-
-      .tagline {
-        padding-top: 12px;
-        max-width: 576px;
-        line-height: 32px;
-        font-size: 20px;
-      }
-
-      .actions {
-        padding-top: 32px;
-      }
-
-      .image {
-        margin: -108px -24px -48px;
-      }
-
-      .image-container {
-        width: 392px;
-        height: 392px;
-      }
-
-      .image-bg {
-        width: 256px;
-        height: 256px;
-      }
-
-      .image-src {
-        max-width: 256px;
-        max-height: 256px;
-      }
-    }
-
-    @media (min-width: 960px) {
-      .LitsxHero {
-        padding: 80px 64px 64px;
-      }
-
-      .container {
-        flex-direction: row;
-      }
-
-      .main {
-        order: 1;
-        width: calc((100% / 3) * 2);
-        max-width: 592px;
-      }
-
-      .container,
-      .tagline,
-      .heading {
-        text-align: left;
-      }
-
-      .heading {
-        margin: 0;
-      }
-
-      .heading-mark {
-        width: max(100%, 392px);
-      }
-
-      .tagline {
-        margin: 0;
-        line-height: 36px;
-        font-size: 24px;
-      }
-
-      .actions {
-        justify-content: flex-start;
-      }
-
-      .image {
-        flex-grow: 1;
-        order: 2;
-        margin: 0;
-        min-height: 100%;
-      }
-
-      .image-container {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        width: 100%;
-        height: 100%;
-        transform: translate(-32px, -32px);
-      }
-
-      .image-bg {
-        width: 320px;
-        height: 320px;
-      }
-
-      .image-src {
-        max-width: 320px;
-        max-height: 320px;
-      }
-    }
-  \`);
-  return (
-    <section class="LitsxHero">
-      <div class="container">
-        <div class="main">
-          <p class="eyebrow">{eyebrow}</p>
-          <h1 class="heading">
-            <img class="heading-mark" src="/title.svg" alt="LitSX" />
-          </h1>
-          <p class="tagline">{tagline}</p>
-          <div class="actions">
-            <LitsxButton
-              type="primary"
-              label={primaryLabel}
-              @click={() => emit("primary-action")}
-            />
-            <LitsxButton
-              type="secondary"
-              label={secondaryLabel}
-              @click={() => emit("secondary-action")}
-            />
-          </div>
-        </div>
-        <div class="image">
-          <div class="image-container">
-            <div class="image-bg"></div>
-            <img class="image-src" src="/flame_512.png" alt="" />
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-};
-`);
-  files.set("src/styles/tokens.css", `:root {
-  --litsx-c-brand-1: #f05a28;
-  --litsx-c-brand-2: #ff7446;
-  --litsx-flame-a: #ff8a00;
-  --litsx-flame-b: #ff3d77;
-  --litsx-flame-c: #6a5cff;
-  --litsx-button-brand-text: #fff7f2;
-  --litsx-c-text-1: #152033;
-  --litsx-c-text-2: rgba(21, 32, 51, 0.76);
-  --litsx-font-family-base: "Inter", "Segoe UI", sans-serif;
-  --litsx-home-hero-image-background-image:
-    linear-gradient(135deg, rgba(255, 138, 0, 0.28), rgba(255, 61, 119, 0.22), rgba(106, 92, 255, 0.24));
-  --litsx-home-hero-image-filter: blur(56px);
-  --color-bg: #ffffff;
-  --color-text: #152033;
-  --font-body: "Inter", "Segoe UI", sans-serif;
-}
-
-body {
-  margin: 0;
-  min-height: 100vh;
-  font-family: var(--font-body);
-  background:
-    radial-gradient(circle at top left, rgba(255, 255, 255, 0.74), transparent 24%),
-    radial-gradient(circle at top right, rgba(203, 88, 33, 0.1), transparent 20%),
-    linear-gradient(180deg, #ffffff 0%, var(--color-bg) 100%);
-  background-repeat: no-repeat;
-  background-size: cover;
-  color: var(--color-text);
-}
 `);
   files.set("README.md", `# ${packageName}
 
@@ -755,8 +414,8 @@ Generated with \`create-litsx-app --template app\`.
 ## What This Template Shows
 
 - authored LitSX JSX
-- \`@click\` event binding
-- local state with \`useState(...)\`
+- routed onboarding actions with \`@primary-action\` and \`@secondary-action\`
+- a home-style starter layout with \`LitsxHero\` and \`StarterGuide\`
 - component-owned styling with \`static styles = ...\`
 `);
 
@@ -937,7 +596,6 @@ export const LitsxHero = ({
   secondaryLabel = "View on GitHub",
 }) => {
   const emit = useEmit();
-
   static styles = \`
     :host {
       display: block;
@@ -1143,7 +801,7 @@ export const LitsxHero = ({
         max-height: 320px;
       }
     }
-  \`);
+  \`;
 
   return (
     <section class="LitsxHero">
@@ -1257,7 +915,7 @@ export const StarterGuide = () => {
         grid-template-columns: repeat(3, minmax(0, 1fr));
       }
     }
-  \`);
+  \`;
 
   return (
     <section class="guide" aria-label="Getting started with LitSX">
@@ -1527,7 +1185,7 @@ function createPackageJson(packageName, template, options = {}) {
 }
 
 export function renderProjectFiles(targetDir, options = {}) {
-  const template = options.template ?? "design-system";
+  const template = options.template ?? "app";
   const visualTests = Boolean(options.visualTests);
 
   if (!["app", "component", "design-system"].includes(template)) {
