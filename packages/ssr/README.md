@@ -135,6 +135,9 @@ This first SSR cut includes:
 It does not yet include:
 
 - hydration payload generation
-- client hydration helpers
+- higher-level LitSX hydration payload orchestration
 - module preload generation
 - server-side components
+
+For the current minimal client-side entrypoint, see
+[`@litsx/ssr-client`](../ssr-client/README.md).
