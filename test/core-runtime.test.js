@@ -1974,7 +1974,7 @@ describe("litsx effects controller", () => {
 
   it("registers direct custom element constructors in the scoped registry", () => {
     const host = new TestHost();
-    class FancyButtonElement {}
+    class FancyButtonElement extends HTMLElement {}
 
     const registered = ensureLazyElement(
       host,
@@ -1989,7 +1989,7 @@ describe("litsx effects controller", () => {
 
   it("loads scoped elements lazily and requests an update once resolved", async () => {
     const host = new TestHost();
-    class FancyButtonElement {}
+    class FancyButtonElement extends HTMLElement {}
     let loads = 0;
     const loader = () => {
       loads += 1;
@@ -2021,7 +2021,7 @@ describe("litsx effects controller", () => {
   });
 
   it("resolves scoped registries from the host root when nested boundaries do not carry registry directly", () => {
-    class FancyButtonElement {}
+    class FancyButtonElement extends HTMLElement {}
     const registry = {
       definitions: new Map(),
       define(tag, ctor) {
