@@ -1,6 +1,9 @@
 import { EffectsController } from "./effects-controller.js";
+import { SsrEffectsController } from "./ssr-effects-controller.js";
+import { LITSX_SSR_CONTEXT } from "./elements/index.js";
 
 const controllers = new WeakMap();
+const ssrControllers = new WeakMap();
 let currentHookHost = null;
 
 export function resolveRuntimeHost(host) {
@@ -21,6 +24,20 @@ export function getController(host) {
     throw new TypeError(
       "Lit<sup>sx</sup> hooks require an active ReactiveControllerHost during render."
     );
+  }
+
+  if (resolvedHost[LITSX_SSR_CONTEXT]) {
+    let controller = ssrControllers.get(resolvedHost);
+    if (!controller) {
+      controller = new SsrEffectsController(
+        resolvedHost,
+        resolvedHost[LITSX_SSR_CONTEXT],
+      );
+      ssrControllers.set(resolvedHost, controller);
+    } else {
+      controller.ssrContext = resolvedHost[LITSX_SSR_CONTEXT];
+    }
+    return controller;
   }
 
   let controller = controllers.get(resolvedHost);
