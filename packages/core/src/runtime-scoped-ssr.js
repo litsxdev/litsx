@@ -1,10 +1,13 @@
 import { render } from "@lit-labs/ssr/lib/render-with-global-dom-shim.js";
 import { LitElementRenderer } from "@lit-labs/ssr/lib/lit-element-renderer.js";
+import { ElementRenderer } from "@lit-labs/ssr/lib/element-renderer.js";
 import {
   __isLitsxScopedTemplate,
   LITSX_MODULE_ID,
   LITSX_SSR_CONTEXT,
 } from "./elements/index.js";
+import { LitsxContextProviderElement } from "./context.js";
+import { withCurrentSsrCustomElementInstanceStack } from "./runtime-ssr-state.js";
 
 const scopedRegistryStack = [];
 const scopedSsrContextStack = [];
@@ -29,10 +32,20 @@ export function createScopedSsrContext(options = {}) {
     assetResolver:
       typeof options.assetResolver === "function" ? options.assetResolver : null,
     clientImports: new Set(),
+    hydrationData: {
+      version: 1,
+      roots: [],
+    },
     instanceCount: 0,
+    rootCount: 0,
     nextInstanceId() {
       const nextId = String(this.instanceCount);
       this.instanceCount += 1;
+      return nextId;
+    },
+    nextRootId() {
+      const nextId = `${this.idPrefix}-root-${this.rootCount}`;
+      this.rootCount += 1;
       return nextId;
     },
     collectClientImport(component) {
@@ -45,6 +58,9 @@ export function createScopedSsrContext(options = {}) {
       if (resolved) {
         this.clientImports.add(resolved);
       }
+    },
+    collectHydrationRoot(root) {
+      this.hydrationData.roots.push(root);
     },
   };
 }
@@ -96,6 +112,9 @@ export class ScopedLitElementRenderer extends LitElementRenderer {
     super(tagName);
     this.element.constructor.finalize?.();
     const context = scopedSsrContextStack.at(-1) ?? createScopedSsrContext();
+    const isHydrationRoot = scopedRegistryStack.length === 1;
+    const rootId = isHydrationRoot ? context.nextRootId() : null;
+    const moduleId = this.element.constructor?.[LITSX_MODULE_ID] ?? null;
 
     this.element[LITSX_SSR_CONTEXT] = {
       context,
@@ -103,6 +122,15 @@ export class ScopedLitElementRenderer extends LitElementRenderer {
       currentInstanceId: context.nextInstanceId(),
     };
     context.collectClientImport(this.element.constructor);
+
+    if (rootId) {
+      this.element.setAttribute("data-litsx-root", rootId);
+      context.collectHydrationRoot({
+        id: rootId,
+        tagName,
+        ...(moduleId ? { moduleId } : {}),
+      });
+    }
   }
 
   renderShadow(renderInfo) {
@@ -124,15 +152,31 @@ export class ScopedLitElementRenderer extends LitElementRenderer {
   }
 }
 
+class ScopedContextProviderRenderer extends ElementRenderer {
+  static matchesClass(ctor) {
+    return ctor === LitsxContextProviderElement;
+  }
+
+  constructor(tagName) {
+    super(tagName);
+    this.element = new LitsxContextProviderElement();
+  }
+
+  connectedCallback() {
+    // Context providers should not dispatch context-request events during SSR.
+  }
+}
+
 export async function renderScopedTemplateWithLitSsr(value, renderInfo = {}) {
   return withScopedCustomElementLookup(async () => {
     const isScopedTemplate = __isLitsxScopedTemplate(value);
     const ssrContext = renderInfo.litsxSsrContext ?? createScopedSsrContext();
-    const elementRenderers = renderInfo.elementRenderers?.includes(
+    const elementRenderers = [
+      ScopedContextProviderRenderer,
       ScopedLitElementRenderer,
-    )
-      ? renderInfo.elementRenderers
-      : [ScopedLitElementRenderer, ...(renderInfo.elementRenderers ?? [])];
+      ...(renderInfo.elementRenderers ?? []),
+    ].filter((renderer, index, list) => list.indexOf(renderer) === index);
+    const customElementInstanceStack = renderInfo.customElementInstanceStack ?? [];
 
     try {
       scopedSsrContextStack.push(ssrContext);
@@ -141,11 +185,16 @@ export async function renderScopedTemplateWithLitSsr(value, renderInfo = {}) {
         scopedRegistryStack.push(value.elements);
       }
 
-      return await collectRenderResult(
-        render(isScopedTemplate ? value.template : value, {
-          ...renderInfo,
-          elementRenderers,
-        }),
+      return await withCurrentSsrCustomElementInstanceStack(
+        customElementInstanceStack,
+        () =>
+          collectRenderResult(
+            render(isScopedTemplate ? value.template : value, {
+              ...renderInfo,
+              customElementInstanceStack,
+              elementRenderers,
+            }),
+          ),
       );
     } finally {
       if (isScopedTemplate) {
