@@ -1,5 +1,62 @@
 import fs from "fs/promises";
 import { createLitsxCompilationSession } from "@litsx/compiler";
+import path from "node:path";
+
+function normalizeSlashes(value) {
+  return String(value).replaceAll("\\", "/");
+}
+
+function normalizeBase(base = "/") {
+  if (!base) {
+    return "/";
+  }
+
+  return base.endsWith("/") ? base : `${base}/`;
+}
+
+function toProjectRelativeModuleId(moduleId, root) {
+  if (typeof moduleId !== "string" || !moduleId) {
+    return null;
+  }
+
+  const normalizedRoot = normalizeSlashes(path.resolve(root));
+  const normalizedModuleId = normalizeSlashes(
+    moduleId.startsWith("file://")
+      ? new URL(moduleId).pathname
+      : path.resolve(moduleId),
+  );
+
+  if (!normalizedModuleId.startsWith(normalizedRoot)) {
+    return null;
+  }
+
+  return normalizeSlashes(path.relative(normalizedRoot, normalizedModuleId));
+}
+
+export function createLitsxViteAssetResolver({
+  root = process.cwd(),
+  manifest = null,
+  base = "/",
+} = {}) {
+  const normalizedBase = normalizeBase(base);
+
+  return (moduleId) => {
+    const relativeModuleId = toProjectRelativeModuleId(moduleId, root);
+    if (!relativeModuleId) {
+      return moduleId || null;
+    }
+
+    if (manifest && typeof manifest === "object") {
+      const manifestEntry = manifest[relativeModuleId] ?? manifest[`./${relativeModuleId}`];
+      const file = manifestEntry?.file;
+      if (typeof file === "string" && file) {
+        return `${normalizedBase}${file}`.replace(/\/{2,}/g, "/");
+      }
+    }
+
+    return `${normalizedBase}${relativeModuleId}`.replace(/\/{2,}/g, "/");
+  };
+}
 
 const LIT_DEDUPE_PACKAGES = [
   "lit",
