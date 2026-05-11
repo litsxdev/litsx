@@ -280,6 +280,14 @@ export declare function collectSoftSuspenseThenables<T>(
   render: () => T
 ): T;
 
+export declare class SsrEffectsController {
+  constructor(
+    host: object,
+    ssrContext?: { idPrefix?: string; currentInstanceId?: string },
+  );
+  prepare(): void;
+}
+
 export type LitsxHostMiddlewareLifecycleMethod =
   | "connectedCallback"
   | "disconnectedCallback"
