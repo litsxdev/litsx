@@ -212,6 +212,55 @@ describe("@litsx/ssr", () => {
     });
   });
 
+  it("renders local async PascalCase composition inside a default-export-style server flow", async () => {
+    class ProductCard extends LitElement {
+      static [LITSX_MODULE_ID] = "/src/ProductCard.litsx";
+
+      render() {
+        return html`<article>${this.product.name}</article>`;
+      }
+    }
+
+    async function ProductSection({ product }) {
+      return __litsxScopedTemplate(
+        html`<product-card .product=${product}></product-card>`,
+        {
+          "product-card": ProductCard,
+        },
+      );
+    }
+
+    async function ProductPage({ product }) {
+      return __litsxScopedTemplate(
+        html`<main>${__litsxServerComponentCall(ProductSection, { product })}</main>`,
+        {},
+      );
+    }
+
+    const result = await renderToString(
+      __litsxServerComponentCall(ProductPage, {
+        product: { name: "Local Trail Shoe" },
+      }),
+    );
+
+    assert.match(result.html, /<main>/);
+    assert.match(result.html, /<product-card[^>]*data-litsx-root="litsx-root-0"/);
+    assert.match(result.html, /Local Trail Shoe/);
+    assert.doesNotMatch(result.html, /<product-page\b/);
+    assert.doesNotMatch(result.html, /<product-section\b/);
+    assert.deepStrictEqual(result.clientImports, ["/src/ProductCard.litsx"]);
+    assert.deepStrictEqual(result.hydrationData, {
+      version: 1,
+      roots: [
+        {
+          id: "litsx-root-0",
+          tagName: "product-card",
+          moduleId: "/src/ProductCard.litsx",
+        },
+      ],
+    });
+  });
+
   it("renders complex server-to-lit projected content with nested SSR roots", async () => {
     class ActionChip extends LitElement {
       static [LITSX_MODULE_ID] = "/src/ActionChip.litsx";

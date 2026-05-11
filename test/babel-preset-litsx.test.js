@@ -331,6 +331,70 @@ describe("@litsx/babel-preset-litsx", () => {
     assert.match(result.code, /export async function ProductPage\(\{\s*slug\s*\}\) \{\s*return html`<main>\$\{slug\}<\/main>`;\s*\}/);
   });
 
+  it("fails when an async PascalCase binding is used as an SSR root without being the default export", () => {
+    const source = [
+      "import { renderToString } from '@litsx/ssr';",
+      "async function ProductPage({ slug }) {",
+      "  return <main>{slug}</main>;",
+      "}",
+      "export async function renderPage(slug) {",
+      "  return renderToString(<ProductPage .slug={slug} />);",
+      "}",
+    ].join("\n");
+
+    assert.throws(
+      () =>
+        transformFromAstSync(
+          parser.parse(source, { sourceType: "module" }),
+          source,
+          {
+            configFile: false,
+            babelrc: false,
+            presets: [[nativePreset, {}]],
+          },
+        ),
+      /Server component "ProductPage" must be the module default export/,
+    );
+  });
+
+  it("fails when a server component module is imported through a non-default binding", () => {
+    const fixtureDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-server-invalid-import-"));
+    const importedFilename = path.join(fixtureDirectory, "ProductPage.js");
+    const entryFilename = path.join(fixtureDirectory, "entry.js");
+
+    fs.writeFileSync(
+      importedFilename,
+      [
+        "export default async function ProductPage({ slug }) {",
+        "  return <main>{slug}</main>;",
+        "}",
+      ].join("\n"),
+    );
+
+    const source = [
+      "import { renderToString } from '@litsx/ssr';",
+      "import { ProductPage } from './ProductPage.js';",
+      "export async function renderPage(slug) {",
+      "  return renderToString(<ProductPage .slug={slug} />);",
+      "}",
+    ].join("\n");
+
+    assert.throws(
+      () =>
+        transformFromAstSync(
+          parser.parse(source, { sourceType: "module" }),
+          source,
+          {
+            configFile: false,
+            babelrc: false,
+            filename: entryFilename,
+            presets: [[nativePreset, {}]],
+          },
+        ),
+      /must be imported as a default binding/,
+    );
+  });
+
   it("does not treat default async PascalCase exports without a renderable return as server-side components", () => {
     const source = [
       "export default async function ProductPage({ slug }) {",
@@ -568,6 +632,32 @@ describe("@litsx/babel-preset-litsx", () => {
     assert.match(result.code, /import \{[\s\S]*__litsxServerComponentCall[\s\S]*\} from "@litsx\/litsx\/runtime-infrastructure";/);
     assert.match(result.code, /return __litsxScopedTemplate\(html`<main>\$\{__litsxServerComponentCall\(ProductSection, \{\s*product: product\s*\}\)\}<\/main>`\, \{\}\);/);
     assert.doesNotMatch(result.code, /"product-section": ProductSection/);
+  });
+
+  it("allows nested async PascalCase bindings inside a default-export server component", () => {
+    const source = [
+      "async function ProductSection({ product }) {",
+      "  return <section>{product.name}</section>;",
+      "}",
+      "export default async function ProductPage({ product }) {",
+      "  return <main><ProductSection .product={product} /></main>;",
+      "}",
+    ].join("\n");
+
+    const result = transformFromAstSync(
+      parser.parse(source, { sourceType: "module" }),
+      source,
+      {
+        configFile: false,
+        babelrc: false,
+        presets: [[nativePreset, {}]],
+      },
+    );
+
+    assert.match(
+      result.code,
+      /return __litsxScopedTemplate\(html`<main>\$\{__litsxServerComponentCall\(ProductSection, \{\s*product: product\s*\}\)\}<\/main>`\, \{\}\);/,
+    );
   });
 
   it("keeps nested server-component projection inside Lit component light-dom children", () => {
