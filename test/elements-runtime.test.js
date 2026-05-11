@@ -18,6 +18,7 @@ import {
 } from "../packages/core/src/elements/index.js";
 
 let tagCounter = 0;
+const LIGHT_DOM_RUNTIME_KEY = Symbol.for("litsx.lightDomRegistry.runtime");
 
 function nextTag(prefix = "litsx-runtime") {
   tagCounter += 1;
@@ -236,6 +237,47 @@ describe("litsx elements runtime", () => {
     assert.equal(host.registry, null);
   });
 
+  it("upgrades existing light-dom children when a light-dom host is upgraded", async () => {
+    const childTag = nextTag("litsx-runtime-light-upgrade-child");
+    const hostTag = nextTag("litsx-runtime-light-upgrade-host");
+    const existingRuntime = window[LIGHT_DOM_RUNTIME_KEY];
+
+    if (existingRuntime?.NativeHTMLElement) {
+      window.HTMLElement = existingRuntime.NativeHTMLElement;
+      globalThis.HTMLElement = existingRuntime.NativeHTMLElement;
+      delete window[LIGHT_DOM_RUNTIME_KEY];
+    }
+
+    class Base extends HTMLElement {}
+
+    class ChildElement extends HTMLElement {
+      connectedCallback() {
+        this.setAttribute("data-upgraded", "yes");
+      }
+    }
+
+    class HostElement extends LightDomElementsMixin(Base) {
+      static elements = {
+        [childTag]: ChildElement,
+      };
+    }
+
+    customElements.define(hostTag, HostElement);
+
+    const host = document.createElement(hostTag);
+    host.innerHTML = `<${childTag}></${childTag}>`;
+    document.body.appendChild(host);
+    await globalThis.happyDOM.whenAsyncComplete();
+    const child = host.querySelector(childTag);
+
+    assert(host.registry);
+    assert.strictEqual(host.registry.get(childTag), ChildElement);
+    assert.strictEqual(Object.getPrototypeOf(child), ChildElement.prototype);
+    assert.strictEqual(child.getAttribute("data-upgraded"), "yes");
+
+    document.body.innerHTML = "";
+  });
+
   it("dedupes repeated light-dom element mixin applications", () => {
     class Base extends HTMLElement {}
 
@@ -395,6 +437,59 @@ describe("litsx elements runtime", () => {
     } finally {
       globalThis.CustomElementRegistry = originalCustomElementRegistry;
       Element.prototype.attachShadow = originalAttachShadow;
+    }
+  });
+
+  it("re-associates a scoped registry when the shadow root already exists", () => {
+    const originalCustomElementRegistry = globalThis.CustomElementRegistry;
+
+    class FakeRegistry {
+      constructor() {
+        this.definitions = new Map();
+      }
+
+      define(tagName, elementClass) {
+        if (!this.definitions.has(tagName)) {
+          this.definitions.set(tagName, elementClass);
+        }
+      }
+
+      get(tagName) {
+        return this.definitions.get(tagName);
+      }
+    }
+
+    class DemoChild extends HTMLElement {}
+
+    class Base {
+      constructor() {
+        this.shadowRoot = {
+          host: this,
+          registry: null,
+          customElements: null,
+          customElementRegistry: null,
+        };
+      }
+
+      static elements = { "demo-child": DemoChild };
+      static finalize() {}
+    }
+
+    try {
+      globalThis.CustomElementRegistry = FakeRegistry;
+
+      const Host = ShadowDomElementsMixin(Base);
+      const host = new Host();
+      const root = host.createRenderRoot();
+
+      assert.strictEqual(root, host.shadowRoot);
+      assert(host.registry);
+      assert.strictEqual(host.registry.get("demo-child"), DemoChild);
+      assert.strictEqual(root.registry, host.registry);
+      assert.strictEqual(root.customElements, host.registry);
+      assert.strictEqual(root.customElementRegistry, host.registry);
+    } finally {
+      globalThis.CustomElementRegistry = originalCustomElementRegistry;
     }
   });
 
