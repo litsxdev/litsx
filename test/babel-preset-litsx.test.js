@@ -1131,7 +1131,8 @@ describe("@litsx/babel-preset-litsx", () => {
       },
     );
 
-    assert.match(result.code, /return renderToString\(ProductPage\(\{\s*slug: slug\s*\}\)\);/);
+    assert.match(result.code, /import \{[\s\S]*__litsxServerComponentCall[\s\S]*\} from "@litsx\/litsx\/runtime-infrastructure";/);
+    assert.match(result.code, /return renderToString\(__litsxServerComponentCall\(ProductPage, \{\s*slug: slug\s*\}\)\);/);
     assert.doesNotMatch(result.code, /renderToString\(__litsxScopedTemplate/);
   });
 

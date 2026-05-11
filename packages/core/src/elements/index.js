@@ -14,6 +14,7 @@ export const LITSX_SCOPED_TEMPLATE = Symbol.for("litsx.scopedTemplate");
 export const LITSX_MODULE_ID = Symbol.for("litsx.moduleId");
 export const LITSX_SSR_CONTEXT = Symbol.for("litsx.ssrContext");
 export const LITSX_SERVER_COMPONENT = Symbol.for("litsx.serverComponent");
+export const LITSX_SERVER_COMPONENT_CALL = Symbol.for("litsx.serverComponentCall");
 let shadowDomRegistryAttachKey;
 let shadowDomRegistryAttachShadowRef;
 let shadowDomRegistryCtorRef;
@@ -37,6 +38,18 @@ export function __litsxScopedTemplate(template, elements) {
 
 export function __isLitsxScopedTemplate(value) {
   return Boolean(value?.[LITSX_SCOPED_TEMPLATE]);
+}
+
+export function __litsxServerComponentCall(component, props) {
+  return {
+    [LITSX_SERVER_COMPONENT_CALL]: true,
+    component,
+    props: props ?? {},
+  };
+}
+
+export function __isLitsxServerComponentCall(value) {
+  return Boolean(value?.[LITSX_SERVER_COMPONENT_CALL]);
 }
 
 function isPolyfilledScopedRegistry(registry) {
