@@ -7,6 +7,7 @@ import transformLitsxRendererProps from "./internal/transform-litsx-renderer-pro
 import transformLitsxSsrRoots from "./internal/transform-litsx-ssr-roots.js";
 
 const NATIVE_TRANSFORM_OPTION_KEYS = [
+  "ssr",
   "defaultDomMode",
   "typeResolutionMode",
   "inMemoryFiles",
