@@ -43,9 +43,15 @@ result.renderModulePreloads();
 - `html`: prerendered HTML, including Declarative Shadow DOM for LitSX elements
 - `clientImports`: deduplicated client module imports collected from rendered
   LitSX elements
+- `hydrationData`: currently reserved for future LitSX-specific payloads and
+  now contains a minimal root-boundary payload
 - `renderClientImports()`: `<script type="module">` tags for `clientImports`
+- `renderClientImportsData()`: a JSON script tag readable by
+  `@litsx/ssr-client`
 - `renderModulePreloads()`: `<link rel="modulepreload">` tags for
   `clientImports`
+- `renderHydrationData()`: a JSON hydration-payload script tag; currently empty
+  for non-LitSX roots
 
 ## Authored Root Syntax
 
@@ -112,7 +118,36 @@ const result = await renderToString(<ProductCard .product={product} />, {
 
 result.renderModulePreloads();
 result.renderClientImports();
+result.renderClientImportsData();
 ```
+
+That JSON helper emits:
+
+```html
+<script type="application/json" id="__LITSX_CLIENT_IMPORTS__">[...]</script>
+```
+
+which `@litsx/ssr-client` can consume through `hydrateDocument(...)` or
+`readClientImports(...)`.
+
+When scoped LitSX roots are rendered, `renderHydrationData()` emits a matching
+root payload:
+
+```json
+{
+  "version": 1,
+  "roots": [
+    {
+      "id": "litsx-root-0",
+      "tagName": "product-card",
+      "moduleId": "/src/ProductCard.litsx"
+    }
+  ]
+}
+```
+
+The rendered host element also receives `data-litsx-root="litsx-root-0"` so the
+client can correlate DOM boundaries with that payload.
 
 ## Supported Input
 

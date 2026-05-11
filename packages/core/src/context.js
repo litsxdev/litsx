@@ -4,6 +4,7 @@ import {
   createContext as createLitContext,
 } from "@lit/context";
 import { useHost } from "./host-hooks.js";
+import { getCurrentSsrCustomElementInstanceStack } from "./runtime-ssr-state.js";
 
 const REACT_CONTEXT_MARK = Symbol("litsx.reactContext");
 const REACT_CONTEXT_KEY = Symbol("litsx.reactContext.key");
@@ -32,6 +33,29 @@ function getHostContextConsumerCache(host) {
   }
 
   return host[HOST_CONTEXT_CONSUMERS];
+}
+
+function getSsrProvidedContextValue(record) {
+  const stack = getCurrentSsrCustomElementInstanceStack();
+  if (!stack) {
+    return null;
+  }
+
+  for (let index = stack.length - 1; index >= 0; index -= 1) {
+    const element = stack[index]?.element;
+    if (!(element instanceof LitsxContextProviderElement)) {
+      continue;
+    }
+
+    if (element.context === record) {
+      return {
+        provided: true,
+        value: element.value,
+      };
+    }
+  }
+
+  return null;
 }
 
 export function createContext(defaultValue) {
@@ -64,6 +88,10 @@ export function useContext(hostOrContext, maybeContext) {
     hasExplicitHost ? maybeContext : hostOrContext,
     "useContext"
   );
+  const ssrValue = getSsrProvidedContextValue(record);
+  if (ssrValue) {
+    return ssrValue.value;
+  }
   const cache = getHostContextConsumerCache(resolvedHost);
 
   let entry = cache.get(record);
