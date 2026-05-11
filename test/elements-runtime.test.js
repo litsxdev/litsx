@@ -7,9 +7,12 @@ import { connectLightDomRegistry } from "../packages/scoped-registry-shim/src/in
 import { prepareEffects, useOnConnect, useState } from "../packages/core/src/index.js";
 import {
   __isLitsxScopedTemplate,
+  __isLitsxServerComponentCall,
   __litsxScopedTemplate,
+  __litsxServerComponentCall,
   LITSX_MODULE_ID,
   LITSX_SCOPED_TEMPLATE,
+  LITSX_SERVER_COMPONENT_CALL,
   LITSX_SERVER_COMPONENT,
   LITSX_SSR_CONTEXT,
   LightDomMixin,
@@ -42,12 +45,20 @@ describe("litsx elements runtime", () => {
     assert.strictEqual(LITSX_MODULE_ID, Symbol.for("litsx.moduleId"));
     assert.strictEqual(LITSX_SSR_CONTEXT, Symbol.for("litsx.ssrContext"));
     assert.strictEqual(LITSX_SERVER_COMPONENT, Symbol.for("litsx.serverComponent"));
+    assert.strictEqual(LITSX_SERVER_COMPONENT_CALL, Symbol.for("litsx.serverComponentCall"));
     assert.strictEqual(__isLitsxScopedTemplate(scoped), true);
     assert.strictEqual(__isLitsxScopedTemplate(template), false);
     assert.strictEqual(scoped[LITSX_SCOPED_TEMPLATE], true);
     assert.strictEqual(scoped.template, template);
     assert.deepStrictEqual(scoped.elements, { "demo-card": DemoCard });
     assert.deepStrictEqual(__litsxScopedTemplate(template).elements, {});
+
+    const call = __litsxServerComponentCall(DemoCard, { slug: "x" });
+    assert.strictEqual(__isLitsxServerComponentCall(call), true);
+    assert.strictEqual(__isLitsxServerComponentCall(template), false);
+    assert.strictEqual(call[LITSX_SERVER_COMPONENT_CALL], true);
+    assert.strictEqual(call.component, DemoCard);
+    assert.deepStrictEqual(call.props, { slug: "x" });
   });
 
   it("dedupes static hoist mixins and merges nested property metadata", () => {

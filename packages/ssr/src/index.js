@@ -2,6 +2,7 @@ import {
   createScopedSsrContext,
   renderScopedTemplateWithLitSsr,
 } from "@litsx/core/internal/runtime-scoped-ssr";
+import { __isLitsxServerComponentCall } from "@litsx/core/elements";
 
 export const LITSX_CLIENT_IMPORTS_SCRIPT_ID = "__LITSX_CLIENT_IMPORTS__";
 export const LITSX_HYDRATION_DATA_SCRIPT_ID = "__LITSX_HYDRATION__";
@@ -21,6 +22,19 @@ function escapeJsonScript(value) {
     .replaceAll("&", "\\u0026");
 }
 
+async function resolveSsrValue(value, context) {
+  const resolvedValue = await value;
+
+  if (__isLitsxServerComponentCall(resolvedValue)) {
+    return resolveSsrValue(
+      resolvedValue.component(resolvedValue.props, context),
+      context,
+    );
+  }
+
+  return resolvedValue;
+}
+
 /**
  * Render a Lit or LitSX template to HTML using the scoped SSR runtime.
  *
@@ -37,7 +51,7 @@ export async function renderToString(value, options = {}) {
     idPrefix: options.context?.idPrefix,
     assetResolver: options.assetResolver,
   });
-  const resolvedValue = await value;
+  const resolvedValue = await resolveSsrValue(value, context);
   const html = await renderScopedTemplateWithLitSsr(resolvedValue, {
     litsxSsrContext: context,
   });
