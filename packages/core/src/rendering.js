@@ -46,6 +46,9 @@ function isShadowRootContainer(value) {
   );
 }
 
+// Renderer props remain a synchronous projection mechanism in SSR.
+// They may return normal renderable values such as TemplateResult trees,
+// but not async server-component calls or scoped-template envelopes.
 function resolveRendererSsrValue(value) {
   if (__isLitsxServerComponentCall(value) || __isLitsxScopedTemplate(value)) {
     throw new Error(
