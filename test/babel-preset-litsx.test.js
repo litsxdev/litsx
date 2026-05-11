@@ -1394,6 +1394,35 @@ describe("@litsx/babel-preset-litsx", () => {
     );
   });
 
+  it("lowers nested async PascalCase bindings inside fragment returns for default-export server components", () => {
+    const source = [
+      "async function ProductSection({ product }) {",
+      "  return <section>{product.name}</section>;",
+      "}",
+      "export default async function ProductPage({ product }) {",
+      "  return <>",
+      "    <ProductSection .product={product} />",
+      "    <footer>done</footer>",
+      "  </>;",
+      "}",
+    ].join("\n");
+
+    const result = transformFromAstSync(
+      parser.parse(source, { sourceType: "module" }),
+      source,
+      {
+        configFile: false,
+        babelrc: false,
+        presets: [[nativePreset, {}]],
+      },
+    );
+
+    assert.match(
+      result.code,
+      /return __litsxScopedTemplate\(html`\$\{__litsxServerComponentCall\(ProductSection, \{\s*product: product\s*\}\)\}<footer>done<\/footer>`\, \{\}\);/,
+    );
+  });
+
   it("keeps nested server-component projection inside Lit component light-dom children", () => {
     const fixtureDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-server-lit-projection-"));
     const importedFilename = path.join(fixtureDirectory, "ProductActions.js");
