@@ -1,5 +1,11 @@
 # litsx
 
+## 0.3.1
+
+### Patch Changes
+
+- 7f5d36d: Fix built-in boundary JSX typings so `ErrorBoundary`, `SuspenseBoundary`, and `SuspenseList` accept base host attributes such as `class`, `style`, `slot`, and `ref`.
+
 ## 0.3.0
 
 ### Minor Changes
