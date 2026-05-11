@@ -7,11 +7,10 @@ import {
   withLightDomCreationContext,
 } from "@litsx/light-dom-registry";
 import {
-  __isLitsxScopedTemplate,
-  __isLitsxServerComponentCall,
   LITSX_SSR_CONTEXT,
 } from "./elements/index.js";
 import { getCurrentSsrCustomElementInstanceStack } from "./runtime-ssr-state.js";
+import { resolveStrictSyncSsrRenderableValue } from "./runtime-ssr-values.js";
 
 /**
  * Rendering helpers used by LitSX transforms when authored JSX passes renderer
@@ -29,25 +28,7 @@ const RENDERER_HOST_INITIALIZED = Symbol("litsx.rendererHostInitialized");
 // They may return normal renderable values such as TemplateResult trees,
 // but not async server-component calls or scoped-template envelopes.
 function resolveRendererSsrValue(value) {
-  if (__isLitsxServerComponentCall(value) || __isLitsxScopedTemplate(value)) {
-    throw new Error(
-      "SSR renderer props must return a renderable TemplateResult, not a server component call or scoped template."
-    );
-  }
-
-  if (isTemplateResult(value)) {
-    const values = value.values.map((entry) => resolveRendererSsrValue(entry));
-    return {
-      ...value,
-      values,
-    };
-  }
-
-  if (Array.isArray(value)) {
-    return value.map((entry) => resolveRendererSsrValue(entry));
-  }
-
-  return value;
+  return resolveStrictSyncSsrRenderableValue(value);
 }
 
 function resolveRendererSsrValueWithContext(value, ssrContext) {
