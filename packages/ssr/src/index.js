@@ -37,7 +37,8 @@ export async function renderToString(value, options = {}) {
     idPrefix: options.context?.idPrefix,
     assetResolver: options.assetResolver,
   });
-  const html = await renderScopedTemplateWithLitSsr(value, {
+  const resolvedValue = await value;
+  const html = await renderScopedTemplateWithLitSsr(resolvedValue, {
     litsxSsrContext: context,
   });
   const clientImports = [...context.clientImports];
