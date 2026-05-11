@@ -41,6 +41,43 @@ await hydrate(document, {
 That order matters because Lit's hydration support must be installed before the
 LitElement modules you want to hydrate are evaluated.
 
+## Document and Root Helpers
+
+The package also exposes a slightly higher-level surface:
+
+```js
+import {
+  hydrateDocument,
+  hydrateRoot,
+  readClientImports,
+  readHydrationData,
+} from "@litsx/ssr-client";
+```
+
+- `hydrateRoot(root, options)` is an explicit alias for hydrating one root
+- `hydrateDocument(options)` defaults the root to `document`
+- `readClientImports(...)` reads imports from options or a JSON script tag
+- `readHydrationData(...)` reads an optional JSON hydration payload
+
+By default the JSON script ids are:
+
+- `__LITSX_CLIENT_IMPORTS__`
+- `__LITSX_HYDRATION__`
+
+Example:
+
+```html
+<script type="application/json" id="__LITSX_CLIENT_IMPORTS__">
+  ["/assets/app.js", "/assets/card.js"]
+</script>
+```
+
+```js
+await hydrateDocument({
+  register: () => import("./main.js"),
+});
+```
+
 ## Working with `@litsx/ssr`
 
 ```js
@@ -74,6 +111,7 @@ This first client helper cut:
 - installs Lit hydration support
 - supports optional bootstrap callbacks
 - supports loading deduplicated client module imports
+- supports document/root helpers and JSON script readers
 
 It does not yet:
 
