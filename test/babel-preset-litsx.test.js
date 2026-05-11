@@ -1188,6 +1188,46 @@ describe("@litsx/babel-preset-litsx", () => {
     assert.doesNotMatch(result.code, /"product-section": ProductSection/);
   });
 
+  it("keeps nested server-component projection inside Lit component light-dom children", () => {
+    const fixtureDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-server-lit-projection-"));
+    const importedFilename = path.join(fixtureDirectory, "ProductActions.js");
+    const entryFilename = path.join(fixtureDirectory, "ProductPage.js");
+
+    fs.writeFileSync(
+      importedFilename,
+      [
+        "export default async function ProductActions({ product }) {",
+        "  return <p>{product.copy}</p>;",
+        "}",
+      ].join("\n"),
+    );
+
+    const source = [
+      "import ProductCard from './ProductCard.js';",
+      "import ProductActions from './ProductActions.js';",
+      "export default async function ProductPage({ product }) {",
+      "  return <ProductCard .product={product}><ProductActions .product={product} /></ProductCard>;",
+      "}",
+    ].join("\n");
+
+    const result = transformFromAstSync(
+      parser.parse(source, { sourceType: "module" }),
+      source,
+      {
+        configFile: false,
+        babelrc: false,
+        filename: entryFilename,
+        presets: [[nativePreset, {}]],
+      },
+    );
+
+    assert.match(
+      result.code,
+      /return __litsxScopedTemplate\(html`<product-card \.product=\$\{product\}>\$\{__litsxServerComponentCall\(ProductActions, \{\s*product: product\s*\}\)\}<\/product-card>`\, \{\s*"product-card": ProductCard\s*\}\);/,
+    );
+    assert.doesNotMatch(result.code, /"product-actions": ProductActions/);
+  });
+
   it("does not lower React-only wrappers in the native preset", () => {
     const source = [
       "import { forwardRef, memo } from 'react';",
