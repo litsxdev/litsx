@@ -1571,6 +1571,43 @@ describe("@litsx/babel-preset-litsx", () => {
     assert.doesNotMatch(result.code, /renderToString\(__litsxScopedTemplate/);
   });
 
+  it("rewrites imported server-component roots into runtime call markers", () => {
+    const fixtureDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-server-root-"));
+    const importedFilename = path.join(fixtureDirectory, "ProductPage.js");
+    const entryFilename = path.join(fixtureDirectory, "entry.js");
+
+    fs.writeFileSync(
+      importedFilename,
+      [
+        "export default async function ProductPage({ slug }) {",
+        "  return <main>{slug}</main>;",
+        "}",
+      ].join("\n"),
+    );
+
+    const source = [
+      "import { renderToString } from '@litsx/ssr';",
+      "import ProductPage from './ProductPage.js';",
+      "export async function renderPage(slug) {",
+      "  return renderToString(<ProductPage .slug={slug} />);",
+      "}",
+    ].join("\n");
+
+    const result = transformFromAstSync(
+      parser.parse(source, { sourceType: "module" }),
+      source,
+      {
+        configFile: false,
+        babelrc: false,
+        filename: entryFilename,
+        presets: [[nativePreset, {}]],
+      },
+    );
+
+    assert.match(result.code, /renderToString\(__litsxServerComponentCall\(ProductPage, \{\s*slug: slug\s*\}\)\);/);
+    assert.doesNotMatch(result.code, /renderToString\(__litsxScopedTemplate/);
+  });
+
   it("dedupes scoped entries across fragment SSR roots", () => {
     const source = [
       "import { renderToString } from '@litsx/ssr';",
@@ -1596,6 +1633,43 @@ describe("@litsx/babel-preset-litsx", () => {
     const matches = result.code.match(/"product-card": ProductCard/g) || [];
     assert.strictEqual(matches.length, 1);
     assert.match(result.code, /renderToString\(__litsxScopedTemplate\(html`/);
+  });
+
+  it("lowers nested imported server components inside server-side component returns", () => {
+    const fixtureDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-server-nested-"));
+    const importedFilename = path.join(fixtureDirectory, "ProductSection.js");
+    const entryFilename = path.join(fixtureDirectory, "ProductPage.js");
+
+    fs.writeFileSync(
+      importedFilename,
+      [
+        "export default async function ProductSection({ product }) {",
+        "  return <section>{product.name}</section>;",
+        "}",
+      ].join("\n"),
+    );
+
+    const source = [
+      "import ProductSection from './ProductSection.js';",
+      "export default async function ProductPage({ product }) {",
+      "  return <main><ProductSection .product={product} /></main>;",
+      "}",
+    ].join("\n");
+
+    const result = transformFromAstSync(
+      parser.parse(source, { sourceType: "module" }),
+      source,
+      {
+        configFile: false,
+        babelrc: false,
+        filename: entryFilename,
+        presets: [[nativePreset, {}]],
+      },
+    );
+
+    assert.match(result.code, /import \{[\s\S]*__litsxServerComponentCall[\s\S]*\} from "@litsx\/litsx\/runtime-infrastructure";/);
+    assert.match(result.code, /return __litsxScopedTemplate\(html`<main>\$\{__litsxServerComponentCall\(ProductSection, \{\s*product: product\s*\}\)\}<\/main>`\, \{\}\);/);
+    assert.doesNotMatch(result.code, /"product-section": ProductSection/);
   });
 
   it("does not lower React-only wrappers in the native preset", () => {
