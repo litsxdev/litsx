@@ -9,6 +9,9 @@ export interface LitsxViteManifestEntry {
   file?: string;
 }
 
+/**
+ * Create an asset resolver suitable for passing to `@litsx/ssr`.
+ */
 export declare function createLitsxViteAssetResolver(options?: {
   root?: string;
   manifest?: Record<string, LitsxViteManifestEntry> | null;

@@ -7,6 +7,9 @@ export interface LitsxSsrResult {
   clientImports: string[];
 }
 
+/**
+ * Render a Lit or LitSX value to HTML using the scoped LitSX SSR runtime.
+ */
 export declare function renderToString(
   value: unknown,
   options?: {
