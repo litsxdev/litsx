@@ -1256,11 +1256,11 @@ describe("@litsx/babel-preset-litsx", () => {
 
     assert.strictEqual(
       createLitsxPresetPlugins({}, detectLitsxSourceFeatures(plainSource, {})).length,
-      4,
+      5,
     );
     assert.strictEqual(
       createLitsxPresetPlugins({}, detectLitsxSourceFeatures(featureSource, {})).length,
-      7,
+      8,
     );
   });
 
@@ -1430,6 +1430,144 @@ describe("@litsx/babel-preset-litsx", () => {
 
     assert.match(result.code, /import \{ __litsxScopedTemplate \} from "@litsx\/core\/elements";/);
     assert.match(result.code, /renderToString\(__litsxScopedTemplate\(html`<product-card \.product=\$\{product\}><\/product-card>`\, \{\s*"product-card": ProductCard\s*\}\)\)/);
+  });
+
+  it("keeps default async PascalCase exports out of the LitElement lowering path", () => {
+    const source = [
+      "export default async function ProductPage({ slug }) {",
+      "  return <main>{slug}</main>;",
+      "}",
+    ].join("\n");
+
+    const result = transformFromAstSync(
+      parser.parse(source, { sourceType: "module" }),
+      source,
+      {
+        configFile: false,
+        babelrc: false,
+        presets: [[nativePreset, {}]],
+      },
+    );
+
+    assert.doesNotMatch(result.code, /class ProductPage extends LitElement/);
+    assert.match(result.code, /return __litsxScopedTemplate\(html`<main>\$\{slug\}<\/main>`\, \{\}\);/);
+    assert.match(result.code, /ProductPage\[LITSX_SERVER_COMPONENT\] = true;/);
+  });
+
+  it("keeps default exports that resolve to async PascalCase bindings out of LitElement lowering", () => {
+    const source = [
+      "const ProductPage = async ({ slug }) => {",
+      "  return <main>{slug}</main>;",
+      "};",
+      "export default ProductPage;",
+    ].join("\n");
+
+    const result = transformFromAstSync(
+      parser.parse(source, { sourceType: "module" }),
+      source,
+      {
+        configFile: false,
+        babelrc: false,
+        presets: [[nativePreset, {}]],
+      },
+    );
+
+    assert.doesNotMatch(result.code, /class ProductPage extends LitElement/);
+    assert.match(result.code, /const ProductPage = async \(\{\s*slug\s*\}\) => \{\s*return __litsxScopedTemplate\(html`<main>\$\{slug\}<\/main>`\, \{\}\);\s*\};/);
+    assert.match(result.code, /export default ProductPage;/);
+    assert.match(result.code, /ProductPage\[LITSX_SERVER_COMPONENT\] = true;/);
+  });
+
+  it("does not treat named async exports as server-side components", () => {
+    const source = [
+      "export async function ProductPage({ slug }) {",
+      "  return <main>{slug}</main>;",
+      "}",
+    ].join("\n");
+
+    const result = transformFromAstSync(
+      parser.parse(source, { sourceType: "module" }),
+      source,
+      {
+        configFile: false,
+        babelrc: false,
+        presets: [[nativePreset, {}]],
+      },
+    );
+
+    assert.doesNotMatch(result.code, /class ProductPage extends LitElement/);
+    assert.match(result.code, /export async function ProductPage\(\{\s*slug\s*\}\) \{\s*return html`<main>\$\{slug\}<\/main>`;\s*\}/);
+  });
+
+  it("does not treat default async PascalCase exports without a renderable return as server-side components", () => {
+    const source = [
+      "export default async function ProductPage({ slug }) {",
+      "  return slug.length;",
+      "}",
+    ].join("\n");
+
+    const result = transformFromAstSync(
+      parser.parse(source, { sourceType: "module" }),
+      source,
+      {
+        configFile: false,
+        babelrc: false,
+        presets: [[nativePreset, {}]],
+      },
+    );
+
+    assert.doesNotMatch(result.code, /class ProductPage extends LitElement/);
+    assert.doesNotMatch(result.code, /import \{ html \} from "lit";/);
+    assert.match(result.code, /export default async function ProductPage\(\{\s*slug\s*\}\) \{\s*return slug\.length;\s*\}/);
+  });
+
+  it("lowers default async PascalCase exports with scoped JSX returns into server-side components", () => {
+    const source = [
+      "import ProductCard from './ProductCard.js';",
+      "export default async function ProductPage({ product }) {",
+      "  return <main><ProductCard .product={product} /></main>;",
+      "}",
+    ].join("\n");
+
+    const result = transformFromAstSync(
+      parser.parse(source, { sourceType: "module" }),
+      source,
+      {
+        configFile: false,
+        babelrc: false,
+        presets: [[nativePreset, {}]],
+      },
+    );
+
+    assert.doesNotMatch(result.code, /class ProductPage extends LitElement/);
+    assert.match(result.code, /import \{ __litsxScopedTemplate, LITSX_SERVER_COMPONENT \} from "@litsx\/litsx\/runtime-infrastructure";|import \{ LITSX_SERVER_COMPONENT, __litsxScopedTemplate \} from "@litsx\/litsx\/runtime-infrastructure";/);
+    assert.match(result.code, /return __litsxScopedTemplate\(html`<main><product-card \.product=\$\{product\}><\/product-card><\/main>`\, \{\s*"product-card": ProductCard\s*\}\);/);
+    assert.match(result.code, /ProductPage\[LITSX_SERVER_COMPONENT\] = true;/);
+  });
+
+  it("rewrites renderToString server-component roots into awaited function calls", () => {
+    const source = [
+      "import { renderToString } from '@litsx/ssr';",
+      "export default async function ProductPage({ slug }) {",
+      "  return <main>{slug}</main>;",
+      "}",
+      "export async function renderPage(slug) {",
+      "  return renderToString(<ProductPage .slug={slug} />);",
+      "}",
+    ].join("\n");
+
+    const result = transformFromAstSync(
+      parser.parse(source, { sourceType: "module" }),
+      source,
+      {
+        configFile: false,
+        babelrc: false,
+        presets: [[nativePreset, {}]],
+      },
+    );
+
+    assert.match(result.code, /return renderToString\(ProductPage\(\{\s*slug: slug\s*\}\)\);/);
+    assert.doesNotMatch(result.code, /renderToString\(__litsxScopedTemplate/);
   });
 
   it("dedupes scoped entries across fragment SSR roots", () => {

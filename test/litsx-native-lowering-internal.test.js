@@ -991,6 +991,25 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
     assert.match(code, /static properties = \{[\s\S]*message: \{\s*type: String\s*\}[\s\S]*\};/);
   });
 
+  it("does not convert default exported async PascalCase functions into LitElement classes", () => {
+    const source = `
+      export default async function ProductPage({ message }) {
+        return <div>{message}</div>;
+      }
+    `;
+    const inputAst = parser.parse(source, { sourceType: "module" });
+    const { code } = transformFromAstSync(inputAst, source, {
+      configFile: false,
+      babelrc: false,
+      presets: [[nativePreset, { jsxTemplate: false }]],
+    });
+
+    assert.doesNotMatch(code, /export default class ProductPage extends LitElement/);
+    assert.match(code, /export default async function ProductPage\(\{\s*message\s*\}\) \{/);
+    assert.match(code, /return __litsxScopedTemplate\(<div>\{message\}<\/div>, \{\}\);/);
+    assert.match(code, /ProductPage\[LITSX_SERVER_COMPONENT\] = true;/);
+  });
+
   it("uses namespace import when LitElement is not directly imported", () => {
     const source = `
       import * as lit from 'lit';
