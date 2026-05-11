@@ -1406,6 +1406,7 @@ describe("@litsx/babel-preset-litsx", () => {
     );
     assert.match(result.code, /static elements = \{\s*"fancy-button": FancyButton/s);
     assert.match(result.code, /html`/);
+    assert.match(result.code, /static \[LITSX_MODULE_ID\] = "\/virtual\/TypedForm\.tsx";/);
   }, 20000);
 
   it("rewrites renderToString roots into scoped templates", () => {
