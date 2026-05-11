@@ -1,4 +1,4 @@
-import { decodeVirtualAttributeName } from "@litsx/jsx-authoring";
+import { decodeVirtualAttributeName } from "@litsx/authoring";
 
 let t;
 

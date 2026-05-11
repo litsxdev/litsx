@@ -11,7 +11,7 @@ import {
 import {
   bindRendererContext,
   renderRendererCall,
-} from "../packages/litsx/src/runtime-render-context.js";
+} from "../packages/core/src/rendering.js";
 
 let tagCounter = 0;
 

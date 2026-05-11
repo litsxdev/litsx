@@ -216,7 +216,7 @@ export function finalizeProgram(programPath, state) {
   if (state.__litsxNeedsModuleIdMetadata) {
     const bodyPathsWithInternal = programPath.get("body");
     const internalImports = bodyPathsWithInternal.filter(
-      (n) => n.isImportDeclaration() && n.node.source.value === "@litsx/litsx/runtime-infrastructure"
+      (n) => n.isImportDeclaration() && n.node.source.value === "@litsx/core/elements"
     );
 
     let internalImported = false;

@@ -14,7 +14,7 @@ import {
 let t;
 const babelTraverse = traverse.default ?? traverse;
 
-const RUNTIME_INFRASTRUCTURE_MODULE = "@litsx/litsx/runtime-infrastructure";
+const RUNTIME_INFRASTRUCTURE_MODULE = "@litsx/core/elements";
 const SCOPED_TEMPLATE_HELPER = "__litsxScopedTemplate";
 const SERVER_COMPONENT_CALL_HELPER = "__litsxServerComponentCall";
 const SERVER_COMPONENT_SYMBOL = "LITSX_SERVER_COMPONENT";

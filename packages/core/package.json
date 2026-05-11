@@ -42,6 +42,11 @@
       "require": "./dist/runtime-scoped-ssr.cjs",
       "default": "./src/runtime-scoped-ssr.js"
     },
+    "./internal/runtime-ssr-values": {
+      "import": "./src/runtime-ssr-values.js",
+      "require": "./dist/runtime-ssr-values.cjs",
+      "default": "./src/runtime-ssr-values.js"
+    },
     "./context": {
       "types": "./src/context.d.ts",
       "import": "./src/context.js",
