@@ -106,12 +106,40 @@ describe("@litsx/ssr-client", () => {
     const {
       hydrateDocument,
       LITSX_CLIENT_IMPORTS_SCRIPT_ID,
+      LITSX_HYDRATION_DATA_SCRIPT_ID,
+      LITSX_ROOT_ATTRIBUTE,
     } = await import("../packages/ssr-client/src/index.js");
     const calls = [];
+    const rootElement = {
+      tagName: "PRODUCT-CARD",
+      getAttribute(name) {
+        return name === LITSX_ROOT_ATTRIBUTE ? "litsx-root-0" : null;
+      },
+    };
     const documentRef = {
       getElementById(id) {
         if (id === LITSX_CLIENT_IMPORTS_SCRIPT_ID) {
           return { textContent: JSON.stringify(["/assets/a.js", "/assets/a.js", "/assets/b.js"]) };
+        }
+        if (id === LITSX_HYDRATION_DATA_SCRIPT_ID) {
+          return {
+            textContent: JSON.stringify({
+              version: 1,
+              roots: [
+                {
+                  id: "litsx-root-0",
+                  tagName: "product-card",
+                  moduleId: "/src/ProductCard.litsx",
+                },
+              ],
+            }),
+          };
+        }
+        return null;
+      },
+      querySelector(selector) {
+        if (selector === `[${LITSX_ROOT_ATTRIBUTE}="litsx-root-0"]`) {
+          return rootElement;
         }
         return null;
       },
@@ -130,12 +158,90 @@ describe("@litsx/ssr-client", () => {
       },
     });
 
-    assert.strictEqual(result, documentRef);
+    assert.deepStrictEqual(result, [
+      {
+        id: "litsx-root-0",
+        tagName: "product-card",
+        moduleId: "/src/ProductCard.litsx",
+        element: rootElement,
+      },
+    ]);
     assert.deepStrictEqual(calls, [
       "support",
       "register",
       "import:/assets/a.js",
       "import:/assets/b.js",
     ]);
+  });
+
+  it("resolves and validates hydration roots from the payload", async () => {
+    const {
+      LITSX_ROOT_ATTRIBUTE,
+      resolveHydrationRoots,
+    } = await import("../packages/ssr-client/src/index.js");
+    const rootElement = {
+      tagName: "PRODUCT-CARD",
+      getAttribute(name) {
+        return name === LITSX_ROOT_ATTRIBUTE ? "litsx-root-0" : null;
+      },
+    };
+
+    const roots = resolveHydrationRoots(
+      {
+        querySelector(selector) {
+          if (selector === `[${LITSX_ROOT_ATTRIBUTE}="litsx-root-0"]`) {
+            return rootElement;
+          }
+          return null;
+        },
+      },
+      {
+        hydrationData: {
+          version: 1,
+          roots: [
+            {
+              id: "litsx-root-0",
+              tagName: "product-card",
+              moduleId: "/src/ProductCard.litsx",
+            },
+          ],
+        },
+      },
+    );
+
+    assert.deepStrictEqual(roots, [
+      {
+        id: "litsx-root-0",
+        tagName: "product-card",
+        moduleId: "/src/ProductCard.litsx",
+        element: rootElement,
+      },
+    ]);
+  });
+
+  it("requires hydrateRoot targets to carry the LitSX root marker", async () => {
+    const { hydrateRoot } = await import("../packages/ssr-client/src/index.js");
+
+    await assert.rejects(
+      () =>
+        hydrateRoot(
+          {
+            getAttribute() {
+              return null;
+            },
+          },
+          {
+            hydrationData: {
+              version: 1,
+              roots: [{ id: "litsx-root-0", tagName: "product-card" }],
+            },
+            querySelector() {
+              return null;
+            },
+            hydrationSupportLoader: async () => {},
+          },
+        ),
+      /requires a root element marked with data-litsx-root/,
+    );
   });
 });

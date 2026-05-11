@@ -14,6 +14,7 @@ export interface HydrateDocumentOptions extends HydrateOptions {
 
 export declare const LITSX_CLIENT_IMPORTS_SCRIPT_ID: "__LITSX_CLIENT_IMPORTS__";
 export declare const LITSX_HYDRATION_DATA_SCRIPT_ID: "__LITSX_HYDRATION__";
+export declare const LITSX_ROOT_ATTRIBUTE: "data-litsx-root";
 
 export declare function readClientImports(
   rootOrDocument?: Document | Element | null,
@@ -24,6 +25,18 @@ export declare function readHydrationData<T = unknown>(
   rootOrDocument?: Document | Element | null,
   options?: Pick<HydrateOptions, "hydrationData" | "scriptId">,
 ): T | null;
+
+export interface ResolvedHydrationRoot {
+  id: string;
+  tagName?: string;
+  moduleId?: string;
+  element: Element;
+}
+
+export declare function resolveHydrationRoots(
+  rootOrDocument?: Document | Element | ShadowRoot | null,
+  options?: Pick<HydrateOptions, "hydrationData" | "scriptId">,
+): ResolvedHydrationRoot[];
 
 /**
  * Install Lit's hydration support before importing LitSX client modules.
@@ -39,13 +52,13 @@ export declare function installHydrationSupport(
 export declare function hydrate<T = Document | null>(
   root?: T,
   options?: HydrateOptions,
-): Promise<T>;
+): Promise<T | ResolvedHydrationRoot[]>;
 
 export declare function hydrateRoot<T = Element | ShadowRoot | Document | null>(
   root: T,
   options?: HydrateOptions,
-): Promise<T>;
+): Promise<Element | T>;
 
 export declare function hydrateDocument(
   options?: HydrateDocumentOptions,
-): Promise<Document | null>;
+): Promise<Document | null | ResolvedHydrationRoot[]>;

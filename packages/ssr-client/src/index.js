@@ -5,6 +5,7 @@ function normalizeClientImports(value) {
 
 export const LITSX_CLIENT_IMPORTS_SCRIPT_ID = "__LITSX_CLIENT_IMPORTS__";
 export const LITSX_HYDRATION_DATA_SCRIPT_ID = "__LITSX_HYDRATION__";
+export const LITSX_ROOT_ATTRIBUTE = "data-litsx-root";
 
 async function importLitHydrationSupport() {
   return import("@lit-labs/ssr-client/lit-element-hydrate-support.js");
@@ -52,6 +53,42 @@ function parseJsonScript(documentRef, id) {
   }
 }
 
+function normalizeHydrationRoots(value) {
+  if (!value || !Array.isArray(value.roots)) {
+    return [];
+  }
+
+  return value.roots.filter((root) =>
+    root &&
+    typeof root === "object" &&
+    typeof root.id === "string" &&
+    root.id.length > 0,
+  );
+}
+
+function queryHydrationRoot(container, id) {
+  if (!container || !id) {
+    return null;
+  }
+
+  if (typeof container.getAttribute === "function" &&
+      container.getAttribute(LITSX_ROOT_ATTRIBUTE) === id) {
+    return container;
+  }
+
+  if (container.host &&
+      typeof container.host.getAttribute === "function" &&
+      container.host.getAttribute(LITSX_ROOT_ATTRIBUTE) === id) {
+    return container.host;
+  }
+
+  if (typeof container.querySelector === "function") {
+    return container.querySelector(`[${LITSX_ROOT_ATTRIBUTE}="${id}"]`);
+  }
+
+  return null;
+}
+
 export function readClientImports(
   rootOrDocument = typeof document === "undefined" ? null : document,
   options = {},
@@ -79,6 +116,37 @@ export function readHydrationData(
   const documentRef = resolveDocument(rootOrDocument);
   const scriptId = options.scriptId ?? LITSX_HYDRATION_DATA_SCRIPT_ID;
   return parseJsonScript(documentRef, scriptId);
+}
+
+export function resolveHydrationRoots(
+  rootOrDocument = typeof document === "undefined" ? null : document,
+  options = {},
+) {
+  const hydrationData = readHydrationData(rootOrDocument, options);
+  const roots = normalizeHydrationRoots(hydrationData);
+
+  return roots.map((root) => {
+    const element = queryHydrationRoot(rootOrDocument, root.id);
+    if (!element) {
+      throw new Error(
+        `Failed to find a LitSX hydration root with ${LITSX_ROOT_ATTRIBUTE}="${root.id}".`
+      );
+    }
+
+    const actualTagName = typeof element.tagName === "string"
+      ? element.tagName.toLowerCase()
+      : null;
+    if (root.tagName && actualTagName && actualTagName !== String(root.tagName).toLowerCase()) {
+      throw new Error(
+        `Hydration root "${root.id}" expected <${root.tagName}> but found <${actualTagName}>.`
+      );
+    }
+
+    return {
+      ...root,
+      element,
+    };
+  });
 }
 
 /**
@@ -122,17 +190,50 @@ export async function hydrate(
     await register();
   }
 
+  const hydrationRoots = resolveHydrationRoots(root, options);
+
   const specifiers = readClientImports(root, options);
   await Promise.all(specifiers.map((specifier) => moduleLoader(specifier)));
 
-  return root;
+  return hydrationRoots.length > 0 ? hydrationRoots : root;
 }
 
 export async function hydrateRoot(
   root,
   options = {},
 ) {
-  return hydrate(root, options);
+  const {
+    register,
+    moduleLoader = importClientModule,
+    hydrationSupportLoader = importLitHydrationSupport,
+  } = options;
+  const element = root?.host ?? root;
+  const rootId = typeof element?.getAttribute === "function"
+    ? element.getAttribute(LITSX_ROOT_ATTRIBUTE)
+    : null;
+
+  if (!rootId) {
+    throw new Error(
+      `hydrateRoot(...) requires a root element marked with ${LITSX_ROOT_ATTRIBUTE}.`
+    );
+  }
+
+  await installHydrationSupport(hydrationSupportLoader);
+
+  if (typeof register === "function") {
+    await register();
+  }
+
+  const specifiers = readClientImports(root, options);
+  await Promise.all(specifiers.map((specifier) => moduleLoader(specifier)));
+
+  const hydrationRoots = resolveHydrationRoots(resolveDocument(root) ?? root, options);
+  const match = hydrationRoots.find((entry) => entry.id === rootId);
+  if (!match) {
+    throw new Error(`Hydration metadata did not include root "${rootId}".`);
+  }
+
+  return match.element ?? element;
 }
 
 export async function hydrateDocument(options = {}) {
