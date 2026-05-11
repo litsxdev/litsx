@@ -2,6 +2,7 @@ import jsxSyntaxPlugin from "@babel/plugin-syntax-jsx";
 import { isLitElementSuperClass } from "@litsx/babel-plugin-shared-hooks";
 import path from "node:path";
 import { normalizeFilePath } from "@litsx/typescript-session";
+import { buildAvailableMap, setTypes, toKebab } from "./shared.js";
 
 let t;
 const SHADOW_MIXIN = "ShadowDomMixin";
@@ -10,6 +11,7 @@ const LIGHT_MIXIN = "LightDomMixin";
 export default function transformFunctionToClassPlugin(api) {
   api.assertVersion(7);
   t = api.types;
+  setTypes(t);
 
   return {
     name: "transform-litsx-scoped-elements",
@@ -140,10 +142,6 @@ function hasMixinInSuperChain(node, mixinName) {
   }
 
   return false;
-}
-
-function toKebab(name) {
-  return name.replace(/([a-z])([A-Z])/g, "$1-$2").toLowerCase();
 }
 
 function createClassProperty(name, elements) {
@@ -303,36 +301,6 @@ function hasNamedImport(programPath, moduleName, importName) {
         t.isIdentifier(specifier.imported, { name: importName })
     );
   });
-}
-
-function buildAvailableMap(programPath) {
-  const availableMap = new Map();
-
-  programPath.get("body").forEach((nodePath) => {
-    if (nodePath.isImportDeclaration()) {
-      nodePath.node.specifiers.forEach((specifier) => {
-        if (t.isImportSpecifier(specifier) || t.isImportDefaultSpecifier(specifier)) {
-          availableMap.set(specifier.local.name, {
-            originalName: specifier.local.name,
-          });
-        }
-      });
-      return;
-    }
-
-    const localClassPath = resolveTopLevelClassPath(nodePath);
-    if (!localClassPath) return;
-
-    const localName = localClassPath.node.id?.name;
-    if (!localName) return;
-
-    availableMap.set(localName, {
-      originalName: localName,
-      local: true,
-    });
-  });
-
-  return availableMap;
 }
 
 function detectElementsFromClass(classPath, availableMap, precomputedCandidates) {

@@ -113,11 +113,11 @@ describe("@litsx/babel-preset-litsx", () => {
 
     assert.strictEqual(
       createLitsxPresetPlugins({}, detectLitsxSourceFeatures(plainSource, {})).length,
-      3,
+      4,
     );
     assert.strictEqual(
       createLitsxPresetPlugins({}, detectLitsxSourceFeatures(featureSource, {})).length,
-      6,
+      7,
     );
   });
 
@@ -238,6 +238,56 @@ describe("@litsx/babel-preset-litsx", () => {
     assert.match(result.code, /static elements = \{\s*"fancy-button": FancyButton/s);
     assert.match(result.code, /html`/);
   }, 20000);
+
+  it("rewrites renderToString roots into scoped templates", () => {
+    const source = [
+      "import { renderToString } from '@litsx/ssr';",
+      "import ProductCard from './ProductCard.js';",
+      "export async function renderProduct(product) {",
+      "  return renderToString(<ProductCard .product={product} />);",
+      "}",
+    ].join("\n");
+
+    const result = transformFromAstSync(
+      parser.parse(source, { sourceType: "module" }),
+      source,
+      {
+        configFile: false,
+        babelrc: false,
+        presets: [[nativePreset, {}]],
+      },
+    );
+
+    assert.match(result.code, /import \{ __litsxScopedTemplate \} from "@litsx\/core\/elements";/);
+    assert.match(result.code, /renderToString\(__litsxScopedTemplate\(html`<product-card \.product=\$\{product\}><\/product-card>`\, \{\s*"product-card": ProductCard\s*\}\)\)/);
+  });
+
+  it("dedupes scoped entries across fragment SSR roots", () => {
+    const source = [
+      "import { renderToString } from '@litsx/ssr';",
+      "import ProductCard from './ProductCard.js';",
+      "export async function renderProducts(a, b) {",
+      "  return renderToString(<>",
+      "    <main><ProductCard .product={a} /></main>",
+      "    <ProductCard .product={b} />",
+      "  </>);",
+      "}",
+    ].join("\n");
+
+    const result = transformFromAstSync(
+      parser.parse(source, { sourceType: "module" }),
+      source,
+      {
+        configFile: false,
+        babelrc: false,
+        presets: [[nativePreset, {}]],
+      },
+    );
+
+    const matches = result.code.match(/"product-card": ProductCard/g) || [];
+    assert.strictEqual(matches.length, 1);
+    assert.match(result.code, /renderToString\(__litsxScopedTemplate\(html`/);
+  });
 
   it("does not lower React-only wrappers in the native preset", () => {
     const source = [
