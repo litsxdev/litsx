@@ -150,6 +150,27 @@ export function resolveHydrationRoots(
 }
 
 /**
+ * Resolve a single LitSX hydration root by id from the current SSR metadata.
+ */
+export function resolveHydrationRoot(
+  rootOrDocument = typeof document === "undefined" ? null : document,
+  rootId,
+  options = {},
+) {
+  if (typeof rootId !== "string" || rootId.length === 0) {
+    throw new TypeError("resolveHydrationRoot(...) requires a non-empty root id.");
+  }
+
+  const roots = resolveHydrationRoots(rootOrDocument, options);
+  const match = roots.find((entry) => entry.id === rootId);
+  if (!match) {
+    throw new Error(`Hydration metadata did not include root "${rootId}".`);
+  }
+
+  return match;
+}
+
+/**
  * Install Lit's hydration support before loading any LitSX client modules.
  *
  * Lit's SSR hydration support patches LitElement globally through a side-effect
@@ -227,11 +248,7 @@ export async function hydrateRoot(
   const specifiers = readClientImports(root, options);
   await Promise.all(specifiers.map((specifier) => moduleLoader(specifier)));
 
-  const hydrationRoots = resolveHydrationRoots(resolveDocument(root) ?? root, options);
-  const match = hydrationRoots.find((entry) => entry.id === rootId);
-  if (!match) {
-    throw new Error(`Hydration metadata did not include root "${rootId}".`);
-  }
+  const match = resolveHydrationRoot(resolveDocument(root) ?? root, rootId, options);
 
   return match.element ?? element;
 }
