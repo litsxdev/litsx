@@ -5,6 +5,8 @@ export interface LitsxSsrContext {
 export interface LitsxSsrResult {
   html: string;
   clientImports: string[];
+  renderClientImports(): string;
+  renderModulePreloads(): string;
 }
 
 /**
