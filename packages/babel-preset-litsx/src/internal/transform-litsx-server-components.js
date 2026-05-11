@@ -1,11 +1,11 @@
 import jsxSyntaxPlugin from "@babel/plugin-syntax-jsx";
-import { decodeVirtualAttributeName } from "@litsx/jsx-authoring";
 import fs from "fs";
 import { resolve, dirname, extname } from "path";
 import * as parser from "@babel/parser";
 import traverse from "@babel/traverse";
 import {
   buildAvailableMap,
+  buildServerComponentPropsObject,
   collectScopedEntries,
   ensureNamedImport,
   setSsrSharedBabelTypes,
@@ -475,50 +475,6 @@ function wrapRenderableReturns(functionPath, programPath) {
   });
 
   return transformed;
-}
-
-function buildServerComponentPropsObject(openingElementPath) {
-  const properties = [];
-
-  for (const attributePath of openingElementPath.get("attributes")) {
-    if (!attributePath.isJSXAttribute()) {
-      continue;
-    }
-
-    if (!attributePath.get("name").isJSXIdentifier()) {
-      continue;
-    }
-
-    const authoredName =
-      decodeVirtualAttributeName(attributePath.node.name.name) ??
-      attributePath.node.name.name;
-    if (!authoredName.startsWith(".")) {
-      continue;
-    }
-
-    const propName = authoredName.slice(1);
-    const valuePath = attributePath.get("value");
-
-    let valueExpression;
-    if (!valuePath.node) {
-      valueExpression = t.booleanLiteral(true);
-    } else if (valuePath.isJSXExpressionContainer()) {
-      valueExpression = valuePath.node.expression;
-    } else if (valuePath.isStringLiteral()) {
-      valueExpression = valuePath.node;
-    } else {
-      continue;
-    }
-
-    properties.push(
-      t.objectProperty(
-        t.identifier(propName),
-        t.cloneNode(valueExpression, true),
-      ),
-    );
-  }
-
-  return t.objectExpression(properties);
 }
 
 function markServerComponent(programPath, componentName) {
