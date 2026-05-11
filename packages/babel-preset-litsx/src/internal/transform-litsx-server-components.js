@@ -420,16 +420,23 @@ function wrapRenderableReturns(functionPath, programPath) {
         );
       }
 
+      const directServerComponentName = argumentPath.isJSXElement() &&
+        t.isJSXIdentifier(argumentPath.node.openingElement.name)
+        ? argumentPath.node.openingElement.name.name
+        : null;
+
       if (
-        argumentPath.isJSXElement() &&
-        isServerComponentBindingName(
-          programPath,
-          argumentPath.node.openingElement.name.name,
-          sharedOptions,
-        )
-        || isLocalComposableServerComponentBinding(
-          programPath,
-          argumentPath.node.openingElement.name.name,
+        directServerComponentName &&
+        (
+          isServerComponentBindingName(
+            programPath,
+            directServerComponentName,
+            sharedOptions,
+          ) ||
+          isLocalComposableServerComponentBinding(
+            programPath,
+            directServerComponentName,
+          )
         )
       ) {
         ensureNamedImport(
@@ -439,7 +446,7 @@ function wrapRenderableReturns(functionPath, programPath) {
         );
         argumentPath.replaceWith(
           t.callExpression(t.identifier(SERVER_COMPONENT_CALL_HELPER), [
-            t.identifier(argumentPath.node.openingElement.name.name),
+            t.identifier(directServerComponentName),
             buildServerComponentPropsObject(argumentPath.get("openingElement")),
           ]),
         );
