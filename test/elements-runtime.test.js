@@ -6,7 +6,12 @@ import { describe, it } from "vitest";
 import { connectLightDomRegistry } from "../packages/light-dom-registry/src/index.js";
 import { prepareEffects, useOnConnect, useState } from "../packages/core/src/index.js";
 import {
-  LightDomMixin,
+  __isLitsxScopedTemplate,
+  __litsxScopedTemplate,
+  LITSX_MODULE_ID,
+  LITSX_SCOPED_TEMPLATE,
+  LITSX_SERVER_COMPONENT,
+  LITSX_SSR_CONTEXT,
   LightDomMixin,
   LitsxStaticHoistsMixin,
   ShadowDomMixin,
@@ -27,6 +32,23 @@ function defineTestElement(tagName, ctor) {
 }
 
 describe("litsx elements runtime", () => {
+  it("exposes SSR metadata symbols and scoped-template helpers", () => {
+    const template = { strings: ["<div></div>"] };
+    class DemoCard {}
+    const scoped = __litsxScopedTemplate(template, { "demo-card": DemoCard });
+
+    assert.strictEqual(LITSX_SCOPED_TEMPLATE, Symbol.for("litsx.scopedTemplate"));
+    assert.strictEqual(LITSX_MODULE_ID, Symbol.for("litsx.moduleId"));
+    assert.strictEqual(LITSX_SSR_CONTEXT, Symbol.for("litsx.ssrContext"));
+    assert.strictEqual(LITSX_SERVER_COMPONENT, Symbol.for("litsx.serverComponent"));
+    assert.strictEqual(__isLitsxScopedTemplate(scoped), true);
+    assert.strictEqual(__isLitsxScopedTemplate(template), false);
+    assert.strictEqual(scoped[LITSX_SCOPED_TEMPLATE], true);
+    assert.strictEqual(scoped.template, template);
+    assert.deepStrictEqual(scoped.elements, { "demo-card": DemoCard });
+    assert.deepStrictEqual(__litsxScopedTemplate(template).elements, {});
+  });
+
   it("dedupes static hoist mixins and merges nested property metadata", () => {
     class Base extends HTMLElement {}
 

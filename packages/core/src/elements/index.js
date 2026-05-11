@@ -9,9 +9,25 @@ import {
 const DEDUPE_MIXIN_MARK = Symbol("litsx.dedupeMixinMark");
 const LIGHT_DOM_STYLE_ELEMENT = Symbol("litsx.lightDomStyleElement");
 const SHADOW_DOM_REGISTRY = Symbol("litsx.shadowDomRegistry");
+export const LITSX_SCOPED_TEMPLATE = Symbol.for("litsx.scopedTemplate");
+export const LITSX_MODULE_ID = Symbol.for("litsx.moduleId");
+export const LITSX_SSR_CONTEXT = Symbol.for("litsx.ssrContext");
+export const LITSX_SERVER_COMPONENT = Symbol.for("litsx.serverComponent");
 let shadowDomRegistryAttachKey;
 let shadowDomRegistryAttachShadowRef;
 let shadowDomRegistryCtorRef;
+
+export function __litsxScopedTemplate(template, elements) {
+  return {
+    [LITSX_SCOPED_TEMPLATE]: true,
+    template,
+    elements: elements ?? {},
+  };
+}
+
+export function __isLitsxScopedTemplate(value) {
+  return Boolean(value?.[LITSX_SCOPED_TEMPLATE]);
+}
 
 function isPolyfilledScopedRegistry(registry) {
   return Boolean(registry && "h" in registry && "m" in registry);
