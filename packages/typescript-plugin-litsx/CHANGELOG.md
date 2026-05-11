@@ -1,5 +1,11 @@
 # @litsx/typescript-plugin
 
+## 0.3.1
+
+### Patch Changes
+
+- 0fd14c4: Remove legacy caret-based hoist metadata from the shared LitSX tooling so editor integrations only surface current `static ... = ...` hoists.
+
 ## 0.3.0
 
 ### Minor Changes

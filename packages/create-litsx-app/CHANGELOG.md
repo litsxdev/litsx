@@ -1,5 +1,11 @@
 # create-litsx-app
 
+## 0.4.2
+
+### Patch Changes
+
+- 26913b7: Make the `app` template the default scaffold, align its starter layout with the current home-style onboarding components, and fix authored `static styles` template output so generated files no longer include legacy `` `); `` hoist closers.
+
 ## 0.4.1
 
 ### Patch Changes

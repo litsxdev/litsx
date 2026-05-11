@@ -1,6 +1,6 @@
 {
   "name": "@litsx/shiki-languages",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "private": true,
   "description": "Shared Shiki/TextMate language registrations for LitSX-authored TSX and JSX.",
   "author": "LitSX Team",
