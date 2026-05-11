@@ -1,5 +1,11 @@
 # create-litsx-app
 
+## 0.4.1
+
+### Patch Changes
+
+- ffe097a: Fix the packaged CLI tarball so `npx create-litsx-app` includes the scaffold flame asset at runtime.
+
 ## 0.4.0
 
 ### Minor Changes
