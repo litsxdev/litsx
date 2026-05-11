@@ -11,6 +11,10 @@ import { css } from "lit";
 import { prepareEffects, useMemoValue } from "../packages/core/src/effect-hooks.js";
 import { useId, useRef, useState, useExternalStore } from "../packages/core/src/state-hooks.js";
 import {
+  bindRendererContext,
+  renderRendererCall,
+} from "../packages/litsx/src/runtime-render-context.js";
+import {
   LitsxContextProviderElement,
   createContext,
   useContext,
@@ -193,6 +197,9 @@ describe("@litsx/ssr", () => {
     assert.match(result.html, /<product-card[^>]*data-litsx-root="litsx-root-0"/);
     assert.match(result.html, /<template shadowroot="open" shadowrootmode="open">/);
     assert.match(result.html, /Nested Trail Shoe/);
+    assert.doesNotMatch(result.html, /<product-page\b/);
+    assert.doesNotMatch(result.html, /<product-section\b/);
+    assert.deepStrictEqual(result.clientImports, ["/src/ProductCard.litsx"]);
     assert.deepStrictEqual(result.hydrationData, {
       version: 1,
       roots: [
@@ -203,6 +210,342 @@ describe("@litsx/ssr", () => {
         },
       ],
     });
+  });
+
+  it("renders complex server-to-lit projected content with nested SSR roots", async () => {
+    class ActionChip extends LitElement {
+      static [LITSX_MODULE_ID] = "/src/ActionChip.litsx";
+
+      render() {
+        return html`<button>${this.label}</button>`;
+      }
+    }
+
+    class ProductCard extends LitElement {
+      static [LITSX_MODULE_ID] = "/src/ProductCard.litsx";
+
+      render() {
+        return html`
+          <article>
+            <header><slot name="actions"></slot></header>
+            <section><slot></slot></section>
+          </article>
+        `;
+      }
+    }
+
+    async function ProductActions({ product }) {
+      return __litsxScopedTemplate(
+        html`
+          <action-chip slot="actions" .label=${product.cta}></action-chip>
+          <p>${product.copy}</p>
+        `,
+        {
+          "action-chip": ActionChip,
+        },
+      );
+    }
+
+    async function ProductPage({ product }) {
+      return __litsxScopedTemplate(
+        html`
+          <product-card .product=${product}>
+            ${__litsxServerComponentCall(ProductActions, { product })}
+          </product-card>
+        `,
+        {
+          "product-card": ProductCard,
+        },
+      );
+    }
+
+    const result = await renderToString(
+      __litsxServerComponentCall(ProductPage, {
+        product: {
+          cta: "Buy now",
+          copy: "Ships tomorrow",
+        },
+      }),
+    );
+
+    assert.doesNotMatch(result.html, /<product-page\b/);
+    assert.doesNotMatch(result.html, /<product-actions\b/);
+    assert.match(result.html, /<product-card[^>]*data-litsx-root="litsx-root-1"/);
+    assert.match(result.html, /<slot name="actions"><\/slot>/);
+    assert.match(result.html, /<slot><\/slot>/);
+    assert.match(result.html, /<action-chip[^>]*data-litsx-root="litsx-root-0"[^>]*slot="actions"|<action-chip[^>]*slot="actions"[^>]*data-litsx-root="litsx-root-0"/);
+    assert.match(result.html, /<action-chip[\s\S]*<template shadowroot="open" shadowrootmode="open">[\s\S]*<button>[\s\S]*Buy now[\s\S]*<\/button>[\s\S]*<\/template><\/action-chip>/);
+    assert.match(result.html, /<p>[\s\S]*Ships tomorrow[\s\S]*<\/p>/);
+    assert.deepStrictEqual(result.clientImports, [
+      "/src/ActionChip.litsx",
+      "/src/ProductCard.litsx",
+    ]);
+    assert.deepStrictEqual(result.hydrationData, {
+      version: 1,
+      roots: [
+        {
+          id: "litsx-root-0",
+          tagName: "action-chip",
+          moduleId: "/src/ActionChip.litsx",
+        },
+        {
+          id: "litsx-root-1",
+          tagName: "product-card",
+          moduleId: "/src/ProductCard.litsx",
+        },
+      ],
+    });
+  });
+
+  it("renders complex server-to-server renderer props with scoped Lit content", async () => {
+    class ActionChip extends LitElement {
+      static [LITSX_MODULE_ID] = "/src/ActionChip.litsx";
+
+      render() {
+        return html`<button>${this.label}</button>`;
+      }
+    }
+
+    function renderAction(product) {
+      return __litsxScopedTemplate(
+        html`<action-chip .label=${product.cta}></action-chip><p>${product.copy}</p>`,
+        {
+          "action-chip": ActionChip,
+        },
+      );
+    }
+
+    async function ProductActions({ actionRenderer, product }) {
+      return __litsxScopedTemplate(
+        html`<section>${actionRenderer(product)}</section>`,
+        {},
+      );
+    }
+
+    async function ProductPage({ product }) {
+      return __litsxServerComponentCall(ProductActions, {
+        product,
+        actionRenderer: renderAction,
+      });
+    }
+
+    const result = await renderToString(
+      __litsxServerComponentCall(ProductPage, {
+        product: {
+          cta: "Buy now",
+          copy: "Ships tomorrow",
+        },
+      }),
+    );
+
+    assert.doesNotMatch(result.html, /<product-page\b/);
+    assert.doesNotMatch(result.html, /<product-actions\b/);
+    assert.match(result.html, /<section>/);
+    assert.match(result.html, /<action-chip[^>]*data-litsx-root="litsx-root-0"/);
+    assert.match(result.html, /<button>[\s\S]*Buy now[\s\S]*<\/button>/);
+    assert.match(result.html, /<p>[\s\S]*Ships tomorrow[\s\S]*<\/p>/);
+    assert.deepStrictEqual(result.clientImports, ["/src/ActionChip.litsx"]);
+    assert.deepStrictEqual(result.hydrationData, {
+      version: 1,
+      roots: [
+        {
+          id: "litsx-root-0",
+          tagName: "action-chip",
+          moduleId: "/src/ActionChip.litsx",
+        },
+      ],
+    });
+  });
+
+  it("renders complex server-to-lit renderer props with scoped Lit content", async () => {
+    class ActionChip extends LitElement {
+      static [LITSX_MODULE_ID] = "/src/ActionChip.litsx";
+
+      render() {
+        return html`<button>${this.label}</button>`;
+      }
+    }
+
+    class ProductCard extends LitElement {
+      static [LITSX_MODULE_ID] = "/src/ProductCard.litsx";
+      static elements = {
+        "action-chip": ActionChip,
+      };
+
+      render() {
+        return html`
+          <article>
+            <header>${renderRendererCall(this.headerRenderer, this.product)}</header>
+          </article>
+        `;
+      }
+    }
+
+    function renderHeader(product) {
+      return html`<action-chip .label=${product.cta}></action-chip><p>${product.copy}</p>`;
+    }
+
+    async function ProductPage({ product }) {
+      return __litsxScopedTemplate(
+        html`
+          <product-card
+            .product=${product}
+            .headerRenderer=${bindRendererContext(null, renderHeader)}
+          ></product-card>
+        `,
+        {
+          "product-card": ProductCard,
+        },
+      );
+    }
+
+    const result = await renderToString(
+      __litsxServerComponentCall(ProductPage, {
+        product: {
+          cta: "Buy now",
+          copy: "Ships tomorrow",
+        },
+      }),
+    );
+
+    assert.doesNotMatch(result.html, /<product-page\b/);
+    assert.match(result.html, /<product-card[^>]*data-litsx-root="litsx-root-0"/);
+    assert.match(result.html, /<header>/);
+    assert.match(result.html, /<action-chip[^>]*defer-hydration/);
+    assert.match(result.html, /<button>[\s\S]*Buy now[\s\S]*<\/button>/);
+    assert.match(result.html, /<p>[\s\S]*Ships tomorrow[\s\S]*<\/p>/);
+    assert.deepStrictEqual(result.clientImports, [
+      "/src/ProductCard.litsx",
+      "/src/ActionChip.litsx",
+    ]);
+    assert.deepStrictEqual(result.hydrationData, {
+      version: 1,
+      roots: [
+        {
+          id: "litsx-root-0",
+          tagName: "product-card",
+          moduleId: "/src/ProductCard.litsx",
+        },
+      ],
+    });
+  });
+
+  it("rejects server components projected through Lit renderer props during SSR", async () => {
+    class ActionChip extends LitElement {
+      static [LITSX_MODULE_ID] = "/src/ActionChip.litsx";
+
+      render() {
+        return html`<button>${this.label}</button>`;
+      }
+    }
+
+    class ProductCard extends LitElement {
+      static [LITSX_MODULE_ID] = "/src/ProductCard.litsx";
+
+      render() {
+        return html`
+          <article>
+            <header>${renderRendererCall(this.headerRenderer, this.product)}</header>
+          </article>
+        `;
+      }
+    }
+
+    async function ProductHeader({ product }) {
+      return __litsxScopedTemplate(
+        html`<action-chip .label=${product.cta}></action-chip><p>${product.copy}</p>`,
+        {
+          "action-chip": ActionChip,
+        },
+      );
+    }
+
+    function renderHeader(product) {
+      return __litsxServerComponentCall(ProductHeader, { product });
+    }
+
+    async function ProductPage({ product }) {
+      return __litsxScopedTemplate(
+        html`
+          <product-card
+            .product=${product}
+            .headerRenderer=${bindRendererContext(null, renderHeader)}
+          ></product-card>
+        `,
+        {
+          "product-card": ProductCard,
+        },
+      );
+    }
+
+    await assert.rejects(
+      () =>
+        renderToString(
+          __litsxServerComponentCall(ProductPage, {
+            product: {
+              cta: "Buy now",
+              copy: "Ships tomorrow",
+            },
+          }),
+        ),
+      /SSR renderer props must return a renderable TemplateResult, not a server component call or scoped template\./,
+    );
+  });
+
+  it("keeps scoped registry context isolated across Lit hosts that use the same renderer", async () => {
+    class UiChipA extends LitElement {
+      render() {
+        return html`<span>A</span>`;
+      }
+    }
+
+    class UiChipB extends LitElement {
+      render() {
+        return html`<span>B</span>`;
+      }
+    }
+
+    function renderHeader() {
+      return html`<ui-chip></ui-chip>`;
+    }
+
+    class CardA extends LitElement {
+      static elements = {
+        "ui-chip": UiChipA,
+      };
+
+      render() {
+        return html`<section data-card="a">${renderRendererCall(this.headerRenderer)}</section>`;
+      }
+    }
+
+    class CardB extends LitElement {
+      static elements = {
+        "ui-chip": UiChipB,
+      };
+
+      render() {
+        return html`<section data-card="b">${renderRendererCall(this.headerRenderer)}</section>`;
+      }
+    }
+
+    async function ProductPage() {
+      return __litsxScopedTemplate(
+        html`
+          <card-a .headerRenderer=${bindRendererContext(null, renderHeader)}></card-a>
+          <card-b .headerRenderer=${bindRendererContext(null, renderHeader)}></card-b>
+        `,
+        {
+          "card-a": CardA,
+          "card-b": CardB,
+        },
+      );
+    }
+
+    const result = await renderToString(__litsxServerComponentCall(ProductPage, {}));
+
+    assert.match(result.html, /data-card="a"[\s\S]*<span>[\s\S]*A[\s\S]*<\/span>/);
+    assert.match(result.html, /data-card="b"[\s\S]*<span>[\s\S]*B[\s\S]*<\/span>/);
   });
 
   it("resolves context-provider values during SSR without extra hydration payload", async () => {
