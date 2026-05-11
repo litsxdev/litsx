@@ -1,4 +1,5 @@
 import jsxSyntaxPlugin from "@babel/plugin-syntax-jsx";
+import { normalizeFilePath } from "@litsx/typescript-session";
 import {
   createTypeResolver,
   ensureTypescriptModule,
@@ -103,6 +104,7 @@ export function createTransformFunctionToClassPlugin(defaultPluginOptions = {}) 
         this.__litsxNeedsStaticHoistsMixin = false;
         this.__litsxNeedsLightDomMixin = false;
         this.__litsxNeedsCallbackRef = false;
+        this.__litsxNeedsModuleIdMetadata = false;
         this.__litsxNeedsRendererCallImport = false;
         this.__litsxWarnings = [];
         this.__litsxResolvedPluginOptions = resolvedPluginOptions;
@@ -285,6 +287,9 @@ function updateTransformState(state, classNode) {
   );
   state.__litsxNeedsCallbackRef ||= Boolean(
     classNode._needsCallbackRef
+  );
+  state.__litsxNeedsModuleIdMetadata ||= Boolean(
+    classNode._needsModuleIdMetadata
   );
 }
 
@@ -487,6 +492,8 @@ function transformFunction(functionPath, programPath, className, options = {}) {
     needsCss,
     needsUnsafeCss,
     needsCallbackRef,
+    needsModuleIdMetadata: true,
+    moduleId: normalizeFilePath(programPath.hub.file?.opts?.filename || ""),
   });
 
   attachStaticIr(classNode, {

@@ -213,6 +213,27 @@ export function finalizeProgram(programPath, state) {
     }
   }
 
+  if (state.__litsxNeedsModuleIdMetadata) {
+    const bodyPathsWithInternal = programPath.get("body");
+    const internalImports = bodyPathsWithInternal.filter(
+      (n) => n.isImportDeclaration() && n.node.source.value === "@litsx/litsx/runtime-infrastructure"
+    );
+
+    let internalImported = false;
+    internalImports.some((importPath) => {
+      if (ensureNamedImport(importPath, "LITSX_MODULE_ID")) {
+        internalImported = true;
+        return true;
+      }
+
+      return false;
+    });
+
+    if (!internalImported) {
+      programPath.unshiftContainer("body", createLitsxInfrastructureImport("LITSX_MODULE_ID"));
+    }
+  }
+
   if (state.__litsxNeedsCallbackRef) {
     const bodyPathsWithLitsx = programPath.get("body");
     const litsxImports = bodyPathsWithLitsx.filter(
