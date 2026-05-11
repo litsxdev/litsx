@@ -4,6 +4,7 @@ import transformLitsxDomRefs from "./internal/transform-litsx-dom-refs.js";
 import transformLitsxHooks from "./internal/transform-litsx-hooks.js";
 import transformLitsxComponents from "./internal/transform-litsx-components.js";
 import transformLitsxRendererProps from "./internal/transform-litsx-renderer-props.js";
+import transformLitsxServerComponents from "./internal/transform-litsx-server-components.js";
 import transformLitsxSsrRoots from "./internal/transform-litsx-ssr-roots.js";
 
 const NATIVE_TRANSFORM_OPTION_KEYS = [
@@ -60,6 +61,7 @@ function shouldIncludeFeaturePlugin(sourceFeatures, key) {
 export function createLitsxPresetPlugins(options = {}, sourceFeatures = null) {
   const plugins = [
     [transformLitsxRendererProps, options.transformLitsxRendererProps || {}],
+    [transformLitsxServerComponents, options.transformLitsxServerComponents || {}],
     [transformLitsxComponents, normalizeTransformLitsxOptions(options)],
   ];
 
