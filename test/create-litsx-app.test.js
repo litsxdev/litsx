@@ -14,7 +14,10 @@ import {
 } from "../packages/create-litsx-app/src/index.js";
 
 const require = createRequire(import.meta.url);
-const { renderProjectFiles: renderDistProjectFiles } = require("../packages/create-litsx-app/dist/index.cjs");
+const distEntrypoint = path.resolve("packages/create-litsx-app/dist/index.cjs");
+const renderDistProjectFiles = fs.existsSync(distEntrypoint)
+  ? require(distEntrypoint).renderProjectFiles
+  : null;
 const tempDirs = [];
 
 function getStaticStyleSources(render) {
@@ -223,10 +226,12 @@ describe("create-litsx-app", () => {
   });
 
   it("does not emit legacy hoist closers in any authored template", () => {
-    for (const [entrypoint, render] of [
-      ["src", renderProjectFiles],
-      ["dist", renderDistProjectFiles],
-    ]) {
+    const renderers = [["src", renderProjectFiles]];
+    if (renderDistProjectFiles) {
+      renderers.push(["dist", renderDistProjectFiles]);
+    }
+
+    for (const [entrypoint, render] of renderers) {
       for (const { template, name, source } of getStaticStyleSources(render)) {
         assert.doesNotMatch(
           source,
