@@ -43,15 +43,15 @@ result.renderModulePreloads();
 - `html`: prerendered HTML, including Declarative Shadow DOM for LitSX elements
 - `clientImports`: deduplicated client module imports collected from rendered
   LitSX elements
-- `hydrationData`: currently reserved for future LitSX-specific payloads and
-  now contains a minimal root-boundary payload
+- `hydrationData`: a minimal LitSX root-boundary payload when scoped LitSX
+  roots are rendered, otherwise `null`
 - `renderClientImports()`: `<script type="module">` tags for `clientImports`
 - `renderClientImportsData()`: a JSON script tag readable by
   `@litsx/ssr-client`
 - `renderModulePreloads()`: `<link rel="modulepreload">` tags for
   `clientImports`
-- `renderHydrationData()`: a JSON hydration-payload script tag; currently empty
-  for non-LitSX roots
+- `renderHydrationData()`: a JSON hydration-payload script tag for scoped LitSX
+  roots; empty for non-LitSX roots
 
 ## Authored Root Syntax
 
@@ -166,12 +166,12 @@ This first SSR cut includes:
 - `SsrEffectsController` for SSR-safe hook execution
 - Declarative Shadow DOM output
 - `clientImports` collection
+- minimal root-boundary hydration metadata
 
 It does not yet include:
 
-- hydration payload generation
-- higher-level LitSX hydration payload orchestration
-- module preload generation
+- general prop/state hydration payload generation
+- higher-level LitSX hydration orchestration
 - server-side components
 
 For the current minimal client-side entrypoint, see
