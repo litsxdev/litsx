@@ -248,7 +248,7 @@ export declare function useEvent<T extends (...args: never[]) => unknown>(
 /**
  * Emit a CustomEvent from the current host.
  */
-export declare function useEmit<T = undefined>(
+export declare function useEmit(): <T = undefined>(
   type: string,
   detail?: T,
   options?: {
@@ -256,7 +256,7 @@ export declare function useEmit<T = undefined>(
     composed?: boolean;
     cancelable?: boolean;
   }
-): boolean;
+) => boolean;
 /**
  * Read the value from the previous render.
  */
@@ -314,7 +314,11 @@ export declare function useOptimistic<TState, TInput>(
 /**
  * Schedule non-urgent updates and track whether they are pending.
  */
-export declare function useTransition(): [boolean, (callback: () => void) => void];
+export declare function useTransition(): [boolean, <T>(callback: () => T) => T];
+/**
+ * Schedule non-urgent updates using the same transition machinery as useTransition.
+ */
+export declare function startTransition<T>(callback: () => T): T;
 /**
  * Let expensive consumers lag behind a fast-changing value.
  */

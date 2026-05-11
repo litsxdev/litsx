@@ -56,4 +56,18 @@ describe("litsx jsx runtime", () => {
     assert.ok(fs.existsSync(new URL("../packages/litsx/src/jsx-runtime.d.ts", import.meta.url)));
     assert.ok(fs.existsSync(new URL("../packages/litsx/src/jsx-dev-runtime.d.ts", import.meta.url)));
   });
+
+  it("types useEmit as a hook that returns an emit function", () => {
+    const declarations = fs.readFileSync(new URL("../packages/litsx/src/index.d.ts", import.meta.url), "utf8");
+
+    assert.match(declarations, /export declare function useEmit\(\): <T = undefined>\(/);
+    assert.doesNotMatch(declarations, /export declare function useEmit<T = undefined>\(/);
+  });
+
+  it("publishes transition helpers with accurate return types", () => {
+    const declarations = fs.readFileSync(new URL("../packages/litsx/src/index.d.ts", import.meta.url), "utf8");
+
+    assert.match(declarations, /export declare function useTransition\(\): \[boolean, <T>\(callback: \(\) => T\) => T\];/);
+    assert.match(declarations, /export declare function startTransition<T>\(callback: \(\) => T\): T;/);
+  });
 });
