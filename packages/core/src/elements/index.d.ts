@@ -6,6 +6,7 @@ export declare const LITSX_SCOPED_TEMPLATE: unique symbol;
 export declare const LITSX_MODULE_ID: unique symbol;
 export declare const LITSX_SSR_CONTEXT: unique symbol;
 export declare const LITSX_SERVER_COMPONENT: unique symbol;
+export declare const LITSX_SERVER_COMPONENT_CALL: unique symbol;
 
 export interface LitsxScopedTemplate<
   TTemplate = unknown,
@@ -27,6 +28,27 @@ export declare function __litsxScopedTemplate<
 export declare function __isLitsxScopedTemplate(
   value: unknown
 ): value is LitsxScopedTemplate;
+
+export interface LitsxServerComponentCall<
+  TComponent = unknown,
+  TProps extends Record<string, unknown> = Record<string, unknown>,
+> {
+  readonly [LITSX_SERVER_COMPONENT_CALL]: true;
+  readonly component: TComponent;
+  readonly props: TProps;
+}
+
+export declare function __litsxServerComponentCall<
+  TComponent,
+  TProps extends Record<string, unknown> = Record<string, unknown>,
+>(
+  component: TComponent,
+  props?: TProps | null | undefined,
+): LitsxServerComponentCall<TComponent, TProps>;
+
+export declare function __isLitsxServerComponentCall(
+  value: unknown
+): value is LitsxServerComponentCall;
 
 export interface LitsxStaticHoistsStatics {
   __litsxStatic<T>(cacheKey: PropertyKey, compute: () => T): T;

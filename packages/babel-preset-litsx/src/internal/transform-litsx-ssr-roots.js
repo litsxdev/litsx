@@ -12,6 +12,7 @@ let t;
 const SSR_MODULE = "@litsx/ssr";
 const RUNTIME_INFRASTRUCTURE_MODULE = "@litsx/core/elements";
 const SCOPED_TEMPLATE_HELPER = "__litsxScopedTemplate";
+const SERVER_COMPONENT_CALL_HELPER = "__litsxServerComponentCall";
 
 export default function transformLitsxSsrRoots(api) {
   api.assertVersion(7);
@@ -56,10 +57,15 @@ export default function transformLitsxSsrRoots(api) {
                 isServerComponentBindingName(programPath, openingName.node.name)
               ) {
                 firstArgument.replaceWith(
-                  t.callExpression(
+                  t.callExpression(t.identifier(SERVER_COMPONENT_CALL_HELPER), [
                     t.identifier(openingName.node.name),
-                    [buildServerComponentPropsObject(firstArgument.get("openingElement"))],
-                  ),
+                    buildServerComponentPropsObject(firstArgument.get("openingElement")),
+                  ]),
+                );
+                ensureNamedImport(
+                  programPath,
+                  RUNTIME_INFRASTRUCTURE_MODULE,
+                  SERVER_COMPONENT_CALL_HELPER,
                 );
                 return;
               }

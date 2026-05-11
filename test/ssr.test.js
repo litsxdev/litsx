@@ -2,6 +2,7 @@ import assert from "assert";
 import { describe, it } from "vitest";
 import { LitElement, html } from "lit";
 import {
+  __litsxServerComponentCall,
   LITSX_MODULE_ID,
   __litsxScopedTemplate,
 } from "../packages/core/src/elements/index.js";
@@ -143,6 +144,18 @@ describe("@litsx/ssr", () => {
   it("accepts promised renderable values", async () => {
     const result = await renderToString(Promise.resolve(html`<main>ready</main>`));
     assert.match(result.html, /<main>ready<\/main>/);
+  });
+
+  it("resolves server-component call markers inside renderToString", async () => {
+    async function ProductPage({ label }) {
+      return __litsxScopedTemplate(html`<main>${label}</main>`, {});
+    }
+
+    const result = await renderToString(
+      __litsxServerComponentCall(ProductPage, { label: "ready" }),
+    );
+
+    assert.match(result.html, /<main>[\s\S]*ready[\s\S]*<\/main>/);
   });
 
   it("resolves context-provider values during SSR without extra hydration payload", async () => {
