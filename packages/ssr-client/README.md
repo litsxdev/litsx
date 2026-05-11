@@ -12,8 +12,10 @@ This package keeps hydration intentionally small:
 - it installs Lit's SSR hydration support before loading client modules
 - it can run your root-registration/bootstrap entry
 - it can load the `clientImports` produced by `@litsx/ssr`
+- it can validate and resolve SSR root boundaries from LitSX hydration metadata
 
-It does not currently generate or consume a LitSX-specific hydration payload.
+It does not currently serialize general props or state into a LitSX-specific
+hydration payload.
 
 ## Installation
 
@@ -51,13 +53,21 @@ import {
   hydrateRoot,
   readClientImports,
   readHydrationData,
+  resolveHydrationRoot,
+  resolveHydrationRoots,
 } from "@litsx/ssr-client";
 ```
 
-- `hydrateRoot(root, options)` is an explicit alias for hydrating one root
-- `hydrateDocument(options)` defaults the root to `document`
+- `hydrateRoot(root, options)` hydrates one explicit root and validates its
+  `data-litsx-root` marker against the SSR payload when present
+- `hydrateDocument(options)` defaults the root to `document` and returns the
+  resolved roots when the payload declares them
 - `readClientImports(...)` reads imports from options or a JSON script tag
-- `readHydrationData(...)` reads an optional JSON hydration payload
+- `readHydrationData(...)` reads the JSON hydration payload emitted by
+  `@litsx/ssr`
+- `resolveHydrationRoots(...)` resolves every declared root boundary to a DOM
+  element
+- `resolveHydrationRoot(...)` resolves one declared root by id
 
 By default the JSON script ids are:
 
@@ -76,6 +86,30 @@ Example:
 await hydrateDocument({
   register: () => import("./main.js"),
 });
+```
+
+When LitSX scoped roots are rendered on the server, the HTML also carries
+`data-litsx-root="<id>"` on each root host. The matching payload emitted by
+`renderHydrationData()` looks like this:
+
+```json
+{
+  "version": 1,
+  "roots": [
+    {
+      "id": "litsx-root-0",
+      "tagName": "product-card",
+      "moduleId": "/src/ProductCard.litsx"
+    }
+  ]
+}
+```
+
+That lets the client validate and resolve boundaries explicitly:
+
+```js
+const roots = resolveHydrationRoots(document);
+const cardRoot = resolveHydrationRoot(document, "litsx-root-0");
 ```
 
 ## Working with `@litsx/ssr`
@@ -103,6 +137,8 @@ In that setup:
 - `register()` should define the root custom elements for the page
 - `clientImports` loads the modules discovered while rendering scoped LitSX
   elements
+- `renderHydrationData()` and `hydrateDocument(...)` can coordinate explicit
+  root boundaries without global registry scans
 
 ## Current Scope
 
@@ -112,9 +148,9 @@ This first client helper cut:
 - supports optional bootstrap callbacks
 - supports loading deduplicated client module imports
 - supports document/root helpers and JSON script readers
+- supports resolving SSR root boundaries from LitSX hydration metadata
 
 It does not yet:
 
-- walk SSR roots automatically
-- manage a LitSX hydration payload
+- serialize general props or state for hydration
 - register root elements for you
