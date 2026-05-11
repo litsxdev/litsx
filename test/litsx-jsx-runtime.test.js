@@ -70,4 +70,12 @@ describe("litsx jsx runtime", () => {
     assert.match(declarations, /export declare function useTransition\(\): \[boolean, <T>\(callback: \(\) => T\) => T\];/);
     assert.match(declarations, /export declare function startTransition<T>\(callback: \(\) => T\): T;/);
   });
+
+  it("types built-in boundary components with base element attributes like class and ref", () => {
+    const declarations = fs.readFileSync(new URL("../packages/litsx/src/jsx-runtime.d.ts", import.meta.url), "utf8");
+
+    assert.match(declarations, /Component extends typeof SuspenseList \? LitsxBoundaryElementProps<SuspenseList, SuspenseListProps> :/);
+    assert.match(declarations, /Component extends typeof SuspenseBoundary \? LitsxBoundaryElementProps<SuspenseBoundary, SuspenseBoundaryProps> :/);
+    assert.match(declarations, /Component extends typeof ErrorBoundary \? LitsxBoundaryElementProps<ErrorBoundary, ErrorBoundaryProps> :/);
+  });
 });

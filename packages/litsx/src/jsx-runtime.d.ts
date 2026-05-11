@@ -2,6 +2,7 @@ import type {
   ErrorBoundary,
   ErrorBoundaryProps,
   LitsxComponent,
+  LitsxElementProps,
   LitsxIntrinsicElements,
   LitsxJsxNode,
   LitsxRef,
@@ -51,16 +52,19 @@ export namespace JSX {
     ref?: LitsxRef<T>;
   }
 
+  type LitsxBoundaryElementProps<TElement, TProps> =
+    LitsxElementProps<TElement> & TProps;
+
   type LibraryManagedAttributes<Component, Props> =
-    Component extends typeof ErrorBoundary ? ErrorBoundaryProps :
-    Component extends typeof SuspenseBoundary ? SuspenseBoundaryProps :
-    Component extends typeof SuspenseList ? SuspenseListProps :
+    Component extends typeof ErrorBoundary ? LitsxBoundaryElementProps<ErrorBoundary, ErrorBoundaryProps> :
+    Component extends typeof SuspenseBoundary ? LitsxBoundaryElementProps<SuspenseBoundary, SuspenseBoundaryProps> :
+    Component extends typeof SuspenseList ? LitsxBoundaryElementProps<SuspenseList, SuspenseListProps> :
     Component extends LitsxComponent<infer InferredProps> ? InferredProps :
     Props;
 }
 
 export type LitsxComponentProps<T> =
-  T extends typeof ErrorBoundary ? ErrorBoundaryProps :
-  T extends typeof SuspenseBoundary ? SuspenseBoundaryProps :
-  T extends typeof SuspenseList ? SuspenseListProps :
+  T extends typeof ErrorBoundary ? JSX.LitsxBoundaryElementProps<ErrorBoundary, ErrorBoundaryProps> :
+  T extends typeof SuspenseBoundary ? JSX.LitsxBoundaryElementProps<SuspenseBoundary, SuspenseBoundaryProps> :
+  T extends typeof SuspenseList ? JSX.LitsxBoundaryElementProps<SuspenseList, SuspenseListProps> :
   Record<string, unknown>;
