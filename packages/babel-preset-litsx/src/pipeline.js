@@ -8,6 +8,7 @@ import transformLitsxBoundaries from "./internal/transform-litsx-boundaries.js";
 import transformLitsxSsrRoots from "./internal/transform-litsx-ssr-roots.js";
 
 const NATIVE_TRANSFORM_OPTION_KEYS = [
+  "ssr",
   "defaultDomMode",
   "typeResolutionMode",
   "inMemoryFiles",
