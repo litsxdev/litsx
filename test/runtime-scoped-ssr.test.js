@@ -13,7 +13,7 @@ async function collectRenderResult(result) {
   return output;
 }
 
-describe("Lit SSR scoped-elements spike", () => {
+describe("runtime scoped SSR", () => {
   it("shows that plain Lit SSR does not resolve unregistered custom elements", async () => {
     class ProductCard extends LitElement {
       render() {
@@ -69,7 +69,7 @@ describe("Lit SSR scoped-elements spike", () => {
 
     assert.strictEqual(customElements.get("product-card"), undefined);
     assert.strictEqual(customElements.get("product-image"), undefined);
-    assert.match(output, /<product-card\s*>/);
+    assert.match(output, /<product-card\b[^>]*data-litsx-root="litsx-root-0"/);
     assert.match(output, /<template shadowroot="open" shadowrootmode="open">/);
     assert.match(output, /<h2><!--lit-part-->Trail Shoe<!--\/lit-part--><\/h2>/);
     assert.match(output, /<product-image[\s\S]*defer-hydration>/);
