@@ -1,0 +1,43 @@
+{
+  "name": "@litsx/ssr-client",
+  "version": "0.1.0",
+  "description": "Client hydration helpers for LitSX SSR",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./src/index.js",
+  "types": "./src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "import": "./src/index.js",
+      "require": "./dist/index.cjs",
+      "default": "./src/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "../../node_modules/.bin/rollup --config rollup.config.js",
+    "prepack": "yarn build"
+  },
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/litsxdev/litsx/tree/main/packages/ssr-client",
+  "bugs": {
+    "url": "https://github.com/litsxdev/litsx/issues"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/litsxdev/litsx.git",
+    "directory": "packages/ssr-client"
+  },
+  "dependencies": {
+    "@lit-labs/ssr-client": "^1.1.7"
+  }
+}

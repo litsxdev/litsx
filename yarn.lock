@@ -1137,6 +1137,14 @@ __metadata:
   languageName: unknown
   linkType: soft
 
+"@litsx/ssr-client@workspace:packages/ssr-client":
+  version: 0.0.0-use.local
+  resolution: "@litsx/ssr-client@workspace:packages/ssr-client"
+  dependencies:
+    "@lit-labs/ssr-client": "npm:^1.1.7"
+  languageName: unknown
+  linkType: soft
+
 "@litsx/ssr@workspace:packages/ssr":
   version: 0.0.0-use.local
   resolution: "@litsx/ssr@workspace:packages/ssr"
