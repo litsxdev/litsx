@@ -91,6 +91,14 @@ describe("@litsx/ssr", () => {
       "/assets/ProductCard.litsx.js",
       "/assets/ProductImage.litsx.js",
     ]);
+    assert.strictEqual(
+      result.renderClientImports(),
+      '<script type="module" src="/assets/ProductCard.litsx.js"></script><script type="module" src="/assets/ProductImage.litsx.js"></script>',
+    );
+    assert.strictEqual(
+      result.renderModulePreloads(),
+      '<link rel="modulepreload" href="/assets/ProductCard.litsx.js"><link rel="modulepreload" href="/assets/ProductImage.litsx.js">',
+    );
   });
 
   it("passes through unknown custom elements and plain template results", async () => {
@@ -101,5 +109,7 @@ describe("@litsx/ssr", () => {
     assert.match(result.html, /<main>/);
     assert.match(result.html, /<external-card data-kind="promo"><\/external-card>/);
     assert.deepStrictEqual(result.clientImports, []);
+    assert.strictEqual(result.renderClientImports(), "");
+    assert.strictEqual(result.renderModulePreloads(), "");
   });
 });
