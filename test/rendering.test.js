@@ -333,7 +333,7 @@ describe("runtime renderer context", () => {
   });
 
   it("returns the renderer value during SSR render calls", async () => {
-    const { renderRendererCall } = await import("../packages/litsx/src/runtime-render-context.js");
+    const { renderRendererCall } = await import("../packages/core/src/rendering.js");
     const result = renderRendererCall((label) => `value:${label}`, "alpha");
     const DirectiveCtor = result._$litDirective$;
     const instance = new DirectiveCtor({ type: PartType.CHILD });
