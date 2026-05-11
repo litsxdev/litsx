@@ -54,7 +54,13 @@ export default function transformLitsxSsrRoots(api) {
               const openingName = firstArgument.get("openingElement.name");
               if (
                 openingName.isJSXIdentifier() &&
-                isServerComponentBindingName(programPath, openingName.node.name)
+                isServerComponentBindingName(
+                  programPath,
+                  openingName.node.name,
+                  {
+                    filename: programPath.hub.file?.opts?.filename || "",
+                  },
+                )
               ) {
                 firstArgument.replaceWith(
                   t.callExpression(t.identifier(SERVER_COMPONENT_CALL_HELPER), [
