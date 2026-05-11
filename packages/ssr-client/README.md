@@ -20,7 +20,7 @@ hydration payload.
 ## Installation
 
 ```bash
-npm install @litsx/ssr-client @litsx/ssr lit @litsx/litsx
+npm install @litsx/ssr-client @litsx/ssr lit @litsx/core
 ```
 
 ## Basic Usage

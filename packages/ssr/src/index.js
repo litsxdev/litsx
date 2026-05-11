@@ -2,12 +2,7 @@ import {
   createScopedSsrContext,
   renderScopedTemplateWithLitSsr,
 } from "@litsx/core/internal/runtime-scoped-ssr";
-import {
-  __isLitsxScopedTemplate,
-  __isLitsxServerComponentCall,
-} from "@litsx/core/elements";
-import { isTemplateResult } from "lit/directive-helpers.js";
-import { unsafeHTML } from "lit/directives/unsafe-html.js";
+import { resolveTopLevelSsrValue } from "@litsx/core/internal/runtime-ssr-values";
 
 export const LITSX_CLIENT_IMPORTS_SCRIPT_ID = "__LITSX_CLIENT_IMPORTS__";
 export const LITSX_HYDRATION_DATA_SCRIPT_ID = "__LITSX_HYDRATION__";
@@ -25,84 +20,6 @@ function escapeJsonScript(value) {
     .replaceAll("<", "\\u003C")
     .replaceAll(">", "\\u003E")
     .replaceAll("&", "\\u0026");
-}
-
-async function resolveNestedSsrValue(value, context) {
-  const resolvedValue = await value;
-
-  if (__isLitsxServerComponentCall(resolvedValue)) {
-    const nextValue = await resolveTopLevelSsrValue(
-      resolvedValue.component(resolvedValue.props, context),
-      context,
-    );
-
-    const html = await renderScopedTemplateWithLitSsr(nextValue, {
-      litsxSsrContext: context,
-    });
-    return unsafeHTML(html);
-  }
-
-  if (__isLitsxScopedTemplate(resolvedValue)) {
-    const nextValue = await resolveTopLevelSsrValue(resolvedValue, context);
-    const html = await renderScopedTemplateWithLitSsr(nextValue, {
-      litsxSsrContext: context,
-    });
-    return unsafeHTML(html);
-  }
-
-  if (isTemplateResult(resolvedValue)) {
-    const values = await Promise.all(
-      resolvedValue.values.map((entry) => resolveNestedSsrValue(entry, context)),
-    );
-    return {
-      ...resolvedValue,
-      values,
-    };
-  }
-
-  if (Array.isArray(resolvedValue)) {
-    return Promise.all(
-      resolvedValue.map((entry) => resolveNestedSsrValue(entry, context)),
-    );
-  }
-
-  return resolvedValue;
-}
-
-async function resolveTopLevelSsrValue(value, context) {
-  const resolvedValue = await value;
-
-  if (__isLitsxServerComponentCall(resolvedValue)) {
-    return resolveTopLevelSsrValue(
-      resolvedValue.component(resolvedValue.props, context),
-      context,
-    );
-  }
-
-  if (__isLitsxScopedTemplate(resolvedValue)) {
-    return {
-      ...resolvedValue,
-      template: await resolveNestedSsrValue(resolvedValue.template, context),
-    };
-  }
-
-  if (isTemplateResult(resolvedValue)) {
-    const values = await Promise.all(
-      resolvedValue.values.map((entry) => resolveNestedSsrValue(entry, context)),
-    );
-    return {
-      ...resolvedValue,
-      values,
-    };
-  }
-
-  if (Array.isArray(resolvedValue)) {
-    return Promise.all(
-      resolvedValue.map((entry) => resolveTopLevelSsrValue(entry, context)),
-    );
-  }
-
-  return resolvedValue;
 }
 
 /**
