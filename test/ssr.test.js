@@ -158,6 +158,53 @@ describe("@litsx/ssr", () => {
     assert.match(result.html, /<main>[\s\S]*ready[\s\S]*<\/main>/);
   });
 
+  it("renders nested server-component call markers inside server-component templates", async () => {
+    class ProductCard extends LitElement {
+      static [LITSX_MODULE_ID] = "/src/ProductCard.litsx";
+
+      render() {
+        return html`<article>${this.product.name}</article>`;
+      }
+    }
+
+    async function ProductSection({ product }) {
+      return __litsxScopedTemplate(
+        html`<product-card .product=${product}></product-card>`,
+        {
+          "product-card": ProductCard,
+        },
+      );
+    }
+
+    async function ProductPage({ product }) {
+      return __litsxScopedTemplate(
+        html`<main>${__litsxServerComponentCall(ProductSection, { product })}</main>`,
+        {},
+      );
+    }
+
+    const result = await renderToString(
+      __litsxServerComponentCall(ProductPage, {
+        product: { name: "Nested Trail Shoe" },
+      }),
+    );
+
+    assert.match(result.html, /<main>/);
+    assert.match(result.html, /<product-card[^>]*data-litsx-root="litsx-root-0"/);
+    assert.match(result.html, /<template shadowroot="open" shadowrootmode="open">/);
+    assert.match(result.html, /Nested Trail Shoe/);
+    assert.deepStrictEqual(result.hydrationData, {
+      version: 1,
+      roots: [
+        {
+          id: "litsx-root-0",
+          tagName: "product-card",
+          moduleId: "/src/ProductCard.litsx",
+        },
+      ],
+    });
+  });
+
   it("resolves context-provider values during SSR without extra hydration payload", async () => {
     const ThemeContext = createContext("light");
 
