@@ -371,7 +371,7 @@ function wrapQuickInfo(method, getVirtualization) {
           }
           : fallbackSpan,
         displayParts: [
-          { text: hoistInfo?.name ?? "^hoist", kind: "functionName" },
+          { text: hoistInfo?.name ?? "static hoist", kind: "functionName" },
           { text: "(...)", kind: "punctuation" },
           { text: ": ", kind: "punctuation" },
           { text: "static hoist", kind: "keyword" },
@@ -437,20 +437,6 @@ function wrapQuickInfo(method, getVirtualization) {
     }
 
     const remappedDisplayParts = remapDisplayParts(info.displayParts);
-    const hoistDisplayName = remappedDisplayParts?.[0]?.text;
-    if (typeof hoistDisplayName === "string" && hoistDisplayName.startsWith("^")) {
-      const remappedSpan = remapToolingTextSpanToOriginal(info.textSpan, virtualization);
-      return createHoistQuickInfo(
-        {
-          name: hoistDisplayName,
-          start: remappedSpan.start,
-          length: hoistDisplayName.length,
-          documentation: `LitSX static hoist ${hoistDisplayName}(...). Declare it before render-time statements in the component body.`,
-        },
-        remappedSpan,
-      );
-    }
-
     return {
       ...info,
       textSpan: remapToolingTextSpanToOriginal(info.textSpan, virtualization),

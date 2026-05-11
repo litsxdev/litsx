@@ -111,13 +111,6 @@ function createLitsxAwareLanguage(registration) {
             3: { name: "entity.name.hoist.litsx" },
           },
         },
-        {
-          match: "(\\^)([A-Za-z_$][\\w$]*)(?=\\s*\\()",
-          captures: {
-            1: { name: "markup.italic.litsx keyword.operator.litsx" },
-            2: { name: "markup.italic.litsx entity.name.hoist.litsx" },
-          },
-        },
       ],
     },
     "litsx-jsx-tag-attribute-name": {
@@ -176,30 +169,6 @@ function createLitsxAwareLanguage(registration) {
             1: { name: "keyword.control.litsx" },
             3: { name: "entity.name.hoist.litsx" },
             5: {
-              name: registration.name === "tsx"
-                ? "string.template.ts punctuation.definition.string.begin.ts"
-                : "string.template.js punctuation.definition.string.begin.js",
-            },
-          },
-          end: "(`)",
-          endCaptures: {
-            1: {
-              name: registration.name === "tsx"
-                ? "string.template.ts punctuation.definition.string.end.ts"
-                : "string.template.js punctuation.definition.string.end.js",
-            },
-          },
-          contentName: "meta.embedded.block.css",
-          patterns: [
-            { include: "#litsx-css-root" },
-          ],
-        },
-        {
-          begin: "(\\^)(styles)(\\s*\\()\\s*(`)",
-          beginCaptures: {
-            1: { name: "markup.italic.litsx keyword.operator.litsx" },
-            2: { name: "markup.italic.litsx entity.name.hoist.litsx" },
-            4: {
               name: registration.name === "tsx"
                 ? "string.template.ts punctuation.definition.string.begin.ts"
                 : "string.template.js punctuation.definition.string.begin.js",

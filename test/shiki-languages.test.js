@@ -21,10 +21,8 @@ describe("@litsx/shiki-languages", () => {
   it("augments the base grammars with LitSX-specific attributes, hoists, and CSS embedding", () => {
     const tagAttributes = litsxTsxLanguage.repository["jsx-tag-attributes"].patterns;
     const staticHoistRule = litsxTsxLanguage.repository["litsx-hoists"].patterns[0];
-    const legacyHoistRule = litsxTsxLanguage.repository["litsx-hoists"].patterns[1];
     const boolAttribute = litsxTsxLanguage.repository["litsx-jsx-tag-bool-attribute"];
     const staticStylesRule = litsxTsxLanguage.repository["litsx-styles-css"].patterns[0];
-    const legacyStylesRule = litsxTsxLanguage.repository["litsx-styles-css"].patterns[1];
 
     assert.deepStrictEqual(tagAttributes[0], { include: "#litsx-jsx-tag-attribute" });
     assert.match(staticHoistRule.match, /\\bstatic\\b/);
@@ -36,11 +34,7 @@ describe("@litsx/shiki-languages", () => {
       staticHoistRule.captures[3].name,
       "entity.name.hoist.litsx",
     );
-    assert.match(legacyHoistRule.match, /\\\^/);
-    assert.strictEqual(
-      legacyHoistRule.captures[2].name,
-      "markup.italic.litsx entity.name.hoist.litsx",
-    );
+    assert.strictEqual(litsxTsxLanguage.repository["litsx-hoists"].patterns.length, 1);
     assert.strictEqual(
       boolAttribute.beginCaptures[2].name,
       "entity.other.attribute-name.boolean.litsx",
@@ -48,7 +42,7 @@ describe("@litsx/shiki-languages", () => {
     assert.strictEqual(staticStylesRule.contentName, "meta.embedded.block.css");
     assert.deepStrictEqual(staticStylesRule.patterns, [{ include: "#litsx-css-root" }]);
     assert.match(staticStylesRule.begin, /\\bstatic\\b/);
-    assert.strictEqual(legacyStylesRule.contentName, "meta.embedded.block.css");
+    assert.strictEqual(litsxTsxLanguage.repository["litsx-styles-css"].patterns.length, 1);
     assert.ok(litsxTsxLanguage.repository["litsx-css-root"]);
     assert.ok(litsxJsxLanguage.repository["litsx-css-root"]);
     assert.ok(

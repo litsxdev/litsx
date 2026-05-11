@@ -4042,7 +4042,7 @@ describe("@litsx/typescript-plugin", () => {
     assert.match(quickInfo.documentation[0].text, /static style hoist/i);
   });
 
-  it("remaps legacy hoist quick-info display parts when TypeScript surfaces caret names", () => {
+  it("passes through unrelated quick-info display parts when no static hoist is inferred", () => {
     const source = "<button @click={handleClick} />";
     const snapshots = new Map([["/virtual/legacy-hoist.tsx", source]]);
     const pluginModule = plugin({
@@ -4095,8 +4095,8 @@ describe("@litsx/typescript-plugin", () => {
             kind: "function",
             kindModifiers: "",
             textSpan: { start: 1, length: 3 },
-            displayParts: [{ text: "^styles", kind: "functionName" }],
-            documentation: [{ text: "legacy hoist", kind: "text" }],
+            displayParts: [{ text: "externalHelper", kind: "functionName" }],
+            documentation: [{ text: "external helper", kind: "text" }],
           };
         },
         getCompletionsAtPosition() {
@@ -4108,8 +4108,8 @@ describe("@litsx/typescript-plugin", () => {
     const quickInfo = wrapped.getQuickInfoAtPosition("/virtual/legacy-hoist.tsx", source.indexOf("@click"));
 
     assert.ok(quickInfo);
-    assert.strictEqual(quickInfo.displayParts[0].text, "^styles");
-    assert.match(quickInfo.documentation[0].text, /LitSX static hoist \^styles/);
+    assert.strictEqual(quickInfo.displayParts[0].text, "externalHelper");
+    assert.strictEqual(quickInfo.documentation[0].text, "external helper");
   });
 
   it("returns null completions when virtualization exists but there is no context or source completion result", () => {

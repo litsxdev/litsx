@@ -255,6 +255,22 @@ describe("@litsx/jsx-authoring", () => {
     assert.match(result.code, /__litsx_static_styles/);
   });
 
+  it("virtualizes hoist-only authored sources that use the current static syntax", () => {
+    const source = `
+      export function Card() {
+        static properties = { active: { reflect: true } };
+        static styles = \`:host { display: block; }\`;
+      }
+    `;
+
+    const result = createVirtualLitsxJsxSource(source, {
+      plugins: ["typescript"],
+    });
+
+    assert.match(result.code, /__litsx_static_properties\(\{ active: \{ reflect: true \} \}\);/);
+    assert.match(result.code, /__litsx_static_styles\(`:host \{ display: block; \}`\);/);
+  });
+
   it("does not rewrite lit-like string keys inside spread expressions", () => {
     const source = `
       const view = <button {...{ "@click": handleClick, ".value": value, "?disabled": busy }} />;
@@ -325,7 +341,7 @@ describe("@litsx/jsx-authoring", () => {
     );
   });
 
-  it("handles empty, unchanged, and mixins-only sources without producing replacements", () => {
+  it("handles empty and unchanged sources without producing replacements", () => {
     assert.deepStrictEqual(createVirtualLitsxJsxSource(null), {
       code: null,
       map: null,
@@ -336,16 +352,6 @@ describe("@litsx/jsx-authoring", () => {
     const unchanged = createVirtualLitsxJsxSource(plainSource);
     assert.equal(unchanged.code, plainSource);
     assert.deepStrictEqual(unchanged.replacements, []);
-
-    const mixinsOnly = `
-      export function Card() {
-        ^mixins(Selectable);
-        return <div />;
-      }
-    `;
-    const mixinResult = createVirtualLitsxJsxSource(mixinsOnly);
-    assert.equal(mixinResult.code, mixinsOnly);
-    assert.deepStrictEqual(mixinResult.replacements, []);
   });
 
   it("survives malformed authored snippets and still remaps exported helpers sensibly", () => {
