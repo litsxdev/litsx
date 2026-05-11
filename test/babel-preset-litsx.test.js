@@ -1395,7 +1395,7 @@ describe("@litsx/babel-preset-litsx", () => {
         configFile: false,
         babelrc: false,
         filename: "/virtual/TypedForm.tsx",
-        presets: [[nativePreset, {}]],
+        presets: [[nativePreset, { ssr: true }]],
       }
     );
 

@@ -1,5 +1,6 @@
 export type TransformLitsxOptions = {
   filename?: string;
+  ssr?: boolean;
   parserPlugins?: string[];
   sourceMaps?: boolean;
   jsxTemplate?: boolean;
