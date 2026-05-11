@@ -8,6 +8,7 @@ import { beforeAll, describe, it } from "vitest";
 import parser from "../packages/babel-parser-litsx/src/index.js";
 import { interopDefault } from "./helpers/interop-default.js";
 import { PLAYGROUND_TYPE_FILES } from "./helpers/playground-virtual-types.js";
+import { createLitsxTypecheckSession } from "../packages/typescript-plugin-litsx/src/typecheck.js";
 
 const { transformFromAstSync } = babelCore;
 
@@ -437,6 +438,72 @@ describe("@litsx/babel-preset-litsx", () => {
 
     assert.match(result.code, /renderToString\(__litsxServerComponentCall\(ProductPage, \{\s*slug: slug\s*\}\)\);/);
     assert.doesNotMatch(result.code, /renderToString\(__litsxScopedTemplate/);
+  });
+
+  it("rewrites aliased imported server-component roots through shared import resolution", () => {
+    const fixtureDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-server-root-alias-"));
+
+    try {
+      const srcDirectory = path.join(fixtureDirectory, "src");
+      fs.mkdirSync(path.join(srcDirectory, "pages"), { recursive: true });
+      const importedFilename = path.join(srcDirectory, "pages", "ProductPage.js");
+      const entryFilename = path.join(srcDirectory, "entry.js");
+      const tsconfigPath = path.join(fixtureDirectory, "tsconfig.json");
+
+      fs.writeFileSync(tsconfigPath, JSON.stringify({
+        compilerOptions: {
+          baseUrl: ".",
+          paths: {
+            "@/*": ["src/*"],
+          },
+          allowJs: true,
+          jsx: "preserve",
+          module: "esnext",
+          target: "esnext",
+        },
+        include: ["src/**/*"],
+      }));
+
+      fs.writeFileSync(
+        importedFilename,
+        [
+          "export default async function ProductPage({ slug }) {",
+          "  return <main>{slug}</main>;",
+          "}",
+        ].join("\n"),
+      );
+
+      const source = [
+        "import { renderToString } from '@litsx/ssr';",
+        'import ProductPage from "@/pages/ProductPage.js";',
+        "export async function renderPage(slug) {",
+        "  return renderToString(<ProductPage .slug={slug} />);",
+        "}",
+      ].join("\n");
+
+      const session = createLitsxTypecheckSession(["--project", tsconfigPath]);
+      try {
+        const result = transformFromAstSync(
+          parser.parse(source, { sourceType: "module" }),
+          source,
+          {
+            configFile: false,
+            babelrc: false,
+            filename: entryFilename,
+            presets: [[nativePreset, {
+              typescriptSession: session.projectSession,
+            }]],
+          },
+        );
+
+        assert.match(result.code, /renderToString\(__litsxServerComponentCall\(ProductPage, \{\s*slug: slug\s*\}\)\);/);
+        assert.doesNotMatch(result.code, /renderToString\(__litsxScopedTemplate/);
+      } finally {
+        session.projectSession.dispose?.();
+      }
+    } finally {
+      fs.rmSync(fixtureDirectory, { recursive: true, force: true });
+    }
   });
 
   it("dedupes scoped entries across fragment SSR roots", () => {

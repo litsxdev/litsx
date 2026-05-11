@@ -59,10 +59,17 @@ function shouldIncludeFeaturePlugin(sourceFeatures, key) {
 }
 
 export function createLitsxPresetPlugins(options = {}, sourceFeatures = null) {
+  const normalizedTransformOptions = normalizeTransformLitsxOptions(options);
   const plugins = [
     [transformLitsxRendererProps, options.transformLitsxRendererProps || {}],
-    [transformLitsxServerComponents, options.transformLitsxServerComponents || {}],
-    [transformLitsxComponents, normalizeTransformLitsxOptions(options)],
+    [
+      transformLitsxServerComponents,
+      {
+        ...normalizedTransformOptions,
+        ...(options.transformLitsxServerComponents || {}),
+      },
+    ],
+    [transformLitsxComponents, normalizedTransformOptions],
   ];
 
   if (shouldIncludeFeaturePlugin(sourceFeatures, "hooks")) {
@@ -77,7 +84,13 @@ export function createLitsxPresetPlugins(options = {}, sourceFeatures = null) {
     plugins.push([transformLitsxScopedElements, options.transformLitsxScopedElements || {}]);
   }
 
-  plugins.push([transformLitsxSsrRoots, options.transformLitsxSsrRoots || {}]);
+  plugins.push([
+    transformLitsxSsrRoots,
+    {
+      ...normalizedTransformOptions,
+      ...(options.transformLitsxSsrRoots || {}),
+    },
+  ]);
 
   if (options.jsxTemplate !== false) {
     if (options.jsxTemplateOptions && Object.keys(options.jsxTemplateOptions).length > 0) {

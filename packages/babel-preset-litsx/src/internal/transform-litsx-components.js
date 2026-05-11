@@ -183,7 +183,12 @@ export function createTransformFunctionToClassPlugin(defaultPluginOptions = {}) 
             isCapitalizedComponentName(varPath.node.id.name)
           ) {
             const programPath = varPath.findParent((p) => p.isProgram());
-            if (isServerComponentBindingName(programPath, varPath.node.id.name)) {
+            if (
+              isServerComponentBindingName(programPath, varPath.node.id.name, {
+                ...resolvedPluginOptions,
+                filename: this.file?.opts?.filename || "",
+              })
+            ) {
               return;
             }
 
@@ -222,7 +227,12 @@ export function createTransformFunctionToClassPlugin(defaultPluginOptions = {}) 
             isCapitalizedComponentName(funcPath.node.id.name)
           ) {
             const programPath = funcPath.findParent((p) => p.isProgram());
-            if (isServerComponentBindingName(programPath, funcPath.node.id.name)) {
+            if (
+              isServerComponentBindingName(programPath, funcPath.node.id.name, {
+                ...resolvedPluginOptions,
+                filename: this.file?.opts?.filename || "",
+              })
+            ) {
               return;
             }
 

@@ -9,6 +9,7 @@ import parser from "../packages/babel-parser-litsx/src/index.js";
 import elementCandidatesPlugin, {
   getAnnotatedElementCandidates,
   getAnnotatedImportedElementCandidates,
+  getImportedBindingModuleAnalysis,
   importedBindingNeedsRendererContext,
   setElementCandidatesBabelTypes,
 } from "../packages/babel-preset-litsx/src/internal/transform-litsx-element-candidates.js";
@@ -670,6 +671,65 @@ describe("native element candidate internals", () => {
           }),
           true
         );
+      } finally {
+        session.projectSession.dispose?.();
+      }
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("returns imported module analysis through path-alias resolution", () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-candidate-server-alias-"));
+
+    try {
+      const srcDir = path.join(tempDir, "src");
+      fs.mkdirSync(path.join(srcDir, "pages"), { recursive: true });
+      const rootFile = path.join(srcDir, "entry.litsx");
+      const pageFile = path.join(srcDir, "pages", "ProductPage.js");
+      const tsconfigPath = path.join(tempDir, "tsconfig.json");
+
+      fs.writeFileSync(tsconfigPath, JSON.stringify({
+        compilerOptions: {
+          baseUrl: ".",
+          paths: {
+            "@/*": ["src/*"],
+          },
+          allowJs: true,
+          jsx: "preserve",
+          module: "esnext",
+          target: "esnext",
+        },
+        include: ["src/**/*"],
+      }));
+
+      fs.writeFileSync(
+        pageFile,
+        [
+          "export default async function ProductPage() {",
+          "  return <main>ok</main>;",
+          "}",
+        ].join("\n")
+      );
+
+      const { programPath } = getPaths(`
+        import ProductPage from "@/pages/ProductPage.js";
+        export function Entry() {
+          return <ProductPage />;
+        }
+      `);
+      programPath.hub = { file: { opts: { filename: rootFile } } };
+
+      const session = createLitsxTypecheckSession(["--project", tsconfigPath]);
+      try {
+        const imported = getImportedBindingModuleAnalysis(programPath, "ProductPage", {
+          filename: rootFile,
+          typescriptSession: session.projectSession,
+        });
+
+        assert.strictEqual(imported?.importedName, "default");
+        assert.strictEqual(imported?.resolvedSource, pageFile);
+        assert.strictEqual(imported?.moduleAnalysis?.filename, pageFile);
       } finally {
         session.projectSession.dispose?.();
       }
