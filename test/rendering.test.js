@@ -332,6 +332,18 @@ describe("runtime renderer context", () => {
     expect(renderLightDom).toHaveBeenLastCalledWith(nothing, directiveHost);
   });
 
+  it("returns the renderer value during SSR render calls", async () => {
+    const { renderRendererCall } = await import("../packages/litsx/src/runtime-render-context.js");
+    const result = renderRendererCall((label) => `value:${label}`, "alpha");
+    const DirectiveCtor = result._$litDirective$;
+    const instance = new DirectiveCtor({ type: PartType.CHILD });
+
+    const rendered = instance.render(...result.values);
+
+    assert.strictEqual(rendered, "value:alpha");
+    expect(renderLightDom).not.toHaveBeenCalled();
+  });
+
   it("returns nothing when renderRendererCall cannot create a host and no-ops on disconnect", async () => {
     const { renderRendererCall } = await import("../packages/core/src/rendering.js");
     const result = renderRendererCall(() => "value");
