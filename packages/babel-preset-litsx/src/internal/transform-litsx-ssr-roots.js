@@ -1,4 +1,12 @@
 import jsxSyntaxPlugin from "@babel/plugin-syntax-jsx";
+import { decodeVirtualAttributeName } from "@litsx/jsx-authoring";
+import { isServerComponentBindingName } from "./transform-litsx-server-components.js";
+import {
+  buildAvailableMap,
+  collectScopedEntries,
+  ensureNamedImport,
+  setSsrSharedBabelTypes,
+} from "./transform-litsx-ssr-shared.js";
 let t;
 
 const SSR_MODULE = "@litsx/ssr";
@@ -8,6 +16,7 @@ const SCOPED_TEMPLATE_HELPER = "__litsxScopedTemplate";
 export default function transformLitsxSsrRoots(api) {
   api.assertVersion(7);
   t = api.types;
+  setSsrSharedBabelTypes(t);
 
   return {
     name: "transform-litsx-ssr-roots",
@@ -40,6 +49,22 @@ export default function transformLitsxSsrRoots(api) {
               return;
             }
 
+            if (firstArgument.isJSXElement()) {
+              const openingName = firstArgument.get("openingElement.name");
+              if (
+                openingName.isJSXIdentifier() &&
+                isServerComponentBindingName(programPath, openingName.node.name)
+              ) {
+                firstArgument.replaceWith(
+                  t.callExpression(
+                    t.identifier(openingName.node.name),
+                    [buildServerComponentPropsObject(firstArgument.get("openingElement"))],
+                  ),
+                );
+                return;
+              }
+            }
+
             const scopeEntries = collectScopedEntries(firstArgument, availableMap);
             const jsxRoot = firstArgument.node;
             ensureNamedImport(
@@ -68,69 +93,6 @@ export default function transformLitsxSsrRoots(api) {
   };
 }
 
-function toKebab(name) {
-  return name.replace(/([a-z])([A-Z])/g, "$1-$2").toLowerCase();
-}
-
-function buildAvailableMap(programPath) {
-  const availableMap = new Map();
-
-  programPath.get("body").forEach((nodePath) => {
-    if (nodePath.isImportDeclaration()) {
-      nodePath.node.specifiers.forEach((specifier) => {
-        if (t.isImportSpecifier(specifier) || t.isImportDefaultSpecifier(specifier)) {
-          availableMap.set(specifier.local.name, {
-            originalName: specifier.local.name,
-          });
-        }
-      });
-      return;
-    }
-
-    const declarationPath = resolveTopLevelDeclarationPath(nodePath);
-    if (!declarationPath) return;
-
-    const localName = declarationPath.node.id?.name;
-    if (!localName) return;
-
-    availableMap.set(localName, {
-      originalName: localName,
-      local: true,
-    });
-  });
-
-  return availableMap;
-}
-
-function resolveTopLevelDeclarationPath(nodePath) {
-  if (nodePath.isClassDeclaration() || nodePath.isFunctionDeclaration()) {
-    return nodePath;
-  }
-
-  if (nodePath.isVariableDeclaration()) {
-    const declarator = nodePath.node.declarations[0];
-    if (t.isIdentifier(declarator?.id)) {
-      return {
-        node: { id: declarator.id },
-      };
-    }
-  }
-
-  if (nodePath.isExportNamedDeclaration()) {
-    const declarationPath = nodePath.get("declaration");
-    if (
-      declarationPath &&
-      (declarationPath.isClassDeclaration() ||
-        declarationPath.isFunctionDeclaration() ||
-        declarationPath.isVariableDeclaration())
-    ) {
-      return resolveTopLevelDeclarationPath(declarationPath);
-    }
-  }
-
-  return null;
-}
-
 function collectSsrRenderBindings(programPath) {
   const bindings = new Set();
 
@@ -155,75 +117,46 @@ function collectSsrRenderBindings(programPath) {
   return bindings;
 }
 
-function collectScopedEntries(rootPath, availableMap) {
-  const used = new Map();
+function buildServerComponentPropsObject(openingElementPath) {
+  const properties = [];
 
-  rootPath.traverse({
-    JSXOpeningElement(path) {
-      const nameNode = path.get("name");
-
-      if (!nameNode.isJSXIdentifier()) {
-        return;
-      }
-
-      const originalName = nameNode.node.name;
-      if (!availableMap.has(originalName)) {
-        return;
-      }
-
-      const tagName = toKebab(originalName);
-      nameNode.node.name = tagName;
-      used.set(originalName, {
-        originalName,
-        tagName,
-      });
-    },
-    JSXClosingElement(path) {
-      const nameNode = path.get("name");
-
-      if (!nameNode.isJSXIdentifier()) {
-        return;
-      }
-
-      const originalName = nameNode.node.name;
-      if (!availableMap.has(originalName)) {
-        return;
-      }
-
-      nameNode.node.name = toKebab(originalName);
-    },
-  });
-
-  return Array.from(used.values());
-}
-
-function ensureNamedImport(programPath, moduleName, importName) {
-  const existingImport = programPath.get("body").find(
-    (nodePath) =>
-      nodePath.isImportDeclaration() &&
-      nodePath.node.source.value === moduleName,
-  );
-
-  if (existingImport) {
-    const hasImport = existingImport.node.specifiers.some(
-      (specifier) =>
-        t.isImportSpecifier(specifier) &&
-        t.isIdentifier(specifier.imported, { name: importName }),
-    );
-
-    if (!hasImport) {
-      existingImport.node.specifiers.push(
-        t.importSpecifier(t.identifier(importName), t.identifier(importName)),
-      );
+  for (const attributePath of openingElementPath.get("attributes")) {
+    if (!attributePath.isJSXAttribute()) {
+      continue;
     }
-    return;
+
+    if (!attributePath.get("name").isJSXIdentifier()) {
+      continue;
+    }
+
+    const authoredName = decodeVirtualAttributeName(attributePath.node.name.name) ??
+      attributePath.node.name.name;
+
+    if (!authoredName.startsWith(".")) {
+      continue;
+    }
+
+    const propName = authoredName.slice(1);
+    const valuePath = attributePath.get("value");
+
+    let valueExpression;
+    if (!valuePath.node) {
+      valueExpression = t.booleanLiteral(true);
+    } else if (valuePath.isJSXExpressionContainer()) {
+      valueExpression = valuePath.node.expression;
+    } else if (valuePath.isStringLiteral()) {
+      valueExpression = valuePath.node;
+    } else {
+      continue;
+    }
+
+    properties.push(
+      t.objectProperty(
+        t.identifier(propName),
+        t.cloneNode(valueExpression, true),
+      ),
+    );
   }
 
-  programPath.unshiftContainer(
-    "body",
-    t.importDeclaration(
-      [t.importSpecifier(t.identifier(importName), t.identifier(importName))],
-      t.stringLiteral(moduleName),
-    ),
-  );
+  return t.objectExpression(properties);
 }
