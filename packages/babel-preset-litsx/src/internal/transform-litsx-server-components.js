@@ -247,6 +247,46 @@ function resolveImportedDefaultServerComponent(programPath, localName, options =
   return result;
 }
 
+function getImportedServerComponentBinding(programPath, localName, options = {}) {
+  if (!programPath?.scope || !localName) {
+    return null;
+  }
+
+  const binding = programPath.scope.getBinding(localName);
+  if (!binding?.path?.node) {
+    return null;
+  }
+
+  if (
+    !binding.path.isImportDefaultSpecifier?.() &&
+    !binding.path.isImportSpecifier?.() &&
+    !binding.path.isImportNamespaceSpecifier?.()
+  ) {
+    return null;
+  }
+
+  const importedBinding = getImportedBindingModuleAnalysis(
+    programPath,
+    localName,
+    options,
+  );
+  if (!importedBinding?.moduleAnalysis?.programPath) {
+    return null;
+  }
+
+  const serverComponentName = getDefaultExportServerComponentName(
+    importedBinding.moduleAnalysis.programPath,
+  );
+  if (!serverComponentName) {
+    return null;
+  }
+
+  return {
+    ...importedBinding,
+    serverComponentName,
+  };
+}
+
 export function isDefaultExportServerComponentPath(exportPath) {
   if (!exportPath?.isExportDefaultDeclaration?.()) {
     return false;
@@ -282,6 +322,52 @@ export function isServerComponentBindingName(programPath, name, options = {}) {
   );
 }
 
+function isLocalComposableServerComponentBinding(programPath, name) {
+  if (!programPath || !name) {
+    return false;
+  }
+
+  if (getDefaultExportServerComponentName(programPath) === name) {
+    return true;
+  }
+
+  const bindingNode = getAsyncBindingFromIdentifier(programPath, name);
+  return Boolean(bindingNode && functionReturnsRenderableTemplate(bindingNode));
+}
+
+export function assertValidServerComponentReference(namePath, programPath, options = {}) {
+  if (!namePath?.isJSXIdentifier?.()) {
+    return;
+  }
+
+  const name = namePath.node.name;
+  if (!isCapitalizedComponentName(name)) {
+    return;
+  }
+
+  const importedServerComponent = getImportedServerComponentBinding(
+    programPath,
+    name,
+    options,
+  );
+  if (importedServerComponent && importedServerComponent.importedName !== "default") {
+    throw namePath.buildCodeFrameError(
+      `Server component "${name}" must be imported as a default binding because LitSX only recognizes default async PascalCase exports as server components.`
+    );
+  }
+
+  const asyncBinding = getAsyncBindingFromIdentifier(programPath, name);
+  if (
+    asyncBinding &&
+    options.requireDefaultExport === true &&
+    getDefaultExportServerComponentName(programPath) !== name
+  ) {
+    throw namePath.buildCodeFrameError(
+      `Server component "${name}" must be the module default export. LitSX only recognizes default async PascalCase exports as server components.`
+    );
+  }
+}
+
 function findServerComponentFunctionPath(programPath, componentName) {
   if (!componentName) {
     return null;
@@ -309,6 +395,9 @@ function findServerComponentFunctionPath(programPath, componentName) {
 function wrapRenderableReturns(functionPath, programPath) {
   const availableMap = buildAvailableMap(programPath);
   let transformed = false;
+  const sharedOptions = {
+    filename: programPath.hub.file?.opts?.filename || "",
+  };
 
   functionPath.traverse({
     ReturnStatement(returnPath) {
@@ -319,13 +408,28 @@ function wrapRenderableReturns(functionPath, programPath) {
 
       if (
         argumentPath.isJSXElement() &&
-        argumentPath.get("openingElement.name").isJSXIdentifier() &&
+        argumentPath.get("openingElement.name").isJSXIdentifier()
+      ) {
+        assertValidServerComponentReference(
+          argumentPath.get("openingElement.name"),
+          programPath,
+          {
+            ...sharedOptions,
+            requireDefaultExport: false,
+          },
+        );
+      }
+
+      if (
+        argumentPath.isJSXElement() &&
         isServerComponentBindingName(
           programPath,
           argumentPath.node.openingElement.name.name,
-          {
-            filename: programPath.hub.file?.opts?.filename || "",
-          },
+          sharedOptions,
+        )
+        || isLocalComposableServerComponentBinding(
+          programPath,
+          argumentPath.node.openingElement.name.name,
         )
       ) {
         ensureNamedImport(
@@ -350,14 +454,29 @@ function wrapRenderableReturns(functionPath, programPath) {
           }
 
           const openingName = jsxPath.get("openingElement.name");
+          if (openingName.isJSXIdentifier()) {
+            assertValidServerComponentReference(
+              openingName,
+              programPath,
+              {
+                ...sharedOptions,
+                requireDefaultExport: false,
+              },
+            );
+          }
+
           if (
             !openingName.isJSXIdentifier() ||
-            !isServerComponentBindingName(
-              programPath,
-              openingName.node.name,
-              {
-                filename: programPath.hub.file?.opts?.filename || "",
-              },
+            !(
+              isServerComponentBindingName(
+                programPath,
+                openingName.node.name,
+                sharedOptions,
+              ) ||
+              isLocalComposableServerComponentBinding(
+                programPath,
+                openingName.node.name,
+              )
             )
           ) {
             return;
