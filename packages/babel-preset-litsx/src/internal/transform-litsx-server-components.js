@@ -1,4 +1,9 @@
 import jsxSyntaxPlugin from "@babel/plugin-syntax-jsx";
+import { decodeVirtualAttributeName } from "@litsx/jsx-authoring";
+import fs from "fs";
+import { resolve, dirname, extname } from "path";
+import * as parser from "@babel/parser";
+import traverse from "@babel/traverse";
 import {
   buildAvailableMap,
   collectScopedEntries,
@@ -7,10 +12,22 @@ import {
 } from "./transform-litsx-ssr-shared.js";
 
 let t;
+const babelTraverse = traverse.default ?? traverse;
 
 const RUNTIME_INFRASTRUCTURE_MODULE = "@litsx/litsx/runtime-infrastructure";
 const SCOPED_TEMPLATE_HELPER = "__litsxScopedTemplate";
+const SERVER_COMPONENT_CALL_HELPER = "__litsxServerComponentCall";
 const SERVER_COMPONENT_SYMBOL = "LITSX_SERVER_COMPONENT";
+const SUPPORTED_IMPORT_EXTENSIONS = [
+  "",
+  ".js",
+  ".jsx",
+  ".ts",
+  ".tsx",
+  ".litsx",
+  ".mjs",
+  ".cjs",
+];
 
 export function setServerComponentBabelTypes(nextTypes) {
   t = nextTypes;
@@ -197,6 +214,113 @@ function getDefaultExportServerComponentName(programPath) {
   return serverComponentName;
 }
 
+function getOrCreateImportedServerComponentCache(programPath) {
+  const existing = programPath.getData("__litsxImportedServerComponentCache");
+  if (existing) {
+    return existing;
+  }
+
+  const next = new Map();
+  programPath.setData("__litsxImportedServerComponentCache", next);
+  return next;
+}
+
+function resolveRelativeImportSource(filename, sourceValue) {
+  if (!filename || typeof sourceValue !== "string" || !sourceValue.startsWith(".")) {
+    return null;
+  }
+
+  const baseDirectory = dirname(filename);
+  const basePath = resolve(baseDirectory, sourceValue);
+  const candidates = [];
+
+  if (extname(basePath)) {
+    candidates.push(basePath);
+  } else {
+    for (const extension of SUPPORTED_IMPORT_EXTENSIONS) {
+      candidates.push(`${basePath}${extension}`);
+    }
+    for (const extension of SUPPORTED_IMPORT_EXTENSIONS.slice(1)) {
+      candidates.push(resolve(basePath, `index${extension}`));
+    }
+  }
+
+  for (const candidate of candidates) {
+    try {
+      if (fs.statSync(candidate).isFile()) {
+        return candidate;
+      }
+    } catch {
+      // Keep scanning.
+    }
+  }
+
+  return null;
+}
+
+function resolveImportedDefaultServerComponent(programPath, localName, options = {}) {
+  if (!programPath?.scope || !localName) {
+    return false;
+  }
+
+  const binding = programPath.scope.getBinding(localName);
+  if (!binding?.path?.node) {
+    return false;
+  }
+
+  if (!binding.path.isImportDefaultSpecifier()) {
+    return false;
+  }
+
+  const filename = options.filename || programPath.hub.file?.opts?.filename || "";
+  const sourceValue = binding.path.parent?.source?.value ?? null;
+  const resolvedSource = resolveRelativeImportSource(filename, sourceValue);
+  if (!resolvedSource) {
+    return false;
+  }
+
+  const cache = getOrCreateImportedServerComponentCache(programPath);
+  if (cache.has(resolvedSource)) {
+    return cache.get(resolvedSource);
+  }
+
+  let source;
+  try {
+    source = fs.readFileSync(resolvedSource, "utf8");
+  } catch {
+    cache.set(resolvedSource, false);
+    return false;
+  }
+
+  let importedProgramPath = null;
+  try {
+    const ast = parser.parse(source, {
+      sourceType: "module",
+      plugins: ["jsx", "typescript"],
+    });
+    babelTraverse(ast, {
+      Program(path) {
+        if (!importedProgramPath) {
+          importedProgramPath = path;
+          path.scope.crawl();
+        }
+      },
+    });
+  } catch {
+    cache.set(resolvedSource, false);
+    return false;
+  }
+
+  if (!importedProgramPath) {
+    cache.set(resolvedSource, false);
+    return false;
+  }
+
+  const result = getDefaultExportServerComponentName(importedProgramPath) !== null;
+  cache.set(resolvedSource, result);
+  return result;
+}
+
 export function isDefaultExportServerComponentPath(exportPath) {
   if (!exportPath?.isExportDefaultDeclaration?.()) {
     return false;
@@ -221,12 +345,15 @@ export function isDefaultExportServerComponentPath(exportPath) {
   return t.isIdentifier(declaration, { name: serverComponentName });
 }
 
-export function isServerComponentBindingName(programPath, name) {
+export function isServerComponentBindingName(programPath, name, options = {}) {
   if (!programPath || !name) {
     return false;
   }
 
-  return getDefaultExportServerComponentName(programPath) === name;
+  return (
+    getDefaultExportServerComponentName(programPath) === name ||
+    resolveImportedDefaultServerComponent(programPath, name, options)
+  );
 }
 
 function findServerComponentFunctionPath(programPath, componentName) {
@@ -264,6 +391,69 @@ function wrapRenderableReturns(functionPath, programPath) {
         return;
       }
 
+      if (
+        argumentPath.isJSXElement() &&
+        argumentPath.get("openingElement.name").isJSXIdentifier() &&
+        isServerComponentBindingName(
+          programPath,
+          argumentPath.node.openingElement.name.name,
+          {
+            filename: programPath.hub.file?.opts?.filename || "",
+          },
+        )
+      ) {
+        ensureNamedImport(
+          programPath,
+          RUNTIME_INFRASTRUCTURE_MODULE,
+          SERVER_COMPONENT_CALL_HELPER,
+        );
+        argumentPath.replaceWith(
+          t.callExpression(t.identifier(SERVER_COMPONENT_CALL_HELPER), [
+            t.identifier(argumentPath.node.openingElement.name.name),
+            buildServerComponentPropsObject(argumentPath.get("openingElement")),
+          ]),
+        );
+        transformed = true;
+        return;
+      }
+
+      argumentPath.traverse({
+        JSXElement(jsxPath) {
+          if (jsxPath === argumentPath) {
+            return;
+          }
+
+          const openingName = jsxPath.get("openingElement.name");
+          if (
+            !openingName.isJSXIdentifier() ||
+            !isServerComponentBindingName(
+              programPath,
+              openingName.node.name,
+              {
+                filename: programPath.hub.file?.opts?.filename || "",
+              },
+            )
+          ) {
+            return;
+          }
+
+          ensureNamedImport(
+            programPath,
+            RUNTIME_INFRASTRUCTURE_MODULE,
+            SERVER_COMPONENT_CALL_HELPER,
+          );
+          jsxPath.replaceWith(
+            t.jsxExpressionContainer(
+              t.callExpression(t.identifier(SERVER_COMPONENT_CALL_HELPER), [
+                t.identifier(openingName.node.name),
+                buildServerComponentPropsObject(jsxPath.get("openingElement")),
+              ]),
+            ),
+          );
+          transformed = true;
+        },
+      });
+
       const scopeEntries = collectScopedEntries(argumentPath, availableMap);
       ensureNamedImport(programPath, RUNTIME_INFRASTRUCTURE_MODULE, SCOPED_TEMPLATE_HELPER);
 
@@ -285,6 +475,50 @@ function wrapRenderableReturns(functionPath, programPath) {
   });
 
   return transformed;
+}
+
+function buildServerComponentPropsObject(openingElementPath) {
+  const properties = [];
+
+  for (const attributePath of openingElementPath.get("attributes")) {
+    if (!attributePath.isJSXAttribute()) {
+      continue;
+    }
+
+    if (!attributePath.get("name").isJSXIdentifier()) {
+      continue;
+    }
+
+    const authoredName =
+      decodeVirtualAttributeName(attributePath.node.name.name) ??
+      attributePath.node.name.name;
+    if (!authoredName.startsWith(".")) {
+      continue;
+    }
+
+    const propName = authoredName.slice(1);
+    const valuePath = attributePath.get("value");
+
+    let valueExpression;
+    if (!valuePath.node) {
+      valueExpression = t.booleanLiteral(true);
+    } else if (valuePath.isJSXExpressionContainer()) {
+      valueExpression = valuePath.node.expression;
+    } else if (valuePath.isStringLiteral()) {
+      valueExpression = valuePath.node;
+    } else {
+      continue;
+    }
+
+    properties.push(
+      t.objectProperty(
+        t.identifier(propName),
+        t.cloneNode(valueExpression, true),
+      ),
+    );
+  }
+
+  return t.objectExpression(properties);
 }
 
 function markServerComponent(programPath, componentName) {
