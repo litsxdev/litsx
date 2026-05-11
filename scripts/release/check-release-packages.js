@@ -126,6 +126,13 @@ function assertPackOutput(packageDir) {
   if (!Array.isArray(pack.files) || pack.files.length === 0) {
     fail(`${packageDir} npm pack dry-run returned no files`);
   }
+
+  if (packageDir === "packages/create-litsx-app") {
+    const packagedFiles = new Set(pack.files.map((entry) => entry.path));
+    if (!packagedFiles.has("dist/assets/flame_512.png")) {
+      fail("packages/create-litsx-app npm pack output is missing dist/assets/flame_512.png");
+    }
+  }
 }
 
 function assertNoWorkspaceProtocols(packageDir, manifest) {

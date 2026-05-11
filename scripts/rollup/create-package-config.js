@@ -176,6 +176,7 @@ export function createPackageRollupConfig({
   packageDir,
   input,
   cliEntries = [],
+  extraPlugins = [],
 }) {
   const packageJsonPath = path.join(packageDir, "package.json");
   const manifest = JSON.parse(fs.readFileSync(packageJsonPath, "utf8"));
@@ -202,6 +203,7 @@ export function createPackageRollupConfig({
     }),
     json(),
     commonjs(),
+    ...extraPlugins,
   ];
 
   return [
