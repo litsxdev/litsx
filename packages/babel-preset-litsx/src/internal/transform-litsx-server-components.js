@@ -1,8 +1,4 @@
 import jsxSyntaxPlugin from "@babel/plugin-syntax-jsx";
-import fs from "fs";
-import { resolve, dirname, extname } from "path";
-import * as parser from "@babel/parser";
-import traverse from "@babel/traverse";
 import {
   buildAvailableMap,
   buildServerComponentPropsObject,
@@ -10,24 +6,14 @@ import {
   ensureNamedImport,
   setSsrSharedBabelTypes,
 } from "./transform-litsx-ssr-shared.js";
+import { getImportedBindingModuleAnalysis } from "./transform-litsx-element-candidates.js";
 
 let t;
-const babelTraverse = traverse.default ?? traverse;
 
 const RUNTIME_INFRASTRUCTURE_MODULE = "@litsx/core/elements";
 const SCOPED_TEMPLATE_HELPER = "__litsxScopedTemplate";
 const SERVER_COMPONENT_CALL_HELPER = "__litsxServerComponentCall";
 const SERVER_COMPONENT_SYMBOL = "LITSX_SERVER_COMPONENT";
-const SUPPORTED_IMPORT_EXTENSIONS = [
-  "",
-  ".js",
-  ".jsx",
-  ".ts",
-  ".tsx",
-  ".litsx",
-  ".mjs",
-  ".cjs",
-];
 
 export function setServerComponentBabelTypes(nextTypes) {
   t = nextTypes;
@@ -225,39 +211,6 @@ function getOrCreateImportedServerComponentCache(programPath) {
   return next;
 }
 
-function resolveRelativeImportSource(filename, sourceValue) {
-  if (!filename || typeof sourceValue !== "string" || !sourceValue.startsWith(".")) {
-    return null;
-  }
-
-  const baseDirectory = dirname(filename);
-  const basePath = resolve(baseDirectory, sourceValue);
-  const candidates = [];
-
-  if (extname(basePath)) {
-    candidates.push(basePath);
-  } else {
-    for (const extension of SUPPORTED_IMPORT_EXTENSIONS) {
-      candidates.push(`${basePath}${extension}`);
-    }
-    for (const extension of SUPPORTED_IMPORT_EXTENSIONS.slice(1)) {
-      candidates.push(resolve(basePath, `index${extension}`));
-    }
-  }
-
-  for (const candidate of candidates) {
-    try {
-      if (fs.statSync(candidate).isFile()) {
-        return candidate;
-      }
-    } catch {
-      // Keep scanning.
-    }
-  }
-
-  return null;
-}
-
 function resolveImportedDefaultServerComponent(programPath, localName, options = {}) {
   if (!programPath?.scope || !localName) {
     return false;
@@ -272,52 +225,25 @@ function resolveImportedDefaultServerComponent(programPath, localName, options =
     return false;
   }
 
-  const filename = options.filename || programPath.hub.file?.opts?.filename || "";
-  const sourceValue = binding.path.parent?.source?.value ?? null;
-  const resolvedSource = resolveRelativeImportSource(filename, sourceValue);
-  if (!resolvedSource) {
-    return false;
-  }
-
   const cache = getOrCreateImportedServerComponentCache(programPath);
-  if (cache.has(resolvedSource)) {
-    return cache.get(resolvedSource);
+  if (cache.has(localName)) {
+    return cache.get(localName);
   }
 
-  let source;
-  try {
-    source = fs.readFileSync(resolvedSource, "utf8");
-  } catch {
-    cache.set(resolvedSource, false);
+  const importedBinding = getImportedBindingModuleAnalysis(
+    programPath,
+    localName,
+    options,
+  );
+  if (!importedBinding?.moduleAnalysis?.programPath) {
+    cache.set(localName, false);
     return false;
   }
 
-  let importedProgramPath = null;
-  try {
-    const ast = parser.parse(source, {
-      sourceType: "module",
-      plugins: ["jsx", "typescript"],
-    });
-    babelTraverse(ast, {
-      Program(path) {
-        if (!importedProgramPath) {
-          importedProgramPath = path;
-          path.scope.crawl();
-        }
-      },
-    });
-  } catch {
-    cache.set(resolvedSource, false);
-    return false;
-  }
-
-  if (!importedProgramPath) {
-    cache.set(resolvedSource, false);
-    return false;
-  }
-
-  const result = getDefaultExportServerComponentName(importedProgramPath) !== null;
-  cache.set(resolvedSource, result);
+  const result =
+    importedBinding.importedName === "default" &&
+    getDefaultExportServerComponentName(importedBinding.moduleAnalysis.programPath) !== null;
+  cache.set(localName, result);
   return result;
 }
 
