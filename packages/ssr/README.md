@@ -34,6 +34,8 @@ const result = await renderToString(
 
 result.html;
 result.clientImports;
+result.renderClientImports();
+result.renderModulePreloads();
 ```
 
 `renderToString(...)` returns:
@@ -41,6 +43,9 @@ result.clientImports;
 - `html`: prerendered HTML, including Declarative Shadow DOM for LitSX elements
 - `clientImports`: deduplicated client module imports collected from rendered
   LitSX elements
+- `renderClientImports()`: `<script type="module">` tags for `clientImports`
+- `renderModulePreloads()`: `<link rel="modulepreload">` tags for
+  `clientImports`
 
 ## Authored Root Syntax
 
@@ -97,6 +102,17 @@ const result = await renderToString(<ProductCard .product={product} />, {
 
 In dev, the resolver can map source module ids to `/src/...` style URLs. In
 builds, it can map them through a Vite manifest to hashed asset paths.
+
+If you want to emit those URLs directly into the SSR document:
+
+```js
+const result = await renderToString(<ProductCard .product={product} />, {
+  assetResolver,
+});
+
+result.renderModulePreloads();
+result.renderClientImports();
+```
 
 ## Supported Input
 

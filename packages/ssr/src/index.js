@@ -3,6 +3,14 @@ import {
   renderScopedTemplateWithLitSsr,
 } from "@litsx/core/internal/runtime-scoped-ssr";
 
+function escapeHtmlAttribute(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
+}
+
 /**
  * Render a Lit or LitSX template to HTML using the scoped SSR runtime.
  *
@@ -19,11 +27,23 @@ export async function renderToString(value, options = {}) {
     idPrefix: options.context?.idPrefix,
     assetResolver: options.assetResolver,
   });
+  const html = await renderScopedTemplateWithLitSsr(value, {
+    litsxSsrContext: context,
+  });
+  const clientImports = [...context.clientImports];
 
   return {
-    html: await renderScopedTemplateWithLitSsr(value, {
-      litsxSsrContext: context,
-    }),
-    clientImports: [...context.clientImports],
+    html,
+    clientImports,
+    renderClientImports() {
+      return clientImports
+        .map((src) => `<script type="module" src="${escapeHtmlAttribute(src)}"></script>`)
+        .join("");
+    },
+    renderModulePreloads() {
+      return clientImports
+        .map((href) => `<link rel="modulepreload" href="${escapeHtmlAttribute(href)}">`)
+        .join("");
+    },
   };
 }
