@@ -477,8 +477,11 @@ function transformFunction(functionPath, programPath, className, options = {}) {
     needsCss,
     needsUnsafeCss,
     needsCallbackRef,
-    needsModuleIdMetadata: true,
-    moduleId: normalizeFilePath(programPath.hub.file?.opts?.filename || ""),
+    needsModuleIdMetadata: options?.ssr === true,
+    moduleId:
+      options?.ssr === true
+        ? normalizeFilePath(programPath.hub.file?.opts?.filename || "")
+        : null,
   });
 
   if (classNode && elementCandidates.size) {
