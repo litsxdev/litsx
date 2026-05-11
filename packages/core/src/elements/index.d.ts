@@ -2,6 +2,32 @@ export type LitsxConstructor<TInstance = object> = abstract new (
   ...args: any[]
 ) => TInstance;
 
+export declare const LITSX_SCOPED_TEMPLATE: unique symbol;
+export declare const LITSX_MODULE_ID: unique symbol;
+export declare const LITSX_SSR_CONTEXT: unique symbol;
+export declare const LITSX_SERVER_COMPONENT: unique symbol;
+
+export interface LitsxScopedTemplate<
+  TTemplate = unknown,
+  TElements extends Record<string, unknown> = Record<string, unknown>,
+> {
+  readonly [LITSX_SCOPED_TEMPLATE]: true;
+  readonly template: TTemplate;
+  readonly elements: TElements;
+}
+
+export declare function __litsxScopedTemplate<
+  TTemplate,
+  TElements extends Record<string, unknown> = Record<string, unknown>,
+>(
+  template: TTemplate,
+  elements?: TElements | null | undefined,
+): LitsxScopedTemplate<TTemplate, TElements>;
+
+export declare function __isLitsxScopedTemplate(
+  value: unknown
+): value is LitsxScopedTemplate;
+
 export interface LitsxStaticHoistsStatics {
   __litsxStatic<T>(cacheKey: PropertyKey, compute: () => T): T;
   __litsxResolveStaticValue<T>(value: T): T;

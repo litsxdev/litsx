@@ -176,6 +176,14 @@ export { ErrorBoundary as ErrorBoundaryElement };
 export { SuspenseBoundary as SuspenseBoundaryElement };
 export { SuspenseList as SuspenseListElement };
 
+export declare class SsrEffectsController {
+  constructor(
+    host: object,
+    ssrContext?: { idPrefix?: string; currentInstanceId?: string },
+  );
+  prepare(): void;
+}
+
 /**
  * Run an effect after the component finishes updating.
  */

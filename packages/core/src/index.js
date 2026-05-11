@@ -12,6 +12,7 @@ export {
 } from "./suspense-list.js";
 
 export { EffectsController } from "./effects-controller.js";
+export { SsrEffectsController } from "./ssr-effects-controller.js";
 
 export {
   prepareEffects,
