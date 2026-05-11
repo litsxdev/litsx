@@ -2,6 +2,7 @@ import { render } from "@lit-labs/ssr/lib/render-with-global-dom-shim.js";
 import { LitElementRenderer } from "@lit-labs/ssr/lib/lit-element-renderer.js";
 import {
   __isLitsxScopedTemplate,
+  LITSX_MODULE_ID,
   LITSX_SSR_CONTEXT,
 } from "./elements/index.js";
 
@@ -25,11 +26,25 @@ async function collectRenderResult(result) {
 export function createScopedSsrContext(options = {}) {
   return {
     idPrefix: options.idPrefix ?? "litsx",
+    assetResolver:
+      typeof options.assetResolver === "function" ? options.assetResolver : null,
+    clientImports: new Set(),
     instanceCount: 0,
     nextInstanceId() {
       const nextId = String(this.instanceCount);
       this.instanceCount += 1;
       return nextId;
+    },
+    collectClientImport(component) {
+      const moduleId = component?.[LITSX_MODULE_ID];
+      if (!moduleId) {
+        return;
+      }
+
+      const resolved = this.assetResolver ? this.assetResolver(moduleId) : moduleId;
+      if (resolved) {
+        this.clientImports.add(resolved);
+      }
     },
   };
 }
@@ -79,6 +94,7 @@ export class ScopedLitElementRenderer extends LitElementRenderer {
 
   constructor(tagName) {
     super(tagName);
+    this.element.constructor.finalize?.();
     const context = scopedSsrContextStack.at(-1) ?? createScopedSsrContext();
 
     this.element[LITSX_SSR_CONTEXT] = {
@@ -86,6 +102,7 @@ export class ScopedLitElementRenderer extends LitElementRenderer {
       idPrefix: context.idPrefix,
       currentInstanceId: context.nextInstanceId(),
     };
+    context.collectClientImport(this.element.constructor);
   }
 
   renderShadow(renderInfo) {

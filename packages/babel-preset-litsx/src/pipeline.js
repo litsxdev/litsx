@@ -5,6 +5,7 @@ import transformLitsxHooks from "./internal/transform-litsx-hooks.js";
 import transformLitsxComponents from "./internal/transform-litsx-components.js";
 import transformLitsxRendererProps from "./internal/transform-litsx-renderer-props.js";
 import transformLitsxBoundaries from "./internal/transform-litsx-boundaries.js";
+import transformLitsxSsrRoots from "./internal/transform-litsx-ssr-roots.js";
 
 const NATIVE_TRANSFORM_OPTION_KEYS = [
   "defaultDomMode",
@@ -278,6 +279,8 @@ export function createLitsxPresetPlugins(options = {}, sourceFeatures = null) {
   if (shouldIncludeFeaturePlugin(sourceFeatures, "scopedElements")) {
     plugins.push([transformLitsxScopedElements, options.transformLitsxScopedElements || {}]);
   }
+
+  plugins.push([transformLitsxSsrRoots, options.transformLitsxSsrRoots || {}]);
 
   if (options.jsxTemplate !== false) {
     if (options.jsxTemplateOptions && Object.keys(options.jsxTemplateOptions).length > 0) {
