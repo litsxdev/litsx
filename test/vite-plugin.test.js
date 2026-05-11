@@ -5,7 +5,10 @@ import path from "path";
 import { describe, it, vi } from "vitest";
 import packageJson from "../packages/vite-plugin/package.json" with { type: "json" };
 
-import { litsx } from "../packages/vite-plugin/src/index.js";
+import {
+  createLitsxViteAssetResolver,
+  litsx,
+} from "../packages/vite-plugin/src/index.js";
 import * as compilerModule from "../packages/compiler/src/index.js";
 
 describe("@litsx/vite-plugin", () => {
@@ -15,6 +18,34 @@ describe("@litsx/vite-plugin", () => {
     assert.strictEqual(packageJson.exports["."].import, "./src/index.js");
     assert.strictEqual(packageJson.exports["."].types, "./src/index.d.ts");
     assert.deepStrictEqual(packageJson.files, ["dist", "src", "README.md"]);
+  });
+
+  it("creates a dev asset resolver from the Vite project root", () => {
+    const resolver = createLitsxViteAssetResolver({
+      root: "/repo",
+    });
+
+    assert.strictEqual(
+      resolver("/repo/src/components/ProductCard.litsx"),
+      "/src/components/ProductCard.litsx",
+    );
+  });
+
+  it("resolves build assets through a Vite manifest", () => {
+    const resolver = createLitsxViteAssetResolver({
+      root: "/repo",
+      base: "/app/",
+      manifest: {
+        "src/components/ProductCard.litsx": {
+          file: "assets/ProductCard.abcd1234.js",
+        },
+      },
+    });
+
+    assert.strictEqual(
+      resolver("/repo/src/components/ProductCard.litsx"),
+      "/app/assets/ProductCard.abcd1234.js",
+    );
   });
 
   it("transforms jsx and returns code with a sourcemap", async () => {
