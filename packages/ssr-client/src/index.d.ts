@@ -33,10 +33,22 @@ export interface ResolvedHydrationRoot {
   element: Element;
 }
 
+/**
+ * Resolve every LitSX hydration root declared in the current SSR payload.
+ */
 export declare function resolveHydrationRoots(
   rootOrDocument?: Document | Element | ShadowRoot | null,
   options?: Pick<HydrateOptions, "hydrationData" | "scriptId">,
 ): ResolvedHydrationRoot[];
+
+/**
+ * Resolve a single LitSX hydration root by id from the current SSR payload.
+ */
+export declare function resolveHydrationRoot(
+  rootOrDocument: Document | Element | ShadowRoot | null | undefined,
+  rootId: string,
+  options?: Pick<HydrateOptions, "hydrationData" | "scriptId">,
+): ResolvedHydrationRoot;
 
 /**
  * Install Lit's hydration support before importing LitSX client modules.
@@ -54,11 +66,19 @@ export declare function hydrate<T = Document | null>(
   options?: HydrateOptions,
 ): Promise<T | ResolvedHydrationRoot[]>;
 
+/**
+ * Hydrate one explicit LitSX root element and validate it against SSR metadata
+ * when that metadata is available.
+ */
 export declare function hydrateRoot<T = Element | ShadowRoot | Document | null>(
   root: T,
   options?: HydrateOptions,
 ): Promise<Element | T>;
 
+/**
+ * Hydrate a whole document and return resolved LitSX root boundaries when the
+ * SSR payload declares them.
+ */
 export declare function hydrateDocument(
   options?: HydrateDocumentOptions,
 ): Promise<Document | null | ResolvedHydrationRoot[]>;

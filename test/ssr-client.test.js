@@ -177,6 +177,7 @@ describe("@litsx/ssr-client", () => {
   it("resolves and validates hydration roots from the payload", async () => {
     const {
       LITSX_ROOT_ATTRIBUTE,
+      resolveHydrationRoot,
       resolveHydrationRoots,
     } = await import("../packages/ssr-client/src/index.js");
     const rootElement = {
@@ -217,6 +218,38 @@ describe("@litsx/ssr-client", () => {
         element: rootElement,
       },
     ]);
+
+    assert.deepStrictEqual(
+      resolveHydrationRoot(
+        {
+          querySelector(selector) {
+            if (selector === `[${LITSX_ROOT_ATTRIBUTE}="litsx-root-0"]`) {
+              return rootElement;
+            }
+            return null;
+          },
+        },
+        "litsx-root-0",
+        {
+          hydrationData: {
+            version: 1,
+            roots: [
+              {
+                id: "litsx-root-0",
+                tagName: "product-card",
+                moduleId: "/src/ProductCard.litsx",
+              },
+            ],
+          },
+        },
+      ),
+      {
+        id: "litsx-root-0",
+        tagName: "product-card",
+        moduleId: "/src/ProductCard.litsx",
+        element: rootElement,
+      },
+    );
   });
 
   it("requires hydrateRoot targets to carry the LitSX root marker", async () => {
