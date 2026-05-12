@@ -83,6 +83,8 @@ function createBasePackageJson(packageName) {
     scripts: {
       dev: "vite",
       build: "vite build",
+      test: "vitest run",
+      "test:watch": "vitest",
       lint: "eslint .",
       format: "prettier --write .",
       typecheck: "litsx-tsc -p jsconfig.json --noEmit",
@@ -97,11 +99,15 @@ function createBasePackageJson(packageName) {
       "@litsx/eslint-plugin": publishedPackageVersions["@litsx/eslint-plugin"],
       "@litsx/typescript-plugin": publishedPackageVersions["@litsx/typescript-plugin"],
       "@litsx/vite-plugin": publishedPackageVersions["@litsx/vite-plugin"],
+      "@vitest/browser": "^4.1.5",
+      "@vitest/browser-playwright": "^4.1.5",
       "eslint": "^9.0.0",
+      "playwright": "^1.54.1",
       "prettier": "^3.8.3",
       "prettier-plugin-litsx": publishedPackageVersions["prettier-plugin-litsx"],
       "typescript": "^6.0.0",
-      "vite": "^8.0.3"
+      "vite": "^8.0.3",
+      "vitest": "^4.1.5"
     }
   };
 }
@@ -217,6 +223,26 @@ import { defineConfig } from "vite";
 
 export default defineConfig({
   plugins: [litsx({ sourceMaps: true })],
+});
+`);
+  files.set("vitest.config.js", `import { defineConfig } from "vitest/config";
+import { litsx } from "@litsx/vite-plugin";
+
+export default defineConfig({
+  plugins: [litsx({ sourceMaps: true })],
+  test: {
+    include: ["src/**/*.test.js"],
+    browser: {
+      enabled: true,
+      provider: "playwright",
+      headless: true,
+      instances: [
+        {
+          browser: "chromium",
+        },
+      ],
+    },
+  },
 });
 `);
   files.set("eslint.config.js", `import litsx from "@litsx/eslint-plugin";
@@ -351,6 +377,36 @@ customElements.define("app-root", ${className});
 
 document.querySelector("#app").innerHTML = "<app-root></app-root>";
 `);
+  files.set(`src/${packageName}.test.js`, `import { afterEach, describe, expect, it } from "vitest";
+import { ${className} } from "./${packageName}.litsx";
+
+const tagName = "test-${packageName}";
+
+if (!customElements.get(tagName)) {
+  customElements.define(tagName, ${className});
+}
+
+describe("${className}", () => {
+  let host = null;
+
+  afterEach(() => {
+    host?.remove();
+    host = null;
+  });
+
+  it("renders the starter shell in a real browser DOM", async () => {
+    host = document.createElement(tagName);
+    document.body.append(host);
+
+    await host.updateComplete;
+
+    const root = host.shadowRoot;
+
+    expect(root?.querySelector("main.shell")).toBeTruthy();
+    expect(root?.textContent ?? "").toContain("Getting Started");
+  });
+});
+`);
 
   return files;
 }
@@ -406,6 +462,7 @@ Generated with \`create-litsx-app --template app\`.
 
 - \`npm run dev\`
 - \`npm run build\`
+- \`npm run test\`
 - \`npm run lint\`
 - \`npm run format\`
 - \`npm run typecheck\`
@@ -459,11 +516,19 @@ export const ${className} = () => {
   );
 };
 `);
-  files.set("src/components/guide-card.litsx", `export const GuideCard = ({
+  files.set("src/components/guide-card.litsx", `import type { LitsxRenderable } from "@litsx/litsx";
+
+type GuideCardProps = {
+  eyebrow?: string;
+  titleRenderer?: () => LitsxRenderable;
+  contentRenderer?: () => LitsxRenderable;
+};
+
+export const GuideCard = ({
   eyebrow = "",
-  titleRenderer = null,
-  contentRenderer = null,
-}) => {
+  titleRenderer = () => null,
+  contentRenderer = () => null,
+}: GuideCardProps) => {
   static styles = \`
     :host { display: block; }
     .guide-card {
@@ -521,10 +586,15 @@ export const ${className} = () => {
   );
 };
 `);
-  files.set("src/components/litsx-button.litsx", `export const LitsxButton = ({
+  files.set("src/components/litsx-button.litsx", `type LitsxButtonProps = {
+  type?: "primary" | "secondary";
+  label?: string;
+};
+
+export const LitsxButton = ({
   type = "secondary",
   label = "",
-}) => {
+}: LitsxButtonProps) => {
   static styles = \`
     :host { display: block; flex-shrink: 0; padding: 6px; }
     button {
@@ -589,12 +659,19 @@ export const ${className} = () => {
   files.set("src/components/litsx-hero.litsx", `import { useEmit } from "@litsx/litsx";
 import { LitsxButton } from "./litsx-button.litsx";
 
+type LitsxHeroProps = {
+  eyebrow?: string;
+  tagline?: string;
+  primaryLabel?: string;
+  secondaryLabel?: string;
+};
+
 export const LitsxHero = ({
   eyebrow = "Authored web components",
   tagline = "Web components with a sharper authoring experience. Less ceremony. More signal.",
   primaryLabel = "Getting Started",
   secondaryLabel = "View on GitHub",
-}) => {
+}: LitsxHeroProps) => {
   const emit = useEmit();
   static styles = \`
     :host {
@@ -829,22 +906,27 @@ export const LitsxHero = ({
   files.set("src/components/starter-guide.litsx", `import { SuspenseBoundary, SuspenseList, useOnConnect, useState } from "@litsx/litsx";
 import { GuideCard } from "./guide-card.litsx";
 
-const pendingSteps = new Map();
+type DeferredStep = {
+  promise: Promise<void>;
+  resolve: (() => void) | null;
+};
+
+const pendingSteps = new Map<number, DeferredStep>();
 
 function createDeferred() {
-  let resolve = null;
-  const promise = new Promise((nextResolve) => {
+  let resolve: (() => void) | null = null;
+  const promise = new Promise<void>((nextResolve) => {
     resolve = nextResolve;
   });
-  return { promise, resolve };
+  return { promise, resolve } satisfies DeferredStep;
 }
 
-function suspendUntil(stepIndex, revealedCount) {
+function suspendUntil(stepIndex: number, revealedCount: number) {
   if (revealedCount > stepIndex) {
     return;
   }
 
-  let pending = pendingSteps.get(stepIndex);
+  let pending = pendingSteps.get(stepIndex) as DeferredStep | undefined;
   if (!pending) {
     pending = createDeferred();
     pendingSteps.set(stepIndex, pending);
@@ -854,7 +936,7 @@ function suspendUntil(stepIndex, revealedCount) {
 }
 
 export const StarterGuide = () => {
-  const delays = [180, 220, 240];
+  const delays: number[] = [180, 220, 240];
   const [revealedCount, setRevealedCount] = useState(0);
 
   if (revealedCount > 0) {
@@ -868,7 +950,7 @@ export const StarterGuide = () => {
 
   useOnConnect(() => {
     const [firstDelay = 0, ...remainingDelays] = delays;
-    let intervalId = null;
+    let intervalId: ReturnType<typeof setInterval> | null = null;
 
     const firstTimeoutId = setTimeout(() => {
       setRevealedCount((count) => count + 1);
@@ -877,6 +959,7 @@ export const StarterGuide = () => {
         return;
       }
 
+      const [intervalDelay = 0] = remainingDelays;
       let intervalIndex = 0;
       intervalId = setInterval(() => {
         setRevealedCount((count) => count + 1);
@@ -885,7 +968,7 @@ export const StarterGuide = () => {
           clearInterval(intervalId);
           intervalId = null;
         }
-      }, remainingDelays[0]);
+      }, intervalDelay);
     }, firstDelay);
 
     return () => {
@@ -1025,6 +1108,7 @@ Generated with \`create-litsx-app --template component\`.
 
 - \`npm run dev\`
 - \`npm run build\`
+- \`npm run test\`
 - \`npm run lint\`
 - \`npm run format\`
 - \`npm run preview\`
@@ -1145,6 +1229,7 @@ Generated with \`create-litsx-app --template design-system\`.
 
 - \`npm run dev\`
 - \`npm run build\`
+- \`npm run test\`
 - \`npm run lint\`
 - \`npm run format\`
 - \`npm run preview\`
