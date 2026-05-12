@@ -1,4 +1,5 @@
 import babelCore from "@babel/core";
+import transformTypescript from "@babel/plugin-transform-typescript";
 import transformJsxHtmlTemplate from "@litsx/babel-plugin-transform-jsx-html-template";
 import {
   createLitsxPresetPlugins,
@@ -82,6 +83,10 @@ function profilePhase(name, callback, profile = null) {
 
 function normalizePluginList(plugins) {
   return Array.isArray(plugins) ? plugins : [];
+}
+
+function shouldStripTypescriptSyntax(filename = "") {
+  return /\.(?:ts|tsx|litsx)$/.test(filename) || filename.endsWith(".litsx.jsx");
 }
 
 function getStandaloneTsSessionKey(filename = "", ts = ensureTypescriptModule()) {
@@ -310,6 +315,9 @@ export function createLitsxTransformConfig(source, options = {}) {
           ? [[transformJsxHtmlTemplate, options.jsxTemplateOptions]]
           : [transformJsxHtmlTemplate]),
         ...outputPlugins,
+        ...(shouldStripTypescriptSyntax(filename)
+          ? [[transformTypescript, { isTSX: true, allowDeclareFields: true }]]
+          : []),
       ]
     : [];
 
@@ -330,7 +338,13 @@ export function createLitsxTransformConfig(source, options = {}) {
       sourceMaps: options.sourceMaps === true,
       plugins: shouldRunFinalTemplatePass
         ? [...presetPlugins]
-        : [...presetPlugins, ...outputPlugins],
+        : [
+            ...presetPlugins,
+            ...outputPlugins,
+            ...(shouldStripTypescriptSyntax(filename)
+              ? [[transformTypescript, { isTSX: true, allowDeclareFields: true }]]
+              : []),
+          ],
     },
   };
 }

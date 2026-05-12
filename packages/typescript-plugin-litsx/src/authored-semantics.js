@@ -142,6 +142,80 @@ function findClosestAttributeSuggestion(prefix, localName, candidates = []) {
   return bestDistance <= maxDistance ? bestCandidate : null;
 }
 
+function splitAttributeCompletionWords(name) {
+  return name
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean);
+}
+
+function rankAttributeCompletion(candidate, partialName) {
+  if (typeof candidate !== "string") {
+    return null;
+  }
+
+  if (partialName.length === 0) {
+    return {
+      score: 0,
+      wordIndex: -1,
+      lengthDelta: candidate.length,
+    };
+  }
+
+  const normalizedCandidate = candidate.toLowerCase();
+  const normalizedPartial = partialName.toLowerCase();
+
+  if (normalizedCandidate === normalizedPartial) {
+    return {
+      score: 0,
+      wordIndex: -1,
+      lengthDelta: 0,
+    };
+  }
+
+  if (normalizedCandidate.startsWith(normalizedPartial)) {
+    return {
+      score: 1,
+      wordIndex: -1,
+      lengthDelta: candidate.length - partialName.length,
+    };
+  }
+
+  const words = splitAttributeCompletionWords(candidate);
+  const exactWordIndex = words.findIndex((word) => word === normalizedPartial);
+
+  if (exactWordIndex !== -1) {
+    return {
+      score: 2,
+      wordIndex: exactWordIndex,
+      lengthDelta: candidate.length - partialName.length,
+    };
+  }
+
+  const prefixWordIndex = words.findIndex((word) => word.startsWith(normalizedPartial));
+
+  if (prefixWordIndex !== -1) {
+    return {
+      score: 3,
+      wordIndex: prefixWordIndex,
+      lengthDelta: candidate.length - partialName.length,
+    };
+  }
+
+  const substringIndex = normalizedCandidate.indexOf(normalizedPartial);
+
+  if (substringIndex !== -1) {
+    return {
+      score: 4,
+      wordIndex: substringIndex,
+      lengthDelta: candidate.length - partialName.length,
+    };
+  }
+
+  return null;
+}
+
 export function inferLitsxStaticHoistInfoAtPosition(sourceText, position) {
   if (typeof sourceText !== "string" || typeof position !== "number") {
     return null;
@@ -679,8 +753,32 @@ export function getLitsxAttributeCompletionNames(context) {
   }
 
   return candidates
-    .filter((name) => name.startsWith(context.partialName))
-    .map((name) => `${context.prefix}${name}`);
+    .map((name, index) => ({
+      name,
+      index,
+      rank: rankAttributeCompletion(name, context.partialName),
+    }))
+    .filter((entry) => entry.rank)
+    .sort((left, right) => {
+      if (left.rank.score !== right.rank.score) {
+        return left.rank.score - right.rank.score;
+      }
+
+      if (left.rank.wordIndex !== right.rank.wordIndex) {
+        return left.rank.wordIndex - right.rank.wordIndex;
+      }
+
+      if (left.index !== right.index) {
+        return left.index - right.index;
+      }
+
+      if (left.rank.lengthDelta !== right.rank.lengthDelta) {
+        return left.rank.lengthDelta - right.rank.lengthDelta;
+      }
+
+      return 0;
+    })
+    .map((entry) => `${context.prefix}${entry.name}`);
 }
 
 export function inferLitsxAttributeCompletionContext(sourceText, position) {

@@ -50,6 +50,7 @@
   "dependencies": {
     "@babel/core": "^7.29.0",
     "@babel/parser": "^7.29.3",
+    "@babel/plugin-transform-typescript": "^7.28.5",
     "@litsx/babel-plugin-transform-jsx-html-template": "^0.3.0",
     "@litsx/babel-preset-litsx": "^0.5.0",
     "@litsx/jsx-authoring": "^0.3.0",

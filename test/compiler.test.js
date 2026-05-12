@@ -72,6 +72,74 @@ describe("@litsx/compiler", () => {
 
     assert.match(result.code, /html`/);
     assert.match(result.code, /@click=\$\{save\}/);
+    assert.doesNotMatch(result.code, /label: string/);
+    assert.doesNotMatch(result.code, /type\s+[A-Za-z0-9_]+/);
+  }, 20000);
+
+  it("strips top-level TypeScript declarations from compiled .litsx output", () => {
+    const source = [
+      "interface ButtonProps {",
+      "  label?: string;",
+      "}",
+      "type ButtonVariant = \"primary\" | \"secondary\";",
+      "const buttonDefaults = { variant: \"primary\" } as const;",
+      "export const Counter = ({ label = buttonDefaults.variant }: ButtonProps) => {",
+      "  const values = [label] as string[];",
+      "  return <button>{values[0]}</button>;",
+      "};",
+    ].join("\n");
+
+    const result = transformLitsxSync(source, {
+      filename: "/virtual/Counter.litsx",
+    });
+
+    assert.match(result.code, /html`/);
+    assert.doesNotMatch(result.code, /interface ButtonProps/);
+    assert.doesNotMatch(result.code, /type ButtonVariant/);
+    assert.doesNotMatch(result.code, / as const/);
+    assert.doesNotMatch(result.code, / as string\[\]/);
+  }, 20000);
+
+  it("strips TypeScript syntax from jsxTemplate=false output", () => {
+    const source = [
+      "type CounterProps = {",
+      "  label: string;",
+      "};",
+      "export const Counter = ({ label }: CounterProps) => {",
+      "  return <button>{label}</button>;",
+      "};",
+    ].join("\n");
+
+    const result = transformLitsxSync(source, {
+      filename: "/virtual/Counter.litsx",
+      jsxTemplate: false,
+    });
+
+    assert.match(result.code, /class Counter extends LitElement/);
+    assert.doesNotMatch(result.code, /type CounterProps/);
+    assert.doesNotMatch(result.code, /label: string/);
+  }, 20000);
+
+  it("strips generic TypeScript syntax from compiled .litsx output", () => {
+    const source = [
+      "function identity<T>(value: T): T {",
+      "  return value;",
+      "}",
+      "export const Counter = () => {",
+      "  const label = identity<string>(\"Save\");",
+      "  return <button>{label}</button>;",
+      "};",
+    ].join("\n");
+
+    const result = transformLitsxSync(source, {
+      filename: "/virtual/Counter.litsx",
+    });
+
+    assert.match(result.code, /html`/);
+    assert.doesNotMatch(result.code, /<T>/);
+    assert.doesNotMatch(result.code, /: T\b/);
+    assert.doesNotMatch(result.code, /identity<string>/);
+    assert.match(result.code, /identity\("Save"\)/);
   }, 20000);
 
   it("lowers authored JSX inside suspense content renderers", () => {
@@ -856,6 +924,121 @@ describe("@litsx/compiler", () => {
     });
 
     assert.match(result.code, /class CounterAfterNative extends LitElement/);
+  }, 20000);
+
+  it("runs outputPlugins before final TypeScript stripping", () => {
+    const source = [
+      "interface CounterProps {",
+      "  label?: string;",
+      "}",
+      "type CounterVariant = \"primary\" | \"secondary\";",
+      "export const Counter = ({ label = \"Save\" }: CounterProps) => {",
+      "  return <button>{label}</button>;",
+      "};",
+    ].join("\n");
+
+    const seenTypeDeclarations = [];
+    const captureTypesPlugin = () => ({
+      visitor: {
+        TSInterfaceDeclaration(path) {
+          seenTypeDeclarations.push(`interface:${path.node.id.name}`);
+          path.insertAfter(
+            t.variableDeclaration("const", [
+              t.variableDeclarator(
+                t.identifier("__sawInterfaceBeforeStrip"),
+                t.booleanLiteral(true),
+              ),
+            ]),
+          );
+        },
+        TSTypeAliasDeclaration(path) {
+          seenTypeDeclarations.push(`type:${path.node.id.name}`);
+          path.insertAfter(
+            t.variableDeclaration("const", [
+              t.variableDeclarator(
+                t.identifier("__sawTypeAliasBeforeStrip"),
+                t.booleanLiteral(true),
+              ),
+            ]),
+          );
+        },
+      },
+    });
+
+    const result = transformLitsxSync(source, {
+      filename: "/virtual/Counter.litsx",
+      outputPlugins: [captureTypesPlugin],
+    });
+
+    assert.deepStrictEqual(seenTypeDeclarations, [
+      "interface:CounterProps",
+      "type:CounterVariant",
+    ]);
+    assert.match(result.code, /const __sawInterfaceBeforeStrip = true;/);
+    assert.match(result.code, /const __sawTypeAliasBeforeStrip = true;/);
+    assert.doesNotMatch(result.code, /interface CounterProps/);
+    assert.doesNotMatch(result.code, /type CounterVariant/);
+  }, 20000);
+
+  it("lets outputPlugins inspect generic TypeScript syntax before final stripping", () => {
+    const source = [
+      "function identity<T>(value: T): T {",
+      "  return value;",
+      "}",
+      "export const Counter = () => {",
+      "  const label = identity<string>(\"Save\");",
+      "  return <button>{label}</button>;",
+      "};",
+    ].join("\n");
+
+    let sawTypeParameterDeclaration = false;
+    let sawTypeParameterInstantiation = false;
+    const captureGenericTypesPlugin = () => ({
+      visitor: {
+        FunctionDeclaration(path) {
+          if (path.node.id?.name === "identity" && path.node.typeParameters) {
+            sawTypeParameterDeclaration = true;
+            path.insertBefore(
+              t.variableDeclaration("const", [
+                t.variableDeclarator(
+                  t.identifier("__sawGenericDeclarationBeforeStrip"),
+                  t.booleanLiteral(true),
+                ),
+              ]),
+            );
+          }
+        },
+        CallExpression(path) {
+          if (
+            path.node.callee?.type === "Identifier"
+            && path.node.callee.name === "identity"
+            && (path.node.typeParameters || path.node.typeArguments)
+          ) {
+            sawTypeParameterInstantiation = true;
+            path.getStatementParent().insertBefore(
+              t.variableDeclaration("const", [
+                t.variableDeclarator(
+                  t.identifier("__sawGenericInstantiationBeforeStrip"),
+                  t.booleanLiteral(true),
+                ),
+              ]),
+            );
+          }
+        },
+      },
+    });
+
+    const result = transformLitsxSync(source, {
+      filename: "/virtual/Counter.litsx",
+      outputPlugins: [captureGenericTypesPlugin],
+    });
+
+    assert.strictEqual(sawTypeParameterDeclaration, true);
+    assert.strictEqual(sawTypeParameterInstantiation, true);
+    assert.match(result.code, /const __sawGenericDeclarationBeforeStrip = true;/);
+    assert.match(result.code, /const __sawGenericInstantiationBeforeStrip = true;/);
+    assert.doesNotMatch(result.code, /<T>/);
+    assert.doesNotMatch(result.code, /identity<string>/);
   }, 20000);
 
   it("runs authoringPlugins before the native preset pipeline", () => {

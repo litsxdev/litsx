@@ -4673,6 +4673,80 @@ describe("@litsx/typescript-plugin", () => {
     assert.ok(completions.entries.every((entry) => entry.source === "LitSX"));
   });
 
+  it("matches contextual property completions by camel-case word segments", () => {
+    const source = "<input .number />";
+    const snapshots = new Map([["/virtual/input-number.tsx", source]]);
+
+    const pluginModule = plugin({
+      typescript: {
+        ScriptSnapshot: {
+          fromString(value) {
+            return {
+              getLength() {
+                return value.length;
+              },
+              getText(start, end) {
+                return value.slice(start, end);
+              },
+            };
+          },
+        },
+      },
+    });
+
+    const wrapped = pluginModule.create({
+      languageServiceHost: {
+        getScriptSnapshot(fileName) {
+          const text = snapshots.get(fileName);
+          if (text == null) {
+            return undefined;
+          }
+
+          return {
+            getLength() {
+              return text.length;
+            },
+            getText(start, end) {
+              return text.slice(start, end);
+            },
+          };
+        },
+      },
+      languageService: {
+        getSyntacticDiagnostics() {
+          return [];
+        },
+        getSemanticDiagnostics() {
+          return [];
+        },
+        getSuggestionDiagnostics() {
+          return [];
+        },
+        getQuickInfoAtPosition() {
+          return undefined;
+        },
+        getCompletionsAtPosition() {
+          return {
+            entries: [
+              { name: "name", kind: "property", sortText: "1" },
+              { name: "nonce", kind: "property", sortText: "2" },
+            ],
+          };
+        },
+      },
+    });
+
+    const completions = wrapped.getCompletionsAtPosition(
+      "/virtual/input-number.tsx",
+      source.indexOf(".number") + ".number".length,
+    );
+
+    assert.deepStrictEqual(
+      completions.entries.map((entry) => entry.name),
+      [".valueAsNumber", "name", "nonce"],
+    );
+  });
+
   it("merges contextual completions ahead of existing non-virtual entries without duplication", () => {
     const source = "<button @cl />";
     const snapshots = new Map([["/virtual/merge.tsx", source]]);
