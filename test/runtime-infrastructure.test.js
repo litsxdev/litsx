@@ -704,4 +704,33 @@ describe("litsx runtime infrastructure", () => {
       Element.prototype.attachShadow = originalAttachShadow;
     }
   });
+
+  it("keeps globally registered shadow-dom hosts newable after the light-dom runtime patches HTMLElement", () => {
+    const shadowHostTag = nextTag("litsx-runtime-global-shadow-host");
+    const shadowChildTag = nextTag("litsx-runtime-global-shadow-child");
+
+    class LightChild extends HTMLElement {}
+    class ShadowChild extends HTMLElement {}
+
+    class ShadowBase extends HTMLElement {
+      static elements = {
+        [shadowChildTag]: ShadowChild,
+      };
+    }
+
+    const lightHost = document.createElement("section");
+    connectLightDomRegistry(lightHost, {
+      [nextTag("litsx-runtime-light-trigger")]: LightChild,
+    });
+
+    const ShadowHost = ShadowDomElementsMixin(ShadowBase);
+    if (!customElements.get(shadowHostTag)) {
+      customElements.define(shadowHostTag, ShadowHost);
+    }
+
+    assert.doesNotThrow(() => new ShadowHost());
+    assert.doesNotThrow(() => new ShadowHost());
+
+    lightHost.remove();
+  });
 });

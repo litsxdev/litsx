@@ -138,7 +138,9 @@ That means generated apps do not need to know about:
 - LitSX Babel plugin ordering
 - sourcemap chaining details
 
-The scaffold also wires Storybook through the Vite builder, so LitSX authored stories and demo components run through the same Vite plugin integration.
+The scaffold also wires Storybook through the Vite builder, so LitSX components can be documented through standard CSF/MDX Storybook files while demos still run through the same Vite plugin integration.
+
+For the `design-system` template, authored `*.stories.litsx` files are indexed through Storybook's experimental indexer API and compiled through the same LitSX toolchain at load time.
 
 ## Why the Scaffold Uses `.litsx`
 

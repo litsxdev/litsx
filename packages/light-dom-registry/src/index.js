@@ -523,6 +523,36 @@ function getRuntime() {
     };
   }
 
+  if (!nativeRegistry.define.__litsxPatched) {
+    const patchedDefine = function define(tagName, elementClass, options) {
+      const normalizedTagName = String(tagName).toLowerCase();
+      nativeDefine(normalizedTagName, elementClass, options);
+
+      if (!globalDefinitionForConstructor.has(elementClass)) {
+        globalDefinitionForConstructor.set(elementClass, {
+          tagName: normalizedTagName,
+          elementClass,
+          connectedCallback: elementClass.prototype.connectedCallback,
+          disconnectedCallback: elementClass.prototype.disconnectedCallback,
+          adoptedCallback: elementClass.prototype.adoptedCallback,
+          attributeChangedCallback: elementClass.prototype.attributeChangedCallback,
+          formAssociated: elementClass.formAssociated ?? false,
+          formAssociatedCallback: elementClass.prototype.formAssociatedCallback,
+          formDisabledCallback: elementClass.prototype.formDisabledCallback,
+          formResetCallback: elementClass.prototype.formResetCallback,
+          formStateRestoreCallback: elementClass.prototype.formStateRestoreCallback,
+          observedAttributes: new Set(elementClass.observedAttributes || []),
+          standInClass: elementClass,
+        });
+      }
+
+      return elementClass;
+    };
+
+    patchedDefine.__litsxPatched = true;
+    nativeRegistry.define = patchedDefine;
+  }
+
   window.HTMLElement = function HTMLElement() {
     let instance = upgradingInstance;
     if (instance) {

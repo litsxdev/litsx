@@ -3,6 +3,7 @@ import path from "path";
 import { publishedPackageVersions } from "./published-package-versions.js";
 
 const LOCAL_WORKSPACE_PACKAGE_NAMES = [
+  "@litsx/compiler",
   "@litsx/litsx",
   "@litsx/eslint-plugin",
   "prettier-plugin-litsx",
@@ -903,15 +904,13 @@ export const LitsxHero = ({
   );
 };
 `);
-  files.set("src/components/starter-guide.litsx", `import { SuspenseBoundary, SuspenseList, useOnConnect, useState } from "@litsx/litsx";
+  files.set("src/components/starter-guide.litsx", `import { SuspenseBoundary, SuspenseList, useOnConnect, useRef, useState } from "@litsx/litsx";
 import { GuideCard } from "./guide-card.litsx";
 
 type DeferredStep = {
   promise: Promise<void>;
   resolve: (() => void) | null;
 };
-
-const pendingSteps = new Map<number, DeferredStep>();
 
 function createDeferred() {
   let resolve: (() => void) | null = null;
@@ -937,6 +936,9 @@ function suspendUntil(stepIndex: number, revealedCount: number) {
 
 export const StarterGuide = () => {
   const delays: number[] = [180, 220, 240];
+  const pendingStepsRef = useRef<Map<number, DeferredStep> | null>(null);
+  pendingStepsRef.current ??= new Map<number, DeferredStep>();
+  const pendingSteps = pendingStepsRef.current;
   const [revealedCount, setRevealedCount] = useState(0);
 
   if (revealedCount > 0) {
@@ -1128,12 +1130,33 @@ Generated with \`create-litsx-app --template component\`.
 function createDesignSystemProfileFiles(packageName, className) {
   const files = createComponentProfileFiles(packageName, className);
 
+  files.set(".storybook/litsx-story-indexer.js", `import fs from "fs/promises";
+import { transformLitsxSync } from "@litsx/compiler";
+import { loadCsf } from "storybook/internal/csf-tools";
+
+export const litsxStoriesIndexer = {
+  test: /\\.stories\\.litsx$/,
+  async createIndex(fileName, { makeTitle }) {
+    const source = await fs.readFile(fileName, "utf8");
+    const transformed = transformLitsxSync(source, {
+      filename: fileName,
+      sourceMaps: false,
+    });
+
+    return loadCsf(transformed.code, { fileName, makeTitle }).parse().indexInputs;
+  },
+};
+`);
   files.set(".storybook/main.js", `import { litsx } from "@litsx/vite-plugin";
+import { litsxStoriesIndexer } from "./litsx-story-indexer.js";
 
 export default {
   framework: "@storybook/web-components-vite",
-  stories: ["../src/**/*.stories.@(js|jsx|litsx|mdx)", "../src/**/*.docs.mdx"],
+  stories: ["../src/**/*.stories.@(js|jsx|ts|tsx|litsx|mdx)", "../src/**/*.docs.mdx"],
   addons: ["@storybook/addon-docs", "@storybook/addon-a11y"],
+  async experimental_indexers(existingIndexers) {
+    return [...existingIndexers, litsxStoriesIndexer];
+  },
   async viteFinal(config) {
     return {
       ...config,
@@ -1142,7 +1165,8 @@ export default {
   },
 };
 `);
-  files.set(".storybook/preview.js", `import "../src/styles/tokens.css";
+  files.set(".storybook/preview.js", `import "@webcomponents/scoped-custom-element-registry";
+import "../src/styles/tokens.css";
 
 export const parameters = {
   controls: { expanded: true },
@@ -1152,10 +1176,14 @@ export const parameters = {
 `);
   files.set("src/stories/litsx-button.stories.litsx", `import { LitsxButton } from "../components/litsx-button.litsx";
 
+if (!customElements.get("litsx-button")) {
+  customElements.define("litsx-button", LitsxButton);
+}
+
 const meta = {
   title: "Components/LitsxButton",
   render: ({ label = "View on GitHub", type = "secondary" } = {}) => (
-    <LitsxButton .label={label} .type={type} />
+    <litsx-button .label={label} .type={type} />
   ),
 };
 
@@ -1171,6 +1199,10 @@ export const Primary = {
 `);
   files.set("src/stories/litsx-hero.stories.litsx", `import { LitsxHero } from "../components/litsx-hero.litsx";
 
+if (!customElements.get("litsx-hero")) {
+  customElements.define("litsx-hero", LitsxHero);
+}
+
 const meta = {
   title: "Marketing/LitsxHero",
   render: ({
@@ -1180,7 +1212,7 @@ const meta = {
     secondaryLabel = "View on GitHub",
   } = {}) => (
     <div style="max-width: 960px; margin: 0 auto;">
-      <LitsxHero
+      <litsx-hero
         .eyebrow={eyebrow}
         .tagline={tagline}
         .primaryLabel={primaryLabel}
@@ -1195,15 +1227,19 @@ export const Default = {};
 `);
   files.set("src/stories/starter-guide.stories.litsx", `import { StarterGuide } from "../components/starter-guide.litsx";
 
+if (!customElements.get("starter-guide")) {
+  customElements.define("starter-guide", StarterGuide);
+}
+
 const meta = {
   title: "Getting Started/StarterGuide",
-  render: () => <StarterGuide />,
+  render: () => <starter-guide />,
 };
 
 export default meta;
 export const Default = {};
 `);
-  files.set("src/stories/starter-guide.docs.mdx", `import { Meta, Canvas } from "@storybook/blocks";
+  files.set("src/stories/starter-guide.docs.mdx", `import { Meta, Canvas } from "@storybook/addon-docs/blocks";
 import * as StarterGuideStories from "./starter-guide.stories.litsx";
 
 <Meta of={StarterGuideStories} />
@@ -1255,6 +1291,7 @@ function createPackageJson(packageName, template, options = {}) {
     packageJson.scripts.storybook = "storybook dev -p 6006";
     packageJson.scripts["build-storybook"] = "storybook build";
     Object.assign(packageJson.devDependencies, {
+      "@litsx/compiler": "^0.5.0",
       "@storybook/addon-a11y": "^9.1.5",
       "@storybook/addon-docs": "^9.1.5",
       "@storybook/web-components-vite": "^9.1.5",

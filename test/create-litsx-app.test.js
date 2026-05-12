@@ -171,7 +171,10 @@ describe("create-litsx-app", () => {
     assert.match(appSource, /https:\/\/litsx\.dev\/getting-started/);
     assert.match(starterGuideSource, /<SuspenseList/);
     assert.match(starterGuideSource, /type DeferredStep = \{/);
-    assert.match(starterGuideSource, /const pendingSteps = new Map<number, DeferredStep>\(\);/);
+    assert.match(starterGuideSource, /import \{ SuspenseBoundary, SuspenseList, useOnConnect, useRef, useState \} from "@litsx\/litsx";/);
+    assert.match(starterGuideSource, /const pendingStepsRef = useRef<Map<number, DeferredStep> \| null>\(null\);/);
+    assert.match(starterGuideSource, /pendingStepsRef\.current \?\?= new Map<number, DeferredStep>\(\);/);
+    assert.match(starterGuideSource, /const pendingSteps = pendingStepsRef\.current;/);
     assert.match(starterGuideSource, /const promise = new Promise<void>\(\(nextResolve\) => \{/);
     assert.match(starterGuideSource, /const delays: number\[\] = \[180, 220, 240\];/);
     assert.match(starterGuideSource, /let intervalId: ReturnType<typeof setInterval> \| null = null;/);
@@ -288,9 +291,15 @@ describe("create-litsx-app", () => {
     const playwrightConfig = result.files.get("playwright.config.js");
     const dockerfile = result.files.get("Dockerfile.visual");
     const visualTest = result.files.get("tests/visual/storybook.spec.js");
+    const previewSource = result.files.get(".storybook/preview.js");
+    const buttonStory = result.files.get("src/stories/litsx-button.stories.litsx");
+    const heroStory = result.files.get("src/stories/litsx-hero.stories.litsx");
+    const starterGuideStory = result.files.get("src/stories/starter-guide.stories.litsx");
+    const starterGuideDocs = result.files.get("src/stories/starter-guide.docs.mdx");
 
     assert.strictEqual(result.visualTests, true);
     assert.ok(packageJson.devDependencies["@playwright/test"]);
+    assert.ok(packageJson.devDependencies["@litsx/compiler"]);
     assert.ok(packageJson.scripts["test:visual"]);
     assert.ok(packageJson.scripts["test:visual:update"]);
     assert.strictEqual(packageJson.scripts.test, "vitest run");
@@ -298,6 +307,14 @@ describe("create-litsx-app", () => {
     assert.match(playwrightConfig, /timezoneId: "UTC"/);
     assert.match(dockerfile, /mcr\.microsoft\.com\/playwright/);
     assert.match(visualTest, /toHaveScreenshot/);
+    assert.match(previewSource, /import "@webcomponents\/scoped-custom-element-registry";/);
+    assert.match(buttonStory, /customElements\.define\("litsx-button", LitsxButton\)/);
+    assert.match(buttonStory, /<litsx-button \.label=\{label\} \.type=\{type\} \/>/);
+    assert.match(heroStory, /customElements\.define\("litsx-hero", LitsxHero\)/);
+    assert.match(heroStory, /<litsx-hero/);
+    assert.match(starterGuideStory, /customElements\.define\("starter-guide", StarterGuide\)/);
+    assert.match(starterGuideStory, /render: \(\) => <starter-guide \/>/);
+    assert.match(starterGuideDocs, /import \{ Meta, Canvas \} from "@storybook\/addon-docs\/blocks";/);
   });
 
   it("writes the scaffold to disk", () => {
@@ -320,6 +337,7 @@ describe("create-litsx-app", () => {
     assert.ok(fs.existsSync(path.join(targetDir, "src", "components", "litsx-hero.litsx")));
     assert.ok(fs.existsSync(path.join(targetDir, "src", "components", "litsx-button.litsx")));
     assert.ok(fs.existsSync(path.join(targetDir, "src", "components", "starter-guide.litsx")));
+    assert.ok(fs.existsSync(path.join(targetDir, ".storybook", "litsx-story-indexer.js")));
     assert.ok(fs.existsSync(path.join(targetDir, "src", "stories", "litsx-button.stories.litsx")));
     assert.ok(fs.existsSync(path.join(targetDir, "src", "stories", "litsx-hero.stories.litsx")));
     assert.ok(fs.existsSync(path.join(targetDir, "src", "stories", "starter-guide.stories.litsx")));
