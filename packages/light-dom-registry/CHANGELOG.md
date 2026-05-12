@@ -1,5 +1,11 @@
 # @litsx/light-dom-registry
 
+## 0.2.2
+
+### Patch Changes
+
+- b3e35a4: Preserve globally registered shadow-DOM component constructors after the light DOM registry runtime patches `HTMLElement`, so subsequent instances remain newable and Storybook-style hosts do not fail after light-DOM features are activated.
+
 ## 0.2.1
 
 ### Patch Changes
