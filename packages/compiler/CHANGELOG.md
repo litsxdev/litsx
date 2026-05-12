@@ -1,5 +1,13 @@
 # @litsx/compiler
 
+## 0.5.1
+
+### Patch Changes
+
+- 8c4a4b6: Strip TypeScript-only syntax from final compiler output after consumer output plugins run, including interfaces, type aliases, assertions, and generics in `.litsx` compilation.
+
+  Improve authored attribute completions to rank camel-case word segment matches more naturally.
+
 ## 0.5.0
 
 ### Minor Changes
