@@ -7,7 +7,6 @@ import {
 const DEDUPE_MIXIN_MARK = Symbol("litsx.dedupeMixinMark");
 const LIGHT_DOM_STYLE_ELEMENT = Symbol("litsx.lightDomStyleElement");
 const SHADOW_DOM_REGISTRY = Symbol("litsx.shadowDomRegistry");
-const SHADOW_DOM_REGISTRY_CACHE = new WeakMap();
 let shadowDomRegistryAttachKey;
 let shadowDomRegistryAttachShadowRef;
 let shadowDomRegistryCtorRef;
@@ -103,11 +102,10 @@ function createScopedRegistryForHost(host) {
 
   const ctor = host.constructor;
   const elements = ctor.scopedElements ?? ctor.elements ?? {};
-  let registry = host.registry ?? SHADOW_DOM_REGISTRY_CACHE.get(ctor);
+  let registry = host.registry ?? null;
 
   if (!registry) {
     registry = new CustomElementRegistry();
-    SHADOW_DOM_REGISTRY_CACHE.set(ctor, registry);
   }
 
   defineScopedElements(registry, elements);

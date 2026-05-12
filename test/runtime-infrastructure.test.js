@@ -1,8 +1,10 @@
 // @vitest-environment happy-dom
 
 import assert from "assert";
+import { LitElement, html } from "lit";
 import { describe, it } from "vitest";
 import { connectLightDomRegistry } from "../packages/light-dom-registry/src/index.js";
+import { prepareEffects, useOnConnect, useState } from "../packages/litsx/src/index.js";
 import {
   LightDomElementsMixin,
   LightDomMixin,
@@ -221,7 +223,7 @@ describe("litsx runtime infrastructure", () => {
     assert.strictEqual(MixedTwice, MixedOnce);
   });
 
-  it("creates scoped registries for shadow-dom hosts when the platform supports them", () => {
+  it("creates per-instance scoped registries for shadow-dom hosts when the platform supports them", () => {
     const originalCustomElementRegistry = globalThis.CustomElementRegistry;
     const originalAttachShadow = Element.prototype.attachShadow;
 
@@ -302,8 +304,9 @@ describe("litsx runtime infrastructure", () => {
       assert(root);
       assert.strictEqual(root.registry, host.registry);
       assert.strictEqual(host.registry.get("demo-child"), DemoChild);
-      assert.strictEqual(secondHost.registry, host.registry);
-      assert.strictEqual(secondRoot.registry, host.registry);
+      assert.strictEqual(secondRoot.registry, secondHost.registry);
+      assert.notStrictEqual(secondHost.registry, host.registry);
+      assert.strictEqual(secondHost.registry.get("demo-child"), DemoChild);
       const adoptedStyles = root.adoptedStyleSheets ?? [];
       if (adoptedStyles.length > 0) {
         assert.equal(adoptedStyles.length, 1);
@@ -436,7 +439,7 @@ describe("litsx runtime infrastructure", () => {
     }
   });
 
-  it("fails clearly when a shared scoped registry would need a different constructor for the same tag", () => {
+  it("allows different instances to redefine the same scoped tag with different constructors", () => {
     const originalCustomElementRegistry = globalThis.CustomElementRegistry;
     const originalAttachShadow = Element.prototype.attachShadow;
 
@@ -492,13 +495,15 @@ describe("litsx runtime infrastructure", () => {
       };
 
       const Host = ShadowDomElementsMixin(Base);
-      new Host().createRenderRoot();
+      const firstHost = new Host();
+      firstHost.createRenderRoot();
       Host.elements = { "demo-child": SecondChild };
 
-      assert.throws(
-        () => new Host().createRenderRoot(),
-        /cannot redefine scoped element "demo-child" with a different constructor/
-      );
+      const secondHost = new Host();
+      assert.doesNotThrow(() => secondHost.createRenderRoot());
+      assert.notStrictEqual(firstHost.registry, secondHost.registry);
+      assert.strictEqual(firstHost.registry.get("demo-child"), FirstChild);
+      assert.strictEqual(secondHost.registry.get("demo-child"), SecondChild);
     } finally {
       globalThis.CustomElementRegistry = originalCustomElementRegistry;
       Element.prototype.attachShadow = originalAttachShadow;
@@ -763,5 +768,104 @@ describe("litsx runtime infrastructure", () => {
     assert.doesNotThrow(() => new ShadowHost());
 
     lightHost.remove();
+  });
+
+  it("re-renders globally registered shadow-dom hosts after disconnect and reconnect with light-dom runtime active", async () => {
+    const shadowHostTag = nextTag("litsx-runtime-reconnect-shadow-host");
+    const shadowChildTag = "litsx-runtime-reconnect-shadow-child";
+    const originalCustomElementRegistry = globalThis.CustomElementRegistry;
+    const originalAttachShadow = Element.prototype.attachShadow;
+
+    class FakeRegistry {
+      constructor() {
+        this.definitions = new Map();
+      }
+
+      define(tagName, elementClass) {
+        if (this.definitions.has(tagName)) {
+          throw new Error(`duplicate definition: ${tagName}`);
+        }
+        this.definitions.set(tagName, elementClass);
+      }
+
+      get(tagName) {
+        return this.definitions.get(tagName);
+      }
+    }
+
+    globalThis.CustomElementRegistry = FakeRegistry;
+    Element.prototype.attachShadow = function attachShadow(init) {
+      const registry = init.registry ?? init.customElements ?? init.customElementRegistry ?? null;
+      const shadowRoot = document.createElement("div");
+      shadowRoot.registry = registry;
+      shadowRoot.customElements = registry;
+      shadowRoot.customElementRegistry = registry;
+      Object.defineProperty(this, "shadowRoot", {
+        configurable: true,
+        value: shadowRoot,
+      });
+      return shadowRoot;
+    };
+
+    try {
+      class ShadowChild extends LitElement {
+        render() {
+          return html`<p data-child="ready">child ready</p>`;
+        }
+      }
+
+      class ShadowBase extends LitElement {
+        static elements = {
+          [shadowChildTag]: ShadowChild,
+        };
+
+        render() {
+          prepareEffects(this);
+          const [connectCount, setConnectCount] = useState(this, 0);
+
+          useOnConnect(this, () => {
+            setConnectCount((count) => count + 1);
+          }, []);
+
+          return html`
+            <section data-connect-count=${String(connectCount)}>
+              <litsx-runtime-reconnect-shadow-child></litsx-runtime-reconnect-shadow-child>
+            </section>
+          `;
+        }
+      }
+
+      const ShadowHost = ShadowDomElementsMixin(ShadowBase);
+      if (!customElements.get(shadowHostTag)) {
+        customElements.define(shadowHostTag, ShadowHost);
+      }
+
+      const lightHost = document.createElement("section");
+      connectLightDomRegistry(lightHost, {
+        [nextTag("litsx-runtime-light-trigger-reconnect")]: class LightChild extends HTMLElement {},
+      });
+
+      const host = document.createElement(shadowHostTag);
+      document.body.appendChild(host);
+      await host.updateComplete;
+      await host.updateComplete;
+
+      assert.match(host.shadowRoot.innerHTML, /litsx-runtime-reconnect-shadow-child/);
+      assert.match(host.shadowRoot.innerHTML, /data-connect-count="1"/);
+
+      host.remove();
+      document.body.appendChild(host);
+      await host.updateComplete;
+      await host.updateComplete;
+
+      assert.match(host.shadowRoot.innerHTML, /litsx-runtime-reconnect-shadow-child/);
+      assert.match(host.shadowRoot.innerHTML, /data-connect-count="2"/);
+
+      host.remove();
+      lightHost.remove();
+    } finally {
+      globalThis.CustomElementRegistry = originalCustomElementRegistry;
+      Element.prototype.attachShadow = originalAttachShadow;
+    }
   });
 });

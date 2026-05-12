@@ -597,6 +597,197 @@ describe("litsx suspense components", () => {
     assert.strictEqual(beta.showing, "content");
   });
 
+  it("replays a forwards suspense list when the same boundary instances disconnect and reconnect", async () => {
+    const list = new SuspenseListElement();
+    list.revealOrder = "forwards";
+    list.tail = "collapsed";
+
+    let alphaDeferred = createDeferred();
+    let betaDeferred = createDeferred();
+    let alphaResolved = false;
+    let betaResolved = false;
+
+    const alpha = new TestSuspenseBoundaryElement();
+    const beta = new TestSuspenseBoundaryElement();
+
+    alpha.compareDocumentPosition = (other) => {
+      return other === beta ? DOCUMENT_POSITION_FOLLOWING : 0;
+    };
+    beta.compareDocumentPosition = (other) => {
+      return other === alpha ? DOCUMENT_POSITION_PRECEDING : 0;
+    };
+
+    alpha.closest = () => list;
+    beta.closest = () => list;
+    alpha.fallbackRenderer = () => "alpha-loading";
+    beta.fallbackRenderer = () => "beta-loading";
+    alpha.contentRenderer = () => {
+      if (!alphaResolved) {
+        throw alphaDeferred.promise;
+      }
+      return "alpha-ready";
+    };
+    beta.contentRenderer = () => {
+      if (!betaResolved) {
+        throw betaDeferred.promise;
+      }
+      return "beta-ready";
+    };
+
+    alpha.connectedCallback();
+    beta.connectedCallback();
+
+    alpha.render();
+    beta.render();
+    assert.strictEqual(alpha.showing, "fallback");
+    assert.strictEqual(beta.showing, "hidden");
+
+    alphaResolved = true;
+    alphaDeferred.resolve();
+    await alphaDeferred.promise;
+    await Promise.resolve();
+    alpha.render();
+    beta.render();
+    assert.strictEqual(alpha.showing, "content");
+    assert.strictEqual(beta.showing, "fallback");
+
+    betaResolved = true;
+    betaDeferred.resolve();
+    await betaDeferred.promise;
+    await Promise.resolve();
+    beta.render();
+    assert.strictEqual(beta.showing, "content");
+
+    alpha.disconnectedCallback();
+    beta.disconnectedCallback();
+
+    alphaDeferred = createDeferred();
+    betaDeferred = createDeferred();
+    alphaResolved = false;
+    betaResolved = false;
+
+    alpha.connectedCallback();
+    beta.connectedCallback();
+
+    alpha.render();
+    beta.render();
+    assert.strictEqual(alpha.showing, "fallback");
+    assert.strictEqual(beta.showing, "hidden");
+
+    alphaResolved = true;
+    alphaDeferred.resolve();
+    await alphaDeferred.promise;
+    await Promise.resolve();
+    alpha.render();
+    beta.render();
+    assert.strictEqual(alpha.showing, "content");
+    assert.strictEqual(beta.showing, "fallback");
+
+    betaResolved = true;
+    betaDeferred.resolve();
+    await betaDeferred.promise;
+    await Promise.resolve();
+    beta.render();
+    assert.strictEqual(beta.showing, "content");
+  });
+
+  it("replays a forwards suspense list when new boundary instances replace disconnected ones", async () => {
+    const list = new SuspenseListElement();
+    list.revealOrder = "forwards";
+    list.tail = "collapsed";
+
+    let alphaDeferred = createDeferred();
+    let betaDeferred = createDeferred();
+    let alphaResolved = false;
+    let betaResolved = false;
+
+    const createPair = () => {
+      const alpha = new TestSuspenseBoundaryElement();
+      const beta = new TestSuspenseBoundaryElement();
+
+      alpha.compareDocumentPosition = (other) => {
+        return other === beta ? DOCUMENT_POSITION_FOLLOWING : 0;
+      };
+      beta.compareDocumentPosition = (other) => {
+        return other === alpha ? DOCUMENT_POSITION_PRECEDING : 0;
+      };
+
+      alpha.closest = () => list;
+      beta.closest = () => list;
+      alpha.fallbackRenderer = () => "alpha-loading";
+      beta.fallbackRenderer = () => "beta-loading";
+      alpha.contentRenderer = () => {
+        if (!alphaResolved) {
+          throw alphaDeferred.promise;
+        }
+        return "alpha-ready";
+      };
+      beta.contentRenderer = () => {
+        if (!betaResolved) {
+          throw betaDeferred.promise;
+        }
+        return "beta-ready";
+      };
+
+      alpha.connectedCallback();
+      beta.connectedCallback();
+      return { alpha, beta };
+    };
+
+    let { alpha, beta } = createPair();
+
+    alpha.render();
+    beta.render();
+    assert.strictEqual(alpha.showing, "fallback");
+    assert.strictEqual(beta.showing, "hidden");
+
+    alphaResolved = true;
+    alphaDeferred.resolve();
+    await alphaDeferred.promise;
+    await Promise.resolve();
+    alpha.render();
+    beta.render();
+    assert.strictEqual(alpha.showing, "content");
+    assert.strictEqual(beta.showing, "fallback");
+
+    betaResolved = true;
+    betaDeferred.resolve();
+    await betaDeferred.promise;
+    await Promise.resolve();
+    beta.render();
+    assert.strictEqual(beta.showing, "content");
+
+    alpha.disconnectedCallback();
+    beta.disconnectedCallback();
+
+    alphaDeferred = createDeferred();
+    betaDeferred = createDeferred();
+    alphaResolved = false;
+    betaResolved = false;
+    ({ alpha, beta } = createPair());
+
+    alpha.render();
+    beta.render();
+    assert.strictEqual(alpha.showing, "fallback");
+    assert.strictEqual(beta.showing, "hidden");
+
+    alphaResolved = true;
+    alphaDeferred.resolve();
+    await alphaDeferred.promise;
+    await Promise.resolve();
+    alpha.render();
+    beta.render();
+    assert.strictEqual(alpha.showing, "content");
+    assert.strictEqual(beta.showing, "fallback");
+
+    betaResolved = true;
+    betaDeferred.resolve();
+    await betaDeferred.promise;
+    await Promise.resolve();
+    beta.render();
+    assert.strictEqual(beta.showing, "content");
+  });
+
   it("normalizes unsupported suspense-list configuration values", () => {
     const list = new SuspenseListElement();
     let refreshes = 0;

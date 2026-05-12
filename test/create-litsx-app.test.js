@@ -173,14 +173,28 @@ describe("create-litsx-app", () => {
     assert.match(starterGuideSource, /type DeferredStep = \{/);
     assert.match(starterGuideSource, /import \{ SuspenseBoundary, SuspenseList, useOnConnect, useRef, useState \} from "@litsx\/litsx";/);
     assert.match(starterGuideSource, /const pendingStepsRef = useRef<Map<number, DeferredStep> \| null>\(null\);/);
+    assert.match(
+      starterGuideSource,
+      /function resolvePendingSteps\(pendingStepsRef: \{ current: Map<number, DeferredStep> \| null \}\) \{/,
+    );
     assert.match(starterGuideSource, /pendingStepsRef\.current \?\?= new Map<number, DeferredStep>\(\);/);
-    assert.match(starterGuideSource, /const pendingSteps = pendingStepsRef\.current;/);
+    assert.match(starterGuideSource, /const pendingSteps = resolvePendingSteps\(pendingStepsRef\);/);
     assert.match(starterGuideSource, /const promise = new Promise<void>\(\(nextResolve\) => \{/);
     assert.match(starterGuideSource, /const delays: number\[\] = \[180, 220, 240\];/);
     assert.match(starterGuideSource, /let intervalId: ReturnType<typeof setInterval> \| null = null;/);
-    assert.match(starterGuideSource, /suspendUntil\(0, revealedCount\)/);
+    assert.match(
+      starterGuideSource,
+      /function suspendUntil\(\s*pendingStepsRef: \{ current: Map<number, DeferredStep> \| null \},\s*stepIndex: number,\s*revealedCount: number,\s*\)/,
+    );
+    assert.match(starterGuideSource, /const pendingSteps = resolvePendingSteps\(pendingStepsRef\);/);
+    assert.match(starterGuideSource, /suspendUntil\(pendingStepsRef, 0, revealedCount\)/);
+    assert.match(starterGuideSource, /suspendUntil\(pendingStepsRef, 1, revealedCount\)/);
+    assert.match(starterGuideSource, /suspendUntil\(pendingStepsRef, 2, revealedCount\)/);
     assert.match(starterGuideSource, /useState\(0\)/);
     assert.match(starterGuideSource, /useOnConnect\(\(\) => \{/);
+    assert.match(starterGuideSource, /for \(const deferred of resolvePendingSteps\(pendingStepsRef\)\.values\(\)\) \{/);
+    assert.match(starterGuideSource, /pendingStepsRef\.current = new Map<number, DeferredStep>\(\);/);
+    assert.match(starterGuideSource, /setRevealedCount\(0\);/);
     assert.match(starterGuideSource, /tail="hidden"/);
     assert.match(starterGuideSource, /const \[intervalDelay = 0\] = remainingDelays/);
     assert.match(starterGuideSource, /setInterval\(\(\) => \{/);

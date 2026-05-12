@@ -231,6 +231,44 @@ describe("@litsx/light-dom-registry", () => {
     assert.strictEqual(registry.get(tagName), CardElement);
   });
 
+  it("keeps resolving scoped constructors for a new host instance after the previous host disconnects", () => {
+    const tagName = nextTag();
+
+    class CardElement extends HTMLElement {
+      constructor() {
+        super();
+        this.kind = "card";
+      }
+    }
+
+    const firstHost = document.createElement("section");
+    connectLightDomRegistry(firstHost, {
+      [tagName]: CardElement,
+    });
+    firstHost.innerHTML = `<${tagName}></${tagName}>`;
+    document.body.appendChild(firstHost);
+
+    const firstElement = firstHost.firstElementChild;
+    assert.strictEqual(Object.getPrototypeOf(firstElement), CardElement.prototype);
+    assert.strictEqual(firstElement.kind, "card");
+
+    firstHost.remove();
+    disconnectLightDomRegistry(firstHost);
+
+    const secondHost = document.createElement("section");
+    connectLightDomRegistry(secondHost, {
+      [tagName]: CardElement,
+    });
+    secondHost.innerHTML = `<${tagName}></${tagName}>`;
+    document.body.appendChild(secondHost);
+
+    const secondElement = secondHost.firstElementChild;
+    assert.strictEqual(Object.getPrototypeOf(secondElement), CardElement.prototype);
+    assert.strictEqual(secondElement.kind, "card");
+
+    secondHost.remove();
+  });
+
   it("handles defensive public calls and empty element maps", () => {
     const host = document.createElement("section");
 

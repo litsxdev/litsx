@@ -920,11 +920,21 @@ function createDeferred() {
   return { promise, resolve } satisfies DeferredStep;
 }
 
-function suspendUntil(stepIndex: number, revealedCount: number) {
+function resolvePendingSteps(pendingStepsRef: { current: Map<number, DeferredStep> | null }) {
+  pendingStepsRef.current ??= new Map<number, DeferredStep>();
+  return pendingStepsRef.current;
+}
+
+function suspendUntil(
+  pendingStepsRef: { current: Map<number, DeferredStep> | null },
+  stepIndex: number,
+  revealedCount: number,
+) {
   if (revealedCount > stepIndex) {
     return;
   }
 
+  const pendingSteps = resolvePendingSteps(pendingStepsRef);
   let pending = pendingSteps.get(stepIndex) as DeferredStep | undefined;
   if (!pending) {
     pending = createDeferred();
@@ -937,9 +947,8 @@ function suspendUntil(stepIndex: number, revealedCount: number) {
 export const StarterGuide = () => {
   const delays: number[] = [180, 220, 240];
   const pendingStepsRef = useRef<Map<number, DeferredStep> | null>(null);
-  pendingStepsRef.current ??= new Map<number, DeferredStep>();
-  const pendingSteps = pendingStepsRef.current;
   const [revealedCount, setRevealedCount] = useState(0);
+  const pendingSteps = resolvePendingSteps(pendingStepsRef);
 
   if (revealedCount > 0) {
     for (const [stepIndex, deferred] of pendingSteps) {
@@ -951,6 +960,12 @@ export const StarterGuide = () => {
   }
 
   useOnConnect(() => {
+    for (const deferred of resolvePendingSteps(pendingStepsRef).values()) {
+      deferred.resolve?.();
+    }
+    pendingStepsRef.current = new Map<number, DeferredStep>();
+    setRevealedCount(0);
+
     const [firstDelay = 0, ...remainingDelays] = delays;
     let intervalId: ReturnType<typeof setInterval> | null = null;
 
@@ -978,6 +993,10 @@ export const StarterGuide = () => {
       if (intervalId != null) {
         clearInterval(intervalId);
       }
+      for (const deferred of resolvePendingSteps(pendingStepsRef).values()) {
+        deferred.resolve?.();
+      }
+      pendingStepsRef.current = new Map<number, DeferredStep>();
     };
   }, []);
 
@@ -1008,7 +1027,7 @@ export const StarterGuide = () => {
         <SuspenseBoundary
           .fallbackRenderer={() => null}
           .contentRenderer={() => {
-            suspendUntil(0, revealedCount);
+            suspendUntil(pendingStepsRef, 0, revealedCount);
             return (
               <GuideCard
                 .eyebrow={"Getting started"}
@@ -1029,7 +1048,7 @@ export const StarterGuide = () => {
         <SuspenseBoundary
           .fallbackRenderer={() => null}
           .contentRenderer={() => {
-            suspendUntil(1, revealedCount);
+            suspendUntil(pendingStepsRef, 1, revealedCount);
             return (
               <GuideCard
                 .eyebrow={"Authored model"}
@@ -1050,7 +1069,7 @@ export const StarterGuide = () => {
         <SuspenseBoundary
           .fallbackRenderer={() => null}
           .contentRenderer={() => {
-            suspendUntil(2, revealedCount);
+            suspendUntil(pendingStepsRef, 2, revealedCount);
             return (
               <GuideCard
                 .eyebrow={"Tooling flow"}
