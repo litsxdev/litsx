@@ -1272,7 +1272,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@litsx/light-dom-registry@npm:^0.2.2, @litsx/light-dom-registry@workspace:packages/light-dom-registry":
+"@litsx/light-dom-registry@npm:^0.2.3, @litsx/light-dom-registry@workspace:packages/light-dom-registry":
   version: 0.0.0-use.local
   resolution: "@litsx/light-dom-registry@workspace:packages/light-dom-registry"
   languageName: unknown
@@ -1284,7 +1284,7 @@ __metadata:
   dependencies:
     "@lit/context": "npm:^1.1.6"
     "@lit/reactive-element": "npm:^2.1.2"
-    "@litsx/light-dom-registry": "npm:^0.2.2"
+    "@litsx/light-dom-registry": "npm:^0.2.3"
     lit: "npm:^3.2.1"
   peerDependencies:
     lit: ">=3"

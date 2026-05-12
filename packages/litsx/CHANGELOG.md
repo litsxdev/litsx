@@ -1,5 +1,13 @@
 # litsx
 
+## 0.3.3
+
+### Patch Changes
+
+- bca974f: Allow globally registered shadow-DOM LitSX components to stay newable after the light DOM registry runtime patches `HTMLElement`, including components defined before the light-DOM runtime activates.
+- Updated dependencies [bca974f]
+  - @litsx/light-dom-registry@0.2.3
+
 ## 0.3.2
 
 ### Patch Changes
