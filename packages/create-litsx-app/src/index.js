@@ -92,7 +92,6 @@ function createBasePackageJson(packageName) {
       preview: "vite preview",
     },
     dependencies: {
-      "@webcomponents/scoped-custom-element-registry": "^0.0.10",
       "lit": "^3.2.1",
       "@litsx/litsx": publishedPackageVersions["@litsx/litsx"],
     },
@@ -224,6 +223,9 @@ import { defineConfig } from "vite";
 
 export default defineConfig({
   plugins: [litsx({ sourceMaps: true })],
+  resolve: {
+    dedupe: ["lit", "lit-html", "lit-element", "@lit/reactive-element"],
+  },
 });
 `);
   files.set("vitest.config.js", `import { defineConfig } from "vitest/config";
@@ -370,8 +372,7 @@ export default [
 </svg>
 `);
   files.set("public/flame_512.png", fs.readFileSync(new URL("./assets/flame_512.png", import.meta.url)));
-  files.set("src/main.js", `import "@webcomponents/scoped-custom-element-registry";
-import { ${className} } from "./${packageName}.litsx";
+  files.set("src/main.js", `import { ${className} } from "./${packageName}.litsx";
 import "./styles/tokens.css";
 
 customElements.define("app-root", ${className});
@@ -1179,13 +1180,24 @@ export default {
   async viteFinal(config) {
     return {
       ...config,
+      resolve: {
+        ...(config.resolve ?? {}),
+        dedupe: [
+          ...new Set([
+            ...((config.resolve?.dedupe ?? [])),
+            "lit",
+            "lit-html",
+            "lit-element",
+            "@lit/reactive-element",
+          ]),
+        ],
+      },
       plugins: [...(config.plugins ?? []), litsx({ sourceMaps: true })],
     };
   },
 };
 `);
-  files.set(".storybook/preview.js", `import "@webcomponents/scoped-custom-element-registry";
-import "../src/styles/tokens.css";
+  files.set(".storybook/preview.js", `import "../src/styles/tokens.css";
 
 export const parameters = {
   controls: { expanded: true },
@@ -1259,15 +1271,15 @@ export default meta;
 export const Default = {};
 `);
   files.set("src/stories/starter-guide.docs.mdx", `import { Meta, Canvas } from "@storybook/addon-docs/blocks";
-import * as StarterGuideStories from "./starter-guide.stories.litsx";
+import starterGuideMeta, { Default as StarterGuideDefault } from "./starter-guide.stories.litsx";
 
-<Meta of={StarterGuideStories} />
+<Meta of={starterGuideMeta} />
 
 # Starter Guide
 
 The \`StarterGuide\` component demonstrates LitSX suspense primitives in a way that is useful to a new project owner: it reveals the first files, bindings and commands worth learning in a fresh scaffold.
 
-<Canvas of={StarterGuideStories.Default} />
+<Canvas of={StarterGuideDefault} />
 
 ## What it shows
 

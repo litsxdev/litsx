@@ -69,10 +69,7 @@ describe("create-litsx-app", () => {
     const starterGuideSource = result.files.get("src/components/starter-guide.litsx");
 
     assert.ok(packageJson.dependencies["@litsx/litsx"]);
-    assert.strictEqual(
-      packageJson.dependencies["@webcomponents/scoped-custom-element-registry"],
-      "^0.0.10",
-    );
+    assert.ok(!("@webcomponents/scoped-custom-element-registry" in packageJson.dependencies));
     assert.ok(!("@open-wc/scoped-elements" in packageJson.dependencies));
     assert.ok(packageJson.dependencies.lit);
     assert.ok(packageJson.devDependencies["@litsx/typescript-plugin"]);
@@ -107,10 +104,11 @@ describe("create-litsx-app", () => {
     assert.doesNotMatch(JSON.stringify(packageJson.devDependencies), /@litsx\/babel-parser/);
     assert.match(viteConfig, /@litsx\/vite-plugin/);
     assert.match(viteConfig, /plugins: \[litsx\(\{ sourceMaps: true \}\)\]/);
+    assert.match(viteConfig, /dedupe: \["lit", "lit-html", "lit-element", "@lit\/reactive-element"\]/);
     assert.match(vitestConfig, /import \{ defineConfig \} from "vitest\/config";/);
     assert.match(vitestConfig, /provider: "playwright"/);
     assert.match(vitestConfig, /browser: "chromium"/);
-    assert.match(mainSource, /import "@webcomponents\/scoped-custom-element-registry";/);
+    assert.doesNotMatch(mainSource, /scoped-custom-element-registry/);
     assert.match(mainSource, /import \{ MyLitsxApp \} from "\.\/my-litsx-app\.litsx";/);
     assert.match(appTestSource, /import \{ afterEach, describe, expect, it \} from "vitest";/);
     assert.match(appTestSource, /const tagName = "test-my-litsx-app";/);
@@ -221,7 +219,7 @@ describe("create-litsx-app", () => {
     assert.strictEqual(packageJson.scripts.format, "prettier --write .");
     assert.ok(!result.files.has(".storybook/main.js"));
     assert.ok(!result.files.has("src/stories/starter-guide.stories.litsx"));
-    assert.match(mainSource, /import "@webcomponents\/scoped-custom-element-registry";/);
+    assert.doesNotMatch(mainSource, /scoped-custom-element-registry/);
     assert.match(appSource, /<LitsxHero/);
     assert.match(appSource, /<StarterGuide/);
     assert.match(appSource, /static styles = /);
@@ -263,7 +261,7 @@ describe("create-litsx-app", () => {
     assert.ok(result.files.has("src/my-litsx-app.test.js"));
     assert.ok(!result.files.has(".storybook/main.js"));
     assert.ok(!result.files.has("src/stories/starter-guide.stories.litsx"));
-    assert.match(mainSource, /import "@webcomponents\/scoped-custom-element-registry";/);
+    assert.doesNotMatch(mainSource, /scoped-custom-element-registry/);
     assert.match(componentSource, /<LitsxHero/);
     assert.match(componentSource, /<StarterGuide/);
     assert.match(componentSource, /static styles = /);
@@ -305,6 +303,7 @@ describe("create-litsx-app", () => {
     const playwrightConfig = result.files.get("playwright.config.js");
     const dockerfile = result.files.get("Dockerfile.visual");
     const visualTest = result.files.get("tests/visual/storybook.spec.js");
+    const storybookMain = result.files.get(".storybook/main.js");
     const previewSource = result.files.get(".storybook/preview.js");
     const buttonStory = result.files.get("src/stories/litsx-button.stories.litsx");
     const heroStory = result.files.get("src/stories/litsx-hero.stories.litsx");
@@ -321,7 +320,12 @@ describe("create-litsx-app", () => {
     assert.match(playwrightConfig, /timezoneId: "UTC"/);
     assert.match(dockerfile, /mcr\.microsoft\.com\/playwright/);
     assert.match(visualTest, /toHaveScreenshot/);
-    assert.match(previewSource, /import "@webcomponents\/scoped-custom-element-registry";/);
+    assert.match(storybookMain, /dedupe:/);
+    assert.match(storybookMain, /"lit"/);
+    assert.match(storybookMain, /"lit-html"/);
+    assert.match(storybookMain, /"lit-element"/);
+    assert.match(storybookMain, /"@lit\/reactive-element"/);
+    assert.doesNotMatch(previewSource, /scoped-custom-element-registry/);
     assert.match(buttonStory, /customElements\.define\("litsx-button", LitsxButton\)/);
     assert.match(buttonStory, /<litsx-button \.label=\{label\} \.type=\{type\} \/>/);
     assert.match(heroStory, /customElements\.define\("litsx-hero", LitsxHero\)/);
@@ -329,6 +333,9 @@ describe("create-litsx-app", () => {
     assert.match(starterGuideStory, /customElements\.define\("starter-guide", StarterGuide\)/);
     assert.match(starterGuideStory, /render: \(\) => <starter-guide \/>/);
     assert.match(starterGuideDocs, /import \{ Meta, Canvas \} from "@storybook\/addon-docs\/blocks";/);
+    assert.match(starterGuideDocs, /import starterGuideMeta, \{ Default as StarterGuideDefault \} from "\.\/starter-guide\.stories\.litsx";/);
+    assert.match(starterGuideDocs, /<Meta of=\{starterGuideMeta\} \/>/);
+    assert.match(starterGuideDocs, /<Canvas of=\{StarterGuideDefault\} \/>/);
   });
 
   it("writes the scaffold to disk", () => {
