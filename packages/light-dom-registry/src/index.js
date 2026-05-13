@@ -59,6 +59,7 @@ function getRuntime() {
   const globalDefinitionForConstructor = new WeakMap();
   const scopeForElement = new WeakMap();
   const standInDefinitionByTag = new Map();
+  let globalRegistry;
 
   let upgradingInstance;
   let elementsPendingAttributes;
@@ -113,9 +114,10 @@ function getRuntime() {
 
       let standInClass = nativeGet(tagName);
       if (standInClass && !standInClass[STAND_IN_MARK]) {
-        throw new Error(
-          `Global custom element tag "${tagName}" is already registered to a different constructor.`
-        );
+        // Storybook and similar hosts may globally register a component that is
+        // also used as a scoped child elsewhere. Keep the native constructor as
+        // the creation stand-in; scoped creation will re-customize the element
+        // with the registry-local definition.
       }
 
       const formAssociated =
@@ -256,6 +258,9 @@ function getRuntime() {
     if (scope.nodeType === Node.ELEMENT_NODE && isRegistryLike(scope[HOST_REGISTRY])) {
       return scope[HOST_REGISTRY];
     }
+    if (scope === document && isRegistryLike(globalRegistry)) {
+      return globalRegistry;
+    }
     return null;
   };
 
@@ -273,7 +278,7 @@ function getRuntime() {
         : null;
       if (root && root !== current) {
         const rootRegistry = registryFromScope(root);
-        if (rootRegistry) {
+        if (rootRegistry && root !== document) {
           return rootRegistry;
         }
       }
@@ -523,6 +528,95 @@ function getRuntime() {
     };
   }
 
+  function upgradeCreatedElement(element, registry) {
+    if (
+      !element ||
+      element.nodeType !== Node.ELEMENT_NODE ||
+      definitionForElement.has(element) ||
+      !registry ||
+      typeof registry._getDefinition !== "function"
+    ) {
+      return;
+    }
+
+    const tagName = element.localName || element.tagName?.toLowerCase?.();
+    const definition = tagName ? registry._getDefinition(tagName) : null;
+    if (definition) {
+      customize(element, definition, element.isConnected);
+    }
+  }
+
+  function upgradeCreatedTree(node, registry) {
+    if (!node || !registry) {
+      return;
+    }
+
+    if (
+      node.nodeType !== Node.DOCUMENT_FRAGMENT_NODE &&
+      node.nodeType !== Node.ELEMENT_NODE
+    ) {
+      return;
+    }
+
+    const pending = [node];
+    while (pending.length > 0) {
+      const current = pending.shift();
+      if (current.nodeType === Node.ELEMENT_NODE) {
+        upgradeCreatedElement(current, registry);
+      }
+
+      for (const child of current.children ?? []) {
+        pending.push(child);
+      }
+    }
+  }
+
+  function upgradeConnectedTree(node, registry) {
+    if (!node || !registry) {
+      return;
+    }
+
+    if (
+      node.nodeType !== Node.DOCUMENT_FRAGMENT_NODE &&
+      node.nodeType !== Node.ELEMENT_NODE
+    ) {
+      return;
+    }
+
+    const pending = [node];
+    while (pending.length > 0) {
+      const current = pending.shift();
+      if (current.nodeType !== Node.ELEMENT_NODE) {
+        for (const child of current.children ?? []) {
+          pending.push(child);
+        }
+        continue;
+      }
+
+      upgradeCreatedElement(current, registry);
+      const definition = definitionForElement.get(current);
+      if (definition?.connectedCallback && current.isConnected) {
+        definition.connectedCallback.call(current);
+      }
+
+      for (const child of current.children ?? []) {
+        pending.push(child);
+      }
+    }
+  }
+
+  function collectInsertedNodes(node) {
+    if (!node) {
+      return [];
+    }
+
+    if (node.nodeType === Node.DOCUMENT_FRAGMENT_NODE) {
+      return Array.from(node.children ?? []);
+    }
+
+    return [node];
+  }
+
   window.HTMLElement = function HTMLElement() {
     let instance = upgradingInstance;
     if (instance) {
@@ -559,8 +653,12 @@ function getRuntime() {
     ctor.prototype[method] = function (...args) {
       creationContext.push(this);
       const result = native.apply(from || this, args);
+      const registry = registryForNode(this);
+      upgradeCreatedTree(result, registry);
       if (result !== undefined) {
         scopeForElement.set(result, this);
+      } else if (method === "insertAdjacentHTML") {
+        upgradeConnectedTree(this, registry);
       }
       creationContext.pop();
       return result;
@@ -577,14 +675,37 @@ function getRuntime() {
       set(value) {
         creationContext.push(this);
         descriptor.set.call(this, value);
+        const registry = registryForNode(this);
+        for (const child of this.children ?? []) {
+          upgradeConnectedTree(child, registry);
+        }
         creationContext.pop();
       },
     });
   }
 
+  function installScopedInsertionMethod(ctor, method) {
+    const native = ctor.prototype[method];
+    if (typeof native !== "function") {
+      return;
+    }
+
+    ctor.prototype[method] = function (node, ...args) {
+      const insertedNodes = collectInsertedNodes(node);
+      const result = native.call(this, node, ...args);
+      const registry = registryForNode(this);
+      for (const inserted of insertedNodes) {
+        upgradeConnectedTree(inserted, registry);
+      }
+      return result;
+    };
+  }
+
   installScopedCreationMethod(ShadowRoot, "createElement", document);
   installScopedCreationMethod(ShadowRoot, "createElementNS", document);
   installScopedCreationMethod(ShadowRoot, "importNode", document);
+  installScopedInsertionMethod(ShadowRoot, "appendChild");
+  installScopedInsertionMethod(ShadowRoot, "insertBefore");
   installScopedCreationMethod(Element, "insertAdjacentHTML");
   installScopedCreationSetter(Element, "innerHTML");
   installScopedCreationSetter(ShadowRoot, "innerHTML");
@@ -626,6 +747,25 @@ function getRuntime() {
       }
     },
   };
+
+  globalRegistry = new ShimmedCustomElementsRegistry();
+  globalRegistry.get = function get(tagName) {
+    const definition = this._getDefinition(tagName);
+    if (definition) {
+      return definition.elementClass;
+    }
+    const ctor = nativeGet(String(tagName).toLowerCase());
+    return ctor?.[STAND_IN_MARK] ? undefined : ctor;
+  };
+  globalRegistry.upgrade = function upgrade(root) {
+    return nativeRegistry.upgrade?.(root);
+  };
+
+  Object.defineProperty(window, "customElements", {
+    value: globalRegistry,
+    configurable: true,
+    writable: true,
+  });
 
   window[RUNTIME_KEY] = runtime;
   return runtime;

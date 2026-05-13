@@ -26,18 +26,18 @@ describe("@litsx/light-dom-registry", () => {
     const second = ensureLightDomProxy(tagName);
 
     assert.strictEqual(first, second);
-    assert.strictEqual(customElements.get(tagName), first);
+    assert.strictEqual(customElements.get(tagName), undefined);
   });
 
-  it("throws when the base tag is already registered to a different constructor", () => {
+  it("keeps scoped proxies separate from global definitions with the same tag", () => {
     const tagName = nextTag();
 
     class ExternalElement extends HTMLElement {}
     customElements.define(tagName, ExternalElement);
 
-    assert.throws(() => {
-      ensureLightDomProxy(tagName);
-    }, /already registered to a different constructor/);
+    const standIn = ensureLightDomProxy(tagName);
+    assert.strictEqual(customElements.get(tagName), ExternalElement);
+    assert.notStrictEqual(standIn, ExternalElement);
   });
 
   it("upgrades light DOM elements in place without creating wrapper children", async () => {
@@ -185,7 +185,7 @@ describe("@litsx/light-dom-registry", () => {
     const standIn = ensureLightDomProxy(tagName);
     const registry = createLightDomRegistry(host, {});
 
-    assert.strictEqual(customElements.get(tagName), standIn);
+    assert.strictEqual(customElements.get(tagName), undefined);
 
     host.innerHTML = `<${tagName}></${tagName}>`;
     document.body.appendChild(host);
@@ -347,11 +347,13 @@ describe("@litsx/light-dom-registry", () => {
 
     registry.define(tagName, CardElement);
 
-    assert.deepStrictEqual(registry.resolve(tagName), {
+    const metadata = registry.resolve(tagName);
+    assert.ok(metadata.standInClass);
+    assert.deepStrictEqual(metadata, {
       host,
       ctor: CardElement,
       tagName,
-      standInClass: customElements.get(tagName),
+      standInClass: metadata.standInClass,
     });
     assert.equal(registry.resolve(`${tagName}-missing`), null);
 
@@ -422,9 +424,8 @@ describe("@litsx/light-dom-registry", () => {
     const host = document.createElement("section");
     const registry = createLightDomRegistry(host, {});
 
-    ensureLightDomProxy(tagName);
+    const standInClass = ensureLightDomProxy(tagName);
     const pending = document.createElement(tagName);
-    const standInClass = customElements.get(tagName);
     host.appendChild(pending);
     document.body.appendChild(host);
 
@@ -640,7 +641,8 @@ describe("@litsx/light-dom-registry", () => {
     assert.strictEqual(runtime.getStandInDefinition("missing-tag"), null);
     assert.strictEqual(runtime.getDefinitionForElement(element).elementClass, MetaElement);
     assert.strictEqual(runtime.getDefinitionForElement(document.createElement("div")), null);
-    assert.strictEqual(registry.resolve(tagName).standInClass, customElements.get(tagName));
+    assert.strictEqual(customElements.get(tagName), undefined);
+    assert.ok(registry.resolve(tagName).standInClass);
 
     host.remove();
   });
@@ -699,6 +701,247 @@ describe("@litsx/light-dom-registry", () => {
     }
 
     host.remove();
+  });
+
+  it("resolves scoped elements from shadowRoot.customElementRegistry too", () => {
+    const tagName = nextTag();
+    const host = document.createElement("section");
+    const shadowRoot = host.attachShadow({ mode: "open" });
+
+    class ScopedElement extends HTMLElement {
+      connectedCallback() {
+        this.connected = true;
+      }
+    }
+
+    const registry = createLightDomRegistry(host, {
+      [tagName]: ScopedElement,
+    });
+    shadowRoot.customElementRegistry = registry;
+
+    shadowRoot.innerHTML = `<${tagName}></${tagName}>`;
+    document.body.appendChild(host);
+
+    const element = shadowRoot.querySelector(tagName);
+    assert(element);
+    assert.strictEqual(Object.getPrototypeOf(element), ScopedElement.prototype);
+    assert.equal(element.connected, true);
+
+    host.remove();
+  });
+
+  it("falls back to shadowRoot.host.registry when the shadow root does not expose registry fields", () => {
+    const tagName = nextTag();
+    const host = document.createElement("section");
+    const shadowRoot = host.attachShadow({ mode: "open" });
+
+    class ScopedElement extends HTMLElement {
+      connectedCallback() {
+        this.connected = true;
+      }
+    }
+
+    connectLightDomRegistry(host, {
+      [tagName]: ScopedElement,
+    });
+
+    shadowRoot.innerHTML = `<${tagName}></${tagName}>`;
+    document.body.appendChild(host);
+
+    const element = shadowRoot.querySelector(tagName);
+    assert(element);
+    assert.strictEqual(Object.getPrototypeOf(element), ScopedElement.prototype);
+    assert.equal(element.connected, true);
+
+    host.remove();
+  });
+
+  it("upgrades stand-ins that are created before they are connected to a scoped shadow root", () => {
+    const tagName = nextTag();
+    const host = document.createElement("section");
+    const shadowRoot = host.attachShadow({ mode: "open" });
+
+    class ScopedElement extends HTMLElement {
+      connectedCallback() {
+        this.connected = true;
+      }
+    }
+
+    connectLightDomRegistry(host, {
+      [tagName]: ScopedElement,
+    });
+
+    const element = document.createElement(tagName);
+    assert.notStrictEqual(Object.getPrototypeOf(element), ScopedElement.prototype);
+
+    shadowRoot.appendChild(element);
+    document.body.appendChild(host);
+
+    assert.strictEqual(Object.getPrototypeOf(element), ScopedElement.prototype);
+    assert.equal(element.connected, true);
+
+    host.remove();
+  });
+
+  it("allows scoped definitions for tags that are already globally registered", () => {
+    const tagName = nextTag();
+    const host = document.createElement("section");
+    const shadowRoot = host.attachShadow({ mode: "open" });
+
+    class GlobalElement extends HTMLElement {}
+
+    class ScopedElement extends HTMLElement {
+      connectedCallback() {
+        this.connected = true;
+      }
+    }
+
+    customElements.define(tagName, GlobalElement);
+
+    const registry = createLightDomRegistry(host, {
+      [tagName]: ScopedElement,
+    });
+    shadowRoot.customElements = registry;
+    document.body.appendChild(host);
+    shadowRoot.innerHTML = `<${tagName}></${tagName}>`;
+
+    const element = shadowRoot.querySelector(tagName);
+    assert(element);
+    assert.strictEqual(Object.getPrototypeOf(element), ScopedElement.prototype);
+    assert.equal(element.connected, true);
+    assert.strictEqual(customElements.get(tagName), GlobalElement);
+
+    host.remove();
+  });
+
+  it("does not expose scoped stand-ins as global custom element definitions", () => {
+    const tagName = nextTag();
+    const host = document.createElement("section");
+    const shadowRoot = host.attachShadow({ mode: "open" });
+
+    class ScopedElement extends HTMLElement {}
+    class GlobalElement extends HTMLElement {
+      connectedCallback() {
+        this.connected = true;
+      }
+    }
+
+    const registry = createLightDomRegistry(host, {
+      [tagName]: ScopedElement,
+    });
+    shadowRoot.customElements = registry;
+    shadowRoot.innerHTML = `<${tagName}></${tagName}>`;
+
+    assert.strictEqual(customElements.get(tagName), undefined);
+    customElements.define(tagName, GlobalElement);
+    assert.strictEqual(customElements.get(tagName), GlobalElement);
+
+    const globalElement = document.createElement(tagName);
+    document.body.appendChild(globalElement);
+
+    assert.strictEqual(Object.getPrototypeOf(globalElement), GlobalElement.prototype);
+    assert.equal(globalElement.connected, true);
+
+    host.remove();
+    globalElement.remove();
+  });
+
+  it("keeps scoped hosts isolated after a global definition claims the same tag", () => {
+    const tagName = nextTag();
+    const firstHost = document.createElement("section");
+    const secondHost = document.createElement("section");
+
+    class FirstScopedElement extends HTMLElement {
+      connectedCallback() {
+        this.kind = "first";
+      }
+    }
+
+    class SecondScopedElement extends HTMLElement {
+      connectedCallback() {
+        this.kind = "second";
+      }
+    }
+
+    class GlobalElement extends HTMLElement {
+      connectedCallback() {
+        this.kind = "global";
+      }
+    }
+
+    connectLightDomRegistry(firstHost, {
+      [tagName]: FirstScopedElement,
+    });
+    firstHost.innerHTML = `<${tagName}></${tagName}>`;
+    document.body.appendChild(firstHost);
+
+    const firstBeforeGlobal = firstHost.querySelector(tagName);
+    assert.strictEqual(Object.getPrototypeOf(firstBeforeGlobal), FirstScopedElement.prototype);
+    assert.equal(firstBeforeGlobal.kind, "first");
+    assert.strictEqual(customElements.get(tagName), undefined);
+
+    customElements.define(tagName, GlobalElement);
+    const globalElement = document.createElement(tagName);
+    document.body.appendChild(globalElement);
+
+    connectLightDomRegistry(secondHost, {
+      [tagName]: SecondScopedElement,
+    });
+    secondHost.innerHTML = `<${tagName}></${tagName}>`;
+    document.body.appendChild(secondHost);
+
+    const firstAfterGlobal = firstHost.querySelector(tagName);
+    const secondAfterGlobal = secondHost.querySelector(tagName);
+
+    assert.strictEqual(Object.getPrototypeOf(firstAfterGlobal), FirstScopedElement.prototype);
+    assert.strictEqual(Object.getPrototypeOf(secondAfterGlobal), SecondScopedElement.prototype);
+    assert.strictEqual(Object.getPrototypeOf(globalElement), GlobalElement.prototype);
+    assert.equal(firstAfterGlobal.kind, "first");
+    assert.equal(secondAfterGlobal.kind, "second");
+    assert.equal(globalElement.kind, "global");
+
+    firstHost.remove();
+    secondHost.remove();
+    globalElement.remove();
+  });
+
+  it("preserves scoped shadow-root importNode results across repeated global definitions", () => {
+    const tagName = nextTag();
+    const firstHost = document.createElement("section");
+    const firstShadow = firstHost.attachShadow({ mode: "open" });
+    const secondHost = document.createElement("section");
+    const secondShadow = secondHost.attachShadow({ mode: "open" });
+    const template = document.createElement("template");
+    template.innerHTML = `<${tagName}></${tagName}>`;
+
+    class FirstScopedElement extends HTMLElement {}
+    class SecondScopedElement extends HTMLElement {}
+    class GlobalElement extends HTMLElement {}
+
+    firstShadow.registry = createLightDomRegistry(firstHost, {
+      [tagName]: FirstScopedElement,
+    });
+    firstShadow.appendChild(firstShadow.importNode(template.content, true));
+    document.body.appendChild(firstHost);
+
+    customElements.define(tagName, GlobalElement);
+
+    secondShadow.registry = createLightDomRegistry(secondHost, {
+      [tagName]: SecondScopedElement,
+    });
+    secondShadow.appendChild(secondShadow.importNode(template.content, true));
+    document.body.appendChild(secondHost);
+
+    const firstElement = firstShadow.querySelector(tagName);
+    const secondElement = secondShadow.querySelector(tagName);
+    const globalElement = document.createElement(tagName);
+
+    assert.strictEqual(Object.getPrototypeOf(firstElement), FirstScopedElement.prototype);
+    assert.strictEqual(Object.getPrototypeOf(secondElement), SecondScopedElement.prototype);
+    assert.strictEqual(Object.getPrototypeOf(globalElement), GlobalElement.prototype);
+
+    firstHost.remove();
+    secondHost.remove();
   });
 
   it("propagates scoped creation context through shadow-root innerHTML", () => {

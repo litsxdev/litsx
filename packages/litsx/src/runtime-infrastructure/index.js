@@ -1,6 +1,7 @@
 import { adoptStyles } from "@lit/reactive-element";
 import {
   connectLightDomRegistry,
+  createLightDomRegistry,
   disconnectLightDomRegistry,
 } from "@litsx/light-dom-registry";
 
@@ -11,7 +12,29 @@ let shadowDomRegistryAttachKey;
 let shadowDomRegistryAttachShadowRef;
 let shadowDomRegistryCtorRef;
 
-function getShadowDomRegistryAttachKey() {
+function getShadowDomRegistryAttachKey(registryOverride = null) {
+  if (registryOverride) {
+    for (const key of ["registry", "customElements", "customElementRegistry"]) {
+      const host = document.createElement("div");
+      try {
+        const shadowRoot = host.attachShadow({
+          mode: "open",
+          [key]: registryOverride,
+        });
+        if (
+          shadowRoot?.registry === registryOverride ||
+          shadowRoot?.customElements === registryOverride ||
+          shadowRoot?.customElementRegistry === registryOverride
+        ) {
+          return key;
+        }
+      } catch {
+        // Try the next known option name.
+      }
+    }
+    return null;
+  }
+
   if (
     shadowDomRegistryAttachKey !== undefined &&
     shadowDomRegistryAttachShadowRef === Element?.prototype?.attachShadow &&
@@ -93,25 +116,34 @@ function defineScopedElements(registry, elements = {}) {
 }
 
 function createScopedRegistryForHost(host) {
-  const attachKey = getShadowDomRegistryAttachKey();
-  if (!attachKey) {
-    throw new Error(
-      "ShadowDomElementsMixin requires native scoped custom element registries or the @webcomponents/scoped-custom-element-registry polyfill."
-    );
-  }
-
   const ctor = host.constructor;
   const elements = ctor.scopedElements ?? ctor.elements ?? {};
   let registry = host.registry ?? null;
+
+  if (!registry || typeof registry._getDefinition !== "function") {
+    registry = createLightDomRegistry(host, {});
+  }
 
   if (!registry) {
     registry = new CustomElementRegistry();
   }
 
+  const attachKey = getShadowDomRegistryAttachKey(registry);
+
   defineScopedElements(registry, elements);
   host.registry = registry;
 
   return { attachKey, registry };
+}
+
+function assignShadowRootRegistry(shadowRoot, registry) {
+  for (const key of ["registry", "customElements", "customElementRegistry"]) {
+    try {
+      shadowRoot[key] = registry;
+    } catch {
+      // Some browsers expose readonly experimental registry aliases.
+    }
+  }
 }
 
 function cssTextFromStyle(style) {
@@ -267,12 +299,16 @@ export const ShadowDomElementsMixin = dedupeMixin((Base) =>
       }
 
       const { attachKey, registry } = createScopedRegistryForHost(this);
+      const scopedRegistryOption = attachKey ? { [attachKey]: registry } : {};
       const shadowRootOptions = {
         mode: "open",
         ...(ctor.shadowRootOptions ?? {}),
-        [attachKey]: registry,
+        ...scopedRegistryOption,
       };
       const shadowRoot = this.attachShadow(shadowRootOptions);
+      if (!attachKey) {
+        assignShadowRootRegistry(shadowRoot, registry);
+      }
       if (this.renderOptions && typeof shadowRoot.importNode === "function") {
         this.renderOptions.creationScope = shadowRoot;
         this.renderOptions.renderBefore ??= shadowRoot.firstChild;
