@@ -92,6 +92,7 @@ function createBasePackageJson(packageName) {
       preview: "vite preview",
     },
     dependencies: {
+      "@webcomponents/scoped-custom-element-registry": "^0.0.10",
       "lit": "^3.2.1",
       "@litsx/litsx": publishedPackageVersions["@litsx/litsx"],
     },
@@ -372,7 +373,8 @@ export default [
 </svg>
 `);
   files.set("public/flame_512.png", fs.readFileSync(new URL("./assets/flame_512.png", import.meta.url)));
-  files.set("src/main.js", `import { ${className} } from "./${packageName}.litsx";
+  files.set("src/main.js", `import "@webcomponents/scoped-custom-element-registry";
+import { ${className} } from "./${packageName}.litsx";
 import "./styles/tokens.css";
 
 customElements.define("app-root", ${className});
@@ -1197,7 +1199,8 @@ export default {
   },
 };
 `);
-  files.set(".storybook/preview.js", `import "../src/styles/tokens.css";
+  files.set(".storybook/preview.js", `import "@webcomponents/scoped-custom-element-registry";
+import "../src/styles/tokens.css";
 
 export const parameters = {
   controls: { expanded: true },
