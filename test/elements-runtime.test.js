@@ -21,7 +21,6 @@ import {
 } from "../packages/core/src/elements/index.js";
 
 let tagCounter = 0;
-const LIGHT_DOM_RUNTIME_KEY = Symbol.for("litsx.lightDomRegistry.runtime");
 
 function nextTag(prefix = "litsx-runtime") {
   tagCounter += 1;
@@ -251,13 +250,6 @@ describe("litsx elements runtime", () => {
   it("upgrades existing light-dom children when a light-dom host is upgraded", async () => {
     const childTag = nextTag("litsx-runtime-light-upgrade-child");
     const hostTag = nextTag("litsx-runtime-light-upgrade-host");
-    const existingRuntime = window[LIGHT_DOM_RUNTIME_KEY];
-
-    if (existingRuntime?.NativeHTMLElement) {
-      window.HTMLElement = existingRuntime.NativeHTMLElement;
-      globalThis.HTMLElement = existingRuntime.NativeHTMLElement;
-      delete window[LIGHT_DOM_RUNTIME_KEY];
-    }
 
     class Base extends HTMLElement {}
 
@@ -276,8 +268,8 @@ describe("litsx elements runtime", () => {
     customElements.define(hostTag, HostElement);
 
     const host = document.createElement(hostTag);
-    host.innerHTML = `<${childTag}></${childTag}>`;
     document.body.appendChild(host);
+    host.innerHTML = `<${childTag}></${childTag}>`;
     await globalThis.happyDOM.whenAsyncComplete();
     const child = host.querySelector(childTag);
 
