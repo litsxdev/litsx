@@ -1,6 +1,7 @@
 ---
 "@litsx/babel-plugin-transform-litsx-scoped-elements": patch
 "@litsx/babel-preset-litsx": patch
+"@litsx/babel-preset-react-compat": patch
 "@litsx/light-dom-registry": patch
 "@litsx/litsx": patch
 "@litsx/vite-plugin": patch

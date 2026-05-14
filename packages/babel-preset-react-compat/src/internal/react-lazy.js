@@ -18,10 +18,35 @@ export default declare((api) => {
 
   function isScopedElementsWrapped(superClass) {
     return (
-      t.isCallExpression(superClass) &&
-      t.isIdentifier(superClass.callee) &&
-      (superClass.callee.name === "ShadowDomElementsMixin" ||
-        superClass.callee.name === "LightDomElementsMixin")
+      hasMixinInSuperChain(superClass, "ShadowDomElementsMixin") ||
+      hasMixinInSuperChain(superClass, "LightDomElementsMixin")
+    );
+  }
+
+  function hasMixinInSuperChain(node, mixinName) {
+    if (!node) {
+      return false;
+    }
+
+    return (
+      t.isCallExpression(node) &&
+      (
+        (
+          t.isIdentifier(node.callee) &&
+          node.callee.name === mixinName
+        ) ||
+        node.arguments.some((argument) =>
+          t.isExpression(argument) && hasMixinInSuperChain(argument, mixinName)
+        )
+      )
+    );
+  }
+
+  function isLightDomClass(classNode) {
+    return (
+      Boolean(classNode._litsxLightDom) ||
+      hasMixinInSuperChain(classNode.superClass, "LightDomMixin") ||
+      hasMixinInSuperChain(classNode.superClass, "LightDomElementsMixin")
     );
   }
 
@@ -204,7 +229,9 @@ export default declare((api) => {
       return null;
     }
 
-    const candidate = args[args.length - 1];
+    const candidate = [...args].reverse().find((argument) =>
+      argument?.isArrowFunctionExpression()
+    );
     if (candidate?.isArrowFunctionExpression()) {
       return candidate;
     }
@@ -281,7 +308,7 @@ export default declare((api) => {
         isLitElementSuperClass(classPath.node.superClass, t) &&
         !isScopedElementsWrapped(classPath.node.superClass)
       ) {
-        const mixinName = classPath.node._litsxLightDom
+        const mixinName = isLightDomClass(classPath.node)
           ? "LightDomElementsMixin"
           : "ShadowDomElementsMixin";
         ensureElementsMixinImport(
