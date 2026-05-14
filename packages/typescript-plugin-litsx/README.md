@@ -67,10 +67,12 @@ VS Code picks this up through the bundled TypeScript server when the workspace i
 ## Exports
 
 - `@litsx/typescript-plugin`
+- `@litsx/typescript-plugin/editor-session`
 - `@litsx/typescript-plugin/virtual-source`
 - `@litsx/typescript-plugin/typecheck`
 
 The `virtual-source` entrypoint exposes the standalone source virtualization helper used internally by the plugin.
+The `editor-session` entrypoint exposes a project-backed editor service for integrations such as VS Code extensions that need LitSX-aware diagnostics, hover, and completions outside the tsserver plugin host. It complements the tsserver plugin rather than replacing it.
 
 ## CLI Typecheck
 

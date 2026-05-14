@@ -50,6 +50,11 @@
       "require": "./dist/typecheck.cjs",
       "import": "./src/typecheck.js",
       "default": "./src/typecheck.js"
+    },
+    "./editor-session": {
+      "require": "./dist/editor-session.cjs",
+      "import": "./src/editor-session.js",
+      "default": "./src/editor-session.js"
     }
   },
   "files": [

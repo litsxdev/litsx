@@ -17,6 +17,7 @@ const input = {
   "virtual-source": "src/virtual-source.js",
   typecheck: "src/typecheck.js",
   "authored-semantics": "src/authored-semantics.js",
+  "editor-session": "src/editor-session.js",
 };
 
 const external = [
