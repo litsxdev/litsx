@@ -139,6 +139,33 @@ describe("@litsx/vite-plugin", () => {
     ]);
   });
 
+  it("drops legacy optimizeDeps rollupOptions when adding rolldown options", () => {
+    const existingRolldownPlugin = { name: "existing-rolldown-plugin" };
+    const plugin = litsx();
+    const config = plugin.config({
+      optimizeDeps: {
+        include: ["lit"],
+        rollupOptions: {
+          plugins: [{ name: "legacy-rollup-plugin" }],
+        },
+        rolldownOptions: {
+          plugins: [existingRolldownPlugin],
+        },
+      },
+    });
+
+    assert.strictEqual("rollupOptions" in config.optimizeDeps, false);
+    assert.deepStrictEqual(config.optimizeDeps.include, ["lit"]);
+    assert.strictEqual(
+      config.optimizeDeps.rolldownOptions.plugins[0],
+      existingRolldownPlugin,
+    );
+    assert.strictEqual(
+      config.optimizeDeps.rolldownOptions.plugins.at(-1).name,
+      "litsx-optimize-deps",
+    );
+  });
+
   it("skips optimizeDeps transforms for files outside the include filter", async () => {
     const transformSync = vi.fn();
     const session = {

@@ -102,6 +102,12 @@ function mergeDedupe(existing = []) {
   ]));
 }
 
+function withoutRollupOptimizeDepsOptions(optimizeDeps = {}) {
+  const nextOptimizeDeps = { ...optimizeDeps };
+  delete nextOptimizeDeps.rollupOptions;
+  return nextOptimizeDeps;
+}
+
 export function litsx(options = {}) {
   const {
     include,
@@ -148,7 +154,8 @@ export function litsx(options = {}) {
     name: "litsx",
     enforce: "pre",
     config(userConfig) {
-      const rolldownOptions = userConfig.optimizeDeps?.rolldownOptions ?? {};
+      const optimizeDeps = withoutRollupOptimizeDepsOptions(userConfig.optimizeDeps);
+      const rolldownOptions = optimizeDeps.rolldownOptions ?? {};
       const existingPlugins = rolldownOptions.plugins ?? [];
       const existingResolve = userConfig.resolve ?? {};
 
@@ -158,7 +165,7 @@ export function litsx(options = {}) {
           dedupe: mergeDedupe(existingResolve.dedupe),
         },
         optimizeDeps: {
-          ...userConfig.optimizeDeps,
+          ...optimizeDeps,
           rolldownOptions: {
             ...rolldownOptions,
             plugins: [...existingPlugins, createOptimizeDepsRolldownPlugin()],

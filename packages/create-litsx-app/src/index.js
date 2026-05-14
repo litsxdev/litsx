@@ -1175,20 +1175,12 @@ export default {
     return [...existingIndexers, litsxStoriesIndexer];
   },
   async viteFinal(config) {
+    const optimizeDeps = { ...(config.optimizeDeps ?? {}) };
+    delete optimizeDeps.rollupOptions;
+
     return {
       ...config,
-      resolve: {
-        ...(config.resolve ?? {}),
-        dedupe: [
-          ...new Set([
-            ...((config.resolve?.dedupe ?? [])),
-            "lit",
-            "lit-html",
-            "lit-element",
-            "@lit/reactive-element",
-          ]),
-        ],
-      },
+      optimizeDeps,
       plugins: [...(config.plugins ?? []), litsx({ sourceMaps: true })],
     };
   },
@@ -1211,6 +1203,7 @@ if (!customElements.get("litsx-button")) {
 
 const meta = {
   title: "Components/LitsxButton",
+  component: "litsx-button",
   render: ({ label = "View on GitHub", type = "secondary" } = {}) => (
     <litsx-button .label={label} .type={type} />
   ),
@@ -1234,6 +1227,7 @@ if (!customElements.get("litsx-hero")) {
 
 const meta = {
   title: "Marketing/LitsxHero",
+  component: "litsx-hero",
   render: ({
     eyebrow = "Design system starter",
     tagline = "Web components with a sharper authoring experience. Less ceremony. More signal.",
@@ -1262,6 +1256,7 @@ if (!customElements.get("starter-guide")) {
 
 const meta = {
   title: "Getting Started/StarterGuide",
+  component: "starter-guide",
   render: () => <starter-guide />,
 };
 
@@ -1269,15 +1264,15 @@ export default meta;
 export const Default = {};
 `);
   files.set("src/stories/starter-guide.docs.mdx", `import { Meta, Canvas } from "@storybook/addon-docs/blocks";
-import starterGuideMeta, { Default as StarterGuideDefault } from "./starter-guide.stories.litsx";
+import * as StarterGuideStories from "./starter-guide.stories.litsx";
 
-<Meta of={starterGuideMeta} />
+<Meta of={StarterGuideStories} />
 
 # Starter Guide
 
 The \`StarterGuide\` component demonstrates LitSX suspense primitives in a way that is useful to a new project owner: it reveals the first files, bindings and commands worth learning in a fresh scaffold.
 
-<Canvas of={StarterGuideDefault} />
+<Canvas of={StarterGuideStories.Default} />
 
 ## What it shows
 

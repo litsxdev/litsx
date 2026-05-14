@@ -323,22 +323,23 @@ describe("create-litsx-app", () => {
     assert.match(playwrightConfig, /timezoneId: "UTC"/);
     assert.match(dockerfile, /mcr\.microsoft\.com\/playwright/);
     assert.match(visualTest, /toHaveScreenshot/);
-    assert.match(storybookMain, /dedupe:/);
-    assert.match(storybookMain, /"lit"/);
-    assert.match(storybookMain, /"lit-html"/);
-    assert.match(storybookMain, /"lit-element"/);
-    assert.match(storybookMain, /"@lit\/reactive-element"/);
+    assert.match(storybookMain, /const optimizeDeps = \{ \.\.\.\(config\.optimizeDeps \?\? \{\}\) \};/);
+    assert.match(storybookMain, /delete optimizeDeps\.rollupOptions;/);
+    assert.match(storybookMain, /plugins: \[\.\.\.\(config\.plugins \?\? \[\]\), litsx\(\{ sourceMaps: true \}\)\]/);
     assert.match(previewSource, /import "@webcomponents\/scoped-custom-element-registry";/);
     assert.match(buttonStory, /customElements\.define\("litsx-button", LitsxButton\)/);
+    assert.match(buttonStory, /component: "litsx-button"/);
     assert.match(buttonStory, /<litsx-button \.label=\{label\} \.type=\{type\} \/>/);
     assert.match(heroStory, /customElements\.define\("litsx-hero", LitsxHero\)/);
+    assert.match(heroStory, /component: "litsx-hero"/);
     assert.match(heroStory, /<litsx-hero/);
     assert.match(starterGuideStory, /customElements\.define\("starter-guide", StarterGuide\)/);
+    assert.match(starterGuideStory, /component: "starter-guide"/);
     assert.match(starterGuideStory, /render: \(\) => <starter-guide \/>/);
     assert.match(starterGuideDocs, /import \{ Meta, Canvas \} from "@storybook\/addon-docs\/blocks";/);
-    assert.match(starterGuideDocs, /import starterGuideMeta, \{ Default as StarterGuideDefault \} from "\.\/starter-guide\.stories\.litsx";/);
-    assert.match(starterGuideDocs, /<Meta of=\{starterGuideMeta\} \/>/);
-    assert.match(starterGuideDocs, /<Canvas of=\{StarterGuideDefault\} \/>/);
+    assert.match(starterGuideDocs, /import \* as StarterGuideStories from "\.\/starter-guide\.stories\.litsx";/);
+    assert.match(starterGuideDocs, /<Meta of=\{StarterGuideStories\} \/>/);
+    assert.match(starterGuideDocs, /<Canvas of=\{StarterGuideStories\.Default\} \/>/);
   });
 
   it("writes the scaffold to disk", () => {
