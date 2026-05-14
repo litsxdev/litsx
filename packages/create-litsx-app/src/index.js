@@ -572,7 +572,7 @@ export const GuideCard = ({
       padding: 2px 8px;
       background: rgba(21, 32, 51, 0.06);
       color: var(--litsx-c-text-1);
-      font-family: "SFMono-Regular", "SFMono-Regular", ui-monospace, monospace;
+      font-family: "SFMono-Regular", ui-monospace, monospace;
       font-size: 0.92em;
     }
     @keyframes guide-card-enter {
@@ -642,7 +642,6 @@ export const LitsxButton = ({
     }
     button.primary {
       color: var(--litsx-button-brand-text);
-      border-color: transparent;
       background-image: linear-gradient(135deg, var(--litsx-flame-a), var(--litsx-flame-b), var(--litsx-flame-c));
       background-origin: border-box;
       box-shadow: 0 14px 32px color-mix(in srgb, var(--litsx-c-brand-1) 28%, transparent);
@@ -713,7 +712,6 @@ export const LitsxHero = ({
     }
 
     .heading {
-      margin: 0;
       width: fit-content;
       margin: 0 auto;
     }
@@ -864,9 +862,6 @@ export const LitsxHero = ({
       }
 
       .image-container {
-        display: flex;
-        justify-content: center;
-        align-items: center;
         width: 100%;
         height: 100%;
         transform: translate(-32px, -32px);
