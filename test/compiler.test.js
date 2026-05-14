@@ -167,7 +167,7 @@ describe("@litsx/compiler", () => {
     assert.match(result.code, /bindRendererContext/);
     assert.doesNotMatch(result.code, /\.titleRenderer=\{bindRendererContext\(typeof this === "undefined" \? null : this,\s*\(\) => "y"\)\}/);
     assert.doesNotMatch(result.code, /\.contentRenderer=\{bindRendererContext\(typeof this === "undefined" \? null : this,\s*\(\) => <p>z<\/p>\)\}/);
-    assert.match(result.code, /\.contentRenderer=\{bindRendererContext\(typeof this === "undefined" \? null : this,\s*\(\) => <guide-card[\s\S]*\/>\)\}/);
+    assert.match(result.code, /\.contentRenderer=\{bindRendererContext\(typeof this === "undefined" \? null : this,\s*\(\) => <guide-card[\s\S]*\/>,\s*\{\s*projected: true\s*\}\)\}/);
   }, 20000);
 
   it("binds only function props whose returned JSX needs component context", () => {
@@ -194,7 +194,7 @@ describe("@litsx/compiler", () => {
     });
 
     assert.doesNotMatch(result.code, /\.contentRenderer=\{bindRendererContext\(typeof this === "undefined" \? null : this,\s*renderHeader\)\}/);
-    assert.match(result.code, /\.header=\{bindRendererContext\(typeof this === "undefined" \? null : this,\s*renderPanel\)\}/);
+    assert.match(result.code, /\.header=\{bindRendererContext\(typeof this === "undefined" \? null : this,\s*renderPanel,\s*\{\s*projected: true\s*\}\)\}/);
     assert.doesNotMatch(result.code, /\.title=\{bindRendererContext\(typeof this === "undefined" \? null : this,\s*renderHeader\)\}/);
     assert.doesNotMatch(result.code, /\.onclick=\{bindRendererContext\(/);
   }, 20000);
@@ -222,7 +222,7 @@ describe("@litsx/compiler", () => {
     });
 
     assert.doesNotMatch(result.code, /\.plain=\{bindRendererContext\(/);
-    assert.match(result.code, /\.card=\{bindRendererContext\(typeof this === "undefined" \? null : this,\s*wrapCard\)\}/);
+    assert.match(result.code, /\.card=\{bindRendererContext\(typeof this === "undefined" \? null : this,\s*wrapCard,\s*\{\s*projected: true\s*\}\)\}/);
   }, 20000);
 
   it("binds imported helper references when they transitively return component JSX from another file", () => {
@@ -266,7 +266,7 @@ describe("@litsx/compiler", () => {
 
       assert.match(result.code, /import \{ renderHeader \} from ['"]\.\/renderers\.js['"]/);
       assert.match(result.code, /import \{ LitsxButton(?: as __litsxImportedLitsxButton1)? \} from ['"]\.\/litsx-button\.litsx['"]/);
-      assert.match(result.code, /\.header=\{bindRendererContext\(typeof this === "undefined" \? null : this,\s*renderHeader\)\}/);
+      assert.match(result.code, /\.header=\{bindRendererContext\(typeof this === "undefined" \? null : this,\s*renderHeader,\s*\{\s*projected: true\s*\}\)\}/);
       assert.match(result.code, /static elements\s*=\s*\{[\s\S]*"litsx-button": (?:LitsxButton|__litsxImportedLitsxButton1)[\s\S]*\}/);
     } finally {
       fs.rmSync(tempDir, { recursive: true, force: true });
@@ -322,7 +322,7 @@ describe("@litsx/compiler", () => {
         jsxTemplate: false,
       });
 
-      assert.match(result.code, /\.header=\{bindRendererContext\(typeof this === "undefined" \? null : this,\s*wrapHeader\)\}/);
+      assert.match(result.code, /\.header=\{bindRendererContext\(typeof this === "undefined" \? null : this,\s*wrapHeader,\s*\{\s*projected: true\s*\}\)\}/);
       assert.match(result.code, /import \{ LitsxButton(?: as __litsxImportedLitsxButton1)? \} from ['"]\.\/litsx-button\.litsx['"]/);
       assert.match(result.code, /static elements\s*=\s*\{[\s\S]*"litsx-button": (?:LitsxButton|__litsxImportedLitsxButton1)[\s\S]*\}/);
     } finally {
@@ -378,7 +378,7 @@ describe("@litsx/compiler", () => {
       });
 
       assert.match(result.code, /import \{ FancyButton(?: as __litsxImportedFancyButton1)? \} from ['"]@acme\/ui['"]/);
-      assert.match(result.code, /\.header=\{bindRendererContext\(typeof this === "undefined" \? null : this,\s*renderHeader\)\}/);
+      assert.match(result.code, /\.header=\{bindRendererContext\(typeof this === "undefined" \? null : this,\s*renderHeader,\s*\{\s*projected: true\s*\}\)\}/);
       assert.match(result.code, /static elements\s*=\s*\{[\s\S]*"fancy-button": (?:FancyButton|__litsxImportedFancyButton1)[\s\S]*\}/);
     } finally {
       fs.rmSync(tempDir, { recursive: true, force: true });
@@ -450,7 +450,7 @@ describe("@litsx/compiler", () => {
       });
 
       assert.match(result.code, /import \{ LitsxButton(?: as __litsxImportedLitsxButton1)? \} from ['"]@\/components\/litsx-button\.litsx['"]/);
-      assert.match(result.code, /\.header=\{bindRendererContext\(typeof this === "undefined" \? null : this,\s*renderHeader\)\}/);
+      assert.match(result.code, /\.header=\{bindRendererContext\(typeof this === "undefined" \? null : this,\s*renderHeader,\s*\{\s*projected: true\s*\}\)\}/);
       assert.match(result.code, /static elements\s*=\s*\{[\s\S]*"litsx-button": (?:LitsxButton|__litsxImportedLitsxButton1)[\s\S]*\}/);
 
       session.dispose();
@@ -627,7 +627,7 @@ describe("@litsx/compiler", () => {
       filename: "/virtual/Demo.litsx",
     });
 
-    assert.match(result.code, /\.itemRenderer=\$\{bindRendererContext\(typeof this === "undefined" \? null : this,\s*label => html`<litsx-button type="primary" label="\$\{label\}"><\/litsx-button>`\)\}/);
+    assert.match(result.code, /\.itemRenderer=\$\{bindRendererContext\(typeof this === "undefined" \? null : this,\s*label => html`<litsx-button type="primary" label="\$\{label\}"><\/litsx-button>`,\s*\{\s*projected: true\s*\}\)\}/);
     assert.match(result.code, /return html`<section>\$\{renderRendererCall\(this\.itemRenderer, 'alpha'\)\}<\/section>`;/);
     assert.match(result.code, /"litsx-button": LitsxButton/);
   }, 20000);
@@ -654,7 +654,7 @@ describe("@litsx/compiler", () => {
     });
 
     assert.match(result.code, /function renderHeader\(\) \{\s*return html`<litsx-button type="secondary" label="Projected"><\/litsx-button>`;\s*\}/);
-    assert.match(result.code, /\.header=\$\{bindRendererContext\(typeof this === "undefined" \? null : this,\s*wrapHeader\)\}/);
+    assert.match(result.code, /\.header=\$\{bindRendererContext\(typeof this === "undefined" \? null : this,\s*wrapHeader,\s*\{\s*projected: true\s*\}\)\}/);
     assert.match(result.code, /return html`<section>\$\{renderRendererCall\(this\.header\)\}<\/section>`;/);
     assert.match(result.code, /"litsx-button": LitsxButton/);
   }, 20000);
@@ -675,7 +675,7 @@ describe("@litsx/compiler", () => {
     });
 
     assert.match(result.code, /class Card extends LightDomMixin\(LitElement\)/);
-    assert.match(result.code, /\.header=\$\{bindRendererContext\(typeof this === "undefined" \? null : this,\s*\(\) => html`<fancy-panel><\/fancy-panel>`\)\}/);
+    assert.match(result.code, /\.header=\$\{bindRendererContext\(typeof this === "undefined" \? null : this,\s*\(\) => html`<fancy-panel><\/fancy-panel>`,\s*\{\s*projected: true\s*\}\)\}/);
     assert.match(result.code, /return html`<section>\$\{renderRendererCall\(this\.header\)\}<\/section>`;/);
   }, 20000);
 
@@ -700,7 +700,7 @@ describe("@litsx/compiler", () => {
       filename: "/virtual/Demo.litsx",
     });
 
-    assert.match(result.code, /<middle \.header=\$\{bindRendererContext\(typeof this === "undefined" \? null : this,\s*renderHeader\)\}><\/middle>/);
+    assert.match(result.code, /<middle \.header=\$\{bindRendererContext\(typeof this === "undefined" \? null : this,\s*renderHeader,\s*\{\s*projected: true\s*\}\)\}><\/middle>/);
     assert.match(result.code, /<card \.header=\$\{this\.header\}><\/card>/);
     assert.match(result.code, /return html`<section>\$\{renderRendererCall\(this\.header\)\}<\/section>`;/);
     assert.match(result.code, /"litsx-button": LitsxButton/);
@@ -723,7 +723,7 @@ describe("@litsx/compiler", () => {
     });
 
     assert.match(result.code, /class Shell extends LightDomMixin\(LitElement\)/);
-    assert.match(result.code, /<shell \.header=\$\{bindRendererContext\(typeof this === "undefined" \? null : this,\s*\(\) => html`<litsx-button type="primary" label="Mixed"><\/litsx-button>`\)\}>Body<\/shell>/);
+    assert.match(result.code, /<shell \.header=\$\{bindRendererContext\(typeof this === "undefined" \? null : this,\s*\(\) => html`<litsx-button type="primary" label="Mixed"><\/litsx-button>`,\s*\{\s*projected: true\s*\}\)\}>Body<\/shell>/);
     assert.match(result.code, /return html`<section><header>\$\{renderRendererCall\(this\.header\)\}<\/header><slot><\/slot><\/section>`;/);
     assert.match(result.code, /"litsx-button": LitsxButton/);
   }, 20000);
@@ -759,7 +759,7 @@ describe("@litsx/compiler", () => {
       filename: "/virtual/Demo.litsx",
     });
 
-    assert.match(result.code, /\.header=\$\{bindRendererContext\(typeof this === "undefined" \? null : this,\s*\(\) => html`<span>Lead<\/span><litsx-button type="secondary" label="Tail"><\/litsx-button>`\)\}/);
+    assert.match(result.code, /\.header=\$\{bindRendererContext\(typeof this === "undefined" \? null : this,\s*\(\) => html`<span>Lead<\/span><litsx-button type="secondary" label="Tail"><\/litsx-button>`,\s*\{\s*projected: true\s*\}\)\}/);
     assert.match(result.code, /return html`<section>\$\{renderRendererCall\(this\.header\)\}<\/section>`;/);
     assert.match(result.code, /"litsx-button": LitsxButton/);
   }, 20000);

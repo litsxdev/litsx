@@ -616,6 +616,66 @@ describe("litsx runtime infrastructure", () => {
     }
   });
 
+  it("falls back to LitSX shadow registries when scoped registry support is polyfilled", () => {
+    const shadowHostTag = nextTag("litsx-runtime-polyfilled-shadow-host");
+    const originalCustomElementRegistry = globalThis.CustomElementRegistry;
+    const originalAttachShadow = Element.prototype.attachShadow;
+
+    class PolyfilledRegistry {
+      constructor() {
+        this.h = new Map();
+        this.m = new Map();
+      }
+
+      define(tagName, elementClass) {
+        this.h.set(tagName, elementClass);
+        this.m.set(elementClass, tagName);
+      }
+
+      get(tagName) {
+        return this.h.get(tagName);
+      }
+    }
+
+    globalThis.CustomElementRegistry = PolyfilledRegistry;
+    Element.prototype.attachShadow = function attachShadow(init) {
+      const registry = init.registry ?? init.customElements ?? init.customElementRegistry ?? null;
+      const shadowRoot = document.createElement("div");
+      shadowRoot.registry = registry;
+      shadowRoot.customElements = registry;
+      shadowRoot.customElementRegistry = registry;
+      Object.defineProperty(this, "shadowRoot", {
+        configurable: true,
+        value: shadowRoot,
+      });
+      return shadowRoot;
+    };
+
+    try {
+      class ShadowChild extends HTMLElement {}
+
+      class ShadowBase extends HTMLElement {
+        static elements = {
+          "polyfilled-shadow-child": ShadowChild,
+        };
+      }
+
+      const ShadowHost = ShadowDomElementsMixin(ShadowBase);
+      if (!customElements.get(shadowHostTag)) {
+        customElements.define(shadowHostTag, ShadowHost);
+      }
+      const shadowHost = document.createElement(shadowHostTag);
+      const root = shadowHost.createRenderRoot();
+
+      assert.notStrictEqual(shadowHost.registry.constructor, PolyfilledRegistry);
+      assert.strictEqual(root.registry, shadowHost.registry);
+      assert.strictEqual(shadowHost.registry.get("polyfilled-shadow-child"), ShadowChild);
+    } finally {
+      globalThis.CustomElementRegistry = originalCustomElementRegistry;
+      Element.prototype.attachShadow = originalAttachShadow;
+    }
+  });
+
   it("uses fallback shadow registries for imported scoped children without the scoped-registry polyfill", () => {
     const hostTag = nextTag("litsx-runtime-shadow-fallback-host");
     const childTag = nextTag("litsx-runtime-shadow-fallback-child");
@@ -734,9 +794,9 @@ describe("litsx runtime infrastructure", () => {
       const shadowHost = new ShadowHost();
       shadowHost.createRenderRoot();
 
-      assert.strictEqual(typeof shadowHost.registry._getDefinition, "function");
+      assert(shadowHost.registry instanceof FakeRegistry);
       assert.strictEqual(shadowHost.registry.get(shadowChildTag), ShadowChild);
-      assert.strictEqual(shadowHost.registry.get(lightChildTag), null);
+      assert.strictEqual(shadowHost.registry.get(lightChildTag), undefined);
       assert.strictEqual(lightHost.registry.get(shadowChildTag), null);
 
       lightHost.remove();

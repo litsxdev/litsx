@@ -140,6 +140,7 @@ function getRuntime() {
       const definition = {
         tagName,
         elementClass,
+        g: elementClass,
         connectedCallback: elementClass.prototype.connectedCallback,
         disconnectedCallback: elementClass.prototype.disconnectedCallback,
         adoptedCallback: elementClass.prototype.adoptedCallback,
@@ -162,6 +163,7 @@ function getRuntime() {
       }
 
       definition.standInClass = standInClass;
+      definition.o = standInClass;
       standInDefinitionByTag.set(tagName, definition);
       globalDefinitionForConstructor.set(elementClass, definition);
 
@@ -738,6 +740,9 @@ function getRuntime() {
     getStandInDefinition(tagName) {
       return standInDefinitionByTag.get(String(tagName).toLowerCase()) ?? null;
     },
+    upgradeTree(node, registry) {
+      upgradeConnectedTree(node, registry);
+    },
     withCreationContext(scope, callback) {
       creationContext.push(scope ?? document);
       try {
@@ -749,6 +754,24 @@ function getRuntime() {
   };
 
   globalRegistry = new ShimmedCustomElementsRegistry();
+  if (nativeRegistry.h && typeof nativeRegistry.h.get === "function") {
+    globalRegistry.h = {
+      get(tagName) {
+        return globalRegistry._getDefinition(tagName) ?? nativeRegistry.h.get(tagName);
+      },
+      set(tagName, definition) {
+        globalRegistry._definitionsByTag.set(tagName, definition);
+        return this;
+      },
+      has(tagName) {
+        return globalRegistry._definitionsByTag.has(tagName) || nativeRegistry.h.has?.(tagName);
+      },
+      delete(tagName) {
+        return globalRegistry._definitionsByTag.delete(tagName);
+      },
+    };
+    globalRegistry.i = new Map();
+  }
   globalRegistry.get = function get(tagName) {
     const definition = this._getDefinition(tagName);
     if (definition) {
@@ -839,4 +862,13 @@ export function withLightDomCreationContext(scope, callback) {
   }
 
   return runtime.withCreationContext(scope, callback);
+}
+
+export function upgradeLightDomTree(node, registry) {
+  const runtime = getRuntime();
+  if (!runtime || !node || !isRegistryLike(registry)) {
+    return;
+  }
+
+  runtime.upgradeTree(node, registry);
 }

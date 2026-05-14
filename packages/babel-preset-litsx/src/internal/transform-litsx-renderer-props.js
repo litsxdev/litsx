@@ -360,6 +360,9 @@ export default function transformLitsxRendererProps(api) {
           [
             createHostReferenceExpression(),
             expressionPath.node,
+            t.objectExpression([
+              t.objectProperty(t.identifier("projected"), t.booleanLiteral(true)),
+            ]),
           ]
         );
       },

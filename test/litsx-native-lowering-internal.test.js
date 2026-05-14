@@ -1573,6 +1573,96 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
     assert.doesNotMatch(code, /static get lightDom\(\)/);
   });
 
+  it("uses ShadowDomElementsMixin when static elements is authored explicitly", () => {
+    const source = `
+      import { FancyButton } from "./fancy-button.litsx";
+
+      function Card() {
+        static elements = {
+          "fancy-button": FancyButton,
+        };
+
+        return <section>ready</section>;
+      }
+    `;
+
+    const { code } = transformWithNativePreset(source);
+
+    assert.match(code, /import \{[^}]*ShadowDomElementsMixin[^}]*\} from "@litsx\/litsx\/runtime-infrastructure";/);
+    assert.match(code, /class Card extends ShadowDomElementsMixin\(LitsxStaticHoistsMixin\(LitElement\)\)|class Card extends LitsxStaticHoistsMixin\(ShadowDomElementsMixin\(LitElement\)\)/);
+    assert.match(code, /static get elements\(\)/);
+  });
+
+  it("does not overwrite authored static elements when JSX also contains component candidates", () => {
+    const source = `
+      import { ChildOne } from "./child-one.litsx";
+      import { ChildTwo } from "./child-two.litsx";
+
+      function Wrapper() {
+        static elements = {
+          "child-one": ChildOne,
+        };
+
+        return <ChildTwo />;
+      }
+    `;
+
+    const { code } = transformWithNativePreset(source);
+
+    assert.match(code, /class Wrapper extends ShadowDomElementsMixin\(LitsxStaticHoistsMixin\(LitElement\)\)|class Wrapper extends LitsxStaticHoistsMixin\(ShadowDomElementsMixin\(LitElement\)\)/);
+    assert.match(code, /static get elements\(\)/);
+    assert.match(code, /"child-one": ChildOne/);
+    assert.doesNotMatch(code, /static elements = \{\s*"child-two": ChildTwo\s*\}/);
+  });
+
+  it("uses LightDomElementsMixin when static elements and static lightDom are authored explicitly", () => {
+    const source = `
+      import { FancyButton } from "./fancy-button.litsx";
+
+      function Card() {
+        static lightDom = true;
+        static elements = {
+          "fancy-button": FancyButton,
+        };
+
+        return <section>ready</section>;
+      }
+    `;
+
+    const { code } = transformWithNativePreset(source);
+
+    assert.match(
+      code,
+      /import \{[^}]*LightDomMixin[^}]*LightDomElementsMixin[^}]*\} from "@litsx\/litsx\/runtime-infrastructure";|import \{[^}]*LightDomElementsMixin[^}]*LightDomMixin[^}]*\} from "@litsx\/litsx\/runtime-infrastructure";/
+    );
+    assert.match(code, /class Card extends LightDomElementsMixin\(LightDomMixin\(LitsxStaticHoistsMixin\(LitElement\)\)\)|class Card extends LightDomElementsMixin\(LitsxStaticHoistsMixin\(LightDomMixin\(LitElement\)\)\)|class Card extends LitsxStaticHoistsMixin\(LightDomElementsMixin\(LightDomMixin\(LitElement\)\)\)/);
+    assert.match(code, /static get elements\(\)/);
+    assert.doesNotMatch(code, /static get lightDom\(\)/);
+  });
+
+  it("does not wrap light-dom element classes in ShadowDomElementsMixin on repeated scoped passes", () => {
+    const source = `
+      import { LightDomMixin, LightDomElementsMixin } from "@litsx/litsx/runtime-infrastructure";
+      import { LitElement } from "lit";
+      import { FancyButton } from "./fancy-button.litsx";
+
+      class Card extends LightDomElementsMixin(LightDomMixin(LitElement)) {
+        render() {
+          return <section>ready</section>;
+        }
+
+        static elements = {
+          "fancy-button": FancyButton,
+        };
+      }
+    `;
+
+    const { code } = transformWithNativePreset(source);
+
+    assert.match(code, /class Card extends LightDomElementsMixin\(LightDomMixin\(LitElement\)\)/);
+    assert.doesNotMatch(code, /ShadowDomElementsMixin/);
+  });
+
   it("ignores static shadowRootOptions when static lightDom is present", () => {
     const source = `
       function Card() {

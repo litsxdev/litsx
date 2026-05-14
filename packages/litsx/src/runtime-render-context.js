@@ -7,6 +7,7 @@ import {
 } from "@litsx/light-dom-registry";
 
 const RENDERER_CONTEXT = Symbol("litsx.rendererContext");
+const RENDERER_HOST_INITIALIZED = Symbol("litsx.rendererHostInitialized");
 
 function captureCreationScope(host) {
   if (!host || typeof host !== "object") {
@@ -34,9 +35,67 @@ function getContextualElements(context) {
   return elements && typeof elements === "object" ? elements : null;
 }
 
+function getScopedRegistry(scope) {
+  for (const key of ["registry", "customElements", "customElementRegistry"]) {
+    const registry = scope?.[key];
+    if (
+      registry &&
+      typeof registry.define === "function" &&
+      typeof registry.get === "function"
+    ) {
+      return registry;
+    }
+  }
+
+  return null;
+}
+
+function assignProjectedHostRegistry(host, registry) {
+  for (const key of ["registry", "customElements", "customElementRegistry"]) {
+    try {
+      host[key] = registry;
+    } catch {
+      // Some DOM implementations expose readonly scoped registry aliases.
+    }
+  }
+}
+
+function hasExternalScopedRegistry(scope) {
+  const registry = getScopedRegistry(scope);
+  return Boolean(registry && typeof registry._getDefinition !== "function");
+}
+
+function resolveContextCreationScope(context) {
+  if (!context?.host) {
+    return null;
+  }
+
+  if (context.creationScope) {
+    return context.creationScope;
+  }
+
+  const creationScope = captureCreationScope(context.host);
+  if (creationScope) {
+    context.creationScope = creationScope;
+  }
+  return creationScope;
+}
+
 function syncProjectedHostRegistry(host, context) {
   const elements = getContextualElements(context);
   if (!host || !elements) {
+    return;
+  }
+
+  if (context?.projected) {
+    connectLightDomRegistry(host, elements);
+    return;
+  }
+
+  const creationScope = resolveContextCreationScope(context);
+  const scopedRegistry = getScopedRegistry(creationScope);
+  if (scopedRegistry && hasExternalScopedRegistry(creationScope)) {
+    assignProjectedHostRegistry(host, scopedRegistry);
     return;
   }
 
@@ -49,17 +108,23 @@ export function bindRendererContext(host, renderer, options = {}) {
   }
 
   const contextHost = host && typeof host === "object" ? host : null;
-  const creationScope = captureCreationScope(contextHost);
   const projected = Boolean(options?.projected);
+  const context = {
+    host: contextHost,
+    creationScope: captureCreationScope(contextHost),
+    projected,
+  };
 
-  const boundRenderer = (...args) =>
-    withLightDomCreationContext(contextHost, () => renderer(...args));
+  const boundRenderer = (...args) => {
+    const render = () => renderer(...args);
+    const creationScope = resolveContextCreationScope(context);
+    if (hasExternalScopedRegistry(creationScope)) {
+      return render();
+    }
+    return withLightDomCreationContext(contextHost, render);
+  };
   Object.defineProperty(boundRenderer, RENDERER_CONTEXT, {
-    value: {
-      host: contextHost,
-      creationScope,
-      projected,
-    },
+    value: context,
     configurable: true,
   });
   return boundRenderer;
@@ -75,7 +140,13 @@ export function invokeRenderer(renderer, ...args) {
   }
 
   const context = renderer[RENDERER_CONTEXT] ?? null;
-  const value = withLightDomCreationContext(context?.host ?? null, () => renderer(...args));
+  const render = () => renderer(...args);
+  const creationScope = resolveContextCreationScope(context);
+  const value = !context?.host
+    ? render()
+    : hasExternalScopedRegistry(creationScope)
+      ? render()
+      : withLightDomCreationContext(context?.host ?? null, render);
   return {
     value: value ?? nothing,
     context,
@@ -84,12 +155,25 @@ export function invokeRenderer(renderer, ...args) {
 }
 
 export function renderWithRendererContext(render, container, value, context, options = {}) {
-  return withLightDomCreationContext(context?.host ?? null, () =>
+  const creationScope = resolveContextCreationScope(context);
+  const projectedCreationHost = context?.projected
+    ? options.creationContextHost ?? null
+    : null;
+  const { creationContextHost, ...renderOptions } = options;
+  const renderValue = () =>
     render(value, container, {
-      ...options,
+      ...renderOptions,
       ...(context?.host ? { host: context.host } : {}),
-      ...(context?.creationScope ? { creationScope: context.creationScope } : {}),
-    }));
+      ...(creationScope && !projectedCreationHost ? { creationScope } : {}),
+    });
+
+  return !context?.host
+    ? renderValue()
+    : projectedCreationHost
+      ? withLightDomCreationContext(projectedCreationHost, renderValue)
+    : hasExternalScopedRegistry(creationScope)
+      ? renderValue()
+      : withLightDomCreationContext(context?.host ?? null, renderValue);
 }
 
 export function syncRendererHost(
@@ -106,12 +190,17 @@ export function syncRendererHost(
 
   syncProjectedHostRegistry(host, rendered?.context ?? null);
   host.hidden = !visible;
+  if (!visible && !rendered?.context && !host[RENDERER_HOST_INITIALIZED]) {
+    return;
+  }
   renderWithRendererContext(
     render,
     host,
     visible ? rendered?.value ?? nothing : nothing,
     rendered?.context ?? null,
+    { creationContextHost: host },
   );
+  host[RENDERER_HOST_INITIALIZED] = true;
 }
 
 class RendererCallDirective extends Directive {

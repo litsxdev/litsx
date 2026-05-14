@@ -55,7 +55,10 @@ function transformClass(classPath, programPath) {
   const precomputedCandidates = new Set(node._litsxElementCandidates || []);
   const importedCandidates = [...(node._litsxImportedElementCandidates || [])];
   const needsElementsRegistry = Boolean(node._needsElementsRegistry);
-  const lightDomRequested = Boolean(node._litsxLightDom);
+  const lightDomRequested =
+    Boolean(node._litsxLightDom) ||
+    hasMixinInSuperChain(node.superClass, LIGHT_BASE_MIXIN) ||
+    hasMixinInSuperChain(node.superClass, LIGHT_MIXIN);
   delete node._litsxElementCandidates;
   delete node._litsxImportedElementCandidates;
   delete node._needsElementsRegistry;
@@ -74,9 +77,15 @@ function transformClass(classPath, programPath) {
     hasRenderableTemplate,
   } = detectElementsFromClass(classPath, availableMap, precomputedCandidates);
   const needsElements = detectedElements.length > 0;
+  const hasExistingElementsStatic = hasStaticElementsMember(node);
 
-  const elementsStatic = createClassProperty("elements", detectedElements);
-  const needsElementsMixin = Boolean(elementsStatic) || needsElementsRegistry;
+  const elementsStatic = hasExistingElementsStatic
+    ? null
+    : createClassProperty("elements", detectedElements);
+  const needsElementsMixin =
+    Boolean(elementsStatic) ||
+    needsElementsRegistry ||
+    hasExistingElementsStatic;
   const needsLightDomBaseMixin = lightDomRequested && !needsElementsMixin;
 
   if (!hasRenderableTemplate && !needsElements && !needsElementsRegistry && !needsLightDomBaseMixin) {
@@ -178,6 +187,20 @@ function insertClassProperty(node, property) {
   } else {
     node.body.body.push(property);
   }
+}
+
+function hasStaticElementsMember(node) {
+  return node.body.body.some((member) => {
+    if (!member.static) {
+      return false;
+    }
+
+    const key = member.key;
+    return (
+      (t.isIdentifier(key) && key.name === "elements") ||
+      (t.isStringLiteral(key) && key.value === "elements")
+    );
+  });
 }
 
 function ensureRuntimeInfrastructureImport(programPath, importName) {

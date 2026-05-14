@@ -79,6 +79,34 @@ describe("runtime renderer context", () => {
     assert.strictEqual(rendered.projected, false);
   });
 
+  it("refreshes renderer creation scope when it becomes available after binding", async () => {
+    const { bindRendererContext, invokeRenderer, renderWithRendererContext } = await import("../packages/litsx/src/runtime-render-context.js");
+
+    const registry = {
+      define() {},
+      get() {},
+    };
+    const creationScope = { registry };
+    const host = {};
+    const renderer = vi.fn(() => "value");
+    const bound = bindRendererContext(host, renderer, { projected: true });
+
+    host.renderOptions = { creationScope };
+
+    const rendered = invokeRenderer(bound);
+    const render = vi.fn();
+    const container = {};
+
+    renderWithRendererContext(render, container, rendered.value, rendered.context);
+
+    assert.strictEqual(rendered.context.creationScope, creationScope);
+    expect(withLightDomCreationContext).not.toHaveBeenCalled();
+    expect(render).toHaveBeenCalledWith("value", container, {
+      host,
+      creationScope,
+    });
+  });
+
   it("returns nothing and null context for non-function renderer invocations", async () => {
     const { invokeRenderer } = await import("../packages/litsx/src/runtime-render-context.js");
 
@@ -87,6 +115,16 @@ describe("runtime renderer context", () => {
     assert.strictEqual(rendered.value, nothing);
     assert.strictEqual(rendered.context, null);
     assert.strictEqual(rendered.projected, false);
+  });
+
+  it("invokes unbound renderers without entering light-dom creation context", async () => {
+    const { invokeRenderer } = await import("../packages/litsx/src/runtime-render-context.js");
+
+    const rendered = invokeRenderer(() => "plain");
+
+    assert.strictEqual(rendered.value, "plain");
+    assert.strictEqual(rendered.context, null);
+    expect(withLightDomCreationContext).not.toHaveBeenCalled();
   });
 
   it("merges host and creation scope into contextual renders", async () => {
@@ -150,6 +188,95 @@ describe("runtime renderer context", () => {
     expect(render).toHaveBeenCalledWith(nothing, host, {
       host: contextualHost,
       creationScope: { id: "scope" },
+    });
+  });
+
+  it("does not initialize an empty hidden renderer host before context is available", async () => {
+    const { syncRendererHost } = await import("../packages/litsx/src/runtime-render-context.js");
+
+    const host = {};
+    const render = vi.fn();
+
+    syncRendererHost(host, null, { render, visible: false });
+
+    assert.strictEqual(host.hidden, true);
+    expect(render).not.toHaveBeenCalled();
+    expect(withLightDomCreationContext).not.toHaveBeenCalled();
+  });
+
+  it("uses external scoped creation scopes without connecting light-dom registries", async () => {
+    const { bindRendererContext, invokeRenderer, renderWithRendererContext } = await import("../packages/litsx/src/runtime-render-context.js");
+
+    function ContextualHost() {}
+    ContextualHost.scopedElements = {
+      "fancy-button": class FancyButton {},
+    };
+    const registry = {
+      define() {},
+      get() {},
+    };
+    const creationScope = { registry };
+    const contextualHost = {
+      constructor: ContextualHost,
+      renderOptions: { creationScope },
+    };
+    const renderer = vi.fn(() => "value");
+    const bound = bindRendererContext(contextualHost, renderer, { projected: true });
+    const rendered = invokeRenderer(bound);
+    const render = vi.fn();
+    const container = {};
+
+    renderWithRendererContext(render, container, rendered.value, rendered.context);
+
+    assert.strictEqual(rendered.value, "value");
+    expect(withLightDomCreationContext).not.toHaveBeenCalled();
+    expect(connectLightDomRegistry).not.toHaveBeenCalled();
+    expect(render).toHaveBeenCalledWith("value", container, {
+      host: contextualHost,
+      creationScope,
+    });
+  });
+
+  it("renders projected external-scope output through the projected host registry", async () => {
+    const { syncRendererHost } = await import("../packages/litsx/src/runtime-render-context.js");
+
+    function ContextualHost() {}
+    ContextualHost.scopedElements = {
+      "fancy-button": class FancyButton {},
+    };
+    const registry = {
+      define() {},
+      get() {},
+    };
+    const contextualHost = {
+      constructor: ContextualHost,
+    };
+    const projectedHost = {};
+    const render = vi.fn();
+
+    syncRendererHost(
+      projectedHost,
+      {
+        value: "value",
+        context: {
+          host: contextualHost,
+          creationScope: { registry },
+          projected: true,
+        },
+      },
+      { render }
+    );
+
+    expect(connectLightDomRegistry).toHaveBeenCalledWith(
+      projectedHost,
+      ContextualHost.scopedElements
+    );
+    expect(withLightDomCreationContext).toHaveBeenCalledWith(
+      projectedHost,
+      expect.any(Function)
+    );
+    expect(render).toHaveBeenCalledWith("value", projectedHost, {
+      host: contextualHost,
     });
   });
 

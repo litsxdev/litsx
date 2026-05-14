@@ -40,7 +40,7 @@ describe("native renderer-props internals", () => {
     );
     assert.match(
       code,
-      /\.header=\{bindRendererContext\(typeof this === "undefined" \? null : this,\s*renderCard\)\}/
+      /\.header=\{bindRendererContext\(typeof this === "undefined" \? null : this,\s*renderCard,\s*\{\s*projected: true\s*\}\)\}/
     );
   });
 
@@ -71,7 +71,7 @@ describe("native renderer-props internals", () => {
 
       assert.match(
         code,
-        /\.header=\{bindRendererContext\(typeof this === "undefined" \? null : this,\s*renderHeader\)\}/
+        /\.header=\{bindRendererContext\(typeof this === "undefined" \? null : this,\s*renderHeader,\s*\{\s*projected: true\s*\}\)\}/
       );
       assert.match(
         code,
