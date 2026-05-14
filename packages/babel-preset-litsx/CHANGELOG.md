@@ -1,5 +1,13 @@
 # @litsx/babel-preset-litsx
 
+## 0.5.1
+
+### Patch Changes
+
+- 63a9d36: Fix scoped custom element registry races across shadow DOM, light DOM, global registrations, authored static element maps, projected renderer output, and Storybook Vite optimize-deps configuration.
+- Updated dependencies [63a9d36]
+  - @litsx/babel-plugin-transform-litsx-scoped-elements@0.2.2
+
 ## 0.5.0
 
 ### Minor Changes

@@ -1,5 +1,13 @@
 # litsx
 
+## 0.3.5
+
+### Patch Changes
+
+- 63a9d36: Fix scoped custom element registry races across shadow DOM, light DOM, global registrations, authored static element maps, projected renderer output, and Storybook Vite optimize-deps configuration.
+- Updated dependencies [63a9d36]
+  - @litsx/light-dom-registry@0.2.4
+
 ## 0.3.4
 
 ### Patch Changes

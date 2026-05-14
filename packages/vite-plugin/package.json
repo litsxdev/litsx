@@ -1,6 +1,6 @@
 {
   "name": "@litsx/vite-plugin",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "description": "Official Vite plugin for LitSX compilation",
   "author": "LitSX Team",
   "type": "module",
