@@ -1257,7 +1257,7 @@ __metadata:
     "@babel/eslint-parser": "npm:^7.28.6"
     "@babel/plugin-syntax-jsx": "npm:^7.28.6"
     "@babel/plugin-syntax-typescript": "npm:^7.27.1"
-    "@litsx/typescript-plugin": "npm:^0.3.0"
+    "@litsx/typescript-plugin": "npm:^0.4.0"
   peerDependencies:
     eslint: ^8.57.0 || ^9.0.0
     typescript: ">=5"
@@ -1305,7 +1305,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@litsx/typescript-plugin@npm:^0.3.0, @litsx/typescript-plugin@workspace:packages/typescript-plugin-litsx":
+"@litsx/typescript-plugin@npm:^0.4.0, @litsx/typescript-plugin@workspace:packages/typescript-plugin-litsx":
   version: 0.0.0-use.local
   resolution: "@litsx/typescript-plugin@workspace:packages/typescript-plugin-litsx"
   dependencies:
