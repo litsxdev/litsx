@@ -206,6 +206,8 @@ jobs:
         run: git push origin HEAD:main
 
       - name: Publish packages
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: corepack yarn release:publish
 
       - name: Create package tags
