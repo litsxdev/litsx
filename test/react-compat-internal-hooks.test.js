@@ -44,7 +44,7 @@ describe("react compat internal hooks", () => {
 
     assert.match(
       code,
-      /import \{[^}]*prepareEffects[^}]*useTransition[^}]*\} from "@litsx\/litsx";/
+      /import \{[^}]*prepareEffects[^}]*useTransition[^}]*\} from "@litsx\/core";/
     );
     assert.match(
       code,
@@ -69,7 +69,7 @@ describe("react compat internal hooks", () => {
 
     assert.match(
       code,
-      /import \{[^}]*startTransition[^}]*\} from "@litsx\/litsx";/
+      /import \{[^}]*startTransition[^}]*\} from "@litsx\/core";/
     );
     assert.match(
       code,
@@ -95,7 +95,7 @@ describe("react compat internal hooks", () => {
 
     assert.match(
       code,
-      /import \{[^}]*prepareEffects[^}]*useDeferredValue[^}]*\} from "@litsx\/litsx";/
+      /import \{[^}]*prepareEffects[^}]*useDeferredValue[^}]*\} from "@litsx\/core";/
     );
     assert.match(
       code,
@@ -120,7 +120,7 @@ describe("react compat internal hooks", () => {
 
     assert.match(
       code,
-      /import \{[^}]*prepareEffects[^}]*useOptimistic[^}]*\} from "@litsx\/litsx";|import \{[^}]*useOptimistic[^}]*prepareEffects[^}]*\} from "@litsx\/litsx";/
+      /import \{[^}]*prepareEffects[^}]*useOptimistic[^}]*\} from "@litsx\/core";|import \{[^}]*useOptimistic[^}]*prepareEffects[^}]*\} from "@litsx\/core";/
     );
     assert.match(
       code,
@@ -144,7 +144,7 @@ describe("react compat internal hooks", () => {
 
     const code = run(source);
 
-    assert.match(code, /import \{[^}]*useExternalStore[^}]*\} from "@litsx\/litsx";/);
+    assert.match(code, /import \{[^}]*useExternalStore[^}]*\} from "@litsx\/core";/);
     assert.match(
       code,
       /const value = useExternalStore\(this, subscribe, getSnapshot\);/
@@ -189,7 +189,7 @@ describe("react compat internal hooks", () => {
 
     assert.match(
       code,
-      /import \{[^}]*prepareEffects[^}]*useMemoValue[^}]*\} from "@litsx\/litsx";/
+      /import \{[^}]*prepareEffects[^}]*useMemoValue[^}]*\} from "@litsx\/core";/
     );
     assert.match(code, /prepareEffects\(this\);/);
     assert.match(
@@ -221,7 +221,7 @@ describe("react compat internal hooks", () => {
 
     assert.match(
       code,
-      /import \{[^}]*prepareEffects[^}]*useAfterUpdate[^}]*useOnCommit[^}]*\} from "@litsx\/litsx";/
+      /import \{[^}]*prepareEffects[^}]*useAfterUpdate[^}]*useOnCommit[^}]*\} from "@litsx\/core";/
     );
     assert.match(
       code,
@@ -251,7 +251,7 @@ describe("react compat internal hooks", () => {
 
     const code = run(source);
 
-    assert.match(code, /import \{[^}]*useStableCallback[^}]*\} from "@litsx\/litsx";/);
+    assert.match(code, /import \{[^}]*useStableCallback[^}]*\} from "@litsx\/core";/);
     assert.match(
       code,
       /const handler = useStableCallback\(this, \(\) => this\.handle\(\), \[this\.handle\]\);/
@@ -276,7 +276,7 @@ describe("react compat internal hooks", () => {
 
     const code = run(source);
 
-    assert.match(code, /import \{[^}]*useReducedState[^}]*\} from "@litsx\/litsx";/);
+    assert.match(code, /import \{[^}]*useReducedState[^}]*\} from "@litsx\/core";/);
     assert.match(
       code,
       /const \[value, dispatch\] = useReducedState\(this,\s*reducer,\s*0\);/
@@ -299,7 +299,7 @@ describe("react compat internal hooks", () => {
 
     const code = run(source);
 
-    assert.match(code, /import \{[^}]*prepareEffects[^}]*useId[^}]*\} from "@litsx\/litsx";/);
+    assert.match(code, /import \{[^}]*prepareEffects[^}]*useId[^}]*\} from "@litsx\/core";/);
     assert.match(code, /const id = useId\(this\);/);
     assert.doesNotMatch(code, /from\s+['"]react['"]/);
   });
@@ -319,7 +319,7 @@ describe("react compat internal hooks", () => {
 
     const code = run(source);
 
-    assert.match(code, /import \{[^}]*useExpose[^}]*\} from "@litsx\/litsx";/);
+    assert.match(code, /import \{[^}]*useExpose[^}]*\} from "@litsx\/core";/);
     assert.match(
       code,
       /useExpose\(this, this\.ref,[\s\S]*focus\(\)[\s\S]*\[this\.ref\]\);/
@@ -344,7 +344,7 @@ describe("react compat internal hooks", () => {
 
     assert.match(
       code,
-      /import \{[^}]*useMemoValue[^}]*useStableCallback[^}]*\} from "@litsx\/litsx";/
+      /import \{[^}]*useMemoValue[^}]*useStableCallback[^}]*\} from "@litsx\/core";/
     );
     assert.match(
       code,
@@ -406,7 +406,7 @@ describe("react compat internal hooks", () => {
 
     const code = run(source);
 
-    assert.match(code, /import \{[^}]*prepareEffects[^}]*useId[^}]*\} from "@litsx\/litsx";/);
+    assert.match(code, /import \{[^}]*prepareEffects[^}]*useId[^}]*\} from "@litsx\/core";/);
     assert.match(code, /const primaryId = useId\(this\);/);
     assert.match(code, /const secondaryId = useId\(this\);/);
   });
@@ -427,7 +427,7 @@ describe("react compat internal hooks", () => {
 
     assert.match(
       code,
-      /import \{[^}]*startTransition[^}]*\} from "@litsx\/litsx";/
+      /import \{[^}]*startTransition[^}]*\} from "@litsx\/core";/
     );
     assert.match(
       code,
@@ -438,7 +438,7 @@ describe("react compat internal hooks", () => {
   it("extends an existing litsx runtime import instead of adding a second one", () => {
     const source = [
       "import { LitElement } from 'lit';",
-      "import { useMemoValue } from '@litsx\/litsx';",
+      "import { useMemoValue } from '@litsx\/core';",
       "import { useEffect } from 'react';",
       "",
       "class ExistingRuntimeImport extends LitElement {",
@@ -453,9 +453,9 @@ describe("react compat internal hooks", () => {
 
     assert.match(
       code,
-      /import \{ useMemoValue, prepareEffects, useAfterUpdate \} from ['"]@litsx\/litsx['"];|import \{ useMemoValue, useAfterUpdate, prepareEffects \} from ['"]@litsx\/litsx['"];|import \{ prepareEffects, useAfterUpdate, useMemoValue \} from ['"]@litsx\/litsx['"];|import \{ prepareEffects, useMemoValue, useAfterUpdate \} from ['"]@litsx\/litsx['"];|import \{ useAfterUpdate, prepareEffects, useMemoValue \} from ['"]@litsx\/litsx['"];|import \{ useAfterUpdate, useMemoValue, prepareEffects \} from ['"]@litsx\/litsx['"];/
+      /import \{ useMemoValue, prepareEffects, useAfterUpdate \} from ['"]@litsx\/core['"];|import \{ useMemoValue, useAfterUpdate, prepareEffects \} from ['"]@litsx\/core['"];|import \{ prepareEffects, useAfterUpdate, useMemoValue \} from ['"]@litsx\/core['"];|import \{ prepareEffects, useMemoValue, useAfterUpdate \} from ['"]@litsx\/core['"];|import \{ useAfterUpdate, prepareEffects, useMemoValue \} from ['"]@litsx\/core['"];|import \{ useAfterUpdate, useMemoValue, prepareEffects \} from ['"]@litsx\/core['"];/
     );
-    assert.strictEqual((code.match(/from ['"]@litsx\/litsx['"];/g) || []).length, 1);
+    assert.strictEqual((code.match(/from ['"]@litsx\/core['"];/g) || []).length, 1);
   });
 
   it("does not duplicate prepareEffects when it is already present", () => {
@@ -545,10 +545,10 @@ describe("react compat internal hooks", () => {
     assert.match(code, /const second = remoteHooks\.useNamespacedThing\(this, this\.other\);/);
   });
 
-  it("rewrites compat useContext imports from @litsx/litsx/context", () => {
+  it("rewrites compat useContext imports from @litsx/core/context", () => {
     const source = [
       "import { LitElement } from 'lit';",
-      "import { useContext } from '@litsx/litsx/context';",
+      "import { useContext } from '@litsx/core/context';",
       "",
       "class ContextConsumer extends LitElement {",
       "  render() {",
@@ -560,7 +560,7 @@ describe("react compat internal hooks", () => {
     const code = run(source);
 
     assert.match(code, /return useContext\(this, ThemeContext\);/);
-    assert.match(code, /import \{ prepareEffects \} from "@litsx\/litsx";/);
+    assert.match(code, /import \{ prepareEffects \} from "@litsx\/core";/);
   });
 
   it("leaves unsupported dependency arrays untouched", () => {
@@ -587,7 +587,7 @@ describe("react compat internal hooks", () => {
     const source = [
       "import * as React from 'react';",
       "import { LitElement } from 'lit';",
-      "import { useAfterUpdate } from '@litsx/litsx';",
+      "import { useAfterUpdate } from '@litsx/core';",
       "",
       "class NamespaceEffects extends LitElement {",
       "  render() {",

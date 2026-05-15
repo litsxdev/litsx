@@ -1,7 +1,7 @@
 {
   "name": "@litsx/litsx",
   "version": "0.3.5",
-  "description": "Native LitSX runtime primitives, JSX runtime entrypoints, and web component utilities",
+  "description": "Deprecated compatibility wrapper for @litsx/core",
   "author": "LitSX Team",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -73,9 +73,7 @@
     "lit": ">=3"
   },
   "dependencies": {
-    "@lit/context": "^1.1.6",
-    "@lit/reactive-element": "^2.1.2",
-    "@litsx/light-dom-registry": "^0.2.4"
+    "@litsx/core": "^0.3.5"
   },
   "devDependencies": {
     "lit": "^3.2.1"

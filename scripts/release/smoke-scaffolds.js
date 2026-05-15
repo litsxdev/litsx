@@ -7,8 +7,8 @@ import { createCaretVersionMap } from "./package-version-map.js";
 const templates = ["app", "component", "design-system"];
 const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-release-scaffold-"));
 const expectedVersions = createCaretVersionMap([
-  "@litsx/litsx",
-  "@litsx/typescript-plugin",
+  "@litsx/core",
+  "@litsx/typescript",
   "prettier-plugin-litsx",
 ]);
 
@@ -29,10 +29,10 @@ for (const template of templates) {
   assert(manifest.scripts?.format, `${template} scaffold is missing format script`);
   assert(manifest.scripts?.typecheck, `${template} scaffold is missing typecheck script`);
   assert(
-    manifest.dependencies?.["@litsx/litsx"] === expectedVersions["@litsx/litsx"],
-    `${template} scaffold should depend on @litsx/litsx ${expectedVersions["@litsx/litsx"]}`,
+    manifest.dependencies?.["@litsx/core"] === expectedVersions["@litsx/core"],
+    `${template} scaffold should depend on @litsx/core ${expectedVersions["@litsx/core"]}`,
   );
-  assert(manifest.devDependencies?.["@litsx/typescript-plugin"] === expectedVersions["@litsx/typescript-plugin"], `${template} scaffold should depend on @litsx/typescript-plugin ${expectedVersions["@litsx/typescript-plugin"]}`);
+  assert(manifest.devDependencies?.["@litsx/typescript"] === expectedVersions["@litsx/typescript"], `${template} scaffold should depend on @litsx/typescript ${expectedVersions["@litsx/typescript"]}`);
   assert(manifest.devDependencies?.["prettier-plugin-litsx"] === expectedVersions["prettier-plugin-litsx"], `${template} scaffold should depend on prettier-plugin-litsx ${expectedVersions["prettier-plugin-litsx"]}`);
   assert(fs.existsSync(path.join(targetDir, "prettier.config.js")), `${template} scaffold is missing prettier.config.js`);
   assert(fs.existsSync(path.join(targetDir, "eslint.config.js")), `${template} scaffold is missing eslint.config.js`);

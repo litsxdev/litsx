@@ -10,7 +10,7 @@ import {
   useOnConnect,
   useRef,
   useState,
-} from "../packages/litsx/src/index.js";
+} from "../packages/core/src/index.js";
 
 let tagCounter = 0;
 

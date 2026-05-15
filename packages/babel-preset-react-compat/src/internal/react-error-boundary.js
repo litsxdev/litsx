@@ -11,7 +11,7 @@ import {
 } from "./react-compat-shared.js";
 
 const { declare } = helperPluginUtils;
-const RUNTIME_MODULE = "@litsx/litsx";
+const RUNTIME_MODULE = "@litsx/core";
 const RUNTIME_PRIMITIVE = "ErrorBoundary";
 const KEYED_MODULE = "lit/directives/keyed.js";
 

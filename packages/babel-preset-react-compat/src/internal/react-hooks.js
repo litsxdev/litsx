@@ -3,7 +3,7 @@ import helperPluginUtils from "@babel/helper-plugin-utils";
 const { declare } = helperPluginUtils;
 let t;
 
-const RUNTIME_MODULE = "@litsx/litsx";
+const RUNTIME_MODULE = "@litsx/core";
 
 const SUPPORTED_HOOKS = new Set([
   "useEffect",
@@ -19,10 +19,10 @@ const SUPPORTED_HOOKS = new Set([
   "useDeferredValue",
   "startTransition",
 ]);
-const REACT_COMPAT_RUNTIME_MODULE = "@litsx/litsx/context";
+const REACT_COMPAT_RUNTIME_MODULE = "@litsx/core/context";
 const REACT_COMPAT_SUPPORTED_HOOKS = new Set(["useContext"]);
 
-const IGNORED_CUSTOM_HOOK_SOURCES = new Set(["react", "@litsx/litsx"]);
+const IGNORED_CUSTOM_HOOK_SOURCES = new Set(["react", "@litsx/core"]);
 
 function ensurePrepareCall(renderMethodPath) {
   const bodyPath = renderMethodPath.get("body");

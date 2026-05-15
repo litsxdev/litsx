@@ -213,7 +213,7 @@ export default declare((api) => {
         },
         exit(path, state) {
           for (const primitiveName of state.usedPrimitives) {
-            addNamedImport(path, "@litsx/litsx", primitiveName);
+            addNamedImport(path, "@litsx/core", primitiveName);
           }
         },
       },

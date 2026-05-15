@@ -24,7 +24,7 @@ For raw Babel-native integration without the compiler facade, prefer [`@litsx/ba
 npm install @litsx/compiler
 ```
 
-Typical consumers also need the runtime packages used by their compiled output, such as `lit`, `@litsx/litsx`, and, when targeting browsers without native scoped registries, `@webcomponents/scoped-custom-element-registry`.
+Typical consumers also need the runtime packages used by their compiled output, such as `lit`, `@litsx/core`, and, when targeting browsers without native scoped registries, `@webcomponents/scoped-custom-element-registry`.
 
 ## What It Solves
 

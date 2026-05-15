@@ -1135,6 +1135,14 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@litsx/authoring@npm:^0.3.0, @litsx/authoring@npm:^0.3.1, @litsx/authoring@workspace:packages/authoring":
+  version: 0.0.0-use.local
+  resolution: "@litsx/authoring@workspace:packages/authoring"
+  dependencies:
+    magic-string: "npm:^0.30.21"
+  languageName: unknown
+  linkType: soft
+
 "@litsx/babel-parser@npm:^0.2.2, @litsx/babel-parser@npm:^0.2.3, @litsx/babel-parser@workspace:packages/babel-parser-litsx":
   version: 0.0.0-use.local
   resolution: "@litsx/babel-parser@workspace:packages/babel-parser-litsx"
@@ -1146,7 +1154,7 @@ __metadata:
     "@babel/helper-validator-identifier": "npm:^7.28.5"
     "@babel/parser": "npm:^7.29.3"
     "@babel/types": "npm:^7.29.0"
-    "@litsx/jsx-authoring": "npm:^0.3.1"
+    "@litsx/authoring": "npm:^0.3.1"
     charcodes: "npm:^0.2.0"
   bin:
     babel-parser: ./dist/babel-parser.js
@@ -1242,10 +1250,23 @@ __metadata:
     "@babel/core": "npm:^7.29.0"
     "@babel/parser": "npm:^7.29.3"
     "@babel/plugin-transform-typescript": "npm:^7.28.5"
+    "@litsx/authoring": "npm:^0.3.0"
     "@litsx/babel-plugin-transform-jsx-html-template": "npm:^0.3.0"
     "@litsx/babel-preset-litsx": "npm:^0.5.0"
-    "@litsx/jsx-authoring": "npm:^0.3.0"
     "@litsx/typescript-session": "npm:^0.2.1"
+  languageName: unknown
+  linkType: soft
+
+"@litsx/core@npm:^0.3.5, @litsx/core@workspace:packages/core":
+  version: 0.0.0-use.local
+  resolution: "@litsx/core@workspace:packages/core"
+  dependencies:
+    "@lit/context": "npm:^1.1.6"
+    "@lit/reactive-element": "npm:^2.1.2"
+    "@litsx/light-dom-registry": "npm:^0.2.4"
+    lit: "npm:^3.2.1"
+  peerDependencies:
+    lit: ">=3"
   languageName: unknown
   linkType: soft
 
@@ -1257,18 +1278,18 @@ __metadata:
     "@babel/eslint-parser": "npm:^7.28.6"
     "@babel/plugin-syntax-jsx": "npm:^7.28.6"
     "@babel/plugin-syntax-typescript": "npm:^7.27.1"
-    "@litsx/typescript-plugin": "npm:^0.5.0"
+    "@litsx/typescript": "npm:^0.5.0"
   peerDependencies:
     eslint: ^8.57.0 || ^9.0.0
     typescript: ">=5"
   languageName: unknown
   linkType: soft
 
-"@litsx/jsx-authoring@npm:^0.3.0, @litsx/jsx-authoring@npm:^0.3.1, @litsx/jsx-authoring@workspace:packages/jsx-authoring":
+"@litsx/jsx-authoring@workspace:packages/jsx-authoring":
   version: 0.0.0-use.local
   resolution: "@litsx/jsx-authoring@workspace:packages/jsx-authoring"
   dependencies:
-    magic-string: "npm:^0.30.21"
+    "@litsx/authoring": "npm:^0.3.1"
   languageName: unknown
   linkType: soft
 
@@ -1282,9 +1303,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@litsx/litsx@workspace:packages/litsx"
   dependencies:
-    "@lit/context": "npm:^1.1.6"
-    "@lit/reactive-element": "npm:^2.1.2"
-    "@litsx/light-dom-registry": "npm:^0.2.4"
+    "@litsx/core": "npm:^0.3.5"
     lit: "npm:^3.2.1"
   peerDependencies:
     lit: ">=3"
@@ -1305,11 +1324,11 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@litsx/typescript-plugin@npm:^0.5.0, @litsx/typescript-plugin@workspace:packages/typescript-plugin-litsx":
+"@litsx/typescript-plugin@workspace:packages/typescript-plugin-litsx":
   version: 0.0.0-use.local
   resolution: "@litsx/typescript-plugin@workspace:packages/typescript-plugin-litsx"
   dependencies:
-    "@babel/parser": "npm:^7.29.3"
+    "@litsx/typescript": "npm:^0.5.0"
   peerDependencies:
     typescript: ">=5"
   bin:
@@ -1322,6 +1341,18 @@ __metadata:
   resolution: "@litsx/typescript-session@workspace:packages/typescript-session"
   peerDependencies:
     typescript: ">=5"
+  languageName: unknown
+  linkType: soft
+
+"@litsx/typescript@npm:^0.5.0, @litsx/typescript@workspace:packages/typescript":
+  version: 0.0.0-use.local
+  resolution: "@litsx/typescript@workspace:packages/typescript"
+  dependencies:
+    "@babel/parser": "npm:^7.29.3"
+  peerDependencies:
+    typescript: ">=5"
+  bin:
+    litsx-tsc: ./dist/litsx-tsc.js
   languageName: unknown
   linkType: soft
 
@@ -4294,8 +4325,8 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "prettier-plugin-litsx@workspace:packages/prettier-plugin-litsx"
   dependencies:
+    "@litsx/authoring": "npm:^0.3.1"
     "@litsx/babel-parser": "npm:^0.2.3"
-    "@litsx/jsx-authoring": "npm:^0.3.1"
   peerDependencies:
     prettier: ^3.0.0
   languageName: unknown

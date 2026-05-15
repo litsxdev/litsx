@@ -7,11 +7,11 @@ import { afterEach, describe, it } from "vitest";
 import {
   bindRendererContext,
   renderRendererCall,
-} from "../packages/litsx/src/runtime-render-context.js";
+} from "../packages/core/src/rendering.js";
 import {
   LightDomElementsMixin,
   ShadowDomElementsMixin,
-} from "../packages/litsx/src/runtime-infrastructure/index.js";
+} from "../packages/core/src/elements/index.js";
 import {
   withLightDomCreationContext,
 } from "../packages/light-dom-registry/src/index.js";

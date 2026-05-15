@@ -1,0 +1,87 @@
+{
+  "name": "@litsx/core",
+  "version": "0.3.5",
+  "description": "Native LitSX runtime primitives, JSX runtime entrypoints, and web component utilities",
+  "author": "LitSX Team",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./src/index.js",
+  "types": "./src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "import": "./src/index.js",
+      "require": "./dist/index.cjs",
+      "default": "./src/index.js"
+    },
+    "./jsx-runtime": {
+      "types": "./src/jsx-runtime.d.ts",
+      "import": "./src/jsx-runtime.js",
+      "require": "./dist/jsx-runtime.cjs",
+      "default": "./src/jsx-runtime.js"
+    },
+    "./jsx-dev-runtime": {
+      "types": "./src/jsx-dev-runtime.d.ts",
+      "import": "./src/jsx-dev-runtime.js",
+      "require": "./dist/jsx-dev-runtime.cjs",
+      "default": "./src/jsx-dev-runtime.js"
+    },
+    "./elements": {
+      "types": "./src/elements/index.d.ts",
+      "import": "./src/elements/index.js",
+      "require": "./dist/elements/index.cjs",
+      "default": "./src/elements/index.js"
+    },
+    "./rendering": {
+      "import": "./src/rendering.js",
+      "require": "./dist/rendering.cjs",
+      "default": "./src/rendering.js"
+    },
+    "./context": {
+      "types": "./src/context.d.ts",
+      "import": "./src/context.js",
+      "require": "./dist/context.cjs",
+      "default": "./src/context.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md"
+  ],
+  "keywords": [
+    "litsx",
+    "lit",
+    "jsx",
+    "web-components"
+  ],
+  "license": "Apache-2.0",
+  "homepage": "https://litsx.dev/",
+  "bugs": {
+    "url": "https://github.com/litsxdev/litsx/issues"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/litsxdev/litsx.git",
+    "directory": "packages/core"
+  },
+  "peerDependencies": {
+    "lit": ">=3"
+  },
+  "dependencies": {
+    "@lit/context": "^1.1.6",
+    "@lit/reactive-element": "^2.1.2",
+    "@litsx/light-dom-registry": "^0.2.4"
+  },
+  "devDependencies": {
+    "lit": "^3.2.1"
+  },
+  "scripts": {
+    "build": "../../node_modules/.bin/rollup --config rollup.config.js",
+    "prepack": "yarn build"
+  }
+}

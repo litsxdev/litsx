@@ -1,4 +1,4 @@
-import { mapOriginalPositionToToolingVirtual } from "@litsx/typescript-plugin/virtual-source";
+import { mapOriginalPositionToToolingVirtual } from "@litsx/typescript/virtualization";
 import { createLintState, getLintState } from "./state.js";
 import { mapOriginalSpanToVirtual, offsetToLineColumn } from "./remap.js";
 

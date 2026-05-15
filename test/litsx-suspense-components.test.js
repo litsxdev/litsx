@@ -6,7 +6,7 @@ import {
   SuspenseBoundaryElement,
   SuspenseList,
   SuspenseListElement,
-} from "../packages/litsx/src/index.js";
+} from "../packages/core/src/index.js";
 
 const DOCUMENT_POSITION_PRECEDING =
   globalThis.Node?.DOCUMENT_POSITION_PRECEDING ?? 2;

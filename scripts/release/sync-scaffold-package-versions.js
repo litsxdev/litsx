@@ -7,9 +7,9 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."
 const targetFile = path.join(repoRoot, "packages/create-litsx-app/src/published-package-versions.js");
 
 const versionMap = createCaretVersionMap([
-  "@litsx/litsx",
+  "@litsx/core",
   "@litsx/eslint-plugin",
-  "@litsx/typescript-plugin",
+  "@litsx/typescript",
   "@litsx/vite-plugin",
   "prettier-plugin-litsx",
 ]);

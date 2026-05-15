@@ -51,7 +51,7 @@ describe("integration: parser + all plugins", () => {
       generatorOpts: { decoratorsBeforeExport: true },
     });
 
-    assert.match(code, /import \{[^}]*prepareEffects[^}]*useAfterUpdate[^}]*\} from "@litsx\/litsx";/);
+    assert.match(code, /import \{[^}]*prepareEffects[^}]*useAfterUpdate[^}]*\} from "@litsx\/core";/);
     assert.match(code, /class FancyForm extends ShadowDomElementsMixin\(LitsxStaticHoistsMixin\(LitElement\)\)/);
     assert.match(code, /static elements = {/);
     assert.match(code, /<fancy-button \.ref=\{buttonRef\} \.label=\{this\.label\} \/>/);
@@ -313,7 +313,7 @@ describe("integration: parser + all plugins", () => {
 
     assert.match(
       code,
-      /import \{ LightDomElementsMixin, LightDomMixin \} from "@litsx\/litsx\/runtime-infrastructure";|import \{ LightDomMixin, LightDomElementsMixin \} from "@litsx\/litsx\/runtime-infrastructure";/
+      /import \{ LightDomElementsMixin, LightDomMixin \} from "@litsx\/core\/elements";|import \{ LightDomMixin, LightDomElementsMixin \} from "@litsx\/core\/elements";/
     );
     assert.match(code, /export class LightForm extends LightDomElementsMixin\(LightDomMixin\(LitElement\)\)/);
     assert.doesNotMatch(code, /ShadowDomElementsMixin/);

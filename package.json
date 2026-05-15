@@ -5,6 +5,7 @@
   "type": "module",
   "packageManager": "yarn@4.10.3",
   "workspaces": [
+    "packages/authoring",
     "packages/babel-parser-litsx",
     "packages/babel-plugin-litsx-proptypes",
     "packages/babel-plugin-shared-hooks",
@@ -13,6 +14,7 @@
     "packages/babel-preset-litsx",
     "packages/babel-preset-react-compat",
     "packages/compiler",
+    "packages/core",
     "packages/create-litsx-app",
     "packages/eslint-plugin-litsx",
     "packages/jsx-authoring",
@@ -21,6 +23,7 @@
     "packages/prettier-plugin-litsx",
     "packages/prop-types",
     "packages/shiki-languages",
+    "packages/typescript",
     "packages/typescript-plugin-litsx",
     "packages/typescript-session",
     "packages/vite-plugin"

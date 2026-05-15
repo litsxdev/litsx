@@ -12,7 +12,7 @@ import elementCandidatesPlugin, {
   importedBindingNeedsRendererContext,
   setElementCandidatesBabelTypes,
 } from "../packages/babel-preset-litsx/src/internal/transform-litsx-element-candidates.js";
-import { createLitsxTypecheckSession } from "../packages/typescript-plugin-litsx/src/typecheck.js";
+import { createLitsxTypecheckSession } from "../packages/typescript/src/typecheck.js";
 
 const traverse = babelTraverse.default || babelTraverse;
 const { transformFromAstSync } = babelCore;

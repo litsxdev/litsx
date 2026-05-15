@@ -204,14 +204,14 @@ function hasStaticElementsMember(node) {
 }
 
 function ensureRuntimeInfrastructureImport(programPath, importName) {
-  if (hasNamedImport(programPath, "@litsx/litsx/runtime-infrastructure", importName)) {
+  if (hasNamedImport(programPath, "@litsx/core/elements", importName)) {
     return;
   }
 
   const runtimeImport = programPath.get("body").find(
     (nodePath) =>
       nodePath.isImportDeclaration() &&
-      nodePath.node.source.value === "@litsx/litsx/runtime-infrastructure"
+      nodePath.node.source.value === "@litsx/core/elements"
   );
 
   if (runtimeImport) {
@@ -223,7 +223,7 @@ function ensureRuntimeInfrastructureImport(programPath, importName) {
 
   programPath.unshiftContainer("body", t.importDeclaration(
     [t.importSpecifier(t.identifier(importName), t.identifier(importName))],
-    t.stringLiteral("@litsx/litsx/runtime-infrastructure")
+    t.stringLiteral("@litsx/core/elements")
   ));
 }
 

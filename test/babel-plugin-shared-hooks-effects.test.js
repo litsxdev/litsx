@@ -9,7 +9,7 @@ const { transformFromAstSync } = babelCore;
 const plugin = createEffectHooksTransform({
   pluginName: "test-shared-hooks-effects",
   importSources: ["react"],
-  runtimeModule: "@litsx/litsx",
+  runtimeModule: "@litsx/core",
 });
 
 function run(source) {
@@ -54,7 +54,7 @@ describe("@litsx/babel-plugin-shared-hooks createEffectHooksTransform", () => {
 
     const code = run(source);
 
-    assert.match(code, /import \{[^}]*prepareEffects[^}]*useAfterUpdate[^}]*useOnCommit[^}]*\} from "@litsx\/litsx"|import \{[^}]*prepareEffects[^}]*useOnCommit[^}]*useAfterUpdate[^}]*\} from "@litsx\/litsx"|import \{[^}]*useAfterUpdate[^}]*prepareEffects[^}]*useOnCommit[^}]*\} from "@litsx\/litsx"/);
+    assert.match(code, /import \{[^}]*prepareEffects[^}]*useAfterUpdate[^}]*useOnCommit[^}]*\} from "@litsx\/core"|import \{[^}]*prepareEffects[^}]*useOnCommit[^}]*useAfterUpdate[^}]*\} from "@litsx\/core"|import \{[^}]*useAfterUpdate[^}]*prepareEffects[^}]*useOnCommit[^}]*\} from "@litsx\/core"/);
     assert.match(code, /prepareEffects\(this\);/);
     assert.strictEqual((code.match(/prepareEffects\(this\);/g) || []).length, 1);
     assert.match(code, /useAfterUpdate\(this, \(\) => this\.sync\(\), \[this\.value\]\);/);
@@ -107,7 +107,7 @@ describe("@litsx/babel-plugin-shared-hooks createEffectHooksTransform", () => {
   it("rewrites effects without dependency arrays and merges into an existing runtime import", () => {
     const source = [
       "import { LitElement } from 'lit';",
-      "import { useId } from '@litsx/litsx';",
+      "import { useId } from '@litsx/core';",
       "import { useEffect } from 'react';",
       "",
       "class EffectsCard extends LitElement {",
@@ -121,10 +121,10 @@ describe("@litsx/babel-plugin-shared-hooks createEffectHooksTransform", () => {
 
     const code = run(source);
 
-    assert.strictEqual((code.match(/from ['"]@litsx\/litsx['"];/g) || []).length, 1);
+    assert.strictEqual((code.match(/from ['"]@litsx\/core['"];/g) || []).length, 1);
     assert.match(
       code,
-      /import \{[^}]*useId[^}]*prepareEffects[^}]*useAfterUpdate[^}]*\} from ['"]@litsx\/litsx['"]|import \{[^}]*prepareEffects[^}]*useAfterUpdate[^}]*useId[^}]*\} from ['"]@litsx\/litsx['"]|import \{[^}]*useId[^}]*useAfterUpdate[^}]*prepareEffects[^}]*\} from ['"]@litsx\/litsx['"]/
+      /import \{[^}]*useId[^}]*prepareEffects[^}]*useAfterUpdate[^}]*\} from ['"]@litsx\/core['"]|import \{[^}]*prepareEffects[^}]*useAfterUpdate[^}]*useId[^}]*\} from ['"]@litsx\/core['"]|import \{[^}]*useId[^}]*useAfterUpdate[^}]*prepareEffects[^}]*\} from ['"]@litsx\/core['"]/
     );
     assert.match(code, /useAfterUpdate\(this, \(\) => this\.sync\(\)\);/);
   });

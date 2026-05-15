@@ -7,7 +7,7 @@ import path from "path";
 import { describe, it, vi } from "vitest";
 import * as jsxTemplateModule from "../packages/babel-plugin-transform-jsx-html-template/src/index.js";
 import * as presetModule from "../packages/babel-preset-litsx/src/index.js";
-import { createLitsxTypecheckSession } from "../packages/typescript-plugin-litsx/src/typecheck.js";
+import { createLitsxTypecheckSession } from "../packages/typescript/src/typecheck.js";
 
 import {
   createLitsxCompilationSession,
@@ -144,7 +144,7 @@ describe("@litsx/compiler", () => {
 
   it("lowers authored JSX inside suspense content renderers", () => {
     const source = [
-      'import { SuspenseBoundary } from "@litsx/litsx";',
+      'import { SuspenseBoundary } from "@litsx/core";',
       'import { GuideCard } from "./guide-card.litsx";',
       "export const Demo = () => {",
       "  return (",
@@ -172,7 +172,7 @@ describe("@litsx/compiler", () => {
 
   it("binds only function props whose returned JSX needs component context", () => {
     const source = [
-      'import { SuspenseBoundary } from "@litsx/litsx";',
+      'import { SuspenseBoundary } from "@litsx/core";',
       'import { GuideCard } from "./guide-card.litsx";',
       "const renderHeader = () => <p>plain</p>;",
       "const renderPanel = () => <fancy-panel />;",
@@ -608,7 +608,7 @@ describe("@litsx/compiler", () => {
       jsxTemplate: false,
     });
 
-    assert.match(result.code, /import \{ renderRendererCall \} from "@litsx\/litsx\/internal\/runtime-render-context";/);
+    assert.match(result.code, /import \{ renderRendererCall \} from "@litsx\/core\/rendering";/);
     assert.match(result.code, /return <section>\{renderRendererCall\(this\.thunk, 'alpha'\)\}<\/section>;/);
   }, 20000);
 
@@ -1249,7 +1249,7 @@ describe("@litsx/compiler", () => {
     ].join("\n");
     const featureSource = [
       "import FancyButton from './FancyButton.js';",
-      "import { useRef, useState } from '@litsx\/litsx';",
+      "import { useRef, useState } from '@litsx\/core';",
       "export function Counter({ label }) {",
       "  const ref = useRef(null);",
       "  const [count] = useState(0);",

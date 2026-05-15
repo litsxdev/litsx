@@ -7,9 +7,9 @@ import {
   LITSX_JSX_TYPE,
   jsx,
   jsxs,
-} from "../packages/litsx/src/jsx-runtime.js";
-import { jsxDEV } from "../packages/litsx/src/jsx-dev-runtime.js";
-import packageJson from "../packages/litsx/package.json" with { type: "json" };
+} from "../packages/core/src/jsx-runtime.js";
+import { jsxDEV } from "../packages/core/src/jsx-dev-runtime.js";
+import packageJson from "../packages/core/package.json" with { type: "json" };
 
 describe("litsx jsx runtime", () => {
   it("creates jsx nodes with a stable runtime marker", () => {
@@ -52,27 +52,27 @@ describe("litsx jsx runtime", () => {
     assert.ok(packageJson.exports["./jsx-runtime"]);
     assert.ok(packageJson.exports["./jsx-dev-runtime"]);
     assert.strictEqual(packageJson.types, "./src/index.d.ts");
-    assert.ok(fs.existsSync(new URL("../packages/litsx/src/index.d.ts", import.meta.url)));
-    assert.ok(fs.existsSync(new URL("../packages/litsx/src/jsx-runtime.d.ts", import.meta.url)));
-    assert.ok(fs.existsSync(new URL("../packages/litsx/src/jsx-dev-runtime.d.ts", import.meta.url)));
+    assert.ok(fs.existsSync(new URL("../packages/core/src/index.d.ts", import.meta.url)));
+    assert.ok(fs.existsSync(new URL("../packages/core/src/jsx-runtime.d.ts", import.meta.url)));
+    assert.ok(fs.existsSync(new URL("../packages/core/src/jsx-dev-runtime.d.ts", import.meta.url)));
   });
 
   it("types useEmit as a hook that returns an emit function", () => {
-    const declarations = fs.readFileSync(new URL("../packages/litsx/src/index.d.ts", import.meta.url), "utf8");
+    const declarations = fs.readFileSync(new URL("../packages/core/src/index.d.ts", import.meta.url), "utf8");
 
     assert.match(declarations, /export declare function useEmit\(\): <T = undefined>\(/);
     assert.doesNotMatch(declarations, /export declare function useEmit<T = undefined>\(/);
   });
 
   it("publishes transition helpers with accurate return types", () => {
-    const declarations = fs.readFileSync(new URL("../packages/litsx/src/index.d.ts", import.meta.url), "utf8");
+    const declarations = fs.readFileSync(new URL("../packages/core/src/index.d.ts", import.meta.url), "utf8");
 
     assert.match(declarations, /export declare function useTransition\(\): \[boolean, <T>\(callback: \(\) => T\) => T\];/);
     assert.match(declarations, /export declare function startTransition<T>\(callback: \(\) => T\): T;/);
   });
 
   it("types built-in boundary components with base element attributes like class and ref", () => {
-    const declarations = fs.readFileSync(new URL("../packages/litsx/src/jsx-runtime.d.ts", import.meta.url), "utf8");
+    const declarations = fs.readFileSync(new URL("../packages/core/src/jsx-runtime.d.ts", import.meta.url), "utf8");
 
     assert.match(declarations, /Component extends typeof SuspenseList \? LitsxBoundaryElementProps<SuspenseList, SuspenseListProps> :/);
     assert.match(declarations, /Component extends typeof SuspenseBoundary \? LitsxBoundaryElementProps<SuspenseBoundary, SuspenseBoundaryProps> :/);

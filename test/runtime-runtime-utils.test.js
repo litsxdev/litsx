@@ -1,19 +1,19 @@
 import assert from "assert";
 import { afterEach, describe, it } from "vitest";
-import { assignRef, cleanupRef } from "../packages/litsx/src/runtime-refs.js";
+import { assignRef, cleanupRef } from "../packages/core/src/runtime-refs.js";
 import {
   Priority,
   PriorityScheduler,
-} from "../packages/litsx/src/runtime-priority-scheduler.js";
+} from "../packages/core/src/runtime-priority-scheduler.js";
 import {
   createTransitionState,
   resetTransitionState,
-} from "../packages/litsx/src/runtime-transition-state.js";
+} from "../packages/core/src/runtime-transition-state.js";
 import {
   getController,
   prepareEffects,
   resolveRuntimeHost,
-} from "../packages/litsx/src/runtime-controller.js";
+} from "../packages/core/src/runtime-controller.js";
 
 class TestHost {
   constructor() {

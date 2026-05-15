@@ -1,6 +1,6 @@
 import { createRuntimeHooksTransform } from "@litsx/babel-plugin-shared-hooks";
 
-const RUNTIME_MODULE = "@litsx/litsx";
+const RUNTIME_MODULE = "@litsx/core";
 const IMPORT_SOURCES = [RUNTIME_MODULE];
 
 const RUNTIME_HELPERS = [

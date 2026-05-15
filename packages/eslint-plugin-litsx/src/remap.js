@@ -1,4 +1,4 @@
-import { mapOriginalPositionToToolingVirtual } from "@litsx/typescript-plugin/virtual-source";
+import { mapOriginalPositionToToolingVirtual } from "@litsx/typescript/virtualization";
 
 export function offsetToLineColumn(offset, lineStarts) {
   const normalizedOffset = Math.max(0, offset);

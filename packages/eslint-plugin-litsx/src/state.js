@@ -1,7 +1,7 @@
 import {
   collectLitsxAuthoredIssues,
   createToolingVirtualLitsxSource,
-} from "@litsx/typescript-plugin/virtual-source";
+} from "@litsx/typescript/virtualization";
 
 const lintStateByFilename = new Map();
 

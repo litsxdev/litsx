@@ -3,7 +3,7 @@ import {
   createHostContentSnapshot,
   isReactiveControllerHostLike,
   isSameHostContentSnapshot,
-} from "../packages/litsx/src/runtime-host-content.js";
+} from "../packages/core/src/runtime-host-content.js";
 
 describe("runtime host content", () => {
   it("detects reactive controller hosts", () => {

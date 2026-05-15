@@ -1,0 +1,76 @@
+{
+  "name": "@litsx/typescript",
+  "version": "0.5.0",
+  "description": "TypeScript language-service, typecheck, and editor support for LitSX authored syntax",
+  "author": "LitSX Team",
+  "homepage": "https://litsx.dev/",
+  "bugs": {
+    "url": "https://github.com/litsxdev/litsx/issues"
+  },
+  "license": "Apache-2.0",
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "keywords": [
+    "typescript",
+    "tsserver",
+    "jsx",
+    "lit",
+    "litsx"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/litsxdev/litsx.git",
+    "directory": "packages/typescript"
+  },
+  "type": "module",
+  "main": "./tsserver-plugin.cjs",
+  "module": "./src/index.js",
+  "bin": {
+    "litsx-tsc": "./dist/litsx-tsc.js"
+  },
+  "exports": {
+    ".": {
+      "require": "./tsserver-plugin.cjs",
+      "import": "./src/index.js",
+      "default": "./src/index.js"
+    },
+    "./authored-semantics": {
+      "require": "./dist/authored-semantics.cjs",
+      "import": "./src/authored-semantics.js",
+      "default": "./src/authored-semantics.js"
+    },
+    "./virtualization": {
+      "require": "./dist/virtualization.cjs",
+      "import": "./src/virtualization.js",
+      "default": "./src/virtualization.js"
+    },
+    "./typecheck": {
+      "require": "./dist/typecheck.cjs",
+      "import": "./src/typecheck.js",
+      "default": "./src/typecheck.js"
+    },
+    "./editor-session": {
+      "require": "./dist/editor-session.cjs",
+      "import": "./src/editor-session.js",
+      "default": "./src/editor-session.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src",
+    "tsserver-plugin.cjs",
+    "README.md"
+  ],
+  "dependencies": {
+    "@babel/parser": "^7.29.3"
+  },
+  "peerDependencies": {
+    "typescript": ">=5"
+  },
+  "scripts": {
+    "build": "../../node_modules/.bin/rollup --config rollup.config.js",
+    "prepack": "yarn build"
+  }
+}

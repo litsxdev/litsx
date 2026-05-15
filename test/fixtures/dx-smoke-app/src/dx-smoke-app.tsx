@@ -1,4 +1,4 @@
-import { useState } from "@litsx/litsx";
+import { useState } from "@litsx/core";
 
 interface DxSmokeAppProps {
   title?: string;

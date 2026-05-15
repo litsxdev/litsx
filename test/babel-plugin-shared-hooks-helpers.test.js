@@ -183,7 +183,7 @@ describe("@litsx/babel-plugin-shared-hooks helpers", () => {
 
     const code = runUseStateCustomHookBridge(source);
 
-    assert.match(code, /import \{ useState \} from "@litsx\/litsx";/);
+    assert.match(code, /import \{ useState \} from "@litsx\/core";/);
     assert.match(code, /function useCounter\(_host, initial\)/);
     assert.match(code, /const \[count, setCount\] = useState\(_host, initial\);/);
     assert.match(code, /return useCounter\(this, 1\);/);
@@ -229,7 +229,7 @@ describe("@litsx/babel-plugin-shared-hooks helpers", () => {
 
   it("keeps pre-hosted local useState calls unchanged when no runtime import rewrite is needed", () => {
     const source = `
-      import { useId } from "@litsx/litsx";
+      import { useId } from "@litsx/core";
       import { useState as useReactState } from "react";
 
       const useCounter = (_host, initial) => {
@@ -259,7 +259,7 @@ describe("@litsx/babel-plugin-shared-hooks helpers", () => {
               programPath.traverse({
                 ImportDeclaration(path) {
                   collectUseStateImports(path, state, {
-                    importSources: ["react", "@litsx/litsx"],
+                    importSources: ["react", "@litsx/core"],
                   });
                 },
               });
@@ -280,8 +280,8 @@ describe("@litsx/babel-plugin-shared-hooks helpers", () => {
               });
 
               finalizeUseStateImports(programPath, state, t, {
-                importSources: ["react", "@litsx/litsx"],
-                runtimeModule: "@litsx/litsx",
+                importSources: ["react", "@litsx/core"],
+                runtimeModule: "@litsx/core",
               });
             },
           },
@@ -291,7 +291,7 @@ describe("@litsx/babel-plugin-shared-hooks helpers", () => {
 
     const code = result.code;
 
-    assert.match(code, /import \{ useId \} from "@litsx\/litsx";/);
+    assert.match(code, /import \{ useId \} from "@litsx\/core";/);
     assert.match(code, /import \{ useState as useReactState \} from "react";/);
     assert.match(code, /const useCounter = \(_host, initial\) => \{/);
     assert.match(code, /useReactState\(_host, initial\);/);
@@ -300,7 +300,7 @@ describe("@litsx/babel-plugin-shared-hooks helpers", () => {
 
   it("drops dead react useState imports while preserving a canonical litsx useState import for bridged hooks", () => {
     const source = `
-      import { useState as runtimeUseState } from "@litsx/litsx";
+      import { useState as runtimeUseState } from "@litsx/core";
       import { useState } from "react";
 
       function useCounter(initial) {
@@ -329,7 +329,7 @@ describe("@litsx/babel-plugin-shared-hooks helpers", () => {
               programPath.traverse({
                 ImportDeclaration(path) {
                   collectUseStateImports(path, state, {
-                    importSources: ["react", "@litsx/litsx"],
+                    importSources: ["react", "@litsx/core"],
                   });
                 },
               });
@@ -347,8 +347,8 @@ describe("@litsx/babel-plugin-shared-hooks helpers", () => {
               });
 
               finalizeUseStateImports(programPath, state, t, {
-                importSources: ["react", "@litsx/litsx"],
-                runtimeModule: "@litsx/litsx",
+                importSources: ["react", "@litsx/core"],
+                runtimeModule: "@litsx/core",
               });
             },
           },
@@ -357,7 +357,7 @@ describe("@litsx/babel-plugin-shared-hooks helpers", () => {
     });
     const code = result.code;
 
-    assert.match(code, /import \{ useState \} from "@litsx\/litsx";/);
+    assert.match(code, /import \{ useState \} from "@litsx\/core";/);
     assert.doesNotMatch(code, /from "react"/);
     assert.match(code, /function useCounter\(_host, initial\)/);
     assert.match(code, /const \[count, setCount\] = useState\(_host, initial\);/);
@@ -524,10 +524,10 @@ describe("@litsx/babel-plugin-shared-hooks helpers", () => {
   it("adds runtime named imports before, after, or into existing runtime imports", () => {
     const noRuntimeAst = parseModule(`import { LitElement } from "lit"; const view = 1;`);
     const namespaceAst = parseModule(`
-      import * as runtime from "@litsx/litsx";
+      import * as runtime from "@litsx/core";
       import { LitElement } from "lit";
     `);
-    const existingAst = parseModule(`import { useId } from "@litsx/litsx";`);
+    const existingAst = parseModule(`import { useId } from "@litsx/core";`);
 
     const noRuntimeResult = transformFromAstSync(noRuntimeAst, "", {
       configFile: false,
@@ -535,7 +535,7 @@ describe("@litsx/babel-plugin-shared-hooks helpers", () => {
       plugins: [() => ({
         visitor: {
           Program(programPath) {
-            ensureRuntimeNamedImports(programPath, "@litsx/litsx", ["prepareEffects", "useState"], t);
+            ensureRuntimeNamedImports(programPath, "@litsx/core", ["prepareEffects", "useState"], t);
           },
         },
       })],
@@ -546,7 +546,7 @@ describe("@litsx/babel-plugin-shared-hooks helpers", () => {
       plugins: [() => ({
         visitor: {
           Program(programPath) {
-            ensureRuntimeNamedImports(programPath, "@litsx/litsx", ["prepareEffects"], t);
+            ensureRuntimeNamedImports(programPath, "@litsx/core", ["prepareEffects"], t);
           },
         },
       })],
@@ -557,16 +557,16 @@ describe("@litsx/babel-plugin-shared-hooks helpers", () => {
       plugins: [() => ({
         visitor: {
           Program(programPath) {
-            ensureRuntimeNamedImports(programPath, "@litsx/litsx", ["useId", "prepareEffects"], t);
+            ensureRuntimeNamedImports(programPath, "@litsx/core", ["useId", "prepareEffects"], t);
           },
         },
       })],
     });
 
-    assert.match(noRuntimeResult.code, /import \{ prepareEffects, useState \} from "@litsx\/litsx";/);
-    assert.match(namespaceResult.code, /import \* as runtime from "@litsx\/litsx";/);
-    assert.match(namespaceResult.code, /import \{ prepareEffects \} from "@litsx\/litsx";/);
-    assert.match(existingResult.code, /import \{ useId, prepareEffects \} from "@litsx\/litsx";|import \{ prepareEffects, useId \} from "@litsx\/litsx";/);
+    assert.match(noRuntimeResult.code, /import \{ prepareEffects, useState \} from "@litsx\/core";/);
+    assert.match(namespaceResult.code, /import \* as runtime from "@litsx\/core";/);
+    assert.match(namespaceResult.code, /import \{ prepareEffects \} from "@litsx\/core";/);
+    assert.match(existingResult.code, /import \{ useId, prepareEffects \} from "@litsx\/core";|import \{ prepareEffects, useId \} from "@litsx\/core";/);
   });
 
   it("skips empty runtime import requests and can insert into files with no imports", () => {
@@ -577,14 +577,14 @@ describe("@litsx/babel-plugin-shared-hooks helpers", () => {
       plugins: [() => ({
         visitor: {
           Program(programPath) {
-            ensureRuntimeNamedImports(programPath, "@litsx/litsx", [], t);
-            ensureRuntimeNamedImports(programPath, "@litsx/litsx", ["prepareEffects", null, "prepareEffects"], t);
+            ensureRuntimeNamedImports(programPath, "@litsx/core", [], t);
+            ensureRuntimeNamedImports(programPath, "@litsx/core", ["prepareEffects", null, "prepareEffects"], t);
           },
         },
       })],
     });
 
-    assert.match(noImportsResult.code, /^import \{ prepareEffects \} from "@litsx\/litsx";\s+const value = 1;/s);
+    assert.match(noImportsResult.code, /^import \{ prepareEffects \} from "@litsx\/core";\s+const value = 1;/s);
   });
 
   it("collects and finalizes useState imports across source and runtime modules", () => {
@@ -611,13 +611,13 @@ describe("@litsx/babel-plugin-shared-hooks helpers", () => {
           Program(programPath) {
             programPath.get("body").forEach((path) => {
               if (path.isImportDeclaration()) {
-                collectUseStateImports(path, state, { importSources: ["react", "@litsx/litsx"] });
+                collectUseStateImports(path, state, { importSources: ["react", "@litsx/core"] });
                 collectReactUseStateImports(path, state);
               }
             });
             finalizeUseStateImports(programPath, state, t, {
-              importSources: ["react", "@litsx/litsx"],
-              runtimeModule: "@litsx/litsx",
+              importSources: ["react", "@litsx/core"],
+              runtimeModule: "@litsx/core",
             });
           },
         },
@@ -625,7 +625,7 @@ describe("@litsx/babel-plugin-shared-hooks helpers", () => {
     });
 
     assert.ok(state.sourceUseStateLocals.has("useReactState"));
-    assert.match(result.code, /import \{ useState as useReactState \} from "@litsx\/litsx";/);
+    assert.match(result.code, /import \{ useState as useReactState \} from "@litsx\/core";/);
     assert.doesNotMatch(result.code, /from "react";/);
   });
 
@@ -682,7 +682,7 @@ describe("@litsx/babel-plugin-shared-hooks helpers", () => {
     assert.match(code, /function useCounter\(initial\)/);
     assert.match(code, /return React\.useState\(initial\);/);
     assert.match(code, /return useCounter\(1\);/);
-    assert.doesNotMatch(code, /from "@litsx\/litsx"/);
+    assert.doesNotMatch(code, /from "@litsx\/core"/);
   });
 
   it("removes emptied source imports and inserts runtime useState before other imports", () => {
@@ -718,7 +718,7 @@ describe("@litsx/babel-plugin-shared-hooks helpers", () => {
 
     assert.match(
       result.code,
-      /^import \{ useState as useReactState \} from "@litsx\/litsx";\s+import \{ html \} from "lit";/s,
+      /^import \{ useState as useReactState \} from "@litsx\/core";\s+import \{ html \} from "lit";/s,
     );
     assert.doesNotMatch(result.code, /from "react";/);
   });
@@ -742,19 +742,19 @@ describe("@litsx/babel-plugin-shared-hooks helpers", () => {
           Program(programPath) {
             finalizeUseStateImports(programPath, state, t, {
               importSources: ["react"],
-              runtimeModule: "@litsx/litsx",
+              runtimeModule: "@litsx/core",
             });
           },
         },
       })],
     });
 
-    assert.match(result.code, /^import \{ useState \} from "@litsx\/litsx";\s+const value = 1;/s);
+    assert.match(result.code, /^import \{ useState \} from "@litsx\/core";\s+const value = 1;/s);
   });
 
   it("keeps existing runtime useState specifiers without duplication", () => {
     const ast = parseModule(`
-      import { useState } from "@litsx/litsx";
+      import { useState } from "@litsx/core";
       useState;
     `);
     const state = {
@@ -770,15 +770,15 @@ describe("@litsx/babel-plugin-shared-hooks helpers", () => {
         visitor: {
           Program(programPath) {
             finalizeUseStateImports(programPath, state, t, {
-              importSources: ["react", "@litsx/litsx"],
-              runtimeModule: "@litsx/litsx",
+              importSources: ["react", "@litsx/core"],
+              runtimeModule: "@litsx/core",
             });
           },
         },
       })],
     });
 
-    assert.strictEqual((result.code.match(/import \{ useState \} from "@litsx\/litsx";/g) || []).length, 1);
+    assert.strictEqual((result.code.match(/import \{ useState \} from "@litsx\/core";/g) || []).length, 1);
   });
 
   it("ignores non-identifier render calls when injecting custom-hook host arguments", () => {

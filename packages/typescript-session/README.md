@@ -14,7 +14,7 @@ used by:
 
 - `@litsx/compiler`
 - `@litsx/babel-preset-litsx`
-- `@litsx/typescript-plugin`
+- `@litsx/typescript`
 - editor-facing LitSX tooling
 
 It exists so those packages do not each reimplement:
@@ -37,7 +37,7 @@ It is primarily useful for:
 Application authors should normally use the higher-level public surfaces instead:
 
 - `@litsx/compiler`
-- `@litsx/typescript-plugin`
+- `@litsx/typescript`
 - `litsx-tsc`
 
 ## Stability

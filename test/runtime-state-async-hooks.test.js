@@ -1,10 +1,10 @@
 import assert from "assert";
 import { describe, it } from "vitest";
-import { prepareEffects } from "../packages/litsx/src/runtime-controller.js";
+import { prepareEffects } from "../packages/core/src/runtime-controller.js";
 import {
   useAsyncStateImpl,
   useOptimisticImpl,
-} from "../packages/litsx/src/state-async-hooks.js";
+} from "../packages/core/src/state-async-hooks.js";
 
 class TestHost {
   constructor() {

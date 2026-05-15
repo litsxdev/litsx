@@ -5,11 +5,11 @@ import os from "os";
 import path from "path";
 import ts from "typescript";
 import { describe, it, vi } from "vitest";
-import * as virtualSourceModule from "../packages/typescript-plugin-litsx/src/virtual-source.js";
+import * as virtualSourceModule from "../packages/typescript/src/virtualization.js";
 import {
   collectLitsxAuthoredIssues,
   inferLitsxStaticHoistInfoAtPosition,
-} from "../packages/typescript-plugin-litsx/src/authored-semantics.js";
+} from "../packages/typescript/src/authored-semantics.js";
 
 import plugin, {
   collectLitsxAuthoredDiagnostics,
@@ -27,7 +27,7 @@ import plugin, {
   remapTextSpanToOriginal,
   remapToolingTextSpanToOriginal,
   runLitsxTypecheck,
-} from "../packages/typescript-plugin-litsx/src/index.js";
+} from "../packages/typescript/src/index.js";
 
 const TEMP_JSX_GLOBALS_DTS = `
 declare namespace JSX {
@@ -50,7 +50,7 @@ async function withMockedTypeScript(mockFactory, callback) {
   });
 
   try {
-    const typecheckModule = await import("../packages/typescript-plugin-litsx/src/typecheck.js");
+    const typecheckModule = await import("../packages/typescript/src/typecheck.js");
     return await callback(typecheckModule, actualTs.default, actualTs);
   } finally {
     vi.doUnmock("typescript");
@@ -58,7 +58,7 @@ async function withMockedTypeScript(mockFactory, callback) {
   }
 }
 
-describe("@litsx/typescript-plugin", () => {
+describe("@litsx/typescript", () => {
   it("reports authored diagnostics for invalid lit bindings", () => {
     const source = `
       const view = (
@@ -2380,7 +2380,7 @@ describe("@litsx/typescript-plugin", () => {
 
       try {
         const { runLitsxTypecheck: mockedRunLitsxTypecheck } = await import(
-          "../packages/typescript-plugin-litsx/src/typecheck.js"
+          "../packages/typescript/src/typecheck.js"
         );
         assert.equal(mockedRunLitsxTypecheck([]), 1);
         assert.ok(compilerHostReads.includes(jsxFile));
@@ -2418,7 +2418,7 @@ describe("@litsx/typescript-plugin", () => {
 
       vi.resetModules();
       const toolingVirtualSourceModule = await import(
-        "../packages/typescript-plugin-litsx/src/virtual-source.js"
+        "../packages/typescript/src/virtualization.js"
       );
       const virtualizationSpy = vi.spyOn(
         toolingVirtualSourceModule,
@@ -2503,7 +2503,7 @@ describe("@litsx/typescript-plugin", () => {
       });
       try {
         const { runLitsxTypecheck: mockedRunLitsxTypecheck } = await import(
-          "../packages/typescript-plugin-litsx/src/typecheck.js"
+          "../packages/typescript/src/typecheck.js"
         );
         assert.equal(mockedRunLitsxTypecheck([]), 0);
         assert.strictEqual(virtualizationSpy.mock.calls.length, 1);
@@ -5598,7 +5598,7 @@ describe("@litsx/typescript-plugin", () => {
     const diagnostics = wrapped.getSemanticDiagnostics("/virtual/semantic.tsx");
 
     assert.strictEqual(diagnostics.length, 1);
-    assert.strictEqual(diagnostics[0].source, "@litsx/typescript-plugin");
+    assert.strictEqual(diagnostics[0].source, "@litsx/typescript");
     assert.match(diagnostics[0].messageText, /must use an expression/);
     assert.strictEqual(diagnostics[0].start, source.indexOf("@click"));
   });

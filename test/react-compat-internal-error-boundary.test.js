@@ -54,7 +54,7 @@ describe("react compat internal error boundary", () => {
 
     const code = run(source);
 
-    assert.match(code, /import \{ ErrorBoundary \} from "@litsx\/litsx";/);
+    assert.match(code, /import \{ ErrorBoundary \} from "@litsx\/core";/);
     assert.match(code, /<ErrorBoundary/);
     assert.match(code, /\.fallbackRenderer=\{\(\) => <p>Oops<\/p>\}/);
     assert.match(code, /\.contentRenderer=\{\(\) => <Widget \/>\}/);
@@ -138,7 +138,7 @@ describe("react compat internal error boundary", () => {
     const code = run(source);
 
     assert.match(code, /import React, \{ useEffect \} from 'react';|import React, \{\s*useEffect\s*\} from "react";/);
-    assert.match(code, /import \{ ErrorBoundary \} from "@litsx\/litsx";/);
+    assert.match(code, /import \{ ErrorBoundary \} from "@litsx\/core";/);
     assert.match(code, /\.fallbackRenderer=\{\(\) => 404\}/);
     assert.doesNotMatch(code, /import .*ErrorBoundary.* from 'react'/);
   });

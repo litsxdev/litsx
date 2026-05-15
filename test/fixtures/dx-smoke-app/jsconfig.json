@@ -6,11 +6,11 @@
     "allowImportingTsExtensions": true,
     "maxNodeModuleJsDepth": 0,
     "jsx": "react-jsx",
-    "jsxImportSource": "@litsx/litsx",
+    "jsxImportSource": "@litsx/core",
     "checkJs": true,
     "plugins": [
       {
-        "name": "@litsx/typescript-plugin"
+        "name": "@litsx/typescript"
       }
     ]
   },

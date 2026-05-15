@@ -4,7 +4,7 @@ import {
   HOST_TYPE_RENDER,
   resolveHostInfo,
 } from "./custom-hook-host.js";
-const RUNTIME_MODULE = "@litsx/litsx";
+const RUNTIME_MODULE = "@litsx/core";
 
 function transformUseStateCall(path, state, hostInfo, t) {
   const existingArgs = path.node.arguments;

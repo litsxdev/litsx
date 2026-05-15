@@ -180,6 +180,11 @@ if (!tsPluginManifest.bin?.["litsx-tsc"]) {
   fail("packages/typescript-plugin-litsx must expose litsx-tsc");
 }
 
+const tsManifest = readJson("packages/typescript/package.json");
+if (!tsManifest.bin?.["litsx-tsc"]) {
+  fail("packages/typescript must expose litsx-tsc");
+}
+
 const prettierReadme = fs.readFileSync(path.join(repoRoot, "packages/prettier-plugin-litsx/README.md"), "utf8");
 if (!prettierReadme.includes("It does **not** claim plain `*.tsx` or `*.jsx` formatting.")) {
   fail("packages/prettier-plugin-litsx/README.md must keep the tsx/jsx limitation explicit");

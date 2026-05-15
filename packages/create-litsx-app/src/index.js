@@ -4,10 +4,10 @@ import { publishedPackageVersions } from "./published-package-versions.js";
 
 const LOCAL_WORKSPACE_PACKAGE_NAMES = [
   "@litsx/compiler",
-  "@litsx/litsx",
+  "@litsx/core",
   "@litsx/eslint-plugin",
   "prettier-plugin-litsx",
-  "@litsx/typescript-plugin",
+  "@litsx/typescript",
   "@litsx/vite-plugin",
 ];
 export function inferPackageManager(userAgent = "") {
@@ -94,11 +94,11 @@ function createBasePackageJson(packageName) {
     dependencies: {
       "@webcomponents/scoped-custom-element-registry": "^0.0.10",
       "lit": "^3.2.1",
-      "@litsx/litsx": publishedPackageVersions["@litsx/litsx"],
+      "@litsx/core": publishedPackageVersions["@litsx/core"],
     },
     devDependencies: {
       "@litsx/eslint-plugin": publishedPackageVersions["@litsx/eslint-plugin"],
-      "@litsx/typescript-plugin": publishedPackageVersions["@litsx/typescript-plugin"],
+      "@litsx/typescript": publishedPackageVersions["@litsx/typescript"],
       "@litsx/vite-plugin": publishedPackageVersions["@litsx/vite-plugin"],
       "@vitest/browser": "^4.1.5",
       "@vitest/browser-playwright": "^4.1.5",
@@ -196,10 +196,10 @@ function createBaseFiles(packageName, className, includeStorybook) {
     "allowArbitraryExtensions": true,
     "checkJs": true,
     "jsx": "react-jsx",
-    "jsxImportSource": "@litsx/litsx",
+    "jsxImportSource": "@litsx/core",
     "plugins": [
       {
-        "name": "@litsx/typescript-plugin"
+        "name": "@litsx/typescript"
       }
     ]
   },
@@ -526,7 +526,7 @@ export const ${className} = () => {
   );
 };
 `);
-  files.set("src/components/guide-card.litsx", `import type { LitsxRenderable } from "@litsx/litsx";
+  files.set("src/components/guide-card.litsx", `import type { LitsxRenderable } from "@litsx/core";
 
 type GuideCardProps = {
   eyebrow?: string;
@@ -665,7 +665,7 @@ export const LitsxButton = ({
   return <button class={type === "primary" ? "primary" : ""}>{label}</button>;
 };
 `);
-  files.set("src/components/litsx-hero.litsx", `import { useEmit } from "@litsx/litsx";
+  files.set("src/components/litsx-hero.litsx", `import { useEmit } from "@litsx/core";
 import { LitsxButton } from "./litsx-button.litsx";
 
 type LitsxHeroProps = {
@@ -908,7 +908,7 @@ export const LitsxHero = ({
   );
 };
 `);
-  files.set("src/components/starter-guide.litsx", `import { SuspenseBoundary, SuspenseList, useOnConnect, useRef, useState } from "@litsx/litsx";
+  files.set("src/components/starter-guide.litsx", `import { SuspenseBoundary, SuspenseList, useOnConnect, useRef, useState } from "@litsx/core";
 import { GuideCard } from "./guide-card.litsx";
 
 type DeferredStep = {

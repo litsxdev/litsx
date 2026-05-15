@@ -61,10 +61,10 @@ The scaffold includes:
 - `vscode-litsx` as the intended VS Code extension companion
 - `@litsx/vite-plugin`
 - `@litsx/eslint-plugin`
-- `@litsx/typescript-plugin`
+- `@litsx/typescript`
 - `eslint.config.js` with `recommended-flat`
 - `prettier.config.js` wired to `prettier-plugin-litsx`
-- `jsconfig.json` configured with `jsxImportSource: "@litsx/litsx"` and arbitrary-extension imports enabled
+- `jsconfig.json` configured with `jsxImportSource: "@litsx/core"` and arbitrary-extension imports enabled
 - `npm run lint` wired to `eslint .`
 - `npm run format` wired to `prettier --write .`
 - `npm run typecheck` wired to `litsx-tsc -p jsconfig.json --noEmit`
@@ -149,7 +149,7 @@ Plain `tsc` still does not parse LitSX-authored forms such as `@click` or `stati
 That is why generated projects use:
 
 - `jsconfig.json` for editor support
-- `@litsx/typescript-plugin` for language-service features
+- `@litsx/typescript` for language-service features
 - `litsx-tsc` for CLI type-checking
 - `vscode-litsx` for authored grammar/highlighting
 
@@ -162,7 +162,7 @@ LitSX ships an official ESLint integration for authored syntax such as `@click`,
 For scaffolded projects, the supported baseline is therefore:
 
 - `vscode-litsx` for highlighting and VS Code defaults
-- `@litsx/typescript-plugin` in the editor
+- `@litsx/typescript` in the editor
 - `litsx-tsc` for authored static checking
 - `@litsx/vite-plugin` for compilation
 - `@litsx/eslint-plugin` for linting

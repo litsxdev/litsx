@@ -31,7 +31,7 @@ describe("litsx runtime transitions", () => {
   const originalRAF = globalThis.requestAnimationFrame;
 
   beforeAll(async () => {
-    const mod = await import("../packages/litsx/src/index.js");
+    const mod = await import("../packages/core/src/index.js");
     ({
       prepareEffects,
       startTransition,

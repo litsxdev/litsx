@@ -24,7 +24,7 @@ describe("runtime renderer context", () => {
   });
 
   it("wraps direct bound renderer calls in the captured creation context", async () => {
-    const { bindRendererContext } = await import("../packages/litsx/src/runtime-render-context.js");
+    const { bindRendererContext } = await import("../packages/core/src/rendering.js");
 
     const host = { constructor: { elements: {} } };
     const renderer = vi.fn((label) => `value:${label}`);
@@ -39,14 +39,14 @@ describe("runtime renderer context", () => {
   });
 
   it("returns non-function renderers unchanged", async () => {
-    const { bindRendererContext } = await import("../packages/litsx/src/runtime-render-context.js");
+    const { bindRendererContext } = await import("../packages/core/src/rendering.js");
 
     assert.strictEqual(bindRendererContext(null, "plain"), "plain");
     expect(withLightDomCreationContext).not.toHaveBeenCalled();
   });
 
   it("captures projected render context from render options and normalizes nullish values", async () => {
-    const { bindRendererContext, invokeRenderer } = await import("../packages/litsx/src/runtime-render-context.js");
+    const { bindRendererContext, invokeRenderer } = await import("../packages/core/src/rendering.js");
 
     const creationScope = { kind: "scope" };
     const host = {
@@ -66,7 +66,7 @@ describe("runtime renderer context", () => {
   });
 
   it("captures shadow root creation scopes when explicit render options are missing", async () => {
-    const { bindRendererContext, invokeRenderer } = await import("../packages/litsx/src/runtime-render-context.js");
+    const { bindRendererContext, invokeRenderer } = await import("../packages/core/src/rendering.js");
 
     const shadowRoot = {
       importNode() {},
@@ -80,7 +80,7 @@ describe("runtime renderer context", () => {
   });
 
   it("refreshes renderer creation scope when it becomes available after binding", async () => {
-    const { bindRendererContext, invokeRenderer, renderWithRendererContext } = await import("../packages/litsx/src/runtime-render-context.js");
+    const { bindRendererContext, invokeRenderer, renderWithRendererContext } = await import("../packages/core/src/rendering.js");
 
     const registry = {
       define() {},
@@ -108,7 +108,7 @@ describe("runtime renderer context", () => {
   });
 
   it("returns nothing and null context for non-function renderer invocations", async () => {
-    const { invokeRenderer } = await import("../packages/litsx/src/runtime-render-context.js");
+    const { invokeRenderer } = await import("../packages/core/src/rendering.js");
 
     const rendered = invokeRenderer("plain");
 
@@ -118,7 +118,7 @@ describe("runtime renderer context", () => {
   });
 
   it("invokes unbound renderers without entering light-dom creation context", async () => {
-    const { invokeRenderer } = await import("../packages/litsx/src/runtime-render-context.js");
+    const { invokeRenderer } = await import("../packages/core/src/rendering.js");
 
     const rendered = invokeRenderer(() => "plain");
 
@@ -128,7 +128,7 @@ describe("runtime renderer context", () => {
   });
 
   it("merges host and creation scope into contextual renders", async () => {
-    const { renderWithRendererContext } = await import("../packages/litsx/src/runtime-render-context.js");
+    const { renderWithRendererContext } = await import("../packages/core/src/rendering.js");
 
     const render = vi.fn();
     const container = { id: "container" };
@@ -152,7 +152,7 @@ describe("runtime renderer context", () => {
   });
 
   it("syncs projected hosts, toggles visibility, and renders nothing when hidden", async () => {
-    const { syncRendererHost } = await import("../packages/litsx/src/runtime-render-context.js");
+    const { syncRendererHost } = await import("../packages/core/src/rendering.js");
 
     function ContextualHost() {}
     ContextualHost.scopedElements = {
@@ -192,7 +192,7 @@ describe("runtime renderer context", () => {
   });
 
   it("does not initialize an empty hidden renderer host before context is available", async () => {
-    const { syncRendererHost } = await import("../packages/litsx/src/runtime-render-context.js");
+    const { syncRendererHost } = await import("../packages/core/src/rendering.js");
 
     const host = {};
     const render = vi.fn();
@@ -205,7 +205,7 @@ describe("runtime renderer context", () => {
   });
 
   it("uses external scoped creation scopes without connecting light-dom registries", async () => {
-    const { bindRendererContext, invokeRenderer, renderWithRendererContext } = await import("../packages/litsx/src/runtime-render-context.js");
+    const { bindRendererContext, invokeRenderer, renderWithRendererContext } = await import("../packages/core/src/rendering.js");
 
     function ContextualHost() {}
     ContextualHost.scopedElements = {
@@ -238,7 +238,7 @@ describe("runtime renderer context", () => {
   });
 
   it("renders projected external-scope output through the projected host registry", async () => {
-    const { syncRendererHost } = await import("../packages/litsx/src/runtime-render-context.js");
+    const { syncRendererHost } = await import("../packages/core/src/rendering.js");
 
     function ContextualHost() {}
     ContextualHost.scopedElements = {
@@ -281,7 +281,7 @@ describe("runtime renderer context", () => {
   });
 
   it("skips renderer host sync when host or render function is missing", async () => {
-    const { syncRendererHost } = await import("../packages/litsx/src/runtime-render-context.js");
+    const { syncRendererHost } = await import("../packages/core/src/rendering.js");
 
     syncRendererHost(null, { value: "x", context: null }, { render: vi.fn() });
     syncRendererHost({}, { value: "x", context: null }, { render: null });
@@ -291,7 +291,7 @@ describe("runtime renderer context", () => {
   });
 
   it("rejects renderRendererCall outside child parts", async () => {
-    const { renderRendererCall } = await import("../packages/litsx/src/runtime-render-context.js");
+    const { renderRendererCall } = await import("../packages/core/src/rendering.js");
     const result = renderRendererCall(() => "value");
 
     const DirectiveCtor = result._$litDirective$;
@@ -303,7 +303,7 @@ describe("runtime renderer context", () => {
   });
 
   it("creates and reuses a contents host for renderRendererCall updates", async () => {
-    const { renderRendererCall } = await import("../packages/litsx/src/runtime-render-context.js");
+    const { renderRendererCall } = await import("../packages/core/src/rendering.js");
     const result = renderRendererCall((label) => `value:${label}`, "alpha");
     const DirectiveCtor = result._$litDirective$;
     const instance = new DirectiveCtor({ type: PartType.CHILD });
@@ -333,7 +333,7 @@ describe("runtime renderer context", () => {
   });
 
   it("returns nothing when renderRendererCall cannot create a host and no-ops on disconnect", async () => {
-    const { renderRendererCall } = await import("../packages/litsx/src/runtime-render-context.js");
+    const { renderRendererCall } = await import("../packages/core/src/rendering.js");
     const result = renderRendererCall(() => "value");
     const DirectiveCtor = result._$litDirective$;
     const instance = new DirectiveCtor({ type: PartType.CHILD });

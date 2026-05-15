@@ -86,7 +86,7 @@ describe("@litsx/babel-plugin-transform-litsx-scoped-elements", () => {
     const mixinImport = ast.program.body.find(
       (node) =>
         node.type === "ImportDeclaration" &&
-        node.source.value === "@litsx/litsx/runtime-infrastructure"
+        node.source.value === "@litsx/core/elements"
     );
     assert(mixinImport, "expected ShadowDomElementsMixin import");
 
@@ -144,7 +144,7 @@ describe("@litsx/babel-plugin-transform-litsx-scoped-elements", () => {
     const mixinImport = outputAst.program.body.find(
       (node) =>
         node.type === "ImportDeclaration" &&
-        node.source.value === "@litsx/litsx/runtime-infrastructure"
+        node.source.value === "@litsx/core/elements"
     );
     assert(mixinImport, "expected ShadowDomElementsMixin import to be added");
 
@@ -287,7 +287,7 @@ describe("@litsx/babel-plugin-transform-litsx-scoped-elements", () => {
       parserPlugins: ["typescript"],
     });
 
-    assert.match(code, /import \{ LightDomMixin \} from "@litsx\/litsx\/runtime-infrastructure";/);
+    assert.match(code, /import \{ LightDomMixin \} from "@litsx\/core\/elements";/);
     assert.match(code, /class LightCard extends LightDomMixin\(LitElement\)/);
     assert.doesNotMatch(code, /LightDomElementsMixin\(LitElement\)/);
   });
@@ -295,7 +295,7 @@ describe("@litsx/babel-plugin-transform-litsx-scoped-elements", () => {
   it("reuses an existing ShadowDomElementsMixin import", () => {
     const source = `
       import { LitElement } from 'lit';
-      import { ShadowDomElementsMixin } from '@litsx/litsx/runtime-infrastructure';
+      import { ShadowDomElementsMixin } from '@litsx/core/elements';
       import FancyButton from './FancyButton.js';
 
       class ReadyElement extends LitElement {
@@ -312,7 +312,7 @@ describe("@litsx/babel-plugin-transform-litsx-scoped-elements", () => {
       plugins: [plugin],
     });
 
-    const mixinImports = code.match(/@litsx\/litsx\/runtime-infrastructure/g) || [];
+    const mixinImports = code.match(/@litsx\/core\/elements/g) || [];
     assert.strictEqual(mixinImports.length, 1);
     assert.match(code, /class ReadyElement extends ShadowDomElementsMixin\(LitElement\)/);
   });
@@ -341,7 +341,7 @@ describe("@litsx/babel-plugin-transform-litsx-scoped-elements", () => {
 
   it("does not duplicate ShadowDomElementsMixin when it is nested inside another mixin", () => {
     const source = `
-      import { ShadowDomElementsMixin } from '@litsx/litsx/runtime-infrastructure';
+      import { ShadowDomElementsMixin } from '@litsx/core/elements';
       import FancyButton from './FancyButton.js';
 
       class MixedElement extends withTheme(ShadowDomElementsMixin(LitElement)) {
@@ -365,7 +365,7 @@ describe("@litsx/babel-plugin-transform-litsx-scoped-elements", () => {
 
   it("does not duplicate LightDomMixin when it is nested inside another mixin", () => {
     const source = `
-      import { LightDomMixin } from '@litsx/litsx/runtime-infrastructure';
+      import { LightDomMixin } from '@litsx/core/elements';
 
       class MixedLightCard extends withTheme(LightDomMixin(LitElement)) {
         render() {
@@ -536,7 +536,7 @@ describe("@litsx/babel-plugin-transform-litsx-scoped-elements", () => {
 
   it("still rewrites scoped tags when candidates were precomputed by transform-litsx", () => {
     const source = `
-      import { SuspenseBoundary } from '@litsx\/litsx';
+      import { SuspenseBoundary } from '@litsx\/core';
 
       export function Screen() {
         return (
@@ -565,7 +565,7 @@ describe("@litsx/babel-plugin-transform-litsx-scoped-elements", () => {
   it("rewrites scoped tags nested inside keyed(...) expressions", () => {
     const source = `
       import { keyed } from 'lit/directives/keyed.js';
-      import { SuspenseBoundary } from '@litsx\/litsx';
+      import { SuspenseBoundary } from '@litsx\/core';
 
       export function Screen({ cycle }) {
         return (
@@ -597,7 +597,7 @@ describe("@litsx/babel-plugin-transform-litsx-scoped-elements", () => {
     const source = `
       import { LitElement, html } from 'lit';
       import { keyed } from 'lit/directives/keyed.js';
-      import { SuspenseBoundary, SuspenseList } from '@litsx\/litsx';
+      import { SuspenseBoundary, SuspenseList } from '@litsx\/core';
 
       class Screen extends LitElement {
         render() {

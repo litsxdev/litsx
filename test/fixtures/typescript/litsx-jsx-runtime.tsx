@@ -1,4 +1,4 @@
-import { SuspenseBoundary, SuspenseList } from "@litsx/litsx";
+import { SuspenseBoundary, SuspenseList } from "@litsx/core";
 
 type ButtonProps = {
   label: string;

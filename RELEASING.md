@@ -15,13 +15,13 @@ LitSX releases are managed with Changesets.
 - `litsx`
 - `@litsx/compiler`
 - `@litsx/vite-plugin`
-- `@litsx/typescript-plugin`
+- `@litsx/typescript`
 - `@litsx/eslint-plugin`
 - `create-litsx-app`
 - `prettier-plugin-litsx`
 - `@litsx/light-dom-registry`
 - `@litsx/babel-parser`
-- `@litsx/jsx-authoring`
+- `@litsx/authoring`
 - `@litsx/prop-types`
 - `@litsx/babel-preset-litsx`
 - `@litsx/babel-preset-react-compat`
@@ -157,7 +157,7 @@ Recommended repository setup:
 
 - `litsx`
 - `@litsx/eslint-plugin`
-- `@litsx/typescript-plugin`
+- `@litsx/typescript`
 - `@litsx/vite-plugin`
 - `prettier-plugin-litsx`
 

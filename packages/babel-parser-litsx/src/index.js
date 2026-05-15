@@ -2,7 +2,7 @@ import * as babelParser from "@babel/parser";
 import {
   getLitsxVirtualizationMetadata,
   parseWithLitsxVirtualization,
-} from "@litsx/jsx-authoring/parser";
+} from "@litsx/authoring/parser";
 
 export { getLitsxVirtualizationMetadata };
 

@@ -23,7 +23,7 @@ LitSX source is not just generic TSX with helper imports. The authored model inc
 
 Generic `static name = ...` hoists lower to memoized static getters on the generated class. `static expose = ...` is the exception: it lowers to real static methods.
 
-Because plain `tsc` does not parse this authored syntax directly, editor support comes from `@litsx/typescript-plugin` and CLI type-checking comes from `litsx-tsc`.
+Because plain `tsc` does not parse this authored syntax directly, editor support comes from `@litsx/typescript` and CLI type-checking comes from `litsx-tsc`.
 
 ## Workspace layout
 
@@ -80,7 +80,7 @@ The workspace focuses on:
 - native LitSX JSX ergonomics
 - React compatibility as a separate transform layer
 - authored syntax support for Lit-flavoured JSX and static hoists
-- editor support through `@litsx/typescript-plugin`
+- editor support through `@litsx/typescript`
 - CLI type-checking through `litsx-tsc`
 - scaffolding and editor tooling
 

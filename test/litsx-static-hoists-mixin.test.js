@@ -2,7 +2,7 @@
 
 import assert from "assert";
 import { describe, it } from "vitest";
-import { LitsxStaticHoistsMixin } from "../packages/litsx/src/runtime-infrastructure/index.js";
+import { LitsxStaticHoistsMixin } from "../packages/core/src/elements/index.js";
 
 describe("LitsxStaticHoistsMixin", () => {
   it("dedupes repeated application of the same mixin", () => {

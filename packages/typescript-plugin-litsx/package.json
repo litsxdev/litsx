@@ -1,7 +1,7 @@
 {
   "name": "@litsx/typescript-plugin",
   "version": "0.5.0",
-  "description": "TypeScript language-service support for LitSX JSX syntax",
+  "description": "Deprecated compatibility wrapper for @litsx/typescript",
   "author": "LitSX Team",
   "homepage": "https://litsx.dev/",
   "bugs": {
@@ -64,7 +64,7 @@
     "README.md"
   ],
   "dependencies": {
-    "@babel/parser": "^7.29.3"
+    "@litsx/typescript": "^0.5.0"
   },
   "peerDependencies": {
     "typescript": ">=5"

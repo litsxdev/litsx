@@ -4,7 +4,7 @@ import { nothing } from "lit";
 import {
   ErrorBoundary,
   ErrorBoundaryElement,
-} from "../packages/litsx/src/index.js";
+} from "../packages/core/src/index.js";
 
 class TestErrorBoundaryElement extends ErrorBoundaryElement {
   scheduleUpdate() {

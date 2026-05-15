@@ -52,7 +52,7 @@
     "@babel/eslint-parser": "^7.28.6",
     "@babel/plugin-syntax-jsx": "^7.28.6",
     "@babel/plugin-syntax-typescript": "^7.27.1",
-    "@litsx/typescript-plugin": "^0.5.0"
+    "@litsx/typescript": "^0.5.0"
   },
   "scripts": {
     "build": "../../node_modules/.bin/rollup --config rollup.config.js",

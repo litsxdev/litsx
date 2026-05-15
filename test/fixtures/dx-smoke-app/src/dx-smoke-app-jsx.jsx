@@ -1,4 +1,4 @@
-import { useState } from "@litsx/litsx";
+import { useState } from "@litsx/core";
 
 export const DxSmokeAppJsx = ({ title = "Hello LitSX" }) => {
   const [count, setCount] = useState(0);

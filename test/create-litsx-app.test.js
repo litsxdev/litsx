@@ -68,14 +68,14 @@ describe("create-litsx-app", () => {
     const heroSource = result.files.get("src/components/litsx-hero.litsx");
     const starterGuideSource = result.files.get("src/components/starter-guide.litsx");
 
-    assert.ok(packageJson.dependencies["@litsx/litsx"]);
+    assert.ok(packageJson.dependencies["@litsx/core"]);
     assert.strictEqual(
       packageJson.dependencies["@webcomponents/scoped-custom-element-registry"],
       "^0.0.10",
     );
     assert.ok(!("@open-wc/scoped-elements" in packageJson.dependencies));
     assert.ok(packageJson.dependencies.lit);
-    assert.ok(packageJson.devDependencies["@litsx/typescript-plugin"]);
+    assert.ok(packageJson.devDependencies["@litsx/typescript"]);
     assert.ok(packageJson.devDependencies["@litsx/vite-plugin"]);
     assert.ok(packageJson.devDependencies["@vitest/browser"]);
     assert.ok(packageJson.devDependencies["@vitest/browser-playwright"]);
@@ -95,7 +95,7 @@ describe("create-litsx-app", () => {
     assert.match(jsconfig, /"allowArbitraryExtensions": true/);
     assert.match(jsconfig, /"allowJs": true/);
     assert.match(jsconfig, /"checkJs": true/);
-    assert.match(jsconfig, /"jsxImportSource": "@litsx\/litsx"/);
+    assert.match(jsconfig, /"jsxImportSource": "@litsx\/core"/);
     assert.match(eslintConfig, /@litsx\/eslint-plugin/);
     assert.match(eslintConfig, /recommended-flat/);
     assert.match(prettierConfig, /prettier-plugin-litsx/);
@@ -103,7 +103,7 @@ describe("create-litsx-app", () => {
     assert.match(prettierConfig, /parser: "litsx-jsx"/);
     assert.match(vscodeSettings, /"js\/ts\.tsdk\.path": "node_modules\/typescript\/lib"/);
     assert.match(vscodeSettings, /"typescript\.tsserver\.useSyntaxServer": "never"/);
-    assert.match(jsconfig, /"name": "@litsx\/typescript-plugin"/);
+    assert.match(jsconfig, /"name": "@litsx\/typescript"/);
     assert.doesNotMatch(JSON.stringify(packageJson.devDependencies), /@litsx\/babel-parser/);
     assert.match(viteConfig, /@litsx\/vite-plugin/);
     assert.match(viteConfig, /plugins: \[litsx\(\{ sourceMaps: true \}\)\]/);
@@ -146,7 +146,7 @@ describe("create-litsx-app", () => {
     assert.match(buttonSource, /label = ""/);
     assert.match(buttonSource, /class=\{type === "primary" \? "primary" : ""\}/);
     assert.doesNotMatch(buttonSource, /onClick/);
-    assert.match(guideCardSource, /import type \{ LitsxRenderable \} from "@litsx\/litsx";/);
+    assert.match(guideCardSource, /import type \{ LitsxRenderable \} from "@litsx\/core";/);
     assert.match(guideCardSource, /type GuideCardProps = \{/);
     assert.match(guideCardSource, /titleRenderer = \(\) => null/);
     assert.match(guideCardSource, /contentRenderer = \(\) => null/);
@@ -158,7 +158,7 @@ describe("create-litsx-app", () => {
     assert.match(heroSource, /src="\/flame_512\.png"/);
     assert.match(heroSource, /class="LitsxHero"/);
     assert.match(heroSource, /primaryLabel = "Getting Started"/);
-    assert.match(heroSource, /import \{ useEmit \} from "@litsx\/litsx";/);
+    assert.match(heroSource, /import \{ useEmit \} from "@litsx\/core";/);
     assert.match(heroSource, /const emit = useEmit\(\);/);
     assert.match(heroSource, /emit\("primary-action"\)/);
     assert.match(heroSource, /emit\("secondary-action"\)/);
@@ -172,7 +172,7 @@ describe("create-litsx-app", () => {
     assert.match(appSource, /https:\/\/litsx\.dev\/getting-started/);
     assert.match(starterGuideSource, /<SuspenseList/);
     assert.match(starterGuideSource, /type DeferredStep = \{/);
-    assert.match(starterGuideSource, /import \{ SuspenseBoundary, SuspenseList, useOnConnect, useRef, useState \} from "@litsx\/litsx";/);
+    assert.match(starterGuideSource, /import \{ SuspenseBoundary, SuspenseList, useOnConnect, useRef, useState \} from "@litsx\/core";/);
     assert.match(starterGuideSource, /const pendingStepsRef = useRef<Map<number, DeferredStep> \| null>\(null\);/);
     assert.match(
       starterGuideSource,
@@ -423,12 +423,12 @@ describe("create-litsx-app", () => {
   it("can rewrite scaffold dependencies to local workspace ranges for smoke testing", () => {
     const packageJson = {
       dependencies: {
-        "@litsx/litsx": "^0.1.0",
+        "@litsx/core": "^0.1.0",
         lit: "^3.2.1",
       },
       devDependencies: {
         "@litsx/eslint-plugin": "^0.1.0",
-        "@litsx/typescript-plugin": "^0.1.0",
+        "@litsx/typescript": "^0.1.0",
         "@litsx/vite-plugin": "^0.1.0",
         "prettier-plugin-litsx": "^0.1.0",
         vite: "^7.1.0",
@@ -437,10 +437,10 @@ describe("create-litsx-app", () => {
 
     applyLocalWorkspaceOverrides(packageJson);
 
-    assert.strictEqual(packageJson.dependencies["@litsx/litsx"], "workspace:^");
+    assert.strictEqual(packageJson.dependencies["@litsx/core"], "workspace:^");
     assert.strictEqual(packageJson.dependencies.lit, "^3.2.1");
     assert.strictEqual(packageJson.devDependencies["@litsx/eslint-plugin"], "workspace:^");
-    assert.strictEqual(packageJson.devDependencies["@litsx/typescript-plugin"], "workspace:^");
+    assert.strictEqual(packageJson.devDependencies["@litsx/typescript"], "workspace:^");
     assert.strictEqual(packageJson.devDependencies["@litsx/vite-plugin"], "workspace:^");
     assert.strictEqual(packageJson.devDependencies["prettier-plugin-litsx"], "workspace:^");
     assert.strictEqual(packageJson.devDependencies.vite, "^7.1.0");

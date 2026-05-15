@@ -1,6 +1,6 @@
 import assert from "assert";
 import { describe, it } from "vitest";
-import { EffectsController } from "../packages/litsx/src/effects-controller.js";
+import { EffectsController } from "../packages/core/src/effects-controller.js";
 
 class TestHost {
   constructor() {

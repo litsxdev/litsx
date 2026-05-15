@@ -13,13 +13,13 @@ import {
   mapVirtualPositionToOriginal,
   remapVirtualText,
   remapTextSpanToOriginal,
-} from "../packages/jsx-authoring/src/index.js";
+} from "../packages/authoring/src/index.js";
 import {
   getLitsxVirtualizationMetadata,
   parseWithLitsxVirtualization,
-} from "../packages/jsx-authoring/src/parser.js";
+} from "../packages/authoring/src/parser.js";
 
-describe("@litsx/jsx-authoring", () => {
+describe("@litsx/authoring", () => {
   it("virtualizes lit-flavoured jsx attribute prefixes into ts-safe names", () => {
     const source = `
       const view = (

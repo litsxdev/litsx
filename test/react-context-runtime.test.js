@@ -8,7 +8,7 @@ import {
   createContext,
   renderContext,
   useContext,
-} from "../packages/litsx/src/context.js";
+} from "../packages/core/src/context.js";
 
 let tagCounter = 0;
 

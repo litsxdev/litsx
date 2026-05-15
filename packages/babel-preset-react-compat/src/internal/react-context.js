@@ -4,7 +4,7 @@ import jsxSyntaxPlugin from "@babel/plugin-syntax-jsx";
 const { declare } = helperPluginUtils;
 
 const REACT_MODULES = new Set(["react", "@litsx/react"]);
-const RUNTIME_MODULE = "@litsx/litsx/context";
+const RUNTIME_MODULE = "@litsx/core/context";
 const PROVIDER_IMPORT_NAME = "LitsxContextProviderElement";
 const PROVIDER_LOCAL_NAME = "LitsxContextProvider";
 const CREATE_CONTEXT_IMPORT_NAME = "createContext";

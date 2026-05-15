@@ -2,7 +2,7 @@ import parser from "@litsx/babel-parser";
 import {
   createVirtualLitsxJsxSource,
   remapVirtualText,
-} from "@litsx/jsx-authoring";
+} from "@litsx/authoring";
 import { format as prettierFormat } from "prettier";
 import babelPlugin from "prettier/plugins/babel";
 import estreePlugin from "prettier/plugins/estree";

@@ -54,7 +54,7 @@ Other shipped classic presets:
 `recommended` is the editor-friendly baseline:
 
 - LitSX source is processed correctly
-- it avoids duplicating inline feedback that `@litsx/typescript-plugin` already shows in editors
+- it avoids duplicating inline feedback that `@litsx/typescript` already shows in editors
 - it disables the processor's baseline authored diagnostics too
 
 Use `recommended-lint` when you want ESLint itself to enforce the LitSX semantic rules in CI or editor linting.

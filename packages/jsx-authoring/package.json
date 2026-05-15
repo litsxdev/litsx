@@ -1,7 +1,7 @@
 {
   "name": "@litsx/jsx-authoring",
   "version": "0.3.1",
-  "description": "Shared authored JSX language utilities for Lit sx",
+  "description": "Deprecated compatibility wrapper for @litsx/authoring",
   "author": "LitSX Team",
   "homepage": "https://litsx.dev/",
   "bugs": {
@@ -33,7 +33,7 @@
     }
   },
   "dependencies": {
-    "magic-string": "^0.30.21"
+    "@litsx/authoring": "^0.3.1"
   },
   "files": [
     "dist",

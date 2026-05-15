@@ -42,12 +42,12 @@ describe("react compat internal lazy", () => {
 
     assert.match(
       code,
-      /import \{ ShadowDomElementsMixin \} from "@litsx\/litsx\/runtime-infrastructure";/
+      /import \{ ShadowDomElementsMixin \} from "@litsx\/core\/elements";/
     );
     assert.match(code, /class Screen extends ShadowDomElementsMixin\(LitElement\)/);
     assert.match(
       code,
-      /import \{[^}]*ensureLazyElement[^}]*\} from "@litsx\/litsx";/
+      /import \{[^}]*ensureLazyElement[^}]*\} from "@litsx\/core";/
     );
     assert.match(
       code,
@@ -107,7 +107,7 @@ describe("react compat internal lazy", () => {
     assert.match(code, /class Screen extends ShadowDomElementsMixin\(LitElement\)/);
     assert.match(
       code,
-      /import \{[^}]*ensureLazyElement[^}]*\} from "@litsx\/litsx";/
+      /import \{[^}]*ensureLazyElement[^}]*\} from "@litsx\/core";/
     );
     assert.match(
       code,
@@ -587,7 +587,7 @@ describe("react compat internal lazy", () => {
 
   it("reuses existing litsx imports without duplicating ensureLazyElement", () => {
     const source = [
-      "import { ensureLazyElement, prepareEffects } from '@litsx\/litsx';",
+      "import { ensureLazyElement, prepareEffects } from '@litsx\/core';",
       "import { lazy } from 'react';",
       "",
       "const FancyButton = lazy(() => import('./FancyButton.js'));",
@@ -601,14 +601,14 @@ describe("react compat internal lazy", () => {
 
     assert.match(
       code,
-      /import \{[^}]*ensureLazyElement[^}]*prepareEffects[^}]*ErrorBoundary[^}]*\} from ['"]@litsx\/litsx['"];/
+      /import \{[^}]*ensureLazyElement[^}]*prepareEffects[^}]*ErrorBoundary[^}]*\} from ['"]@litsx\/core['"];/
     );
     assert.match(code, /ensureLazyElement\(this,\s*"fancy-button",\s*FancyButton\);/);
   });
 
   it("inserts a named litsx import after an existing namespace import", () => {
     const source = [
-      "import * as runtime from '@litsx\/litsx';",
+      "import * as runtime from '@litsx\/core';",
       "import { lazy } from 'react';",
       "",
       "const FancyButton = lazy(() => import('./FancyButton.js'));",
@@ -620,15 +620,15 @@ describe("react compat internal lazy", () => {
 
     const code = run(source);
 
-    assert.match(code, /import \* as runtime,\s*\{\s*ErrorBoundary\s*\} from ['"]@litsx\/litsx['"];/);
-    assert.match(code, /import \{ ensureLazyElement \} from "@litsx\/litsx";/);
+    assert.match(code, /import \* as runtime,\s*\{\s*ErrorBoundary\s*\} from ['"]@litsx\/core['"];/);
+    assert.match(code, /import \{ ensureLazyElement \} from "@litsx\/core";/);
     assert.match(code, /ensureLazyElement\(this,\s*"fancy-button",\s*FancyButton\);/);
   });
 
   it("keeps classes already wrapped with elements mixins and supports light DOM lazy components", () => {
     const source = [
       "import { lazy } from 'react';",
-      "import { LightDomMixin, LightDomElementsMixin } from '@litsx/litsx/runtime-infrastructure';",
+      "import { LightDomMixin, LightDomElementsMixin } from '@litsx/core/elements';",
       "import { LitElement } from 'lit';",
       "",
       "const FancyButton = lazy(() => import('./FancyButton.js'));",
@@ -749,10 +749,10 @@ describe("react compat internal lazy", () => {
     assert.doesNotMatch(code, /ensureLazyElement\(/);
   });
 
-  it("extends existing runtime-infrastructure imports when a light-dom class needs lazy elements", () => {
+  it("extends existing elements imports when a light-dom class needs lazy elements", () => {
     const source = [
       "import React from 'react';",
-      "import { LightDomMixin } from '@litsx/litsx/runtime-infrastructure';",
+      "import { LightDomMixin } from '@litsx/core/elements';",
       "import { LitElement } from 'lit';",
       "",
       "const FancyButton = React.lazy(() => import('./FancyButton.js'));",
@@ -768,7 +768,7 @@ describe("react compat internal lazy", () => {
 
     assert.match(
       code,
-      /import \{ LightDomMixin,\s*LightDomElementsMixin \} from '@litsx\/litsx\/runtime-infrastructure';|import \{ LightDomElementsMixin,\s*LightDomMixin \} from "@litsx\/litsx\/runtime-infrastructure";/
+      /import \{ LightDomMixin,\s*LightDomElementsMixin \} from '@litsx\/core\/elements';|import \{ LightDomElementsMixin,\s*LightDomMixin \} from "@litsx\/core\/elements";/
     );
     assert.match(code, /class Screen extends LightDomElementsMixin\(LightDomMixin\(LitElement\)\)/);
     assert.doesNotMatch(code, /ShadowDomElementsMixin/);

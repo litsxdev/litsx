@@ -5,7 +5,7 @@ import path from "path";
 import ts from "typescript";
 import { describe, it } from "vitest";
 
-import { createLitsxEditorSession } from "../packages/typescript-plugin-litsx/src/editor-session.js";
+import { createLitsxEditorSession } from "../packages/typescript/src/editor-session.js";
 
 function createCompletionKinds() {
   return {
@@ -21,7 +21,7 @@ function createCompletionKinds() {
   };
 }
 
-describe("@litsx/typescript-plugin editor-session", () => {
+describe("@litsx/typescript editor-session", () => {
   it("uses the injected TypeScript module", () => {
     const session = createLitsxEditorSession({
       typescript: ts,
@@ -244,7 +244,7 @@ describe("@litsx/typescript-plugin editor-session", () => {
       JSON.stringify({
         compilerOptions: {
           jsx: "react-jsx",
-          jsxImportSource: "@litsx/litsx",
+          jsxImportSource: "@litsx/core",
           target: "ES2022",
           module: "ESNext",
           strict: true,
@@ -290,7 +290,7 @@ describe("@litsx/typescript-plugin editor-session", () => {
       JSON.stringify({
         compilerOptions: {
           jsx: "react-jsx",
-          jsxImportSource: "@litsx/litsx",
+          jsxImportSource: "@litsx/core",
           target: "ES2022",
           module: "ESNext",
           strict: true,
@@ -345,7 +345,7 @@ describe("@litsx/typescript-plugin editor-session", () => {
       JSON.stringify({
         compilerOptions: {
           jsx: "react-jsx",
-          jsxImportSource: "@litsx/litsx",
+          jsxImportSource: "@litsx/core",
           target: "ES2022",
           module: "ESNext",
           strict: true,
@@ -358,7 +358,7 @@ describe("@litsx/typescript-plugin editor-session", () => {
     fs.writeFileSync(
       componentFilePath,
       [
-        'import { useEmit } from "@litsx/litsx";',
+        'import { useEmit } from "@litsx/core";',
         "",
         "export const Button = () => {",
         "  const emit = useEmit();",
@@ -384,20 +384,20 @@ describe("@litsx/typescript-plugin editor-session", () => {
     assert.ok(!completions.some((entry) => entry.label === "@secondary-action"));
   }, 15000);
 
-  it("prioritizes @litsx/litsx exports over noisy globals in component bodies", () => {
+  it("prioritizes @litsx/core exports over noisy globals in component bodies", () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-editor-session-uses-"));
     const packageDir = path.join(tempDir, "node_modules", "@litsx");
     const filePath = path.join(tempDir, "component.litsx");
     const sourceText = "export function Component() { useS }\n";
 
     fs.mkdirSync(packageDir, { recursive: true });
-    fs.symlinkSync(path.join(process.cwd(), "packages", "litsx"), path.join(packageDir, "litsx"), "dir");
+    fs.symlinkSync(path.join(process.cwd(), "packages", "core"), path.join(packageDir, "core"), "dir");
     fs.writeFileSync(
       path.join(tempDir, "tsconfig.json"),
       JSON.stringify({
         compilerOptions: {
           jsx: "react-jsx",
-          jsxImportSource: "@litsx/litsx",
+          jsxImportSource: "@litsx/core",
           target: "ES2022",
           module: "ESNext",
           moduleResolution: "Bundler",
@@ -423,7 +423,7 @@ describe("@litsx/typescript-plugin editor-session", () => {
     assert.ok(completions.findIndex((entry) => entry.label === "useState") < completions.findIndex((entry) => entry.label === "AbortController"));
     const useStateCompletion = completions.find((entry) => entry.label === "useState");
     assert.ok(useStateCompletion.additionalTextEdits?.some((edit) => (
-      edit.newText.includes('import { useState } from "@litsx/litsx";')
+      edit.newText.includes('import { useState } from "@litsx/core";')
     )));
     assert.ok(!completions.some((entry) => entry.label === "__litsx_static_styles"));
   }, 15000);
@@ -446,13 +446,13 @@ describe("@litsx/typescript-plugin editor-session", () => {
     ].join("\n");
 
     fs.mkdirSync(packageDir, { recursive: true });
-    fs.symlinkSync(path.join(process.cwd(), "packages", "litsx"), path.join(packageDir, "litsx"), "dir");
+    fs.symlinkSync(path.join(process.cwd(), "packages", "core"), path.join(packageDir, "core"), "dir");
     fs.writeFileSync(
       path.join(tempDir, "tsconfig.json"),
       JSON.stringify({
         compilerOptions: {
           jsx: "react-jsx",
-          jsxImportSource: "@litsx/litsx",
+          jsxImportSource: "@litsx/core",
           target: "ES2022",
           module: "ESNext",
           moduleResolution: "Bundler",
@@ -488,7 +488,7 @@ describe("@litsx/typescript-plugin editor-session", () => {
       JSON.stringify({
         compilerOptions: {
           jsx: "react-jsx",
-          jsxImportSource: "@litsx/litsx",
+          jsxImportSource: "@litsx/core",
           target: "ES2022",
           module: "ESNext",
         },

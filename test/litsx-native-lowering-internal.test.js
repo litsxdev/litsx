@@ -397,7 +397,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
     assert.match(code, /reflect: true/);
     assert.match(code, /payload: \{\s*attribute: false\s*\}/s);
     assert.match(code, /static get properties\(\)/);
-    assert.match(code, /from "@litsx\/litsx\/runtime-infrastructure"/);
+    assert.match(code, /from "@litsx\/core\/elements"/);
     assert.match(code, /extends LitsxStaticHoistsMixin\(LitElement\)/);
     assert.match(code, /this\.__litsxMergeProperties\(/);
     assert.match(code, /this\.__litsxStatic\(_litsx_static_properties,\s*\(\)\s*=>/);
@@ -432,7 +432,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
 
     assert.match(code, /const _litsx_static_properties = Symbol\("litsx\.static\.properties"\);/);
     assert.match(code, /static get properties\(\)/);
-    assert.match(code, /from "@litsx\/litsx\/runtime-infrastructure"/);
+    assert.match(code, /from "@litsx\/core\/elements"/);
     assert.match(code, /extends LitsxStaticHoistsMixin\(LitElement\)/);
     assert.match(code, /this\.__litsxStatic\(_litsx_static_properties,\s*\(\)\s*=>/);
     assert.match(code, /this\.__litsxMergeProperties\(/);
@@ -1567,7 +1567,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
       presets: [[nativePreset, { jsxTemplate: false }]],
     });
 
-    assert.match(code, /import \{ LightDomMixin \} from "@litsx\/litsx\/runtime-infrastructure";/);
+    assert.match(code, /import \{ LightDomMixin \} from "@litsx\/core\/elements";/);
     assert.match(code, /class Card extends LightDomMixin\(LitElement\)/);
     assert.doesNotMatch(code, /createRenderRoot\(\)\s*\{\s*return this;\s*\}/s);
     assert.doesNotMatch(code, /static get lightDom\(\)/);
@@ -1588,7 +1588,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
 
     const { code } = transformWithNativePreset(source);
 
-    assert.match(code, /import \{[^}]*ShadowDomElementsMixin[^}]*\} from "@litsx\/litsx\/runtime-infrastructure";/);
+    assert.match(code, /import \{[^}]*ShadowDomElementsMixin[^}]*\} from "@litsx\/core\/elements";/);
     assert.match(code, /class Card extends ShadowDomElementsMixin\(LitsxStaticHoistsMixin\(LitElement\)\)|class Card extends LitsxStaticHoistsMixin\(ShadowDomElementsMixin\(LitElement\)\)/);
     assert.match(code, /static get elements\(\)/);
   });
@@ -1633,7 +1633,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
 
     assert.match(
       code,
-      /import \{[^}]*LightDomMixin[^}]*LightDomElementsMixin[^}]*\} from "@litsx\/litsx\/runtime-infrastructure";|import \{[^}]*LightDomElementsMixin[^}]*LightDomMixin[^}]*\} from "@litsx\/litsx\/runtime-infrastructure";/
+      /import \{[^}]*LightDomMixin[^}]*LightDomElementsMixin[^}]*\} from "@litsx\/core\/elements";|import \{[^}]*LightDomElementsMixin[^}]*LightDomMixin[^}]*\} from "@litsx\/core\/elements";/
     );
     assert.match(code, /class Card extends LightDomElementsMixin\(LightDomMixin\(LitsxStaticHoistsMixin\(LitElement\)\)\)|class Card extends LightDomElementsMixin\(LitsxStaticHoistsMixin\(LightDomMixin\(LitElement\)\)\)|class Card extends LitsxStaticHoistsMixin\(LightDomElementsMixin\(LightDomMixin\(LitElement\)\)\)/);
     assert.match(code, /static get elements\(\)/);
@@ -1642,7 +1642,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
 
   it("does not wrap light-dom element classes in ShadowDomElementsMixin on repeated scoped passes", () => {
     const source = `
-      import { LightDomMixin, LightDomElementsMixin } from "@litsx/litsx/runtime-infrastructure";
+      import { LightDomMixin, LightDomElementsMixin } from "@litsx/core/elements";
       import { LitElement } from "lit";
       import { FancyButton } from "./fancy-button.litsx";
 
@@ -1714,7 +1714,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
     assert.match(code, /static createConfig\(\)\s*\{/);
     assert.match(code, /return \{\s*modal: true\s*\};/s);
     assert.doesNotMatch(code, /LitsxStaticHoistsMixin/);
-    assert.doesNotMatch(code, /runtime-infrastructure/);
+    assert.doesNotMatch(code, /@litsx\/core\/elements/);
     assert.doesNotMatch(code, /_litsx_static_expose/);
   });
 
@@ -1766,7 +1766,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
 
   it("does not require static hoists to be imported from litsx", () => {
     const source = `
-      import { useState } from "@litsx/litsx";
+      import { useState } from "@litsx/core";
 
       export function Card() {
         static properties = {
@@ -1793,7 +1793,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
 
     assert.doesNotMatch(code, /static properties = \{/);
     assert.doesNotMatch(code, /static styles = /);
-    assert.match(code, /import \{[^}]*useState[^}]*\} from ['"]@litsx\/litsx['"]/);
+    assert.match(code, /import \{[^}]*useState[^}]*\} from ['"]@litsx\/core['"]/);
   });
 
   it("rejects static hoists outside top-level component statements", () => {

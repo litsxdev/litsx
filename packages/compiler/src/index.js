@@ -6,7 +6,7 @@ import {
   detectLitsxSourceFeatures,
 } from "@litsx/babel-preset-litsx";
 import { ensureTypescriptModule } from "@litsx/babel-preset-litsx/internal/transform-litsx-properties";
-import { createLitsxTypecheckSession } from "@litsx/typescript-plugin/typecheck";
+import { createLitsxTypecheckSession } from "@litsx/typescript/typecheck";
 import {
   createStandaloneTsSession,
   normalizeFilePath,

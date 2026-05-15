@@ -27,7 +27,7 @@ import {
   useCallbackRef,
   useExpose,
   useExternalStore,
-} from "../packages/litsx/src/index.js";
+} from "../packages/core/src/index.js";
 
 class TestHost extends EventTarget {
   constructor() {

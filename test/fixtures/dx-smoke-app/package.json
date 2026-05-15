@@ -13,11 +13,11 @@
   "dependencies": {
     "@webcomponents/scoped-custom-element-registry": "^0.0.10",
     "lit": "^3.2.1",
-    "@litsx/litsx": "workspace:^"
+    "@litsx/core": "workspace:^"
   },
   "devDependencies": {
     "@litsx/eslint-plugin": "workspace:^",
-    "@litsx/typescript-plugin": "workspace:^",
+    "@litsx/typescript": "workspace:^",
     "@litsx/vite-plugin": "workspace:^",
     "eslint": "^9.0.0",
     "typescript": "^6.0.0",

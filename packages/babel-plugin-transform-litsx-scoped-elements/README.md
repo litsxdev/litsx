@@ -13,7 +13,7 @@ Automatically wires the Lit<sup>sx</sup> element mixins for LitElement classes s
 - Injects a static `elements` map with the detected components.
 - Wraps shadow DOM components in `ShadowDomElementsMixin`, which resolves `elements` through native or polyfilled scoped custom element registries.
 - Wraps `static lightDom = true` components in `LightDomElementsMixin`, which uses the light DOM registry runtime.
-- Adds the required runtime-infrastructure import only when at least one element dependency is discovered, keeping untouched classes minimal.
+- Adds the required `@litsx/core/elements` import only when at least one element dependency is discovered, keeping untouched classes minimal.
 - Updates matching closing tags and leaves unrelated JSX nodes unchanged.
 - Detects scoped usage inside `html` tagged template literals as well, ensuring templates converted by the JSX plugin still register components.
 
@@ -51,7 +51,7 @@ class MyElement extends LitElement {
 **Output (simplified)**
 
 ```js
-import { ShadowDomElementsMixin } from "@litsx/litsx/runtime-infrastructure";
+import { ShadowDomElementsMixin } from "@litsx/core/elements";
 import { LitElement, html } from "lit";
 import FancyButton from "./FancyButton.js";
 

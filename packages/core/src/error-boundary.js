@@ -3,7 +3,7 @@ import { render as renderLightDom } from "lit/html.js";
 import {
   invokeRenderer,
   syncRendererHost,
-} from "./runtime-render-context.js";
+} from "./rendering.js";
 
 function isThenable(value) {
   return (

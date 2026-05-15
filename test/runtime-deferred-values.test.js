@@ -4,7 +4,7 @@ import {
   clearDeferredValues,
   resolveDeferredValue,
   scheduleDeferredFlush,
-} from "../packages/litsx/src/runtime-deferred-values.js";
+} from "../packages/core/src/runtime-deferred-values.js";
 
 describe("runtime deferred values", () => {
   beforeEach(() => {

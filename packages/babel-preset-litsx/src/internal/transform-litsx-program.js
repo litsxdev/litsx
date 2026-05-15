@@ -18,7 +18,7 @@ function createLitsxInfrastructureImport(importedName) {
     [
       t.importSpecifier(t.identifier(importedName), t.identifier(importedName)),
     ],
-    t.stringLiteral("@litsx/litsx/runtime-infrastructure")
+    t.stringLiteral("@litsx/core/elements")
   );
 }
 
@@ -27,7 +27,7 @@ function createLitsxInternalRuntimeImport(importedName) {
     [
       t.importSpecifier(t.identifier(importedName), t.identifier(importedName)),
     ],
-    t.stringLiteral("@litsx/litsx/internal/runtime-render-context")
+    t.stringLiteral("@litsx/core/rendering")
   );
 }
 
@@ -36,7 +36,7 @@ function createLitsxImport(importedName) {
     [
       t.importSpecifier(t.identifier(importedName), t.identifier(importedName)),
     ],
-    t.stringLiteral("@litsx/litsx")
+    t.stringLiteral("@litsx/core")
   );
 }
 
@@ -68,7 +68,7 @@ function pruneUnusedLitsxStaticImports(programPath) {
 
   const bodyPaths = programPath.get("body");
   const litsxImports = bodyPaths.filter(
-    (path) => path.isImportDeclaration() && path.node.source.value === "@litsx/litsx"
+    (path) => path.isImportDeclaration() && path.node.source.value === "@litsx/core"
   );
 
   litsxImports.forEach((importPath) => {
@@ -174,7 +174,7 @@ export function finalizeProgram(programPath, state) {
   if (state.__litsxNeedsStaticHoistsMixin) {
     const bodyPathsWithInternal = programPath.get("body");
     const internalImports = bodyPathsWithInternal.filter(
-      (n) => n.isImportDeclaration() && n.node.source.value === "@litsx/litsx/runtime-infrastructure"
+      (n) => n.isImportDeclaration() && n.node.source.value === "@litsx/core/elements"
     );
 
     let internalImported = false;
@@ -195,7 +195,7 @@ export function finalizeProgram(programPath, state) {
   if (state.__litsxNeedsLightDomMixin) {
     const bodyPathsWithInternal = programPath.get("body");
     const internalImports = bodyPathsWithInternal.filter(
-      (n) => n.isImportDeclaration() && n.node.source.value === "@litsx/litsx/runtime-infrastructure"
+      (n) => n.isImportDeclaration() && n.node.source.value === "@litsx/core/elements"
     );
 
     let internalImported = false;
@@ -216,7 +216,7 @@ export function finalizeProgram(programPath, state) {
   if (state.__litsxNeedsCallbackRef) {
     const bodyPathsWithLitsx = programPath.get("body");
     const litsxImports = bodyPathsWithLitsx.filter(
-      (n) => n.isImportDeclaration() && n.node.source.value === "@litsx/litsx"
+      (n) => n.isImportDeclaration() && n.node.source.value === "@litsx/core"
     );
 
     let litsxImported = false;
@@ -239,7 +239,7 @@ export function finalizeProgram(programPath, state) {
     const internalRuntimeImports = bodyPathsWithInternalRuntime.filter(
       (n) =>
         n.isImportDeclaration() &&
-        n.node.source.value === "@litsx/litsx/internal/runtime-render-context"
+        n.node.source.value === "@litsx/core/rendering"
     );
 
     let internalRuntimeImported = false;

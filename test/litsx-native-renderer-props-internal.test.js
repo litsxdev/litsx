@@ -26,7 +26,7 @@ function transform(source, filename = "/virtual/Demo.litsx") {
 describe("native renderer-props internals", () => {
   it("adds bindRendererContext to an existing runtime import without duplicating the import", () => {
     const source = [
-      'import { renderRendererCall } from "@litsx/litsx/internal/runtime-render-context";',
+      'import { renderRendererCall } from "@litsx/core/rendering";',
       'import { FancyButton } from "./fancy-button.litsx";',
       "const renderCard = () => <FancyButton />;",
       "export const Demo = () => <GuideCard .header={renderCard} />;",
@@ -36,7 +36,7 @@ describe("native renderer-props internals", () => {
 
     assert.match(
       code,
-      /import \{ renderRendererCall, bindRendererContext \} from "@litsx\/litsx\/internal\/runtime-render-context";/
+      /import \{ renderRendererCall, bindRendererContext \} from "@litsx\/core\/rendering";/
     );
     assert.match(
       code,
@@ -75,7 +75,7 @@ describe("native renderer-props internals", () => {
       );
       assert.match(
         code,
-        /import \{ bindRendererContext \} from "@litsx\/litsx\/internal\/runtime-render-context";/
+        /import \{ bindRendererContext \} from "@litsx\/core\/rendering";/
       );
     } finally {
       fs.rmSync(tempDir, { recursive: true, force: true });

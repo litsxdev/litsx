@@ -6,7 +6,7 @@ import { describe, it } from "vitest";
 import {
   LightDomElementsMixin,
   LightDomMixin,
-} from "../packages/litsx/src/runtime-infrastructure/index.js";
+} from "../packages/core/src/elements/index.js";
 
 let tagCounter = 0;
 

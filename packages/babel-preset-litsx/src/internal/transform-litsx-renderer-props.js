@@ -1,5 +1,5 @@
 import jsxSyntaxPlugin from "@babel/plugin-syntax-jsx";
-import { decodeVirtualAttributeName } from "@litsx/jsx-authoring";
+import { decodeVirtualAttributeName } from "@litsx/authoring";
 import { importedBindingNeedsRendererContext } from "./transform-litsx-element-candidates.js";
 
 let t;
@@ -288,7 +288,7 @@ function ensureRendererBindingImport(programPath) {
   const runtimeImports = bodyPaths.filter(
     (path) =>
       path.isImportDeclaration() &&
-      path.node.source.value === "@litsx/litsx/internal/runtime-render-context"
+      path.node.source.value === "@litsx/core/rendering"
   );
 
   const importSpecifier = t.importSpecifier(
@@ -314,7 +314,7 @@ function ensureRendererBindingImport(programPath) {
 
   programPath.unshiftContainer("body", t.importDeclaration(
     [importSpecifier],
-    t.stringLiteral("@litsx/litsx/internal/runtime-render-context")
+    t.stringLiteral("@litsx/core/rendering")
   ));
 }
 

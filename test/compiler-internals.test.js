@@ -34,7 +34,7 @@ vi.mock("@litsx/babel-preset-litsx/internal/transform-litsx-properties", () => (
   ensureTypescriptModule,
 }));
 
-vi.mock("@litsx/typescript-plugin/typecheck", () => ({
+vi.mock("@litsx/typescript/typecheck", () => ({
   createLitsxTypecheckSession,
 }));
 

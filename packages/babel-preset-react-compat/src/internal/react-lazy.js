@@ -9,8 +9,8 @@ import {
 } from "./react-lazy-analysis.js";
 
 const { declare } = helperPluginUtils;
-const RUNTIME_MODULE = "@litsx/litsx";
-const INFRASTRUCTURE_MODULE = "@litsx/litsx/runtime-infrastructure";
+const RUNTIME_MODULE = "@litsx/core";
+const INFRASTRUCTURE_MODULE = "@litsx/core/elements";
 
 export default declare((api) => {
   api.assertVersion(7);

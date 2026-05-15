@@ -42,7 +42,7 @@ describe("react compat internal useState", () => {
 
     assert.match(
       code,
-      /import \{ useState, prepareEffects \} from "@litsx\/litsx";|import \{ prepareEffects, useState \} from "@litsx\/litsx";/
+      /import \{ useState, prepareEffects \} from "@litsx\/core";|import \{ prepareEffects, useState \} from "@litsx\/core";/
     );
     assert.match(code, /const \[count, setCount\] = useState\(this, 1\);/);
     assert.match(code, /prepareEffects\(this\);/);

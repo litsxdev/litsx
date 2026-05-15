@@ -22,7 +22,7 @@ export function collectUseStateImports(path, state, options = {}) {
 
 export function finalizeUseStateImports(programPath, state, t, options = {}) {
   const importSources = new Set(options.importSources || ['react']);
-  const runtimeModule = options.runtimeModule || '@litsx/litsx';
+  const runtimeModule = options.runtimeModule || '@litsx/core';
   programPath.scope.crawl();
 
   if (state.runtimeUseStateLocals.size > 0) {
@@ -107,7 +107,7 @@ export function injectCustomHookHostArguments(classPath, state, t) {
   );
 }
 
-function ensureLitsxUseStateImport(programPath, localNames, t, runtimeModule = '@litsx/litsx') {
+function ensureLitsxUseStateImport(programPath, localNames, t, runtimeModule = '@litsx/core') {
   if (localNames.length === 0) return;
 
   let existingImport = null;
@@ -156,6 +156,6 @@ export function collectReactUseStateImports(path, state) {
 export function finalizeReactUseStateImports(programPath, state, t) {
   finalizeUseStateImports(programPath, state, t, {
     importSources: ['react'],
-    runtimeModule: '@litsx/litsx',
+    runtimeModule: '@litsx/core',
   });
 }

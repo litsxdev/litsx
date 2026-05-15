@@ -1,7 +1,7 @@
 import { createUseRefTransform } from "@litsx/babel-plugin-shared-hooks";
 
 export default createUseRefTransform({
-  importSource: "@litsx/litsx",
+  importSource: "@litsx/core",
   hookNames: ["useRef"],
   pluginName: "transform-litsx-dom-refs",
   pendingPropertyKey: "_litsxPendingElements",

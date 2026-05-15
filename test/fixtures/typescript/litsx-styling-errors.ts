@@ -1,4 +1,4 @@
-import { useStyle } from "@litsx/litsx";
+import { useStyle } from "@litsx/core";
 
 declare const host: object;
 

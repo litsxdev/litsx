@@ -47,7 +47,7 @@ describe("react compat internal context", () => {
 
     assert.match(
       code,
-      /import \{ createContext as createCtx, useContext as consumeCtx, renderContext, LitsxContextProviderElement as LitsxContextProvider \} from "@litsx\/litsx\/context";|import \{ createContext as createCtx, useContext as consumeCtx, LitsxContextProviderElement as LitsxContextProvider, renderContext \} from "@litsx\/litsx\/context";|import \{ createContext as createCtx, renderContext, useContext as consumeCtx, LitsxContextProviderElement as LitsxContextProvider \} from "@litsx\/litsx\/context";/
+      /import \{ createContext as createCtx, useContext as consumeCtx, renderContext, LitsxContextProviderElement as LitsxContextProvider \} from "@litsx\/core\/context";|import \{ createContext as createCtx, useContext as consumeCtx, LitsxContextProviderElement as LitsxContextProvider, renderContext \} from "@litsx\/core\/context";|import \{ createContext as createCtx, renderContext, useContext as consumeCtx, LitsxContextProviderElement as LitsxContextProvider \} from "@litsx\/core\/context";/
     );
     assert.match(code, /import \{ useMemo \} from 'react';|import \{\s*useMemo\s*\} from "react";/);
     assert.match(code, /const ThemeContext = createContext\('light'\);/);
@@ -74,7 +74,7 @@ describe("react compat internal context", () => {
 
     const code = run(source);
 
-    assert.match(code, /import \{ createContext, useContext, LitsxContextProviderElement as LitsxContextProvider \} from "@litsx\/litsx\/context";/);
+    assert.match(code, /import \{ createContext, useContext, LitsxContextProviderElement as LitsxContextProvider \} from "@litsx\/core\/context";/);
     assert.match(code, /const ThemeContext = createContext\('light'\);/);
     assert.match(code, /const one = useContext\(ThemeContext\);/);
     assert.match(code, /const two = useContext\(this, ThemeContext\);/);
@@ -158,7 +158,7 @@ describe("react compat internal context", () => {
 
     assert.match(
       code,
-      /import \{ createContext, renderContext, LitsxContextProviderElement as LitsxContextProvider \} from "@litsx\/litsx\/context";|import \{ createContext, LitsxContextProviderElement as LitsxContextProvider, renderContext \} from "@litsx\/litsx\/context";/
+      /import \{ createContext, renderContext, LitsxContextProviderElement as LitsxContextProvider \} from "@litsx\/core\/context";|import \{ createContext, LitsxContextProviderElement as LitsxContextProvider, renderContext \} from "@litsx\/core\/context";/
     );
     assert.match(code, /const rendered = renderContext\(this, ThemeContext, function \(value\) \{/);
     assert.match(code, /<LitsxContextProvider \.context=\{ThemeContext\} key=\{routeKey\} \.value=\{"dark"\}>/);
