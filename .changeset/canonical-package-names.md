@@ -5,7 +5,7 @@
 "@litsx/litsx": patch
 "@litsx/typescript-plugin": patch
 "@litsx/jsx-authoring": patch
-"@litsx/create-litsx-app": minor
+"create-litsx-app": minor
 "@litsx/compiler": minor
 "@litsx/babel-preset-litsx": minor
 "@litsx/babel-preset-react-compat": minor
