@@ -1,5 +1,13 @@
 # @litsx/babel-plugin-shared-hooks
 
+## 0.2.2
+
+### Patch Changes
+
+- be88410: Release every public package that is currently ahead of its latest published tag.
+
+  This includes the LitSX TypeScript editor-session and completion improvements, refreshed scaffolded VS Code defaults, and the pending source, metadata, and packaging updates already present in the other affected packages.
+
 ## 0.2.1
 
 ### Patch Changes

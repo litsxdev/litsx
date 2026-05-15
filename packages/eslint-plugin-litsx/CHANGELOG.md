@@ -1,5 +1,12 @@
 # @litsx/eslint-plugin
 
+## 0.3.2
+
+### Patch Changes
+
+- Updated dependencies [be88410]
+  - @litsx/typescript-plugin@0.5.0
+
 ## 0.3.1
 
 ### Patch Changes

@@ -1135,7 +1135,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@litsx/babel-parser@npm:^0.2.2, @litsx/babel-parser@workspace:packages/babel-parser-litsx":
+"@litsx/babel-parser@npm:^0.2.2, @litsx/babel-parser@npm:^0.2.3, @litsx/babel-parser@workspace:packages/babel-parser-litsx":
   version: 0.0.0-use.local
   resolution: "@litsx/babel-parser@workspace:packages/babel-parser-litsx"
   dependencies:
@@ -1146,7 +1146,7 @@ __metadata:
     "@babel/helper-validator-identifier": "npm:^7.28.5"
     "@babel/parser": "npm:^7.29.3"
     "@babel/types": "npm:^7.29.0"
-    "@litsx/jsx-authoring": "npm:^0.3.0"
+    "@litsx/jsx-authoring": "npm:^0.3.1"
     charcodes: "npm:^0.2.0"
   bin:
     babel-parser: ./dist/babel-parser.js
@@ -1158,7 +1158,7 @@ __metadata:
   resolution: "@litsx/babel-plugin-litsx-proptypes@workspace:packages/babel-plugin-litsx-proptypes"
   dependencies:
     "@babel/core": "npm:^7.29.0"
-    "@litsx/prop-types": "npm:^0.2.1"
+    "@litsx/prop-types": "npm:^0.2.2"
   peerDependencies:
     "@babel/core": ">=7"
   languageName: unknown
@@ -1257,14 +1257,14 @@ __metadata:
     "@babel/eslint-parser": "npm:^7.28.6"
     "@babel/plugin-syntax-jsx": "npm:^7.28.6"
     "@babel/plugin-syntax-typescript": "npm:^7.27.1"
-    "@litsx/typescript-plugin": "npm:^0.4.0"
+    "@litsx/typescript-plugin": "npm:^0.5.0"
   peerDependencies:
     eslint: ^8.57.0 || ^9.0.0
     typescript: ">=5"
   languageName: unknown
   linkType: soft
 
-"@litsx/jsx-authoring@npm:^0.3.0, @litsx/jsx-authoring@workspace:packages/jsx-authoring":
+"@litsx/jsx-authoring@npm:^0.3.0, @litsx/jsx-authoring@npm:^0.3.1, @litsx/jsx-authoring@workspace:packages/jsx-authoring":
   version: 0.0.0-use.local
   resolution: "@litsx/jsx-authoring@workspace:packages/jsx-authoring"
   dependencies:
@@ -1291,7 +1291,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@litsx/prop-types@npm:^0.2.1, @litsx/prop-types@workspace:packages/prop-types":
+"@litsx/prop-types@npm:^0.2.2, @litsx/prop-types@workspace:packages/prop-types":
   version: 0.0.0-use.local
   resolution: "@litsx/prop-types@workspace:packages/prop-types"
   languageName: unknown
@@ -1305,7 +1305,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@litsx/typescript-plugin@npm:^0.4.0, @litsx/typescript-plugin@workspace:packages/typescript-plugin-litsx":
+"@litsx/typescript-plugin@npm:^0.5.0, @litsx/typescript-plugin@workspace:packages/typescript-plugin-litsx":
   version: 0.0.0-use.local
   resolution: "@litsx/typescript-plugin@workspace:packages/typescript-plugin-litsx"
   dependencies:
@@ -4294,8 +4294,8 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "prettier-plugin-litsx@workspace:packages/prettier-plugin-litsx"
   dependencies:
-    "@litsx/babel-parser": "npm:^0.2.2"
-    "@litsx/jsx-authoring": "npm:^0.3.0"
+    "@litsx/babel-parser": "npm:^0.2.3"
+    "@litsx/jsx-authoring": "npm:^0.3.1"
   peerDependencies:
     prettier: ^3.0.0
   languageName: unknown

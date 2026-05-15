@@ -1,6 +1,6 @@
 {
   "name": "@litsx/babel-parser",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Babel parser adapter for LitSX-authored JSX",
   "author": "LitSX Team",
   "homepage": "https://litsx.dev/",
@@ -48,7 +48,7 @@
   "dependencies": {
     "@babel/parser": "^7.29.3",
     "@babel/types": "^7.29.0",
-    "@litsx/jsx-authoring": "^0.3.0"
+    "@litsx/jsx-authoring": "^0.3.1"
   },
   "devDependencies": {
     "@babel/code-frame": "^7.29.0",
