@@ -102,7 +102,7 @@ describe("create-litsx-app", () => {
     assert.match(prettierConfig, /parser: "litsx"/);
     assert.match(prettierConfig, /parser: "litsx-jsx"/);
     assert.match(vscodeSettings, /"js\/ts\.tsdk\.path": "node_modules\/typescript\/lib"/);
-    assert.match(vscodeSettings, /"typescript\.tsserver\.useSeparateSyntaxServer": false/);
+    assert.match(vscodeSettings, /"typescript\.tsserver\.useSyntaxServer": "never"/);
     assert.match(jsconfig, /"name": "@litsx\/typescript-plugin"/);
     assert.doesNotMatch(JSON.stringify(packageJson.devDependencies), /@litsx\/babel-parser/);
     assert.match(viteConfig, /@litsx\/vite-plugin/);
@@ -240,7 +240,7 @@ describe("create-litsx-app", () => {
     assert.match(prettierConfig, /prettier-plugin-litsx/);
     assert.match(jsconfig, /"moduleResolution": "Bundler"/);
     assert.match(jsconfig, /"allowArbitraryExtensions": true/);
-    assert.match(vscodeSettings, /"typescript\.tsserver\.useSeparateSyntaxServer": false/);
+    assert.match(vscodeSettings, /"typescript\.tsserver\.useSyntaxServer": "never"/);
     assert.match(appTestSource, /Getting Started/);
   });
 
