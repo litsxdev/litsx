@@ -4,13 +4,13 @@ import assert from "assert";
 import { LitElement, html } from "lit";
 import { describe, it } from "vitest";
 import { connectLightDomRegistry } from "../packages/light-dom-registry/src/index.js";
-import { prepareEffects, useOnConnect, useState } from "../packages/litsx/src/index.js";
+import { prepareEffects, useOnConnect, useState } from "../packages/core/src/index.js";
 import {
   LightDomElementsMixin,
   LightDomMixin,
   LitsxStaticHoistsMixin,
   ShadowDomElementsMixin,
-} from "../packages/litsx/src/runtime-infrastructure/index.js";
+} from "../packages/core/src/elements/index.js";
 
 let tagCounter = 0;
 
@@ -26,7 +26,7 @@ function defineTestElement(tagName, ctor) {
   return document.createElement(tagName);
 }
 
-describe("litsx runtime infrastructure", () => {
+describe("litsx elements runtime", () => {
   it("dedupes static hoist mixins and merges nested property metadata", () => {
     class Base extends HTMLElement {}
 
