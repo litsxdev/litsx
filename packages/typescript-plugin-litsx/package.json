@@ -1,6 +1,6 @@
 {
   "name": "@litsx/typescript-plugin",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Deprecated compatibility wrapper for @litsx/typescript",
   "author": "LitSX Team",
   "homepage": "https://litsx.dev/",
@@ -64,7 +64,7 @@
     "README.md"
   ],
   "dependencies": {
-    "@litsx/typescript": "^0.5.0"
+    "@litsx/typescript": "^0.6.0"
   },
   "peerDependencies": {
     "typescript": ">=5"

@@ -1,6 +1,6 @@
 {
   "name": "prettier-plugin-litsx",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Official Prettier plugin for LitSX-authored source",
   "author": "LitSX Team",
   "type": "module",
@@ -43,8 +43,8 @@
     "prettier": "^3.0.0"
   },
   "dependencies": {
-    "@litsx/authoring": "^0.3.1",
-    "@litsx/babel-parser": "^0.2.3"
+    "@litsx/authoring": "^0.4.0",
+    "@litsx/babel-parser": "^0.2.4"
   },
   "scripts": {
     "build": "../../node_modules/.bin/rollup --config rollup.config.js",

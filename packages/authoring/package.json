@@ -1,6 +1,6 @@
 {
   "name": "@litsx/authoring",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "description": "Shared LitSX authored syntax utilities for parser and tooling integrations",
   "author": "LitSX Team",
   "homepage": "https://litsx.dev/",
