@@ -275,7 +275,13 @@ export default [
 `);
   files.set(".vscode/settings.json", `{
   "js/ts.tsdk.path": "node_modules/typescript/lib",
-  "typescript.tsserver.useSeparateSyntaxServer": false
+  "typescript.tsserver.useSyntaxServer": "never"
+}
+`);
+  files.set(".vscode/extensions.json", `{
+  "recommendations": [
+    "litsx.vscode-litsx"
+  ]
 }
 `);
   files.set("public/title.svg", `<svg class="litsx-logo" width="144" height="40" viewBox="0 0 144 40" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="LitSX">
