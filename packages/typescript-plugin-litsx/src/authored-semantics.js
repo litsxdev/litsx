@@ -23,13 +23,13 @@ const EVENT_COMPLETIONS = [
 ];
 
 const EVENT_COMPLETIONS_BY_TAG = {
-  input: ["input", "change", "focus", "blur", "keydown", "keyup"],
-  textarea: ["input", "change", "focus", "blur", "keydown", "keyup"],
+  input: ["click", "input", "change", "focus", "blur", "keydown", "keyup"],
+  textarea: ["click", "input", "change", "focus", "blur", "keydown", "keyup"],
   button: ["click", "focus", "blur", "keydown", "keyup"],
-  form: ["submit", "change", "input"],
-  video: ["play", "pause", "timeupdate", "loadedmetadata", "volumechange"],
-  audio: ["play", "pause", "timeupdate", "loadedmetadata", "volumechange"],
-  "suspense-boundary": ["transitionend", "animationend"],
+  form: ["submit", "change", "input", "click"],
+  video: ["click", "play", "pause", "timeupdate", "loadedmetadata", "volumechange"],
+  audio: ["click", "play", "pause", "timeupdate", "loadedmetadata", "volumechange"],
+  "suspense-boundary": ["click", "transitionend", "animationend"],
 };
 
 const BOOL_COMPLETIONS = [
@@ -61,6 +61,54 @@ const PROP_COMPLETIONS_BY_TAG = {
   audio: ["currentTime", "muted", "volume", "playbackRate"],
   "suspense-boundary": ["fallbackRenderer", "contentRenderer", "pending", "resolved", "showing", "phase"],
   "suspense-list": ["revealOrder", "tail"],
+};
+
+const GLOBAL_ATTRIBUTE_COMPLETIONS = [
+  "class",
+  "id",
+  "title",
+  "style",
+  "role",
+  "slot",
+  "part",
+  "tabIndex",
+  "lang",
+  "dir",
+  "hidden",
+  "inert",
+  "draggable",
+  "spellcheck",
+  "translate",
+  "accessKey",
+  "contentEditable",
+];
+
+const GLOBAL_ARIA_ATTRIBUTE_COMPLETIONS = [
+  "aria-label",
+  "aria-hidden",
+  "aria-describedby",
+  "aria-labelledby",
+  "aria-controls",
+  "aria-expanded",
+  "aria-pressed",
+  "aria-current",
+  "aria-live",
+];
+
+const ATTRIBUTE_COMPLETIONS_BY_TAG = {
+  a: ["href", "target", "rel", "download", "hreflang"],
+  audio: ["src", "controls", "autoplay", "muted", "loop", "preload"],
+  button: ["type", "name", "value", "disabled", "form", "autofocus"],
+  details: ["name", "open"],
+  dialog: ["open"],
+  form: ["action", "method", "autocomplete", "name", "novalidate"],
+  iframe: ["src", "name", "title", "loading", "allow"],
+  img: ["src", "alt", "width", "height", "loading", "decoding"],
+  input: ["type", "name", "value", "placeholder", "checked", "disabled", "required", "readonly", "autocomplete", "min", "max", "step"],
+  option: ["value", "label", "selected", "disabled"],
+  select: ["name", "value", "disabled", "required", "multiple"],
+  textarea: ["name", "value", "placeholder", "disabled", "required", "readonly", "rows", "cols"],
+  video: ["src", "controls", "autoplay", "muted", "loop", "playsInline", "poster", "preload"],
 };
 
 const STATIC_HOIST_CALL_RE = /\b(__litsx_static_[A-Za-z_$][\w$]*)\s*\(/g;
@@ -214,6 +262,101 @@ function rankAttributeCompletion(candidate, partialName) {
   }
 
   return null;
+}
+
+function findEnclosingJsxOpeningTagStart(sourceText, position) {
+  let tagStart = -1;
+  let inTag = false;
+  let braceDepth = 0;
+  let quote = null;
+
+  for (let index = 0; index < position; index += 1) {
+    const char = sourceText[index];
+
+    if (!inTag) {
+      if (char === "<" && /[A-Za-z]/.test(sourceText[index + 1] ?? "")) {
+        inTag = true;
+        tagStart = index;
+      }
+      continue;
+    }
+
+    if (quote) {
+      if (char === "\\" && index + 1 < position) {
+        index += 1;
+        continue;
+      }
+
+      if (char === quote) {
+        quote = null;
+      }
+      continue;
+    }
+
+    if (char === '"' || char === "'" || char === "`") {
+      quote = char;
+      continue;
+    }
+
+    if (char === "{") {
+      braceDepth += 1;
+      continue;
+    }
+
+    if (char === "}" && braceDepth > 0) {
+      braceDepth -= 1;
+      continue;
+    }
+
+    if (char === ">" && braceDepth === 0) {
+      inTag = false;
+      tagStart = -1;
+    }
+  }
+
+  return inTag ? tagStart : -1;
+}
+
+function findJsxOpeningTagEnd(sourceText, tagStart) {
+  let braceDepth = 0;
+  let quote = null;
+
+  for (let index = tagStart + 1; index < sourceText.length; index += 1) {
+    const char = sourceText[index];
+
+    if (quote) {
+      if (char === "\\" && index + 1 < sourceText.length) {
+        index += 1;
+        continue;
+      }
+
+      if (char === quote) {
+        quote = null;
+      }
+      continue;
+    }
+
+    if (char === '"' || char === "'" || char === "`") {
+      quote = char;
+      continue;
+    }
+
+    if (char === "{") {
+      braceDepth += 1;
+      continue;
+    }
+
+    if (char === "}" && braceDepth > 0) {
+      braceDepth -= 1;
+      continue;
+    }
+
+    if (char === ">" && braceDepth === 0) {
+      return index;
+    }
+  }
+
+  return sourceText.length;
 }
 
 export function inferLitsxStaticHoistInfoAtPosition(sourceText, position) {
@@ -640,6 +783,227 @@ function collectComponentLikeFunctions(ast) {
   return functions;
 }
 
+function getFunctionLikeBody(node) {
+  if (!node || typeof node !== "object") {
+    return null;
+  }
+
+  if (
+    node.type === "FunctionDeclaration" ||
+    node.type === "FunctionExpression" ||
+    node.type === "ArrowFunctionExpression"
+  ) {
+    return node.body ?? null;
+  }
+
+  return null;
+}
+
+function inferEmitAliases(functionNode) {
+  const aliases = new Set();
+  const body = getFunctionLikeBody(functionNode);
+
+  if (!body) {
+    return aliases;
+  }
+
+  walk(body, (child) => {
+    if (
+      child?.type === "VariableDeclarator" &&
+      child.id?.type === "Identifier" &&
+      child.init?.type === "CallExpression" &&
+      child.init.callee?.type === "Identifier" &&
+      child.init.callee.name === "useEmit"
+    ) {
+      aliases.add(child.id.name);
+    }
+  });
+
+  return aliases;
+}
+
+function inferEmittedEventNames(functionNode) {
+  const aliases = inferEmitAliases(functionNode);
+  if (aliases.size === 0) {
+    return [];
+  }
+
+  const emittedEventNames = new Set();
+  const body = getFunctionLikeBody(functionNode);
+  if (!body) {
+    return [];
+  }
+
+  walk(body, (child) => {
+    if (
+      child?.type === "CallExpression" &&
+      child.callee?.type === "Identifier" &&
+      aliases.has(child.callee.name) &&
+      child.arguments?.[0]?.type === "StringLiteral"
+    ) {
+      emittedEventNames.add(child.arguments[0].value);
+    }
+  });
+
+  return Array.from(emittedEventNames).sort();
+}
+
+export function inferLitsxComponentEventNames(sourceText, options = {}) {
+  const plugins = Array.from(new Set(["jsx", ...(options.plugins ?? [])]));
+  const virtualization = createVirtualLitsxJsxSource(sourceText);
+  let ast;
+
+  try {
+    ast = babelParser.parse(virtualization.code, {
+      sourceType: "module",
+      plugins,
+    });
+  } catch {
+    return {};
+  }
+
+  const componentEventNames = {};
+
+  for (const { node, parent } of collectComponentLikeFunctions(ast)) {
+    let componentName = null;
+
+    if (
+      (node.type === "FunctionDeclaration" || node.type === "FunctionExpression") &&
+      node.id?.type === "Identifier"
+    ) {
+      componentName = node.id.name;
+    } else if (
+      node.type === "ArrowFunctionExpression" &&
+      parent?.type === "VariableDeclarator" &&
+      parent.id?.type === "Identifier"
+    ) {
+      componentName = parent.id.name;
+    } else if (
+      node.type === "ArrowFunctionExpression" &&
+      parent?.type === "AssignmentExpression" &&
+      parent.left?.type === "Identifier"
+    ) {
+      componentName = parent.left.name;
+    }
+
+    if (!componentName) {
+      continue;
+    }
+
+    const emittedEventNames = inferEmittedEventNames(node);
+    if (emittedEventNames.length > 0) {
+      componentEventNames[componentName] = emittedEventNames;
+    }
+  }
+
+  return componentEventNames;
+}
+
+function inferStaticPropertyNames(functionNode) {
+  const propertyNames = new Set();
+  const body = getFunctionLikeBody(functionNode);
+
+  if (!body) {
+    return [];
+  }
+
+  walk(body, (child) => {
+    let propertiesObject = null;
+
+    if (
+      child?.type === "AssignmentExpression" &&
+      child.operator === "=" &&
+      child.left?.type === "MemberExpression" &&
+      child.left.computed === false &&
+      child.left.object?.type === "Identifier" &&
+      child.left.object.name === "static" &&
+      child.left.property?.type === "Identifier" &&
+      child.left.property.name === "properties" &&
+      child.right?.type === "ObjectExpression"
+    ) {
+      propertiesObject = child.right;
+    }
+
+    if (
+      child?.type === "CallExpression" &&
+      child.callee?.type === "Identifier" &&
+      child.callee.name === "__litsx_static_properties" &&
+      child.arguments?.[0]?.type === "ObjectExpression"
+    ) {
+      propertiesObject = child.arguments[0];
+    }
+
+    if (!propertiesObject) {
+      return;
+    }
+
+    for (const property of propertiesObject.properties ?? []) {
+      if (property?.type !== "ObjectProperty") {
+        continue;
+      }
+
+      if (property.key?.type === "Identifier") {
+        propertyNames.add(property.key.name);
+      } else if (property.key?.type === "StringLiteral") {
+        propertyNames.add(property.key.value);
+      }
+    }
+  });
+
+  return Array.from(propertyNames).sort();
+}
+
+export function inferLitsxComponentPropNames(sourceText, options = {}) {
+  const plugins = Array.from(new Set(["jsx", ...(options.plugins ?? [])]));
+  const virtualization = createVirtualLitsxJsxSource(sourceText);
+  let ast;
+
+  try {
+    ast = babelParser.parse(virtualization.code, {
+      sourceType: "module",
+      plugins,
+    });
+  } catch {
+    return {};
+  }
+
+  const componentPropNames = {};
+
+  for (const { node, parent } of collectComponentLikeFunctions(ast)) {
+    let componentName = null;
+
+    if (
+      (node.type === "FunctionDeclaration" || node.type === "FunctionExpression") &&
+      node.id?.type === "Identifier"
+    ) {
+      componentName = node.id.name;
+    } else if (
+      node.type === "ArrowFunctionExpression" &&
+      parent?.type === "VariableDeclarator" &&
+      parent.id?.type === "Identifier"
+    ) {
+      componentName = parent.id.name;
+    } else if (
+      node.type === "ArrowFunctionExpression" &&
+      parent?.type === "AssignmentExpression" &&
+      parent.left?.type === "Identifier"
+    ) {
+      componentName = parent.left.name;
+    }
+
+    if (!componentName) {
+      continue;
+    }
+
+    const propNames = inferStaticPropertyNames(node);
+    if (propNames.length > 0) {
+      componentPropNames[componentName] = propNames;
+    }
+  }
+
+  return componentPropNames;
+}
+
 function collectPropsAccessIssues(ast, virtualization) {
   const issues = [];
 
@@ -760,6 +1124,10 @@ export function getLitsxAttributeCompletionNames(context) {
     }))
     .filter((entry) => entry.rank)
     .sort((left, right) => {
+      if (context.partialName.length === 0) {
+        return left.index - right.index;
+      }
+
       if (left.rank.score !== right.rank.score) {
         return left.rank.score - right.rank.score;
       }
@@ -782,14 +1150,14 @@ export function getLitsxAttributeCompletionNames(context) {
 }
 
 export function inferLitsxAttributeCompletionContext(sourceText, position) {
-  const prefixText = sourceText.slice(0, position);
-  const lastOpen = prefixText.lastIndexOf("<");
-  const lastClose = prefixText.lastIndexOf(">");
+  const tagStart = findEnclosingJsxOpeningTagStart(sourceText, position);
 
-  if (lastOpen === -1 || lastClose > lastOpen) {
+  if (tagStart === -1) {
     return null;
   }
 
+  const prefixText = sourceText.slice(0, position);
+  const lastOpen = tagStart;
   const openingSegment = prefixText.slice(lastOpen + 1);
   const tagMatch = /^([A-Za-z][\w:-]*)/.exec(openingSegment.trimStart());
 
@@ -815,22 +1183,133 @@ export function inferLitsxAttributeCompletionContext(sourceText, position) {
   };
 }
 
-export function inferLitsxAttributeInfoAtPosition(sourceText, position) {
-  const prefixText = sourceText.slice(0, position);
-  const lastOpen = prefixText.lastIndexOf("<");
-  const lastClose = prefixText.lastIndexOf(">");
+export function inferLitsxMarkupCompletionContext(sourceText, position) {
+  const tagStart = findEnclosingJsxOpeningTagStart(sourceText, position);
 
-  if (lastOpen === -1 || lastClose > lastOpen) {
+  if (tagStart === -1) {
     return null;
   }
 
-  const segment = sourceText.slice(lastOpen + 1);
+  const prefixText = sourceText.slice(0, position);
+  const lastOpen = tagStart;
+  const openingSegment = prefixText.slice(lastOpen + 1);
+  const tagMatch = /^([A-Za-z][\w:-]*)/.exec(openingSegment.trimStart());
+
+  if (!tagMatch) {
+    return null;
+  }
+
+  if (inferLitsxAttributeCompletionContext(sourceText, position)) {
+    return null;
+  }
+
+  if (/\s$/.test(openingSegment)) {
+    return {
+      tagName: tagMatch[1],
+      partialName: "",
+      start: position,
+      length: 0,
+    };
+  }
+
+  const tailMatch = /(?:^|\s)([A-Za-z_:][\w:.-]*)?$/.exec(openingSegment);
+  if (!tailMatch) {
+    return null;
+  }
+
+  const tailText = tailMatch[0];
+  if (/[={'"`]/.test(tailText) || tailText.trim() === "/" || tailText.includes("...")) {
+    return null;
+  }
+
+  const partialName = tailMatch[1] ?? "";
+  const trimmedOpening = openingSegment.trimStart();
+  const afterTag = trimmedOpening.slice(tagMatch[0].length);
+
+  if (partialName.length === 0 && !/\s$/.test(openingSegment) && afterTag.length > 0) {
+    return null;
+  }
+
+  return {
+    tagName: tagMatch[1],
+    partialName,
+    start: position - partialName.length,
+    length: partialName.length,
+  };
+}
+
+export function getLitsxMarkupCompletionNames(context) {
+  if (!context) {
+    return [];
+  }
+
+  const seen = new Set();
+  const attributes = [
+    ...GLOBAL_ATTRIBUTE_COMPLETIONS,
+    ...(ATTRIBUTE_COMPLETIONS_BY_TAG[context.tagName] ?? []),
+    ...GLOBAL_ARIA_ATTRIBUTE_COMPLETIONS,
+  ]
+    .filter((candidate) => {
+      if (seen.has(candidate)) {
+        return false;
+      }
+      seen.add(candidate);
+      return true;
+    })
+    .map((name, index) => ({
+      name,
+      index,
+      rank: rankAttributeCompletion(name, context.partialName),
+    }))
+    .filter((entry) => entry.rank)
+    .sort((left, right) => {
+      if (context.partialName.length === 0) {
+        return left.index - right.index;
+      }
+
+      if (left.rank.score !== right.rank.score) {
+        return left.rank.score - right.rank.score;
+      }
+
+      if (left.rank.wordIndex !== right.rank.wordIndex) {
+        return left.rank.wordIndex - right.rank.wordIndex;
+      }
+
+      if (left.rank.lengthDelta !== right.rank.lengthDelta) {
+        return left.rank.lengthDelta - right.rank.lengthDelta;
+      }
+
+      return left.index - right.index;
+    })
+    .map((entry) => entry.name);
+
+  if (context.partialName.length > 0) {
+    return attributes;
+  }
+
+  return [
+    ...attributes,
+    ...getLitsxAttributeCompletionNames({ ...context, prefix: "@" }),
+    ...getLitsxAttributeCompletionNames({ ...context, prefix: "." }),
+    ...getLitsxAttributeCompletionNames({ ...context, prefix: "?" }),
+  ];
+}
+
+export function inferLitsxAttributeInfoAtPosition(sourceText, position) {
+  const tagStart = findEnclosingJsxOpeningTagStart(sourceText, position);
+
+  if (tagStart === -1) {
+    return null;
+  }
+
+  const tagEnd = findJsxOpeningTagEnd(sourceText, tagStart);
+  const segment = sourceText.slice(tagStart + 1, tagEnd);
   const tagMatch = /^([A-Za-z][\w:-]*)/.exec(segment.trimStart());
   if (!tagMatch) {
     return null;
   }
 
-  const absoluteSegmentStart = lastOpen + 1;
+  const absoluteSegmentStart = tagStart + 1;
   const attributePattern = /(?:^|\s)([@.?])([\w:-]+)/g;
   let match;
 

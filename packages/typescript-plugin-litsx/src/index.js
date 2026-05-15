@@ -8,6 +8,7 @@ import {
   inferLitsxAttributeInfoAtPosition,
   inferLitsxStaticHoistInfoAtPosition,
   inferLitsxAttributeCompletionContext,
+  inferLitsxMarkupCompletionContext,
   looksLikeLitsxJsx,
   mapOriginalPositionToToolingVirtual,
   remapVirtualText,
@@ -478,6 +479,17 @@ function getLitsxCompletionMetadata(name) {
   return null;
 }
 
+function createContextualReplacementSpan(context) {
+  if (!context) {
+    return undefined;
+  }
+
+  return {
+    start: context.start + 1,
+    length: Math.max(context.length - 1, 0),
+  };
+}
+
 function createContextualCompletionEntries(virtualization, position) {
   if (!virtualization) {
     return [];
@@ -493,13 +505,9 @@ function createContextualCompletionEntries(virtualization, position) {
       kind: metadata?.kind ?? "property",
       kindModifiers: "",
       sortText: `0${index}`,
-      insertText: name,
-      replacementSpan: context
-        ? {
-          start: context.start,
-          length: context.length,
-        }
-        : undefined,
+      insertText: name.slice(1),
+      filterText: name.slice(1),
+      replacementSpan: createContextualReplacementSpan(context),
       source: "LitSX",
       data: {
         __litsxContextualCompletion: true,
@@ -826,6 +834,7 @@ export {
   getLitsxAttributeCompletionNames,
   inferLitsxAttributeInfoAtPosition,
   inferLitsxAttributeCompletionContext,
+  inferLitsxMarkupCompletionContext,
   looksLikeLitsxJsx,
   mapOriginalPositionToVirtual,
   mapOriginalPositionToToolingVirtual,

@@ -7,12 +7,16 @@ import {
   createToolingVirtualLitsxSource,
   decodeVirtualAttributeName,
   getLitsxAttributeCompletionNames,
+  inferLitsxComponentEventNames,
+  inferLitsxComponentPropNames,
   inferLitsxAttributeCompletionContext,
   inferLitsxAttributeInfoAtPosition,
+  inferLitsxMarkupCompletionContext,
   inferLitsxStaticHoistInfoAtPosition,
   looksLikeLitsxJsx,
   mapOriginalPositionToToolingVirtual,
   remapToolingTextSpanToOriginal,
+  getLitsxMarkupCompletionNames,
   remapVirtualText,
 } from "./virtual-source.js";
 
@@ -153,6 +157,25 @@ function remapMessageText(messageText) {
   };
 }
 
+function remapCompletionTextChanges(textChanges, targetFileName, virtualization) {
+  if (!Array.isArray(textChanges)) {
+    return [];
+  }
+
+  return textChanges.map((change) => {
+    const span = virtualization
+      ? remapToolingTextSpanToOriginal(change.span, virtualization)
+      : change.span;
+
+    return {
+      fileName: targetFileName,
+      start: span.start,
+      length: span.length,
+      newText: change.newText,
+    };
+  });
+}
+
 function startsAtAuthoredSyntax(sourceText, start) {
   if (typeof sourceText !== "string" || typeof start !== "number" || !(start >= 0 && start < sourceText.length)) {
     return false;
@@ -182,6 +205,18 @@ function getBindingHoverInfo(attributeInfo) {
 
 function getCompletionKindToken(name) {
   return name.startsWith("@") ? "Event" : "Property";
+}
+
+function getContextualCompletionEdit(name, context) {
+  const replacementStart = (context?.start ?? 0) + 1;
+  const replacementLength = Math.max((context?.length ?? 1) - 1, 0);
+
+  return {
+    insertText: name.slice(1),
+    filterText: name.slice(1),
+    start: replacementStart,
+    length: replacementLength,
+  };
 }
 
 function getModuleExtension(ts, fileName) {
@@ -244,9 +279,398 @@ function findDeepestNodeAtPosition(sourceFile, position) {
   return bestNode;
 }
 
+function getSourceFileScriptKind(ts, fileName, languageId) {
+  if (fileName.endsWith(".litsx.jsx") || languageId === "litsx-jsx" || fileName.endsWith(".jsx")) {
+    return ts.ScriptKind.JSX;
+  }
+
+  if (fileName.endsWith(".litsx") || languageId === "litsx" || fileName.endsWith(".tsx")) {
+    return ts.ScriptKind.TSX;
+  }
+
+  if (fileName.endsWith(".ts")) {
+    return ts.ScriptKind.TS;
+  }
+
+  return ts.ScriptKind.JS;
+}
+
+function isCustomElementsDefineCall(ts, node) {
+  return ts.isCallExpression(node)
+    && ts.isPropertyAccessExpression(node.expression)
+    && ts.isIdentifier(node.expression.expression)
+    && node.expression.expression.text === "customElements"
+    && node.expression.name.text === "define";
+}
+
+function isLikelyLitsxComponentReference(ts, sourceFile, node) {
+  if (!ts.isIdentifier(node) || !/^[A-Z]/.test(node.text)) {
+    return false;
+  }
+
+  let matches = false;
+
+  function visit(current) {
+    if (matches) {
+      return;
+    }
+
+    if (
+      ts.isImportDeclaration(current)
+      && ts.isStringLiteral(current.moduleSpecifier)
+      && (current.moduleSpecifier.text.endsWith(".litsx") || current.moduleSpecifier.text.endsWith(".litsx.jsx"))
+    ) {
+      const bindings = current.importClause?.namedBindings;
+      if (bindings && ts.isNamedImports(bindings)) {
+        matches = bindings.elements.some((element) => element.name.text === node.text);
+      }
+    }
+
+    if (
+      ts.isVariableDeclaration(current)
+      && ts.isIdentifier(current.name)
+      && current.name.text === node.text
+      && (ts.isArrowFunction(current.initializer) || ts.isFunctionExpression(current.initializer))
+    ) {
+      matches = true;
+    }
+
+    if (ts.isFunctionDeclaration(current) && current.name?.text === node.text) {
+      matches = true;
+    }
+
+    if (!matches) {
+      current.forEachChild(visit);
+    }
+  }
+
+  sourceFile.forEachChild(visit);
+  return matches;
+}
+
+function shouldSuppressCustomElementConstructorDiagnostic(ts, sourceFile, diagnostic) {
+  if (diagnostic.code !== 2345 || typeof diagnostic.start !== "number") {
+    return false;
+  }
+
+  const node = findDeepestNodeAtPosition(sourceFile, diagnostic.start);
+  let current = node;
+
+  while (current && !isCustomElementsDefineCall(ts, current)) {
+    current = current.parent ?? null;
+  }
+
+  if (!current || !isCustomElementsDefineCall(ts, current)) {
+    return false;
+  }
+
+  const candidate = current.arguments?.[1];
+  if (!candidate || diagnostic.start < candidate.getStart(sourceFile) || diagnostic.start >= candidate.getEnd()) {
+    return false;
+  }
+
+  return isLikelyLitsxComponentReference(ts, sourceFile, candidate)
+    && String(typeof diagnostic.messageText === "string" ? diagnostic.messageText : diagnostic.messageText?.messageText ?? "")
+      .includes("CustomElementConstructor");
+}
+
 function getScopeCompletionPrefix(sourceText, position) {
   const match = /[A-Za-z0-9_$]*$/.exec(sourceText.slice(0, position));
   return match?.[0] ?? "";
+}
+
+function getJsxImportSourceExportEntries(service, ts, prefix, adaptKind, position) {
+  if (!prefix) {
+    return [];
+  }
+
+  const program = service.languageService.getProgram();
+  const checker = program?.getTypeChecker();
+  const jsxImportSource = program?.getCompilerOptions?.().jsxImportSource;
+
+  if (!program || !checker || typeof jsxImportSource !== "string" || jsxImportSource.length === 0) {
+    return [];
+  }
+
+  const moduleSourceFile = program.getSourceFiles().find((sourceFile) => (
+    sourceFile.fileName.includes(`/node_modules/${jsxImportSource}/`)
+    || sourceFile.fileName.includes(`/${jsxImportSource}/src/`)
+  ));
+
+  const moduleSymbol = moduleSourceFile?.symbol ?? null;
+  if (!moduleSymbol) {
+    return [];
+  }
+
+  const exportedSymbols = checker.getExportsOfModule(moduleSymbol);
+
+  return exportedSymbols
+    .filter((symbol) => {
+      const name = symbol.getName?.();
+      return typeof name === "string"
+        && name.startsWith(prefix)
+        && !isInternalCompletionName(name);
+    })
+    .map((symbol) => {
+      const name = symbol.getName();
+      return {
+        label: name,
+        kind: adaptKind(getSymbolCompletionKind(ts, symbol), {
+          source: jsxImportSource,
+          label: name,
+        }),
+        detail: "export",
+        documentation: `From ${jsxImportSource}`,
+        start: position - prefix.length,
+        length: prefix.length,
+      };
+    });
+}
+
+function getSourceParserPlugins(fileName) {
+  return /\.(litsx|tsx|ts)$/.test(fileName) ? ["typescript"] : [];
+}
+
+function getImportedComponentReference(ts, sourceFile, tagName) {
+  let reference = null;
+
+  sourceFile.forEachChild((node) => {
+    if (
+      reference ||
+      !ts.isImportDeclaration(node) ||
+      !ts.isStringLiteral(node.moduleSpecifier)
+    ) {
+      return;
+    }
+
+    const bindings = node.importClause?.namedBindings;
+    if (!bindings || !ts.isNamedImports(bindings)) {
+      return;
+    }
+
+    for (const element of bindings.elements) {
+      if (element.name.text !== tagName) {
+        continue;
+      }
+
+      reference = {
+        exportName: element.propertyName?.text ?? element.name.text,
+        moduleName: node.moduleSpecifier.text,
+      };
+      return;
+    }
+  });
+
+  return reference;
+}
+
+function getComponentEventCompletionEntries(service, ts, queryFileName, sourceText, position, adaptKind) {
+  const context = inferLitsxAttributeCompletionContext(sourceText, position);
+  if (!context || context.prefix !== "@" || !/^[A-Z]/.test(context.tagName)) {
+    return [];
+  }
+
+  const program = service.languageService.getProgram();
+  const sourceFile = program?.getSourceFile(queryFileName);
+  if (!sourceFile) {
+    return [];
+  }
+
+  const reference = getImportedComponentReference(ts, sourceFile, context.tagName);
+  if (!reference) {
+    return [];
+  }
+
+  const resolvedModule = service.resolveModuleName?.(reference.moduleName, queryFileName);
+  const componentFileName = resolvedModule?.resolvedFileName;
+  if (!componentFileName) {
+    return [];
+  }
+
+  const componentSourceText = service.readSourceText?.(componentFileName);
+  if (typeof componentSourceText !== "string") {
+    return [];
+  }
+
+  const eventNames = inferLitsxComponentEventNames(componentSourceText, {
+    plugins: getSourceParserPlugins(componentFileName),
+  })[reference.exportName] ?? [];
+
+  return eventNames
+    .filter((name) => typeof name === "string" && name.startsWith(context.partialName))
+    .map((name) => ({
+      ...getContextualCompletionEdit(`@${name}`, context),
+      label: `@${name}`,
+      kind: adaptKind("Event", {
+        source: "litsx-component-event",
+        label: `@${name}`,
+      }),
+      detail: `Emitted by <${context.tagName}>`,
+      documentation: `LitSX custom event emitted by <${context.tagName}>.`,
+    }));
+}
+
+function getComponentStaticPropCompletionEntries(service, ts, queryFileName, sourceText, position, adaptKind) {
+  const markupContext = inferLitsxMarkupCompletionContext(sourceText, position);
+  if (!markupContext || !/^[A-Z]/.test(markupContext.tagName)) {
+    return [];
+  }
+
+  const program = service.languageService.getProgram();
+  const sourceFile = program?.getSourceFile(queryFileName);
+  if (!sourceFile) {
+    return [];
+  }
+
+  const reference = getImportedComponentReference(ts, sourceFile, markupContext.tagName);
+  if (!reference) {
+    return [];
+  }
+
+  const resolvedModule = service.resolveModuleName?.(reference.moduleName, queryFileName);
+  const componentFileName = resolvedModule?.resolvedFileName;
+  if (!componentFileName) {
+    return [];
+  }
+
+  const componentSourceText = service.readSourceText?.(componentFileName);
+  if (typeof componentSourceText !== "string") {
+    return [];
+  }
+
+  const propNames = inferLitsxComponentPropNames(componentSourceText, {
+    plugins: getSourceParserPlugins(componentFileName),
+  })[reference.exportName] ?? [];
+
+  return propNames
+    .filter((name) => typeof name === "string" && name.startsWith(markupContext.partialName))
+    .map((name) => ({
+      label: name,
+      kind: adaptKind("Property", {
+        source: "litsx-component-static-prop",
+        label: name,
+      }),
+      detail: `Static property of <${markupContext.tagName}>`,
+      documentation: `LitSX static property exposed by <${markupContext.tagName}>.`,
+      start: markupContext.start,
+      length: markupContext.length,
+    }));
+}
+
+function getCompletionEntryImportEdits(languageService, queryFileName, fileName, position, entry, virtualization) {
+  if (typeof languageService.getCompletionEntryDetails !== "function" || !entry?.hasAction) {
+    return [];
+  }
+
+  let details;
+  try {
+    details = languageService.getCompletionEntryDetails(
+      queryFileName,
+      position,
+      entry.name,
+      {},
+      entry.source,
+      {},
+      entry.data,
+    );
+  } catch {
+    return [];
+  }
+
+  const fileChanges = details?.codeActions
+    ?.flatMap((action) => action.changes ?? [])
+    ?.filter((change) => change.fileName === queryFileName || change.fileName === fileName) ?? [];
+
+  return fileChanges.flatMap((change) => (
+    remapCompletionTextChanges(change.textChanges, fileName, virtualization)
+  ));
+}
+
+function isInternalCompletionName(name) {
+  return typeof name === "string" && (
+    name.startsWith("__litsx_") ||
+    name.startsWith("_$L") ||
+    name.startsWith("_currentTarget") ||
+    name.includes("$")
+  );
+}
+
+function isLikelyIntrinsicMarkupCompletionName(name) {
+  if (
+    typeof name !== "string" ||
+    name.length === 0 ||
+    isInternalCompletionName(name) ||
+    name.startsWith("_") ||
+    /^[A-Z0-9_]+$/.test(name) ||
+    /^[A-Z]/.test(name) ||
+    /^on[a-z]/.test(name) ||
+    /(Element|Elements|Node|Nodes)$/.test(name)
+  ) {
+    return false;
+  }
+
+  return /^[a-z][\w-]*$/.test(name) || /^aria[A-Z]/.test(name);
+}
+
+function isLikelyComponentPropCompletionName(name) {
+  return typeof name === "string"
+    && name.length > 0
+    && !isInternalCompletionName(name)
+    && !name.startsWith("_")
+    && !/^[A-Z]/.test(name)
+    && !name.includes("$")
+    && /^[a-z][\w-]*$/.test(name);
+}
+
+function rankCompletionLabel(label, prefix) {
+  const normalizedLabel = String(label ?? "").toLowerCase();
+  const normalizedPrefix = prefix.toLowerCase();
+
+  if (normalizedPrefix.length === 0) {
+    return 3;
+  }
+
+  if (normalizedLabel === normalizedPrefix) {
+    return 0;
+  }
+
+  if (normalizedLabel.startsWith(normalizedPrefix)) {
+    return 1;
+  }
+
+  if (normalizedLabel.includes(normalizedPrefix)) {
+    return 2;
+  }
+
+  return 3;
+}
+
+function compareCompletionEntries(left, right, prefix) {
+  const leftLabel = String(left.label ?? "");
+  const rightLabel = String(right.label ?? "");
+  const leftRank = rankCompletionLabel(leftLabel, prefix);
+  const rightRank = rankCompletionLabel(rightLabel, prefix);
+
+  if (leftRank !== rightRank) {
+    return leftRank - rightRank;
+  }
+
+  const leftIsLitsxApi = left.documentation === "From @litsx/litsx";
+  const rightIsLitsxApi = right.documentation === "From @litsx/litsx";
+
+  if (leftIsLitsxApi !== rightIsLitsxApi) {
+    return leftIsLitsxApi ? -1 : 1;
+  }
+
+  if (prefix.toLowerCase().startsWith("use")) {
+    const leftStartsWithUse = leftLabel.startsWith("use");
+    const rightStartsWithUse = rightLabel.startsWith("use");
+    if (leftStartsWithUse !== rightStartsWithUse) {
+      return leftStartsWithUse ? -1 : 1;
+    }
+  }
+
+  return leftLabel.localeCompare(rightLabel);
 }
 
 function getSymbolCompletionKind(ts, symbol) {
@@ -531,6 +955,12 @@ function createLitsxEditorSession(options = {}) {
         rootNames,
         overlays,
         languageService: ts.createLanguageService(host, ts.createDocumentRegistry()),
+        readSourceText(nextFileName) {
+          return readFileText(nextFileName, overlays);
+        },
+        resolveModuleName(moduleName, containingFile) {
+          return resolveModule(moduleName, containingFile);
+        },
         getVirtualization(nextFileName) {
           return getSnapshotRecord(nextFileName)?.virtualization ?? null;
         },
@@ -559,6 +989,13 @@ function createLitsxEditorSession(options = {}) {
     const service = getOrCreateProjectService(fileName, sourceText, languageId);
     const queryFileName = service.queryFileName ?? fileName;
     const virtualization = service.getVirtualization(queryFileName);
+    const authoredSourceFile = ts.createSourceFile(
+      fileName,
+      sourceText,
+      ts.ScriptTarget.Latest,
+      true,
+      getSourceFileScriptKind(ts, fileName, languageId),
+    );
     const diagnostics = [
       ...service.languageService.getSyntacticDiagnostics(queryFileName),
       ...service.languageService.getSemanticDiagnostics(queryFileName),
@@ -589,7 +1026,8 @@ function createLitsxEditorSession(options = {}) {
       })
       .filter((diagnostic) => (
         !String(diagnostic.messageText ?? "").includes("__litsx_") &&
-        !startsAtAuthoredSyntax(sourceText, diagnostic.start)
+        !startsAtAuthoredSyntax(sourceText, diagnostic.start) &&
+        !shouldSuppressCustomElementConstructorDiagnostic(ts, authoredSourceFile, diagnostic)
       ));
 
     const authoredDiagnostics = collectLitsxAuthoredDiagnostics(sourceText, ts, {
@@ -724,10 +1162,16 @@ function createLitsxEditorSession(options = {}) {
       includeCompletionsForModuleExports: true,
       includeCompletionsWithInsertText: true,
     });
+    const rawCompletionEntriesByName = new Map(
+      (completions?.entries ?? []).map((entry) => [entry.name, entry]),
+    );
 
     const context = inferLitsxAttributeCompletionContext(sourceText, position);
+    const markupContext = inferLitsxMarkupCompletionContext(sourceText, position);
+    const isComponentTag = /^[A-Z]/.test(markupContext?.tagName ?? "");
     const contextualEntries = context
       ? getLitsxAttributeCompletionNames(context).map((name) => ({
+        ...getContextualCompletionEdit(name, context),
         label: name,
         kind: adaptKind(getCompletionKindToken(name), {
           source: "litsx",
@@ -735,18 +1179,93 @@ function createLitsxEditorSession(options = {}) {
         }),
         detail: "LitSX binding",
         documentation: `LitSX binding for <${context.tagName}>.`,
-        start: context.start,
-        length: context.length,
       }))
       : [];
+    const componentEventEntries = getComponentEventCompletionEntries(
+      service,
+      ts,
+      queryFileName,
+      sourceText,
+      position,
+      adaptKind,
+    ).filter((entry) => !contextualEntries.some((contextualEntry) => contextualEntry.label === entry.label));
+    const componentStaticPropEntries = getComponentStaticPropCompletionEntries(
+      service,
+      ts,
+      queryFileName,
+      sourceText,
+      position,
+      adaptKind,
+    );
+    const markupEntries = markupContext && !isComponentTag
+      ? getLitsxMarkupCompletionNames(markupContext).map((name) => ({
+        label: name,
+        kind: adaptKind(
+          name.startsWith("@")
+            ? "Event"
+            : name.startsWith(".") || name.startsWith("?")
+              ? "Property"
+              : "Property",
+          {
+            source: "litsx-markup",
+            label: name,
+          },
+        ),
+        detail: name.startsWith("@")
+          ? "LitSX event binding"
+          : name.startsWith(".")
+            ? "LitSX property binding"
+            : name.startsWith("?")
+              ? "LitSX boolean attribute binding"
+              : "LitSX markup attribute",
+        documentation: name.startsWith("@") || name.startsWith(".") || name.startsWith("?")
+          ? `LitSX binding for <${markupContext.tagName}>.`
+          : `LitSX-authored attribute for <${markupContext.tagName}>.`,
+        start: markupContext.start,
+        length: markupContext.length,
+      }))
+      : [];
+    const scopePrefix = getScopeCompletionPrefix(sourceText, position);
+    const jsxImportSourceEntries = markupContext
+      ? []
+      : getJsxImportSourceExportEntries(service, ts, scopePrefix, adaptKind, position).map((entry) => ({
+        ...entry,
+        additionalTextEdits: getCompletionEntryImportEdits(
+          service.languageService,
+          queryFileName,
+          fileName,
+          mappedPosition,
+          rawCompletionEntriesByName.get(entry.label),
+          virtualization,
+        ),
+      }));
 
-    const mergedEntries = [...contextualEntries];
-    const seen = new Set(contextualEntries.map((entry) => entry.label));
+    const mergedEntries = [
+      ...contextualEntries,
+      ...componentEventEntries,
+      ...componentStaticPropEntries,
+      ...markupEntries,
+      ...jsxImportSourceEntries,
+    ];
+    const seen = new Set(mergedEntries.map((entry) => entry.label));
 
     for (const entry of completions?.entries ?? []) {
-      if (decodeVirtualAttributeName(entry.name) || seen.has(entry.name)) {
+      if (
+        decodeVirtualAttributeName(entry.name) ||
+        seen.has(entry.name) ||
+        isInternalCompletionName(entry.name)
+      ) {
         continue;
       }
+
+      if (markupContext && !isComponentTag && !isLikelyIntrinsicMarkupCompletionName(entry.name)) {
+        continue;
+      }
+
+      if (markupContext && isComponentTag && !isLikelyComponentPropCompletionName(entry.name)) {
+        continue;
+      }
+
       seen.add(entry.name);
 
       const remappedSpan = virtualization && entry.replacementSpan
@@ -766,17 +1285,25 @@ function createLitsxEditorSession(options = {}) {
         documentation: entry.source ? `From ${entry.source}` : "TypeScript completion",
         start: remappedSpan.start,
         length: remappedSpan.length,
+        additionalTextEdits: getCompletionEntryImportEdits(
+          service.languageService,
+          queryFileName,
+          fileName,
+          mappedPosition,
+          entry,
+          virtualization,
+        ),
       });
     }
 
-    if (mergedEntries.length === contextualEntries.length) {
+    if (mergedEntries.length === (contextualEntries.length + componentEventEntries.length + componentStaticPropEntries.length)) {
       const program = service.languageService.getProgram();
       const sourceFile = program?.getSourceFile(queryFileName);
       const checker = program?.getTypeChecker();
       const node = sourceFile ? findDeepestNodeAtPosition(sourceFile, mappedPosition) : null;
-      const prefix = getScopeCompletionPrefix(sourceText, position);
+      const prefix = scopePrefix;
 
-      if (node && checker) {
+      if (node && checker && !markupContext) {
         const scopeSymbols = checker.getSymbolsInScope(
           node,
           ts.SymbolFlags.Value | ts.SymbolFlags.Type | ts.SymbolFlags.Namespace | ts.SymbolFlags.Alias,
@@ -784,7 +1311,7 @@ function createLitsxEditorSession(options = {}) {
 
         for (const symbol of scopeSymbols) {
           const name = symbol.getName?.();
-          if (!name || name.startsWith("__litsx_") || seen.has(name) || !name.startsWith(prefix)) {
+          if (!name || isInternalCompletionName(name) || seen.has(name) || !name.startsWith(prefix)) {
             continue;
           }
 
@@ -805,7 +1332,13 @@ function createLitsxEditorSession(options = {}) {
       }
     }
 
-    return mergedEntries;
+    if (markupContext) {
+      return mergedEntries;
+    }
+
+    return mergedEntries.sort((left, right) => (
+      compareCompletionEntries(left, right, scopePrefix)
+    ));
   }
 
   log("LitSX editor session initialized");

@@ -19,6 +19,7 @@ import plugin, {
   getLitsxAttributeCompletionNames,
   inferLitsxAttributeInfoAtPosition,
   inferLitsxAttributeCompletionContext,
+  inferLitsxMarkupCompletionContext,
   looksLikeLitsxJsx,
   mapOriginalPositionToVirtual,
   mapOriginalPositionToToolingVirtual,
@@ -763,6 +764,37 @@ describe("@litsx/typescript-plugin", () => {
     assert.deepStrictEqual(getLitsxAttributeCompletionNames(eventContext), ["@click"]);
     assert.deepStrictEqual(getLitsxAttributeCompletionNames(propContext), [".value", ".valueAsNumber"]);
     assert.deepStrictEqual(getLitsxAttributeCompletionNames(boolContext), ["?hidden"]);
+  });
+
+  it("keeps LitSX completion context after event handlers containing arrow functions", () => {
+    const source = [
+      "const count = 1;",
+      "",
+      "function Demo() {",
+      "  return <input .value={count} @click={() => count.toFixed()} ?disabled />;",
+      "}",
+      "",
+    ].join("\n");
+
+    assert.deepStrictEqual(
+      inferLitsxAttributeCompletionContext(source, source.indexOf("?disabled") + 1),
+      {
+        tagName: "input",
+        prefix: "?",
+        partialName: "",
+        start: source.indexOf("?disabled"),
+        length: 1,
+      },
+    );
+    assert.deepStrictEqual(
+      inferLitsxMarkupCompletionContext(source, source.indexOf("?disabled")),
+      {
+        tagName: "input",
+        partialName: "",
+        start: source.indexOf("?disabled"),
+        length: 0,
+      },
+    );
   });
 
   it("infers authored attribute info for hover positions inside LitSX attribute names", () => {
@@ -4950,8 +4982,8 @@ describe("@litsx/typescript-plugin", () => {
     );
     assert.strictEqual(completions.entries[0].kind, "memberVariableElement");
     assert.deepStrictEqual(completions.entries[0].replacementSpan, {
-      start: source.indexOf("@cl"),
-      length: "@cl".length,
+      start: source.indexOf("@cl") + 1,
+      length: "cl".length,
     });
   });
 
