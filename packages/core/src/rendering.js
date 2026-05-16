@@ -7,10 +7,11 @@ import {
   withLightDomCreationContext,
 } from "@litsx/light-dom-registry";
 import {
+  __isLitsxScopedTemplate,
+  __isLitsxServerComponentCall,
   LITSX_SSR_CONTEXT,
 } from "./elements/index.js";
 import { getCurrentSsrCustomElementInstanceStack } from "./runtime-ssr-state.js";
-import { resolveStrictSyncSsrRenderableValue } from "./runtime-ssr-values.js";
 
 /**
  * Rendering helpers used by LitSX transforms when authored JSX passes renderer
@@ -23,6 +24,27 @@ import { resolveStrictSyncSsrRenderableValue } from "./runtime-ssr-values.js";
 
 const RENDERER_CONTEXT = Symbol("litsx.rendererContext");
 const RENDERER_HOST_INITIALIZED = Symbol("litsx.rendererHostInitialized");
+const RENDERER_SSR_VALUE_ERROR =
+  "SSR renderer props must return a renderable TemplateResult, not a server component call or scoped template.";
+
+function resolveStrictSyncSsrRenderableValue(value) {
+  if (__isLitsxServerComponentCall(value) || __isLitsxScopedTemplate(value)) {
+    throw new Error(RENDERER_SSR_VALUE_ERROR);
+  }
+
+  if (isTemplateResult(value)) {
+    return {
+      ...value,
+      values: value.values.map((entry) => resolveStrictSyncSsrRenderableValue(entry)),
+    };
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((entry) => resolveStrictSyncSsrRenderableValue(entry));
+  }
+
+  return value;
+}
 
 // Renderer props remain a synchronous projection mechanism in SSR.
 // They may return normal renderable values such as TemplateResult trees,
