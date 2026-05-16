@@ -5,7 +5,7 @@ import { performance } from "node:perf_hooks";
 import {
   createLitsxTypecheckSession,
   runLitsxTypecheck,
-} from "../../packages/typescript-plugin-litsx/src/typecheck.js";
+} from "../../packages/typescript/src/typecheck.js";
 
 function writeJson(filePath, value) {
   fs.writeFileSync(filePath, `${JSON.stringify(value, null, 2)}\n`, "utf8");

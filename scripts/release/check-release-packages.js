@@ -175,11 +175,6 @@ if (prettierManifest.dependencies?.prettier) {
   fail("packages/prettier-plugin-litsx must not depend on prettier directly");
 }
 
-const tsPluginManifest = readJson("packages/typescript-plugin-litsx/package.json");
-if (!tsPluginManifest.bin?.["litsx-tsc"]) {
-  fail("packages/typescript-plugin-litsx must expose litsx-tsc");
-}
-
 const tsManifest = readJson("packages/typescript/package.json");
 if (!tsManifest.bin?.["litsx-tsc"]) {
   fail("packages/typescript must expose litsx-tsc");

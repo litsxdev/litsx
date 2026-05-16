@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { performance } from "node:perf_hooks";
 import ts from "typescript";
-import createPlugin from "../../packages/typescript-plugin-litsx/src/index.js";
+import createPlugin from "../../packages/typescript/src/index.js";
 
 function formatMs(value) {
   return `${value.toFixed(2)}ms`;

@@ -6,18 +6,15 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."
 
 export const packageDirsByName = new Map([
   ["@litsx/core", "packages/core"],
-  ["@litsx/litsx", "packages/litsx"],
   ["@litsx/compiler", "packages/compiler"],
   ["@litsx/vite-plugin", "packages/vite-plugin"],
   ["@litsx/typescript", "packages/typescript"],
-  ["@litsx/typescript-plugin", "packages/typescript-plugin-litsx"],
   ["@litsx/eslint-plugin", "packages/eslint-plugin-litsx"],
   ["create-litsx-app", "packages/create-litsx-app"],
   ["prettier-plugin-litsx", "packages/prettier-plugin-litsx"],
   ["@litsx/light-dom-registry", "packages/light-dom-registry"],
   ["@litsx/babel-parser", "packages/babel-parser-litsx"],
   ["@litsx/authoring", "packages/authoring"],
-  ["@litsx/jsx-authoring", "packages/jsx-authoring"],
   ["@litsx/prop-types", "packages/prop-types"],
   ["@litsx/babel-preset-litsx", "packages/babel-preset-litsx"],
   ["@litsx/babel-preset-react-compat", "packages/babel-preset-react-compat"],

@@ -31,7 +31,6 @@ export default defineConfig({
         'packages/create-litsx-app/src/cli.js',
         'packages/babel-plugin-shared-hooks/src/index.js',
         'packages/babel-preset-litsx/src/internal/transform-litsx-dom-refs.js',
-        'packages/litsx/src/index.js',
         'packages/vitepress/src/**',
         'packages/litsx-playground/src/LitsxPlayground.tsx',
         'packages/litsx-playground/src/index.js',

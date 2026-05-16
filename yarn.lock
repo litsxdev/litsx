@@ -1257,7 +1257,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@litsx/core@npm:^0.4.0, @litsx/core@workspace:packages/core":
+"@litsx/core@workspace:packages/core":
   version: 0.0.0-use.local
   resolution: "@litsx/core@workspace:packages/core"
   dependencies:
@@ -1285,28 +1285,9 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@litsx/jsx-authoring@workspace:packages/jsx-authoring":
-  version: 0.0.0-use.local
-  resolution: "@litsx/jsx-authoring@workspace:packages/jsx-authoring"
-  dependencies:
-    "@litsx/authoring": "npm:^0.4.0"
-  languageName: unknown
-  linkType: soft
-
 "@litsx/light-dom-registry@npm:^0.2.4, @litsx/light-dom-registry@workspace:packages/light-dom-registry":
   version: 0.0.0-use.local
   resolution: "@litsx/light-dom-registry@workspace:packages/light-dom-registry"
-  languageName: unknown
-  linkType: soft
-
-"@litsx/litsx@workspace:packages/litsx":
-  version: 0.0.0-use.local
-  resolution: "@litsx/litsx@workspace:packages/litsx"
-  dependencies:
-    "@litsx/core": "npm:^0.4.0"
-    lit: "npm:^3.2.1"
-  peerDependencies:
-    lit: ">=3"
   languageName: unknown
   linkType: soft
 
@@ -1321,18 +1302,6 @@ __metadata:
   resolution: "@litsx/shiki-languages@workspace:packages/shiki-languages"
   dependencies:
     shiki: "npm:^2.1.0"
-  languageName: unknown
-  linkType: soft
-
-"@litsx/typescript-plugin@workspace:packages/typescript-plugin-litsx":
-  version: 0.0.0-use.local
-  resolution: "@litsx/typescript-plugin@workspace:packages/typescript-plugin-litsx"
-  dependencies:
-    "@litsx/typescript": "npm:^0.6.0"
-  peerDependencies:
-    typescript: ">=5"
-  bin:
-    litsx-tsc: ./dist/litsx-tsc.js
   languageName: unknown
   linkType: soft
 
