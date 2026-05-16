@@ -259,7 +259,7 @@ describe("litsx elements runtime", () => {
       }
     }
 
-    class HostElement extends LightDomElementsMixin(Base) {
+    class HostElement extends LightDomMixin(Base) {
       static elements = {
         [childTag]: ChildElement,
       };
