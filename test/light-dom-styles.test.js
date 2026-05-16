@@ -3,10 +3,7 @@
 import assert from "assert";
 import { css, html, LitElement } from "lit";
 import { describe, it } from "vitest";
-import {
-  LightDomMixin,
-  LightDomMixin,
-} from "../packages/core/src/elements/index.js";
+import { LightDomMixin } from "../packages/core/src/elements/index.js";
 
 let tagCounter = 0;
 
