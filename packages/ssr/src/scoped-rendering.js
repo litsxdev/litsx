@@ -5,9 +5,9 @@ import {
   __isLitsxScopedTemplate,
   LITSX_MODULE_ID,
   LITSX_SSR_CONTEXT,
-} from "./elements/index.js";
-import { LitsxContextProviderElement } from "./context.js";
-import { withCurrentSsrCustomElementInstanceStack } from "./runtime-ssr-state.js";
+} from "@litsx/core/elements";
+import { LitsxContextProviderElement } from "@litsx/core/context";
+import { withCurrentSsrCustomElementInstanceStack } from "./ssr-state.js";
 
 const scopedRegistryStack = [];
 const scopedSsrContextStack = [];
