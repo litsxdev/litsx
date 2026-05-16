@@ -30,6 +30,126 @@ describe("@litsx/typescript editor-session", () => {
     assert.strictEqual(session.typescript, ts);
   });
 
+  it("supports trace loggers, bundled lib fallback, completion adapters, and cache clearing", () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-editor-session-options-"));
+    const bundledLibDir = path.join(tempDir, "lib");
+    const filePath = path.join(tempDir, "plain.jsx");
+    const sourceText = "const view = <button  />;\n";
+    const logs = [];
+
+    fs.mkdirSync(bundledLibDir, { recursive: true });
+    fs.writeFileSync(path.join(bundledLibDir, ts.getDefaultLibFileName({})), "", "utf8");
+    fs.writeFileSync(filePath, sourceText);
+
+    const session = createLitsxEditorSession({
+      typescript: ts,
+      bundledLibDir,
+      trace: true,
+      logger: {
+        appendLine(message) {
+          logs.push(message);
+        },
+      },
+    });
+
+    const hover = session.getHover(filePath, sourceText, "jsx", sourceText.indexOf("view") + 1);
+    const completions = session.getCompletions(
+      filePath,
+      sourceText,
+      "jsx",
+      sourceText.indexOf("<button ") + "<button ".length,
+      (kind, context) => `${kind}:${context?.source ?? "none"}`,
+    );
+
+    assert.deepStrictEqual(logs, ["LitSX editor session initialized"]);
+    assert.match(hover.markdown, /```jsx/);
+    assert.ok(completions.some((entry) => (
+      entry.label === "class" &&
+      entry.kind === "Property:litsx-markup"
+    )));
+    session.clear();
+    assert.ok(session.getDiagnostics(filePath, sourceText, "jsx").length >= 0);
+  }, 15000);
+
+  it("covers jsconfig projects, logger functions, and transparent extensionless resolution", () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-editor-session-jsconfig-"));
+    const bundledLibDir = path.join(tempDir, "missing-libs");
+    const srcDir = path.join(tempDir, "src");
+    const libDir = path.join(srcDir, "lib");
+    const filePath = path.join(srcDir, "component.litsx.jsx");
+    const plainTsPath = path.join(srcDir, "plain.ts");
+    const logs = [];
+
+    fs.mkdirSync(libDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(tempDir, "jsconfig.json"),
+      JSON.stringify({
+        compilerOptions: {
+          jsx: "preserve",
+          target: "ES2022",
+          module: "ESNext",
+          checkJs: true,
+        },
+        include: ["src/**/*"],
+      }),
+    );
+    fs.writeFileSync(path.join(libDir, "index.ts"), "export const label: string = 'ready';\n");
+    fs.writeFileSync(path.join(srcDir, "helper.js"), "export const count = 1;\n");
+    fs.writeFileSync(plainTsPath, "export const typed = 1;\n");
+
+    const sourceText = [
+      "import { label } from './lib';",
+      "import { count } from './helper';",
+      "const view = <button title={label}>{count}</button>;",
+      "",
+    ].join("\n");
+    fs.writeFileSync(filePath, sourceText);
+
+    const session = createLitsxEditorSession({
+      typescript: ts,
+      bundledLibDir,
+      trace: true,
+      logger(message) {
+        logs.push(message);
+      },
+    });
+
+    assert.deepStrictEqual(logs, ["LitSX editor session initialized"]);
+    assert.deepStrictEqual(
+      session.getDiagnostics(filePath, sourceText, "litsx-jsx").filter((diagnostic) => diagnostic.code === 2307),
+      [],
+    );
+    assert.deepStrictEqual(
+      session.getDiagnostics(plainTsPath, "export const typed = 1;\n", "typescript"),
+      [],
+    );
+  }, 15000);
+
+  it("uses standalone sessions without a logger and falls back for missing files", () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-editor-session-standalone-"));
+    const filePath = path.join(tempDir, "standalone.js");
+    const sourceText = "const value = 1;\nvalue;\n";
+
+    const session = createLitsxEditorSession({
+      typescript: ts,
+      trace: true,
+    });
+
+    const diagnostics = session.getDiagnostics(filePath, sourceText, "javascript");
+    const hover = session.getHover(filePath, sourceText, "javascript", sourceText.indexOf("value") + 1);
+    const completions = session.getCompletions(
+      filePath,
+      sourceText,
+      "javascript",
+      sourceText.length,
+      null,
+    );
+
+    assert.deepStrictEqual(diagnostics, []);
+    assert.match(hover.markdown, /```ts/);
+    assert.ok(completions.some((entry) => entry.label === "value"));
+  }, 15000);
+
   it("provides project-backed diagnostics, hover, and completions", () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-editor-session-"));
     const filePath = path.join(tempDir, "component.litsx");

@@ -9,6 +9,8 @@ import * as virtualSourceModule from "../packages/typescript/src/virtualization.
 import {
   collectLitsxAuthoredIssues,
   inferLitsxStaticHoistInfoAtPosition,
+  inferLitsxComponentEventNames,
+  inferLitsxComponentPropNames,
 } from "../packages/typescript/src/authored-semantics.js";
 
 import plugin, {
@@ -877,6 +879,153 @@ describe("@litsx/typescript", () => {
       }),
       ["@pointerdown", "@pointerup"],
     );
+    assert.ok(getLitsxAttributeCompletionNames({
+      tagName: "input",
+      prefix: "@",
+      partialName: "",
+    }).includes("@input"));
+    assert.ok(getLitsxAttributeCompletionNames({
+      tagName: "button",
+      prefix: "?",
+      partialName: "",
+    }).includes("?disabled"));
+    assert.ok(getLitsxAttributeCompletionNames({
+      tagName: "video",
+      prefix: ".",
+      partialName: "",
+    }).includes(".currentTime"));
+    assert.deepStrictEqual(
+      getLitsxAttributeCompletionNames({
+        tagName: "input",
+        prefix: ".",
+        partialName: "value",
+      }).slice(0, 1),
+      [".value"],
+    );
+    assert.deepStrictEqual(
+      getLitsxAttributeCompletionNames({
+        tagName: "input",
+        prefix: ".",
+        partialName: "number",
+      }),
+      [".valueAsNumber"],
+    );
+    assert.deepStrictEqual(
+      getLitsxAttributeCompletionNames({
+        tagName: "input",
+        prefix: ".",
+        partialName: "num",
+      }),
+      [".valueAsNumber"],
+    );
+    assert.deepStrictEqual(
+      getLitsxAttributeCompletionNames({
+        tagName: "input",
+        prefix: ".",
+        partialName: "lue",
+      }),
+      [".value", ".valueAsNumber"],
+    );
+    assert.deepStrictEqual(
+      inferLitsxAttributeCompletionContext(
+        '<button title={"<not-a-tag>"} data-copy={`> still inside`} @cli',
+        '<button title={"<not-a-tag>"} data-copy={`> still inside`} @cli'.length,
+      ),
+      {
+        tagName: "button",
+        prefix: "@",
+        partialName: "cli",
+        start: '<button title={"<not-a-tag>"} data-copy={`> still inside`} '.length,
+        length: "@cli".length,
+      },
+    );
+    assert.deepStrictEqual(
+      inferLitsxMarkupCompletionContext("<input aria", "<input aria".length),
+      {
+        tagName: "input",
+        partialName: "aria",
+        start: "<input ".length,
+        length: "aria".length,
+      },
+    );
+    assert.deepStrictEqual(
+      inferLitsxMarkupCompletionContext("<input value=", "<input value=".length),
+      null,
+    );
+    assert.deepStrictEqual(
+      inferLitsxMarkupCompletionContext("<input {...props}", "<input {...props}".length),
+      null,
+    );
+  });
+
+  it("infers emitted component events across declaration forms", () => {
+    const source = [
+      "function NamedCard() {",
+      "  const emit = useEmit();",
+      "  emit('named-ready');",
+      "  return <button />;",
+      "}",
+      "const ArrowCard = () => {",
+      "  const send = useEmit();",
+      "  send('arrow-ready');",
+      "  send(dynamicName);",
+      "  return <button />;",
+      "};",
+      "const FunctionCard = function LocalCard() {",
+      "  const publish = useEmit();",
+      "  publish('function-ready');",
+      "  return <button />;",
+      "};",
+      "let AssignedCard;",
+      "AssignedCard = () => {",
+      "  const dispatch = useEmit();",
+      "  dispatch('assigned-ready');",
+      "  return <button />;",
+      "};",
+      "const PlainCard = () => <button />;",
+      "",
+    ].join("\n");
+
+    assert.deepStrictEqual(
+      inferLitsxComponentEventNames(source),
+      {
+        AssignedCard: ["assigned-ready"],
+        ArrowCard: ["arrow-ready"],
+        LocalCard: ["function-ready"],
+        NamedCard: ["named-ready"],
+      },
+    );
+    assert.deepStrictEqual(inferLitsxComponentEventNames("<button"), {});
+  });
+
+  it("infers static component props across authored and virtual hoist forms", () => {
+    const source = [
+      "function NamedCard() {",
+      "  __litsx_static_properties({ foo: {}, 'bar-baz': {}, [dynamicName]: {} });",
+      "  return <button />;",
+      "}",
+      "const ArrowCard = () => {",
+      "  __litsx_static_properties({ alpha: {}, 'beta-gamma': {} });",
+      "  return <button />;",
+      "};",
+      "let AssignedCard;",
+      "AssignedCard = () => {",
+      "  __litsx_static_properties({ assigned: {} });",
+      "  return <button />;",
+      "};",
+      "const PlainCard = () => <button />;",
+      "",
+    ].join("\n");
+
+    assert.deepStrictEqual(
+      inferLitsxComponentPropNames(source),
+      {
+        AssignedCard: ["assigned"],
+        ArrowCard: ["alpha", "beta-gamma"],
+        NamedCard: ["bar-baz", "dynamicName", "foo"],
+      },
+    );
+    assert.deepStrictEqual(inferLitsxComponentPropNames("<button"), {});
   });
 
   it("maps spans between authored and virtualized sources", () => {
