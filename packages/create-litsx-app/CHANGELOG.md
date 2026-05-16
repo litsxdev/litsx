@@ -1,5 +1,11 @@
 # create-litsx-app
 
+## 0.5.1
+
+### Patch Changes
+
+- 9f19379: Use the synchronized published `@litsx/compiler` version in the design-system Storybook template instead of a stale hardcoded dependency.
+
 ## 0.5.0
 
 ### Minor Changes
