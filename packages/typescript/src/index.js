@@ -56,6 +56,23 @@ function remapDisplayParts(parts) {
   }));
 }
 
+function normalizeEscapedNewlines(text) {
+  if (typeof text !== "string" || !text.includes("\\")) {
+    return text;
+  }
+
+  return text
+    .replace(/\\r\\n/g, "\r\n")
+    .replace(/\\n/g, "\n");
+}
+
+function remapDocumentationParts(parts) {
+  return parts?.map((part) => ({
+    ...part,
+    text: normalizeEscapedNewlines(remapVirtualText(part.text)),
+  }));
+}
+
 function remapMessageText(messageText) {
   if (typeof messageText === "string") {
     return remapVirtualText(messageText);
@@ -442,7 +459,7 @@ function wrapQuickInfo(method, getVirtualization) {
       ...info,
       textSpan: remapToolingTextSpanToOriginal(info.textSpan, virtualization),
       displayParts: remappedDisplayParts,
-      documentation: remapDisplayParts(info.documentation),
+      documentation: remapDocumentationParts(info.documentation),
     };
   };
 }
@@ -593,7 +610,7 @@ function wrapCompletionEntryDetails(method, getVirtualization) {
     return {
       ...details,
       displayParts: remapDisplayParts(details.displayParts),
-      documentation: remapDisplayParts(details.documentation),
+      documentation: remapDocumentationParts(details.documentation),
     };
   };
 }

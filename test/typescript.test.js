@@ -3277,6 +3277,82 @@ describe("@litsx/typescript", () => {
     assert.strictEqual(diagnostic.relatedInformation[0].start, 1);
   });
 
+  it("normalizes escaped newlines in quick info documentation", () => {
+    const source = `
+      const view = <button @click={handleClick} />;
+    `;
+    const virtualSource = createVirtualLitsxJsxSource(source);
+    const virtualEventStart = virtualSource.code.indexOf("__litsx_event_click");
+    const originalEventStart = source.indexOf("@click");
+    const snapshots = new Map([
+      ["/virtual/example.tsx", source],
+    ]);
+
+    const pluginModule = plugin({
+      typescript: {
+        ScriptSnapshot: {
+          fromString(text) {
+            return {
+              getText(start, end) {
+                return text.slice(start, end);
+              },
+              getLength() {
+                return text.length;
+              },
+            };
+          },
+        },
+      },
+    });
+
+    const wrapped = pluginModule.create({
+      languageServiceHost: {
+        getScriptSnapshot(fileName) {
+          const sourceText = snapshots.get(fileName);
+          if (sourceText == null) {
+            return undefined;
+          }
+
+          return {
+            getText(start, end) {
+              return sourceText.slice(start, end);
+            },
+            getLength() {
+              return sourceText.length;
+            },
+          };
+        },
+      },
+      languageService: {
+        getSyntacticDiagnostics() {
+          return [];
+        },
+        getSemanticDiagnostics() {
+          return [];
+        },
+        getSuggestionDiagnostics() {
+          return [];
+        },
+        getQuickInfoAtPosition() {
+          return {
+            kind: "property",
+            kindModifiers: "",
+            textSpan: { start: virtualEventStart, length: "__litsx_event_click".length },
+            displayParts: [{ text: "__litsx_event_click", kind: "propertyName" }],
+            documentation: [{ text: "line 1\\nline 2", kind: "text" }],
+          };
+        },
+        getCompletionsAtPosition() {
+          return null;
+        },
+      },
+    });
+
+    const quickInfo = wrapped.getQuickInfoAtPosition("/virtual/example.tsx", originalEventStart);
+
+    assert.strictEqual(quickInfo.documentation[0].text, "line 1\nline 2");
+  });
+
   it("passes through diagnostics unchanged when no virtualization exists", () => {
     const pluginModule = plugin({
       typescript: {

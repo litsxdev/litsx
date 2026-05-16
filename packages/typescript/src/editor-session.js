@@ -141,6 +141,56 @@ function remapDisplayParts(parts) {
   }));
 }
 
+function normalizeEscapedNewlines(text) {
+  if (typeof text !== "string" || !text.includes("\\")) {
+    return text;
+  }
+
+  return text
+    .replace(/\\r\\n/g, "\r\n")
+    .replace(/\\n/g, "\n");
+}
+
+function remapDocumentationParts(parts) {
+  return parts?.map((part) => ({
+    ...part,
+    text: normalizeEscapedNewlines(remapVirtualText(part.text)),
+  }));
+}
+
+function getHoverCodeLanguage(languageId) {
+  if (languageId === "litsx" || languageId === "tsx") {
+    return "tsx";
+  }
+
+  if (languageId === "litsx-jsx" || languageId === "jsx") {
+    return "jsx";
+  }
+
+  return "ts";
+}
+
+function createHoverResult({ start, length, code, documentation, languageId }) {
+  const normalizedDocumentation = normalizeEscapedNewlines(documentation ?? "");
+  const markdownParts = [
+    `\`\`\`${getHoverCodeLanguage(languageId)}`,
+    code || "symbol",
+    "```",
+  ];
+
+  if (normalizedDocumentation) {
+    markdownParts.push("", normalizedDocumentation);
+  }
+
+  return {
+    start,
+    length,
+    code: code || "symbol",
+    documentation: normalizedDocumentation,
+    markdown: markdownParts.join("\n"),
+  };
+}
+
 function remapMessageText(messageText) {
   if (typeof messageText === "string") {
     return remapVirtualText(messageText);
@@ -1061,12 +1111,13 @@ function createLitsxEditorSession(options = {}) {
 
     const hoistInfo = inferLitsxStaticHoistInfoAtPosition(sourceText, position);
     if (hoistInfo) {
-      return {
+      return createHoverResult({
         start: hoistInfo.start,
         length: hoistInfo.length,
         code: `${hoistInfo.name}(...): static hoist`,
         documentation: hoistInfo.documentation,
-      };
+        languageId,
+      });
     }
 
     if (!info) {
@@ -1078,12 +1129,13 @@ function createLitsxEditorSession(options = {}) {
           inferLitsxAttributeInfoAtPosition(sourceText, position),
         );
         return bindingHoverInfo
-          ? {
+          ? createHoverResult({
             start: bindingHoverInfo.start,
             length: bindingHoverInfo.length,
             code: `${bindingHoverInfo.name}: ${bindingHoverInfo.kindLabel}`,
             documentation: bindingHoverInfo.detail,
-          }
+            languageId,
+          })
           : null;
       }
 
@@ -1109,26 +1161,28 @@ function createLitsxEditorSession(options = {}) {
             length: 0,
           };
 
-        return {
+        return createHoverResult({
           start: remappedNodeSpan.start,
           length: remappedNodeSpan.length,
           code: `${symbol?.getName?.() ?? node.getText(sourceFile)}: ${checker.typeToString(type)}`,
           documentation: symbol
-            ? ts.displayPartsToString(symbol.getDocumentationComment(checker))
+            ? normalizeEscapedNewlines(ts.displayPartsToString(symbol.getDocumentationComment(checker)))
             : "",
-        };
+          languageId,
+        });
       }
 
       const bindingHoverInfo = getBindingHoverInfo(
         inferLitsxAttributeInfoAtPosition(sourceText, position),
       );
       return bindingHoverInfo
-        ? {
+        ? createHoverResult({
           start: bindingHoverInfo.start,
           length: bindingHoverInfo.length,
           code: `${bindingHoverInfo.name}: ${bindingHoverInfo.kindLabel}`,
           documentation: bindingHoverInfo.detail,
-        }
+          languageId,
+        })
         : null;
     }
 
@@ -1138,16 +1192,17 @@ function createLitsxEditorSession(options = {}) {
     const displayText = (remapDisplayParts(info.displayParts) ?? [])
       .map((entry) => entry.text)
       .join("");
-    const documentation = (remapDisplayParts(info.documentation) ?? [])
+    const documentation = (remapDocumentationParts(info.documentation) ?? [])
       .map((entry) => entry.text)
       .join("");
 
-    return {
+    return createHoverResult({
       start: remappedSpan.start,
       length: remappedSpan.length,
       code: displayText || "symbol",
       documentation,
-    };
+      languageId,
+    });
   }
 
   function getCompletions(fileName, sourceText, languageId, position, completionKindAdapter) {

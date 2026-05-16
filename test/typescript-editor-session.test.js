@@ -67,6 +67,8 @@ describe("@litsx/typescript editor-session", () => {
 
     assert.ok(diagnostics.some((diagnostic) => diagnostic.code === 2322));
     assert.match(hover.code, /const count: number/);
+    assert.match(hover.markdown, /```tsx/);
+    assert.match(hover.markdown, /const count: number/);
     assert.ok(completions.some((entry) => entry.label === "@click" && entry.kind === 23));
     const clickCompletion = completions.find((entry) => entry.label === "@click");
     assert.strictEqual(clickCompletion.insertText, "click");
