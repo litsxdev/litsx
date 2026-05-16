@@ -42,9 +42,9 @@ describe("react compat internal lazy", () => {
 
     assert.match(
       code,
-      /import \{ ShadowDomElementsMixin \} from "@litsx\/core\/elements";/
+      /import \{ ShadowDomMixin \} from "@litsx\/core\/elements";/
     );
-    assert.match(code, /class Screen extends ShadowDomElementsMixin\(LitElement\)/);
+    assert.match(code, /class Screen extends ShadowDomMixin\(LitElement\)/);
     assert.match(
       code,
       /import \{[^}]*ensureLazyElement[^}]*\} from "@litsx\/core";/
@@ -104,7 +104,7 @@ describe("react compat internal lazy", () => {
 
     const code = run(source);
 
-    assert.match(code, /class Screen extends ShadowDomElementsMixin\(LitElement\)/);
+    assert.match(code, /class Screen extends ShadowDomMixin\(LitElement\)/);
     assert.match(
       code,
       /import \{[^}]*ensureLazyElement[^}]*\} from "@litsx\/core";/
@@ -313,7 +313,7 @@ describe("react compat internal lazy", () => {
     assert.doesNotMatch(code, /ensureLazyElement\(/);
     assert.match(code, /const PrimaryAction = controls\[this\.kind\];/);
     assert.match(code, /return <PrimaryAction \/>;/);
-    assert.doesNotMatch(code, /ShadowDomElementsMixin/);
+    assert.doesNotMatch(code, /ShadowDomMixin/);
   });
 
   it("supports React.lazy namespace calls", () => {
@@ -625,15 +625,15 @@ describe("react compat internal lazy", () => {
     assert.match(code, /ensureLazyElement\(this,\s*"fancy-button",\s*FancyButton\);/);
   });
 
-  it("keeps classes already wrapped with elements mixins and supports light DOM lazy components", () => {
+  it("keeps classes already wrapped with DOM mixins and supports light DOM lazy components", () => {
     const source = [
       "import { lazy } from 'react';",
-      "import { LightDomMixin, LightDomElementsMixin } from '@litsx/core/elements';",
+      "import { LightDomMixin } from '@litsx/core/elements';",
       "import { LitElement } from 'lit';",
       "",
       "const FancyButton = lazy(() => import('./FancyButton.js'));",
       "",
-      "export class Screen extends LightDomElementsMixin(LightDomMixin(LitElement)) {",
+      "export class Screen extends LightDomMixin(LitElement) {",
       "  render() {",
       "    return <FancyButton />;",
       "  }",
@@ -644,10 +644,10 @@ describe("react compat internal lazy", () => {
 
     assert.match(
       code,
-      /class Screen extends LightDomElementsMixin\(LightDomMixin\(LitElement\)\)/
+      /class Screen extends LightDomMixin\(LitElement\)/
     );
-    assert.doesNotMatch(code, /ShadowDomElementsMixin/);
-    const lightDomMixinMatches = code.match(/LightDomElementsMixin/g) || [];
+    assert.doesNotMatch(code, /ShadowDomMixin/);
+    const lightDomMixinMatches = code.match(/LightDomMixin/g) || [];
     assert.strictEqual(lightDomMixinMatches.length, 2);
     assert.match(code, /ensureLazyElement\(this,\s*"fancy-button",\s*FancyButton\);/);
     assert.match(code, /return <fancy-button \/>;/);
@@ -768,10 +768,10 @@ describe("react compat internal lazy", () => {
 
     assert.match(
       code,
-      /import \{ LightDomMixin,\s*LightDomElementsMixin \} from '@litsx\/core\/elements';|import \{ LightDomElementsMixin,\s*LightDomMixin \} from "@litsx\/core\/elements";/
+      /import \{ LightDomMixin \} from '@litsx\/core\/elements';|import \{ LightDomMixin \} from "@litsx\/core\/elements";/
     );
-    assert.match(code, /class Screen extends LightDomElementsMixin\(LightDomMixin\(LitElement\)\)/);
-    assert.doesNotMatch(code, /ShadowDomElementsMixin/);
+    assert.match(code, /class Screen extends LightDomMixin\(LitElement\)/);
+    assert.doesNotMatch(code, /ShadowDomMixin/);
     assert.match(code, /ensureLazyElement\(this,\s*"fancy-button",\s*FancyButton\);/);
   });
 });

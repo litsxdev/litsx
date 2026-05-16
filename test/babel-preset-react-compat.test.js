@@ -54,7 +54,7 @@ describe("@litsx/babel-preset-react-compat", () => {
 
     const code = run(source);
 
-    assert.match(code, /class FancyForm extends ShadowDomElementsMixin\(LitsxStaticHoistsMixin\(LitElement\)\)/);
+    assert.match(code, /class FancyForm extends ShadowDomMixin\(LitsxStaticHoistsMixin\(LitElement\)\)/);
     assert.match(code, /prepareEffects\(this\);/);
     assert.match(code, /useAfterUpdate\(this,/);
     assert.match(code, /return html`<div><fancy-button \.ref=\$\{buttonRef\} \.label=\$\{this\.label\}><\/fancy-button><\/div>`;/);
@@ -272,8 +272,8 @@ describe("@litsx/babel-preset-react-compat", () => {
 
     const code = run(source, { preset: { domMode: "light" } });
 
-    assert.match(code, /export class LightForm extends LightDomElementsMixin\(LightDomMixin\(LitElement\)\)/);
-    assert.doesNotMatch(code, /ShadowDomElementsMixin/);
+    assert.match(code, /export class LightForm extends LightDomMixin\(LitElement\)/);
+    assert.doesNotMatch(code, /ShadowDomMixin/);
     assert.match(code, /return html`<section><fancy-button \.label=\$\{this\.label\}><\/fancy-button><\/section>`;/);
   });
 
@@ -299,7 +299,7 @@ describe("@litsx/babel-preset-react-compat", () => {
 
     assert.match(code, /import \{ LitElement, html \} from "lit";/);
     assert.match(code, /import \{[^}]*ensureLazyElement[^}]*ErrorBoundary[^}]*SuspenseBoundary[^}]*\} from "@litsx\/core"|import \{[^}]*ensureLazyElement[^}]*SuspenseBoundary[^}]*ErrorBoundary[^}]*\} from "@litsx\/core"|import \{[^}]*ErrorBoundary[^}]*ensureLazyElement[^}]*SuspenseBoundary[^}]*\} from "@litsx\/core"|import \{[^}]*SuspenseBoundary[^}]*ErrorBoundary[^}]*ensureLazyElement[^}]*\} from "@litsx\/core"/);
-    assert.match(code, /import \{ ShadowDomElementsMixin \} from "@litsx\/core\/elements";/);
+    assert.match(code, /import \{ ShadowDomMixin \} from "@litsx\/core\/elements";/);
     assert.match(code, /const ResultsPanel = \(\) => import\("\.\/ResultsPanel\.js"\);/);
     assert.match(code, /ensureLazyElement\(this, "results-panel", ResultsPanel\);/);
     assert.match(code, /html`<error-boundary \.fallbackRenderer=\$\{\(\) => html`<p>Oops<\/p>`\} \.contentRenderer=\$\{bindRendererContext\([\s\S]*?\(\) => html`<suspense-boundary \.fallbackRenderer=\$\{\(\) => html`<p>Loading<\/p>`\} \.contentRenderer=\$\{bindRendererContext\([\s\S]*?\(\) => html`<results-panel value="ready"><\/results-panel>`, \{\s*projected: true\s*\}\)\}><\/suspense-boundary>`, \{\s*projected: true\s*\}\)\}><\/error-boundary>`;/);

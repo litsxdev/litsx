@@ -57,7 +57,7 @@ describe("@litsx/babel-preset-litsx native lowering internals", () => {
     const { code } = transformWithNativePreset(source);
 
     assert.match(code, /class SearchField extends LitElement/);
-    assert.match(code, /class SearchShell extends (?:ShadowDomElementsMixin\(LitElement\)|LitElement)/);
+    assert.match(code, /class SearchShell extends (?:ShadowDomMixin\(LitElement\)|LitElement)/);
     assert.match(code, /<input data-ref="_refElement" \/>/);
     assert.match(code, /useCallbackRef\(this, \(\) => this\.renderRoot\?\./);
     assert.match(code, /<(?:search-field|SearchField) ref=\{this\.ref\} \/>/);
@@ -92,7 +92,7 @@ describe("@litsx/babel-preset-litsx native lowering internals", () => {
 
     const { code } = transformWithNativePreset(source);
 
-    assert.match(code, /class SearchPanel extends (?:ShadowDomElementsMixin\(LitElement\)|LitElement)/);
+    assert.match(code, /class SearchPanel extends (?:ShadowDomMixin\(LitElement\)|LitElement)/);
     assert.match(
       code,
       /static properties = \{[\s\S]*ref: \{[\s\S]*type: String[\s\S]*attribute: false/s
@@ -1573,7 +1573,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
     assert.doesNotMatch(code, /static get lightDom\(\)/);
   });
 
-  it("uses ShadowDomElementsMixin when static elements is authored explicitly", () => {
+  it("uses ShadowDomMixin when static elements is authored explicitly", () => {
     const source = `
       import { FancyButton } from "./fancy-button.litsx";
 
@@ -1588,8 +1588,8 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
 
     const { code } = transformWithNativePreset(source);
 
-    assert.match(code, /import \{[^}]*ShadowDomElementsMixin[^}]*\} from "@litsx\/core\/elements";/);
-    assert.match(code, /class Card extends ShadowDomElementsMixin\(LitsxStaticHoistsMixin\(LitElement\)\)|class Card extends LitsxStaticHoistsMixin\(ShadowDomElementsMixin\(LitElement\)\)/);
+    assert.match(code, /import \{[^}]*ShadowDomMixin[^}]*\} from "@litsx\/core\/elements";/);
+    assert.match(code, /class Card extends ShadowDomMixin\(LitsxStaticHoistsMixin\(LitElement\)\)|class Card extends LitsxStaticHoistsMixin\(ShadowDomMixin\(LitElement\)\)/);
     assert.match(code, /static get elements\(\)/);
   });
 
@@ -1609,13 +1609,13 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
 
     const { code } = transformWithNativePreset(source);
 
-    assert.match(code, /class Wrapper extends ShadowDomElementsMixin\(LitsxStaticHoistsMixin\(LitElement\)\)|class Wrapper extends LitsxStaticHoistsMixin\(ShadowDomElementsMixin\(LitElement\)\)/);
+    assert.match(code, /class Wrapper extends ShadowDomMixin\(LitsxStaticHoistsMixin\(LitElement\)\)|class Wrapper extends LitsxStaticHoistsMixin\(ShadowDomMixin\(LitElement\)\)/);
     assert.match(code, /static get elements\(\)/);
     assert.match(code, /"child-one": ChildOne/);
     assert.doesNotMatch(code, /static elements = \{\s*"child-two": ChildTwo\s*\}/);
   });
 
-  it("uses LightDomElementsMixin when static elements and static lightDom are authored explicitly", () => {
+  it("uses LightDomMixin when static elements and static lightDom are authored explicitly", () => {
     const source = `
       import { FancyButton } from "./fancy-button.litsx";
 
@@ -1633,20 +1633,20 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
 
     assert.match(
       code,
-      /import \{[^}]*LightDomMixin[^}]*LightDomElementsMixin[^}]*\} from "@litsx\/core\/elements";|import \{[^}]*LightDomElementsMixin[^}]*LightDomMixin[^}]*\} from "@litsx\/core\/elements";/
+      /import \{[^}]*LightDomMixin[^}]*\} from "@litsx\/core\/elements";/
     );
-    assert.match(code, /class Card extends LightDomElementsMixin\(LightDomMixin\(LitsxStaticHoistsMixin\(LitElement\)\)\)|class Card extends LightDomElementsMixin\(LitsxStaticHoistsMixin\(LightDomMixin\(LitElement\)\)\)|class Card extends LitsxStaticHoistsMixin\(LightDomElementsMixin\(LightDomMixin\(LitElement\)\)\)/);
+    assert.match(code, /class Card extends LightDomMixin\(LitsxStaticHoistsMixin\(LitElement\)\)|class Card extends LitsxStaticHoistsMixin\(LightDomMixin\(LitElement\)\)/);
     assert.match(code, /static get elements\(\)/);
     assert.doesNotMatch(code, /static get lightDom\(\)/);
   });
 
-  it("does not wrap light-dom element classes in ShadowDomElementsMixin on repeated scoped passes", () => {
+  it("does not wrap light-dom element classes in ShadowDomMixin on repeated scoped passes", () => {
     const source = `
-      import { LightDomMixin, LightDomElementsMixin } from "@litsx/core/elements";
+      import { LightDomMixin } from "@litsx/core/elements";
       import { LitElement } from "lit";
       import { FancyButton } from "./fancy-button.litsx";
 
-      class Card extends LightDomElementsMixin(LightDomMixin(LitElement)) {
+      class Card extends LightDomMixin(LitElement) {
         render() {
           return <section>ready</section>;
         }
@@ -1659,8 +1659,8 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
 
     const { code } = transformWithNativePreset(source);
 
-    assert.match(code, /class Card extends LightDomElementsMixin\(LightDomMixin\(LitElement\)\)/);
-    assert.doesNotMatch(code, /ShadowDomElementsMixin/);
+    assert.match(code, /class Card extends LightDomMixin\(LitElement\)/);
+    assert.doesNotMatch(code, /ShadowDomMixin/);
   });
 
   it("ignores static shadowRootOptions when static lightDom is present", () => {

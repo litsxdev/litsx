@@ -6,10 +6,10 @@ import { describe, it } from "vitest";
 import { connectLightDomRegistry } from "../packages/light-dom-registry/src/index.js";
 import { prepareEffects, useOnConnect, useState } from "../packages/core/src/index.js";
 import {
-  LightDomElementsMixin,
+  LightDomMixin,
   LightDomMixin,
   LitsxStaticHoistsMixin,
-  ShadowDomElementsMixin,
+  ShadowDomMixin,
 } from "../packages/core/src/elements/index.js";
 
 let tagCounter = 0;
@@ -76,9 +76,9 @@ describe("litsx elements runtime", () => {
       }
     }
 
-    const ShadowHost = ShadowDomElementsMixin(Base);
+    const ShadowHost = ShadowDomMixin(Base);
     const LightHost = LightDomMixin(Base);
-    const shadowCtor = ShadowDomElementsMixin(ShadowHost);
+    const shadowCtor = ShadowDomMixin(ShadowHost);
 
     assert.strictEqual(shadowCtor, ShadowHost);
     assert.deepStrictEqual(ShadowHost.scopedElements, Base.elements);
@@ -194,7 +194,7 @@ describe("litsx elements runtime", () => {
 
     class ChildElement extends HTMLElement {}
 
-    class HostElement extends LightDomElementsMixin(Base) {
+    class HostElement extends LightDomMixin(Base) {
       static elements = {
         [childTag]: ChildElement,
       };
@@ -217,8 +217,8 @@ describe("litsx elements runtime", () => {
   it("dedupes repeated light-dom element mixin applications", () => {
     class Base extends HTMLElement {}
 
-    const MixedOnce = LightDomElementsMixin(Base);
-    const MixedTwice = LightDomElementsMixin(MixedOnce);
+    const MixedOnce = LightDomMixin(Base);
+    const MixedTwice = LightDomMixin(MixedOnce);
 
     assert.strictEqual(MixedTwice, MixedOnce);
   });
@@ -295,7 +295,7 @@ describe("litsx elements runtime", () => {
     }
 
     try {
-      const Host = ShadowDomElementsMixin(Base);
+      const Host = ShadowDomMixin(Base);
       const host = new Host();
       const root = host.createRenderRoot();
       const secondHost = new Host();
@@ -365,7 +365,7 @@ describe("litsx elements runtime", () => {
     }
 
     try {
-      const Host = ShadowDomElementsMixin(Base);
+      const Host = ShadowDomMixin(Base);
       const host = new Host();
       const shadowRoot = host.createRenderRoot();
 
@@ -426,7 +426,7 @@ describe("litsx elements runtime", () => {
         return shadowRoot;
       };
 
-      const Host = ShadowDomElementsMixin(Base);
+      const Host = ShadowDomMixin(Base);
       const host = new Host();
       host.createRenderRoot();
 
@@ -494,7 +494,7 @@ describe("litsx elements runtime", () => {
         return shadowRoot;
       };
 
-      const Host = ShadowDomElementsMixin(Base);
+      const Host = ShadowDomMixin(Base);
       const firstHost = new Host();
       firstHost.createRenderRoot();
       Host.elements = { "demo-child": SecondChild };
@@ -564,7 +564,7 @@ describe("litsx elements runtime", () => {
         return shadowRoot;
       };
 
-      const Host = ShadowDomElementsMixin(Base);
+      const Host = ShadowDomMixin(Base);
       const firstHost = new Host();
       const secondHost = new Host();
       firstHost.registry = new FakeRegistry();
@@ -602,7 +602,7 @@ describe("litsx elements runtime", () => {
     try {
       globalThis.CustomElementRegistry = undefined;
 
-      const Host = ShadowDomElementsMixin(Base);
+      const Host = ShadowDomMixin(Base);
       const host = new Host();
 
       const shadowRoot = host.createRenderRoot();
@@ -660,7 +660,7 @@ describe("litsx elements runtime", () => {
         };
       }
 
-      const ShadowHost = ShadowDomElementsMixin(ShadowBase);
+      const ShadowHost = ShadowDomMixin(ShadowBase);
       if (!customElements.get(shadowHostTag)) {
         customElements.define(shadowHostTag, ShadowHost);
       }
@@ -692,7 +692,7 @@ describe("litsx elements runtime", () => {
       };
     }
 
-    const Host = ShadowDomElementsMixin(HostBase);
+    const Host = ShadowDomMixin(HostBase);
     const host = defineTestElement(hostTag, Host);
     document.body.appendChild(host);
 
@@ -790,7 +790,7 @@ describe("litsx elements runtime", () => {
         return shadowRoot;
       };
 
-      const ShadowHost = ShadowDomElementsMixin(ShadowBase);
+      const ShadowHost = ShadowDomMixin(ShadowBase);
       const shadowHost = new ShadowHost();
       shadowHost.createRenderRoot();
 
@@ -824,7 +824,7 @@ describe("litsx elements runtime", () => {
       [nextTag("litsx-runtime-light-trigger")]: LightChild,
     });
 
-    const ShadowHost = ShadowDomElementsMixin(ShadowBase);
+    const ShadowHost = ShadowDomMixin(ShadowBase);
     if (!customElements.get(shadowHostTag)) {
       customElements.define(shadowHostTag, ShadowHost);
     }
@@ -848,7 +848,7 @@ describe("litsx elements runtime", () => {
       };
     }
 
-    const ShadowHost = ShadowDomElementsMixin(ShadowBase);
+    const ShadowHost = ShadowDomMixin(ShadowBase);
     if (!customElements.get(shadowHostTag)) {
       customElements.define(shadowHostTag, ShadowHost);
     }
@@ -931,7 +931,7 @@ describe("litsx elements runtime", () => {
         }
       }
 
-      const ShadowHost = ShadowDomElementsMixin(ShadowBase);
+      const ShadowHost = ShadowDomMixin(ShadowBase);
       if (!customElements.get(shadowHostTag)) {
         customElements.define(shadowHostTag, ShadowHost);
       }

@@ -18,34 +18,27 @@ export declare function LitsxStaticHoistsMixin<TBase extends LitsxConstructor>(
   Base: TBase
 ): LitsxStaticHoistsHost<TBase>;
 
-export interface ShadowDomScopedElementsStatics {
+export interface ShadowDomStatics {
   readonly scopedElements: Record<string, unknown>;
 }
 
-export interface ShadowDomElementsInstance {
+export interface DomMixinInstance {
   registry: CustomElementRegistry | null;
 }
 
-export type ShadowDomElementsHost<TBase extends LitsxConstructor> =
-  TBase & ShadowDomScopedElementsStatics;
+export type ShadowDomHost<TBase extends LitsxConstructor> =
+  TBase & ShadowDomStatics;
 
-export declare function ShadowDomElementsMixin<TBase extends LitsxConstructor>(
+export declare function ShadowDomMixin<TBase extends LitsxConstructor>(
   Base: TBase
-): LitsxConstructor<InstanceType<TBase> & ShadowDomElementsInstance> &
-  ShadowDomScopedElementsStatics;
+): LitsxConstructor<InstanceType<TBase> & DomMixinInstance> &
+  ShadowDomStatics;
 
 export interface LightDomHost {
   createRenderRoot(): this;
+  registry: Map<string, unknown> | null;
 }
 
 export declare function LightDomMixin<TBase extends LitsxConstructor>(
   Base: TBase
 ): LitsxConstructor<InstanceType<TBase> & LightDomHost>;
-
-export interface LightDomElementsHost {
-  registry: Map<string, unknown> | null;
-}
-
-export declare function LightDomElementsMixin<TBase extends LitsxConstructor>(
-  Base: TBase
-): LitsxConstructor<InstanceType<TBase> & LightDomHost & LightDomElementsHost>;

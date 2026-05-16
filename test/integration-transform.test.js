@@ -52,7 +52,7 @@ describe("integration: parser + all plugins", () => {
     });
 
     assert.match(code, /import \{[^}]*prepareEffects[^}]*useAfterUpdate[^}]*\} from "@litsx\/core";/);
-    assert.match(code, /class FancyForm extends ShadowDomElementsMixin\(LitsxStaticHoistsMixin\(LitElement\)\)/);
+    assert.match(code, /class FancyForm extends ShadowDomMixin\(LitsxStaticHoistsMixin\(LitElement\)\)/);
     assert.match(code, /static elements = {/);
     assert.match(code, /<fancy-button \.ref=\{buttonRef\} \.label=\{this\.label\} \/>/);
     assert.doesNotMatch(code, /data-ref="_buttonRefElement"/);
@@ -95,7 +95,7 @@ describe("integration: parser + all plugins", () => {
       generatorOpts: { decoratorsBeforeExport: true },
     });
 
-    assert.match(code, /class TypedForm extends ShadowDomElementsMixin\(LitElement\)/);
+    assert.match(code, /class TypedForm extends ShadowDomMixin\(LitElement\)/);
     assert.match(code, /static properties = {\s*label: {\s*type: String\s*},\s*count: {\s*type: Number\s*}\s*};/s);
     assert.match(code, /<fancy-button \.ref=\{buttonRef\} \.label=\{this\.label\} mode=\{"primary" as ButtonMode\}>/);
     assert.doesNotMatch(code, /data-ref="_buttonRefElement"/);
@@ -279,7 +279,7 @@ describe("integration: parser + all plugins", () => {
       generatorOpts: { decoratorsBeforeExport: true },
     });
 
-    assert.match(code, /export class Demo extends ShadowDomElementsMixin\(LitElement\)/);
+    assert.match(code, /export class Demo extends ShadowDomMixin\(LitElement\)/);
     assert.match(code, /const ResultsPanel = \(\) => import\("\.\/ResultsPanel\.js"\);/);
     assert.match(code, /ensureLazyElement/);
     assert.match(code, /SuspenseBoundary/);
@@ -313,10 +313,10 @@ describe("integration: parser + all plugins", () => {
 
     assert.match(
       code,
-      /import \{ LightDomElementsMixin, LightDomMixin \} from "@litsx\/core\/elements";|import \{ LightDomMixin, LightDomElementsMixin \} from "@litsx\/core\/elements";/
+      /import \{ LightDomMixin \} from "@litsx\/core\/elements";/
     );
-    assert.match(code, /export class LightForm extends LightDomElementsMixin\(LightDomMixin\(LitElement\)\)/);
-    assert.doesNotMatch(code, /ShadowDomElementsMixin/);
+    assert.match(code, /export class LightForm extends LightDomMixin\(LitElement\)/);
+    assert.doesNotMatch(code, /ShadowDomMixin/);
   });
 
   it("ignores shadowRootOptions when forcing light DOM", () => {

@@ -62,7 +62,7 @@ function transformWithReactCompatPreset(source, options = {}) {
 
 describe("@litsx/babel-plugin-transform-litsx-scoped-elements", () => {
 
-  it("wraps LitElement with ShadowDomElementsMixin and registers tags", () => {
+  it("wraps LitElement with ShadowDomMixin and registers tags", () => {
     const source = `
       import { LitElement, html } from 'lit';
       import FancyButton from './FancyButton.js';
@@ -88,12 +88,12 @@ describe("@litsx/babel-plugin-transform-litsx-scoped-elements", () => {
         node.type === "ImportDeclaration" &&
         node.source.value === "@litsx/core/elements"
     );
-    assert(mixinImport, "expected ShadowDomElementsMixin import");
+    assert(mixinImport, "expected ShadowDomMixin import");
 
     const classDecl = ast.program.body.find((node) => node.type === "ClassDeclaration");
     assert(classDecl, "expected transformed class declaration");
     assert.strictEqual(classDecl.superClass.type, "CallExpression");
-    assert.strictEqual(classDecl.superClass.callee.name, "ShadowDomElementsMixin");
+    assert.strictEqual(classDecl.superClass.callee.name, "ShadowDomMixin");
 
     const elementsField = classDecl.body.body.find(
       (member) => member.type === "ClassProperty" && member.key.name === "elements"
@@ -146,7 +146,7 @@ describe("@litsx/babel-plugin-transform-litsx-scoped-elements", () => {
         node.type === "ImportDeclaration" &&
         node.source.value === "@litsx/core/elements"
     );
-    assert(mixinImport, "expected ShadowDomElementsMixin import to be added");
+    assert(mixinImport, "expected ShadowDomMixin import to be added");
 
     const fancyFormClass = outputAst.program.body.find(
       (node) => node.type === "ClassDeclaration" && node.id.name === "FancyForm"
@@ -155,11 +155,11 @@ describe("@litsx/babel-plugin-transform-litsx-scoped-elements", () => {
     assert.strictEqual(
       fancyFormClass.superClass.type,
       "CallExpression",
-      "FancyForm should extend ShadowDomElementsMixin(LitElement)"
+      "FancyForm should extend ShadowDomMixin(LitElement)"
     );
     assert.strictEqual(
       fancyFormClass.superClass.callee.name,
-      "ShadowDomElementsMixin"
+      "ShadowDomMixin"
     );
 
     const elementsField = fancyFormClass.body.body.find(
@@ -201,7 +201,7 @@ describe("@litsx/babel-plugin-transform-litsx-scoped-elements", () => {
       plugins: [plugin],
     });
 
-    assert.match(code, /ShadowDomElementsMixin\(LitElement\)/);
+    assert.match(code, /ShadowDomMixin\(LitElement\)/);
     assert.match(code, /"fancy-button": FancyButton/);
   });
 
@@ -252,11 +252,11 @@ describe("@litsx/babel-plugin-transform-litsx-scoped-elements", () => {
       plugins: [plugin],
     });
 
-    assert.doesNotMatch(code, /ShadowDomElementsMixin/);
+    assert.doesNotMatch(code, /ShadowDomMixin/);
     assert.doesNotMatch(code, /static elements/);
   });
 
-  it("uses LightDomElementsMixin for light DOM dependencies", () => {
+  it("uses LightDomMixin for light DOM dependencies", () => {
     const source = `
       import FancyButton from './FancyButton.js';
 
@@ -270,7 +270,7 @@ describe("@litsx/babel-plugin-transform-litsx-scoped-elements", () => {
       parserPlugins: ["typescript"],
     });
 
-    assert.match(code, /LightDomElementsMixin\(LightDomMixin\(LitElement\)\)/);
+    assert.match(code, /LightDomMixin\(LitElement\)/);
     assert.match(code, /static elements = \{\s*"fancy-button": FancyButton\s*\};/);
     assert.match(code, /return <fancy-button\s*\/>;/);
   });
@@ -289,13 +289,12 @@ describe("@litsx/babel-plugin-transform-litsx-scoped-elements", () => {
 
     assert.match(code, /import \{ LightDomMixin \} from "@litsx\/core\/elements";/);
     assert.match(code, /class LightCard extends LightDomMixin\(LitElement\)/);
-    assert.doesNotMatch(code, /LightDomElementsMixin\(LitElement\)/);
   });
 
-  it("reuses an existing ShadowDomElementsMixin import", () => {
+  it("reuses an existing ShadowDomMixin import", () => {
     const source = `
       import { LitElement } from 'lit';
-      import { ShadowDomElementsMixin } from '@litsx/core/elements';
+      import { ShadowDomMixin } from '@litsx/core/elements';
       import FancyButton from './FancyButton.js';
 
       class ReadyElement extends LitElement {
@@ -314,7 +313,7 @@ describe("@litsx/babel-plugin-transform-litsx-scoped-elements", () => {
 
     const mixinImports = code.match(/@litsx\/core\/elements/g) || [];
     assert.strictEqual(mixinImports.length, 1);
-    assert.match(code, /class ReadyElement extends ShadowDomElementsMixin\(LitElement\)/);
+    assert.match(code, /class ReadyElement extends ShadowDomMixin\(LitElement\)/);
   });
 
   it("supports classes extending mixins around LitElement", () => {
@@ -335,16 +334,16 @@ describe("@litsx/babel-plugin-transform-litsx-scoped-elements", () => {
       plugins: [plugin],
     });
 
-    assert.match(code, /class MixedElement extends ShadowDomElementsMixin\(withTheme\(LitElement\)\)/);
+    assert.match(code, /class MixedElement extends ShadowDomMixin\(withTheme\(LitElement\)\)/);
     assert.match(code, /static elements = \{\s*"fancy-button": FancyButton\s*\}/);
   });
 
-  it("does not duplicate ShadowDomElementsMixin when it is nested inside another mixin", () => {
+  it("does not duplicate ShadowDomMixin when it is nested inside another mixin", () => {
     const source = `
-      import { ShadowDomElementsMixin } from '@litsx/core/elements';
+      import { ShadowDomMixin } from '@litsx/core/elements';
       import FancyButton from './FancyButton.js';
 
-      class MixedElement extends withTheme(ShadowDomElementsMixin(LitElement)) {
+      class MixedElement extends withTheme(ShadowDomMixin(LitElement)) {
         render() {
           return <FancyButton />;
         }
@@ -358,9 +357,9 @@ describe("@litsx/babel-plugin-transform-litsx-scoped-elements", () => {
       plugins: [plugin],
     });
 
-    const shadowMixinMatches = code.match(/ShadowDomElementsMixin\(/g) || [];
+    const shadowMixinMatches = code.match(/ShadowDomMixin\(/g) || [];
     assert.strictEqual(shadowMixinMatches.length, 1);
-    assert.match(code, /class MixedElement extends withTheme\(ShadowDomElementsMixin\(LitElement\)\)/);
+    assert.match(code, /class MixedElement extends withTheme\(ShadowDomMixin\(LitElement\)\)/);
   });
 
   it("does not duplicate LightDomMixin when it is nested inside another mixin", () => {
@@ -389,7 +388,6 @@ describe("@litsx/babel-plugin-transform-litsx-scoped-elements", () => {
     const lightMixinMatches = code.match(/LightDomMixin\(/g) || [];
     assert.strictEqual(lightMixinMatches.length, 1);
     assert.match(code, /class MixedLightCard extends withTheme\(LightDomMixin\(LitElement\)\)/);
-    assert.doesNotMatch(code, /LightDomElementsMixin\(/);
   });
 
   it("rewrites JSX opening tags with attributes to kebab-case consistently", () => {
@@ -439,7 +437,7 @@ describe("@litsx/babel-plugin-transform-litsx-scoped-elements", () => {
       plugins: [plugin],
     });
 
-    assert.match(code, /export class ProfileScreen extends ShadowDomElementsMixin\(LitElement\)/);
+    assert.match(code, /export class ProfileScreen extends ShadowDomMixin\(LitElement\)/);
     assert.match(code, /static elements = \{\s*"profile-chip": ProfileChip\s*\}/);
     assert.match(code, /return <profile-chip\s*\/>;/);
   });
@@ -466,7 +464,7 @@ describe("@litsx/babel-plugin-transform-litsx-scoped-elements", () => {
       plugins: [plugin],
     });
 
-    assert.match(code, /export class TreeNode extends ShadowDomElementsMixin\(LitElement\)/);
+    assert.match(code, /export class TreeNode extends ShadowDomMixin\(LitElement\)/);
     assert.match(code, /static elements = \{\s*"tree-node": TreeNode\s*\}/);
     assert.match(code, /return <section>\s*<tree-node\s*\/>\s*<\/section>;/s);
   });
@@ -551,7 +549,7 @@ describe("@litsx/babel-plugin-transform-litsx-scoped-elements", () => {
 
     const { code } = transformWithNativePreset(source);
 
-    assert.match(code, /class Screen extends ShadowDomElementsMixin\(LitElement\)/);
+    assert.match(code, /class Screen extends ShadowDomMixin\(LitElement\)/);
     assert.match(
       code,
       /return <section>\s*<suspense-boundary fallback=\{<span>loading<\/span>\}>\s*<span>ready<\/span>\s*<\/suspense-boundary>\s*<\/section>;/s
@@ -582,7 +580,7 @@ describe("@litsx/babel-plugin-transform-litsx-scoped-elements", () => {
 
     const { code } = transformWithNativePreset(source);
 
-    assert.match(code, /class Screen extends ShadowDomElementsMixin\(LitElement\)/);
+    assert.match(code, /class Screen extends ShadowDomMixin\(LitElement\)/);
     assert.match(
       code,
       /keyed\(this\.cycle,\s*<suspense-boundary fallback=\{<span>loading<\/span>\}>\s*<span>ready<\/span>\s*<\/suspense-boundary>\s*\)/s

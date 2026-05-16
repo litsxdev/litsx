@@ -18,8 +18,8 @@ export default declare((api) => {
 
   function isScopedElementsWrapped(superClass) {
     return (
-      hasMixinInSuperChain(superClass, "ShadowDomElementsMixin") ||
-      hasMixinInSuperChain(superClass, "LightDomElementsMixin")
+      hasMixinInSuperChain(superClass, "ShadowDomMixin") ||
+      hasMixinInSuperChain(superClass, "LightDomMixin")
     );
   }
 
@@ -45,8 +45,7 @@ export default declare((api) => {
   function isLightDomClass(classNode) {
     return (
       Boolean(classNode._litsxLightDom) ||
-      hasMixinInSuperChain(classNode.superClass, "LightDomMixin") ||
-      hasMixinInSuperChain(classNode.superClass, "LightDomElementsMixin")
+      hasMixinInSuperChain(classNode.superClass, "LightDomMixin")
     );
   }
 
@@ -309,8 +308,8 @@ export default declare((api) => {
         !isScopedElementsWrapped(classPath.node.superClass)
       ) {
         const mixinName = isLightDomClass(classPath.node)
-          ? "LightDomElementsMixin"
-          : "ShadowDomElementsMixin";
+          ? "LightDomMixin"
+          : "ShadowDomMixin";
         ensureElementsMixinImport(
           renderPath.findParent((path) => path.isProgram()),
           mixinName,

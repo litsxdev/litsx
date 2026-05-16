@@ -120,7 +120,7 @@ function defineScopedElements(registry, elements = {}) {
 
     if (existing && existing !== elementClass) {
       throw new Error(
-        `ShadowDomElementsMixin cannot redefine scoped element "${tagName}" with a different constructor.`
+        `ShadowDomMixin cannot redefine scoped element "${tagName}" with a different constructor.`
       );
     }
 
@@ -293,8 +293,13 @@ export const LitsxStaticHoistsMixin = dedupeMixin((Base) =>
   }
 );
 
-export const ShadowDomElementsMixin = dedupeMixin((Base) =>
-  class ShadowDomElementsHost extends Base {
+function hasScopedElements(host) {
+  const elements = host?.constructor?.elements ?? host?.constructor?.scopedElements ?? {};
+  return elements && typeof elements === "object" && Object.keys(elements).length > 0;
+}
+
+export const ShadowDomMixin = dedupeMixin((Base) =>
+  class ShadowDomHost extends Base {
     static get scopedElements() {
       return this.elements ?? {};
     }
@@ -350,9 +355,34 @@ export const ShadowDomElementsMixin = dedupeMixin((Base) =>
 );
 
 export const LightDomMixin = dedupeMixin((Base) =>
-  class LightDomElementsHost extends Base {
+  class LightDomHost extends Base {
+    constructor(...args) {
+      super(...args);
+      if (hasScopedElements(this)) {
+        this.registry = connectLightDomRegistry(this, this.constructor.elements ?? {});
+      }
+    }
+
     createRenderRoot() {
       return this;
+    }
+
+    connectedCallback(...args) {
+      if (typeof super.connectedCallback === "function") {
+        super.connectedCallback(...args);
+      }
+      if (hasScopedElements(this)) {
+        this.registry = connectLightDomRegistry(this, this.constructor.elements ?? {});
+      }
+    }
+
+    disconnectedCallback(...args) {
+      if (typeof super.disconnectedCallback === "function") {
+        super.disconnectedCallback(...args);
+      }
+      if (hasScopedElements(this)) {
+        disconnectLightDomRegistry(this);
+      }
     }
 
     update(...args) {
@@ -360,29 +390,6 @@ export const LightDomMixin = dedupeMixin((Base) =>
         super.update(...args);
       }
       ensureLightDomStyles(this);
-    }
-  }
-);
-
-export const LightDomElementsMixin = dedupeMixin((Base) =>
-  class LightDomElementsHost extends LightDomMixin(Base) {
-    constructor(...args) {
-      super(...args);
-      this.registry = connectLightDomRegistry(this, this.constructor.elements ?? {});
-    }
-
-    connectedCallback(...args) {
-      if (typeof super.connectedCallback === "function") {
-        super.connectedCallback(...args);
-      }
-      this.registry = connectLightDomRegistry(this, this.constructor.elements ?? {});
-    }
-
-    disconnectedCallback(...args) {
-      if (typeof super.disconnectedCallback === "function") {
-        super.disconnectedCallback(...args);
-      }
-      disconnectLightDomRegistry(this);
     }
   }
 );

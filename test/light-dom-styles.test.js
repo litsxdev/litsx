@@ -4,7 +4,7 @@ import assert from "assert";
 import { css, html, LitElement } from "lit";
 import { describe, it } from "vitest";
 import {
-  LightDomElementsMixin,
+  LightDomMixin,
   LightDomMixin,
 } from "../packages/core/src/elements/index.js";
 
@@ -15,7 +15,7 @@ function nextTag(prefix = "litsx-light-style-test") {
   return `${prefix}-${tagCounter}`;
 }
 
-describe("LightDomElementsMixin styles", () => {
+describe("LightDomMixin styles", () => {
   it("injects static styles for plain light DOM hosts without elements metadata", async () => {
     const tagName = nextTag();
 
@@ -53,7 +53,7 @@ describe("LightDomElementsMixin styles", () => {
   it("injects static styles into light DOM hosts", async () => {
     const tagName = nextTag();
 
-    class LightStyledCard extends LightDomElementsMixin(LitElement) {
+    class LightStyledCard extends LightDomMixin(LitElement) {
       static styles = css`
         :host {
           display: block;

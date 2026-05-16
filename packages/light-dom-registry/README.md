@@ -25,7 +25,7 @@ It does that by:
 This is runtime infrastructure. The transform and LitSX runtime are still responsible for:
 
 - emitting `static elements`
-- choosing `LightDomElementsMixin`
+- choosing `LightDomMixin`
 - calling `connectLightDomRegistry(...)`
 
 ## Where The Global Proxy Is Registered
@@ -81,7 +81,7 @@ GuestScreen.elements = {
 ### Lowered Shape
 
 ```js
-class AdminScreen extends LightDomElementsMixin(LitElement) {
+class AdminScreen extends LightDomMixin(LitElement) {
   static elements = {
     "profile-chip": AdminProfileChip,
   };
@@ -95,7 +95,7 @@ class AdminScreen extends LightDomElementsMixin(LitElement) {
   }
 }
 
-class GuestScreen extends LightDomElementsMixin(LitElement) {
+class GuestScreen extends LightDomMixin(LitElement) {
   static elements = {
     "profile-chip": GuestProfileChip,
   };

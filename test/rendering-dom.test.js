@@ -9,8 +9,8 @@ import {
   renderRendererCall,
 } from "../packages/core/src/rendering.js";
 import {
-  LightDomElementsMixin,
-  ShadowDomElementsMixin,
+  LightDomMixin,
+  ShadowDomMixin,
 } from "../packages/core/src/elements/index.js";
 import {
   withLightDomCreationContext,
@@ -50,7 +50,7 @@ describe("runtime renderer context DOM integration", () => {
       }
     }
 
-    class ShadowHost extends ShadowDomElementsMixin(LitElement) {
+    class ShadowHost extends ShadowDomMixin(LitElement) {
       static elements = {
         [childTag]: ScopedChild,
       };
@@ -101,7 +101,7 @@ describe("runtime renderer context DOM integration", () => {
       }
     }
 
-    class LightHost extends LightDomElementsMixin(LitElement) {
+    class LightHost extends LightDomMixin(LitElement) {
       static elements = {
         [childTag]: ScopedChild,
       };
@@ -151,7 +151,7 @@ describe("runtime renderer context DOM integration", () => {
       }
     }
 
-    class LightPanel extends LightDomElementsMixin(LitElement) {
+    class LightPanel extends LightDomMixin(LitElement) {
       static properties = {
         footerRenderer: { attribute: false },
       };
@@ -172,7 +172,7 @@ describe("runtime renderer context DOM integration", () => {
       }
     }
 
-    class LightHost extends LightDomElementsMixin(LitElement) {
+    class LightHost extends LightDomMixin(LitElement) {
       static elements = {
         [panelTag]: LightPanel,
         [childTag]: ScopedChild,
@@ -221,7 +221,7 @@ describe("runtime renderer context DOM integration", () => {
       }
     }
 
-    class ShadowPanel extends ShadowDomElementsMixin(LitElement) {
+    class ShadowPanel extends ShadowDomMixin(LitElement) {
       static properties = {
         footerRenderer: { attribute: false },
       };
@@ -242,7 +242,7 @@ describe("runtime renderer context DOM integration", () => {
       }
     }
 
-    class ShadowHost extends ShadowDomElementsMixin(LitElement) {
+    class ShadowHost extends ShadowDomMixin(LitElement) {
       static elements = {
         [panelTag]: ShadowPanel,
         [childTag]: ScopedChild,
@@ -298,7 +298,7 @@ describe("runtime renderer context DOM integration", () => {
       }
     }
 
-    class InnerPanel extends ShadowDomElementsMixin(LitElement) {
+    class InnerPanel extends ShadowDomMixin(LitElement) {
       static elements = {
         [sharedTag]: InnerAction,
       };
@@ -310,7 +310,7 @@ describe("runtime renderer context DOM integration", () => {
       }
     }
 
-    class OuterHost extends ShadowDomElementsMixin(LitElement) {
+    class OuterHost extends ShadowDomMixin(LitElement) {
       static elements = {
         [sharedTag]: OuterAction,
         [panelTag]: InnerPanel,
@@ -366,7 +366,7 @@ describe("runtime renderer context DOM integration", () => {
       }
     }
 
-    class InnerPanel extends LightDomElementsMixin(LitElement) {
+    class InnerPanel extends LightDomMixin(LitElement) {
       static elements = {
         [sharedTag]: InnerAction,
       };
@@ -378,7 +378,7 @@ describe("runtime renderer context DOM integration", () => {
       }
     }
 
-    class OuterHost extends LightDomElementsMixin(LitElement) {
+    class OuterHost extends LightDomMixin(LitElement) {
       static elements = {
         [sharedTag]: OuterAction,
         [panelTag]: InnerPanel,
@@ -433,7 +433,7 @@ describe("runtime renderer context DOM integration", () => {
       }
     }
 
-    class ShadowHost extends ShadowDomElementsMixin(LitElement) {
+    class ShadowHost extends ShadowDomMixin(LitElement) {
       static properties = {
         label: { type: String },
       };
@@ -505,7 +505,7 @@ describe("runtime renderer context DOM integration", () => {
       }
     }
 
-    class ShadowHost extends ShadowDomElementsMixin(LitElement) {
+    class ShadowHost extends ShadowDomMixin(LitElement) {
       static properties = {
         label: { type: String },
         mode: { type: String },
@@ -609,7 +609,7 @@ describe("runtime renderer context DOM integration", () => {
       }
     }
 
-    class LightHost extends LightDomElementsMixin(LitElement) {
+    class LightHost extends LightDomMixin(LitElement) {
       static properties = {
         label: { type: String },
         mode: { type: String },

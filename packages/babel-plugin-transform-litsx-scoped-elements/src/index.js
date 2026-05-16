@@ -4,9 +4,8 @@ import path from "node:path";
 import { normalizeFilePath } from "@litsx/typescript-session";
 
 let t;
-const SHADOW_MIXIN = "ShadowDomElementsMixin";
-const LIGHT_BASE_MIXIN = "LightDomMixin";
-const LIGHT_MIXIN = "LightDomElementsMixin";
+const SHADOW_MIXIN = "ShadowDomMixin";
+const LIGHT_MIXIN = "LightDomMixin";
 
 export default function transformFunctionToClassPlugin(api) {
   api.assertVersion(7);
@@ -57,7 +56,6 @@ function transformClass(classPath, programPath) {
   const needsElementsRegistry = Boolean(node._needsElementsRegistry);
   const lightDomRequested =
     Boolean(node._litsxLightDom) ||
-    hasMixinInSuperChain(node.superClass, LIGHT_BASE_MIXIN) ||
     hasMixinInSuperChain(node.superClass, LIGHT_MIXIN);
   delete node._litsxElementCandidates;
   delete node._litsxImportedElementCandidates;
@@ -86,48 +84,40 @@ function transformClass(classPath, programPath) {
     Boolean(elementsStatic) ||
     needsElementsRegistry ||
     hasExistingElementsStatic;
-  const needsLightDomBaseMixin = lightDomRequested && !needsElementsMixin;
+  const needsLightDomMixin = lightDomRequested;
 
-  if (!hasRenderableTemplate && !needsElements && !needsElementsRegistry && !needsLightDomBaseMixin) {
+  if (!hasRenderableTemplate && !needsElements && !needsElementsRegistry && !needsLightDomMixin) {
     return false;
   }
 
   if (
-    needsLightDomBaseMixin &&
-    !hasMixinInSuperChain(node.superClass, LIGHT_BASE_MIXIN) &&
+    needsLightDomMixin &&
     !hasMixinInSuperChain(node.superClass, LIGHT_MIXIN)
   ) {
-    ensureRuntimeInfrastructureImport(programPath, LIGHT_BASE_MIXIN);
+    ensureRuntimeInfrastructureImport(programPath, LIGHT_MIXIN);
     node.superClass = t.callExpression(
-      t.identifier(LIGHT_BASE_MIXIN),
+      t.identifier(LIGHT_MIXIN),
       [node.superClass]
     );
   }
 
   if (
     needsElementsMixin &&
-    !hasMixinInSuperChain(
-      node.superClass,
-      lightDomRequested ? LIGHT_MIXIN : SHADOW_MIXIN
-    )
+    !lightDomRequested &&
+    !hasMixinInSuperChain(node.superClass, SHADOW_MIXIN)
   ) {
-    const mixinName = lightDomRequested ? LIGHT_MIXIN : SHADOW_MIXIN;
-    ensureRuntimeInfrastructureImport(programPath, mixinName);
+    ensureRuntimeInfrastructureImport(programPath, SHADOW_MIXIN);
     node.superClass = t.callExpression(
-      t.identifier(mixinName),
+      t.identifier(SHADOW_MIXIN),
       [node.superClass]
     );
-  }
-
-  if (lightDomRequested && hasMixinInSuperChain(node.superClass, LIGHT_BASE_MIXIN)) {
-    ensureRuntimeInfrastructureImport(programPath, LIGHT_BASE_MIXIN);
   }
 
   if (elementsStatic) {
     insertClassProperty(node, elementsStatic);
   }
 
-  return needsLightDomBaseMixin || needsElementsMixin;
+  return needsLightDomMixin || needsElementsMixin;
 }
 
 function hasMixinInSuperChain(node, mixinName) {

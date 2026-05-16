@@ -230,7 +230,7 @@ describe("@litsx/babel-preset-litsx", () => {
       }
     );
 
-    assert.match(result.code, /class TypedForm extends ShadowDomElementsMixin\(LitElement\)/);
+    assert.match(result.code, /class TypedForm extends ShadowDomMixin\(LitElement\)/);
     assert.match(
       result.code,
       /static properties = \{[\s\S]*label: \{[\s\S]*type: String[\s\S]*count: \{[\s\S]*type: Number/s
@@ -318,7 +318,7 @@ describe("@litsx/babel-preset-litsx", () => {
       }
     );
 
-    assert.match(result.code, /extends ShadowDomElementsMixin\(LitsxStaticHoistsMixin\(LitElement\)\)|extends LitsxStaticHoistsMixin\(ShadowDomElementsMixin\(LitElement\)\)/);
+    assert.match(result.code, /extends ShadowDomMixin\(LitsxStaticHoistsMixin\(LitElement\)\)|extends LitsxStaticHoistsMixin\(ShadowDomMixin\(LitElement\)\)/);
     assert.match(result.code, /static get styles\(\)/);
     assert.match(result.code, /static get properties\(\)/);
     assert.match(result.code, /reflect: true/);
