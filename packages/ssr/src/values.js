@@ -3,30 +3,8 @@ import { unsafeHTML } from "lit/directives/unsafe-html.js";
 import {
   __isLitsxScopedTemplate,
   __isLitsxServerComponentCall,
-} from "./elements/index.js";
-import { renderScopedTemplateWithLitSsr } from "./runtime-scoped-ssr.js";
-
-export const RENDERER_SSR_VALUE_ERROR =
-  "SSR renderer props must return a renderable TemplateResult, not a server component call or scoped template.";
-
-export function resolveStrictSyncSsrRenderableValue(value) {
-  if (__isLitsxServerComponentCall(value) || __isLitsxScopedTemplate(value)) {
-    throw new Error(RENDERER_SSR_VALUE_ERROR);
-  }
-
-  if (isTemplateResult(value)) {
-    return {
-      ...value,
-      values: value.values.map((entry) => resolveStrictSyncSsrRenderableValue(entry)),
-    };
-  }
-
-  if (Array.isArray(value)) {
-    return value.map((entry) => resolveStrictSyncSsrRenderableValue(entry));
-  }
-
-  return value;
-}
+} from "@litsx/core/elements";
+import { renderScopedTemplateWithLitSsr } from "./scoped-rendering.js";
 
 export async function resolveNestedSsrValue(value, context) {
   const resolvedValue = await value;

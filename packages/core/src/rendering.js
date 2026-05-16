@@ -8,10 +8,11 @@ import {
   withLightDomCreationContext,
 } from "@litsx/scoped-registry-shim";
 import {
+  __isLitsxScopedTemplate,
+  __isLitsxServerComponentCall,
   LITSX_SSR_CONTEXT,
 } from "./elements/index.js";
 import { getCurrentSsrCustomElementInstanceStack } from "./runtime-ssr-state.js";
-import { resolveStrictSyncSsrRenderableValue } from "./runtime-ssr-values.js";
 
 /**
  * Rendering helpers used by LitSX transforms when authored JSX passes renderer
@@ -34,6 +35,9 @@ let rendererRegistryAttachShadowRef;
 let rendererRegistryCtorRef;
 let rendererRegistryNativeSupport;
 
+const RENDERER_SSR_VALUE_ERROR =
+  "SSR renderer props must return a renderable TemplateResult, not a server component call or scoped template.";
+
 function getElementAttachShadowRef() {
   return typeof Element !== "undefined" ? Element.prototype.attachShadow : undefined;
 }
@@ -43,6 +47,25 @@ function isShadowRootContainer(value) {
     (typeof ShadowRoot !== "undefined" && value instanceof ShadowRoot) ||
     value?.[RENDERER_SHADOW_CONTAINER] === true
   );
+}
+
+function resolveStrictSyncSsrRenderableValue(value) {
+  if (__isLitsxServerComponentCall(value) || __isLitsxScopedTemplate(value)) {
+    throw new Error(RENDERER_SSR_VALUE_ERROR);
+  }
+
+  if (isTemplateResult(value)) {
+    return {
+      ...value,
+      values: value.values.map((entry) => resolveStrictSyncSsrRenderableValue(entry)),
+    };
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((entry) => resolveStrictSyncSsrRenderableValue(entry));
+  }
+
+  return value;
 }
 
 // Renderer props remain a synchronous projection mechanism in SSR.

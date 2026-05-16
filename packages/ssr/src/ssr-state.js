@@ -7,6 +7,12 @@ function getStackStore() {
   return globalThis[SSR_CUSTOM_ELEMENT_INSTANCE_STACK];
 }
 
-export function getCurrentSsrCustomElementInstanceStack() {
-  return getStackStore().at(-1) ?? null;
+export async function withCurrentSsrCustomElementInstanceStack(stack, run) {
+  const stackStore = getStackStore();
+  stackStore.push(stack);
+  try {
+    return await run();
+  } finally {
+    stackStore.pop();
+  }
 }

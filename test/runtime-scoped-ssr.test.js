@@ -3,7 +3,7 @@ import { describe, it } from "vitest";
 import { LitElement, html } from "lit";
 import { render } from "@lit-labs/ssr/lib/render-with-global-dom-shim.js";
 import { __litsxScopedTemplate } from "../packages/core/src/elements/index.js";
-import { renderScopedTemplateWithLitSsr } from "../packages/core/src/runtime-scoped-ssr.js";
+import { renderScopedTemplateWithLitSsr } from "../packages/ssr/src/scoped-rendering.js";
 
 async function collectRenderResult(result) {
   let output = "";
