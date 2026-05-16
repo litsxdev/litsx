@@ -1,5 +1,11 @@
 # @litsx/typescript
 
+## 0.6.1
+
+### Patch Changes
+
+- 887ecb2: Normalize escaped newlines in hover documentation and add a preformatted `markdown` field to `editor-session` hover results for editor integrations.
+
 ## 0.6.0
 
 ### Minor Changes

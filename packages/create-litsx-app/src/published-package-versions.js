@@ -3,7 +3,7 @@ export const publishedPackageVersions = {
   "@litsx/compiler": "^0.6.0",
   "@litsx/core": "^0.4.0",
   "@litsx/eslint-plugin": "^0.3.3",
-  "@litsx/typescript": "^0.6.0",
+  "@litsx/typescript": "^0.6.1",
   "@litsx/vite-plugin": "^0.2.7",
   "prettier-plugin-litsx": "^0.3.2"
 };
