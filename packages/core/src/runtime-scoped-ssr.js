@@ -16,6 +16,14 @@ function getScopedElements(ctor) {
   return ctor?.elements ?? ctor?.scopedElements ?? null;
 }
 
+function ensureSsrElementShape(element) {
+  if (element && typeof element.getRootNode !== "function") {
+    element.getRootNode = function getRootNode() {
+      return this.__host?.shadowRoot ?? null;
+    };
+  }
+}
+
 async function collectRenderResult(result) {
   let output = "";
 
@@ -110,6 +118,7 @@ export class ScopedLitElementRenderer extends LitElementRenderer {
 
   constructor(tagName) {
     super(tagName);
+    ensureSsrElementShape(this.element);
     this.element.constructor.finalize?.();
     const context = scopedSsrContextStack.at(-1) ?? createScopedSsrContext();
     const isHydrationRoot = scopedRegistryStack.length === 1;
@@ -160,6 +169,7 @@ class ScopedContextProviderRenderer extends ElementRenderer {
   constructor(tagName) {
     super(tagName);
     this.element = new LitsxContextProviderElement();
+    ensureSsrElementShape(this.element);
   }
 
   connectedCallback() {
