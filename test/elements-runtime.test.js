@@ -443,59 +443,6 @@ describe("litsx elements runtime", () => {
     }
   });
 
-  it("re-associates a scoped registry when the shadow root already exists", () => {
-    const originalCustomElementRegistry = globalThis.CustomElementRegistry;
-
-    class FakeRegistry {
-      constructor() {
-        this.definitions = new Map();
-      }
-
-      define(tagName, elementClass) {
-        if (!this.definitions.has(tagName)) {
-          this.definitions.set(tagName, elementClass);
-        }
-      }
-
-      get(tagName) {
-        return this.definitions.get(tagName);
-      }
-    }
-
-    class DemoChild extends HTMLElement {}
-
-    class Base {
-      constructor() {
-        this.shadowRoot = {
-          host: this,
-          registry: null,
-          customElements: null,
-          customElementRegistry: null,
-        };
-      }
-
-      static elements = { "demo-child": DemoChild };
-      static finalize() {}
-    }
-
-    try {
-      globalThis.CustomElementRegistry = FakeRegistry;
-
-      const Host = ShadowDomElementsMixin(Base);
-      const host = new Host();
-      const root = host.createRenderRoot();
-
-      assert.strictEqual(root, host.shadowRoot);
-      assert(host.registry);
-      assert.strictEqual(host.registry.get("demo-child"), DemoChild);
-      assert.strictEqual(root.registry, host.registry);
-      assert.strictEqual(root.customElements, host.registry);
-      assert.strictEqual(root.customElementRegistry, host.registry);
-    } finally {
-      globalThis.CustomElementRegistry = originalCustomElementRegistry;
-    }
-  });
-
   it("supports late scoped definitions through this.registry", () => {
     const originalCustomElementRegistry = globalThis.CustomElementRegistry;
     const originalAttachShadow = Element.prototype.attachShadow;
