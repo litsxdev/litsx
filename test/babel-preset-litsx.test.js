@@ -1121,7 +1121,7 @@ describe("@litsx/babel-preset-litsx", () => {
     );
 
     assert.doesNotMatch(result.code, /class ProductPage extends LitElement/);
-    assert.match(result.code, /import \{ __litsxScopedTemplate, LITSX_SERVER_COMPONENT \} from "@litsx\/litsx\/runtime-infrastructure";|import \{ LITSX_SERVER_COMPONENT, __litsxScopedTemplate \} from "@litsx\/litsx\/runtime-infrastructure";/);
+    assert.match(result.code, /import \{ __litsxScopedTemplate, LITSX_SERVER_COMPONENT \} from "@litsx\/core\/elements";|import \{ LITSX_SERVER_COMPONENT, __litsxScopedTemplate \} from "@litsx\/core\/elements";/);
     assert.match(result.code, /return __litsxScopedTemplate\(html`<main><product-card \.product=\$\{product\}><\/product-card><\/main>`\, \{\s*"product-card": ProductCard\s*\}\);/);
     assert.match(result.code, /ProductPage\[LITSX_SERVER_COMPONENT\] = true;/);
   });
@@ -1147,7 +1147,7 @@ describe("@litsx/babel-preset-litsx", () => {
       },
     );
 
-    assert.match(result.code, /import \{[\s\S]*__litsxServerComponentCall[\s\S]*\} from "@litsx\/litsx\/runtime-infrastructure";/);
+    assert.match(result.code, /import \{[\s\S]*__litsxServerComponentCall[\s\S]*\} from "@litsx\/core\/elements";/);
     assert.match(result.code, /return renderToString\(__litsxServerComponentCall\(ProductPage, \{\s*slug: slug\s*\}\)\);/);
     assert.doesNotMatch(result.code, /renderToString\(__litsxScopedTemplate/);
   });
@@ -1314,7 +1314,7 @@ describe("@litsx/babel-preset-litsx", () => {
       },
     );
 
-    assert.match(result.code, /import \{[\s\S]*__litsxServerComponentCall[\s\S]*\} from "@litsx\/litsx\/runtime-infrastructure";/);
+    assert.match(result.code, /import \{[\s\S]*__litsxServerComponentCall[\s\S]*\} from "@litsx\/core\/elements";/);
     assert.match(result.code, /return __litsxScopedTemplate\(html`<main>\$\{__litsxServerComponentCall\(ProductSection, \{\s*product: product\s*\}\)\}<\/main>`\, \{\}\);/);
     assert.doesNotMatch(result.code, /"product-section": ProductSection/);
   });

@@ -345,6 +345,12 @@ export const ShadowDomMixin = dedupeMixin((Base) =>
       const existingRoot = this.shadowRoot;
       if (existingRoot) {
         this.registry ??= existingRoot.registry ?? existingRoot.customElements ?? existingRoot.customElementRegistry ?? null;
+
+        if (!this.registry) {
+          const { registry } = createScopedRegistryForHost(this);
+          assignShadowRootRegistry(existingRoot, registry);
+        }
+
         return existingRoot;
       }
 
