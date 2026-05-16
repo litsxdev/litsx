@@ -315,7 +315,7 @@ describe("create-litsx-app", () => {
 
     assert.strictEqual(result.visualTests, true);
     assert.ok(packageJson.devDependencies["@playwright/test"]);
-    assert.ok(packageJson.devDependencies["@litsx/compiler"]);
+    assert.strictEqual(packageJson.devDependencies["@litsx/compiler"], "^0.6.0");
     assert.ok(packageJson.scripts["test:visual"]);
     assert.ok(packageJson.scripts["test:visual:update"]);
     assert.strictEqual(packageJson.scripts.test, "vitest run");

@@ -1321,7 +1321,7 @@ function createPackageJson(packageName, template, options = {}) {
     packageJson.scripts.storybook = "storybook dev -p 6006";
     packageJson.scripts["build-storybook"] = "storybook build";
     Object.assign(packageJson.devDependencies, {
-      "@litsx/compiler": "^0.5.0",
+      "@litsx/compiler": publishedPackageVersions["@litsx/compiler"],
       "@storybook/addon-a11y": "^10.4.0",
       "@storybook/addon-docs": "^10.4.0",
       "@storybook/web-components-vite": "^10.4.0",
