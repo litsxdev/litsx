@@ -1,8 +1,8 @@
 import {
   createScopedSsrContext,
   renderScopedTemplateWithLitSsr,
-} from "@litsx/core/internal/runtime-scoped-ssr";
-import { resolveTopLevelSsrValue } from "@litsx/core/internal/runtime-ssr-values";
+} from "./scoped-rendering.js";
+import { resolveTopLevelSsrValue } from "./values.js";
 
 export const LITSX_CLIENT_IMPORTS_SCRIPT_ID = "__LITSX_CLIENT_IMPORTS__";
 export const LITSX_HYDRATION_DATA_SCRIPT_ID = "__LITSX_HYDRATION__";

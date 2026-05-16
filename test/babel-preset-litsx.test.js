@@ -8,7 +8,7 @@ import { beforeAll, describe, it } from "vitest";
 import parser from "./helpers/litsx-parser.js";
 import { interopDefault } from "./helpers/interop-default.js";
 import { PLAYGROUND_TYPE_FILES } from "./helpers/playground-virtual-types.js";
-import { createLitsxTypecheckSession } from "../packages/typescript-plugin-litsx/src/typecheck.js";
+import { createLitsxTypecheckSession } from "../packages/typescript/src/typecheck.js";
 
 const { transformFromAstSync } = babelCore;
 
