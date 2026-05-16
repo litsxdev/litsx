@@ -1193,7 +1193,6 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@litsx/core@workspace:packages/core"
   dependencies:
-    "@lit-labs/ssr": "npm:^4.0.0"
     "@lit/context": "npm:^1.1.6"
     "@lit/reactive-element": "npm:^2.1.2"
     "@litsx/scoped-registry-shim": "npm:^0.2.6"
@@ -1251,6 +1250,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@litsx/ssr@workspace:packages/ssr"
   dependencies:
+    "@lit-labs/ssr": "npm:^4.0.0"
     "@litsx/core": "npm:^0.4.0"
     lit: "npm:^3.2.1"
   peerDependencies:
