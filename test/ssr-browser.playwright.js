@@ -42,7 +42,7 @@ function createComponentsSource({ browser }) {
 import { LitElement, css, html } from "${litImport}";
 import { renderLight } from "${renderLightImport}";
 import { LightDomMixin, ShadowDomMixin, LITSX_MODULE_ID } from "${elementsImport}";
-import { prepareEffects } from "${effectsImport}";
+import { prepareEffects, useOnConnect } from "${effectsImport}";
 import { useState } from "${stateImport}";
 
 export class SsrLeafShadow extends ShadowDomMixin(LitElement) {
@@ -51,6 +51,9 @@ export class SsrLeafShadow extends ShadowDomMixin(LitElement) {
 
   render() {
     prepareEffects(this);
+    useOnConnect(this, () => {
+      window.__litsxClientConnectCalls = (window.__litsxClientConnectCalls ?? 0) + 1;
+    }, []);
     const [count, setCount] = useState(this, 3);
     this.__increment = () => setCount(count + 1);
     return html\`<button id="leaf-button" @click=\${this.__increment}>leaf:\${this.label}:\${count}</button>\`;
@@ -210,6 +213,7 @@ window.__litsxSsrBrowserResult = {
         name: "Real Browser",
       },
     });
+    await page.waitForFunction(() => window.__litsxClientConnectCalls === 1);
     await page.waitForFunction(() => {
       const buttons = [];
       const collectButtons = (root) => {
