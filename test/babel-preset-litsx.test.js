@@ -1486,6 +1486,80 @@ describe("@litsx/babel-preset-litsx", () => {
     assert.doesNotMatch(result.code, /"product-actions": ProductActions/);
   });
 
+  it("injects SSR light DOM rendering for authored light DOM components", () => {
+    const source = [
+      "export function LightChild() {",
+      "  static lightDom = true;",
+      "  return <span>child</span>;",
+      "}",
+      "export function Parent() {",
+      "  return <LightChild />;",
+      "}",
+    ].join("\n");
+
+    const result = transformFromAstSync(
+      parser.parse(source, { sourceType: "module" }),
+      source,
+      {
+        configFile: false,
+        babelrc: false,
+        presets: [[nativePreset, { ssr: true }]],
+      },
+    );
+
+    assert.match(
+      result.code,
+      /import \{ renderLight \} from "@lit-labs\/ssr-client\/directives\/render-light\.js";/,
+    );
+    assert.match(
+      result.code,
+      /return html`<light-child>\$\{renderLight\(\)\}<\/light-child>`;/,
+    );
+  });
+
+  it("injects SSR light DOM rendering for imported authored light DOM components", () => {
+    const fixtureDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-ssr-light-dom-import-"));
+    const importedFilename = path.join(fixtureDirectory, "LightChild.litsx");
+    const entryFilename = path.join(fixtureDirectory, "Parent.litsx");
+
+    fs.writeFileSync(
+      importedFilename,
+      [
+        "export function LightChild() {",
+        "  static lightDom = true;",
+        "  return <span>child</span>;",
+        "}",
+      ].join("\n"),
+    );
+
+    const source = [
+      'import { LightChild } from "./LightChild.litsx";',
+      "export function Parent() {",
+      "  return <LightChild />;",
+      "}",
+    ].join("\n");
+
+    const result = transformFromAstSync(
+      parser.parse(source, { sourceType: "module" }),
+      source,
+      {
+        configFile: false,
+        babelrc: false,
+        filename: entryFilename,
+        presets: [[nativePreset, { ssr: true }]],
+      },
+    );
+
+    assert.match(
+      result.code,
+      /import \{ renderLight \} from "@lit-labs\/ssr-client\/directives\/render-light\.js";/,
+    );
+    assert.match(
+      result.code,
+      /return html`<light-child>\$\{renderLight\(\)\}<\/light-child>`;/,
+    );
+  });
+
   it("does not lower React-only wrappers in the native preset", () => {
     const source = [
       "import { forwardRef, memo } from 'react';",
