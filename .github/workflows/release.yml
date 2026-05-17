@@ -184,6 +184,11 @@ jobs:
           YARN_ENABLE_IMMUTABLE_INSTALLS: false
         run: corepack yarn install
 
+      - name: Publish packages
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: corepack yarn release:publish
+
       - name: Resolve release app bot user
         id: app-bot-user
         env:
@@ -211,11 +216,6 @@ jobs:
       - name: Push release version commit
         if: steps.version_commit.outputs.created_commit == 'true'
         run: git push origin HEAD:main
-
-      - name: Publish packages
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: corepack yarn release:publish
 
       - name: Create package tags
         run: node scripts/release/create-release-tags.js
