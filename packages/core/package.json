@@ -42,11 +42,6 @@
       "import": "./src/context.js",
       "require": "./dist/context.cjs",
       "default": "./src/context.js"
-    },
-    "./internal/ssr-runtime": {
-      "import": "./src/ssr-runtime.js",
-      "require": "./dist/ssr-runtime.cjs",
-      "default": "./src/ssr-runtime.js"
     }
   },
   "files": [
