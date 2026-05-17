@@ -45,6 +45,25 @@ jobs:
       - name: Install dependencies
         run: corepack yarn install --immutable
 
+      - name: Detect pending changesets
+        id: pending
+        run: |
+          if find .changeset -maxdepth 1 -name '*.md' ! -name 'README.md' -print -quit | grep -q .; then
+            echo "has_changesets=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_changesets=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Materialize release versions
+        if: steps.pending.outputs.has_changesets == 'true'
+        run: corepack yarn changeset:version
+
+      - name: Refresh lockfile after versioning
+        if: steps.pending.outputs.has_changesets == 'true'
+        env:
+          YARN_ENABLE_IMMUTABLE_INSTALLS: false
+        run: corepack yarn install
+
       - name: Run release validation
         run: |
           corepack yarn release:check
