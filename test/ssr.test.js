@@ -6,7 +6,7 @@ import {
   LITSX_MODULE_ID,
   __litsxScopedTemplate,
 } from "../packages/core/src/elements/index.js";
-import { renderToString } from "../packages/ssr/src/index.js";
+import { renderToStream, renderToString } from "../packages/ssr/src/index.js";
 import { css } from "lit";
 import { prepareEffects, useMemoValue } from "../packages/core/src/effect-hooks.js";
 import { useId, useRef, useState, useExternalStore } from "../packages/core/src/state-hooks.js";
@@ -90,7 +90,7 @@ describe("@litsx/ssr", () => {
     );
 
     assert.match(result.html, /<product-card\b/);
-    assert.match(result.html, /<product-card[^>]*data-litsx-root="litsx-root-0"/);
+    assert.match(result.html, /<product-card\b[^>]*data-litsx-root="litsx-root-0"/);
     assert.match(result.html, /<template shadowroot="open" shadowrootmode="open">/);
     assert.match(result.html, /<style>[\s\S]*:host\s*\{[\s\S]*display:\s*block;[\s\S]*h2\s*\{[\s\S]*color:\s*red;[\s\S]*<\/style>/);
     assert.match(result.html, /data-product-id="litsx-0-0"/);
@@ -120,14 +120,74 @@ describe("@litsx/ssr", () => {
         },
       ],
     });
+    assert.deepStrictEqual(result.hydrationData.clientImports, [
+      "/assets/ProductCard.litsx.js",
+      "/assets/ProductImage.litsx.js",
+    ]);
+    assert.deepStrictEqual(result.hydrationData.payload, {
+      roots: {
+        "litsx-root-0": {
+          props: {
+            product: {
+              name: "Trail Shoe",
+              image: "/shoe.png",
+            },
+          },
+        },
+      },
+      instances: {
+        "litsx-root-0:0": {
+          rootId: "litsx-root-0",
+          instanceId: "0",
+          state: [1],
+        },
+      },
+    });
     assert.strictEqual(
       result.renderClientImportsData(),
       '<script type="application/json" id="__LITSX_CLIENT_IMPORTS__">["/assets/ProductCard.litsx.js","/assets/ProductImage.litsx.js"]</script>',
     );
     assert.strictEqual(
       result.renderHydrationData(),
-      '<script type="application/json" id="__LITSX_HYDRATION__">{"version":1,"roots":[{"id":"litsx-root-0","tagName":"product-card","moduleId":"/src/ProductCard.litsx"}]}</script>',
+      '<script type="application/json" id="__LITSX_HYDRATION__">{"version":1,"roots":[{"id":"litsx-root-0","tagName":"product-card","moduleId":"/src/ProductCard.litsx"}],"payload":{"roots":{"litsx-root-0":{"props":{"product":{"name":"Trail Shoe","image":"/shoe.png"}}}},"instances":{"litsx-root-0:0":{"rootId":"litsx-root-0","instanceId":"0","state":[1]}}},"clientImports":["/assets/ProductCard.litsx.js","/assets/ProductImage.litsx.js"]}</script>',
     );
+  });
+
+  it("streams the same HTML and metadata as renderToString", async () => {
+    class ProductCard extends LitElement {
+      static [LITSX_MODULE_ID] = "/src/ProductCard.litsx";
+
+      render() {
+        prepareEffects(this);
+        const [count] = useState(this, 2);
+        return html`<article>${this.product.name}:${count}</article>`;
+      }
+    }
+
+    const value = __litsxScopedTemplate(
+      html`<product-card .product=${{ name: "Stream Shoe" }}></product-card>`,
+      {
+        "product-card": ProductCard,
+      },
+    );
+    const expected = await renderToString(value);
+    const streamed = await renderToStream(value);
+    const reader = streamed.stream.getReader();
+    let htmlOutput = "";
+
+    while (true) {
+      const { done, value: chunk } = await reader.read();
+      if (done) {
+        break;
+      }
+      htmlOutput += chunk;
+    }
+
+    const metadata = await streamed.allReady;
+    assert.strictEqual(htmlOutput, expected.html);
+    assert.deepStrictEqual(metadata.clientImports, expected.clientImports);
+    assert.deepStrictEqual(metadata.hydrationData, expected.hydrationData);
+    assert.deepStrictEqual(metadata.hydrationData.payload, expected.hydrationData.payload);
   });
 
   it("passes through unknown custom elements and plain template results", async () => {
@@ -194,7 +254,7 @@ describe("@litsx/ssr", () => {
     );
 
     assert.match(result.html, /<main>/);
-    assert.match(result.html, /<product-card[^>]*data-litsx-root="litsx-root-0"/);
+    assert.match(result.html, /<product-card\b[^>]*data-litsx-root="litsx-root-0"/);
     assert.match(result.html, /<template shadowroot="open" shadowrootmode="open">/);
     assert.match(result.html, /Nested Trail Shoe/);
     assert.doesNotMatch(result.html, /<product-page\b/);
@@ -244,7 +304,7 @@ describe("@litsx/ssr", () => {
     );
 
     assert.match(result.html, /<main>/);
-    assert.match(result.html, /<product-card[^>]*data-litsx-root="litsx-root-0"/);
+    assert.match(result.html, /<product-card\b[^>]*data-litsx-root="litsx-root-0"/);
     assert.match(result.html, /Local Trail Shoe/);
     assert.doesNotMatch(result.html, /<product-page\b/);
     assert.doesNotMatch(result.html, /<product-section\b/);
@@ -319,10 +379,10 @@ describe("@litsx/ssr", () => {
 
     assert.doesNotMatch(result.html, /<product-page\b/);
     assert.doesNotMatch(result.html, /<product-actions\b/);
-    assert.match(result.html, /<product-card[^>]*data-litsx-root="litsx-root-1"/);
+    assert.match(result.html, /<product-card\b[^>]*data-litsx-root="litsx-root-1"/);
     assert.match(result.html, /<slot name="actions"><\/slot>/);
     assert.match(result.html, /<slot><\/slot>/);
-    assert.match(result.html, /<action-chip[^>]*data-litsx-root="litsx-root-0"[^>]*slot="actions"|<action-chip[^>]*slot="actions"[^>]*data-litsx-root="litsx-root-0"/);
+    assert.match(result.html, /<action-chip\b(?=[^>]*data-litsx-root="litsx-root-0")(?=[^>]*slot="actions")[^>]*>/);
     assert.match(result.html, /<action-chip[\s\S]*<template shadowroot="open" shadowrootmode="open">[\s\S]*<button>[\s\S]*Buy now[\s\S]*<\/button>[\s\S]*<\/template><\/action-chip>/);
     assert.match(result.html, /<p>[\s\S]*Ships tomorrow[\s\S]*<\/p>/);
     assert.deepStrictEqual(result.clientImports, [
@@ -390,7 +450,7 @@ describe("@litsx/ssr", () => {
     assert.doesNotMatch(result.html, /<product-page\b/);
     assert.doesNotMatch(result.html, /<product-actions\b/);
     assert.match(result.html, /<section>/);
-    assert.match(result.html, /<action-chip[^>]*data-litsx-root="litsx-root-0"/);
+    assert.match(result.html, /<action-chip\b[^>]*data-litsx-root="litsx-root-0"/);
     assert.match(result.html, /<button>[\s\S]*Buy now[\s\S]*<\/button>/);
     assert.match(result.html, /<p>[\s\S]*Ships tomorrow[\s\S]*<\/p>/);
     assert.deepStrictEqual(result.clientImports, ["/src/ActionChip.litsx"]);
@@ -458,7 +518,7 @@ describe("@litsx/ssr", () => {
     );
 
     assert.doesNotMatch(result.html, /<product-page\b/);
-    assert.match(result.html, /<product-card[^>]*data-litsx-root="litsx-root-0"/);
+    assert.match(result.html, /<product-card\b[^>]*data-litsx-root="litsx-root-0"/);
     assert.match(result.html, /<header>/);
     assert.match(result.html, /<action-chip[^>]*defer-hydration/);
     assert.match(result.html, /<button>[\s\S]*Buy now[\s\S]*<\/button>/);
