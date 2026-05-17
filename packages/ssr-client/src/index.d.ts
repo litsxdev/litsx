@@ -6,6 +6,7 @@ export interface HydrateOptions {
   register?: (() => unknown | Promise<unknown>) | null | undefined;
   moduleLoader?: ((specifier: string) => unknown | Promise<unknown>) | null | undefined;
   hydrationSupportLoader?: (() => unknown | Promise<unknown>) | null | undefined;
+  rootId?: string | null | undefined;
 }
 
 export interface HydrateDocumentOptions extends HydrateOptions {
@@ -15,6 +16,8 @@ export interface HydrateDocumentOptions extends HydrateOptions {
 export declare const LITSX_CLIENT_IMPORTS_SCRIPT_ID: "__LITSX_CLIENT_IMPORTS__";
 export declare const LITSX_HYDRATION_DATA_SCRIPT_ID: "__LITSX_HYDRATION__";
 export declare const LITSX_ROOT_ATTRIBUTE: "data-litsx-root";
+export declare const LITSX_ROOT_MARKER_PREFIX: "litsx-root";
+export declare const LITSX_HYDRATION_PAYLOAD_PROPERTY: "__litsxHydrationPayload";
 
 export declare function readClientImports(
   rootOrDocument?: Document | Element | null,
@@ -26,12 +29,25 @@ export declare function readHydrationData<T = unknown>(
   options?: Pick<HydrateOptions, "hydrationData" | "scriptId">,
 ): T | null;
 
+export declare function readHydrationPayload<T = unknown>(
+  rootOrDocument?: Document | Element | null,
+  options?: Pick<HydrateOptions, "hydrationData" | "scriptId">,
+): T;
+
 export interface ResolvedHydrationRoot {
   id: string;
   tagName?: string;
   moduleId?: string;
   element: Element;
 }
+
+/**
+ * Attach a root-scoped SSR hydration payload to its matching root elements.
+ */
+export declare function applyHydrationPayload(
+  roots: ResolvedHydrationRoot[],
+  hydrationData: unknown,
+): ResolvedHydrationRoot[];
 
 /**
  * Resolve every LitSX hydration root declared in the current SSR payload.
