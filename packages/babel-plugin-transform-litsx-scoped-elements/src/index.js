@@ -1,5 +1,7 @@
 import jsxSyntaxPlugin from "@babel/plugin-syntax-jsx";
 import { isLitElementSuperClass } from "@litsx/babel-plugin-shared-hooks";
+import parser from "@litsx/babel-parser";
+import fs from "node:fs";
 import path from "node:path";
 import { normalizeFilePath } from "@litsx/typescript-session";
 import { buildAvailableMap, setTypes, toKebab } from "./shared.js";
@@ -7,8 +9,18 @@ import { buildAvailableMap, setTypes, toKebab } from "./shared.js";
 let t;
 const SHADOW_MIXIN = "ShadowDomMixin";
 const LIGHT_MIXIN = "LightDomMixin";
+const RENDER_LIGHT_MODULE = "@lit-labs/ssr-client/directives/render-light.js";
+const RENDER_LIGHT_IMPORT = "renderLight";
+const IMPORT_RESOLUTION_EXTENSIONS = [
+  ".litsx",
+  ".litsx.jsx",
+  ".jsx",
+  ".js",
+  ".tsx",
+  ".ts",
+];
 
-export default function transformFunctionToClassPlugin(api) {
+export default function transformFunctionToClassPlugin(api, options = {}) {
   api.assertVersion(7);
   t = api.types;
   setTypes(t);
@@ -19,13 +31,15 @@ export default function transformFunctionToClassPlugin(api) {
     visitor: {
       Program: {
         exit(programPath) {
+          const availableMap = buildAvailableMap(programPath);
+          annotateImportedLightDomEntries(programPath, availableMap);
           programPath.get("body").forEach((nodePath) => {
             const classPath = resolveTopLevelClassPath(nodePath);
             if (!classPath) return;
             if (!isLitElementSuperClass(classPath.node.superClass, t)) return;
             if (classPath.node._elementsTransformed) return;
 
-            const transformed = transformClass(classPath, programPath);
+            const transformed = transformClass(classPath, programPath, options, availableMap);
             if (transformed) {
               classPath.node._elementsTransformed = true;
             }
@@ -51,7 +65,7 @@ function resolveTopLevelClassPath(nodePath) {
   return null;
 }
 
-function transformClass(classPath, programPath) {
+function transformClass(classPath, programPath, options = {}, availableMap = buildAvailableMap(programPath)) {
   const { node } = classPath;
   const staticIr = consumeStaticIr(node);
   const precomputedCandidates = new Set(staticIr.elements.localCandidates);
@@ -63,16 +77,22 @@ function transformClass(classPath, programPath) {
 
   const filename = normalizeFilePath(programPath.hub.file?.opts?.filename || "");
   if (importedCandidates.length > 0 && filename) {
-    const localNames = ensureImportedElementCandidates(programPath, filename, importedCandidates);
-    localNames.forEach((localName) => precomputedCandidates.add(localName));
+    const importedEntries = ensureImportedElementCandidates(programPath, filename, importedCandidates);
+    importedEntries.forEach(({ localName, lightDom }) => {
+      precomputedCandidates.add(localName);
+      const availableEntry = availableMap.get(localName);
+      if (availableEntry) {
+        availableEntry.lightDom ||= Boolean(lightDom);
+      }
+    });
   }
-
-  const availableMap = buildAvailableMap(programPath);
 
   const {
     elements: detectedElements,
     hasRenderableTemplate,
-  } = detectElementsFromClass(classPath, availableMap, precomputedCandidates);
+  } = detectElementsFromClass(classPath, programPath, availableMap, precomputedCandidates, {
+    ssr: options?.ssr === true,
+  });
   const needsElements = detectedElements.length > 0;
   const hasExistingElementsStatic = hasStaticElementsMember(node);
   const needsScopedElements =
@@ -276,7 +296,7 @@ function ensureUniqueLocalName(programPath, baseName) {
 }
 
 function ensureImportedElementCandidates(programPath, fromFilename, importedCandidates) {
-  const localNames = [];
+  const localEntries = [];
 
   importedCandidates.forEach((candidate) => {
     const sourceValue = candidate.sourceSpecifier || createRelativeModuleSpecifier(fromFilename, candidate.sourceFile);
@@ -298,7 +318,10 @@ function ensureImportedElementCandidates(programPath, fromFilename, importedCand
       });
 
       if (matchingSpecifier?.local?.name) {
-        localNames.push(matchingSpecifier.local.name);
+        localEntries.push({
+          localName: matchingSpecifier.local.name,
+          lightDom: Boolean(candidate.lightDom),
+        });
         return;
       }
     }
@@ -320,10 +343,147 @@ function ensureImportedElementCandidates(programPath, fromFilename, importedCand
       );
     }
 
-    localNames.push(localName);
+    localEntries.push({
+      localName,
+      lightDom: Boolean(candidate.lightDom),
+    });
   });
 
-  return localNames;
+  return localEntries;
+}
+
+function annotateImportedLightDomEntries(programPath, availableMap) {
+  const filename = normalizeFilePath(programPath.hub.file?.opts?.filename || "");
+  if (!filename) {
+    return;
+  }
+
+  programPath.get("body").forEach((nodePath) => {
+    if (!nodePath.isImportDeclaration()) {
+      return;
+    }
+
+    const resolvedSource = resolveImportSource(filename, nodePath.node.source.value);
+    if (!resolvedSource) {
+      return;
+    }
+
+    const lightDomExports = getLightDomExports(resolvedSource);
+    if (lightDomExports.size === 0) {
+      return;
+    }
+
+    for (const specifier of nodePath.node.specifiers) {
+      const localName = specifier.local?.name;
+      if (!localName || !availableMap.has(localName)) {
+        continue;
+      }
+
+      const importedName = t.isImportDefaultSpecifier(specifier)
+        ? "default"
+        : specifier.imported?.name ?? specifier.imported?.value ?? null;
+
+      if (importedName && lightDomExports.has(importedName)) {
+        availableMap.get(localName).lightDom = true;
+      }
+    }
+  });
+}
+
+function resolveImportSource(fromFilename, sourceValue) {
+  if (
+    typeof sourceValue !== "string" ||
+    !(
+      sourceValue.startsWith("./") ||
+      sourceValue.startsWith("../") ||
+      sourceValue.startsWith("/")
+    )
+  ) {
+    return null;
+  }
+
+  const basePath = sourceValue.startsWith("/")
+    ? sourceValue
+    : path.resolve(path.dirname(fromFilename), sourceValue);
+  const candidates = IMPORT_RESOLUTION_EXTENSIONS.some((extension) => basePath.endsWith(extension))
+    ? [basePath]
+    : [
+        ...IMPORT_RESOLUTION_EXTENSIONS.map((extension) => `${basePath}${extension}`),
+        ...IMPORT_RESOLUTION_EXTENSIONS.map((extension) => path.join(basePath, `index${extension}`)),
+      ];
+
+  return candidates.find((candidate) => {
+    try {
+      return fs.statSync(candidate).isFile();
+    } catch {
+      return false;
+    }
+  }) ?? null;
+}
+
+const LIGHT_DOM_EXPORTS_BY_FILE = new Map();
+
+function getLightDomExports(fileName) {
+  const normalizedFileName = normalizeFilePath(fileName);
+  if (LIGHT_DOM_EXPORTS_BY_FILE.has(normalizedFileName)) {
+    return LIGHT_DOM_EXPORTS_BY_FILE.get(normalizedFileName);
+  }
+
+  let sourceText = "";
+  try {
+    sourceText = fs.readFileSync(normalizedFileName, "utf8");
+  } catch {
+    const empty = new Set();
+    LIGHT_DOM_EXPORTS_BY_FILE.set(normalizedFileName, empty);
+    return empty;
+  }
+
+  let ast;
+  try {
+    ast = parser.parse(sourceText, { sourceType: "module" });
+  } catch {
+    const empty = new Set();
+    LIGHT_DOM_EXPORTS_BY_FILE.set(normalizedFileName, empty);
+    return empty;
+  }
+
+  const lightDomExports = new Set();
+  for (const node of ast.program?.body ?? []) {
+    if (t.isExportNamedDeclaration(node)) {
+      const declaration = node.declaration;
+      if (
+        (t.isFunctionDeclaration(declaration) || t.isClassDeclaration(declaration)) &&
+        declaration.id?.name &&
+        nodeHasLightDomHoist(declaration)
+      ) {
+        lightDomExports.add(declaration.id.name);
+      }
+      continue;
+    }
+
+    if (
+      t.isExportDefaultDeclaration(node) &&
+      nodeHasLightDomHoist(node.declaration)
+    ) {
+      lightDomExports.add("default");
+    }
+  }
+
+  LIGHT_DOM_EXPORTS_BY_FILE.set(normalizedFileName, lightDomExports);
+  return lightDomExports;
+}
+
+function nodeHasLightDomHoist(node) {
+  const body = node?.body?.body;
+  if (!Array.isArray(body)) {
+    return false;
+  }
+
+  return body.some((statement) => (
+    t.isExpressionStatement(statement) &&
+    t.isCallExpression(statement.expression) &&
+    t.isIdentifier(statement.expression.callee, { name: "__litsx_static_lightDom" })
+  ));
 }
 
 function hasNamedImport(programPath, moduleName, importName) {
@@ -340,83 +500,7 @@ function hasNamedImport(programPath, moduleName, importName) {
   });
 }
 
-function unwrapNamespaceAliasExpression(node) {
-  let current = node;
-  while (
-    t.isTSAsExpression(current) ||
-    t.isTSTypeAssertion(current) ||
-    t.isTSNonNullExpression(current) ||
-    t.isTSSatisfiesExpression?.(current)
-  ) {
-    current = current.expression;
-  }
-  return current;
-}
-
-function buildAvailableMap(programPath) {
-  const availableMap = new Map();
-  const namespaceImports = new Set();
-
-  programPath.get("body").forEach((nodePath) => {
-    if (nodePath.isImportDeclaration()) {
-      nodePath.node.specifiers.forEach((specifier) => {
-        if (t.isImportSpecifier(specifier) || t.isImportDefaultSpecifier(specifier)) {
-          availableMap.set(specifier.local.name, {
-            originalName: specifier.local.name,
-          });
-          return;
-        }
-
-        if (t.isImportNamespaceSpecifier(specifier)) {
-          namespaceImports.add(specifier.local.name);
-        }
-      });
-      return;
-    }
-
-    const localClassPath = resolveTopLevelClassPath(nodePath);
-    if (!localClassPath) return;
-
-    const localName = localClassPath.node.id?.name;
-    if (!localName) return;
-
-    availableMap.set(localName, {
-      originalName: localName,
-      local: true,
-    });
-  });
-
-  programPath.get("body").forEach((nodePath) => {
-    if (!nodePath.isVariableDeclaration()) {
-      return;
-    }
-
-    nodePath.node.declarations.forEach((declarator) => {
-      if (!t.isIdentifier(declarator.id)) {
-        return;
-      }
-
-      const init = unwrapNamespaceAliasExpression(declarator.init);
-      if (
-        !t.isMemberExpression(init) ||
-        init.computed ||
-        !t.isIdentifier(unwrapNamespaceAliasExpression(init.object)) ||
-        !t.isIdentifier(init.property) ||
-        !namespaceImports.has(unwrapNamespaceAliasExpression(init.object).name)
-      ) {
-        return;
-      }
-
-      availableMap.set(declarator.id.name, {
-        originalName: declarator.id.name,
-      });
-    });
-  });
-
-  return availableMap;
-}
-
-function detectElementsFromClass(classPath, availableMap, precomputedCandidates) {
+function detectElementsFromClass(classPath, programPath, availableMap, precomputedCandidates, options = {}) {
   if (availableMap.size === 0) {
     return {
       elements: [],
@@ -450,6 +534,9 @@ function detectElementsFromClass(classPath, availableMap, precomputedCandidates)
       const tagName = toKebab(originalName);
       nameNode.node.name = tagName;
       nameToTag.set(originalName, tagName);
+      // Covers standalone use of this plugin before JSX has been lowered.
+      // In the preset pipeline, html`` templates are handled below instead.
+      maybeInsertSsrRenderLight(path, programPath, entry, options);
       used.set(originalName, {
         ...entry,
         originalName,
@@ -474,7 +561,14 @@ function detectElementsFromClass(classPath, availableMap, precomputedCandidates)
       availableMap.forEach((entry, originalName) => {
         const tagName = toKebab(originalName);
         const replaced = replaceInTemplate(quasi, originalName, tagName);
-        if (replaced) {
+        const insertedRenderLight = maybeInsertSsrRenderLightTemplate(
+          quasi,
+          tagName,
+          programPath,
+          entry,
+          options,
+        );
+        if (replaced || insertedRenderLight) {
           used.set(originalName, {
             ...entry,
             originalName,
@@ -490,6 +584,132 @@ function detectElementsFromClass(classPath, availableMap, precomputedCandidates)
     elements: Array.from(used.values()),
     hasRenderableTemplate,
   };
+}
+
+function maybeInsertSsrRenderLight(openingPath, programPath, entry, options) {
+  if (options?.ssr !== true || entry?.lightDom !== true) {
+    return;
+  }
+
+  const elementPath = openingPath.parentPath;
+  if (!elementPath?.isJSXElement?.()) {
+    return;
+  }
+
+  const children = elementPath.node.children ?? [];
+  if (children.some((child) => !isWhitespaceJsxText(child)) || children.some(isRenderLightExpression)) {
+    return;
+  }
+
+  if (openingPath.node.selfClosing) {
+    openingPath.node.selfClosing = false;
+    elementPath.node.closingElement = t.jsxClosingElement(t.cloneNode(openingPath.node.name));
+  }
+
+  elementPath.node.children = [
+    t.jsxExpressionContainer(
+      t.callExpression(ensureRenderLightImport(programPath), [])
+    ),
+  ];
+}
+
+function isWhitespaceJsxText(node) {
+  return t.isJSXText(node) && node.value.trim() === "";
+}
+
+function isRenderLightExpression(node) {
+  if (!t.isJSXExpressionContainer(node)) {
+    return false;
+  }
+
+  const expression = node.expression;
+  return (
+    t.isCallExpression(expression) &&
+    t.isIdentifier(expression.callee, { name: RENDER_LIGHT_IMPORT })
+  );
+}
+
+function ensureRenderLightImport(programPath) {
+  const existing = programPath.get("body").find(
+    (nodePath) =>
+      nodePath.isImportDeclaration() &&
+      nodePath.node.source.value === RENDER_LIGHT_MODULE
+  );
+
+  if (existing) {
+    const specifier = existing.node.specifiers.find((entry) =>
+      t.isImportSpecifier(entry) &&
+      t.isIdentifier(entry.imported, { name: RENDER_LIGHT_IMPORT })
+    );
+
+    if (specifier?.local?.name) {
+      return t.identifier(specifier.local.name);
+    }
+
+    const localName = ensureUniqueLocalName(programPath, RENDER_LIGHT_IMPORT);
+    existing.node.specifiers.push(
+      t.importSpecifier(t.identifier(localName), t.identifier(RENDER_LIGHT_IMPORT))
+    );
+    return t.identifier(localName);
+  }
+
+  const localName = ensureUniqueLocalName(programPath, RENDER_LIGHT_IMPORT);
+  programPath.unshiftContainer(
+    "body",
+    t.importDeclaration(
+      [t.importSpecifier(t.identifier(localName), t.identifier(RENDER_LIGHT_IMPORT))],
+      t.stringLiteral(RENDER_LIGHT_MODULE)
+    )
+  );
+  return t.identifier(localName);
+}
+
+function maybeInsertSsrRenderLightTemplate(quasi, tagName, programPath, entry, options = {}) {
+  if (options?.ssr !== true || entry?.lightDom !== true) {
+    return false;
+  }
+
+  const pattern = new RegExp(`(<${tagName}(?:\\s[^>]*)?>)</${tagName}>`);
+  for (let index = 0; index < quasi.quasis.length; index += 1) {
+    const element = quasi.quasis[index];
+    const raw = element.value.raw;
+    const cooked = element.value.cooked ?? raw;
+    const rawMatch = raw.match(pattern);
+    const cookedMatch = cooked.match(pattern);
+
+    if (!rawMatch || !cookedMatch) {
+      continue;
+    }
+
+    const rawStart = rawMatch.index;
+    const cookedStart = cookedMatch.index;
+    const rawOpening = rawMatch[1];
+    const cookedOpening = cookedMatch[1];
+    const rawEnd = rawStart + rawMatch[0].length;
+    const cookedEnd = cookedStart + cookedMatch[0].length;
+    const closing = `</${tagName}>`;
+
+    element.value.raw = `${raw.slice(0, rawStart)}${rawOpening}`;
+    element.value.cooked = `${cooked.slice(0, cookedStart)}${cookedOpening}`;
+
+    const nextElement = t.templateElement(
+      {
+        raw: `${closing}${raw.slice(rawEnd)}`,
+        cooked: `${closing}${cooked.slice(cookedEnd)}`,
+      },
+      element.tail,
+    );
+    element.tail = false;
+    quasi.quasis.splice(index + 1, 0, nextElement);
+    quasi.expressions.splice(
+      index,
+      0,
+      t.callExpression(ensureRenderLightImport(programPath), []),
+    );
+    return true;
+  }
+
+  return false;
 }
 
 function replaceInTemplate(quasi, originalName, kebabName) {

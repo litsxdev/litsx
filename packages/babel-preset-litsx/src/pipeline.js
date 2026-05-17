@@ -287,7 +287,13 @@ export function createLitsxPresetPlugins(options = {}, sourceFeatures = null) {
   }
 
   if (shouldIncludeFeaturePlugin(sourceFeatures, "scopedElements")) {
-    plugins.push([transformLitsxScopedElements, options.transformLitsxScopedElements || {}]);
+    plugins.push([
+      transformLitsxScopedElements,
+      {
+        ...normalizedTransformOptions,
+        ...(options.transformLitsxScopedElements || {}),
+      },
+    ]);
   }
 
   plugins.push([

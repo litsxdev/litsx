@@ -16,7 +16,6 @@ function viteFsSpecifier(filePath) {
 
 function createComponentsSource() {
   return `
-import { renderLight } from "@lit-labs/ssr-client/directives/render-light.js";
 import { useOnConnect, useState } from "@litsx/core";
 
 export function SsrLeafShadow({ label }) {
@@ -37,7 +36,7 @@ export function SsrLevelFourLight({ label }) {
 export function SsrLevelThreeShadow({ label }) {
   return (
     <section id="level-three">
-      <SsrLevelFourLight .label={label}>{renderLight()}</SsrLevelFourLight>
+      <SsrLevelFourLight .label={label} />
     </section>
   );
 }
@@ -54,7 +53,7 @@ export function SsrAppRoot({ name = "demo" }) {
   return (
     <main id="app-root">
       <h1>{title}</h1>
-      <SsrLevelTwoLight .label={title}>{renderLight()}</SsrLevelTwoLight>
+      <SsrLevelTwoLight .label={title} />
     </main>
   );
 }
