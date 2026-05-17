@@ -13,9 +13,7 @@ This package keeps hydration intentionally small:
 - it can run your root-registration/bootstrap entry
 - it can load the `clientImports` produced by `@litsx/ssr`
 - it can validate and resolve SSR root boundaries from LitSX hydration metadata
-
-It does not currently serialize general props or state into a LitSX-specific
-hydration payload.
+- it can attach root-scoped hydration payloads to their matching DOM roots
 
 ## Installation
 
@@ -38,7 +36,8 @@ await hydrate(document, {
 
 1. loads Lit's hydration support side effect
 2. runs your optional `register()` bootstrap
-3. imports the client modules you pass in `clientImports`
+3. reads and applies the SSR hydration payload when present
+4. imports the client modules you pass in `clientImports`
 
 That order matters because Lit's hydration support must be installed before the
 LitElement modules you want to hydrate are evaluated.
@@ -51,6 +50,7 @@ The package also exposes a slightly higher-level surface:
 import {
   hydrateDocument,
   hydrateRoot,
+  readHydrationPayload,
   readClientImports,
   readHydrationData,
   resolveHydrationRoot,
@@ -59,12 +59,14 @@ import {
 ```
 
 - `hydrateRoot(root, options)` hydrates one explicit root and validates its
-  `data-litsx-root` marker against the SSR payload when present
+  LitSX SSR root attribute against the SSR payload when present
 - `hydrateDocument(options)` defaults the root to `document` and returns the
   resolved roots when the payload declares them
 - `readClientImports(...)` reads imports from options or a JSON script tag
 - `readHydrationData(...)` reads the JSON hydration payload emitted by
   `@litsx/ssr`
+- `readHydrationPayload(...)` extracts and validates the payload object inside
+  the SSR hydration data
 - `resolveHydrationRoots(...)` resolves every declared root boundary to a DOM
   element
 - `resolveHydrationRoot(...)` resolves one declared root by id
@@ -88,9 +90,14 @@ await hydrateDocument({
 });
 ```
 
-When LitSX scoped roots are rendered on the server, the HTML also carries
-`data-litsx-root="<id>"` on each root host. The matching payload emitted by
-`renderHydrationData()` looks like this:
+When LitSX scoped roots are rendered on the server, the HTML also carries a
+root attribute on each root host:
+
+```html
+<product-card data-litsx-root="litsx-root-0">...</product-card>
+```
+
+The matching payload emitted by `renderHydrationData()` looks like this:
 
 ```json
 {
@@ -101,7 +108,20 @@ When LitSX scoped roots are rendered on the server, the HTML also carries
       "tagName": "product-card",
       "moduleId": "/src/ProductCard.litsx"
     }
-  ]
+  ],
+  "payload": {
+    "roots": {
+      "litsx-root-0": {
+        "props": {
+          "product": {
+            "name": "Trail Shoe"
+          }
+        }
+      }
+    },
+    "instances": {}
+  },
+  "clientImports": ["/assets/ProductCard.js"]
 }
 ```
 
@@ -111,6 +131,10 @@ That lets the client validate and resolve boundaries explicitly:
 const roots = resolveHydrationRoots(document);
 const cardRoot = resolveHydrationRoot(document, "litsx-root-0");
 ```
+
+Do not strip Lit comments from hydrated SSR HTML. Lit hydration depends on its
+own comment markers, and inserting extra comments between Lit markers and
+hosts can break Lit's hydration mapping.
 
 ## Working with `@litsx/ssr`
 
@@ -135,22 +159,13 @@ In that setup:
 
 - your SSR HTML already contains Declarative Shadow DOM
 - `register()` should define the root custom elements for the page
-- `clientImports` loads the modules discovered while rendering scoped LitSX
-  elements
+- `clientImports` can be passed explicitly or embedded in the hydration data
 - `renderHydrationData()` and `hydrateDocument(...)` can coordinate explicit
-  root boundaries without global registry scans
+  root boundaries and root-scoped payloads without global registry scans
 
-## Current Scope
+## Scope
 
-This first client helper cut:
-
-- installs Lit hydration support
-- supports optional bootstrap callbacks
-- supports loading deduplicated client module imports
-- supports document/root helpers and JSON script readers
-- supports resolving SSR root boundaries from LitSX hydration metadata
-
-It does not yet:
-
-- serialize general props or state for hydration
-- register root elements for you
+The client helper installs Lit hydration support, supports optional bootstrap
+callbacks, loads deduplicated client module imports, resolves root boundaries,
+validates hydration metadata, and attaches root-scoped payloads. It still leaves
+application-specific custom element registration to your bootstrap code.
