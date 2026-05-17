@@ -32,10 +32,37 @@ export function buildAvailableMap(programPath) {
     availableMap.set(localName, {
       originalName: localName,
       local: true,
+      lightDom: isLightDomClass(localClassPath.node),
     });
   });
 
   return availableMap;
+}
+
+function isLightDomClass(node) {
+  return Boolean(node?._litsxLightDom) || hasMixinInSuperChain(node?.superClass, "LightDomMixin");
+}
+
+function hasMixinInSuperChain(node, mixinName) {
+  if (!node) {
+    return false;
+  }
+
+  if (
+    t.isCallExpression(node) &&
+    t.isIdentifier(node.callee) &&
+    node.callee.name === mixinName
+  ) {
+    return true;
+  }
+
+  if (t.isCallExpression(node)) {
+    return node.arguments.some((argument) =>
+      t.isExpression(argument) && hasMixinInSuperChain(argument, mixinName)
+    );
+  }
+
+  return false;
 }
 
 function resolveTopLevelClassPath(nodePath) {

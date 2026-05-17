@@ -943,6 +943,7 @@ function resolveImportedElementRequirement(candidateName, moduleAnalysis, contex
       originalName: candidateName,
       tagName: candidateName.replace(/([a-z])([A-Z])/g, "$1-$2").toLowerCase(),
       rootFilename,
+      lightDom: importedBindingHasLightDomHoist(importInfo, context),
     };
   }
 
@@ -988,6 +989,7 @@ function resolveImportedElementRequirement(candidateName, moduleAnalysis, contex
     originalName: candidateName,
     tagName: candidateName.replace(/([a-z])([A-Z])/g, "$1-$2").toLowerCase(),
     rootFilename,
+    lightDom: helperPathHasLightDomHoist(moduleAnalysis.helperPaths.get(candidateName)),
   };
 }
 
@@ -1033,6 +1035,41 @@ function resolveDirectImportRequirement(candidateName, moduleAnalysis, context, 
     tagName: candidateName.replace(/([a-z])([A-Z])/g, "$1-$2").toLowerCase(),
     rootFilename,
   };
+}
+
+function helperPathHasLightDomHoist(helperPath) {
+  const body = helperPath?.node?.body?.body;
+  if (!Array.isArray(body)) {
+    return false;
+  }
+
+  return body.some((statement) => (
+    t.isExpressionStatement(statement) &&
+    t.isCallExpression(statement.expression) &&
+    t.isIdentifier(statement.expression.callee, { name: "__litsx_static_lightDom" })
+  ));
+}
+
+function importedBindingHasLightDomHoist(importInfo, context) {
+  if (!importInfo?.resolvedSource || importInfo.importedName === "*") {
+    return false;
+  }
+
+  const importedModule = getOrCreateModuleAnalysis(importInfo.resolvedSource, context);
+  if (!importedModule) {
+    return false;
+  }
+
+  const exportInfo = importedModule.exportBindings.get(importInfo.importedName);
+  const localName = exportInfo?.localName ?? (
+    importInfo.importedName === "default" ? "default" : importInfo.importedName
+  );
+
+  if (exportInfo?.path) {
+    return helperPathHasLightDomHoist(exportInfo.path);
+  }
+
+  return helperPathHasLightDomHoist(importedModule.helperPaths.get(localName));
 }
 
 function collectCandidateResult(functionPath, programPath, options = {}) {
