@@ -1,6 +1,6 @@
 {
   "name": "@litsx/vite-plugin",
-  "version": "0.2.7",
+  "version": "0.2.8",
   "description": "Official Vite plugin for LitSX compilation",
   "author": "LitSX Team",
   "type": "module",
@@ -45,7 +45,7 @@
     "vite": "^7.3.2 || ^8.0.0"
   },
   "dependencies": {
-    "@litsx/compiler": "^0.6.0"
+    "@litsx/compiler": "^0.7.0"
   },
   "scripts": {
     "build": "../../node_modules/.bin/rollup --config rollup.config.js",

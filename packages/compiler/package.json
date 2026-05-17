@@ -1,6 +1,6 @@
 {
   "name": "@litsx/compiler",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Build-facing LitSX compilation facade with correct parser and sourcemap handling",
   "author": "LitSX Team",
   "type": "module",
@@ -53,7 +53,7 @@
     "@babel/plugin-transform-typescript": "^7.28.5",
     "@litsx/authoring": "^0.4.0",
     "@litsx/babel-plugin-transform-jsx-html-template": "^0.3.2",
-    "@litsx/babel-preset-litsx": "^0.6.0",
+    "@litsx/babel-preset-litsx": "^0.7.0",
     "@litsx/typescript-session": "^0.2.1"
   },
   "scripts": {

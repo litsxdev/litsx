@@ -1,5 +1,11 @@
 # @litsx/babel-plugin-transform-litsx-scoped-elements
 
+## 0.4.0
+
+### Minor Changes
+
+- 677553b: Normalize DOM runtime mixins around root mode: `ShadowDomMixin` and `LightDomMixin` are now the canonical mixins, and `LightDomMixin` also handles scoped light-DOM elements when `static elements` is present.
+
 ## 0.3.0
 
 ### Minor Changes

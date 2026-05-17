@@ -1,5 +1,11 @@
 # @litsx/typescript
 
+## 0.6.2
+
+### Patch Changes
+
+- 24fef97: Fix LitSX editor false positives for authored components with JSX children, static light DOM hoists, default JSX options, and destructured component props.
+
 ## 0.6.1
 
 ### Patch Changes

@@ -1,5 +1,15 @@
 # litsx
 
+## 0.5.0
+
+### Minor Changes
+
+- 677553b: Normalize DOM runtime mixins around root mode: `ShadowDomMixin` and `LightDomMixin` are now the canonical mixins, and `LightDomMixin` also handles scoped light-DOM elements when `static elements` is present.
+
+### Patch Changes
+
+- 24fef97: Fix LitSX editor false positives for authored components with JSX children, static light DOM hoists, default JSX options, and destructured component props.
+
 ## 0.4.0
 
 ### Minor Changes
