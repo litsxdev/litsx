@@ -60,8 +60,14 @@ function isPolyfilledScopedRegistry(registry) {
 }
 
 function supportsScopedRegistryElementCreation(shadowRoot, registry) {
-  if (!shadowRoot || typeof shadowRoot.createElement !== "function" || !registry) {
+  if (!shadowRoot || !registry) {
     return false;
+  }
+
+  const canCreateElement = typeof shadowRoot.createElement === "function";
+  const canParseElement = typeof shadowRoot.querySelector === "function";
+  if (!canCreateElement && !canParseElement) {
+    return true;
   }
 
   const tagName = `litsx-scoped-registry-probe-${shadowDomRegistryProbeId++}`;
@@ -72,11 +78,16 @@ function supportsScopedRegistryElementCreation(shadowRoot, registry) {
   try {
     registry.define(tagName, ScopedRegistryProbe);
     registry.define(parsedTagName, ParsedScopedRegistryProbe);
-    const createdElementWorks = shadowRoot.createElement(tagName) instanceof ScopedRegistryProbe;
-    shadowRoot.innerHTML = `<${parsedTagName}></${parsedTagName}>`;
-    const parsedElementWorks =
-      shadowRoot.querySelector(parsedTagName) instanceof ParsedScopedRegistryProbe;
-    shadowRoot.textContent = "";
+    const createdElementWorks =
+      !canCreateElement ||
+      shadowRoot.createElement(tagName) instanceof ScopedRegistryProbe;
+    let parsedElementWorks = true;
+    if (canParseElement) {
+      shadowRoot.innerHTML = `<${parsedTagName}></${parsedTagName}>`;
+      parsedElementWorks =
+        shadowRoot.querySelector(parsedTagName) instanceof ParsedScopedRegistryProbe;
+      shadowRoot.textContent = "";
+    }
     return createdElementWorks && parsedElementWorks;
   } catch {
     return false;
