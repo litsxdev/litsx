@@ -1125,20 +1125,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@litsx/core@npm:^0.4.0":
-  version: 0.4.0
-  resolution: "@litsx/core@npm:0.4.0"
-  dependencies:
-    "@lit/context": "npm:^1.1.6"
-    "@lit/reactive-element": "npm:^2.1.2"
-    "@litsx/light-dom-registry": "npm:^0.2.4"
-  peerDependencies:
-    lit: ">=3"
-  checksum: 10c0/9012b0ffc7a2a43995f1c47bfbb520163f2f304a70e9914455a8ed2b07692e737ea6c3003f352c2adb0d5817419dd7c6d8ad665ed1fa0ed94f204ef3de53a210
-  languageName: node
-  linkType: hard
-
-"@litsx/core@workspace:packages/core":
+"@litsx/core@workspace:*, @litsx/core@workspace:packages/core":
   version: 0.0.0-use.local
   resolution: "@litsx/core@workspace:packages/core"
   dependencies:
@@ -1199,7 +1186,7 @@ __metadata:
   resolution: "@litsx/ssr@workspace:packages/ssr"
   dependencies:
     "@lit-labs/ssr": "npm:^4.0.0"
-    "@litsx/core": "npm:^0.4.0"
+    "@litsx/core": "workspace:*"
     lit: "npm:^3.2.1"
   peerDependencies:
     lit: ">=3"
