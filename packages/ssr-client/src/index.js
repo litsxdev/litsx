@@ -6,6 +6,8 @@ function normalizeClientImports(value) {
 export const LITSX_CLIENT_IMPORTS_SCRIPT_ID = "__LITSX_CLIENT_IMPORTS__";
 export const LITSX_HYDRATION_DATA_SCRIPT_ID = "__LITSX_HYDRATION__";
 export const LITSX_ROOT_ATTRIBUTE = "data-litsx-root";
+export const LITSX_ROOT_MARKER_PREFIX = "litsx-root";
+export const LITSX_HYDRATION_PAYLOAD_PROPERTY = "__litsxHydrationPayload";
 
 async function importLitHydrationSupport() {
   return import("@lit-labs/ssr-client/lit-element-hydrate-support.js");
@@ -66,27 +68,157 @@ function normalizeHydrationRoots(value) {
   );
 }
 
+function normalizeHydrationPayload(value) {
+  const payload = value?.payload;
+  if (payload == null) {
+    return {
+      roots: {},
+      instances: {},
+    };
+  }
+
+  if (
+    typeof payload !== "object" ||
+    Array.isArray(payload) ||
+    payload.roots == null ||
+    payload.instances == null ||
+    typeof payload.roots !== "object" ||
+    Array.isArray(payload.roots) ||
+    typeof payload.instances !== "object" ||
+    Array.isArray(payload.instances)
+  ) {
+    throw new Error("Invalid LitSX SSR hydration payload.");
+  }
+
+  return payload;
+}
+
+function parseRootMarker(value) {
+  const text = String(value ?? "").trim();
+  if (!text.startsWith(LITSX_ROOT_MARKER_PREFIX)) {
+    return null;
+  }
+
+  const entries = Object.fromEntries(
+    text
+      .slice(LITSX_ROOT_MARKER_PREFIX.length)
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((part) => {
+        const separatorIndex = part.indexOf("=");
+        return separatorIndex === -1
+          ? [part, ""]
+          : [part.slice(0, separatorIndex), part.slice(separatorIndex + 1)];
+      }),
+  );
+
+  return entries.id
+    ? {
+      id: entries.id,
+      tagName: entries.tag ?? null,
+    }
+    : null;
+}
+
+function getChildNodes(container) {
+  if (!container) {
+    return [];
+  }
+
+  return container.childNodes ? [...container.childNodes] : [];
+}
+
+function isCommentNode(node) {
+  return node?.nodeType === 8 || node?.constructor?.name === "Comment";
+}
+
+function isElementNode(node) {
+  return node?.nodeType === 1 || typeof node?.tagName === "string";
+}
+
+function findNextElementSibling(node) {
+  let current = node?.nextSibling ?? null;
+  while (current) {
+    if (isElementNode(current)) {
+      return current;
+    }
+    current = current.nextSibling ?? null;
+  }
+
+  return null;
+}
+
+function findHydrationRootIdForElement(element) {
+  if (!element) {
+    return null;
+  }
+
+  const attributeRootId = element.getAttribute?.(LITSX_ROOT_ATTRIBUTE);
+  if (attributeRootId) {
+    return attributeRootId;
+  }
+
+  let current = element.previousSibling ?? null;
+  while (current) {
+    if (isElementNode(current)) {
+      return null;
+    }
+
+    if (isCommentNode(current)) {
+      const marker = parseRootMarker(current.data ?? current.nodeValue);
+      return marker?.id ?? null;
+    }
+
+    current = current.previousSibling ?? null;
+  }
+
+  return null;
+}
+
+function walkNodes(container, visit) {
+  for (const node of getChildNodes(container)) {
+    if (visit(node) === false) {
+      return false;
+    }
+
+    if (node?.childNodes && walkNodes(node, visit) === false) {
+      return false;
+    }
+
+    if (node?.shadowRoot && walkNodes(node.shadowRoot, visit) === false) {
+      return false;
+    }
+  }
+  return true;
+}
+
 function queryHydrationRoot(container, id) {
   if (!container || !id) {
     return null;
   }
 
-  if (typeof container.getAttribute === "function" &&
-      container.getAttribute(LITSX_ROOT_ATTRIBUTE) === id) {
-    return container;
-  }
+  let match = null;
+  walkNodes(container, (node) => {
+    if (isElementNode(node) && node.getAttribute?.(LITSX_ROOT_ATTRIBUTE) === id) {
+      match = node;
+      return false;
+    }
 
-  if (container.host &&
-      typeof container.host.getAttribute === "function" &&
-      container.host.getAttribute(LITSX_ROOT_ATTRIBUTE) === id) {
-    return container.host;
-  }
+    if (!isCommentNode(node)) {
+      return true;
+    }
 
-  if (typeof container.querySelector === "function") {
-    return container.querySelector(`[${LITSX_ROOT_ATTRIBUTE}="${id}"]`);
-  }
+    const marker = parseRootMarker(node.data ?? node.nodeValue);
+    if (marker?.id !== id) {
+      return true;
+    }
 
-  return null;
+    match = findNextElementSibling(node);
+    return false;
+  });
+
+  return match;
 }
 
 export function readClientImports(
@@ -101,7 +233,15 @@ export function readClientImports(
   const documentRef = resolveDocument(rootOrDocument);
   const scriptId = options.scriptId ?? LITSX_CLIENT_IMPORTS_SCRIPT_ID;
   const parsed = parseJsonScript(documentRef, scriptId);
-  return normalizeClientImports(parsed);
+  const imports = normalizeClientImports(parsed);
+  if (imports.length > 0) {
+    return imports;
+  }
+
+  const hydrationData = readHydrationData(rootOrDocument, {
+    hydrationData: options.hydrationData,
+  });
+  return normalizeClientImports(hydrationData?.clientImports);
 }
 
 export function readHydrationData(
@@ -118,6 +258,13 @@ export function readHydrationData(
   return parseJsonScript(documentRef, scriptId);
 }
 
+export function readHydrationPayload(
+  rootOrDocument = typeof document === "undefined" ? null : document,
+  options = {},
+) {
+  return normalizeHydrationPayload(readHydrationData(rootOrDocument, options));
+}
+
 export function resolveHydrationRoots(
   rootOrDocument = typeof document === "undefined" ? null : document,
   options = {},
@@ -127,11 +274,11 @@ export function resolveHydrationRoots(
 
   return roots.map((root) => {
     const element = queryHydrationRoot(rootOrDocument, root.id);
-    if (!element) {
-      throw new Error(
-        `Failed to find a LitSX hydration root with ${LITSX_ROOT_ATTRIBUTE}="${root.id}".`
-      );
-    }
+      if (!element) {
+        throw new Error(
+          `Failed to find a LitSX hydration root element for "${root.id}".`
+        );
+      }
 
     const actualTagName = typeof element.tagName === "string"
       ? element.tagName.toLowerCase()
@@ -147,6 +294,36 @@ export function resolveHydrationRoots(
       element,
     };
   });
+}
+
+export function applyHydrationPayload(
+  roots,
+  hydrationData,
+) {
+  const payload = normalizeHydrationPayload(hydrationData);
+
+  for (const root of roots) {
+    const rootPayload = payload.roots[root.id] ?? null;
+    if (rootPayload == null) {
+      continue;
+    }
+
+    const currentPayload = root.element[LITSX_HYDRATION_PAYLOAD_PROPERTY];
+    if (currentPayload !== undefined && currentPayload !== rootPayload) {
+      throw new Error(`Hydration payload for root "${root.id}" has already been applied.`);
+    }
+
+    root.element[LITSX_HYDRATION_PAYLOAD_PROPERTY] = rootPayload;
+    if (
+      rootPayload.props &&
+      typeof rootPayload.props === "object" &&
+      !Array.isArray(rootPayload.props)
+    ) {
+      Object.assign(root.element, rootPayload.props);
+    }
+  }
+
+  return roots;
 }
 
 /**
@@ -207,11 +384,13 @@ export async function hydrate(
 
   await installHydrationSupport(hydrationSupportLoader);
 
+  const hydrationData = readHydrationData(root, options);
+  const hydrationRoots = resolveHydrationRoots(root, options);
+  applyHydrationPayload(hydrationRoots, hydrationData);
+
   if (typeof register === "function") {
     await register();
   }
-
-  const hydrationRoots = resolveHydrationRoots(root, options);
 
   const specifiers = readClientImports(root, options);
   await Promise.all(specifiers.map((specifier) => moduleLoader(specifier)));
@@ -229,17 +408,41 @@ export async function hydrateRoot(
     hydrationSupportLoader = importLitHydrationSupport,
   } = options;
   const element = root?.host ?? root;
-  const rootId = typeof element?.getAttribute === "function"
-    ? element.getAttribute(LITSX_ROOT_ATTRIBUTE)
-    : null;
+  const rootId = options.rootId ?? findHydrationRootIdForElement(element);
 
   if (!rootId) {
     throw new Error(
-      `hydrateRoot(...) requires a root element marked with ${LITSX_ROOT_ATTRIBUTE}.`
+      "hydrateRoot(...) requires a root id or an element marked as a LitSX SSR root."
     );
   }
 
   await installHydrationSupport(hydrationSupportLoader);
+
+  const documentRef = resolveDocument(root) ?? root;
+  const hydrationData = readHydrationData(documentRef, options);
+  const rootMetadata = normalizeHydrationRoots(hydrationData).find((entry) => entry.id === rootId);
+  if (!rootMetadata) {
+    throw new Error(`Hydration metadata did not include root "${rootId}".`);
+  }
+
+  const actualTagName = typeof element?.tagName === "string"
+    ? element.tagName.toLowerCase()
+    : null;
+  if (
+    rootMetadata.tagName &&
+    actualTagName &&
+    actualTagName !== String(rootMetadata.tagName).toLowerCase()
+  ) {
+    throw new Error(
+      `Hydration root "${rootId}" expected <${rootMetadata.tagName}> but found <${actualTagName}>.`
+    );
+  }
+
+  const match = {
+    ...rootMetadata,
+    element,
+  };
+  applyHydrationPayload([match], hydrationData);
 
   if (typeof register === "function") {
     await register();
@@ -247,8 +450,6 @@ export async function hydrateRoot(
 
   const specifiers = readClientImports(root, options);
   await Promise.all(specifiers.map((specifier) => moduleLoader(specifier)));
-
-  const match = resolveHydrationRoot(resolveDocument(root) ?? root, rootId, options);
 
   return match.element ?? element;
 }

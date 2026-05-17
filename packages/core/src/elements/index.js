@@ -7,6 +7,7 @@ import {
 } from "@litsx/light-dom-registry";
 
 const DEDUPE_MIXIN_MARK = Symbol("litsx.dedupeMixinMark");
+const HYDRATION_RENDER_BEFORE = Symbol("litsx.hydrationRenderBefore");
 const LIGHT_DOM_STYLE_ELEMENT = Symbol("litsx.lightDomStyleElement");
 const SHADOW_DOM_REGISTRY = Symbol("litsx.shadowDomRegistry");
 export const LITSX_SCOPED_TEMPLATE = Symbol.for("litsx.scopedTemplate");
@@ -14,9 +15,11 @@ export const LITSX_MODULE_ID = Symbol.for("litsx.moduleId");
 export const LITSX_SSR_CONTEXT = Symbol.for("litsx.ssrContext");
 export const LITSX_SERVER_COMPONENT = Symbol.for("litsx.serverComponent");
 export const LITSX_SERVER_COMPONENT_CALL = Symbol.for("litsx.serverComponentCall");
+export const LITSX_LIGHT_DOM = Symbol.for("litsx.lightDom");
 let shadowDomRegistryAttachKey;
 let shadowDomRegistryAttachShadowRef;
 let shadowDomRegistryCtorRef;
+let shadowDomRegistryProbeId = 0;
 
 export function __litsxScopedTemplate(template, elements) {
   return {
@@ -46,6 +49,30 @@ function isPolyfilledScopedRegistry(registry) {
   return Boolean(registry && "h" in registry && "m" in registry);
 }
 
+function supportsScopedRegistryElementCreation(shadowRoot, registry) {
+  if (!shadowRoot || typeof shadowRoot.createElement !== "function" || !registry) {
+    return false;
+  }
+
+  const tagName = `litsx-scoped-registry-probe-${shadowDomRegistryProbeId++}`;
+  const parsedTagName = `litsx-scoped-registry-parsed-probe-${shadowDomRegistryProbeId++}`;
+  class ScopedRegistryProbe extends HTMLElement {}
+  class ParsedScopedRegistryProbe extends HTMLElement {}
+
+  try {
+    registry.define(tagName, ScopedRegistryProbe);
+    registry.define(parsedTagName, ParsedScopedRegistryProbe);
+    const createdElementWorks = shadowRoot.createElement(tagName) instanceof ScopedRegistryProbe;
+    shadowRoot.innerHTML = `<${parsedTagName}></${parsedTagName}>`;
+    const parsedElementWorks =
+      shadowRoot.querySelector(parsedTagName) instanceof ParsedScopedRegistryProbe;
+    shadowRoot.textContent = "";
+    return createdElementWorks && parsedElementWorks;
+  } catch {
+    return false;
+  }
+}
+
 function getShadowDomRegistryAttachKey(registryOverride = null) {
   if (registryOverride) {
     if (isPolyfilledScopedRegistry(registryOverride)) {
@@ -66,7 +93,10 @@ function getShadowDomRegistryAttachKey(registryOverride = null) {
           mode: "open",
           [key]: registryOverride,
         });
-        if (shadowRoot?.[key] === registryOverride) {
+        if (
+          shadowRoot?.[key] === registryOverride &&
+          supportsScopedRegistryElementCreation(shadowRoot, registryOverride)
+        ) {
           return key;
         }
       } catch {
@@ -119,7 +149,10 @@ function getShadowDomRegistryAttachKey(registryOverride = null) {
         mode: "open",
         [key]: registry,
       });
-      if (shadowRoot?.[key] === registry) {
+      if (
+        shadowRoot?.[key] === registry &&
+        supportsScopedRegistryElementCreation(shadowRoot, registry)
+      ) {
         shadowDomRegistryAttachKey = key;
         shadowDomRegistryAttachShadowRef = Element.prototype.attachShadow;
         shadowDomRegistryCtorRef = globalThis.CustomElementRegistry;
@@ -159,14 +192,19 @@ function defineScopedElements(registry, elements = {}) {
   return registry;
 }
 
-function createScopedRegistryForHost(host) {
+function createScopedRegistryForHost(host, options = {}) {
   const ctor = host.constructor;
   const elements = ctor.scopedElements ?? ctor.elements ?? {};
   let registry = host.registry ?? null;
   let attachKey = null;
 
+  if (options.forceLightDomRegistry && !isPolyfilledScopedRegistry(registry)) {
+    registry = null;
+    host.registry = null;
+  }
+
   if (!registry) {
-    attachKey = getShadowDomRegistryAttachKey();
+    attachKey = options.forceLightDomRegistry ? null : getShadowDomRegistryAttachKey();
     if (attachKey) {
       registry = new CustomElementRegistry();
     }
@@ -327,6 +365,39 @@ function hasScopedElements(host) {
   return elements && typeof elements === "object" && Object.keys(elements).length > 0;
 }
 
+function hasHydratableLitMarkers(root) {
+  for (const node of root?.childNodes ?? []) {
+    if (node.nodeType === 8 && /^\/?lit-|^lit-/.test(node.data ?? "")) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function prepareLitHydration(host, root) {
+  host._$AG = true;
+  host._$needsHydration = true;
+
+  const renderBefore = root?.firstChild ?? null;
+  if (host.renderOptions && renderBefore) {
+    host[HYDRATION_RENDER_BEFORE] = renderBefore;
+    host.renderOptions.renderBefore ??= renderBefore;
+  }
+}
+
+function clearHydrationRenderBefore(host) {
+  const renderBefore = host[HYDRATION_RENDER_BEFORE];
+  if (!renderBefore) {
+    return;
+  }
+
+  if (host.renderOptions?.renderBefore === renderBefore) {
+    delete host.renderOptions.renderBefore;
+  }
+  host[HYDRATION_RENDER_BEFORE] = null;
+  host._$AG = false;
+}
+
 export const ShadowDomMixin = dedupeMixin((Base) =>
   class ShadowDomHost extends Base {
     static get scopedElements() {
@@ -344,7 +415,22 @@ export const ShadowDomMixin = dedupeMixin((Base) =>
     createRenderRoot() {
       const existingRoot = this.shadowRoot;
       if (existingRoot) {
+        prepareLitHydration(this, existingRoot);
         this.registry ??= existingRoot.registry ?? existingRoot.customElements ?? existingRoot.customElementRegistry ?? null;
+        if (hasScopedElements(this)) {
+          const { registry } = createScopedRegistryForHost(this, {
+            forceLightDomRegistry: true,
+          });
+          assignShadowRootRegistry(existingRoot, registry);
+          if (typeof registry?._getDefinition === "function") {
+            upgradeLightDomTree(existingRoot, registry);
+          } else if (typeof registry?.upgrade === "function") {
+            registry.upgrade(existingRoot);
+          }
+        }
+        if (this.renderOptions && typeof existingRoot.importNode === "function") {
+          this.renderOptions.creationScope = existingRoot;
+        }
         return existingRoot;
       }
 
@@ -376,8 +462,11 @@ export const ShadowDomMixin = dedupeMixin((Base) =>
       if (typeof super.update === "function") {
         super.update(...args);
       }
+      clearHydrationRenderBefore(this);
       if (this.registry && typeof this.registry._getDefinition === "function") {
         upgradeLightDomTree(this.shadowRoot, this.registry);
+      } else if (typeof this.registry?.upgrade === "function") {
+        this.registry.upgrade(this.shadowRoot);
       }
     }
   }
@@ -385,6 +474,8 @@ export const ShadowDomMixin = dedupeMixin((Base) =>
 
 export const LightDomMixin = dedupeMixin((Base) =>
   class LightDomHost extends Base {
+    static [LITSX_LIGHT_DOM] = true;
+
     constructor(...args) {
       super(...args);
       if (hasScopedElements(this)) {
@@ -393,7 +484,14 @@ export const LightDomMixin = dedupeMixin((Base) =>
     }
 
     createRenderRoot() {
+      if (hasHydratableLitMarkers(this)) {
+        prepareLitHydration(this, this);
+      }
       return this;
+    }
+
+    renderLight() {
+      return typeof this.render === "function" ? this.render() : undefined;
     }
 
     connectedCallback(...args) {
@@ -418,6 +516,7 @@ export const LightDomMixin = dedupeMixin((Base) =>
       if (typeof super.update === "function") {
         super.update(...args);
       }
+      clearHydrationRenderBefore(this);
       ensureLightDomStyles(this);
     }
   }

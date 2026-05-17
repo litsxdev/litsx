@@ -949,6 +949,29 @@ describe("@litsx/babel-preset-litsx", () => {
     assert.match(result.code, /renderToString\(__litsxScopedTemplate\(html`<product-card \.product=\$\{product\}><\/product-card>`\, \{\s*"product-card": ProductCard\s*\}\)\)/);
   });
 
+  it("rewrites renderToStream roots into scoped templates", () => {
+    const source = [
+      "import { renderToStream } from '@litsx/ssr';",
+      "import ProductCard from './ProductCard.js';",
+      "export async function renderProduct(product) {",
+      "  return renderToStream(<ProductCard .product={product} />);",
+      "}",
+    ].join("\n");
+
+    const result = transformFromAstSync(
+      parser.parse(source, { sourceType: "module" }),
+      source,
+      {
+        configFile: false,
+        babelrc: false,
+        presets: [[nativePreset, {}]],
+      },
+    );
+
+    assert.match(result.code, /import \{ __litsxScopedTemplate \} from "@litsx\/core\/elements";/);
+    assert.match(result.code, /renderToStream\(__litsxScopedTemplate\(html`<product-card \.product=\$\{product\}><\/product-card>`\, \{\s*"product-card": ProductCard\s*\}\)\)/);
+  });
+
   it("keeps default async PascalCase exports out of the LitElement lowering path", () => {
     const source = [
       "export default async function ProductPage({ slug }) {",

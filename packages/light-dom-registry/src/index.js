@@ -560,15 +560,16 @@ function getRuntime() {
       return;
     }
 
-    const pending = [node];
+    const pending = [{ node, registry }];
     while (pending.length > 0) {
-      const current = pending.shift();
+      const { node: current, registry: currentRegistry } = pending.shift();
       if (current.nodeType === Node.ELEMENT_NODE) {
-        upgradeCreatedElement(current, registry);
+        upgradeCreatedElement(current, currentRegistry);
       }
 
+      const childRegistry = current[HOST_REGISTRY] ?? registryForNode(current) ?? currentRegistry;
       for (const child of current.children ?? []) {
-        pending.push(child);
+        pending.push({ node: child, registry: childRegistry });
       }
     }
   }
@@ -585,24 +586,25 @@ function getRuntime() {
       return;
     }
 
-    const pending = [node];
+    const pending = [{ node, registry }];
     while (pending.length > 0) {
-      const current = pending.shift();
+      const { node: current, registry: currentRegistry } = pending.shift();
       if (current.nodeType !== Node.ELEMENT_NODE) {
         for (const child of current.children ?? []) {
-          pending.push(child);
+          pending.push({ node: child, registry: currentRegistry });
         }
         continue;
       }
 
-      upgradeCreatedElement(current, registry);
+      upgradeCreatedElement(current, currentRegistry);
       const definition = definitionForElement.get(current);
       if (definition?.connectedCallback && current.isConnected) {
         definition.connectedCallback.call(current);
       }
 
+      const childRegistry = current[HOST_REGISTRY] ?? registryForNode(current) ?? currentRegistry;
       for (const child of current.children ?? []) {
-        pending.push(child);
+        pending.push({ node: child, registry: childRegistry });
       }
     }
   }
