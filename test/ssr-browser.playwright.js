@@ -1,131 +1,95 @@
 import fs from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { expect, test } from "@playwright/test";
 import { createServer } from "vite";
 import { html } from "lit";
 import { __litsxScopedTemplate } from "../packages/core/src/elements/index.js";
+import { createLitsxCompilationSession } from "../packages/compiler/src/index.js";
+import { litsx } from "../packages/vite-plugin/src/index.js";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
-
-function fileSpecifier(filePath) {
-  return pathToFileURL(filePath).href;
-}
 
 function viteFsSpecifier(filePath) {
   return `/@fs/${filePath}`;
 }
 
-function createComponentsSource({ browser }) {
-  const litImport = browser
-    ? viteFsSpecifier(path.join(repoRoot, "node_modules/lit/index.js"))
-    : fileSpecifier(path.join(repoRoot, "node_modules/lit/index.js"));
-  const elementsImport = browser
-    ? viteFsSpecifier(path.join(repoRoot, "packages/core/src/elements/index.js"))
-    : fileSpecifier(path.join(repoRoot, "packages/core/src/elements/index.js"));
-  const renderLightImport = browser
-    ? viteFsSpecifier(
-        path.join(repoRoot, "node_modules/@lit-labs/ssr-client/directives/render-light.js"),
-      )
-    : fileSpecifier(
-        path.join(repoRoot, "node_modules/@lit-labs/ssr-client/directives/render-light.js"),
-      );
-  const effectsImport = browser
-    ? viteFsSpecifier(path.join(repoRoot, "packages/core/src/effect-hooks.js"))
-    : fileSpecifier(path.join(repoRoot, "packages/core/src/effect-hooks.js"));
-  const stateImport = browser
-    ? viteFsSpecifier(path.join(repoRoot, "packages/core/src/state-hooks.js"))
-    : fileSpecifier(path.join(repoRoot, "packages/core/src/state-hooks.js"));
-
+function createComponentsSource() {
   return `
-import { LitElement, css, html } from "${litImport}";
-import { renderLight } from "${renderLightImport}";
-import { LightDomMixin, ShadowDomMixin, LITSX_MODULE_ID } from "${elementsImport}";
-import { prepareEffects, useOnConnect } from "${effectsImport}";
-import { useState } from "${stateImport}";
+import { renderLight } from "@lit-labs/ssr-client/directives/render-light.js";
+import { useOnConnect, useState } from "@litsx/core";
 
-export class SsrLeafShadow extends ShadowDomMixin(LitElement) {
-  static [LITSX_MODULE_ID] = "/src/ssr-leaf-shadow.js";
-  static styles = css\`:host { display: inline-block; color: rgb(0, 96, 128); }\`;
+export function SsrLeafShadow({ label }) {
+  static styles = \`:host { display: inline-block; color: rgb(0, 96, 128); }\`;
 
-  render() {
-    prepareEffects(this);
-    useOnConnect(this, () => {
-      window.__litsxClientConnectCalls = (window.__litsxClientConnectCalls ?? 0) + 1;
-    }, []);
-    const [count, setCount] = useState(this, 3);
-    this.__increment = () => setCount(count + 1);
-    return html\`<button id="leaf-button" @click=\${this.__increment}>leaf:\${this.label}:\${count}</button>\`;
-  }
+  useOnConnect(() => {
+    window.__litsxClientConnectCalls = (window.__litsxClientConnectCalls ?? 0) + 1;
+  }, []);
+  const [count, setCount] = useState(3);
+  return <button id="leaf-button" @click={() => setCount(count + 1)}>leaf:{label}:{count}</button>;
 }
 
-export class SsrLevelFourLight extends LightDomMixin(LitElement) {
-  static [LITSX_MODULE_ID] = "/src/ssr-level-four-light.js";
-  static elements = { "ssr-leaf-shadow": SsrLeafShadow };
-
-  render() {
-    return html\`<ssr-leaf-shadow .label=\${this.label}></ssr-leaf-shadow>\`;
-  }
+export function SsrLevelFourLight({ label }) {
+  static lightDom = true;
+  return <SsrLeafShadow .label={label} />;
 }
 
-export class SsrLevelThreeShadow extends ShadowDomMixin(LitElement) {
-  static [LITSX_MODULE_ID] = "/src/ssr-level-three-shadow.js";
-  static elements = { "ssr-level-four-light": SsrLevelFourLight };
-
-  render() {
-    return html\`<section id="level-three"><ssr-level-four-light .label=\${this.label}>\${renderLight()}</ssr-level-four-light></section>\`;
-  }
+export function SsrLevelThreeShadow({ label }) {
+  return (
+    <section id="level-three">
+      <SsrLevelFourLight .label={label}>{renderLight()}</SsrLevelFourLight>
+    </section>
+  );
 }
 
-export class SsrLevelTwoLight extends LightDomMixin(LitElement) {
-  static [LITSX_MODULE_ID] = "/src/ssr-level-two-light.js";
-  static elements = { "ssr-level-three-shadow": SsrLevelThreeShadow };
-
-  render() {
-    return html\`<ssr-level-three-shadow .label=\${this.label}></ssr-level-three-shadow>\`;
-  }
+export function SsrLevelTwoLight({ label }) {
+  static lightDom = true;
+  return <SsrLevelThreeShadow .label={label} />;
 }
 
-export class SsrAppRoot extends ShadowDomMixin(LitElement) {
-  static [LITSX_MODULE_ID] = "/src/ssr-app-root.js";
-  static elements = { "ssr-level-two-light": SsrLevelTwoLight };
-  static styles = css\`:host { display: block; }\`;
+export function SsrAppRoot({ name = "demo" }) {
+  static styles = \`:host { display: block; }\`;
 
-  render() {
-    prepareEffects(this);
-    const [name] = useState(this, this.name ?? "demo");
-    return html\`<main id="app-root"><h1>\${name}</h1><ssr-level-two-light .label=\${name}>\${renderLight()}</ssr-level-two-light></main>\`;
-  }
+  const [title] = useState(name);
+  return (
+    <main id="app-root">
+      <h1>{title}</h1>
+      <SsrLevelTwoLight .label={title}>{renderLight()}</SsrLevelTwoLight>
+    </main>
+  );
 }
 
 export function defineSsrComponents() {
-  const definitions = {
-    "ssr-app-root": SsrAppRoot,
-    "ssr-level-two-light": SsrLevelTwoLight,
-    "ssr-level-three-shadow": SsrLevelThreeShadow,
-    "ssr-level-four-light": SsrLevelFourLight,
-    "ssr-leaf-shadow": SsrLeafShadow,
-  };
-  for (const [tagName, ctor] of Object.entries(definitions)) {
-    if (!customElements.get(tagName)) {
-      customElements.define(tagName, ctor);
-    }
+  if (!customElements.get("ssr-app-root")) {
+    customElements.define("ssr-app-root", SsrAppRoot);
   }
 }
 `;
 }
 
 test("hydrates a real browser page rendered by @litsx/ssr", async ({ page }) => {
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "litsx-ssr-browser-"));
+  const tempRoot = path.join(repoRoot, "test-results");
+  await fs.mkdir(tempRoot, { recursive: true });
+  const tempDir = await fs.mkdtemp(path.join(tempRoot, "litsx-ssr-browser-"));
   const srcDir = path.join(tempDir, "src");
   await fs.mkdir(srcDir, { recursive: true });
 
   const serverComponentsPath = path.join(srcDir, "components.server.mjs");
-  const clientComponentsPath = path.join(srcDir, "components.client.js");
+  const clientComponentsPath = path.join(srcDir, "components.client.litsx");
   const clientEntryPath = path.join(srcDir, "main.js");
-  await fs.writeFile(serverComponentsPath, createComponentsSource({ browser: false }));
-  await fs.writeFile(clientComponentsPath, createComponentsSource({ browser: true }));
+  const componentsSource = createComponentsSource();
+  await fs.writeFile(clientComponentsPath, componentsSource);
+  const session = createLitsxCompilationSession({
+    transformOptions: {
+      ssr: true,
+      filename: clientComponentsPath,
+    },
+  });
+  const serverResult = session.transformSync(componentsSource, {
+    filename: clientComponentsPath,
+    sourceMaps: false,
+  });
+  await fs.writeFile(serverComponentsPath, serverResult.code);
   await fs.writeFile(
     clientEntryPath,
     `
@@ -134,7 +98,7 @@ import { hydrateDocument, LITSX_HYDRATION_PAYLOAD_PROPERTY } from "${viteFsSpeci
 try {
   await hydrateDocument({
     async register() {
-      const { defineSsrComponents } = await import("./components.client.js");
+      const { defineSsrComponents } = await import("./components.client.litsx");
       defineSsrComponents();
     },
     moduleLoader: async () => {},
@@ -165,10 +129,18 @@ window.__litsxSsrBrowserResult = {
     ),
     {
       assetResolver(moduleId) {
-        return moduleId ? "/src/components.client.js" : null;
+        return moduleId ? "/src/components.client.litsx" : null;
       },
     },
   );
+  expect(result.clientImports).toEqual(["/src/components.client.litsx"]);
+  expect(result.hydrationData.roots).toEqual([
+    {
+      id: "litsx-root-0",
+      tagName: "ssr-app-root",
+      moduleId: clientComponentsPath,
+    },
+  ]);
   const documentHtml = `<!doctype html>
 <html>
   <head>
@@ -189,6 +161,11 @@ window.__litsxSsrBrowserResult = {
       host: "127.0.0.1",
       strictPort: false,
     },
+    plugins: [
+      litsx({
+        ssr: true,
+      }),
+    ],
   });
   await server.listen();
 
