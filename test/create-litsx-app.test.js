@@ -12,6 +12,7 @@ import {
   inferPackageManager,
   renderProjectFiles,
 } from "../packages/create-litsx-app/src/index.js";
+import { publishedPackageVersions } from "../packages/create-litsx-app/src/published-package-versions.js";
 
 const require = createRequire(import.meta.url);
 const distEntrypoint = path.resolve("packages/create-litsx-app/dist/index.cjs");
@@ -315,7 +316,10 @@ describe("create-litsx-app", () => {
 
     assert.strictEqual(result.visualTests, true);
     assert.ok(packageJson.devDependencies["@playwright/test"]);
-    assert.strictEqual(packageJson.devDependencies["@litsx/compiler"], "^0.6.0");
+    assert.strictEqual(
+      packageJson.devDependencies["@litsx/compiler"],
+      publishedPackageVersions["@litsx/compiler"],
+    );
     assert.ok(packageJson.scripts["test:visual"]);
     assert.ok(packageJson.scripts["test:visual:update"]);
     assert.strictEqual(packageJson.scripts.test, "vitest run");
