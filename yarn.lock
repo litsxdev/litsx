@@ -1125,7 +1125,20 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@litsx/core@npm:^0.4.0, @litsx/core@workspace:packages/core":
+"@litsx/core@npm:^0.4.0":
+  version: 0.4.0
+  resolution: "@litsx/core@npm:0.4.0"
+  dependencies:
+    "@lit/context": "npm:^1.1.6"
+    "@lit/reactive-element": "npm:^2.1.2"
+    "@litsx/light-dom-registry": "npm:^0.2.4"
+  peerDependencies:
+    lit: ">=3"
+  checksum: 10c0/9012b0ffc7a2a43995f1c47bfbb520163f2f304a70e9914455a8ed2b07692e737ea6c3003f352c2adb0d5817419dd7c6d8ad665ed1fa0ed94f204ef3de53a210
+  languageName: node
+  linkType: hard
+
+"@litsx/core@workspace:packages/core":
   version: 0.0.0-use.local
   resolution: "@litsx/core@workspace:packages/core"
   dependencies:
@@ -4035,6 +4048,30 @@ __metadata:
   version: 4.0.1
   resolution: "pify@npm:4.0.1"
   checksum: 10c0/6f9d404b0d47a965437403c9b90eca8bb2536407f03de165940e62e72c8c8b75adda5516c6b9b23675a5877cc0bcac6bdfb0ef0e39414cd2476d5495da40e7cf
+  languageName: node
+  linkType: hard
+
+"playwright-core@npm:1.60.0":
+  version: 1.60.0
+  resolution: "playwright-core@npm:1.60.0"
+  bin:
+    playwright-core: cli.js
+  checksum: 10c0/99ccd43923b6e9355e0723b7fe221e6326efd4687f8dafff951313662aea11db51f542a9c2122c704c445fb9baae1c9ec9fa6f895126bbddd9fe92313f6942c9
+  languageName: node
+  linkType: hard
+
+"playwright@npm:1.60.0":
+  version: 1.60.0
+  resolution: "playwright@npm:1.60.0"
+  dependencies:
+    fsevents: "npm:2.3.2"
+    playwright-core: "npm:1.60.0"
+  dependenciesMeta:
+    fsevents:
+      optional: true
+  bin:
+    playwright: cli.js
+  checksum: 10c0/714ad76d85b4865d7e43c0012f9039800c1485373388973ed39d79339cee5ad467052d1e2f1eaeca107a1cb6e65342186a8578a4c3504853d84c3a691250d5db
   languageName: node
   linkType: hard
 
