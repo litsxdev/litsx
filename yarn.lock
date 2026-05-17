@@ -1002,7 +1002,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@litsx/babel-parser@npm:^0.2.4, @litsx/babel-parser@workspace:packages/babel-parser-litsx":
+"@litsx/babel-parser@npm:^0.2.4, @litsx/babel-parser@workspace:*, @litsx/babel-parser@workspace:packages/babel-parser-litsx":
   version: 0.0.0-use.local
   resolution: "@litsx/babel-parser@workspace:packages/babel-parser-litsx"
   dependencies:
@@ -1065,6 +1065,7 @@ __metadata:
   dependencies:
     "@babel/core": "npm:^7.29.0"
     "@babel/plugin-syntax-jsx": "npm:^7.28.6"
+    "@litsx/babel-parser": "workspace:*"
     "@litsx/babel-plugin-shared-hooks": "npm:^0.3.0"
     "@litsx/typescript-session": "npm:^0.2.1"
   peerDependencies:

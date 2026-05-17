@@ -43,6 +43,7 @@
   "dependencies": {
     "@babel/plugin-syntax-jsx": "^7.28.6",
     "@litsx/babel-plugin-shared-hooks": "^0.3.0",
+    "@litsx/babel-parser": "workspace:*",
     "@litsx/typescript-session": "^0.2.1"
   },
   "devDependencies": {
