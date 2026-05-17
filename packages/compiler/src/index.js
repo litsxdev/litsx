@@ -1,16 +1,21 @@
 import babelCore from "@babel/core";
+import * as babelParser from "@babel/parser";
+import * as babelTypes from "@babel/types";
 import transformTypescript from "@babel/plugin-transform-typescript";
 import transformJsxHtmlTemplate from "@litsx/babel-plugin-transform-jsx-html-template";
+import { decodeVirtualAttributeName } from "@litsx/authoring";
 import {
   createLitsxPresetPlugins,
   detectLitsxSourceFeatures,
 } from "@litsx/babel-preset-litsx";
 import { ensureTypescriptModule } from "@litsx/babel-preset-litsx/internal/transform-litsx-properties";
+import { parseWithLitsxVirtualization } from "@litsx/authoring/parser";
 import { createLitsxTypecheckSession } from "@litsx/typescript/typecheck";
 import {
   createStandaloneTsSession,
   normalizeFilePath,
 } from "@litsx/typescript-session";
+import { SourceMapConsumer } from "source-map-js";
 import {
   patchLitAttributeSourcemap,
 } from "@litsx/babel-plugin-transform-jsx-html-template";
@@ -87,6 +92,132 @@ function normalizePluginList(plugins) {
 
 function shouldStripTypescriptSyntax(filename = "") {
   return /\.(?:ts|tsx|litsx)$/.test(filename) || filename.endsWith(".litsx.jsx");
+}
+
+function reparseTemplateLoweringAst(source, options = {}) {
+  return parseWithLitsxVirtualization(babelParser.parse, source, {
+    sourceType: "module",
+    plugins: ensureLitsxParserPlugins(
+      options.filename,
+      options.parserPlugins,
+      { requireJsx: true },
+    ),
+    sourceFileName: options.filename,
+    litsxSourceMap: false,
+  });
+}
+
+function collectAuthoredTemplateAttributeMappings(
+  node,
+  mappings = [],
+  options = {},
+) {
+  if (!node || typeof node !== "object") {
+    return mappings;
+  }
+
+  if (node.type === "JSXElement") {
+    for (const attr of node.openingElement?.attributes || []) {
+      if (attr?.type !== "JSXAttribute") {
+        continue;
+      }
+
+      const rawName = decodeVirtualAttributeName(attr.name.name) ?? attr.name.name;
+      const prefix = rawName[0];
+      const generatedName =
+        prefix === "." || prefix === "@" || prefix === "?"
+          ? `${prefix}${rawName.slice(1)}`
+          : rawName;
+      const sourceLocation = attr.name?.loc ?? attr.loc ?? null;
+
+      mappings.push({
+        generatedNeedle: attr.value
+          ? ` ${generatedName}=`
+          : ` ${generatedName}`,
+        generatedOffset: 1,
+        source: sourceLocation?.filename ?? options.sourceFileName ?? null,
+        line: sourceLocation?.start?.line ?? null,
+        column: sourceLocation?.start?.column ?? null,
+      });
+    }
+  }
+
+  const visitorKeys = babelTypes.VISITOR_KEYS?.[node.type];
+  if (!visitorKeys) {
+    return mappings;
+  }
+
+  for (const key of visitorKeys) {
+    const value = node[key];
+    if (Array.isArray(value)) {
+      for (const child of value) {
+        collectAuthoredTemplateAttributeMappings(child, mappings, options);
+      }
+      continue;
+    }
+
+    collectAuthoredTemplateAttributeMappings(value, mappings, options);
+  }
+
+  return mappings;
+}
+
+function remapTemplateAttributeMappings(mappings = [], inputSourceMap = null) {
+  if (!Array.isArray(mappings) || mappings.length === 0 || !inputSourceMap) {
+    return mappings;
+  }
+
+  const consumer = new SourceMapConsumer(inputSourceMap);
+
+  try {
+    return mappings.map((mapping) => {
+      if (!mapping?.source || mapping.line == null || mapping.column == null) {
+        return mapping;
+      }
+
+      const original = consumer.originalPositionFor({
+        line: mapping.line,
+        column: mapping.column,
+      });
+
+      if (original.source == null || original.line == null || original.column == null) {
+        return mapping;
+      }
+
+      return {
+        ...mapping,
+        source: original.source,
+        line: original.line,
+        column: original.column,
+      };
+    });
+  } finally {
+    consumer.destroy?.();
+  }
+}
+
+function mergeTemplateLoweringMetadata(
+  firstPassMetadata = {},
+  secondPassMetadata = {},
+  firstPassMap = null,
+  authoredTemplateAttributeMappings = [],
+) {
+  const remappedTemplateAttributeMappings = remapTemplateAttributeMappings(
+    secondPassMetadata.litsxTemplateAttributeMappings || [],
+    firstPassMap,
+  );
+  const templateAttributeMappings =
+    authoredTemplateAttributeMappings.length > 0
+      ? authoredTemplateAttributeMappings
+      : remappedTemplateAttributeMappings;
+
+  return {
+    ...firstPassMetadata,
+    ...secondPassMetadata,
+    ...(templateAttributeMappings.length > 0
+      ? { litsxTemplateAttributeMappings: templateAttributeMappings }
+      : {}),
+  };
 }
 
 function getStandaloneTsSessionKey(filename = "", ts = ensureTypescriptModule()) {
@@ -320,6 +451,12 @@ export function createLitsxTransformConfig(source, options = {}) {
           : []),
       ]
     : [];
+  const authoredTemplateAttributeMappings =
+    shouldRunFinalTemplatePass && options.sourceMaps === true
+      ? collectAuthoredTemplateAttributeMappings(inputAst.program, [], {
+          sourceFileName: filename,
+        })
+      : [];
 
   return {
     filename,
@@ -328,6 +465,7 @@ export function createLitsxTransformConfig(source, options = {}) {
     profile,
     shouldRunFinalTemplatePass,
     finalTemplatePlugins,
+    authoredTemplateAttributeMappings,
     babelOptions: {
       filename,
       sourceFileName: filename,
@@ -412,6 +550,7 @@ export async function transformLitsx(source, options = {}) {
       babelOptions,
       shouldRunFinalTemplatePass,
       finalTemplatePlugins,
+      authoredTemplateAttributeMappings,
       authoredWarnings,
       profile,
     } = createLitsxTransformConfig(source, nextOptions);
@@ -428,8 +567,12 @@ export async function transformLitsx(source, options = {}) {
       ? await profilePhase(
           "template-lowering",
           async () => {
+            const reparsedTemplateAst = reparseTemplateLoweringAst(
+              firstPassResult?.code ?? source,
+              nextOptions,
+            );
             const secondPassResult = await transformFromAstAsync(
-              firstPassResult?.ast ?? inputAst,
+              reparsedTemplateAst,
               firstPassResult?.code ?? source,
               {
                 filename: babelOptions.filename,
@@ -445,10 +588,12 @@ export async function transformLitsx(source, options = {}) {
 
             return {
               ...secondPassResult,
-              metadata: {
-                ...(firstPassResult?.metadata || {}),
-                ...(secondPassResult?.metadata || {}),
-              },
+              metadata: mergeTemplateLoweringMetadata(
+                firstPassResult?.metadata || {},
+                secondPassResult?.metadata || {},
+                firstPassResult?.map ?? null,
+                authoredTemplateAttributeMappings,
+              ),
             };
           },
           profile,
@@ -462,6 +607,7 @@ export async function transformLitsx(source, options = {}) {
     babelOptions,
     shouldRunFinalTemplatePass,
     finalTemplatePlugins,
+    authoredTemplateAttributeMappings,
     authoredWarnings,
     profile,
   } = createLitsxTransformConfig(source, options);
@@ -478,8 +624,12 @@ export async function transformLitsx(source, options = {}) {
     ? await profilePhase(
         "template-lowering",
         async () => {
+          const reparsedTemplateAst = reparseTemplateLoweringAst(
+            firstPassResult?.code ?? source,
+            options,
+          );
           const secondPassResult = await transformFromAstAsync(
-            firstPassResult?.ast ?? inputAst,
+            reparsedTemplateAst,
             firstPassResult?.code ?? source,
             {
               filename: babelOptions.filename,
@@ -495,10 +645,12 @@ export async function transformLitsx(source, options = {}) {
 
           return {
             ...secondPassResult,
-            metadata: {
-              ...(firstPassResult?.metadata || {}),
-              ...(secondPassResult?.metadata || {}),
-            },
+            metadata: mergeTemplateLoweringMetadata(
+              firstPassResult?.metadata || {},
+              secondPassResult?.metadata || {},
+              firstPassResult?.map ?? null,
+              authoredTemplateAttributeMappings,
+            ),
           };
         },
         profile,
@@ -522,6 +674,7 @@ export function transformLitsxSync(source, options = {}) {
       babelOptions,
       shouldRunFinalTemplatePass,
       finalTemplatePlugins,
+      authoredTemplateAttributeMappings,
       authoredWarnings,
       profile,
     } = createLitsxTransformConfig(source, nextOptions);
@@ -537,8 +690,12 @@ export function transformLitsxSync(source, options = {}) {
       ? profilePhase(
           "template-lowering",
           () => {
+            const reparsedTemplateAst = reparseTemplateLoweringAst(
+              firstPassResult?.code ?? source,
+              nextOptions,
+            );
             const secondPassResult = transformFromAstSync(
-              firstPassResult?.ast ?? inputAst,
+              reparsedTemplateAst,
               firstPassResult?.code ?? source,
               {
                 filename: babelOptions.filename,
@@ -554,10 +711,12 @@ export function transformLitsxSync(source, options = {}) {
 
             return {
               ...secondPassResult,
-              metadata: {
-                ...(firstPassResult?.metadata || {}),
-                ...(secondPassResult?.metadata || {}),
-              },
+              metadata: mergeTemplateLoweringMetadata(
+                firstPassResult?.metadata || {},
+                secondPassResult?.metadata || {},
+                firstPassResult?.map ?? null,
+                authoredTemplateAttributeMappings,
+              ),
             };
           },
           profile,
@@ -571,6 +730,7 @@ export function transformLitsxSync(source, options = {}) {
     babelOptions,
     shouldRunFinalTemplatePass,
     finalTemplatePlugins,
+    authoredTemplateAttributeMappings,
     authoredWarnings,
     profile,
   } = createLitsxTransformConfig(source, options);
@@ -586,8 +746,12 @@ export function transformLitsxSync(source, options = {}) {
     ? profilePhase(
         "template-lowering",
         () => {
+          const reparsedTemplateAst = reparseTemplateLoweringAst(
+            firstPassResult?.code ?? source,
+            options,
+          );
           const secondPassResult = transformFromAstSync(
-            firstPassResult?.ast ?? inputAst,
+            reparsedTemplateAst,
             firstPassResult?.code ?? source,
             {
               filename: babelOptions.filename,
@@ -603,10 +767,12 @@ export function transformLitsxSync(source, options = {}) {
 
           return {
             ...secondPassResult,
-            metadata: {
-              ...(firstPassResult?.metadata || {}),
-              ...(secondPassResult?.metadata || {}),
-            },
+            metadata: mergeTemplateLoweringMetadata(
+              firstPassResult?.metadata || {},
+              secondPassResult?.metadata || {},
+              firstPassResult?.map ?? null,
+              authoredTemplateAttributeMappings,
+            ),
           };
         },
         profile,

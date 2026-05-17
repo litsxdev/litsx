@@ -29,26 +29,28 @@ export function collectLitAttributeSourcemapMetadata(node, mappings = [], option
   }
 
   if (t.isJSXElement(node)) {
-    const { isComponent } = getTag(node.openingElement);
-
-    if (!isComponent) {
-      for (const attr of node.openingElement.attributes) {
-        if (attr.type !== "JSXAttribute") {
-          continue;
-        }
-
-        const rawName = decodeVirtualAttributeName(attr.name.name) ?? attr.name.name;
-        const prefix = rawName[0];
-        if (prefix === "." || prefix === "@" || prefix === "?") {
-          mappings.push({
-            generatedNeedle: ` ${prefix}${rawName.slice(1)}=`,
-            generatedOffset: 1,
-            source: attr.loc?.filename ?? options.sourceFileName ?? null,
-            line: attr.loc?.start?.line ?? null,
-            column: attr.loc?.start?.column ?? null,
-          });
-        }
+    for (const attr of node.openingElement.attributes) {
+      if (attr.type !== "JSXAttribute") {
+        continue;
       }
+
+      const rawName = decodeVirtualAttributeName(attr.name.name) ?? attr.name.name;
+      const prefix = rawName[0];
+      const generatedName =
+        prefix === "." || prefix === "@" || prefix === "?"
+          ? `${prefix}${rawName.slice(1)}`
+          : rawName;
+      const sourceLocation = attr.name?.loc ?? attr.loc ?? null;
+
+      mappings.push({
+        generatedNeedle: attr.value
+          ? ` ${generatedName}=`
+          : ` ${generatedName}`,
+        generatedOffset: 1,
+        source: sourceLocation?.filename ?? options.sourceFileName ?? null,
+        line: sourceLocation?.start?.line ?? null,
+        column: sourceLocation?.start?.column ?? null,
+      });
     }
 
     for (const child of node.children) {
@@ -249,17 +251,31 @@ function createComponent(node, opts = {}) {
         ? t.identifier(rawName)
         : t.stringLiteral(rawName);
 
-      return t.objectProperty(key, nextValue);
+      return copySourceLocation(
+        t.objectProperty(key, nextValue),
+        attr,
+        attr,
+      );
     })
   );
+  copySourceLocation(attributes, node.openingElement, node.openingElement);
 
   const children = t.jsxFragment(
     t.jsxOpeningFragment(),
     t.jsxClosingFragment(),
     node.children
   );
+  copySourceLocation(children, node, node);
 
-  return t.callExpression(createComponentCallee(node.openingElement.name), [attributes, children]);
+  const callExpression = t.callExpression(
+    createComponentCallee(node.openingElement.name),
+    [attributes, children],
+  );
+  return copySourceLocation(
+    callExpression,
+    node.openingElement,
+    node.closingElement ?? node.openingElement,
+  );
 }
 
 function createComponentCallee(nameNode) {
@@ -377,7 +393,11 @@ export function buildTemplate(node, opts) {
     strings.push(t.templateElement({ raw: "", cooked: "" }, false));
   }
 
-  return t.templateLiteral(strings, keys);
+  return copySourceLocation(
+    t.templateLiteral(strings, keys),
+    node,
+    node,
+  );
 }
 
 export function createTaggedTemplate(node, opts, tag = "html") {
@@ -386,5 +406,9 @@ export function createTaggedTemplate(node, opts, tag = "html") {
     return literal;
   }
 
-  return t.taggedTemplateExpression(t.identifier(tag), literal);
+  return copySourceLocation(
+    t.taggedTemplateExpression(t.identifier(tag), literal),
+    node,
+    node,
+  );
 }
