@@ -42,7 +42,7 @@
   },
   "dependencies": {
     "@lit-labs/ssr": "^4.0.0",
-    "@litsx/core": "^0.4.0"
+    "@litsx/core": "workspace:*"
   },
   "devDependencies": {
     "lit": "^3.2.1"

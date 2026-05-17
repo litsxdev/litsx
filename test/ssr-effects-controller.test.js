@@ -1,6 +1,5 @@
 import assert from "assert";
 import { describe, it } from "vitest";
-import "../packages/core/src/ssr-runtime.js";
 import {
   LITSX_SSR_CONTEXT,
 } from "../packages/core/src/elements/index.js";
