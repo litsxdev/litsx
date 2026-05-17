@@ -1,10 +1,14 @@
 import { EffectsController } from "./effects-controller.js";
-import { SsrEffectsController } from "./ssr-effects-controller.js";
 import { LITSX_SSR_CONTEXT } from "./elements/index.js";
 
 const controllers = new WeakMap();
 const ssrControllers = new WeakMap();
 let currentHookHost = null;
+let createSsrEffectsController = null;
+
+export function registerSsrEffectsController(factory) {
+  createSsrEffectsController = typeof factory === "function" ? factory : null;
+}
 
 export function resolveRuntimeHost(host) {
   if (host && typeof host === "object") {
@@ -27,9 +31,15 @@ export function getController(host) {
   }
 
   if (resolvedHost[LITSX_SSR_CONTEXT]) {
+    if (!createSsrEffectsController) {
+      throw new Error(
+        "LitSX SSR hooks require the @litsx/ssr runtime to register an SSR effects controller."
+      );
+    }
+
     let controller = ssrControllers.get(resolvedHost);
     if (!controller) {
-      controller = new SsrEffectsController(
+      controller = createSsrEffectsController(
         resolvedHost,
         resolvedHost[LITSX_SSR_CONTEXT],
       );
