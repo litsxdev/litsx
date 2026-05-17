@@ -163,6 +163,7 @@ window.__litsxSsrBrowserResult = {
     plugins: [
       litsx({
         ssr: true,
+        sourceMaps: true,
       }),
     ],
   });
