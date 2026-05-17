@@ -6,6 +6,62 @@ describe("@litsx/ssr-client", () => {
     vi.resetModules();
   });
 
+  function createRootMarkerDocument({
+    rootId = "litsx-root-0",
+    tagName = "PRODUCT-CARD",
+  } = {}) {
+    const rootElement = {
+      nodeType: 1,
+      tagName,
+      previousSibling: null,
+      nextSibling: null,
+      childNodes: [],
+    };
+    const marker = {
+      nodeType: 8,
+      data: `litsx-root id=${rootId} tag=${tagName.toLowerCase()}`,
+      previousSibling: null,
+      nextSibling: rootElement,
+    };
+    rootElement.previousSibling = marker;
+
+    return {
+      rootElement,
+      documentRef: {
+        childNodes: [marker, rootElement],
+        getElementById() {
+          return null;
+        },
+      },
+    };
+  }
+
+  function createRootAttributeDocument({
+    rootId = "litsx-root-0",
+    tagName = "PRODUCT-CARD",
+  } = {}) {
+    const rootElement = {
+      nodeType: 1,
+      tagName,
+      previousSibling: null,
+      nextSibling: null,
+      childNodes: [],
+      getAttribute(name) {
+        return name === "data-litsx-root" ? rootId : null;
+      },
+    };
+
+    return {
+      rootElement,
+      documentRef: {
+        childNodes: [rootElement],
+        getElementById() {
+          return null;
+        },
+      },
+    };
+  }
+
   it("installs hydration support only once", async () => {
     const { installHydrationSupport } = await import("../packages/ssr-client/src/index.js");
     const calls = [];
@@ -102,47 +158,115 @@ describe("@litsx/ssr-client", () => {
     assert.deepStrictEqual(readHydrationData(documentRef), payload);
   });
 
+  it("reads client imports from hydration data when no standalone imports script exists", async () => {
+    const { readClientImports } = await import("../packages/ssr-client/src/index.js");
+
+    assert.deepStrictEqual(
+      readClientImports(
+        {
+          getElementById() {
+            return null;
+          },
+        },
+        {
+          hydrationData: {
+            version: 1,
+            roots: [],
+            clientImports: ["/assets/a.js", "/assets/a.js", "/assets/b.js"],
+          },
+        },
+      ),
+      ["/assets/a.js", "/assets/b.js"],
+    );
+  });
+
+  it("applies root hydration payloads idempotently", async () => {
+    const {
+      LITSX_HYDRATION_PAYLOAD_PROPERTY,
+      applyHydrationPayload,
+    } = await import("../packages/ssr-client/src/index.js");
+    const element = {};
+    const roots = [
+      {
+        id: "litsx-root-0",
+        tagName: "product-card",
+        element,
+      },
+    ];
+    const hydrationData = {
+      version: 1,
+      roots: [{ id: "litsx-root-0", tagName: "product-card" }],
+      payload: {
+        roots: {
+          "litsx-root-0": {
+            props: {
+              product: {
+                name: "Trail Shoe",
+              },
+            },
+          },
+        },
+        instances: {},
+      },
+    };
+
+    assert.strictEqual(applyHydrationPayload(roots, hydrationData), roots);
+    assert.deepStrictEqual(element[LITSX_HYDRATION_PAYLOAD_PROPERTY], {
+      props: {
+        product: {
+          name: "Trail Shoe",
+        },
+      },
+    });
+    assert.strictEqual(applyHydrationPayload(roots, hydrationData), roots);
+  });
+
+  it("rejects invalid hydration payload shapes", async () => {
+    const { readHydrationPayload } = await import("../packages/ssr-client/src/index.js");
+
+    assert.throws(
+      () =>
+        readHydrationPayload(null, {
+          hydrationData: {
+            version: 1,
+            roots: [],
+            payload: {
+              roots: [],
+              instances: {},
+            },
+          },
+        }),
+      /Invalid LitSX SSR hydration payload/,
+    );
+  });
+
   it("hydrates a document by reading client imports from the default script tag", async () => {
     const {
       hydrateDocument,
       LITSX_CLIENT_IMPORTS_SCRIPT_ID,
       LITSX_HYDRATION_DATA_SCRIPT_ID,
-      LITSX_ROOT_ATTRIBUTE,
     } = await import("../packages/ssr-client/src/index.js");
     const calls = [];
-    const rootElement = {
-      tagName: "PRODUCT-CARD",
-      getAttribute(name) {
-        return name === LITSX_ROOT_ATTRIBUTE ? "litsx-root-0" : null;
-      },
-    };
-    const documentRef = {
-      getElementById(id) {
-        if (id === LITSX_CLIENT_IMPORTS_SCRIPT_ID) {
-          return { textContent: JSON.stringify(["/assets/a.js", "/assets/a.js", "/assets/b.js"]) };
-        }
-        if (id === LITSX_HYDRATION_DATA_SCRIPT_ID) {
-          return {
-            textContent: JSON.stringify({
-              version: 1,
-              roots: [
-                {
-                  id: "litsx-root-0",
-                  tagName: "product-card",
-                  moduleId: "/src/ProductCard.litsx",
-                },
-              ],
-            }),
-          };
-        }
-        return null;
-      },
-      querySelector(selector) {
-        if (selector === `[${LITSX_ROOT_ATTRIBUTE}="litsx-root-0"]`) {
-          return rootElement;
-        }
-        return null;
-      },
+    const { documentRef, rootElement } = createRootAttributeDocument();
+    documentRef.getElementById = (id) => {
+      if (id === LITSX_CLIENT_IMPORTS_SCRIPT_ID) {
+        return { textContent: JSON.stringify(["/assets/a.js", "/assets/a.js", "/assets/b.js"]) };
+      }
+      if (id === LITSX_HYDRATION_DATA_SCRIPT_ID) {
+        return {
+          textContent: JSON.stringify({
+            version: 1,
+            roots: [
+              {
+                id: "litsx-root-0",
+                tagName: "product-card",
+                moduleId: "/src/ProductCard.litsx",
+              },
+            ],
+          }),
+        };
+      }
+      return null;
     };
 
     const result = await hydrateDocument({
@@ -176,26 +300,13 @@ describe("@litsx/ssr-client", () => {
 
   it("resolves and validates hydration roots from the payload", async () => {
     const {
-      LITSX_ROOT_ATTRIBUTE,
       resolveHydrationRoot,
       resolveHydrationRoots,
     } = await import("../packages/ssr-client/src/index.js");
-    const rootElement = {
-      tagName: "PRODUCT-CARD",
-      getAttribute(name) {
-        return name === LITSX_ROOT_ATTRIBUTE ? "litsx-root-0" : null;
-      },
-    };
+    const { documentRef, rootElement } = createRootAttributeDocument();
 
     const roots = resolveHydrationRoots(
-      {
-        querySelector(selector) {
-          if (selector === `[${LITSX_ROOT_ATTRIBUTE}="litsx-root-0"]`) {
-            return rootElement;
-          }
-          return null;
-        },
-      },
+      documentRef,
       {
         hydrationData: {
           version: 1,
@@ -221,14 +332,7 @@ describe("@litsx/ssr-client", () => {
 
     assert.deepStrictEqual(
       resolveHydrationRoot(
-        {
-          querySelector(selector) {
-            if (selector === `[${LITSX_ROOT_ATTRIBUTE}="litsx-root-0"]`) {
-              return rootElement;
-            }
-            return null;
-          },
-        },
+        documentRef,
         "litsx-root-0",
         {
           hydrationData: {
@@ -252,29 +356,62 @@ describe("@litsx/ssr-client", () => {
     );
   });
 
-  it("requires hydrateRoot targets to carry the LitSX root marker", async () => {
+  it("resolves hydrateRoot ids from LitSX root attributes", async () => {
+    const { hydrateRoot } = await import("../packages/ssr-client/src/index.js");
+    const { rootElement } = createRootAttributeDocument();
+    const calls = [];
+
+    const result = await hydrateRoot(rootElement, {
+      hydrationData: {
+        version: 1,
+        roots: [{ id: "litsx-root-0", tagName: "product-card" }],
+      },
+      hydrationSupportLoader: async () => {
+        calls.push("support");
+      },
+    });
+
+    assert.strictEqual(result, rootElement);
+    assert.deepStrictEqual(calls, ["support"]);
+  });
+
+  it("resolves hydrateRoot ids from the preceding LitSX root marker fallback", async () => {
+    const { hydrateRoot } = await import("../packages/ssr-client/src/index.js");
+    const { rootElement } = createRootMarkerDocument();
+    const calls = [];
+
+    const result = await hydrateRoot(rootElement, {
+      hydrationData: {
+        version: 1,
+        roots: [{ id: "litsx-root-0", tagName: "product-card" }],
+      },
+      hydrationSupportLoader: async () => {
+        calls.push("support");
+      },
+    });
+
+    assert.strictEqual(result, rootElement);
+    assert.deepStrictEqual(calls, ["support"]);
+  });
+
+  it("requires hydrateRoot targets to have a LitSX root attribute, marker, or explicit root id", async () => {
     const { hydrateRoot } = await import("../packages/ssr-client/src/index.js");
 
     await assert.rejects(
       () =>
         hydrateRoot(
           {
-            getAttribute() {
-              return null;
-            },
+            tagName: "PRODUCT-CARD",
           },
           {
             hydrationData: {
               version: 1,
               roots: [{ id: "litsx-root-0", tagName: "product-card" }],
             },
-            querySelector() {
-              return null;
-            },
             hydrationSupportLoader: async () => {},
           },
         ),
-      /requires a root element marked with data-litsx-root/,
+      /requires a root id or an element marked as a LitSX SSR root/,
     );
   });
 });

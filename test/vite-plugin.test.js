@@ -48,6 +48,46 @@ describe("@litsx/vite-plugin", () => {
     );
   });
 
+  it("resolves manifest entries with dot-prefixed keys and normalized base paths", () => {
+    const resolver = createLitsxViteAssetResolver({
+      root: "/repo",
+      base: "nested/app",
+      manifest: {
+        "./src/components/ProductCard.litsx": {
+          file: "assets/ProductCard.abcd1234.js",
+        },
+      },
+    });
+
+    assert.strictEqual(
+      resolver("/repo/src/components/ProductCard.litsx"),
+      "/nested/app/assets/ProductCard.abcd1234.js",
+    );
+  });
+
+  it("returns null for LitSX SSR assets outside the Vite root", () => {
+    const resolver = createLitsxViteAssetResolver({
+      root: "/repo",
+    });
+
+    assert.strictEqual(
+      resolver("/external/ProductCard.litsx"),
+      null,
+    );
+  });
+
+  it("resolves file URL module ids for SSR asset collection", () => {
+    const resolver = createLitsxViteAssetResolver({
+      root: "/repo",
+      base: "/",
+    });
+
+    assert.strictEqual(
+      resolver("file:///repo/src/components/ProductCard.litsx"),
+      "/src/components/ProductCard.litsx",
+    );
+  });
+
   it("transforms jsx and returns code with a sourcemap", async () => {
     const plugin = litsx({ sourceMaps: true });
     const source = [

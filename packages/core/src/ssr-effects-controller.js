@@ -61,7 +61,14 @@ export class SsrEffectsController {
   }
 
   resolveReducer(reducer, initialArg, init) {
+    const slotIndex = this.reducerCursor;
     const [state] = resolveReducer(this, reducer, initialArg, init);
+    this.ssrContext?.context?.collectHydrationState?.({
+      rootId: this.ssrContext.rootId,
+      instanceId: this.ssrContext.currentInstanceId,
+      slot: slotIndex,
+      value: state,
+    });
     return [state, () => state];
   }
 

@@ -11,7 +11,8 @@ function normalizeBase(base = "/") {
     return "/";
   }
 
-  return base.endsWith("/") ? base : `${base}/`;
+  const prefixed = base.startsWith("/") ? base : `/${base}`;
+  return prefixed.endsWith("/") ? prefixed : `${prefixed}/`;
 }
 
 function toProjectRelativeModuleId(moduleId, root) {
@@ -51,7 +52,7 @@ export function createLitsxViteAssetResolver({
   return (moduleId) => {
     const relativeModuleId = toProjectRelativeModuleId(moduleId, root);
     if (!relativeModuleId) {
-      return moduleId || null;
+      return null;
     }
 
     if (manifest && typeof manifest === "object") {
