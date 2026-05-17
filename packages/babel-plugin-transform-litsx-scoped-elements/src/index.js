@@ -81,11 +81,17 @@ function transformClass(classPath, programPath, options = {}, availableMap = bui
   const filename = normalizeFilePath(programPath.hub.file?.opts?.filename || "");
   if (importedCandidates.length > 0 && filename) {
     const importedEntries = ensureImportedElementCandidates(programPath, filename, importedCandidates);
-    importedEntries.forEach(({ localName, lightDom }) => {
+    importedEntries.forEach(({ localName, originalName, lightDom }) => {
       precomputedCandidates.add(localName);
       const availableEntry = availableMap.get(localName);
       if (availableEntry) {
         availableEntry.lightDom ||= Boolean(lightDom);
+        availableEntry.originalName = originalName ?? availableEntry.originalName ?? localName;
+      } else {
+        availableMap.set(localName, {
+          originalName: originalName ?? localName,
+          lightDom: Boolean(lightDom),
+        });
       }
     });
   }
@@ -283,6 +289,7 @@ function ensureImportedElementCandidates(programPath, fromFilename, importedCand
       if (matchingSpecifier?.local?.name) {
         localEntries.push({
           localName: matchingSpecifier.local.name,
+          originalName: candidate.originalName,
           lightDom: Boolean(candidate.lightDom),
         });
         return;
@@ -308,6 +315,7 @@ function ensureImportedElementCandidates(programPath, fromFilename, importedCand
 
     localEntries.push({
       localName,
+      originalName: candidate.originalName,
       lightDom: Boolean(candidate.lightDom),
     });
   });
@@ -478,10 +486,11 @@ function detectElementsFromClass(classPath, programPath, availableMap, precomput
   precomputedCandidates.forEach((candidate) => {
     if (!availableMap.has(candidate)) return;
     const entry = availableMap.get(candidate);
+    const originalName = entry.originalName ?? candidate;
     used.set(candidate, {
       ...entry,
       originalName: candidate,
-      tagName: toKebab(candidate),
+      tagName: toKebab(originalName),
     });
   });
 
