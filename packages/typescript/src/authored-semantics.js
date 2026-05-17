@@ -477,7 +477,20 @@ function createOriginalIssue(virtualization, config) {
 
 function collectStaticHoistIssues(ast, virtualization) {
   const issues = [];
-  const seenSingletonHoists = new Map();
+  const seenSingletonHoistsByBody = new Map();
+
+  function getSeenSingletonHoists(functionBody) {
+    if (!functionBody || typeof functionBody !== "object") {
+      return null;
+    }
+
+    let seenSingletonHoists = seenSingletonHoistsByBody.get(functionBody);
+    if (!seenSingletonHoists) {
+      seenSingletonHoists = new Map();
+      seenSingletonHoistsByBody.set(functionBody, seenSingletonHoists);
+    }
+    return seenSingletonHoists;
+  }
 
   function visit(node, parent = null, functionBody = null) {
     if (!node || typeof node !== "object") {
@@ -519,7 +532,8 @@ function collectStaticHoistIssues(ast, virtualization) {
         );
       }
 
-      if (SINGLETON_STATIC_HOISTS.has(macroName)) {
+      const seenSingletonHoists = getSeenSingletonHoists(nextFunctionBody);
+      if (seenSingletonHoists && SINGLETON_STATIC_HOISTS.has(macroName)) {
         if (seenSingletonHoists.has(macroName)) {
           issues.push(
             createOriginalIssue(virtualization, {
@@ -556,25 +570,27 @@ function collectStaticHoistIssues(ast, virtualization) {
 
   visit(ast.program ?? ast, null, null);
 
-  if (
-    seenSingletonHoists.has("lightDom") &&
-    seenSingletonHoists.has("shadowRootOptions")
-  ) {
-    const shadowRootOptionsHoist = seenSingletonHoists.get("shadowRootOptions");
-    issues.push(
-      createOriginalIssue(virtualization, {
-        kind: "ignored-static-hoist",
-        severity: "warning",
-        code: 91019,
-        start: shadowRootOptionsHoist.start ?? 0,
-        length: Math.max(
-          0,
-          (shadowRootOptionsHoist.end ?? shadowRootOptionsHoist.start ?? 0) -
-            (shadowRootOptionsHoist.start ?? 0),
-        ),
-        message: 'static shadowRootOptions = ... is ignored when static lightDom = true.',
-      }),
-    );
+  for (const seenSingletonHoists of seenSingletonHoistsByBody.values()) {
+    if (
+      seenSingletonHoists.has("lightDom") &&
+      seenSingletonHoists.has("shadowRootOptions")
+    ) {
+      const shadowRootOptionsHoist = seenSingletonHoists.get("shadowRootOptions");
+      issues.push(
+        createOriginalIssue(virtualization, {
+          kind: "ignored-static-hoist",
+          severity: "warning",
+          code: 91019,
+          start: shadowRootOptionsHoist.start ?? 0,
+          length: Math.max(
+            0,
+            (shadowRootOptionsHoist.end ?? shadowRootOptionsHoist.start ?? 0) -
+              (shadowRootOptionsHoist.start ?? 0),
+          ),
+          message: 'static shadowRootOptions = ... is ignored when static lightDom = true.',
+        }),
+      );
+    }
   }
 
   return issues;

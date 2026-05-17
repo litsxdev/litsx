@@ -600,6 +600,70 @@ describe("@litsx/typescript editor-session", () => {
     assert.ok(completions.findIndex((entry) => entry.label === "useState") < completions.findIndex((entry) => entry.label === "UserActivation"));
   }, 15000);
 
+  it("does not report editor false positives for authored LitSX components", () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-editor-session-authored-"));
+    const packageDir = path.join(tempDir, "node_modules", "@litsx");
+    const filePath = path.join(tempDir, "components.litsx");
+    const sourceText = [
+      'import { useState } from "@litsx/core";',
+      "",
+      'export function DemoLeaf({ label = "Counter", initialCount = 0 }) {',
+      '  static styles = `button { border-radius: 8px; }`;',
+      '  const [count, setCount] = useState(initialCount);',
+      '  return <button @click={() => setCount(count + 1)}>{label}: {count}</button>;',
+      "}",
+      "",
+      'export function DemoMetricRow({ label = "Depth", children }) {',
+      "  return <p><strong>{label}</strong>{children}</p>;",
+      "}",
+      "",
+      "export function DemoPanel({ children }) {",
+      "  static lightDom = true;",
+      "  return <section>{children}</section>;",
+      "}",
+      "",
+      'export function DemoApp({ title = "SSR" }) {',
+      "  static lightDom = true;",
+      "  return (",
+      "    <DemoPanel>",
+      "      <h1>{title}</h1>",
+      '      <DemoMetricRow label="Level">5</DemoMetricRow>',
+      '      <DemoLeaf initialCount={4} />',
+      "    </DemoPanel>",
+      "  );",
+      "}",
+      "",
+    ].join("\n");
+
+    fs.mkdirSync(packageDir, { recursive: true });
+    fs.symlinkSync(path.join(process.cwd(), "packages", "core"), path.join(packageDir, "core"), "dir");
+    fs.writeFileSync(
+      path.join(tempDir, "tsconfig.json"),
+      JSON.stringify({
+        compilerOptions: {
+          jsx: "react-jsx",
+          jsxImportSource: "@litsx/core",
+          target: "ES2022",
+          module: "ESNext",
+          moduleResolution: "Bundler",
+          allowArbitraryExtensions: true,
+          strict: true,
+        },
+        include: ["components.litsx"],
+      }),
+    );
+    fs.writeFileSync(filePath, sourceText);
+
+    const session = createLitsxEditorSession({ typescript: ts });
+    const diagnostics = session.getDiagnostics(filePath, sourceText, "litsx");
+    const diagnosticCodes = diagnostics.map((diagnostic) => diagnostic.code);
+
+    assert.ok(!diagnosticCodes.includes(2554));
+    assert.ok(!diagnosticCodes.includes(2322));
+    assert.ok(!diagnosticCodes.includes(7031));
+    assert.ok(!diagnosticCodes.includes(91009));
+  }, 15000);
+
   it("suppresses customElements.define false positives for imported .litsx components", () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-editor-session-story-"));
     const componentFilePath = path.join(tempDir, "button.litsx");

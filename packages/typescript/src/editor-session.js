@@ -424,6 +424,79 @@ function shouldSuppressCustomElementConstructorDiagnostic(ts, sourceFile, diagno
       .includes("CustomElementConstructor");
 }
 
+function containsJsx(ts, node) {
+  let found = false;
+
+  function visit(current) {
+    if (found) {
+      return;
+    }
+
+    if (
+      ts.isJsxElement(current) ||
+      ts.isJsxSelfClosingElement(current) ||
+      ts.isJsxFragment(current)
+    ) {
+      found = true;
+      return;
+    }
+
+    current.forEachChild(visit);
+  }
+
+  node?.forEachChild?.(visit);
+  return found;
+}
+
+function getFunctionLikeName(ts, node) {
+  if (ts.isFunctionDeclaration(node) || ts.isFunctionExpression(node)) {
+    return node.name?.text ?? null;
+  }
+
+  const parent = node.parent;
+  if (ts.isVariableDeclaration(parent) && ts.isIdentifier(parent.name)) {
+    return parent.name.text;
+  }
+
+  return null;
+}
+
+function isLikelyAuthoredLitsxComponent(ts, node) {
+  const name = getFunctionLikeName(ts, node);
+  return (typeof name === "string" && /^[A-Z]/.test(name)) || containsJsx(ts, node.body);
+}
+
+function shouldSuppressImplicitAnyBindingDiagnostic(ts, sourceFile, diagnostic) {
+  if (diagnostic.code !== 7031 || typeof diagnostic.start !== "number") {
+    return false;
+  }
+
+  let current = findDeepestNodeAtPosition(sourceFile, diagnostic.start);
+
+  while (current && !ts.isParameter(current)) {
+    current = current.parent ?? null;
+  }
+
+  if (!current || !ts.isParameter(current)) {
+    return false;
+  }
+
+  const owner = current.parent;
+  if (
+    !owner ||
+    !(
+      ts.isFunctionDeclaration(owner) ||
+      ts.isFunctionExpression(owner) ||
+      ts.isArrowFunction(owner)
+    ) ||
+    owner.parameters?.[0] !== current
+  ) {
+    return false;
+  }
+
+  return isLikelyAuthoredLitsxComponent(ts, owner);
+}
+
 function getScopeCompletionPrefix(sourceText, position) {
   const match = /[A-Za-z0-9_$]*$/.exec(sourceText.slice(0, position));
   return match?.[0] ?? "";
@@ -798,6 +871,24 @@ function createLitsxEditorSession(options = {}) {
     }
   }
 
+  function applyLitsxCompilerOptionDefaults(compilerOptions, fileName, queryFileName) {
+    if (!isRelevantFile(fileName) && !isRelevantFile(queryFileName)) {
+      return compilerOptions;
+    }
+
+    const needsDefaultJsxImportSource = compilerOptions.jsxImportSource == null;
+    return {
+      ...compilerOptions,
+      jsx:
+        compilerOptions.jsx == null || needsDefaultJsxImportSource
+          ? ts.JsxEmit.ReactJSX
+          : compilerOptions.jsx,
+      jsxImportSource: needsDefaultJsxImportSource
+        ? "@litsx/core"
+        : compilerOptions.jsxImportSource,
+    };
+  }
+
   function getOrCreateProjectService(fileName, sourceText, languageId) {
     const projectKey = getProjectKey(fileName);
     const queryFileName = getQueryFileName(fileName, languageId);
@@ -837,11 +928,17 @@ function createLitsxEditorSession(options = {}) {
             allowNonTsExtensions: true,
           };
         }
+        compilerOptions = applyLitsxCompilerOptionDefaults(
+          compilerOptions,
+          fileName,
+          queryFileName,
+        );
       } else {
         compilerOptions = {
           target: ts.ScriptTarget.ESNext,
           module: ts.ModuleKind.ESNext,
-          jsx: ts.JsxEmit.Preserve,
+          jsx: ts.JsxEmit.ReactJSX,
+          jsxImportSource: "@litsx/core",
           allowJs: true,
           checkJs: true,
           allowNonTsExtensions: true,
@@ -1077,7 +1174,8 @@ function createLitsxEditorSession(options = {}) {
       .filter((diagnostic) => (
         !String(diagnostic.messageText ?? "").includes("__litsx_") &&
         !startsAtAuthoredSyntax(sourceText, diagnostic.start) &&
-        !shouldSuppressCustomElementConstructorDiagnostic(ts, authoredSourceFile, diagnostic)
+        !shouldSuppressCustomElementConstructorDiagnostic(ts, authoredSourceFile, diagnostic) &&
+        !(languageId === "litsx" && shouldSuppressImplicitAnyBindingDiagnostic(ts, authoredSourceFile, diagnostic))
       ));
 
     const authoredDiagnostics = collectLitsxAuthoredDiagnostics(sourceText, ts, {

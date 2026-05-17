@@ -546,7 +546,7 @@ describe("@litsx/typescript", () => {
       plugins: ["typescript"],
     });
 
-    assert.match(result.toolingPreamble, /declare function __litsx_static_lightDom\(\): void;/);
+    assert.match(result.toolingPreamble, /declare function __litsx_static_lightDom\(value\?: unknown\): void;/);
   });
 
   it("uses JS-safe tooling stubs for static hoists in jsx files", () => {
@@ -560,7 +560,7 @@ describe("@litsx/typescript", () => {
 
     const result = createToolingVirtualLitsxSource(source);
 
-    assert.match(result.toolingPreamble, /function __litsx_static_lightDom\(\) \{\}/);
+    assert.match(result.toolingPreamble, /function __litsx_static_lightDom\(value\) \{\}/);
     assert.match(result.toolingPreamble, /function __litsx_static_styles\(value\) \{ return value; \}/);
     assert.doesNotMatch(result.toolingPreamble, /declare function/);
   });

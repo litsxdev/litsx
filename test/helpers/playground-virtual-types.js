@@ -100,7 +100,7 @@ export const PLAYGROUND_TYPE_FILES = {
         value: T
       ): void;
 
-      declare function __litsx_static_lightDom(): void;
+      declare function __litsx_static_lightDom(value?: unknown): void;
     
       export function useAfterUpdate(
         callback: () => void | (() => void),

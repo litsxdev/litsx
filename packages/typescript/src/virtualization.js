@@ -51,12 +51,12 @@ export function createToolingVirtualLitsxSource(sourceText, options = {}) {
         usesTypeScriptSyntax
           ? (
             name === "__litsx_static_lightDom"
-              ? "declare function __litsx_static_lightDom(): void;\n"
+              ? "declare function __litsx_static_lightDom(value?: unknown): void;\n"
               : `declare function ${name}<T = unknown>(value: T): T;\n`
           )
           : (
             name === "__litsx_static_lightDom"
-              ? "function __litsx_static_lightDom() {}\n"
+              ? "function __litsx_static_lightDom(value) {}\n"
               : `/** @template T @param {T} value @returns {T} */\nfunction ${name}(value) { return value; }\n`
           )
       ))
