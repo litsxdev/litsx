@@ -35,6 +35,7 @@
     "@changesets/cli": "^2.31.1",
     "@lit-labs/ssr": "^4.0.0",
     "@open-wc/scoped-elements": "^3.0.10",
+    "@playwright/test": "^1.60.0",
     "@rollup/plugin-babel": "^7.1.0",
     "@rollup/plugin-commonjs": "^29.0.3",
     "@rollup/plugin-json": "^6.1.0",
@@ -58,6 +59,7 @@
     "build": "yarn workspaces run build",
     "test": "vitest run",
     "test:browser:scoped-registry": "vitest run --config test/vitest.browser-repro.config.js",
+    "test:ssr:browser": "playwright test --config=playwright.ssr.config.js",
     "test:transforms": "LITSX_VITEST_TRANSFORMS=1 vitest run",
     "bench:transform-litsx": "node scripts/bench/transform-litsx.js",
     "coverage": "vitest run --coverage",
@@ -78,7 +80,7 @@
     "release:github": "node scripts/release/build-github-release.js",
     "release:github:backfill": "node scripts/release/backfill-github-releases.js",
     "release:publish": "yarn release:check && yarn release:smoke:scaffolds && yarn changeset:publish",
-    "release:test": "vitest run test/release-manifest.test.js test/create-litsx-app.test.js test/prettier-plugin-litsx.test.js test/shiki-languages.test.js test/typescript-plugin-litsx.test.js test/vite-plugin.test.js test/compiler.test.js test/compiler-authored-input.test.js"
+    "release:test": "vitest run test/release-manifest.test.js test/create-litsx-app.test.js test/prettier-plugin-litsx.test.js test/shiki-languages.test.js test/typescript-plugin-litsx.test.js test/vite-plugin.test.js test/compiler.test.js test/compiler-authored-input.test.js test/ssr.test.js test/ssr-client.test.js"
   },
   "author": "LitSX Team",
   "license": "Apache-2.0",

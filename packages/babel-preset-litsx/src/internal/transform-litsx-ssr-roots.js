@@ -28,13 +28,13 @@ export default function transformLitsxSsrRoots(api) {
     visitor: {
       Program(programPath, state) {
         const availableMap = buildAvailableMap(programPath);
-        const renderToStringBindings = collectSsrRenderBindings(programPath);
+        const ssrRenderBindings = collectSsrRenderBindings(programPath);
         const sharedOptions = {
           ...(state.opts || {}),
           filename: programPath.hub.file?.opts?.filename || "",
         };
 
-        if (renderToStringBindings.size === 0) {
+        if (ssrRenderBindings.size === 0) {
           return;
         }
 
@@ -45,7 +45,7 @@ export default function transformLitsxSsrRoots(api) {
             }
 
             const calleeName = callPath.node.callee.name;
-            if (!renderToStringBindings.has(calleeName)) {
+            if (!ssrRenderBindings.has(calleeName)) {
               return;
             }
 
@@ -135,7 +135,10 @@ function collectSsrRenderBindings(programPath) {
     for (const specifier of nodePath.node.specifiers) {
       if (
         t.isImportSpecifier(specifier) &&
-        t.isIdentifier(specifier.imported, { name: "renderToString" })
+        (
+          t.isIdentifier(specifier.imported, { name: "renderToString" }) ||
+          t.isIdentifier(specifier.imported, { name: "renderToStream" })
+        )
       ) {
         bindings.add(specifier.local.name);
       }
