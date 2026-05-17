@@ -661,6 +661,107 @@ describe("@litsx/typescript editor-session", () => {
     assert.ok(!diagnosticCodes.includes(2554));
     assert.ok(!diagnosticCodes.includes(2322));
     assert.ok(!diagnosticCodes.includes(7031));
+    assert.ok(diagnosticCodes.includes(91020));
+    assert.ok(!diagnosticCodes.includes(91009));
+  }, 15000);
+
+  it("does not report duplicate static hoists for the ssr hydration component tree", () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-editor-session-ssr-hydration-"));
+    const packageDir = path.join(tempDir, "node_modules", "@litsx");
+    const filePath = path.join(tempDir, "components.litsx");
+    const sourceText = [
+      'import { useMemoValue, useState } from "@litsx/core";',
+      "",
+      'export function DemoLeaf({ label, initialCount = 0 }) {',
+      "  static styles = `",
+      "    :host {",
+      "      display: inline-block;",
+      "    }",
+      "",
+      "    button {",
+      "      border: 0;",
+      "    }",
+      "  `;",
+      "",
+      "  const [count, setCount] = useState(initialCount);",
+      "  const buttonLabel = useMemoValue(() => `${label}: ${count}`, [label, count]);",
+      "  return <button @click={() => setCount((value) => value + 1)}>{buttonLabel}</button>;",
+      "}",
+      "",
+      "export function DemoMetricRow({ label, initialCount }) {",
+      "  static lightDom = true;",
+      "  return (",
+      "    <article>",
+      "      <DemoLeaf label={label} initialCount={initialCount} />",
+      "    </article>",
+      "  );",
+      "}",
+      "",
+      "export function DemoPanel({ label, initialCount, children }) {",
+      "  static styles = `",
+      "    :host {",
+      "      display: block;",
+      "    }",
+      "  `;",
+      "  return (",
+      "    <section>",
+      "      <slot></slot>",
+      "      <DemoMetricRow label={label} initialCount={initialCount} />",
+      "    </section>",
+      "  );",
+      "}",
+      "",
+      "export function DemoContent({ label, initialCount }) {",
+      "  static lightDom = true;",
+      "  return (",
+      "    <div>",
+      "      <DemoPanel label={label} initialCount={initialCount}>",
+      "        <p>{label}</p>",
+      "      </DemoPanel>",
+      "    </div>",
+      "  );",
+      "}",
+      "",
+      'export function DemoApp({ title = "LitSX SSR", initialCount = 0 }) {',
+      "  static styles = `",
+      "    :host {",
+      "      display: block;",
+      "    }",
+      "  `;",
+      "  const [currentTitle] = useState(title);",
+      "  return (",
+      "    <section>",
+      "      <h1>{currentTitle}</h1>",
+      '      <DemoContent label="Hydrated counter" initialCount={initialCount} />',
+      "    </section>",
+      "  );",
+      "}",
+      "",
+    ].join("\n");
+
+    fs.mkdirSync(packageDir, { recursive: true });
+    fs.symlinkSync(path.join(process.cwd(), "packages", "core"), path.join(packageDir, "core"), "dir");
+    fs.writeFileSync(
+      path.join(tempDir, "tsconfig.json"),
+      JSON.stringify({
+        compilerOptions: {
+          jsx: "react-jsx",
+          jsxImportSource: "@litsx/core",
+          target: "ES2022",
+          module: "ESNext",
+          moduleResolution: "Bundler",
+          allowArbitraryExtensions: true,
+          strict: true,
+        },
+        include: ["components.litsx"],
+      }),
+    );
+    fs.writeFileSync(filePath, sourceText);
+
+    const session = createLitsxEditorSession({ typescript: ts });
+    const diagnostics = session.getDiagnostics(filePath, sourceText, "litsx");
+    const diagnosticCodes = diagnostics.map((diagnostic) => diagnostic.code);
+
     assert.ok(!diagnosticCodes.includes(91009));
   }, 15000);
 

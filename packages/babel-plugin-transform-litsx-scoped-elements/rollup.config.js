@@ -5,11 +5,4 @@ const packageDir = fileURLToPath(new URL(".", import.meta.url));
 
 export default createPackageRollupConfig({
   packageDir,
-  input: {
-    index: "src/index.js",
-    virtualization: "src/virtualization.js",
-    typecheck: "src/typecheck.js",
-    "authored-semantics": "src/authored-semantics.js",
-    "editor-session": "src/editor-session.js",
-  },
 });

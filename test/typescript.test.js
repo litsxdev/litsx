@@ -376,6 +376,44 @@ describe("@litsx/typescript", () => {
     assert.ok(!issues.some((issue) => issue.code === 91018));
   });
 
+  it("warns when destructured component props have no explicit metadata", () => {
+    const issues = collectLitsxAuthoredIssues(`
+      export function Card({ title, count = 0 }) {
+        return <button>{title}:{count}</button>;
+      }
+    `, { channel: "all" });
+
+    assert.ok(issues.some((issue) => issue.code === 91020));
+    assert.ok(issues.some((issue) => issue.code === 91020 && /"title"/.test(issue.message)));
+  });
+
+  it("does not warn for destructured component props with TypeScript annotations", () => {
+    const issues = collectLitsxAuthoredIssues(`
+      type Props = { title: string; count?: number };
+
+      export function Card({ title, count = 0 }: Props) {
+        return <button>{title}:{count}</button>;
+      }
+    `, { channel: "all", plugins: ["typescript"] });
+
+    assert.ok(!issues.some((issue) => issue.code === 91020));
+  });
+
+  it("does not warn for destructured component props covered by static properties", () => {
+    const issues = collectLitsxAuthoredIssues(`
+      export function Card({ title, count = 0 }) {
+        static properties = {
+          title: String,
+          count: Number,
+        };
+
+        return <button>{title}:{count}</button>;
+      }
+    `, { channel: "all" });
+
+    assert.ok(!issues.some((issue) => issue.code === 91020));
+  });
+
   it("treats PascalCase function declarations as components and ignores member assignments", () => {
     const issues = collectLitsxAuthoredIssues(`
       function Card(props) {
@@ -504,9 +542,13 @@ describe("@litsx/typescript", () => {
       plugins: ["typescript"],
     });
 
-    assert.strictEqual(diagnostics.length, 1);
-    assert.strictEqual(diagnostics[0].code, 91007);
-    assert.match(diagnostics[0].messageText, /must appear as a top-level statement in the component body/);
+    assert.ok(diagnostics.some((diagnostic) => diagnostic.code === 91007));
+    assert.ok(
+      diagnostics.some((diagnostic) => (
+        diagnostic.code === 91007
+        && /must appear as a top-level statement in the component body/.test(diagnostic.messageText)
+      )),
+    );
   });
 
   it("does not report authored diagnostics for top-level static hoists", () => {

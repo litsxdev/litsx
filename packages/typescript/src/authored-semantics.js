@@ -1072,6 +1072,94 @@ function collectPropsAccessIssues(ast, virtualization) {
   return issues;
 }
 
+function getFirstParamObjectPattern(node) {
+  const firstParam = node?.params?.[0];
+  if (!firstParam) {
+    return null;
+  }
+
+  if (firstParam.type === "ObjectPattern") {
+    return {
+      pattern: firstParam,
+      hasTypeAnnotation: Boolean(firstParam.typeAnnotation),
+    };
+  }
+
+  if (firstParam.type === "AssignmentPattern" && firstParam.left?.type === "ObjectPattern") {
+    return {
+      pattern: firstParam.left,
+      hasTypeAnnotation: Boolean(firstParam.left.typeAnnotation || firstParam.typeAnnotation),
+    };
+  }
+
+  return null;
+}
+
+function getObjectPatternPropertyNames(pattern) {
+  const names = [];
+
+  for (const property of pattern?.properties ?? []) {
+    if (property?.type !== "ObjectProperty") {
+      continue;
+    }
+
+    if (property.key?.type === "Identifier") {
+      names.push(property.key.name);
+      continue;
+    }
+
+    if (property.key?.type === "StringLiteral") {
+      names.push(property.key.value);
+    }
+  }
+
+  return names;
+}
+
+function collectDestructuredPropsMetadataIssues(ast, virtualization) {
+  const issues = [];
+
+  for (const { node } of collectComponentLikeFunctions(ast)) {
+    const firstParamPattern = getFirstParamObjectPattern(node);
+    if (!firstParamPattern || firstParamPattern.hasTypeAnnotation) {
+      continue;
+    }
+
+    const destructuredPropNames = getObjectPatternPropertyNames(firstParamPattern.pattern);
+    if (destructuredPropNames.length === 0) {
+      continue;
+    }
+
+    const staticPropNames = new Set(inferStaticPropertyNames(node));
+    const uncoveredPropNames = destructuredPropNames.filter((name) => !staticPropNames.has(name));
+    if (uncoveredPropNames.length === 0) {
+      continue;
+    }
+
+    const propSummary = uncoveredPropNames
+      .slice(0, 3)
+      .map((name) => `"${name}"`)
+      .join(", ");
+    const moreCount = uncoveredPropNames.length - Math.min(uncoveredPropNames.length, 3);
+    const propDetails = moreCount > 0 ? `${propSummary}, and ${moreCount} more` : propSummary;
+
+    issues.push(createOriginalIssue(virtualization, {
+      kind: "destructured-props-metadata-missing",
+      severity: "warning",
+      code: 91020,
+      start: firstParamPattern.pattern.start ?? 0,
+      length: Math.max(
+        0,
+        (firstParamPattern.pattern.end ?? firstParamPattern.pattern.start ?? 0)
+          - (firstParamPattern.pattern.start ?? 0),
+      ),
+      message: `Destructured component props ${propDetails} have no explicit LitSX prop metadata. Add a TypeScript annotation or static properties = ... for stronger prop semantics.`,
+    }));
+  }
+
+  return issues;
+}
+
 function collectHoistsFirstIssues(ast, virtualization) {
   const issues = [];
 
@@ -1379,6 +1467,7 @@ export function collectLitsxAuthoredIssues(sourceText, options = {}) {
   issues.push(...collectStaticHoistIssues(ast, virtualization));
   issues.push(...collectReactMemoIssues(ast, virtualization));
   issues.push(...collectReactCompatSurfaceIssues(ast, virtualization));
+  issues.push(...collectDestructuredPropsMetadataIssues(ast, virtualization));
   issues.push(...collectPropsAccessIssues(ast, virtualization));
   issues.push(...collectHoistsFirstIssues(ast, virtualization));
 
