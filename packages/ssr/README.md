@@ -43,8 +43,9 @@ result.renderModulePreloads();
 - `html`: prerendered HTML, including Declarative Shadow DOM for LitSX elements
 - `clientImports`: deduplicated client module imports collected from rendered
   LitSX elements
-- `hydrationData`: a minimal LitSX root-boundary payload when scoped LitSX
-  roots are rendered, otherwise `null`
+- `hydrationData`: LitSX root-boundary metadata plus root payload, state
+  payload, and client imports when scoped LitSX roots are rendered, otherwise
+  `null`
 - `renderClientImports()`: `<script type="module">` tags for `clientImports`
 - `renderClientImportsData()`: a JSON script tag readable by
   `@litsx/ssr-client`
@@ -52,6 +53,18 @@ result.renderModulePreloads();
   `clientImports`
 - `renderHydrationData()`: a JSON hydration-payload script tag for scoped LitSX
   roots; empty for non-LitSX roots
+
+For streaming responses, use `renderToStream(...)`:
+
+```tsx
+import { renderToStream } from "@litsx/ssr";
+
+const { stream, allReady } = await renderToStream(<ProductCard .product={product} />);
+const metadata = await allReady;
+```
+
+`stream` is a Web `ReadableStream<string>`. `allReady` resolves with the same
+metadata helpers as `renderToString(...)` once rendering has completed.
 
 ## Authored Root Syntax
 
@@ -142,12 +155,33 @@ root payload:
       "tagName": "product-card",
       "moduleId": "/src/ProductCard.litsx"
     }
-  ]
+  ],
+  "payload": {
+    "roots": {
+      "litsx-root-0": {
+        "props": {
+          "product": {
+            "name": "Trail Shoe"
+          }
+        }
+      }
+    },
+    "instances": {}
+  },
+  "clientImports": ["/assets/ProductCard.js"]
 }
 ```
 
-The rendered host element also receives `data-litsx-root="litsx-root-0"` so the
-client can correlate DOM boundaries with that payload.
+The rendered host element carries a LitSX SSR root attribute so the client can
+correlate DOM boundaries with that payload without inserting extra comments
+into Lit's hydration marker sequence:
+
+```html
+<product-card data-litsx-root="litsx-root-0">...</product-card>
+```
+
+Do not strip Lit comments from hydrated SSR HTML. Lit itself uses comment
+markers for hydration.
 
 ## Supported Input
 
@@ -158,21 +192,12 @@ The current API accepts:
 - arrays
 - strings, numbers, booleans, `null`, and `undefined`
 
-## Current Scope
+## Scope
 
-This first SSR cut includes:
+SSR support includes scoped LitSX element rendering, server components,
+SSR-safe hook execution, Declarative Shadow DOM output, client import
+collection, root-boundary metadata, JSON-safe root prop payloads, hook state
+payloads, and Web Streams output.
 
-- scoped LitSX element rendering
-- `SsrEffectsController` for SSR-safe hook execution
-- Declarative Shadow DOM output
-- `clientImports` collection
-- minimal root-boundary hydration metadata
-
-It does not yet include:
-
-- general prop/state hydration payload generation
-- higher-level LitSX hydration orchestration
-- server-side components
-
-For the current minimal client-side entrypoint, see
+For the client-side entrypoint, see
 [`@litsx/ssr-client`](../ssr-client/README.md).
