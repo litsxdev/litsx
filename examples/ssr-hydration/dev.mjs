@@ -15,6 +15,7 @@ const server = await createServer({
   plugins: [
     litsx({
       ssr: true,
+      sourceMaps: true,
     }),
   ],
 });
