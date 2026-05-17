@@ -1,5 +1,11 @@
 # @litsx/babel-plugin-litsx-proptypes
 
+## 0.2.3
+
+### Patch Changes
+
+- 0394450: Unify package build configuration on the shared Rollup helper and improve LitSX editor diagnostics for destructured component props without explicit metadata.
+
 ## 0.2.2
 
 ### Patch Changes

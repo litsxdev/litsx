@@ -1,5 +1,11 @@
 # @litsx/typescript
 
+## 0.6.3
+
+### Patch Changes
+
+- 0394450: Unify package build configuration on the shared Rollup helper and improve LitSX editor diagnostics for destructured component props without explicit metadata.
+
 ## 0.6.2
 
 ### Patch Changes

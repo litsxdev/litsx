@@ -1,5 +1,11 @@
 # @litsx/babel-plugin-transform-jsx-html-template
 
+## 0.3.3
+
+### Patch Changes
+
+- 0394450: Unify package build configuration on the shared Rollup helper and improve LitSX editor diagnostics for destructured component props without explicit metadata.
+
 ## 0.3.2
 
 ### Patch Changes

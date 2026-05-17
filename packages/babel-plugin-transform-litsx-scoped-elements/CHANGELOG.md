@@ -1,5 +1,11 @@
 # @litsx/babel-plugin-transform-litsx-scoped-elements
 
+## 0.4.1
+
+### Patch Changes
+
+- 0394450: Unify package build configuration on the shared Rollup helper and improve LitSX editor diagnostics for destructured component props without explicit metadata.
+
 ## 0.4.0
 
 ### Minor Changes
