@@ -1,3 +1,4 @@
+import "@litsx/core/internal/ssr-runtime";
 import {
   createScopedSsrContext,
   renderScopedTemplateWithLitSsr,
