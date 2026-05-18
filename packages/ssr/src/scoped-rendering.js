@@ -23,10 +23,50 @@ function isLightDomElement(ctor) {
 }
 
 function ensureSsrElementShape(element) {
-  if (element && typeof element.getRootNode !== "function") {
+  if (!element) {
+    return;
+  }
+
+  if (typeof element.getRootNode !== "function") {
     element.getRootNode = function getRootNode() {
       return this.__host?.shadowRoot ?? null;
     };
+  }
+
+  if (!Array.isArray(element.attributes)) {
+    element.attributes = [];
+  }
+
+  if (typeof element.getAttribute !== "function") {
+    element.getAttribute = function getAttribute(name) {
+      const attribute = this.attributes.find((entry) => entry.name === name);
+      return attribute ? attribute.value : null;
+    };
+  }
+
+  if (typeof element.setAttribute !== "function") {
+    element.setAttribute = function setAttribute(name, value) {
+      const nextValue = String(value);
+      const existing = this.attributes.find((entry) => entry.name === name);
+
+      if (existing) {
+        existing.value = nextValue;
+        return;
+      }
+
+      this.attributes.push({
+        name,
+        value: nextValue,
+      });
+    };
+  }
+
+  if (typeof element.addEventListener !== "function") {
+    element.addEventListener = function addEventListener() {};
+  }
+
+  if (typeof element.removeEventListener !== "function") {
+    element.removeEventListener = function removeEventListener() {};
   }
 }
 
