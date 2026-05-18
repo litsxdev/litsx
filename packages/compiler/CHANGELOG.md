@@ -1,5 +1,17 @@
 # @litsx/compiler
 
+## 0.7.1
+
+### Patch Changes
+
+- c432761: Declare direct runtime dependencies explicitly so strict package managers such as Yarn Plug'n'Play can resolve the published LitSX toolchain without undeclared dependency errors.
+- c432761: Declare `source-map-js` explicitly so Yarn Plug'n'Play and other strict resolvers can load the published compiler pipeline without undeclared dependency errors.
+- Updated dependencies [c432761]
+- Updated dependencies [c432761]
+  - @litsx/babel-plugin-transform-jsx-html-template@0.3.4
+  - @litsx/babel-preset-litsx@0.7.1
+  - @litsx/typescript@0.6.4
+
 ## 0.7.0
 
 ### Minor Changes

@@ -1,5 +1,11 @@
 # @litsx/babel-plugin-transform-litsx-scoped-elements
 
+## 0.4.2
+
+### Patch Changes
+
+- c432761: Declare direct runtime dependencies explicitly so strict package managers such as Yarn Plug'n'Play can resolve the published LitSX toolchain without undeclared dependency errors.
+
 ## 0.4.1
 
 ### Patch Changes

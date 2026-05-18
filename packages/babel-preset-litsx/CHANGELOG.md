@@ -1,5 +1,15 @@
 # @litsx/babel-preset-litsx
 
+## 0.7.1
+
+### Patch Changes
+
+- c432761: Declare direct runtime dependencies explicitly so strict package managers such as Yarn Plug'n'Play can resolve the published LitSX toolchain without undeclared dependency errors.
+- Updated dependencies [c432761]
+- Updated dependencies [c432761]
+  - @litsx/babel-plugin-transform-jsx-html-template@0.3.4
+  - @litsx/babel-plugin-transform-litsx-scoped-elements@0.4.2
+
 ## 0.7.0
 
 ### Minor Changes

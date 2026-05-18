@@ -1,5 +1,11 @@
 # @litsx/typescript
 
+## 0.6.4
+
+### Patch Changes
+
+- c432761: Declare direct runtime dependencies explicitly so strict package managers such as Yarn Plug'n'Play can resolve the published LitSX toolchain without undeclared dependency errors.
+
 ## 0.6.3
 
 ### Patch Changes
