@@ -298,6 +298,34 @@ describe("create-litsx-app", () => {
     }
   });
 
+  it("scaffolds runtime package versions from the published version manifest", () => {
+    const renderers = [["src", renderProjectFiles]];
+    if (renderDistProjectFiles) {
+      renderers.push(["dist", renderDistProjectFiles]);
+    }
+
+    for (const [entrypoint, render] of renderers) {
+      const { files } = render("/tmp/my-litsx-app", { template: "design-system" });
+      const packageJson = JSON.parse(files.get("package.json"));
+
+      assert.strictEqual(
+        packageJson.dependencies["@litsx/core"],
+        publishedPackageVersions["@litsx/core"],
+        `${entrypoint} scaffold is emitting a stale @litsx/core version`,
+      );
+      assert.strictEqual(
+        packageJson.devDependencies["@litsx/typescript"],
+        publishedPackageVersions["@litsx/typescript"],
+        `${entrypoint} scaffold is emitting a stale @litsx/typescript version`,
+      );
+      assert.strictEqual(
+        packageJson.devDependencies["@litsx/vite-plugin"],
+        publishedPackageVersions["@litsx/vite-plugin"],
+        `${entrypoint} scaffold is emitting a stale @litsx/vite-plugin version`,
+      );
+    }
+  });
+
   it("adds visual testing assets when requested", () => {
     const result = renderProjectFiles("/tmp/my-litsx-app", {
       template: "design-system",
