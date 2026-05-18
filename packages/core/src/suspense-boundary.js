@@ -4,6 +4,7 @@ import {
   invokeRenderer,
   syncRendererHost,
 } from "./rendering.js";
+import { LightDomMixin } from "./elements/index.js";
 
 function isThenable(value) {
   return (
@@ -39,7 +40,7 @@ function reportAsyncError(error) {
  *   <UserProfile />
  * </SuspenseBoundary>
  */
-export class SuspenseBoundary extends LitElement {
+export class SuspenseBoundary extends LightDomMixin(LitElement) {
   static properties = {
     pending: { type: Boolean, reflect: true },
     resolved: { type: Boolean, reflect: true },
@@ -74,10 +75,6 @@ export class SuspenseBoundary extends LitElement {
     this._isRevealing = false;
     this._revealTimeout = null;
     this._lastListSnapshot = "";
-  }
-
-  createRenderRoot() {
-    return this;
   }
 
   connectedCallback() {

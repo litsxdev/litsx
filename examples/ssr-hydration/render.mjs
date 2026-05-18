@@ -31,10 +31,10 @@ export async function renderDemoHtml() {
 
   const { html } = await import("lit");
   const { __litsxScopedTemplate } = await import("@litsx/core/elements");
-  const { renderToString } = await import("@litsx/ssr");
+  const { renderDocument } = await import("@litsx/ssr");
   const { DemoApp } = await import(`./.ssr/components.server.mjs?t=${Date.now()}`);
 
-  const result = await renderToString(
+  const result = await renderDocument(
     __litsxScopedTemplate(
       html`<demo-app
         .title=${"LitSX SSR Hydration"}
@@ -48,15 +48,8 @@ export async function renderDemoHtml() {
       assetResolver(moduleId) {
         return moduleId ? "/src/components.litsx" : null;
       },
-    },
-  );
-
-  const documentHtml = `<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>LitSX SSR Hydration Demo</title>
+      title: "LitSX SSR Hydration Demo",
+      head: `
     <style>
       body {
         margin: 0;
@@ -90,18 +83,19 @@ export async function renderDemoHtml() {
         content: "server rendered";
         color: #8a4c00;
       }
-    </style>
-    ${result.renderModulePreloads()}
-    ${result.renderHydrationData()}
-  </head>
-  <body>
-    <main class="page">
+    </style>`,
+      bodyAttributes: {},
+      bootstrap: "/src/main.js",
+    },
+  );
+
+  const documentHtml = result.document.replace(
+    result.html,
+    `<main class="page">
       <div class="status">LitSX SSR status: </div>
       ${result.html}
-    </main>
-    <script type="module" src="/src/main.js"></script>
-  </body>
-</html>`;
+    </main>`,
+  );
 
   await fs.writeFile(path.join(exampleDir, "index.html"), documentHtml);
   return {

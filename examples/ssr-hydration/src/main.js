@@ -1,10 +1,9 @@
 import {
   LITSX_HYDRATION_PAYLOAD_PROPERTY,
-  hydrateDocument,
+  hydratePage,
 } from "@litsx/ssr-client";
 
-const roots = await hydrateDocument({
-  clientImports: [],
+const roots = await hydratePage({
   async register() {
     // @ts-expect-error LitSX authored modules resolve through the LitSX/Vite pipeline.
     const { defineDemoElements } = await import("./components.litsx");

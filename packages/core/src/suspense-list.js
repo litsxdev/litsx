@@ -1,4 +1,5 @@
 import { ReactiveElement } from "lit";
+import { LightDomMixin } from "./elements/index.js";
 const DOM_NODE = globalThis.Node ?? null;
 
 function normalizeRevealOrder(value) {
@@ -65,7 +66,7 @@ function blocksReveal(boundary) {
  *   <suspense-boundary></suspense-boundary>
  * </suspense-list>
  */
-export class SuspenseList extends ReactiveElement {
+export class SuspenseList extends LightDomMixin(ReactiveElement) {
   static properties = {
     revealOrder: { type: String, attribute: "reveal-order" },
     tail: { type: String },
@@ -105,10 +106,6 @@ export class SuspenseList extends ReactiveElement {
     }
     this._tail = nextValue;
     this.requestUpdate("tail", previousValue);
-  }
-
-  createRenderRoot() {
-    return this;
   }
 
   registerBoundary(boundary) {

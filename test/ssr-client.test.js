@@ -243,6 +243,7 @@ describe("@litsx/ssr-client", () => {
   it("hydrates a document by reading client imports from the default script tag", async () => {
     const {
       hydrateDocument,
+      hydratePage,
       LITSX_CLIENT_IMPORTS_SCRIPT_ID,
       LITSX_HYDRATION_DATA_SCRIPT_ID,
     } = await import("../packages/ssr-client/src/index.js");
@@ -292,6 +293,27 @@ describe("@litsx/ssr-client", () => {
     ]);
     assert.deepStrictEqual(calls, [
       "support",
+      "register",
+      "import:/assets/a.js",
+      "import:/assets/b.js",
+    ]);
+
+    const pageCalls = [];
+    const pageResult = await hydratePage({
+      document: documentRef,
+      hydrationSupportLoader: async () => {
+        pageCalls.push("support");
+      },
+      register: async () => {
+        pageCalls.push("register");
+      },
+      moduleLoader: async (specifier) => {
+        pageCalls.push(`import:${specifier}`);
+      },
+    });
+
+    assert.deepStrictEqual(pageResult, result);
+    assert.deepStrictEqual(pageCalls, [
       "register",
       "import:/assets/a.js",
       "import:/assets/b.js",

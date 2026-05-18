@@ -10,4 +10,5 @@ node examples/ssr-hydration/dev.mjs
 ```
 
 Open the URL printed by the dev server. The page is prerendered by
-`@litsx/ssr`, then hydrated in the browser by `@litsx/ssr-client`.
+`@litsx/ssr` through `renderDocument(...)` / `createSsrDevServer(...)`, then
+hydrated in the browser by `@litsx/ssr-client` through `hydratePage(...)`.
