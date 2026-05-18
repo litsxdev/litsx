@@ -41,6 +41,7 @@
     "@babel/core": ">=7"
   },
   "dependencies": {
+    "@babel/helper-plugin-utils": "^7.28.6",
     "@litsx/prop-types": "^0.2.2"
   },
   "devDependencies": {

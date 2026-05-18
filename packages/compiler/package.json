@@ -51,10 +51,13 @@
     "@babel/core": "^7.29.0",
     "@babel/parser": "^7.29.3",
     "@babel/plugin-transform-typescript": "^7.28.5",
+    "@babel/types": "^7.29.0",
     "@litsx/authoring": "^0.4.0",
     "@litsx/babel-plugin-transform-jsx-html-template": "^0.3.2",
     "@litsx/babel-preset-litsx": "^0.7.0",
-    "@litsx/typescript-session": "^0.2.1"
+    "@litsx/typescript": "^0.6.3",
+    "@litsx/typescript-session": "^0.2.1",
+    "source-map-js": "^1.2.1"
   },
   "scripts": {
     "build": "../../node_modules/.bin/rollup --config rollup.config.js",

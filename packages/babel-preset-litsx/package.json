@@ -75,6 +75,7 @@
     "@babel/helper-plugin-utils": "^7.28.6",
     "@babel/plugin-syntax-jsx": "^7.28.6",
     "@babel/traverse": "^7.28.5",
+    "@litsx/authoring": "^0.4.0",
     "@litsx/babel-parser": "^0.2.4",
     "@litsx/babel-plugin-shared-hooks": "^0.3.0",
     "@litsx/babel-plugin-transform-jsx-html-template": "^0.3.2",

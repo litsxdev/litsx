@@ -42,7 +42,8 @@
   },
   "dependencies": {
     "@babel/plugin-syntax-jsx": "^7.28.6",
-    "@litsx/babel-plugin-shared-hooks": "^0.3.0"
+    "@litsx/babel-plugin-shared-hooks": "^0.3.0",
+    "@litsx/typescript-session": "^0.2.1"
   },
   "devDependencies": {
     "@babel/core": "^7.29.0"
