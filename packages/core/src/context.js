@@ -9,6 +9,7 @@ import { getCurrentSsrCustomElementInstanceStack } from "./runtime-ssr-state.js"
 const REACT_CONTEXT_MARK = Symbol("litsx.reactContext");
 const REACT_CONTEXT_KEY = Symbol("litsx.reactContext.key");
 const HOST_CONTEXT_CONSUMERS = Symbol("litsx.reactContextConsumers");
+const LitsxContextProviderElementBase = globalThis.HTMLElement ?? class {};
 
 function createContextSentinel(context, kind) {
   return Object.freeze({
@@ -128,7 +129,9 @@ export function renderContext(host, context, render) {
   return render(useContext(host, context));
 }
 
-export class LitsxContextProviderElement extends HTMLElement {
+export class LitsxContextProviderElement extends LitsxContextProviderElementBase {
+  static observedAttributes = [];
+
   constructor() {
     super();
     this._context = undefined;
@@ -187,6 +190,10 @@ export class LitsxContextProviderElement extends HTMLElement {
 
   _ensureProvider() {
     if (!this._context) {
+      return null;
+    }
+
+    if (typeof this.addEventListener !== "function") {
       return null;
     }
 

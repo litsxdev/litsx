@@ -23,6 +23,22 @@ npm install @litsx/ssr-client @litsx/ssr lit @litsx/core
 
 ## Basic Usage
 
+For full-page hydration, `hydratePage(...)` is the recommended entrypoint:
+
+```js
+import { hydratePage } from "@litsx/ssr-client";
+
+await hydratePage({
+  register: () => import("./main.js"),
+});
+```
+
+`hydratePage(...)` uses the default LitSX SSR script ids, installs Lit
+hydration support, applies the emitted payload, runs your bootstrap, and then
+loads the client imports declared by `@litsx/ssr`.
+
+The lower-level `hydrate(...)` helper remains available:
+
 ```js
 import { hydrate } from "@litsx/ssr-client";
 
@@ -48,6 +64,7 @@ The package also exposes a slightly higher-level surface:
 
 ```js
 import {
+  hydratePage,
   hydrateDocument,
   hydrateRoot,
   readHydrationPayload,
@@ -58,6 +75,7 @@ import {
 } from "@litsx/ssr-client";
 ```
 
+- `hydratePage(options)` is the recommended whole-document entrypoint
 - `hydrateRoot(root, options)` hydrates one explicit root and validates its
   LitSX SSR root attribute against the SSR payload when present
 - `hydrateDocument(options)` defaults the root to `document` and returns the
@@ -85,7 +103,7 @@ Example:
 ```
 
 ```js
-await hydrateDocument({
+await hydratePage({
   register: () => import("./main.js"),
 });
 ```

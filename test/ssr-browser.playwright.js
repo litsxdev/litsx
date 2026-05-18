@@ -1,12 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
 import { expect, test } from "@playwright/test";
-import { createServer } from "vite";
-import { html } from "lit";
-import { __litsxScopedTemplate } from "../packages/core/src/elements/index.js";
-import { createLitsxCompilationSession } from "../packages/compiler/src/index.js";
-import { litsx } from "../packages/vite-plugin/src/index.js";
+import { createSsrDevServer } from "../packages/ssr/src/index.js";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 
@@ -26,6 +21,201 @@ export function SsrLeafShadow({ label }) {
   }, []);
   const [count, setCount] = useState(3);
   return <button id="leaf-button" @click={() => setCount(count + 1)}>leaf:{label}:{count}</button>;
+}
+
+function createSuspenseComponentsSource() {
+  return `
+import type { LitsxRenderable } from "@litsx/core";
+import { SuspenseBoundary, SuspenseList, useOnConnect, useRef, useState } from "@litsx/core";
+
+function createDeferred() {
+  let resolve = null;
+  const promise = new Promise((nextResolve) => {
+    resolve = nextResolve;
+  });
+  return { promise, resolve };
+}
+
+function resolvePendingSteps(pendingStepsRef) {
+  pendingStepsRef.current ??= new Map();
+  return pendingStepsRef.current;
+}
+
+function suspendUntil(pendingStepsRef, stepIndex, revealedCount) {
+  if (revealedCount > stepIndex) {
+    return;
+  }
+
+  const pendingSteps = resolvePendingSteps(pendingStepsRef);
+  let pending = pendingSteps.get(stepIndex);
+  if (!pending) {
+    pending = createDeferred();
+    pendingSteps.set(stepIndex, pending);
+  }
+
+  throw pending.promise;
+}
+
+export const GuideCard = ({
+  eyebrow = "",
+  titleRenderer = () => null,
+  contentRenderer = () => null,
+}: {
+  eyebrow?: string;
+  titleRenderer?: () => LitsxRenderable;
+  contentRenderer?: () => LitsxRenderable;
+}) => {
+  static styles = \`
+    :host { display: block; }
+    .guide-card {
+      padding: 24px;
+      border: 1px solid rgba(21, 32, 51, 0.08);
+      border-radius: 24px;
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.78), transparent 140px),
+        rgba(255, 250, 245, 0.96);
+      box-shadow: 0 18px 48px rgba(21, 32, 51, 0.08);
+      animation: guide-card-enter 280ms ease both;
+    }
+    @keyframes guide-card-enter {
+      from { opacity: 0; transform: translateY(14px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+  \`;
+
+  return (
+    <article class="guide-card">
+      <p class="guide-card__eyebrow">{eyebrow}</p>
+      <h2>{titleRenderer()}</h2>
+      {contentRenderer()}
+    </article>
+  );
+};
+
+export const SuspenseGuideApp = () => {
+  static styles = \`
+    :host { display: block; padding: 24px; font-family: sans-serif; }
+    .guide-list { display: grid; gap: 18px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  \`;
+
+  const delays = [180, 220, 240];
+  const pendingStepsRef = useRef(null);
+  const [revealedCount, setRevealedCount] = useState(0);
+  const pendingSteps = resolvePendingSteps(pendingStepsRef);
+
+  if (revealedCount > 0) {
+    for (const [stepIndex, deferred] of pendingSteps) {
+      if (stepIndex < revealedCount) {
+        pendingSteps.delete(stepIndex);
+        deferred.resolve?.();
+      }
+    }
+  }
+
+  useOnConnect(() => {
+    for (const deferred of resolvePendingSteps(pendingStepsRef).values()) {
+      deferred.resolve?.();
+    }
+    pendingStepsRef.current = new Map();
+    setRevealedCount(0);
+
+    const [firstDelay = 0, ...remainingDelays] = delays;
+    let intervalId = null;
+
+    const firstTimeoutId = setTimeout(() => {
+      setRevealedCount((count) => count + 1);
+
+      if (remainingDelays.length === 0) {
+        return;
+      }
+
+      const [intervalDelay = 0] = remainingDelays;
+      let intervalIndex = 0;
+      intervalId = setInterval(() => {
+        setRevealedCount((count) => count + 1);
+        intervalIndex += 1;
+        if (intervalIndex >= remainingDelays.length) {
+          clearInterval(intervalId);
+          intervalId = null;
+        }
+      }, intervalDelay);
+    }, firstDelay);
+
+    return () => {
+      clearTimeout(firstTimeoutId);
+      if (intervalId != null) {
+        clearInterval(intervalId);
+      }
+      for (const deferred of resolvePendingSteps(pendingStepsRef).values()) {
+        deferred.resolve?.();
+      }
+      pendingStepsRef.current = new Map();
+    };
+  }, []);
+
+  return (
+    <section class="guide" aria-label="Getting started with LitSX">
+      <SuspenseList class="guide-list" reveal-order="forwards" tail="hidden">
+        <SuspenseBoundary
+          .fallbackRenderer={() => null}
+          .contentRenderer={() => {
+            suspendUntil(pendingStepsRef, 0, revealedCount);
+            return (
+              <GuideCard
+                .eyebrow={"Getting started"}
+                .titleRenderer={() => <><code>src/app.litsx</code>, then open <code>Getting Started</code></>}
+                .contentRenderer={() => <p>First card body</p>}
+              />
+            );
+          }}
+        />
+
+        <SuspenseBoundary
+          .fallbackRenderer={() => null}
+          .contentRenderer={() => {
+            suspendUntil(pendingStepsRef, 1, revealedCount);
+            return (
+              <GuideCard
+                .eyebrow={"Authored model"}
+                .titleRenderer={() => <>Read <code>Authored Model</code> while you learn LitSX bindings</>}
+                .contentRenderer={() => <p>Second card body</p>}
+              />
+            );
+          }}
+        />
+
+        <SuspenseBoundary
+          .fallbackRenderer={() => null}
+          .contentRenderer={() => {
+            suspendUntil(pendingStepsRef, 2, revealedCount);
+            return (
+              <GuideCard
+                .eyebrow={"Tooling flow"}
+                .titleRenderer={() => "Pair the tooling docs with your daily loop"}
+                .contentRenderer={() => (
+                  <ul>
+                    <li><code>npm run dev</code></li>
+                    <li><code>npm run lint</code></li>
+                  </ul>
+                )}
+              />
+            );
+          }}
+        />
+      </SuspenseList>
+    </section>
+  );
+};
+
+export function defineSsrComponents() {
+  if (!customElements.get("suspense-guide-app")) {
+    customElements.define("suspense-guide-app", SuspenseGuideApp);
+  }
+  if (!customElements.get("guide-card")) {
+    customElements.define("guide-card", GuideCard);
+  }
+}
+`;
 }
 
 export function SsrLevelFourLight({ label }) {
@@ -73,34 +263,21 @@ test("hydrates a real browser page rendered by @litsx/ssr", async ({ page }) => 
   const srcDir = path.join(tempDir, "src");
   await fs.mkdir(srcDir, { recursive: true });
 
-  const serverComponentsPath = path.join(srcDir, "components.server.mjs");
   const clientComponentsPath = path.join(srcDir, "components.client.litsx");
   const clientEntryPath = path.join(srcDir, "main.js");
   const componentsSource = createComponentsSource();
   await fs.writeFile(clientComponentsPath, componentsSource);
-  const session = createLitsxCompilationSession({
-    transformOptions: {
-      ssr: true,
-      filename: clientComponentsPath,
-    },
-  });
-  const serverResult = session.transformSync(componentsSource, {
-    filename: clientComponentsPath,
-    sourceMaps: false,
-  });
-  await fs.writeFile(serverComponentsPath, serverResult.code);
   await fs.writeFile(
     clientEntryPath,
     `
-import { hydrateDocument, LITSX_HYDRATION_PAYLOAD_PROPERTY } from "${viteFsSpecifier(path.join(repoRoot, "packages/ssr-client/src/index.js"))}";
+import { hydratePage, LITSX_HYDRATION_PAYLOAD_PROPERTY } from "${viteFsSpecifier(path.join(repoRoot, "packages/ssr-client/src/index.js"))}";
 
 try {
-  await hydrateDocument({
+  await hydratePage({
     async register() {
       const { defineSsrComponents } = await import("./components.client.litsx");
       defineSsrComponents();
     },
-    moduleLoader: async () => {},
   });
 } catch (error) {
   window.__litsxSsrBrowserError = error instanceof Error ? error.message : String(error);
@@ -115,57 +292,22 @@ window.__litsxSsrBrowserResult = {
 };
 `,
   );
-
-  await import("@lit-labs/ssr/lib/install-global-dom-shim.js");
-  const { renderToString } = await import("../packages/ssr/src/index.js");
-  const { SsrAppRoot } = await import(`${pathToFileURL(serverComponentsPath).href}?t=${Date.now()}`);
-  const result = await renderToString(
-    __litsxScopedTemplate(
-      html`<ssr-app-root .name=${"Real Browser"}></ssr-app-root>`,
-      {
-        "ssr-app-root": SsrAppRoot,
-      },
-    ),
-    {
-      assetResolver(moduleId) {
-        return moduleId ? "/src/components.client.litsx" : null;
-      },
-    },
-  );
-  expect(result.clientImports).toEqual(["/src/components.client.litsx"]);
-  expect(result.hydrationData.roots).toEqual([
-    {
-      id: "litsx-root-0",
-      tagName: "ssr-app-root",
-      moduleId: clientComponentsPath,
-    },
-  ]);
-  const documentHtml = `<!doctype html>
-<html>
-  <head>
-    ${result.renderModulePreloads()}
-    ${result.renderHydrationData()}
-  </head>
-  <body>
-    ${result.html}
-    <script type="module" src="/src/main.js"></script>
-  </body>
-</html>`;
-  await fs.writeFile(path.join(tempDir, "index.html"), documentHtml);
-
-  const server = await createServer({
+  const server = await createSsrDevServer({
     root: tempDir,
+    serverEntry: "./src/components.client.litsx",
+    clientEntry: "./src/main.js",
     logLevel: "silent",
-    server: {
-      host: "127.0.0.1",
-      strictPort: false,
+    host: "127.0.0.1",
+    strictPort: false,
+    render({ module, html, scopedTemplate }) {
+      const { SsrAppRoot } = module;
+      return scopedTemplate(
+        html`<ssr-app-root .name=${"Real Browser"}></ssr-app-root>`,
+        {
+          "ssr-app-root": SsrAppRoot,
+        },
+      );
     },
-    plugins: [
-      litsx({
-        ssr: true,
-        sourceMaps: true,
-      }),
-    ],
   });
   await server.listen();
 
@@ -237,6 +379,132 @@ window.__litsxSsrBrowserResult = {
       buttonCount: 1,
       buttonText: "leaf:Real Browser:4",
     });
+  } finally {
+    await server.close();
+  }
+});
+
+test("reveals suspense-list guide cards after SSR hydration", async ({ page }) => {
+  const tempRoot = path.join(repoRoot, "test-results");
+  await fs.mkdir(tempRoot, { recursive: true });
+  const tempDir = await fs.mkdtemp(path.join(tempRoot, "litsx-ssr-suspense-browser-"));
+  const srcDir = path.join(tempDir, "src");
+  await fs.mkdir(srcDir, { recursive: true });
+
+  const clientComponentsPath = path.join(srcDir, "components.client.litsx");
+  const clientEntryPath = path.join(srcDir, "main.js");
+  await fs.writeFile(clientComponentsPath, createSuspenseComponentsSource());
+  await fs.writeFile(
+    clientEntryPath,
+    `
+import { hydratePage } from "${viteFsSpecifier(path.join(repoRoot, "packages/ssr-client/src/index.js"))}";
+
+try {
+  await hydratePage({
+    async register() {
+      const { defineSsrComponents } = await import("./components.client.litsx");
+      defineSsrComponents();
+    },
+  });
+} catch (error) {
+  window.__litsxSsrBrowserError = error instanceof Error ? error.message : String(error);
+}
+
+function collectGuideState() {
+  return [...document.querySelectorAll("suspense-boundary")].map((boundary, index) => {
+    const card = boundary.querySelector("guide-card");
+    const article = card?.shadowRoot?.querySelector(".guide-card");
+    return {
+      index,
+      pending: boundary.pending,
+      resolved: boundary.resolved,
+      showing: boundary.getAttribute("showing"),
+      phase: boundary.getAttribute("phase"),
+      boundaryRect: {
+        width: boundary.getBoundingClientRect().width,
+        height: boundary.getBoundingClientRect().height,
+      },
+      cardRect: card ? {
+        width: card.getBoundingClientRect().width,
+        height: card.getBoundingClientRect().height,
+      } : null,
+      articleRect: article ? {
+        width: article.getBoundingClientRect().width,
+        height: article.getBoundingClientRect().height,
+      } : null,
+      text: card?.shadowRoot?.textContent?.replace(/\\s+/g, " ").trim() ?? "",
+    };
+  });
+}
+
+window.__litsxSsrSuspenseGuideSnapshots = [];
+const snapshotInterval = setInterval(() => {
+  window.__litsxSsrSuspenseGuideSnapshots.push(collectGuideState());
+}, 100);
+
+setTimeout(() => {
+  clearInterval(snapshotInterval);
+  window.__litsxSsrSuspenseGuideResult = {
+    error: window.__litsxSsrBrowserError ?? null,
+    listRect: (() => {
+      const list = document.querySelector("suspense-list");
+      return list ? {
+        width: list.getBoundingClientRect().width,
+        height: list.getBoundingClientRect().height,
+      } : null;
+    })(),
+    boundaries: collectGuideState(),
+    snapshots: window.__litsxSsrSuspenseGuideSnapshots,
+  };
+}, 1400);
+`,
+  );
+
+  const server = await createSsrDevServer({
+    root: tempDir,
+    serverEntry: "./src/components.client.litsx",
+    clientEntry: "./src/main.js",
+    logLevel: "silent",
+    host: "127.0.0.1",
+    strictPort: false,
+    render({ module, html, scopedTemplate }) {
+      const { SuspenseGuideApp } = module;
+      return scopedTemplate(
+        html`<suspense-guide-app></suspense-guide-app>`,
+        {
+          "suspense-guide-app": SuspenseGuideApp,
+        },
+      );
+    },
+  });
+  await server.listen();
+
+  try {
+    const url = server.resolvedUrls.local[0];
+    const consoleErrors = [];
+    page.on("console", (message) => {
+      if (message.type() === "error") {
+        consoleErrors.push(message.text());
+      }
+    });
+    await page.goto(url);
+    await page.waitForFunction(() => Boolean(window.__litsxSsrSuspenseGuideResult), null, {
+      timeout: 5000,
+    });
+
+    const result = await page.evaluate(() => window.__litsxSsrSuspenseGuideResult);
+    expect(consoleErrors).toEqual([]);
+    expect(result.error).toBe(null);
+    expect(result.listRect.height).toBeGreaterThan(0);
+    expect(result.boundaries).toHaveLength(3);
+    expect(result.boundaries.map((entry) => entry.showing)).toEqual([
+      "content",
+      "content",
+      "content",
+    ]);
+    expect(result.boundaries.every((entry) => entry.resolved === true)).toBe(true);
+    expect(result.boundaries.every((entry) => entry.cardRect && entry.cardRect.height > 0)).toBe(true);
+    expect(result.boundaries.every((entry) => entry.articleRect && entry.articleRect.height > 0)).toBe(true);
   } finally {
     await server.close();
   }

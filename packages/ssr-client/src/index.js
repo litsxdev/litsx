@@ -3,10 +3,29 @@ function normalizeClientImports(value) {
   return [...new Set(values.filter((entry) => typeof entry === "string" && entry.length > 0))];
 }
 
+/**
+ * Default JSON script id used for client import metadata emitted by `@litsx/ssr`.
+ */
 export const LITSX_CLIENT_IMPORTS_SCRIPT_ID = "__LITSX_CLIENT_IMPORTS__";
+
+/**
+ * Default JSON script id used for LitSX hydration metadata emitted by `@litsx/ssr`.
+ */
 export const LITSX_HYDRATION_DATA_SCRIPT_ID = "__LITSX_HYDRATION__";
+
+/**
+ * Root host attribute used to correlate DOM elements with LitSX SSR root ids.
+ */
 export const LITSX_ROOT_ATTRIBUTE = "data-litsx-root";
+
+/**
+ * Comment-marker prefix used as a fallback when no explicit root attribute exists.
+ */
 export const LITSX_ROOT_MARKER_PREFIX = "litsx-root";
+
+/**
+ * Property used to attach the resolved root-scoped hydration payload to a host.
+ */
 export const LITSX_HYDRATION_PAYLOAD_PROPERTY = "__litsxHydrationPayload";
 
 async function importLitHydrationSupport() {
@@ -457,4 +476,15 @@ export async function hydrateRoot(
 export async function hydrateDocument(options = {}) {
   const root = options.document ?? (typeof document === "undefined" ? null : document);
   return hydrate(root, options);
+}
+
+/**
+ * Hydrate a full SSR-rendered page using the default LitSX SSR document metadata.
+ *
+ * This is the recommended document-level entrypoint for pages rendered by
+ * `renderDocument(...)`. It is equivalent to `hydrateDocument(...)` but makes
+ * the whole-page intent explicit in public API docs.
+ */
+export async function hydratePage(options = {}) {
+  return hydrateDocument(options);
 }

@@ -8,6 +8,8 @@ import {
   setHostSuspenseCapture,
   withSuspenseCapture,
 } from "./runtime-suspense.js";
+import { LightDomMixin } from "./elements/index.js";
+import { LightDomMixin } from "./elements/index.js";
 
 function isThenable(value) {
   return (
@@ -43,7 +45,7 @@ function reportAsyncError(error) {
  *   <UserProfile />
  * </SuspenseBoundary>
  */
-export class SuspenseBoundary extends LitElement {
+export class SuspenseBoundary extends LightDomMixin(LitElement) {
   static properties = {
     pending: { type: Boolean, reflect: true },
     resolved: { type: Boolean, reflect: true },
@@ -85,10 +87,6 @@ export class SuspenseBoundary extends LitElement {
       capture: (thenable) => this.captureFallbackSuspension(thenable),
     };
     this._fallbackSuspendedDuringRender = false;
-  }
-
-  createRenderRoot() {
-    return this;
   }
 
   connectedCallback() {
