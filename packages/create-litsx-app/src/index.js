@@ -6,6 +6,8 @@ const LOCAL_WORKSPACE_PACKAGE_NAMES = [
   "@litsx/compiler",
   "@litsx/core",
   "@litsx/eslint-plugin",
+  "@litsx/ssr",
+  "@litsx/ssr-client",
   "prettier-plugin-litsx",
   "@litsx/typescript",
   "@litsx/vite-plugin",
@@ -111,6 +113,27 @@ function createBasePackageJson(packageName) {
       "vitest": "^4.1.5"
     }
   };
+}
+
+function createSsrPackageJson(packageName) {
+  const packageJson = createBasePackageJson(packageName);
+
+  packageJson.scripts.dev = "node dev.mjs";
+  packageJson.scripts.build = "node render.mjs";
+  packageJson.scripts.render = "node render.mjs";
+  delete packageJson.scripts.preview;
+
+  Object.assign(packageJson.dependencies, {
+    "@litsx/ssr": publishedPackageVersions["@litsx/ssr"],
+    "@litsx/ssr-client": publishedPackageVersions["@litsx/ssr-client"],
+  });
+
+  Object.assign(packageJson.devDependencies, {
+    "@lit-labs/ssr": "^4.0.0",
+    "@litsx/compiler": publishedPackageVersions["@litsx/compiler"],
+  });
+
+  return packageJson;
 }
 
 function addVisualTestingPackageBits(packageJson) {
@@ -1400,8 +1423,342 @@ Generated with \`create-litsx-app --template design-system\`.
   return files;
 }
 
+function createSsrProfileFiles(packageName, className) {
+  const files = createAppProfileFiles(packageName, className);
+  const tagName = packageName;
+
+  files.delete("index.html");
+  files.delete("vite.config.js");
+
+  files.set("jsconfig.json", `{
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "allowJs": true,
+    "allowArbitraryExtensions": true,
+    "checkJs": true,
+    "jsx": "react-jsx",
+    "jsxImportSource": "@litsx/core",
+    "plugins": [
+      {
+        "name": "@litsx/typescript"
+      }
+    ]
+  },
+  "include": [
+    "src",
+    "dev.mjs",
+    "render.mjs"
+  ]
+}
+`);
+  files.set("src/main.js", `import { hydratePage } from "@litsx/ssr-client";
+
+await hydratePage({
+  async register() {
+    // @ts-expect-error LitSX authored modules resolve through the LitSX/Vite pipeline.
+    const { defineAppElements } = await import("./${packageName}.litsx");
+    defineAppElements();
+  },
+});
+
+document.body.dataset.hydrated = "true";
+`);
+  files.set(`src/${packageName}.test.js`, `import { afterEach, describe, expect, it } from "vitest";
+import { ${className}, defineAppElements } from "./${packageName}.litsx";
+
+const tagName = "${tagName}";
+
+defineAppElements();
+
+describe("${className}", () => {
+  let host = null;
+
+  afterEach(() => {
+    host?.remove();
+    host = null;
+  });
+
+  it("renders the SSR starter shell in a real browser DOM", async () => {
+    host = document.createElement(tagName);
+    document.body.append(host);
+
+    await host.updateComplete;
+
+    const root = host.shadowRoot;
+
+    expect(root?.querySelector("main.shell")).toBeTruthy();
+    expect(root?.textContent ?? "").toContain("SSR for authored web components");
+  });
+});
+`);
+  files.set(`src/${packageName}.litsx`, `import { LitsxHero } from "./components/litsx-hero.litsx";
+import { StarterGuide } from "./components/starter-guide.litsx";
+
+export function ${className}({
+  eyebrow = "SSR starter",
+  tagline = "SSR for authored web components. Render the document on the server, then hydrate the same authored tree in the browser.",
+  primaryLabel = "SSR docs",
+  secondaryLabel = "View on GitHub",
+}) {
+  static styles = \`
+    :host {
+      display: block;
+    }
+
+    .shell {
+      max-width: 960px;
+      margin: 0 auto;
+      padding-top: 28px;
+      padding-bottom: 28px;
+      position: relative;
+    }
+  \`;
+
+  return (
+    <main class="shell">
+      <LitsxHero
+        eyebrow={eyebrow}
+        tagline={tagline}
+        primaryLabel={primaryLabel}
+        secondaryLabel={secondaryLabel}
+        @primary-action={() => {
+          window.open("https://litsx.dev/guides/ssr", "_blank", "noopener,noreferrer");
+        }}
+        @secondary-action={() => {
+          window.open("https://github.com/litsxdev/litsx", "_blank", "noopener,noreferrer");
+        }}
+      />
+      <StarterGuide />
+    </main>
+  );
+}
+
+export function defineAppElements() {
+  if (!customElements.get("${tagName}")) {
+    customElements.define("${tagName}", ${className} as any);
+  }
+}
+`);
+  files.set("dev.mjs", `import { createSsrDevServer } from "@litsx/ssr";
+
+const server = await createSsrDevServer({
+  root: new URL(".", import.meta.url).pathname,
+  serverEntry: "./src/${packageName}.litsx",
+  clientEntry: "./src/main.js",
+  host: "127.0.0.1",
+  port: 5177,
+  logLevel: "info",
+  title: "LitSX SSR Starter",
+  head: \`
+    <style>
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: linear-gradient(180deg, #f6efe8, #fdfaf6);
+        color: #1d231f;
+        font-family: ui-sans-serif, system-ui, sans-serif;
+      }
+
+      .page {
+        max-width: 720px;
+        margin: 0 auto;
+        padding: 64px 24px 96px;
+      }
+
+      .status {
+        margin-bottom: 16px;
+        color: #6d776f;
+        font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      body[data-hydrated="true"] .status::after {
+        content: "hydrated";
+        color: #146b43;
+      }
+
+      body:not([data-hydrated="true"]) .status::after {
+        content: "server rendered";
+        color: #8a4c00;
+      }
+    </style>\`,
+  render({ module, html, scopedTemplate }) {
+    const { ${className} } = module;
+
+    return html\`<main class="page">
+      <div class="status">LitSX SSR status: </div>
+      \${scopedTemplate(
+        html\`<${tagName}
+          .eyebrow=\${"SSR starter"}
+          .tagline=\${"SSR for authored web components. Render the document on the server, then hydrate the same authored tree in the browser."}
+          .primaryLabel=\${"SSR docs"}
+          .secondaryLabel=\${"View on GitHub"}
+        ></${tagName}>\`,
+        {
+          "${tagName}": ${className},
+        },
+      )}
+    </main>\`;
+  },
+});
+
+await server.listen();
+server.printUrls();
+`);
+  files.set("render.mjs", `import fs from "node:fs/promises";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { createServer } from "vite";
+import { litsx } from "@litsx/vite-plugin";
+
+const exampleDir = path.dirname(fileURLToPath(import.meta.url));
+const sourcePath = path.join(exampleDir, "src/${packageName}.litsx");
+
+export async function renderAppDocument() {
+  await import("@lit-labs/ssr/lib/install-global-dom-shim.js");
+  const viteServer = await createServer({
+    root: exampleDir,
+    appType: "custom",
+    logLevel: "silent",
+    server: {
+      middlewareMode: true,
+    },
+    plugins: [
+      litsx({
+        ssr: true,
+        sourceMaps: true,
+      }),
+    ],
+  });
+
+  try {
+    const [{ html }, { __litsxScopedTemplate }, { renderDocument }, moduleExports] = await Promise.all([
+      import("lit"),
+      import("@litsx/core/elements"),
+      import("@litsx/ssr"),
+      viteServer.ssrLoadModule("/src/${packageName}.litsx"),
+    ]);
+    const { ${className} } = moduleExports;
+
+    const result = await renderDocument(
+      __litsxScopedTemplate(
+        html\`<${tagName}
+          .eyebrow=\${"SSR starter"}
+          .tagline=\${"SSR for authored web components. Render the document on the server, then hydrate the same authored tree in the browser."}
+          .primaryLabel=\${"SSR docs"}
+          .secondaryLabel=\${"View on GitHub"}
+        ></${tagName}>\`,
+        {
+          "${tagName}": ${className},
+        },
+      ),
+      {
+        assetResolver(moduleId) {
+          return moduleId ? "/src/${packageName}.litsx" : null;
+        },
+        title: "LitSX SSR Starter",
+        head: \`
+    <style>
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: linear-gradient(180deg, #f6efe8, #fdfaf6);
+        color: #1d231f;
+        font-family: ui-sans-serif, system-ui, sans-serif;
+      }
+
+      .page {
+        max-width: 720px;
+        margin: 0 auto;
+        padding: 64px 24px 96px;
+      }
+
+      .status {
+        margin-bottom: 16px;
+        color: #6d776f;
+        font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      body[data-hydrated="true"] .status::after {
+        content: "hydrated";
+        color: #146b43;
+      }
+
+      body:not([data-hydrated="true"]) .status::after {
+        content: "server rendered";
+        color: #8a4c00;
+      }
+    </style>\`,
+        bootstrap: "/src/main.js",
+      },
+    );
+
+    const documentHtml = result.document.replace(
+      result.html,
+      \`<main class="page">
+      <div class="status">LitSX SSR status: </div>
+      \${result.html}
+    </main>\`,
+    );
+
+    await fs.writeFile(path.join(exampleDir, "index.html"), documentHtml);
+    return {
+      html: documentHtml,
+      result,
+    };
+  } finally {
+    await viteServer.close();
+  }
+}
+
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  const { result } = await renderAppDocument();
+  console.log(\`wrote \${path.join(exampleDir, "index.html")}\`);
+  console.log(\`client imports: \${result.clientImports.join(", ")}\`);
+  console.log(\`hydration roots: \${result.hydrationData?.roots.length ?? 0}\`);
+}
+`);
+  files.set("README.md", `# ${packageName}
+
+Generated with \`create-litsx-app --template ssr\`.
+
+## First Run
+
+1. \`npm install\`
+2. \`npm run dev\`
+3. Open the local URL printed by the SSR dev server
+
+## Scripts
+
+- \`npm run dev\`
+- \`npm run build\`
+- \`npm run render\`
+- \`npm run test\`
+- \`npm run lint\`
+- \`npm run format\`
+- \`npm run typecheck\`
+
+## What This Template Shows
+
+- document-first server rendering with \`renderDocument(...)\`
+- local SSR development with \`createSsrDevServer(...)\`
+- browser hydration with \`hydratePage(...)\`
+- the same hero and guide components as the standard app scaffold
+- SSR-specific copy, routes, and entrypoints
+- authored LitSX source in \`src/${packageName}.litsx\`
+`);
+
+  return files;
+}
+
 function createPackageJson(packageName, template, options = {}) {
-  const packageJson = createBasePackageJson(packageName);
+  const packageJson = template === "ssr"
+    ? createSsrPackageJson(packageName)
+    : createBasePackageJson(packageName);
 
   if (template === "design-system") {
     packageJson.scripts.storybook = "storybook dev -p 6006";
@@ -1426,8 +1783,8 @@ export function renderProjectFiles(targetDir, options = {}) {
   const template = options.template ?? "app";
   const visualTests = Boolean(options.visualTests);
 
-  if (!["app", "component", "design-system"].includes(template)) {
-    throw new Error(`Unknown template "${template}". Expected "app", "component" or "design-system".`);
+  if (!["app", "component", "design-system", "ssr"].includes(template)) {
+    throw new Error(`Unknown template "${template}". Expected "app", "component", "design-system" or "ssr".`);
   }
 
   const packageName = toPackageName(path.basename(targetDir));
@@ -1440,7 +1797,9 @@ export function renderProjectFiles(targetDir, options = {}) {
     ? createAppProfileFiles(packageName, className)
     : template === "component"
       ? createComponentProfileFiles(packageName, className)
-      : createDesignSystemProfileFiles(packageName, className);
+      : template === "design-system"
+        ? createDesignSystemProfileFiles(packageName, className)
+        : createSsrProfileFiles(packageName, className);
 
   if (visualTests) {
     addVisualTestingFiles(files);

@@ -1108,7 +1108,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@litsx/compiler@npm:^0.8.0, @litsx/compiler@workspace:packages/compiler":
+"@litsx/compiler@npm:^0.8.0, @litsx/compiler@workspace:*, @litsx/compiler@workspace:packages/compiler":
   version: 0.0.0-use.local
   resolution: "@litsx/compiler@workspace:packages/compiler"
   dependencies:
@@ -1187,10 +1187,16 @@ __metadata:
   resolution: "@litsx/ssr@workspace:packages/ssr"
   dependencies:
     "@lit-labs/ssr": "npm:^4.0.0"
+    "@litsx/compiler": "workspace:*"
     "@litsx/core": "workspace:*"
+    "@litsx/vite-plugin": "workspace:*"
     lit: "npm:^3.2.1"
   peerDependencies:
     lit: ">=3"
+    vite: ^7.3.2 || ^8.0.0
+  peerDependenciesMeta:
+    vite:
+      optional: true
   languageName: unknown
   linkType: soft
 
@@ -1216,7 +1222,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@litsx/vite-plugin@workspace:packages/vite-plugin":
+"@litsx/vite-plugin@workspace:*, @litsx/vite-plugin@workspace:packages/vite-plugin":
   version: 0.0.0-use.local
   resolution: "@litsx/vite-plugin@workspace:packages/vite-plugin"
   dependencies:
