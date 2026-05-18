@@ -38,11 +38,19 @@
     "directory": "packages/ssr"
   },
   "peerDependencies": {
-    "lit": ">=3"
+    "lit": ">=3",
+    "vite": "^7.3.2 || ^8.0.0"
+  },
+  "peerDependenciesMeta": {
+    "vite": {
+      "optional": true
+    }
   },
   "dependencies": {
     "@lit-labs/ssr": "^4.0.0",
-    "@litsx/core": "workspace:*"
+    "@litsx/compiler": "workspace:*",
+    "@litsx/core": "workspace:*",
+    "@litsx/vite-plugin": "workspace:*"
   },
   "devDependencies": {
     "lit": "^3.2.1"

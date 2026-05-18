@@ -4,6 +4,7 @@ import {
   invokeRenderer,
   syncRendererHost,
 } from "./rendering.js";
+import { LightDomMixin } from "./elements/index.js";
 
 function isThenable(value) {
   return (
@@ -32,7 +33,7 @@ function isThenable(value) {
  *   <ProfilePanel />
  * </ErrorBoundary>
  */
-export class ErrorBoundary extends LitElement {
+export class ErrorBoundary extends LightDomMixin(LitElement) {
   static [Symbol.for("litsx.component")] = true;
 
   static properties = {
@@ -54,10 +55,6 @@ export class ErrorBoundary extends LitElement {
     this._fallbackHostState = null;
     this._contentVisible = true;
     this._fallbackVisible = false;
-  }
-
-  createRenderRoot() {
-    return this;
   }
 
   renderFallback() {
