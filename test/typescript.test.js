@@ -385,6 +385,17 @@ describe("@litsx/typescript", () => {
 
     assert.ok(issues.some((issue) => issue.code === 91020));
     assert.ok(issues.some((issue) => issue.code === 91020 && /"title"/.test(issue.message)));
+    assert.ok(!issues.some((issue) => issue.code === 91020 && /"count"/.test(issue.message)));
+  });
+
+  it("does not warn for destructured component props inferable from default values", () => {
+    const issues = collectLitsxAuthoredIssues(`
+      export function Card({ title = "Hello", count = 0, active = false }) {
+        return <button>{title}:{count}:{String(active)}</button>;
+      }
+    `, { channel: "all" });
+
+    assert.ok(!issues.some((issue) => issue.code === 91020));
   });
 
   it("does not warn for destructured component props with TypeScript annotations", () => {

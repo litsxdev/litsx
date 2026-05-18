@@ -1116,6 +1116,32 @@ function getObjectPatternPropertyNames(pattern) {
   return names;
 }
 
+function getObjectPatternImplicitMetadataNames(pattern) {
+  const names = new Set();
+
+  for (const property of pattern?.properties ?? []) {
+    if (property?.type !== "ObjectProperty") {
+      continue;
+    }
+
+    const keyName = property.key?.type === "Identifier"
+      ? property.key.name
+      : property.key?.type === "StringLiteral"
+      ? property.key.value
+      : null;
+
+    if (!keyName) {
+      continue;
+    }
+
+    if (property.value?.type === "AssignmentPattern") {
+      names.add(keyName);
+    }
+  }
+
+  return names;
+}
+
 function collectDestructuredPropsMetadataIssues(ast, virtualization) {
   const issues = [];
 
@@ -1131,7 +1157,10 @@ function collectDestructuredPropsMetadataIssues(ast, virtualization) {
     }
 
     const staticPropNames = new Set(inferStaticPropertyNames(node));
-    const uncoveredPropNames = destructuredPropNames.filter((name) => !staticPropNames.has(name));
+    const implicitMetadataPropNames = getObjectPatternImplicitMetadataNames(firstParamPattern.pattern);
+    const uncoveredPropNames = destructuredPropNames.filter(
+      (name) => !staticPropNames.has(name) && !implicitMetadataPropNames.has(name),
+    );
     if (uncoveredPropNames.length === 0) {
       continue;
     }
