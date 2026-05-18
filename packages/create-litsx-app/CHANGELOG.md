@@ -1,5 +1,11 @@
 # create-litsx-app
 
+## 0.5.2
+
+### Patch Changes
+
+- cc2eb1d: Refresh the scaffolded `@litsx/core`, `@litsx/typescript`, and `@litsx/vite-plugin` versions so published design-system starters do not install a broken runtime/tooling combination.
+
 ## 0.5.1
 
 ### Patch Changes

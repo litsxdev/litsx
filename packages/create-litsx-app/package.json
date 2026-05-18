@@ -1,6 +1,6 @@
 {
   "name": "create-litsx-app",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "description": "Scaffold a LitSX project with the recommended editor and build setup",
   "author": "LitSX Team",
   "type": "module",
