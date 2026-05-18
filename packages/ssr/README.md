@@ -24,6 +24,28 @@ need the relevant compiler integration such as
 
 ## Basic Usage
 
+For full HTML documents, use `renderDocument(...)`:
+
+```tsx
+import { renderDocument } from "@litsx/ssr";
+import { ProductCard } from "./ProductCard.litsx";
+
+const result = await renderDocument(<ProductCard .product={product} />, {
+  title: "Product Page",
+  bootstrap: "/src/main.js",
+});
+
+result.document;
+result.html;
+result.hydrationData;
+```
+
+`renderDocument(...)` wraps the rendered fragment in a complete HTML document,
+emits module preloads and hydration data, and can inject a configurable client
+bootstrap script.
+
+For lower-level integrations, `renderToString(...)` remains available:
+
 ```tsx
 import { renderToString } from "@litsx/ssr";
 import { ProductCard } from "./ProductCard.litsx";
@@ -65,6 +87,13 @@ const metadata = await allReady;
 
 `stream` is a Web `ReadableStream<string>`. `allReady` resolves with the same
 metadata helpers as `renderToString(...)` once rendering has completed.
+
+## Dev Helper
+
+`@litsx/ssr` also exposes `createSsrDevServer(...)` for authored LitSX SSR
+examples and local development. It compiles an authored server entry, renders a
+document through `renderDocument(...)`, and serves it through Vite with LitSX
+client sourcemaps enabled.
 
 ## Authored Root Syntax
 
