@@ -23,8 +23,11 @@ const tempDirs = [];
 
 function getStaticStyleSources(render) {
   const sources = [];
+  const templates = render === renderProjectFiles
+    ? ["app", "component", "design-system", "ssr"]
+    : ["app", "component", "design-system"];
 
-  for (const template of ["app", "component", "design-system"]) {
+  for (const template of templates) {
     const { files } = render("/tmp/my-litsx-app", { template });
 
     for (const [name, source] of files) {
@@ -281,6 +284,66 @@ describe("create-litsx-app", () => {
     assert.match(readme, /npm run test/);
   });
 
+  it("renders the ssr profile with productized SSR entrypoints", () => {
+    const result = renderProjectFiles("/tmp/my-litsx-app", { template: "ssr" });
+    const packageJson = JSON.parse(result.files.get("package.json"));
+    const jsconfig = result.files.get("jsconfig.json");
+    const mainSource = result.files.get("src/main.js");
+    const appSource = result.files.get("src/my-litsx-app.litsx");
+    const appTestSource = result.files.get("src/my-litsx-app.test.js");
+    const devSource = result.files.get("dev.mjs");
+    const renderSource = result.files.get("render.mjs");
+    const readme = result.files.get("README.md");
+
+    assert.strictEqual(result.template, "ssr");
+    assert.ok(packageJson.dependencies["@litsx/ssr"]);
+    assert.ok(packageJson.dependencies["@litsx/ssr-client"]);
+    assert.ok(packageJson.devDependencies["@litsx/compiler"]);
+    assert.ok(packageJson.devDependencies["@lit-labs/ssr"]);
+    assert.strictEqual(packageJson.scripts.dev, "node dev.mjs");
+    assert.strictEqual(packageJson.scripts.build, "node render.mjs");
+    assert.strictEqual(packageJson.scripts.render, "node render.mjs");
+    assert.ok(!("preview" in packageJson.scripts));
+    assert.ok(!result.files.has("index.html"));
+    assert.ok(!result.files.has("vite.config.js"));
+    assert.match(jsconfig, /"include": \[/);
+    assert.match(jsconfig, /"dev\.mjs"/);
+    assert.match(jsconfig, /"render\.mjs"/);
+    assert.match(mainSource, /import \{ hydratePage \} from "@litsx\/ssr-client";/);
+    assert.match(mainSource, /await hydratePage\(/);
+    assert.match(mainSource, /defineAppElements/);
+    assert.match(appSource, /export function MyLitsxApp/);
+    assert.match(appSource, /import \{ LitsxHero \} from "\.\/components\/litsx-hero\.litsx";/);
+    assert.match(appSource, /import \{ StarterGuide \} from "\.\/components\/starter-guide\.litsx";/);
+    assert.match(appSource, /customElements\.define\("my-litsx-app", MyLitsxApp as any\)/);
+    assert.match(appSource, /eyebrow = "SSR starter"/);
+    assert.match(appSource, /SSR for authored web components\./);
+    assert.match(appSource, /primaryLabel = "SSR docs"/);
+    assert.match(appSource, /https:\/\/litsx\.dev\/guides\/ssr/);
+    assert.match(appSource, /<LitsxHero/);
+    assert.match(appSource, /<StarterGuide/);
+    assert.match(appTestSource, /renders the SSR starter shell in a real browser DOM/);
+    assert.match(devSource, /import \{ createSsrDevServer \} from "@litsx\/ssr";/);
+    assert.match(devSource, /serverEntry: "\.\/src\/my-litsx-app\.litsx"/);
+    assert.match(devSource, /clientEntry: "\.\/src\/main\.js"/);
+    assert.match(devSource, /<my-litsx-app/);
+    assert.match(devSource, /\.eyebrow=\$\{"SSR starter"\}/);
+    assert.match(devSource, /\.primaryLabel=\$\{"SSR docs"\}/);
+    assert.match(renderSource, /import \{ createServer \} from "vite";/);
+    assert.match(renderSource, /import \{ litsx \} from "@litsx\/vite-plugin";/);
+    assert.match(renderSource, /import\("@lit-labs\/ssr\/lib\/install-global-dom-shim\.js"\)/);
+    assert.match(renderSource, /import\("@litsx\/ssr"\)/);
+    assert.match(renderSource, /viteServer\.ssrLoadModule\("\/src\/my-litsx-app\.litsx"\)/);
+    assert.match(renderSource, /renderDocument\(/);
+    assert.match(renderSource, /assetResolver\(moduleId\)/);
+    assert.match(renderSource, /"\/src\/my-litsx-app\.litsx"/);
+    assert.match(readme, /--template ssr/);
+    assert.match(readme, /renderDocument/);
+    assert.match(readme, /createSsrDevServer/);
+    assert.match(readme, /hydratePage/);
+    assert.match(readme, /same hero and guide components as the standard app scaffold/);
+  });
+
   it("does not emit legacy hoist closers in any authored template", () => {
     const renderers = [["src", renderProjectFiles]];
     if (renderDistProjectFiles) {
@@ -456,9 +519,12 @@ describe("create-litsx-app", () => {
     const packageJson = {
       dependencies: {
         "@litsx/core": "^0.1.0",
+        "@litsx/ssr": "^0.1.0",
+        "@litsx/ssr-client": "^0.1.0",
         lit: "^3.2.1",
       },
       devDependencies: {
+        "@litsx/compiler": "^0.1.0",
         "@litsx/eslint-plugin": "^0.1.0",
         "@litsx/typescript": "^0.1.0",
         "@litsx/vite-plugin": "^0.1.0",
@@ -470,7 +536,10 @@ describe("create-litsx-app", () => {
     applyLocalWorkspaceOverrides(packageJson);
 
     assert.strictEqual(packageJson.dependencies["@litsx/core"], "workspace:^");
+    assert.strictEqual(packageJson.dependencies["@litsx/ssr"], "workspace:^");
+    assert.strictEqual(packageJson.dependencies["@litsx/ssr-client"], "workspace:^");
     assert.strictEqual(packageJson.dependencies.lit, "^3.2.1");
+    assert.strictEqual(packageJson.devDependencies["@litsx/compiler"], "workspace:^");
     assert.strictEqual(packageJson.devDependencies["@litsx/eslint-plugin"], "workspace:^");
     assert.strictEqual(packageJson.devDependencies["@litsx/typescript"], "workspace:^");
     assert.strictEqual(packageJson.devDependencies["@litsx/vite-plugin"], "workspace:^");

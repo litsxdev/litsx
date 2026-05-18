@@ -84,6 +84,7 @@ npx create-litsx-app my-app
 npx create-litsx-app my-design-system --template design-system
 npx create-litsx-app my-components --template component
 npx create-litsx-app my-app-shell --template app
+npx create-litsx-app my-ssr-app --template ssr
 npx create-litsx-app my-design-system --template design-system --visual-tests
 ```
 
@@ -113,6 +114,16 @@ Includes:
 - component-library structure under `src/components`
 - shared design tokens
 - no Storybook setup
+
+### `ssr`
+
+Includes:
+
+- document-first SSR with `@litsx/ssr`
+- browser hydration with `@litsx/ssr-client`
+- a local SSR dev server entry in `dev.mjs`
+- a static document render entry in `render.mjs`
+- a minimal authored LitSX SSR component under `src/`
 
 ## Optional Flags
 
