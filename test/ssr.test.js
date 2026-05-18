@@ -6,7 +6,7 @@ import {
   LITSX_MODULE_ID,
   __litsxScopedTemplate,
 } from "../packages/core/src/elements/index.js";
-import { renderToStream, renderToString } from "../packages/ssr/src/index.js";
+import { renderDocument, renderToStream, renderToString } from "../packages/ssr/src/index.js";
 import { css } from "lit";
 import { prepareEffects, useMemoValue } from "../packages/core/src/effect-hooks.js";
 import { useId, useRef, useState, useExternalStore } from "../packages/core/src/state-hooks.js";
@@ -19,6 +19,11 @@ import {
   createContext,
   useContext,
 } from "../packages/core/src/context.js";
+import {
+  ErrorBoundary,
+  SuspenseBoundary,
+  SuspenseList,
+} from "../packages/core/src/index.js";
 
 describe("@litsx/ssr", () => {
   it("renders scoped LitSX elements with nested declarative shadow DOM", async () => {
@@ -188,6 +193,91 @@ describe("@litsx/ssr", () => {
     assert.deepStrictEqual(metadata.clientImports, expected.clientImports);
     assert.deepStrictEqual(metadata.hydrationData, expected.hydrationData);
     assert.deepStrictEqual(metadata.hydrationData.payload, expected.hydrationData.payload);
+  });
+
+  it("renders a full HTML document around the SSR fragment", async () => {
+    class ProductCard extends LitElement {
+      static [LITSX_MODULE_ID] = "/src/ProductCard.litsx";
+
+      render() {
+        prepareEffects(this);
+        return html`<article>${this.product.name}</article>`;
+      }
+    }
+
+    const result = await renderDocument(
+      __litsxScopedTemplate(
+        html`<product-card .product=${{ name: "Doc Shoe" }}></product-card>`,
+        {
+          "product-card": ProductCard,
+        },
+      ),
+      {
+        title: "SSR Document",
+        head: '<meta name="description" content="doc-test">',
+        bodyAttributes: {
+          class: "ssr-page",
+        },
+        bootstrap: "/src/main.js",
+      },
+    );
+
+    assert.match(result.document, /^<!doctype html>/i);
+    assert.match(result.document, /<html lang="en">/);
+    assert.match(result.document, /<title>SSR Document<\/title>/);
+    assert.match(result.document, /<meta name="description" content="doc-test">/);
+    assert.match(result.document, /<body class="ssr-page">/);
+    assert.match(result.document, /<script type="module" src="\/src\/main\.js"><\/script>/);
+    assert.match(result.document, /<script type="application\/json" id="__LITSX_HYDRATION__">/);
+    assert.match(result.document, /<link rel="modulepreload" href="\/src\/ProductCard\.litsx">/);
+    assert.match(result.document, /<product-card\b[^>]*data-litsx-root="litsx-root-0"/);
+    assert.strictEqual(result.html.includes("Doc Shoe"), true);
+    assert.strictEqual(result.document.includes(result.html), true);
+  });
+
+  it("renders light-dom boundaries without declarative shadow DOM", async () => {
+    const result = await renderToString(
+      __litsxScopedTemplate(
+        html`
+          <suspense-list reveal-order="forwards" tail="hidden">
+            <suspense-boundary
+              .fallbackRenderer=${() => html`<span>Loading...</span>`}
+              .contentRenderer=${() => html`<article>Loaded</article>`}
+            ></suspense-boundary>
+          </suspense-list>
+          <error-boundary
+            .fallbackRenderer=${() => html`<span>Errored</span>`}
+            .contentRenderer=${() => html`<article>Stable</article>`}
+          ></error-boundary>
+        `,
+        {
+          "suspense-list": SuspenseList,
+          "suspense-boundary": SuspenseBoundary,
+          "error-boundary": ErrorBoundary,
+        },
+      ),
+    );
+
+    assert.doesNotMatch(
+      result.html,
+      /<suspense-list\b[^>]*>\s*<template shadowroot="open"/,
+    );
+    assert.doesNotMatch(
+      result.html,
+      /<suspense-boundary\b[^>]*>\s*<template shadowroot="open"/,
+    );
+    assert.doesNotMatch(
+      result.html,
+      /<error-boundary\b[^>]*>\s*<template shadowroot="open"/,
+    );
+    assert.match(
+      result.html,
+      /<suspense-boundary\b/,
+    );
+    assert.match(
+      result.html,
+      /<error-boundary\b/,
+    );
   });
 
   it("passes through unknown custom elements and plain template results", async () => {
