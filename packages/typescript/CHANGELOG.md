@@ -1,5 +1,11 @@
 # @litsx/typescript
 
+## 0.6.5
+
+### Patch Changes
+
+- 3b44e44: Avoid warning `91020` for destructured component props that already declare default values, since those defaults provide implicit prop metadata.
+
 ## 0.6.4
 
 ### Patch Changes
