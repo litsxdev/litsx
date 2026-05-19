@@ -12,6 +12,22 @@ HTML without globally registering child components. It builds on Lit SSR for
 final serialization while resolving `static elements` locally, with the same
 shadowing semantics LitSX uses in the browser.
 
+## Current Scope
+
+SSR v1 is designed around LitSX-authored components and LitSX runtime
+primitives.
+
+- LitSX-authored components participate fully in the scoped SSR and hydration
+  pipeline
+- plain Lit templates are supported as render input
+- third-party Lit components are not yet treated as full LitSX SSR components
+  unless they are part of the LitSX-authored tree model
+
+In practice, that means you can render arbitrary Lit templates, but the
+documented SSR guarantees in this package apply to LitSX-authored component
+trees. Support for third-party Lit components with their own light/shadow DOM
+semantics is intentionally out of scope for this first iteration.
+
 ## Installation
 
 ```bash
@@ -227,6 +243,11 @@ SSR support includes scoped LitSX element rendering, server components,
 SSR-safe hook execution, Declarative Shadow DOM output, client import
 collection, root-boundary metadata, JSON-safe root prop payloads, hook state
 payloads, and Web Streams output.
+
+The scoped SSR lifecycle described here is guaranteed for LitSX-authored
+components. Third-party Lit components can still appear inside rendered
+templates, but they are not yet promoted into the full LitSX SSR component
+model by default.
 
 For the client-side entrypoint, see
 [`@litsx/ssr-client`](../ssr-client/README.md).
