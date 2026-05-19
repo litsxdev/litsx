@@ -15,6 +15,10 @@ This package keeps hydration intentionally small:
 - it can validate and resolve SSR root boundaries from LitSX hydration metadata
 - it can attach root-scoped hydration payloads to their matching DOM roots
 
+The hydration contract in this package follows the current LitSX SSR scope:
+documented end-to-end hydration support is for LitSX-authored SSR roots and
+the LitSX primitives that participate in that render pipeline.
+
 ## Installation
 
 ```bash
@@ -187,3 +191,7 @@ The client helper installs Lit hydration support, supports optional bootstrap
 callbacks, loads deduplicated client module imports, resolves root boundaries,
 validates hydration metadata, and attaches root-scoped payloads. It still leaves
 application-specific custom element registration to your bootstrap code.
+
+That boundary is intentionally narrow in v1: the hydration metadata and root
+resolution model are defined around LitSX-authored SSR roots, not arbitrary
+third-party Lit component trees.

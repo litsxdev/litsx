@@ -1,5 +1,9 @@
 /**
  * Shared hydration options used by the document, root, and low-level helpers.
+ *
+ * These helpers are designed for documents and roots emitted by `@litsx/ssr`,
+ * which currently guarantees end-to-end hydration for LitSX-authored SSR
+ * roots.
  */
 export interface HydrateOptions {
   /**
