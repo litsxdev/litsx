@@ -19,6 +19,31 @@ The hydration contract in this package follows the current LitSX SSR scope:
 documented end-to-end hydration support is for LitSX-authored SSR roots and
 the LitSX primitives that participate in that render pipeline.
 
+## Start Here
+
+For most applications, you do not need to call these helpers directly.
+
+When you render the page with:
+
+```js
+await renderDocument(value, {
+  clientEntry: "/src/main.js",
+});
+```
+
+`@litsx/ssr` can emit the hydration bootstrap wrapper for you.
+
+In that standard flow, your browser entry can stay small:
+
+```js
+const { defineAppElements } = await import("./AppRoot.litsx");
+defineAppElements();
+```
+
+Reach for `hydratePage(...)` only when you need to start hydration yourself.
+Reach for `hydrate(...)`, `hydrateDocument(...)`, or `hydrateRoot(...)` only
+when you need lower-level control over explicit roots or payload handling.
+
 ## Installation
 
 ```bash
@@ -27,7 +52,8 @@ npm install @litsx/ssr-client @litsx/ssr lit @litsx/core
 
 ## Basic Usage
 
-For full-page hydration, `hydratePage(...)` is the recommended entrypoint:
+For full-page hydration with explicit control, `hydratePage(...)` is the
+recommended public entrypoint:
 
 ```js
 import { hydratePage } from "@litsx/ssr-client";
@@ -41,7 +67,8 @@ await hydratePage({
 hydration support, applies the emitted payload, runs your bootstrap, and then
 loads the client imports declared by `@litsx/ssr`.
 
-The lower-level `hydrate(...)` helper remains available:
+The lower-level `hydrate(...)` helper remains available when you need to
+provide the root yourself or manually pass client imports:
 
 ```js
 import { hydrate } from "@litsx/ssr-client";
@@ -62,9 +89,9 @@ await hydrate(document, {
 That order matters because Lit's hydration support must be installed before the
 LitElement modules you want to hydrate are evaluated.
 
-## Document and Root Helpers
+## Lower-Level Helpers
 
-The package also exposes a slightly higher-level surface:
+The rest of the surface is there for explicit control:
 
 ```js
 import {
@@ -79,7 +106,6 @@ import {
 } from "@litsx/ssr-client";
 ```
 
-- `hydratePage(options)` is the recommended whole-document entrypoint
 - `hydrateRoot(root, options)` hydrates one explicit root and validates its
   LitSX SSR root attribute against the SSR payload when present
 - `hydrateDocument(options)` defaults the root to `document` and returns the
@@ -161,29 +187,21 @@ hosts can break Lit's hydration mapping.
 ## Working with `@litsx/ssr`
 
 ```js
-import { renderToString } from "@litsx/ssr";
-import { hydrate } from "@litsx/ssr-client";
+import { renderDocument } from "@litsx/ssr";
 
-const result = await renderToString(<AppRoot .data={data} />);
-
-document.body.innerHTML = `
-  ${result.html}
-  ${result.renderModulePreloads()}
-`;
-
-await hydrate(document, {
-  register: () => import("./main.js"),
-  clientImports: result.clientImports,
+const result = await renderDocument(<AppRoot .data={data} />, {
+  clientEntry: "/src/main.js",
 });
+
+document.documentElement.innerHTML = result.document;
 ```
 
 In that setup:
 
-- your SSR HTML already contains Declarative Shadow DOM
-- `register()` should define the root custom elements for the page
-- `clientImports` can be passed explicitly or embedded in the hydration data
-- `renderHydrationData()` and `hydrateDocument(...)` can coordinate explicit
-  root boundaries and root-scoped payloads without global registry scans
+- your SSR document already contains the rendered HTML shell
+- the emitted bootstrap script will call `hydratePage(...)` for you
+- your client entry should define the root custom elements for the page
+- lower-level helpers remain available if you need explicit root handling
 
 ## Scope
 
