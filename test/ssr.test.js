@@ -78,16 +78,14 @@ describe("@litsx/ssr", () => {
     }
 
     const result = await renderToString(
-      __litsxScopedTemplate(
-        html`<product-card .product=${{
-          name: "Trail Shoe",
-          image: "/shoe.png",
-        }}></product-card>`,
-        {
+      html`<product-card .product=${{
+        name: "Trail Shoe",
+        image: "/shoe.png",
+      }}></product-card>`,
+      {
+        elements: {
           "product-card": ProductCard,
         },
-      ),
-      {
         assetResolver(moduleId) {
           return `/assets/${moduleId.split("/").at(-1)}.js`;
         },
@@ -206,19 +204,17 @@ describe("@litsx/ssr", () => {
     }
 
     const result = await renderDocument(
-      __litsxScopedTemplate(
-        html`<product-card .product=${{ name: "Doc Shoe" }}></product-card>`,
-        {
+      html`<product-card .product=${{ name: "Doc Shoe" }}></product-card>`,
+      {
+        elements: {
           "product-card": ProductCard,
         },
-      ),
-      {
         title: "SSR Document",
         head: '<meta name="description" content="doc-test">',
         bodyAttributes: {
           class: "ssr-page",
         },
-        bootstrap: "/src/main.js",
+        clientEntry: "/src/main.js",
       },
     );
 
@@ -227,12 +223,76 @@ describe("@litsx/ssr", () => {
     assert.match(result.document, /<title>SSR Document<\/title>/);
     assert.match(result.document, /<meta name="description" content="doc-test">/);
     assert.match(result.document, /<body class="ssr-page">/);
-    assert.match(result.document, /<script type="module" src="\/src\/main\.js"><\/script>/);
+    assert.match(result.document, /import \{ hydratePage \} from "@litsx\/ssr-client";/);
+    assert.match(result.document, /register: \(\) =\\u003E import\("\/src\/main\.js"\)/);
     assert.match(result.document, /<script type="application\/json" id="__LITSX_HYDRATION__">/);
     assert.match(result.document, /<link rel="modulepreload" href="\/src\/ProductCard\.litsx">/);
     assert.match(result.document, /<product-card\b[^>]*data-litsx-root="litsx-root-0"/);
     assert.strictEqual(result.html.includes("Doc Shoe"), true);
     assert.strictEqual(result.document.includes(result.html), true);
+  });
+
+  it("still accepts a raw bootstrap override", async () => {
+    const result = await renderDocument(html`<main>ready</main>`, {
+      clientEntry: "/src/main.js",
+      bootstrap: "/src/raw-bootstrap.js",
+    });
+
+    assert.match(result.document, /<script type="module" src="\/src\/raw-bootstrap\.js"><\/script>/);
+    assert.doesNotMatch(result.document, /hydratePage/);
+    assert.doesNotMatch(result.document, /import\("\/src\/main\.js"\)/);
+  });
+
+  it("lets callers provide their own document template", async () => {
+    class ProductCard extends LitElement {
+      static [LITSX_MODULE_ID] = "/src/ProductCard.litsx";
+
+      render() {
+        return html`<article>${this.product.name}</article>`;
+      }
+    }
+
+    const result = await renderDocument(
+      html`<product-card .product=${{ name: "Template Shoe" }}></product-card>`,
+      {
+        elements: {
+          "product-card": ProductCard,
+        },
+        title: "Custom Shell",
+        clientEntry: "/src/main.js",
+        template({
+          html: fragment,
+          title,
+          modulePreloads,
+          hydrationScript,
+          bootstrap,
+          htmlAttributesString,
+          bodyAttributesString,
+        }) {
+          return `<!doctype html>
+<html${htmlAttributesString}>
+  <head>
+    <title>${title}</title>
+    ${modulePreloads}
+  </head>
+  <body${bodyAttributesString}>
+    <header>Custom shell</header>
+    <main data-slot="app">${fragment}</main>
+    ${hydrationScript}
+    ${bootstrap}
+  </body>
+</html>`;
+        },
+      },
+    );
+
+    assert.match(result.document, /^<!doctype html>/i);
+    assert.match(result.document, /<header>Custom shell<\/header>/);
+    assert.match(result.document, /<main data-slot="app">[\s\S]*Template Shoe[\s\S]*<\/main>/);
+    assert.match(result.document, /<script type="application\/json" id="__LITSX_HYDRATION__">/);
+    assert.match(result.document, /import \{ hydratePage \} from "@litsx\/ssr-client";/);
+    assert.match(result.document, /register: \(\) =\\u003E import\("\/src\/main\.js"\)/);
+    assert.doesNotMatch(result.document, /<meta charset="utf-8">/);
   });
 
   it("renders light-dom boundaries without declarative shadow DOM", async () => {

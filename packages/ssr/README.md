@@ -28,6 +28,45 @@ documented SSR guarantees in this package apply to LitSX-authored component
 trees. Support for third-party Lit components with their own light/shadow DOM
 semantics is intentionally out of scope for this first iteration.
 
+## Start Here
+
+If you are starting from scratch, the normal SSR flow is:
+
+1. render a full HTML document on the server with `renderDocument(...)`
+2. point `clientEntry` at your normal browser entry
+3. use `createSsrDevServer(...)` during local development
+
+Minimal server entry:
+
+```tsx
+import { renderDocument } from "@litsx/ssr";
+import { ProductCard } from "./ProductCard.litsx";
+
+const result = await renderDocument(
+  <ProductCard .product={product} />,
+  {
+    title: "Product Page",
+    clientEntry: "/src/main.js",
+  },
+);
+
+result.document;
+```
+
+Matching client entry:
+
+```js
+const { defineProductElements } = await import("./ProductCard.litsx");
+defineProductElements();
+```
+
+`renderDocument(...)` emits the hydration bootstrap wrapper for you when
+`clientEntry` is provided. The client entry can stay focused on registering
+elements and running browser-only setup.
+
+If you want a working reference project, start from
+[`examples/ssr-starter`](../../examples/ssr-starter/README.md).
+
 ## Installation
 
 ```bash
@@ -40,7 +79,7 @@ need the relevant compiler integration such as
 
 ## Basic Usage
 
-For full HTML documents, use `renderDocument(...)`:
+For most applications, `renderDocument(...)` should be your default server API:
 
 ```tsx
 import { renderDocument } from "@litsx/ssr";
@@ -48,7 +87,7 @@ import { ProductCard } from "./ProductCard.litsx";
 
 const result = await renderDocument(<ProductCard .product={product} />, {
   title: "Product Page",
-  bootstrap: "/src/main.js",
+  clientEntry: "/src/main.js",
 });
 
 result.document;
@@ -57,10 +96,58 @@ result.hydrationData;
 ```
 
 `renderDocument(...)` wraps the rendered fragment in a complete HTML document,
-emits module preloads and hydration data, and can inject a configurable client
-bootstrap script.
+emits module preloads and hydration data, and can emit the standard LitSX SSR
+hydration bootstrap automatically when `clientEntry` is provided.
 
-For lower-level integrations, `renderToString(...)` remains available:
+If the built-in shell is not enough, pass `template(...)` to assemble the final
+document yourself:
+
+```tsx
+const result = await renderDocument(<ProductCard .product={product} />, {
+  title: "Product Page",
+  clientEntry: "/src/main.js",
+  template({ html, title, modulePreloads, hydrationScript, bootstrap }) {
+    return `<!doctype html>
+<html>
+  <head>
+    <title>${title}</title>
+    ${modulePreloads}
+    ${hydrationScript}
+  </head>
+  <body>
+    <main class="page-shell">${html}</main>
+    ${bootstrap}
+  </body>
+</html>`;
+  },
+});
+```
+
+For prerender/build scripts that start from authored source instead of an
+already-imported component constructor, `renderDocument(...)` also accepts an
+authored-entry configuration object:
+
+```js
+import { renderDocument } from "@litsx/ssr";
+
+const result = await renderDocument({
+  root: process.cwd(),
+  template: "./index.html",
+  clientEntry: "./src/main.js",
+  elements(loader) {
+    return {
+      "app-root": async () =>
+        (await loader("./src/App.litsx")).AppRoot,
+    };
+  },
+  render({ html }) {
+    return html`<app-root></app-root>`;
+  },
+});
+```
+
+If you need finer control over the HTML shell, `renderToString(...)` remains
+available as the lower-level API:
 
 ```tsx
 import { renderToString } from "@litsx/ssr";
@@ -108,8 +195,48 @@ metadata helpers as `renderToString(...)` once rendering has completed.
 
 `@litsx/ssr` also exposes `createSsrDevServer(...)` for authored LitSX SSR
 examples and local development. It compiles an authored server entry, renders a
-document through `renderDocument(...)`, and serves it through Vite with LitSX
-client sourcemaps enabled.
+fragment through your `render(...)` callback, injects that fragment into an
+HTML template, and serves the result through Vite with LitSX client sourcemaps
+enabled.
+
+Minimal example:
+
+```js
+import { createSsrDevServer } from "@litsx/ssr";
+
+const server = await createSsrDevServer({
+  root: process.cwd(),
+  template: "./index.html",
+  clientEntry: "./src/main.js",
+  elements(loader) {
+    return {
+      "demo-app": async () =>
+        (await loader("./src/components.litsx")).DemoApp,
+    };
+  },
+  render({ html }) {
+    return html`<demo-app .title=${"Hello SSR"}></demo-app>`;
+  },
+});
+
+await server.listen();
+server.printUrls();
+```
+
+Use this helper for local development and examples. Use `renderDocument(...)`
+or `renderToString(...)` directly in production integrations.
+
+When you provide a template file, `createSsrDevServer(...)` expects
+`<!--app-html-->` and will also fill `<!--app-head-->`,
+`<!--app-bootstrap-->`, and `<!--app-title-->` when present.
+
+For the simple case, `elements(loader)` is just the scoped registry for the
+tags returned by `render(...)`. The `loader(...)` helper exists so authored
+`.litsx` modules resolve through the same SSR-aware Vite pipeline the dev
+helper already uses internally.
+
+If you need total control over the emitted bootstrap script, pass `bootstrap`
+explicitly. That low-level override takes precedence over `clientEntry`.
 
 ## Authored Root Syntax
 
