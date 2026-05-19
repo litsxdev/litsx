@@ -23,6 +23,44 @@ export function SsrLeafShadow({ label }) {
   return <button id="leaf-button" @click={() => setCount(count + 1)}>leaf:{label}:{count}</button>;
 }
 
+export function SsrLevelFourLight({ label }) {
+  static lightDom = true;
+  return <SsrLeafShadow .label={label} />;
+}
+
+export function SsrLevelThreeShadow({ label }) {
+  return (
+    <section id="level-three">
+      <SsrLevelFourLight .label={label} />
+    </section>
+  );
+}
+
+export function SsrLevelTwoLight({ label }) {
+  static lightDom = true;
+  return <SsrLevelThreeShadow .label={label} />;
+}
+
+export function SsrAppRoot({ name = "demo" }) {
+  static styles = \`:host { display: block; }\`;
+
+  const [title] = useState(name);
+  return (
+    <main id="app-root">
+      <h1>{title}</h1>
+      <SsrLevelTwoLight .label={title} />
+    </main>
+  );
+}
+
+export function defineSsrComponents() {
+  if (!customElements.get("ssr-app-root")) {
+    customElements.define("ssr-app-root", SsrAppRoot);
+  }
+}
+`;
+}
+
 function createSuspenseComponentsSource() {
   return `
 import type { LitsxRenderable } from "@litsx/core";
@@ -218,44 +256,6 @@ export function defineSsrComponents() {
 `;
 }
 
-export function SsrLevelFourLight({ label }) {
-  static lightDom = true;
-  return <SsrLeafShadow .label={label} />;
-}
-
-export function SsrLevelThreeShadow({ label }) {
-  return (
-    <section id="level-three">
-      <SsrLevelFourLight .label={label} />
-    </section>
-  );
-}
-
-export function SsrLevelTwoLight({ label }) {
-  static lightDom = true;
-  return <SsrLevelThreeShadow .label={label} />;
-}
-
-export function SsrAppRoot({ name = "demo" }) {
-  static styles = \`:host { display: block; }\`;
-
-  const [title] = useState(name);
-  return (
-    <main id="app-root">
-      <h1>{title}</h1>
-      <SsrLevelTwoLight .label={title} />
-    </main>
-  );
-}
-
-export function defineSsrComponents() {
-  if (!customElements.get("ssr-app-root")) {
-    customElements.define("ssr-app-root", SsrAppRoot);
-  }
-}
-`;
-}
-
 test("hydrates a real browser page rendered by @litsx/ssr", async ({ page }) => {
   const tempRoot = path.join(repoRoot, "test-results");
   await fs.mkdir(tempRoot, { recursive: true });
@@ -294,19 +294,18 @@ window.__litsxSsrBrowserResult = {
   );
   const server = await createSsrDevServer({
     root: tempDir,
-    serverEntry: "./src/components.client.litsx",
     clientEntry: "./src/main.js",
     logLevel: "silent",
     host: "127.0.0.1",
     strictPort: false,
-    render({ module, html, scopedTemplate }) {
-      const { SsrAppRoot } = module;
-      return scopedTemplate(
-        html`<ssr-app-root .name=${"Real Browser"}></ssr-app-root>`,
-        {
-          "ssr-app-root": SsrAppRoot,
-        },
-      );
+    elements(loader) {
+      return {
+        "ssr-app-root": async () =>
+          (await loader("./src/components.client.litsx")).SsrAppRoot,
+      };
+    },
+    render({ html }) {
+      return html`<ssr-app-root .name=${"Real Browser"}></ssr-app-root>`;
     },
   });
   await server.listen();
@@ -462,19 +461,18 @@ setTimeout(() => {
 
   const server = await createSsrDevServer({
     root: tempDir,
-    serverEntry: "./src/components.client.litsx",
     clientEntry: "./src/main.js",
     logLevel: "silent",
     host: "127.0.0.1",
     strictPort: false,
-    render({ module, html, scopedTemplate }) {
-      const { SuspenseGuideApp } = module;
-      return scopedTemplate(
-        html`<suspense-guide-app></suspense-guide-app>`,
-        {
-          "suspense-guide-app": SuspenseGuideApp,
-        },
-      );
+    elements(loader) {
+      return {
+        "suspense-guide-app": async () =>
+          (await loader("./src/components.client.litsx")).SuspenseGuideApp,
+      };
+    },
+    render({ html }) {
+      return html`<suspense-guide-app></suspense-guide-app>`;
     },
   });
   await server.listen();
