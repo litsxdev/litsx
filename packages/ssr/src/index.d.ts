@@ -13,6 +13,14 @@ export interface LitsxSsrAssetResolver {
 }
 
 /**
+ * Local scoped custom element registry used to render LitSX-authored tags
+ * without globally defining them.
+ */
+export interface LitsxSsrElements {
+  [tagName: string]: unknown;
+}
+
+/**
  * Configure the client bootstrap script emitted by `renderDocument(...)`.
  */
 export interface LitsxSsrBootstrapScript {
@@ -48,6 +56,11 @@ export interface LitsxSsrBootstrapScript {
 export interface LitsxSsrRenderOptions {
   context?: LitsxSsrContext;
   assetResolver?: LitsxSsrAssetResolver;
+  /**
+   * Local scoped custom element registry used to resolve LitSX-authored tags
+   * inside the provided render value.
+   */
+  elements?: LitsxSsrElements;
 }
 
 export interface LitsxHydrationRoot {
@@ -146,6 +159,63 @@ export interface LitsxSsrResult extends LitsxSsrMetadata {
   html: string;
 }
 
+export interface LitsxSsrDocumentTemplateContext extends LitsxSsrResult {
+  /**
+   * Resolved `lang` value for the document shell.
+   */
+  lang: string;
+
+  /**
+   * Resolved document title text.
+   */
+  title: string;
+
+  /**
+   * Normalized extra `<head>` markup from `options.head`.
+   */
+  head: string;
+
+  /**
+   * Resolved attributes for the `<html>` element.
+   */
+  htmlAttributes: Record<string, string | number | boolean | null | undefined>;
+
+  /**
+   * Resolved attributes for the `<body>` element.
+   */
+  bodyAttributes: Record<string, string | number | boolean | null | undefined>;
+
+  /**
+   * Final bootstrap `<script>` markup.
+   */
+  bootstrap: string;
+
+  /**
+   * Final `<link rel="modulepreload">` markup for discovered client imports.
+   */
+  modulePreloads: string;
+
+  /**
+   * Final LitSX hydration payload script markup.
+   */
+  hydrationScript: string;
+
+  /**
+   * Serialized `<html>` attributes, ready to insert into a template.
+   */
+  htmlAttributesString: string;
+
+  /**
+   * Serialized `<body>` attributes, ready to insert into a template.
+   */
+  bodyAttributesString: string;
+
+  /**
+   * Standard document shell produced by the built-in opinionated template.
+   */
+  defaultDocument: string;
+}
+
 /**
  * Options for `renderDocument(...)`.
  */
@@ -176,10 +246,22 @@ export interface LitsxSsrDocumentOptions extends LitsxSsrRenderOptions {
   htmlAttributes?: Record<string, string | number | boolean | null | undefined>;
 
   /**
-   * Client bootstrap script emitted at the end of the generated `<body>`.
+   * Client entry module for the standard LitSX SSR hydration flow.
+   *
+   * When provided, `renderDocument(...)` emits a small bootstrap wrapper that
+   * imports `hydratePage(...)` from `@litsx/ssr-client`, then imports this
+   * client entry through `register()`.
+   */
+  clientEntry?: string | null | undefined;
+
+  /**
+   * Raw client bootstrap script emitted at the end of the generated `<body>`.
    *
    * Pass a string for a simple module `src`, or a structured object to emit an
    * inline script or add custom attributes.
+   *
+   * This is the low-level escape hatch. When `bootstrap` is provided, it takes
+   * precedence over `clientEntry`.
    */
   bootstrap?: string | LitsxSsrBootstrapScript | null | false | undefined;
 
@@ -188,6 +270,16 @@ export interface LitsxSsrDocumentOptions extends LitsxSsrRenderOptions {
    * generated document.
    */
   hydrationScriptId?: string | undefined;
+
+  /**
+   * Build the final HTML document shell yourself while reusing the rendered
+   * fragment, preload tags, hydration payload, and bootstrap script generated
+   * by `renderDocument(...)`.
+   *
+   * When omitted, `renderDocument(...)` uses its standard opinionated HTML
+   * document template.
+   */
+  template?: ((context: LitsxSsrDocumentTemplateContext) => string) | null | undefined;
 }
 
 export interface LitsxSsrDocumentResult extends LitsxSsrResult {
@@ -206,29 +298,36 @@ export interface LitsxSsrDocumentResult extends LitsxSsrResult {
  * Values passed to `createSsrDevServer(...).render(...)`.
  */
 export interface LitsxSsrDevRenderContext {
-  module: Record<string, unknown>;
   html: typeof import("lit").html;
-  scopedTemplate: typeof import("@litsx/core/elements").__litsxScopedTemplate;
-  serverEntry: string;
   clientEntry: string | null;
   root: string;
 }
 
-export interface LitsxSsrDevServerOptions extends LitsxSsrDocumentOptions {
+export interface LitsxSsrAuthoredDocumentOptions extends Omit<LitsxSsrDocumentOptions, "template" | "elements"> {
   /**
    * Filesystem root passed to Vite and used to resolve authored entries.
    */
   root?: string;
 
   /**
-   * Authored LitSX module compiled for SSR on each request.
-   */
-  serverEntry: string;
-
-  /**
    * Optional client bootstrap module resolved relative to `root`.
    */
   clientEntry?: string;
+
+  /**
+   * Optional HTML template file used by the dev server document shell.
+   *
+   * The file must contain `<!--app-html-->`. LitSX also recognizes
+   * `<!--app-head-->`, `<!--app-bootstrap-->`, and `<!--app-title-->`.
+   *
+   * When omitted, `createSsrDevServer(...)` falls back to the same document
+   * shell behavior as `renderDocument(...)`.
+   */
+  template?:
+    | string
+    | ((context: LitsxSsrDocumentTemplateContext) => string)
+    | null
+    | undefined;
 
   /**
    * Optional location for the compiled temporary SSR module.
@@ -276,10 +375,35 @@ export interface LitsxSsrDevServerOptions extends LitsxSsrDocumentOptions {
   plugins?: unknown[];
 
   /**
+   * Optional scoped element resolvers keyed by custom element tag name.
+   *
+   * Pass either a plain object or a function that receives a SSR-aware
+   * `loader(...)` helper. That helper resolves authored `.litsx` modules
+   * through the same SSR-aware pipeline the dev server already uses
+   * internally.
+   */
+  elements?:
+    | Record<string, unknown | Promise<unknown> | (() => unknown | Promise<unknown>)>
+    | ((loader: (specifier: string) => Promise<Record<string, unknown>>) => Record<string, unknown | Promise<unknown> | (() => unknown | Promise<unknown>)>);
+
+  /**
    * Produce the SSR root value for each request using the compiled server
    * module plus Lit / LitSX helpers.
    */
   render(context: LitsxSsrDevRenderContext): unknown | Promise<unknown>;
+}
+
+export interface LitsxSsrDevServerOptions extends LitsxSsrAuthoredDocumentOptions {
+}
+
+interface LitsxSsrInternalAuthoredDocumentOptions extends LitsxSsrAuthoredDocumentOptions {
+  /**
+   * Optional Vite SSR server used to resolve authored modules through Vite's
+   * SSR pipeline instead of compiling them directly.
+   *
+   * This is primarily used internally by `createSsrDevServer(...)`.
+   */
+  viteServer?: import("vite").ViteDevServer | undefined;
 }
 
 export interface LitsxSsrStreamResult {
@@ -303,10 +427,18 @@ export declare const LITSX_HYDRATION_DATA_SCRIPT_ID: "__LITSX_HYDRATION__";
  * @usage Use this when you want the rendered HTML fragment and SSR metadata, but
  * you are assembling the surrounding document shell yourself.
  * @param value Lit or LitSX value to render through the scoped SSR runtime.
- * @param options Optional scoped SSR context and client asset resolution.
+ * @param options Optional scoped SSR context, scoped elements registry, and
+ * client asset resolution.
  * @returns A prerendered HTML fragment plus client import and hydration helpers.
  * @example
- * const result = await renderToString(<ProductCard .product={product} />);
+ * const result = await renderToString(
+ *   html`<product-card .product=${product}></product-card>`,
+ *   {
+ *     elements: {
+ *       "product-card": ProductCard,
+ *     },
+ *   },
+ * );
  * result.html;
  * result.renderHydrationData();
  */
@@ -320,22 +452,46 @@ export declare function renderToString(
  *
  * This helper wraps `renderToString(...)` with a standard document shell,
  * emitted hydration metadata, module preloads, and an optional bootstrap
- * script suitable for whole-page SSR responses.
+ * script suitable for whole-page SSR responses. You can also override the
+ * document shell with `options.template(...)` when you need a custom layout.
  *
  * @usage Use this as the main whole-page SSR entrypoint when the server should
  * return a complete HTML document instead of a fragment.
  * @param value Lit or LitSX value to render through the scoped SSR runtime.
- * @param options Document shell, bootstrap, and hydration-script options.
+ * @param options Document shell, bootstrap, hydration-script, and optional
+ * custom template options.
  * @returns A complete HTML document plus the same fragment metadata helpers as
  * `renderToString(...)`.
  * @example
  * const result = await renderDocument(<AppRoot .data={data} />, {
  *   title: "Dashboard",
- *   bootstrap: "/src/main.js",
+ *   clientEntry: "/src/main.js",
  * });
  *
  * return new Response(result.document, {
  *   headers: { "content-type": "text/html; charset=utf-8" },
+ * });
+ *
+ * @example
+ * const result = await renderDocument(<AppRoot .data={data} />, {
+ *   title: "Dashboard",
+ *   elements: {
+ *     "app-root": AppRoot,
+ *   },
+ *   template({ html, title, modulePreloads, hydrationScript, bootstrap }) {
+ *     return `<!doctype html>
+ * <html>
+ *   <head>
+ *     <title>${title}</title>
+ *     ${modulePreloads}
+ *     ${hydrationScript}
+ *   </head>
+ *   <body>
+ *     <main class="shell">${html}</main>
+ *     ${bootstrap}
+ *   </body>
+ * </html>`;
+ *   },
  * });
  */
 export declare function renderDocument(
@@ -344,21 +500,53 @@ export declare function renderDocument(
 ): Promise<LitsxSsrDocumentResult>;
 
 /**
+ * Render a complete HTML document from an authored LitSX entry configuration.
+ *
+ * @usage Use this for document SSR when you want `renderDocument(...)` to
+ * resolve authored LitSX modules through `elements(loader)` instead of passing
+ * an already-imported render value.
+ * @param options Authored entry, document-template, and render callback configuration.
+ * @returns A complete HTML document plus SSR fragment metadata.
+ * @example
+ * const result = await renderDocument({
+ *   root: process.cwd(),
+ *   template: "./index.html",
+ *   clientEntry: "./src/main.js",
+ *   elements(loader) {
+ *     return {
+ *       "app-root": async () =>
+ *         (await loader("./src/App.litsx")).AppRoot,
+ *     };
+ *   },
+ *   render({ html }) {
+ *     return html`<app-root></app-root>`;
+ *   },
+ * });
+ */
+export declare function renderDocument(
+  options: LitsxSsrAuthoredDocumentOptions,
+): Promise<LitsxSsrDocumentResult>;
+
+/**
  * Create a Vite-backed development server for authored LitSX SSR entrypoints.
  *
  * @usage Use this for local SSR development when your server entry is still an
  * authored `.litsx` module and you want Vite to serve the hydrated page.
- * @param options Dev-server, authored entry, and render callback configuration.
+ * @param options Dev-server, document-template, authored entry, and render callback configuration.
  * @returns A configured Vite dev server instance that still needs `listen()`.
  * @example
  * const server = await createSsrDevServer({
  *   root: process.cwd(),
- *   serverEntry: "./src/App.litsx",
+ *   template: "./index.html",
  *   clientEntry: "./src/main.js",
- *   render({ module, html, scopedTemplate }) {
- *     return scopedTemplate(html`<app-root></app-root>`, {
- *       "app-root": module.AppRoot,
- *     });
+ *   elements(loader) {
+ *     return {
+ *       "app-root": async () =>
+ *         (await loader("./src/App.litsx")).AppRoot,
+ *     };
+ *   },
+ *   render({ html }) {
+ *     return html`<app-root></app-root>`;
  *   },
  * });
  *
@@ -366,7 +554,7 @@ export declare function renderDocument(
  */
 export declare function createSsrDevServer(
   options: LitsxSsrDevServerOptions,
-): Promise<unknown>;
+): Promise<import("vite").ViteDevServer>;
 
 /**
  * Render a Lit or LitSX value to a Web Stream using the scoped LitSX SSR runtime.
@@ -374,7 +562,8 @@ export declare function createSsrDevServer(
  * @usage Use this when you want to stream HTML to the client while still
  * collecting the same SSR metadata available from `renderToString(...)`.
  * @param value Lit or LitSX value to render through the scoped SSR runtime.
- * @param options Optional scoped SSR context and client asset resolution.
+ * @param options Optional scoped SSR context, scoped elements registry, and
+ * client asset resolution.
  * @returns A Web stream plus an `allReady` promise for the final SSR metadata.
  */
 export declare function renderToStream(
