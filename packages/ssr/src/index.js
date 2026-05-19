@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import { __litsxScopedTemplate } from "@litsx/core/elements";
 
 /**
  * Default JSON script id used by `renderClientImportsData()`.
@@ -11,6 +12,11 @@ export const LITSX_CLIENT_IMPORTS_SCRIPT_ID = "__LITSX_CLIENT_IMPORTS__";
  * Default JSON script id used by `renderHydrationData()`.
  */
 export const LITSX_HYDRATION_DATA_SCRIPT_ID = "__LITSX_HYDRATION__";
+
+const DEV_TEMPLATE_TITLE_MARKER = "<!--app-title-->";
+const DEV_TEMPLATE_HEAD_MARKER = "<!--app-head-->";
+const DEV_TEMPLATE_HTML_MARKER = "<!--app-html-->";
+const DEV_TEMPLATE_BOOTSTRAP_MARKER = "<!--app-bootstrap-->";
 
 let ssrRuntimePromise;
 
@@ -43,6 +49,13 @@ function escapeHtmlAttribute(value) {
 
 function escapeJsonScript(value) {
   return JSON.stringify(value)
+    .replaceAll("<", "\\u003C")
+    .replaceAll(">", "\\u003E")
+    .replaceAll("&", "\\u0026");
+}
+
+function escapeInlineScriptText(value) {
+  return String(value)
     .replaceAll("<", "\\u003C")
     .replaceAll(">", "\\u003E")
     .replaceAll("&", "\\u0026");
@@ -100,6 +113,22 @@ function renderBootstrapScript(bootstrap) {
   }
 
   return "";
+}
+
+function renderClientEntryBootstrapScript(clientEntry) {
+  if (!clientEntry) {
+    return "";
+  }
+
+  const source = `
+import { hydratePage } from "@litsx/ssr-client";
+
+await hydratePage({
+  register: () => import(${JSON.stringify(clientEntry)}),
+});
+`;
+
+  return `<script type="module">${escapeInlineScriptText(source)}</script>`;
 }
 
 function createHydrationData(context) {
@@ -186,6 +215,80 @@ function createDocumentResult(result, document, bootstrapHtml) {
   };
 }
 
+function createDefaultDocument({
+  htmlAttributes,
+  bodyAttributes,
+  title,
+  head,
+  modulePreloads,
+  hydrationScript,
+  html,
+  bootstrap,
+}) {
+  return `<!doctype html>
+<html${renderHtmlAttributes(htmlAttributes)}>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>${escapeHtmlText(title)}</title>
+    ${head}
+    ${modulePreloads}
+    ${hydrationScript}
+  </head>
+  <body${renderHtmlAttributes(bodyAttributes)}>
+    ${html}
+    ${bootstrap}
+  </body>
+</html>`;
+}
+
+function injectMarkupBeforeCloseTag(document, closeTag, markup) {
+  if (!markup) {
+    return document;
+  }
+
+  const closeTagIndex = document.lastIndexOf(closeTag);
+  if (closeTagIndex === -1) {
+    return document;
+  }
+
+  return `${document.slice(0, closeTagIndex)}${markup}\n${document.slice(closeTagIndex)}`;
+}
+
+function renderDevTemplateDocument(templateSource, context) {
+  if (!templateSource.includes(DEV_TEMPLATE_HTML_MARKER)) {
+    throw new TypeError(
+      `createSsrDevServer(...) HTML templates must contain ${DEV_TEMPLATE_HTML_MARKER}.`,
+    );
+  }
+
+  const titleMarkup = context.title ? escapeHtmlText(context.title) : "";
+  const headMarkup = [
+    context.head,
+    context.modulePreloads,
+    context.hydrationScript,
+  ].filter((chunk) => chunk && chunk.length > 0).join("\n");
+  let document = templateSource.replaceAll(DEV_TEMPLATE_HTML_MARKER, context.html);
+
+  if (document.includes(DEV_TEMPLATE_TITLE_MARKER)) {
+    document = document.replaceAll(DEV_TEMPLATE_TITLE_MARKER, titleMarkup);
+  }
+
+  if (document.includes(DEV_TEMPLATE_HEAD_MARKER)) {
+    document = document.replaceAll(DEV_TEMPLATE_HEAD_MARKER, headMarkup);
+  } else {
+    document = injectMarkupBeforeCloseTag(document, "</head>", headMarkup);
+  }
+
+  if (document.includes(DEV_TEMPLATE_BOOTSTRAP_MARKER)) {
+    document = document.replaceAll(DEV_TEMPLATE_BOOTSTRAP_MARKER, context.bootstrap);
+  } else {
+    document = injectMarkupBeforeCloseTag(document, "</body>", context.bootstrap);
+  }
+
+  return document;
+}
+
 function resolveFsPath(root, value) {
   if (!value) {
     return root;
@@ -199,24 +302,24 @@ function toPublicPath(root, filePath) {
   return relativePath.startsWith("../") ? null : `/${relativePath}`;
 }
 
-function createServerOutputPath(root, serverEntry) {
-  const basename = path.basename(serverEntry).replace(/\.[^.]+$/, "");
+function createServerOutputPath(root, entryPath) {
+  const basename = path.basename(entryPath).replace(/\.[^.]+$/, "");
   return path.join(root, ".ssr", `${basename}.server.mjs`);
 }
 
-async function compileServerEntry(serverEntry, outputPath) {
+async function compileServerEntry(entryPath, outputPath) {
   const [{ createLitsxCompilationSession }, source] = await Promise.all([
     import("@litsx/compiler"),
-    fs.readFile(serverEntry, "utf8"),
+    fs.readFile(entryPath, "utf8"),
   ]);
   const session = createLitsxCompilationSession({
     transformOptions: {
       ssr: true,
-      filename: serverEntry,
+      filename: entryPath,
     },
   });
   const result = session.transformSync(source, {
-    filename: serverEntry,
+    filename: entryPath,
     sourceMaps: false,
   });
 
@@ -229,8 +332,8 @@ async function loadCompiledServerModule(compiledPath) {
   return import(`${pathToFileURL(compiledPath).href}?t=${Date.now()}`);
 }
 
-async function loadServerModuleFromVite(viteServer, root, serverEntry) {
-  const moduleId = toPublicPath(root, serverEntry) ?? serverEntry;
+async function loadServerModuleFromVite(viteServer, root, entryPath) {
+  const moduleId = toPublicPath(root, entryPath) ?? entryPath;
   return viteServer.ssrLoadModule(moduleId);
 }
 
@@ -248,9 +351,24 @@ function createDefaultAssetResolver(root, customResolver = null) {
   };
 }
 
-async function renderDevDocumentFromEntry(options = {}) {
+function normalizeSsrRenderable(value, elements) {
+  if (!elements || typeof elements !== "object") {
+    return value;
+  }
+
+  const entries = Object.entries(elements).filter(([, entry]) => entry != null);
+  if (entries.length === 0) {
+    return value;
+  }
+
+  return __litsxScopedTemplate(value, Object.fromEntries(entries));
+}
+
+async function renderAuthoredDocument(options = {}) {
   const root = resolveFsPath(process.cwd(), options.root ?? process.cwd());
-  const serverEntry = resolveFsPath(root, options.serverEntry);
+  const templateSource = typeof options.template === "string"
+    ? await fs.readFile(resolveFsPath(root, options.template), "utf8")
+    : null;
   const clientEntry = options.clientEntry
     ? toPublicPath(root, resolveFsPath(root, options.clientEntry)) ?? options.clientEntry
     : null;
@@ -260,43 +378,77 @@ async function renderDevDocumentFromEntry(options = {}) {
   }
 
   await import("@lit-labs/ssr/lib/install-global-dom-shim.js");
-  const [moduleExports, { html }, { __litsxScopedTemplate }] = await Promise.all([
-    options.viteServer
-      ? loadServerModuleFromVite(options.viteServer, root, serverEntry)
-      : (async () => {
-          const compiledServerPath = resolveFsPath(
-            root,
-            options.compiledServerPath ?? createServerOutputPath(root, serverEntry),
-          );
-          await compileServerEntry(serverEntry, compiledServerPath);
-          return loadCompiledServerModule(compiledServerPath);
-        })(),
+  async function importModule(specifier) {
+    const resolvedEntryPath = resolveFsPath(root, specifier);
+    if (options.viteServer) {
+      return loadServerModuleFromVite(options.viteServer, root, resolvedEntryPath);
+    }
+
+    const compiledServerPath = resolveFsPath(
+      root,
+      createServerOutputPath(root, resolvedEntryPath),
+    );
+    await compileServerEntry(resolvedEntryPath, compiledServerPath);
+    return loadCompiledServerModule(compiledServerPath);
+  }
+
+  const [{ html }, resolvedElementRegistry] = await Promise.all([
     import("lit"),
-    import("@litsx/core/elements"),
+    (async () => {
+      if (!options.elements) {
+        return null;
+      }
+
+      const elementResolvers = typeof options.elements === "function"
+        ? options.elements(importModule)
+        : options.elements;
+
+      const pairs = await Promise.all(
+        Object.entries(elementResolvers).map(async ([tagName, resolveElement]) => {
+          const resolvedValue = typeof resolveElement === "function"
+            ? await resolveElement()
+            : await resolveElement;
+
+          return [tagName, resolvedValue];
+        }),
+      );
+
+      return Object.fromEntries(pairs);
+    })(),
   ]);
 
-  const value = await options.render({
-    module: moduleExports,
+  const renderValue = await options.render({
     html,
-    scopedTemplate: __litsxScopedTemplate,
-    serverEntry,
     clientEntry,
     root,
   });
+  const resolvedElements = resolvedElementRegistry && typeof resolvedElementRegistry === "object"
+    ? resolvedElementRegistry
+    : undefined;
+  const elements = {
+    ...(resolvedElements || {}),
+  };
   const assetResolver = createDefaultAssetResolver(root, options.assetResolver);
 
-  return renderDocument(value, {
+  return renderDocument(renderValue, {
+    elements: Object.keys(elements).length > 0 ? elements : undefined,
     assetResolver,
     lang: options.lang,
     title: options.title,
     head: options.head,
     bodyAttributes: options.bodyAttributes,
     htmlAttributes: options.htmlAttributes,
-    bootstrap:
+    clientEntry:
       options.bootstrap === undefined
         ? clientEntry
-        : options.bootstrap,
+        : undefined,
+    bootstrap: options.bootstrap,
     hydrationScriptId: options.hydrationScriptId,
+    template: templateSource
+      ? (context) => renderDevTemplateDocument(templateSource, context)
+      : typeof options.template === "function"
+        ? options.template
+        : undefined,
   });
 }
 
@@ -322,17 +474,16 @@ async function renderResolvedValue(value, context) {
 /**
  * Render a Lit or LitSX template to HTML using the scoped SSR runtime.
  *
- * LitSX roots are expected to arrive as scoped templates produced by the
- * SSR root transform, for example from:
- *
- * `renderToString(<ProductCard .product={product} />)`
- *
- * The current MVP returns prerendered HTML plus the deduplicated list of
- * client module imports discovered while resolving scoped LitSX elements.
+ * LitSX roots can arrive either as already-lowered scoped templates or as a
+ * plain Lit value plus `options.elements`, which is wrapped into a scoped SSR
+ * template internally.
  */
 export async function renderToString(value, options = {}) {
   const context = await createSsrContext(options);
-  const html = await renderResolvedValue(value, context);
+  const html = await renderResolvedValue(
+    normalizeSsrRenderable(await Promise.resolve(value), options.elements),
+    context,
+  );
   return createSsrResult(html, context);
 }
 
@@ -349,6 +500,16 @@ export async function renderToString(value, options = {}) {
  * Use this as the recommended document-oriented entrypoint for full-page SSR.
  */
 export async function renderDocument(value, options = {}) {
+  if (
+    arguments.length === 1 &&
+    value &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    typeof value.render === "function"
+  ) {
+    return renderAuthoredDocument(value);
+  }
+
   const result = await renderToString(value, options);
   const lang = options.lang ?? "en";
   const htmlAttributes = {
@@ -358,22 +519,37 @@ export async function renderDocument(value, options = {}) {
   const bodyAttributes = options.bodyAttributes || {};
   const title = options.title == null ? "" : String(options.title);
   const head = normalizeTagContents(options.head);
-  const bootstrapHtml = renderBootstrapScript(options.bootstrap);
-  const document = `<!doctype html>
-<html${renderHtmlAttributes(htmlAttributes)}>
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>${escapeHtmlText(title)}</title>
-    ${head}
-    ${result.renderModulePreloads()}
-    ${result.renderHydrationData(options.hydrationScriptId)}
-  </head>
-  <body${renderHtmlAttributes(bodyAttributes)}>
-    ${result.html}
-    ${bootstrapHtml}
-  </body>
-</html>`;
+  const bootstrapHtml = options.bootstrap === undefined
+    ? renderClientEntryBootstrapScript(options.clientEntry)
+    : renderBootstrapScript(options.bootstrap);
+  const modulePreloads = result.renderModulePreloads();
+  const hydrationScript = result.renderHydrationData(options.hydrationScriptId);
+  const defaultDocument = createDefaultDocument({
+    htmlAttributes,
+    bodyAttributes,
+    title,
+    head,
+    modulePreloads,
+    hydrationScript,
+    html: result.html,
+    bootstrap: bootstrapHtml,
+  });
+  const document = typeof options.template === "function"
+    ? String(options.template({
+      ...result,
+      title,
+      lang,
+      head,
+      htmlAttributes: { ...htmlAttributes },
+      bodyAttributes: { ...bodyAttributes },
+      bootstrap: bootstrapHtml,
+      modulePreloads,
+      hydrationScript,
+      htmlAttributesString: renderHtmlAttributes(htmlAttributes),
+      bodyAttributesString: renderHtmlAttributes(bodyAttributes),
+      defaultDocument,
+    }))
+    : defaultDocument;
 
   return createDocumentResult(result, document, bootstrapHtml);
 }
@@ -393,7 +569,10 @@ export async function renderToStream(value, options = {}) {
   const stream = new ReadableStream({
     async start(controller) {
       try {
-        const html = await renderResolvedValue(value, context);
+        const html = await renderResolvedValue(
+          normalizeSsrRenderable(await Promise.resolve(value), options.elements),
+          context,
+        );
         controller.enqueue(html);
         controller.close();
         const result = createSsrResult(html, context);
@@ -428,8 +607,9 @@ export async function renderToStream(value, options = {}) {
  * - serves the result through Vite with LitSX client sourcemaps enabled
  *
  * This is intended for local development and examples, not production builds.
- * Callers provide a `render(...)` callback that receives the compiled server
- * module plus `html` / `scopedTemplate` helpers and returns the SSR root value.
+ * Callers provide a `render(...)` callback that returns the SSR root template,
+ * and can optionally use `elements(loader)` to resolve authored LitSX elements
+ * through the same SSR-aware pipeline as the main server entry.
  */
 export async function createSsrDevServer(options = {}) {
   const { createServer } = await import("vite");
@@ -467,7 +647,7 @@ export async function createSsrDevServer(options = {}) {
     }
 
     try {
-      const result = await renderDevDocumentFromEntry({
+      const result = await renderAuthoredDocument({
         ...options,
         root,
         viteServer,
