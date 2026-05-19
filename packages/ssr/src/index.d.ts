@@ -39,6 +39,11 @@ export interface LitsxSsrBootstrapScript {
 
 /**
  * Low-level scoped SSR render options shared by string and document rendering.
+ *
+ * The scoped SSR lifecycle described by this package is defined around
+ * LitSX-authored component trees. Plain Lit templates are accepted as input,
+ * but arbitrary third-party Lit components are not yet promoted into the full
+ * LitSX SSR component model by default.
  */
 export interface LitsxSsrRenderOptions {
   context?: LitsxSsrContext;
