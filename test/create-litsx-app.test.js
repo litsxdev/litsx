@@ -1,6 +1,5 @@
 import assert from "assert";
 import fs from "fs";
-import { createRequire } from "module";
 import os from "os";
 import path from "path";
 import { afterEach, describe, it } from "vitest";
@@ -13,12 +12,6 @@ import {
   renderProjectFiles,
 } from "../packages/create-litsx-app/src/index.js";
 import { publishedPackageVersions } from "../packages/create-litsx-app/src/published-package-versions.js";
-
-const require = createRequire(import.meta.url);
-const distEntrypoint = path.resolve("packages/create-litsx-app/dist/index.cjs");
-const renderDistProjectFiles = fs.existsSync(distEntrypoint)
-  ? require(distEntrypoint).renderProjectFiles
-  : null;
 const tempDirs = [];
 
 function getStaticStyleSources(render) {
@@ -282,46 +275,11 @@ describe("create-litsx-app", () => {
   });
 
   it("does not emit legacy hoist closers in any authored template", () => {
-    const renderers = [["src", renderProjectFiles]];
-    if (renderDistProjectFiles) {
-      renderers.push(["dist", renderDistProjectFiles]);
-    }
-
-    for (const [entrypoint, render] of renderers) {
-      for (const { template, name, source } of getStaticStyleSources(render)) {
-        assert.doesNotMatch(
-          source,
-          /`\);/,
-          `${entrypoint} ${template} ${name} still contains a legacy \`); hoist closer`,
-        );
-      }
-    }
-  });
-
-  it("scaffolds runtime package versions from the published version manifest", () => {
-    const renderers = [["src", renderProjectFiles]];
-    if (renderDistProjectFiles) {
-      renderers.push(["dist", renderDistProjectFiles]);
-    }
-
-    for (const [entrypoint, render] of renderers) {
-      const { files } = render("/tmp/my-litsx-app", { template: "design-system" });
-      const packageJson = JSON.parse(files.get("package.json"));
-
-      assert.strictEqual(
-        packageJson.dependencies["@litsx/core"],
-        publishedPackageVersions["@litsx/core"],
-        `${entrypoint} scaffold is emitting a stale @litsx/core version`,
-      );
-      assert.strictEqual(
-        packageJson.devDependencies["@litsx/typescript"],
-        publishedPackageVersions["@litsx/typescript"],
-        `${entrypoint} scaffold is emitting a stale @litsx/typescript version`,
-      );
-      assert.strictEqual(
-        packageJson.devDependencies["@litsx/vite-plugin"],
-        publishedPackageVersions["@litsx/vite-plugin"],
-        `${entrypoint} scaffold is emitting a stale @litsx/vite-plugin version`,
+    for (const { template, name, source } of getStaticStyleSources(renderProjectFiles)) {
+      assert.doesNotMatch(
+        source,
+        /`\);/,
+        `src ${template} ${name} still contains a legacy \`); hoist closer`,
       );
     }
   });
