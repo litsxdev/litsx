@@ -142,6 +142,28 @@ describe("@litsx/compiler", () => {
     assert.match(result.code, /identity\("Save"\)/);
   }, 20000);
 
+  it("lowers direct children expressions to slots for implicit projection", () => {
+    const source = [
+      "export function Frame({ children }) {",
+      "  return <section>{children}</section>;",
+      "}",
+      "export function Shell(props) {",
+      "  return <Frame>{props.children}</Frame>;",
+      "}",
+      "export function Demo() {",
+      "  return <Shell><p>Alpha</p></Shell>;",
+      "}",
+    ].join("\n");
+
+    const result = transformLitsxSync(source, {
+      filename: "/virtual/Children.litsx",
+    });
+
+    assert.match(result.code, /return html`<section><slot><\/slot><\/section>`;/);
+    assert.match(result.code, /return html`<frame><slot><\/slot><\/frame>`;/);
+    assert.match(result.code, /return html`<shell><p>Alpha<\/p><\/shell>`;/);
+  }, 20000);
+
   it("lowers authored JSX inside suspense content renderers", () => {
     const source = [
       'import { SuspenseBoundary } from "@litsx/core";',
@@ -883,6 +905,41 @@ describe("@litsx/compiler", () => {
     assert.strictEqual(result.metadata.litsxWarnings.length, 1);
     assert.strictEqual(result.metadata.litsxWarnings[0].code, 91016);
     assert.match(result.metadata.litsxWarnings[0].message, /migration wrapper only/);
+  }, 20000);
+
+  it("throws when implicit children are used outside direct JSX child projection", () => {
+    const source = [
+      "export function Panel({ children }) {",
+      "  const body = children;",
+      "  return <section>{body}</section>;",
+      "}",
+    ].join("\n");
+
+    assert.throws(
+      () => {
+        transformLitsxSync(source, {
+          filename: "/virtual/ChildrenError.litsx",
+        });
+      },
+      /Implicit `children` projection is only supported as a direct JSX child expression/
+    );
+  }, 20000);
+
+  it("throws when implicit children projection is duplicated in one render", () => {
+    const source = [
+      "export function Panel({ children }) {",
+      "  return <section>{children}{children}</section>;",
+      "}",
+    ].join("\n");
+
+    assert.throws(
+      () => {
+        transformLitsxSync(source, {
+          filename: "/virtual/ChildrenDuplicate.litsx",
+        });
+      },
+      /Implicit `children` projection can only appear once per component render/
+    );
   }, 20000);
 
   it("accepts static hoist assignments without surfacing deprecation warnings", () => {

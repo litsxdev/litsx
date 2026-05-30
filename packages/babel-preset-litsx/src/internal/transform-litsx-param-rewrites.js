@@ -4,6 +4,79 @@ export function setParamRewriteBabelTypes(nextTypes) {
   t = nextTypes;
 }
 
+function getBoundPropName(bindingInfo) {
+  if (typeof bindingInfo === "string") {
+    return bindingInfo;
+  }
+
+  if (bindingInfo && typeof bindingInfo === "object") {
+    return bindingInfo.bindKey ?? null;
+  }
+
+  return null;
+}
+
+function createDefaultSlotElement() {
+  return t.jsxElement(
+    t.jsxOpeningElement(t.jsxIdentifier("slot"), [], false),
+    t.jsxClosingElement(t.jsxIdentifier("slot")),
+    [],
+    false
+  );
+}
+
+function isDirectJsxChildExpression(expressionPath) {
+  return (
+    expressionPath.listKey === "children" &&
+    (expressionPath.parentPath?.isJSXElement() || expressionPath.parentPath?.isJSXFragment())
+  );
+}
+
+function isImplicitChildrenExpression(node, bindings) {
+  if (t.isIdentifier(node)) {
+    return getBoundPropName(bindings.get(node.name)) === "children";
+  }
+
+  if (
+    t.isMemberExpression(node) &&
+    !node.computed &&
+    t.isIdentifier(node.object) &&
+    t.isIdentifier(node.property, { name: "children" })
+  ) {
+    return bindings.has(node.object.name);
+  }
+
+  return false;
+}
+
+function isJsxContainerChildPath(path) {
+  return (
+    path?.parentPath?.isJSXExpressionContainer() &&
+    path.parentPath.listKey === "children" &&
+    (path.parentPath.parentPath?.isJSXElement() || path.parentPath.parentPath?.isJSXFragment())
+  );
+}
+
+function isSupportedImplicitChildrenReference(refPath, bindingInfo) {
+  if (typeof bindingInfo === "string") {
+    return bindingInfo === "children" && isJsxContainerChildPath(refPath);
+  }
+
+  if (
+    bindingInfo &&
+    typeof bindingInfo === "object" &&
+    bindingInfo.kind === "alias" &&
+    refPath.parentPath?.isMemberExpression() &&
+    refPath.parentKey === "object" &&
+    !refPath.parentPath.node.computed &&
+    t.isIdentifier(refPath.parentPath.node.property, { name: "children" })
+  ) {
+    return isJsxContainerChildPath(refPath.parentPath);
+  }
+
+  return false;
+}
+
 function createThisMemberExpression(propName) {
   return t.memberExpression(t.thisExpression(), t.identifier(propName));
 }
@@ -13,6 +86,14 @@ export function transformJSXExpressions(jsxPath, bindings, state = null) {
 
   jsxPath.traverse({
     JSXExpressionContainer(expressionPath) {
+      if (
+        isDirectJsxChildExpression(expressionPath) &&
+        isImplicitChildrenExpression(expressionPath.node.expression, bindings)
+      ) {
+        expressionPath.replaceWith(createDefaultSlotElement());
+        return;
+      }
+
       if (t.isIdentifier(expressionPath.node.expression)) {
         const name = expressionPath.node.expression.name;
         if (localNames.includes(name)) {
@@ -96,7 +177,7 @@ function shouldCapturePropReference(refPath, functionPath) {
   return !functionParent.isArrowFunctionExpression();
 }
 
-export function replaceParamReferences(functionPath, bindings, propertyMap = new Map()) {
+export function replaceParamReferences(functionPath, bindings, propertyMap = new Map(), state = null) {
   registerLocalPropAliases(functionPath, bindings);
 
   const capturedPropAliases = new Map();
@@ -166,6 +247,13 @@ export function replaceParamReferences(functionPath, bindings, propertyMap = new
         targetProp = bindingInfo;
       } else if (bindingInfo && typeof bindingInfo === "object") {
         targetProp = bindingInfo.bindKey;
+      }
+
+      if (
+        targetProp === "children" &&
+        !isSupportedImplicitChildrenReference(refPath, bindingInfo)
+      ) {
+        return;
       }
 
       if (

@@ -66,6 +66,69 @@ describe("native param rewrite internals", () => {
     assert.strictEqual(expressions[2].name, "localOnly");
   });
 
+  it("lowers direct children expressions to a default slot", () => {
+    const directChildren = getPaths(`
+      function Panel({ children }) {
+        return <section>{children}</section>;
+      }
+    `);
+
+    transformJSXExpressions(directChildren.jsxPath, new Map([["children", "children"]]));
+
+    assert.strictEqual(directChildren.jsxPath.node.children[0].type, "JSXElement");
+    assert.strictEqual(directChildren.jsxPath.node.children[0].openingElement.name.name, "slot");
+
+    const propsChildren = getPaths(`
+      function Panel(props) {
+        return <section>{props.children}</section>;
+      }
+    `);
+
+    transformJSXExpressions(
+      propsChildren.jsxPath,
+      new Map([
+        [
+          "props",
+          {
+            kind: "alias",
+            properties: new Map([
+              ["children", "children"],
+            ]),
+          },
+        ],
+      ])
+    );
+
+    assert.strictEqual(propsChildren.jsxPath.node.children[0].type, "JSXElement");
+    assert.strictEqual(propsChildren.jsxPath.node.children[0].openingElement.name.name, "slot");
+  });
+
+  it("does not validate duplicate implicit children projection during raw JSX slot lowering", () => {
+    const { jsxPath } = getPaths(`
+      function Panel({ children, props }) {
+        return <section>{children}{props.children}</section>;
+      }
+    `);
+
+    const bindings = new Map([
+      ["children", "children"],
+      [
+        "props",
+        {
+          kind: "alias",
+          properties: new Map([
+            ["children", "children"],
+          ]),
+        },
+      ],
+    ]);
+
+    transformJSXExpressions(jsxPath, bindings);
+
+    assert.strictEqual(jsxPath.node.children[0].openingElement.name.name, "slot");
+    assert.strictEqual(jsxPath.node.children[1].openingElement.name.name, "slot");
+  });
+
   it("captures nested non-arrow references and rewrites alias members, shorthand objects, and JSX attributes", () => {
     const { functionPath } = getPaths(`
       function Card(props) {

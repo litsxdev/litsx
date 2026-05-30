@@ -1,6 +1,7 @@
 import * as babelParser from "@babel/parser";
 import {
   collectComponentLikeFunctions,
+  collectImplicitChildrenProjectionIssues,
   collectNativeClassNameWarnings,
   collectReactMemoWarnings,
   createVirtualLitsxJsxSource,
@@ -1345,6 +1346,9 @@ export function collectLitsxAuthoredIssues(sourceText, options = {}) {
   issues.push(...collectDestructuredPropsMetadataIssues(ast, virtualization));
   issues.push(...collectPropsAccessIssues(ast, virtualization));
   issues.push(...collectHoistsFirstIssues(ast, virtualization));
+  issues.push(...collectImplicitChildrenProjectionIssues(ast).map((issue) =>
+    createOriginalIssue(virtualization, issue)
+  ));
   issues.push(...collectNativeClassNameWarnings(ast).map((warning) =>
     createOriginalIssue(virtualization, {
       kind: "native-classname",

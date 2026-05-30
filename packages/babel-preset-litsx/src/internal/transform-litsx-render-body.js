@@ -1,3 +1,4 @@
+import { collectImplicitChildrenProjectionIssues } from "@litsx/authoring";
 import {
   createComponentInstanceRefSyncStatement,
   hasRefProp,
@@ -36,6 +37,29 @@ function createNestedInitializerStatement(pattern, root, defaultValue) {
   ]);
 }
 
+function throwFirstImplicitChildrenProjectionIssue(functionPath) {
+  const [issue] = collectImplicitChildrenProjectionIssues(functionPath.node);
+  if (!issue) {
+    return;
+  }
+
+  let issuePath = null;
+  functionPath.traverse({
+    enter(path) {
+      if (path.node === issue.node) {
+        issuePath = path;
+        path.stop();
+      }
+    },
+  });
+
+  if (issuePath) {
+    throw issuePath.buildCodeFrameError(issue.message);
+  }
+
+  throw functionPath.buildCodeFrameError(issue.message);
+}
+
 function collectReturnStatement(functionPath, bindings, state) {
   let returnStatement = null;
 
@@ -53,6 +77,8 @@ function collectReturnStatement(functionPath, bindings, state) {
 }
 
 export function prepareComponentRender(functionPath, node, propertyNames, bindings, nestedInitializers, options = {}) {
+  throwFirstImplicitChildrenProjectionIssue(functionPath);
+
   const returnStatement = collectReturnStatement(
     functionPath,
     bindings,
@@ -66,7 +92,8 @@ export function prepareComponentRender(functionPath, node, propertyNames, bindin
   const capturedPropAliasStatements = replaceParamReferences(
     functionPath,
     bindings,
-    propertyNames
+    propertyNames,
+    options.state ?? null
   );
   const prefixStatements = [];
 

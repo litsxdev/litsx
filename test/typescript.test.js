@@ -6477,6 +6477,27 @@ describe("@litsx/typescript", () => {
     }
   });
 
+  it("reports implicit children misuse as authored diagnostics", () => {
+    const unsupportedIssues = collectLitsxAuthoredIssues(`
+      export function Panel({ children }) {
+        const body = children;
+        return <section>{body}</section>;
+      }
+    `);
+
+    assert.ok(unsupportedIssues.some((issue) => issue.code === 91021));
+    assert.ok(unsupportedIssues.some((issue) => issue.code === 91021 && issue.severity === "error"));
+
+    const duplicateIssues = collectLitsxAuthoredIssues(`
+      export function Panel({ children }) {
+        return <section>{children}{children}</section>;
+      }
+    `);
+
+    assert.ok(duplicateIssues.some((issue) => issue.code === 91022));
+    assert.ok(duplicateIssues.some((issue) => issue.code === 91022 && issue.severity === "error"));
+  });
+
   it("surfaces authored warning diagnostics through syntactic diagnostics in tsx files", () => {
     const source = `
       const view = (

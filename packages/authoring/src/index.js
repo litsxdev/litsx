@@ -6,6 +6,13 @@ export {
   NATIVE_STATIC_HOISTS,
   STATIC_HOIST_CALL_RE,
 } from "./authored-semantics.js";
+export {
+  collectImplicitChildrenProjectionIssues,
+  LITSX_IMPLICIT_CHILDREN_DUPLICATE_CODE,
+  LITSX_IMPLICIT_CHILDREN_DUPLICATE_MESSAGE,
+  LITSX_IMPLICIT_CHILDREN_UNSUPPORTED_CODE,
+  LITSX_IMPLICIT_CHILDREN_UNSUPPORTED_MESSAGE,
+} from "./implicit-children.js";
 
 const PREFIX_TO_KIND = {
   "@": "event",

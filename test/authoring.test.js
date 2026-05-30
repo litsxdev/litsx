@@ -4,6 +4,7 @@ import { describe, it } from "vitest";
 import {
   applyVirtualAttributeReplacements,
   collectComponentLikeFunctions,
+  collectImplicitChildrenProjectionIssues,
   collectNativeClassNameWarnings,
   collectReactMemoWarnings,
   createVirtualLitsxJsxSourceMap,
@@ -72,6 +73,29 @@ describe("@litsx/authoring", () => {
       collectReactMemoWarnings(ast).map((entry) => entry.code),
       [91016],
     );
+  });
+
+  it("collects implicit children projection issues from authored component ASTs", () => {
+    const duplicateAst = parser.parse(`
+      export function Panel({ children }) {
+        return <section>{children}{children}</section>;
+      }
+    `, { sourceType: "module" });
+
+    const duplicateIssues = collectImplicitChildrenProjectionIssues(duplicateAst);
+    assert.strictEqual(duplicateIssues.length, 1);
+    assert.strictEqual(duplicateIssues[0].code, 91022);
+
+    const invalidAst = parser.parse(`
+      export function Panel({ children }) {
+        const body = children;
+        return <section>{body}</section>;
+      }
+    `, { sourceType: "module" });
+
+    const invalidIssues = collectImplicitChildrenProjectionIssues(invalidAst);
+    assert.strictEqual(invalidIssues.length, 1);
+    assert.strictEqual(invalidIssues[0].code, 91021);
   });
 
   it("supports tsx sources through the litsx parser", () => {
