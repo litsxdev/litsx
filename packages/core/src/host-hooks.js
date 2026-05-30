@@ -50,7 +50,7 @@ export function useHost(host) {
  * @behavior The snapshot updates when light DOM children, text nodes, or slot attributes change.
  * @behavior `slots.default` contains nodes without an explicit slot name.
  * @mentalModel useHostContent treats the host's light DOM as input data owned by the component boundary, not as an implementation detail hidden behind `this.textContent`.
- * @pitfall This reads projected host content, not children as an abstract virtual data structure.
+ * @pitfall This reads projected host content, not `children` as an abstract virtual data structure or general-purpose render value.
  * @example
  * const content = useHostContent({ trim: true });
  * const source = content.text;
@@ -152,7 +152,7 @@ export function useTextContent(host, options) {
  * @behavior Returns a reactive array of nodes assigned to the requested slot.
  * @behavior The returned array updates when projected nodes are added, removed, or moved between slots.
  * @mentalModel useSlot gives authored code a reactive view of projected light DOM for one slot. It does not render, clone, or virtualize children as framework-level data.
- * @pitfall useSlot reads host-projected content, not JSX children as an abstract data structure.
+ * @pitfall useSlot reads host-projected content, not JSX `children` as a manipulable abstract data structure.
  * @example
  * const defaultNodes = useSlot();
  * const actions = useSlot("actions");

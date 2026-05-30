@@ -26,6 +26,14 @@ export interface LitsxBaseAttributes {
   class?: string;
   part?: string;
   style?: string | Partial<CSSStyleDeclaration>;
+  /**
+   * Authored child content passed between component tags.
+   * LitSX treats this as projected content for the default slot.
+   * In authored component bodies, implicit `children` projection is only supported as
+   * a single direct JSX child expression such as `{children}` or `{props.children}`.
+   * For named slots, repeated distribution, or other composition patterns, use explicit
+   * `<slot>` markup or host-content hooks instead of treating `children` as ordinary data.
+   */
   children?: LitsxRenderable;
   ref?: LitsxRef<unknown>;
   [attributeName: `data-${string}`]: unknown;
@@ -82,7 +90,7 @@ export type LitsxComponent<Props = Record<string, unknown>> =
 
 export interface SuspenseBoundaryProps {
   /**
-   * Content rendered inside the boundary when it is ready to reveal.
+   * Content projected into the boundary when it is ready to reveal.
    */
   children?: LitsxRenderable;
   /**
@@ -93,7 +101,7 @@ export interface SuspenseBoundaryProps {
 
 export interface ErrorBoundaryProps {
   /**
-   * Content rendered inside the boundary while no error has been captured.
+   * Content projected into the boundary while no error has been captured.
    */
   children?: LitsxRenderable;
   /**
@@ -108,7 +116,7 @@ export interface ErrorBoundaryProps {
 
 export interface SuspenseListProps {
   /**
-   * Suspense boundaries coordinated by the list.
+   * Suspense boundary content coordinated by the list.
    */
   children?: LitsxRenderable;
   /**
