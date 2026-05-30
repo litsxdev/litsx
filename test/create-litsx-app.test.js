@@ -344,7 +344,7 @@ describe("create-litsx-app", () => {
     assert.match(renderSource, /loader\("\.\/src\/my-litsx-app\.litsx"\)/);
     assert.match(readme, /--template ssr/);
     assert.match(readme, /renderDocument/);
-    assert.match(readme, /renderDocument\(\.\.\.\)|renderDocument/);
+    assert.match(readme, /renderDocument/);
     assert.match(readme, /createSsrDevServer/);
     assert.match(readme, /dist\/index\.html/);
     assert.match(readme, /automatic hydration bootstrap through `clientEntry`/);
