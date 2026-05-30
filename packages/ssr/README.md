@@ -179,6 +179,25 @@ result.renderModulePreloads();
 - `renderHydrationData()`: a JSON hydration-payload script tag for scoped LitSX
   roots; empty for non-LitSX roots
 
+It can also accept the same authored-entry configuration object used by
+`renderDocument(...)` when you want the `elements(loader)` + `render(...)`
+model without building a full document:
+
+```js
+const result = await renderToString({
+  root: process.cwd(),
+  elements(loader) {
+    return {
+      "product-card": async () =>
+        (await loader("./src/ProductCard.litsx")).ProductCard,
+    };
+  },
+  render({ html }) {
+    return html`<product-card .product=${product}></product-card>`;
+  },
+});
+```
+
 For streaming responses, use `renderToStream(...)`:
 
 ```tsx
@@ -191,13 +210,17 @@ const metadata = await allReady;
 `stream` is a Web `ReadableStream<string>`. `allReady` resolves with the same
 metadata helpers as `renderToString(...)` once rendering has completed.
 
+`renderToStream(...)` also accepts the same authored-entry configuration object
+when you want to stream authored LitSX SSR without first constructing the
+render value yourself.
+
 ## Dev Helper
 
 `@litsx/ssr` also exposes `createSsrDevServer(...)` for authored LitSX SSR
-examples and local development. It compiles an authored server entry, renders a
-fragment through your `render(...)` callback, injects that fragment into an
-HTML template, and serves the result through Vite with LitSX client sourcemaps
-enabled.
+examples and local development. It resolves authored `.litsx` modules through
+`elements(loader)`, renders a fragment through your `render(...)` callback,
+injects that fragment into an HTML template, and serves the result through Vite
+with LitSX client sourcemaps enabled.
 
 Minimal example:
 
@@ -237,6 +260,58 @@ helper already uses internally.
 
 If you need total control over the emitted bootstrap script, pass `bootstrap`
 explicitly. That low-level override takes precedence over `clientEntry`.
+
+## Authored Config Contract
+
+`renderDocument(...)`, `renderToString(...)`, and `renderToStream(...)` all
+accept the same authored LitSX configuration object:
+
+- `root`: filesystem base used to resolve authored modules and template files
+- `clientEntry`: optional browser bootstrap module, normalized relative to
+  `root`
+- `elements(loader)`: scoped element registry, or a factory that receives the
+  SSR-aware `loader(...)`
+- `render({ html, clientEntry, root })`: callback that returns the Lit render
+  value for the request
+
+That shape is the intended public contract for framework-style integrations
+that want LitSX to resolve authored modules without globally registering them.
+
+## `loader(...)` Contract
+
+When you provide `elements(loader)`, LitSX passes a SSR-aware loader with this
+behavior:
+
+- `loader(specifier)` resolves `specifier` relative to `root`
+- in dev, it loads the authored module through Vite SSR
+- outside the dev server, it compiles the authored module to a temporary SSR
+  module and imports that result
+- it returns the SSR-ready module namespace for the authored file
+
+That means authored `.litsx` modules work through the same API in:
+
+- `renderDocument(...)`
+- `renderToString(...)`
+- `renderToStream(...)`
+- `createSsrDevServer(...)`
+
+## Template Marker Contract
+
+When `createSsrDevServer(...)` receives `template: "./index.html"`, the
+template file follows a small explicit contract:
+
+- `<!--app-html-->` is required and is replaced with the rendered SSR fragment
+- `<!--app-title-->` is optional and is replaced with the escaped document
+  title when present
+- `<!--app-head-->` is optional and is replaced with head content, module
+  preloads, and hydration data when present
+- `<!--app-bootstrap-->` is optional and is replaced with the emitted bootstrap
+  script when present
+
+If `<!--app-head-->` is missing, LitSX injects the head markup before
+`</head>` when that closing tag exists. If `<!--app-bootstrap-->` is missing,
+LitSX injects the bootstrap markup before `</body>` when that closing tag
+exists.
 
 ## Authored Root Syntax
 
@@ -354,6 +429,26 @@ into Lit's hydration marker sequence:
 
 Do not strip Lit comments from hydrated SSR HTML. Lit itself uses comment
 markers for hydration.
+
+## Hydration Contract
+
+The public hydration protocol between `@litsx/ssr` and `@litsx/ssr-client` is:
+
+- `renderClientImportsData()` emits `__LITSX_CLIENT_IMPORTS__`
+- `renderHydrationData()` emits `__LITSX_HYDRATION__`
+- each LitSX SSR root host carries `data-litsx-root="<root-id>"`
+- `hydrationData.roots` maps those root ids to tag names and module ids
+- `hydrationData.payload` carries serialized root props and hook state
+
+In the standard `clientEntry` flow, the emitted bootstrap script then:
+
+1. installs Lit hydration support
+2. runs your client bootstrap/register entry
+3. reads and applies the LitSX hydration payload
+4. imports the emitted client modules
+
+Framework integrations can rely on that order when wiring their own hydration
+entry around `@litsx/ssr-client`.
 
 ## Supported Input
 
