@@ -303,6 +303,17 @@ export interface LitsxSsrDevRenderContext {
   root: string;
 }
 
+export type LitsxSsrModuleLoader = (
+  specifier: string,
+) => Promise<Record<string, unknown>>;
+
+export type LitsxSsrElementResolver =
+  | unknown
+  | Promise<unknown>
+  | (() => unknown | Promise<unknown>);
+
+export type LitsxSsrElementRegistry = Record<string, LitsxSsrElementResolver>;
+
 export interface LitsxSsrAuthoredDocumentOptions extends Omit<LitsxSsrDocumentOptions, "template" | "elements"> {
   /**
    * Filesystem root passed to Vite and used to resolve authored entries.
@@ -330,10 +341,64 @@ export interface LitsxSsrAuthoredDocumentOptions extends Omit<LitsxSsrDocumentOp
     | undefined;
 
   /**
-   * Optional location for the compiled temporary SSR module.
+   * Optional scoped element resolvers keyed by custom element tag name.
+   *
+   * Pass either a plain object or a function that receives a SSR-aware
+   * `loader(...)` helper.
+   *
+   * `loader(specifier)` resolves the authored module relative to `root` and
+   * returns the SSR-ready module namespace for that file. In dev it resolves
+   * through Vite SSR. Outside the dev server it compiles the authored module
+   * to a temporary SSR module before importing it.
    */
-  compiledServerPath?: string;
+  elements?:
+    | LitsxSsrElementRegistry
+    | ((loader: LitsxSsrModuleLoader) => LitsxSsrElementRegistry);
 
+  /**
+   * Produce the SSR root value for each request.
+   *
+   * `html` is Lit's template tag. `clientEntry` is the normalized public
+   * browser entry path when one is configured, otherwise `null`. `root` is
+   * the filesystem root used to resolve authored modules and templates.
+   */
+  render(context: LitsxSsrDevRenderContext): unknown | Promise<unknown>;
+}
+
+export interface LitsxSsrAuthoredRenderOptions extends Omit<LitsxSsrRenderOptions, "elements"> {
+  /**
+   * Filesystem root used to resolve authored entries.
+   */
+  root?: string;
+
+  /**
+   * Optional client entry module resolved relative to `root`.
+   *
+   * This is passed through the authored `render(...)` context for consistency
+   * with `renderDocument(...)`, even when the fragment/stream APIs do not emit
+   * a bootstrap script themselves.
+   */
+  clientEntry?: string;
+
+  /**
+   * Optional scoped element resolvers keyed by custom element tag name.
+   *
+   * This follows the same contract as `renderDocument(...)`: either pass a
+   * registry directly or a function that receives the SSR-aware `loader(...)`
+   * helper.
+   */
+  elements?:
+    | LitsxSsrElementRegistry
+    | ((loader: LitsxSsrModuleLoader) => LitsxSsrElementRegistry);
+
+  /**
+   * Produce the SSR root value using Lit's `html` helper plus any authored
+   * elements resolved through `elements(...)`.
+   */
+  render(context: LitsxSsrDevRenderContext): unknown | Promise<unknown>;
+}
+
+export interface LitsxSsrDevServerOptions extends LitsxSsrAuthoredDocumentOptions {
   /**
    * Host used by the Vite dev server.
    */
@@ -373,30 +438,14 @@ export interface LitsxSsrAuthoredDocumentOptions extends Omit<LitsxSsrDocumentOp
    * Extra Vite plugins appended after the LitSX plugin.
    */
   plugins?: unknown[];
-
-  /**
-   * Optional scoped element resolvers keyed by custom element tag name.
-   *
-   * Pass either a plain object or a function that receives a SSR-aware
-   * `loader(...)` helper. That helper resolves authored `.litsx` modules
-   * through the same SSR-aware pipeline the dev server already uses
-   * internally.
-   */
-  elements?:
-    | Record<string, unknown | Promise<unknown> | (() => unknown | Promise<unknown>)>
-    | ((loader: (specifier: string) => Promise<Record<string, unknown>>) => Record<string, unknown | Promise<unknown> | (() => unknown | Promise<unknown>)>);
-
-  /**
-   * Produce the SSR root value for each request using the compiled server
-   * module plus Lit / LitSX helpers.
-   */
-  render(context: LitsxSsrDevRenderContext): unknown | Promise<unknown>;
-}
-
-export interface LitsxSsrDevServerOptions extends LitsxSsrAuthoredDocumentOptions {
 }
 
 interface LitsxSsrInternalAuthoredDocumentOptions extends LitsxSsrAuthoredDocumentOptions {
+  /**
+   * Optional location for the compiled temporary SSR module.
+   */
+  compiledServerPath?: string;
+
   /**
    * Optional Vite SSR server used to resolve authored modules through Vite's
    * SSR pipeline instead of compiling them directly.
@@ -445,6 +494,16 @@ export declare const LITSX_HYDRATION_DATA_SCRIPT_ID: "__LITSX_HYDRATION__";
 export declare function renderToString(
   value: unknown,
   options?: LitsxSsrRenderOptions,
+): Promise<LitsxSsrResult>;
+
+/**
+ * Render an authored LitSX SSR configuration to an HTML fragment.
+ *
+ * @usage Use this when you want the same authored-entry model as
+ * `renderDocument(...)`, but only need the rendered fragment and SSR metadata.
+ */
+export declare function renderToString(
+  options: LitsxSsrAuthoredRenderOptions,
 ): Promise<LitsxSsrResult>;
 
 /**
@@ -530,8 +589,8 @@ export declare function renderDocument(
 /**
  * Create a Vite-backed development server for authored LitSX SSR entrypoints.
  *
- * @usage Use this for local SSR development when your server entry is still an
- * authored `.litsx` module and you want Vite to serve the hydrated page.
+ * @usage Use this for local SSR development when authored `.litsx` modules are
+ * resolved through `elements(loader)` and you want Vite to serve the hydrated page.
  * @param options Dev-server, document-template, authored entry, and render callback configuration.
  * @returns A configured Vite dev server instance that still needs `listen()`.
  * @example
@@ -569,4 +628,14 @@ export declare function createSsrDevServer(
 export declare function renderToStream(
   value: unknown,
   options?: LitsxSsrRenderOptions,
+): Promise<LitsxSsrStreamResult>;
+
+/**
+ * Render an authored LitSX SSR configuration to a stream.
+ *
+ * @usage Use this when you want authored-entry SSR with the streaming surface
+ * instead of a full document.
+ */
+export declare function renderToStream(
+  options: LitsxSsrAuthoredRenderOptions,
 ): Promise<LitsxSsrStreamResult>;

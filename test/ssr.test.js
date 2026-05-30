@@ -232,6 +232,65 @@ describe("@litsx/ssr", () => {
     assert.strictEqual(result.document.includes(result.html), true);
   });
 
+  it("renders authored document config through renderToString", async () => {
+    class ProductCard extends LitElement {
+      static [LITSX_MODULE_ID] = "/src/ProductCard.litsx";
+
+      render() {
+        prepareEffects(this);
+        return html`<article>${this.product.name}</article>`;
+      }
+    }
+
+    const result = await renderToString({
+      elements: {
+        "product-card": ProductCard,
+      },
+      render({ html }) {
+        return html`<product-card .product=${{ name: "Authored String" }}></product-card>`;
+      },
+    });
+
+    assert.match(result.html, /<product-card\b[^>]*data-litsx-root="litsx-root-0"/);
+    assert.match(result.html, /Authored String/);
+    assert.deepStrictEqual(result.clientImports, ["/src/ProductCard.litsx"]);
+  });
+
+  it("renders authored document config through renderToStream", async () => {
+    class ProductCard extends LitElement {
+      static [LITSX_MODULE_ID] = "/src/ProductCard.litsx";
+
+      render() {
+        prepareEffects(this);
+        return html`<article>${this.product.name}</article>`;
+      }
+    }
+
+    const streamed = await renderToStream({
+      elements: {
+        "product-card": ProductCard,
+      },
+      render({ html }) {
+        return html`<product-card .product=${{ name: "Authored Stream" }}></product-card>`;
+      },
+    });
+    const reader = streamed.stream.getReader();
+    let htmlOutput = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+      htmlOutput += value;
+    }
+
+    const metadata = await streamed.allReady;
+    assert.match(htmlOutput, /<product-card\b[^>]*data-litsx-root="litsx-root-0"/);
+    assert.match(htmlOutput, /Authored Stream/);
+    assert.deepStrictEqual(metadata.clientImports, ["/src/ProductCard.litsx"]);
+  });
+
   it("still accepts a raw bootstrap override", async () => {
     const result = await renderDocument(html`<main>ready</main>`, {
       clientEntry: "/src/main.js",

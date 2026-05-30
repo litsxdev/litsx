@@ -364,6 +364,10 @@ function normalizeSsrRenderable(value, elements) {
   return __litsxScopedTemplate(value, Object.fromEntries(entries));
 }
 
+function isClassLikeValue(value) {
+  return typeof value === "function" && /^class\s/.test(Function.prototype.toString.call(value));
+}
+
 async function renderAuthoredDocument(options = {}) {
   const root = resolveFsPath(process.cwd(), options.root ?? process.cwd());
   const templateSource = typeof options.template === "string"
@@ -405,7 +409,7 @@ async function renderAuthoredDocument(options = {}) {
 
       const pairs = await Promise.all(
         Object.entries(elementResolvers).map(async ([tagName, resolveElement]) => {
-          const resolvedValue = typeof resolveElement === "function"
+          const resolvedValue = typeof resolveElement === "function" && !isClassLikeValue(resolveElement)
             ? await resolveElement()
             : await resolveElement;
 
@@ -452,6 +456,79 @@ async function renderAuthoredDocument(options = {}) {
   });
 }
 
+async function resolveAuthoredRenderInput(options = {}) {
+  const root = resolveFsPath(process.cwd(), options.root ?? process.cwd());
+
+  if (typeof options.render !== "function") {
+    throw new TypeError("LitSX authored SSR rendering requires a render(...) callback.");
+  }
+
+  await import("@lit-labs/ssr/lib/install-global-dom-shim.js");
+  async function importModule(specifier) {
+    const resolvedEntryPath = resolveFsPath(root, specifier);
+    if (options.viteServer) {
+      return loadServerModuleFromVite(options.viteServer, root, resolvedEntryPath);
+    }
+
+    const compiledServerPath = resolveFsPath(
+      root,
+      createServerOutputPath(root, resolvedEntryPath),
+    );
+    await compileServerEntry(resolvedEntryPath, compiledServerPath);
+    return loadCompiledServerModule(compiledServerPath);
+  }
+
+  const [{ html }, resolvedElementRegistry] = await Promise.all([
+    import("lit"),
+    (async () => {
+      if (!options.elements) {
+        return null;
+      }
+
+      const elementResolvers = typeof options.elements === "function"
+        ? options.elements(importModule)
+        : options.elements;
+
+      const pairs = await Promise.all(
+        Object.entries(elementResolvers).map(async ([tagName, resolveElement]) => {
+          const resolvedValue = typeof resolveElement === "function" && !isClassLikeValue(resolveElement)
+            ? await resolveElement()
+            : await resolveElement;
+
+          return [tagName, resolvedValue];
+        }),
+      );
+
+      return Object.fromEntries(pairs);
+    })(),
+  ]);
+
+  const clientEntry = options.clientEntry
+    ? toPublicPath(root, resolveFsPath(root, options.clientEntry)) ?? options.clientEntry
+    : null;
+  const renderValue = await options.render({
+    html,
+    clientEntry,
+    root,
+  });
+  const resolvedElements = resolvedElementRegistry && typeof resolvedElementRegistry === "object"
+    ? resolvedElementRegistry
+    : undefined;
+  const elements = Object.keys(resolvedElements || {}).length > 0
+    ? resolvedElements
+    : undefined;
+
+  return {
+    value: renderValue,
+    options: {
+      ...options,
+      root,
+      clientEntry,
+      elements,
+    },
+  };
+}
+
 async function createSsrContext(options) {
   const { createScopedSsrContext } = await loadSsrRuntime();
   return createScopedSsrContext({
@@ -479,6 +556,17 @@ async function renderResolvedValue(value, context) {
  * template internally.
  */
 export async function renderToString(value, options = {}) {
+  if (
+    arguments.length === 1 &&
+    value &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    typeof value.render === "function"
+  ) {
+    const authored = await resolveAuthoredRenderInput(value);
+    return renderToString(authored.value, authored.options);
+  }
+
   const context = await createSsrContext(options);
   const html = await renderResolvedValue(
     normalizeSsrRenderable(await Promise.resolve(value), options.elements),
@@ -558,6 +646,17 @@ export async function renderDocument(value, options = {}) {
  * Render a Lit or LitSX value to a Web Stream using the scoped LitSX SSR runtime.
  */
 export async function renderToStream(value, options = {}) {
+  if (
+    arguments.length === 1 &&
+    value &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    typeof value.render === "function"
+  ) {
+    const authored = await resolveAuthoredRenderInput(value);
+    return renderToStream(authored.value, authored.options);
+  }
+
   const context = await createSsrContext(options);
   let resolveAllReady;
   let rejectAllReady;
