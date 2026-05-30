@@ -1104,6 +1104,7 @@ __metadata:
     "@babel/eslint-parser": "npm:^7.28.6"
     "@babel/plugin-syntax-jsx": "npm:^7.28.6"
     "@babel/plugin-syntax-typescript": "npm:^7.27.1"
+    "@litsx/authoring": "npm:^0.4.0"
     "@litsx/typescript": "npm:^0.6.0"
   peerDependencies:
     eslint: ^8.57.0 || ^9.0.0
