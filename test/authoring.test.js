@@ -3,6 +3,9 @@ import { describe, it } from "vitest";
 
 import {
   applyVirtualAttributeReplacements,
+  collectComponentLikeFunctions,
+  collectNativeClassNameWarnings,
+  collectReactMemoWarnings,
   createVirtualLitsxJsxSourceMap,
   createVirtualLitsxJsxSource,
   encodeVirtualAttributeName,
@@ -18,6 +21,7 @@ import {
   getLitsxVirtualizationMetadata,
   parseWithLitsxVirtualization,
 } from "../packages/authoring/src/parser.js";
+import parser from "../packages/babel-parser-litsx/src/index.js";
 
 describe("@litsx/authoring", () => {
   it("virtualizes lit-flavoured jsx attribute prefixes into ts-safe names", () => {
@@ -35,6 +39,38 @@ describe("@litsx/authoring", () => {
     assert.deepStrictEqual(
       result.replacements.map((entry) => entry.originalName),
       [".value", "@click", "?disabled"],
+    );
+  });
+
+  it("exports shared authored semantics helpers for component detection and authored warnings", () => {
+    const ast = parser.parse(`
+      import React, { memo } from "react";
+      export function Panel() {
+        return <button className="cta">ready</button>;
+      }
+      export const Card = () => <div />;
+      const MemoPanel = memo(Panel);
+      const helper = () => "noop";
+    `, { sourceType: "module" });
+
+    const componentNames = collectComponentLikeFunctions(ast)
+      .map(({ node, parent }) => (
+        node.id?.name ??
+        parent?.id?.name ??
+        parent?.left?.name ??
+        null
+      ))
+      .filter(Boolean)
+      .sort();
+
+    assert.deepStrictEqual(componentNames, ["Card", "Panel"]);
+    assert.deepStrictEqual(
+      collectNativeClassNameWarnings(ast).map((entry) => entry.code),
+      [91008],
+    );
+    assert.deepStrictEqual(
+      collectReactMemoWarnings(ast).map((entry) => entry.code),
+      [91016],
     );
   });
 

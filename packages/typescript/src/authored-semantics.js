@@ -1,12 +1,17 @@
 import * as babelParser from "@babel/parser";
 import {
+  collectComponentLikeFunctions,
+  collectNativeClassNameWarnings,
+  collectReactMemoWarnings,
   createVirtualLitsxJsxSource,
   decodeVirtualAttributeName,
   decodeVirtualStaticHoistName,
+  NATIVE_STATIC_HOISTS,
   looksLikeLitsxJsx,
   mapOriginalPositionToVirtual,
   remapTextSpanToOriginal,
   remapVirtualText,
+  STATIC_HOIST_CALL_RE,
 } from "@litsx/authoring";
 
 const EVENT_COMPLETIONS = [
@@ -111,19 +116,7 @@ const ATTRIBUTE_COMPLETIONS_BY_TAG = {
   video: ["src", "controls", "autoplay", "muted", "loop", "playsInline", "poster", "preload"],
 };
 
-const STATIC_HOIST_CALL_RE = /\b(__litsx_static_[A-Za-z_$][\w$]*)\s*\(/g;
-const NATIVE_STATIC_HOISTS = new Set([
-  "styles",
-  "properties",
-  "shadowRootOptions",
-  "lightDom",
-]);
-const SINGLETON_STATIC_HOISTS = new Set([
-  "styles",
-  "properties",
-  "shadowRootOptions",
-  "lightDom",
-]);
+const SINGLETON_STATIC_HOISTS = NATIVE_STATIC_HOISTS;
 
 const STATIC_HOIST_DOCUMENTATION_BY_NAME = {
   "static styles": "LitSX static style hoist. Declare component-scoped styles before render-time statements.",
@@ -596,87 +589,6 @@ function collectStaticHoistIssues(ast, virtualization) {
   return issues;
 }
 
-function collectReactMemoIssues(ast, virtualization) {
-  const issues = [];
-  const reactMemoLocalNames = new Set();
-  const reactNamespaceNames = new Set();
-  const body = ast?.program?.body ?? ast?.body ?? [];
-
-  for (const node of body) {
-    if (node?.type !== "ImportDeclaration" || node.source?.value !== "react") {
-      continue;
-    }
-
-    for (const specifier of node.specifiers || []) {
-      if (
-        specifier?.type === "ImportSpecifier" &&
-        specifier.imported?.type === "Identifier" &&
-        specifier.imported.name === "memo" &&
-        specifier.local?.type === "Identifier"
-      ) {
-        reactMemoLocalNames.add(specifier.local.name);
-      }
-
-      if (
-        (specifier?.type === "ImportDefaultSpecifier" ||
-          specifier?.type === "ImportNamespaceSpecifier") &&
-        specifier.local?.type === "Identifier"
-      ) {
-        reactNamespaceNames.add(specifier.local.name);
-      }
-    }
-  }
-
-  walk(ast.program ?? ast, (node) => {
-    if (node?.type !== "CallExpression") {
-      return;
-    }
-
-    const callee = node.callee;
-    const isImportedMemo =
-      callee?.type === "Identifier" && reactMemoLocalNames.has(callee.name);
-    const isNamespacedMemo =
-      callee?.type === "MemberExpression" &&
-      callee.computed === false &&
-      callee.object?.type === "Identifier" &&
-      reactNamespaceNames.has(callee.object.name) &&
-      callee.property?.type === "Identifier" &&
-      callee.property.name === "memo";
-
-    if (!isImportedMemo && !isNamespacedMemo) {
-      return;
-    }
-
-    issues.push(
-      createOriginalIssue(virtualization, {
-        kind: "react-memo",
-        severity: "warning",
-        code: 91016,
-        start: node.start ?? 0,
-        length: Math.max(0, (node.end ?? node.start ?? 0) - (node.start ?? 0)),
-        message:
-          "`memo(...)` is removed during LitSX lowering. LitSX does not use React-style parent re-render bailout semantics, so `memo` is treated as a migration wrapper only.",
-      })
-    );
-
-    if ((node.arguments || []).length > 1) {
-      issues.push(
-        createOriginalIssue(virtualization, {
-          kind: "react-memo",
-          severity: "warning",
-          code: 91017,
-          start: node.start ?? 0,
-          length: Math.max(0, (node.end ?? node.start ?? 0) - (node.start ?? 0)),
-          message:
-            "`memo(Component, areEqual)` ignores the comparator during LitSX lowering because LitSX does not use React-style parent re-render bailout semantics.",
-        })
-      );
-    }
-  });
-
-  return issues;
-}
-
 function collectReactCompatSurfaceIssues(ast, virtualization) {
   const issues = [];
   const attributes = collectJsxAttributes(ast);
@@ -736,67 +648,17 @@ function collectReactCompatSurfaceIssues(ast, virtualization) {
   return issues;
 }
 
-function collectComponentLikeFunctions(ast) {
-  const functions = [];
-
-  function isPascalCaseName(name) {
-    return typeof name === "string" && /^[A-Z]/.test(name);
-  }
-
-  function isComponentLikeFunction(node, parent) {
-    if (!node || typeof node !== "object") {
-      return false;
-    }
-
-    if (
-      node.type === "FunctionDeclaration" ||
-      node.type === "FunctionExpression"
-    ) {
-      return isPascalCaseName(node.id?.name ?? "");
-    }
-
-    if (node.type === "ArrowFunctionExpression") {
-      if (parent?.type === "VariableDeclarator" && parent.id?.type === "Identifier") {
-        return isPascalCaseName(parent.id.name);
-      }
-
-      if (parent?.type === "AssignmentExpression" && parent.left?.type === "Identifier") {
-        return isPascalCaseName(parent.left.name);
-      }
-
-      return false;
-    }
-
-    return false;
-  }
-
-  function collect(node, parent = null) {
-    if (!node || typeof node !== "object") {
-      return;
-    }
-
-    if (isComponentLikeFunction(node, parent)) {
-      functions.push({ node, parent });
-    }
-
-    for (const [key, value] of Object.entries(node)) {
-      if (key === "loc" || key === "leadingComments" || key === "innerComments" || key === "trailingComments") {
-        continue;
-      }
-      if (Array.isArray(value)) {
-        for (const child of value) {
-          if (child && typeof child.type === "string") {
-            collect(child, node);
-          }
-        }
-      } else if (value && typeof value.type === "string") {
-        collect(value, node);
-      }
-    }
-  }
-
-  collect(ast.program ?? ast, null);
-  return functions;
+function collectReactMemoIssues(ast, virtualization) {
+  return collectReactMemoWarnings(ast).map((warning) =>
+    createOriginalIssue(virtualization, {
+      kind: "react-memo",
+      severity: "warning",
+      code: warning.code,
+      start: warning.start,
+      length: warning.length,
+      message: warning.message,
+    })
+  );
 }
 
 function getFunctionLikeBody(node) {
@@ -813,6 +675,54 @@ function getFunctionLikeBody(node) {
   }
 
   return null;
+}
+
+function getComponentLikeFunctionName(node, parent) {
+  if (
+    (node.type === "FunctionDeclaration" || node.type === "FunctionExpression") &&
+    node.id?.type === "Identifier"
+  ) {
+    return node.id.name;
+  }
+
+  if (
+    node.type === "ArrowFunctionExpression" &&
+    parent?.type === "VariableDeclarator" &&
+    parent.id?.type === "Identifier"
+  ) {
+    return parent.id.name;
+  }
+
+  if (
+    node.type === "ArrowFunctionExpression" &&
+    parent?.type === "AssignmentExpression" &&
+    parent.left?.type === "Identifier"
+  ) {
+    return parent.left.name;
+  }
+
+  return null;
+}
+
+function parseAuthoredAst(sourceText, options = {}) {
+  const plugins = Array.from(new Set(["jsx", ...(options.plugins ?? [])]));
+  const virtualization = createVirtualLitsxJsxSource(sourceText);
+
+  try {
+    return {
+      virtualization,
+      ast: babelParser.parse(virtualization.code, {
+        sourceType: "module",
+        plugins,
+      }),
+    };
+  } catch (error) {
+    return {
+      virtualization,
+      ast: null,
+      error,
+    };
+  }
 }
 
 function inferEmitAliases(functionNode) {
@@ -865,43 +775,15 @@ function inferEmittedEventNames(functionNode) {
 }
 
 export function inferLitsxComponentEventNames(sourceText, options = {}) {
-  const plugins = Array.from(new Set(["jsx", ...(options.plugins ?? [])]));
-  const virtualization = createVirtualLitsxJsxSource(sourceText);
-  let ast;
-
-  try {
-    ast = babelParser.parse(virtualization.code, {
-      sourceType: "module",
-      plugins,
-    });
-  } catch {
+  const { ast } = parseAuthoredAst(sourceText, options);
+  if (!ast) {
     return {};
   }
 
   const componentEventNames = {};
 
   for (const { node, parent } of collectComponentLikeFunctions(ast)) {
-    let componentName = null;
-
-    if (
-      (node.type === "FunctionDeclaration" || node.type === "FunctionExpression") &&
-      node.id?.type === "Identifier"
-    ) {
-      componentName = node.id.name;
-    } else if (
-      node.type === "ArrowFunctionExpression" &&
-      parent?.type === "VariableDeclarator" &&
-      parent.id?.type === "Identifier"
-    ) {
-      componentName = parent.id.name;
-    } else if (
-      node.type === "ArrowFunctionExpression" &&
-      parent?.type === "AssignmentExpression" &&
-      parent.left?.type === "Identifier"
-    ) {
-      componentName = parent.left.name;
-    }
-
+    const componentName = getComponentLikeFunctionName(node, parent);
     if (!componentName) {
       continue;
     }
@@ -970,43 +852,15 @@ function inferStaticPropertyNames(functionNode) {
 }
 
 export function inferLitsxComponentPropNames(sourceText, options = {}) {
-  const plugins = Array.from(new Set(["jsx", ...(options.plugins ?? [])]));
-  const virtualization = createVirtualLitsxJsxSource(sourceText);
-  let ast;
-
-  try {
-    ast = babelParser.parse(virtualization.code, {
-      sourceType: "module",
-      plugins,
-    });
-  } catch {
+  const { ast } = parseAuthoredAst(sourceText, options);
+  if (!ast) {
     return {};
   }
 
   const componentPropNames = {};
 
   for (const { node, parent } of collectComponentLikeFunctions(ast)) {
-    let componentName = null;
-
-    if (
-      (node.type === "FunctionDeclaration" || node.type === "FunctionExpression") &&
-      node.id?.type === "Identifier"
-    ) {
-      componentName = node.id.name;
-    } else if (
-      node.type === "ArrowFunctionExpression" &&
-      parent?.type === "VariableDeclarator" &&
-      parent.id?.type === "Identifier"
-    ) {
-      componentName = parent.id.name;
-    } else if (
-      node.type === "ArrowFunctionExpression" &&
-      parent?.type === "AssignmentExpression" &&
-      parent.left?.type === "Identifier"
-    ) {
-      componentName = parent.left.name;
-    }
-
+    const componentName = getComponentLikeFunctionName(node, parent);
     if (!componentName) {
       continue;
     }
@@ -1469,16 +1323,8 @@ export function inferLitsxAttributeInfoAtPosition(sourceText, position) {
 
 export function collectLitsxAuthoredIssues(sourceText, options = {}) {
   const channel = options.channel === "eslint" ? "eslint" : options.channel === "all" ? "all" : "typescript";
-  const plugins = Array.from(new Set(["jsx", ...(options.plugins ?? [])]));
-  const virtualization = createVirtualLitsxJsxSource(sourceText);
-  let ast;
-
-  try {
-    ast = babelParser.parse(virtualization.code, {
-      sourceType: "module",
-      plugins,
-    });
-  } catch (error) {
+  const { virtualization, ast, error } = parseAuthoredAst(sourceText, options);
+  if (!ast) {
     return [
       createOriginalIssue(virtualization, {
         kind: "parse-error",
@@ -1499,6 +1345,19 @@ export function collectLitsxAuthoredIssues(sourceText, options = {}) {
   issues.push(...collectDestructuredPropsMetadataIssues(ast, virtualization));
   issues.push(...collectPropsAccessIssues(ast, virtualization));
   issues.push(...collectHoistsFirstIssues(ast, virtualization));
+  issues.push(...collectNativeClassNameWarnings(ast).map((warning) =>
+    createOriginalIssue(virtualization, {
+      kind: "native-classname",
+      severity: "warning",
+      code: warning.code,
+      start: warning.start,
+      length: warning.length,
+      message: warning.message,
+      fix: {
+        text: "class",
+      },
+    })
+  ));
 
   for (const attribute of attributes) {
     const tagName = attribute.__litsxTagName;
@@ -1511,22 +1370,6 @@ export function collectLitsxAuthoredIssues(sourceText, options = {}) {
     const attributeName = decodeVirtualAttributeName(rawAttributeName);
 
     if (!attributeName) {
-      if (rawAttributeName === "className" && typeof tagName === "string" && /^[a-z]/.test(tagName)) {
-        issues.push(
-          createOriginalIssue(virtualization, {
-            kind: "native-classname",
-            severity: "warning",
-            code: 91008,
-            start: virtualSpan.start,
-            length: virtualSpan.length,
-            message:
-              '`className` is not native LitSX syntax. Use `class` in native LitSX, or add the React compatibility layer to rewrite `className`.',
-            fix: {
-              text: "class",
-            },
-          })
-        );
-      }
       continue;
     }
 

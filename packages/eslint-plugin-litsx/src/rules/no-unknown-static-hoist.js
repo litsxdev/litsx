@@ -1,4 +1,4 @@
-import { decodeVirtualStaticHoistName, NATIVE_STATIC_HOISTS } from "@litsx/typescript/authored-semantics";
+import { decodeVirtualStaticHoistName, NATIVE_STATIC_HOISTS } from "@litsx/authoring";
 
 export default {
   meta: {

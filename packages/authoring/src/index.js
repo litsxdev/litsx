@@ -1,4 +1,11 @@
 import MagicString from "magic-string";
+export {
+  collectComponentLikeFunctions,
+  collectNativeClassNameWarnings,
+  collectReactMemoWarnings,
+  NATIVE_STATIC_HOISTS,
+  STATIC_HOIST_CALL_RE,
+} from "./authored-semantics.js";
 
 const PREFIX_TO_KIND = {
   "@": "event",
