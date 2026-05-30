@@ -13,6 +13,7 @@ concurrency:
 jobs:
   status:
     name: Check Changesets
+    if: github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
