@@ -1,5 +1,12 @@
 # @litsx/vite-plugin
 
+## 0.2.9
+
+### Patch Changes
+
+- Updated dependencies [29582a0]
+  - @litsx/compiler@0.8.0
+
 ## 0.2.8
 
 ### Patch Changes

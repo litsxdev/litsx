@@ -1,5 +1,13 @@
 # prettier-plugin-litsx
 
+## 0.3.3
+
+### Patch Changes
+
+- Updated dependencies [29582a0]
+  - @litsx/authoring@0.5.0
+  - @litsx/babel-parser@0.2.5
+
 ## 0.3.2
 
 ### Patch Changes

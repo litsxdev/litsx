@@ -1,5 +1,19 @@
 # @litsx/compiler
 
+## 0.8.0
+
+### Minor Changes
+
+- 29582a0: Add implicit `children` projection for LitSX components as a default-slot transform, and report unsupported `children` usages consistently across the compiler and TypeScript tooling. Also extract the shared authored-semantics helpers behind those checks into `@litsx/authoring`.
+
+### Patch Changes
+
+- Updated dependencies [29582a0]
+  - @litsx/authoring@0.5.0
+  - @litsx/babel-preset-litsx@0.8.0
+  - @litsx/typescript@0.7.0
+  - @litsx/babel-plugin-transform-jsx-html-template@0.3.5
+
 ## 0.7.1
 
 ### Patch Changes

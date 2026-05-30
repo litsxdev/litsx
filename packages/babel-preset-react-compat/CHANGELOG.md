@@ -1,5 +1,13 @@
 # @litsx/babel-preset-react-compat
 
+## 0.4.1
+
+### Patch Changes
+
+- Updated dependencies [29582a0]
+  - @litsx/babel-preset-litsx@0.8.0
+  - @litsx/babel-plugin-transform-jsx-html-template@0.3.5
+
 ## 0.4.0
 
 ### Minor Changes

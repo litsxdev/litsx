@@ -1,5 +1,12 @@
 # @litsx/babel-plugin-transform-jsx-html-template
 
+## 0.3.5
+
+### Patch Changes
+
+- Updated dependencies [29582a0]
+  - @litsx/authoring@0.5.0
+
 ## 0.3.4
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # @litsx/jsx-authoring
 
+## 0.5.0
+
+### Minor Changes
+
+- 29582a0: Add implicit `children` projection for LitSX components as a default-slot transform, and report unsupported `children` usages consistently across the compiler and TypeScript tooling. Also extract the shared authored-semantics helpers behind those checks into `@litsx/authoring`.
+
 ## 0.4.0
 
 ### Minor Changes
