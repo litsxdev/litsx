@@ -46,8 +46,8 @@
   },
   "# dependencies": "This package doesn't actually have runtime dependencies. @babel/types is only needed for type definitions.",
   "dependencies": {
-    "@babel/parser": "^7.29.3",
-    "@babel/types": "^7.29.0",
+    "@babel/parser": "^7.29.7",
+    "@babel/types": "^7.29.7",
     "@litsx/authoring": "^0.5.0"
   },
   "devDependencies": {
