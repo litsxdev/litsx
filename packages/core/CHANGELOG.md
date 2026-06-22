@@ -1,5 +1,11 @@
 # litsx
 
+## 0.5.1
+
+### Patch Changes
+
+- 029c198: Allow arbitrary JSX attributes on kebab-case custom elements while keeping native HTML tags strict.
+
 ## 0.5.0
 
 ### Minor Changes
