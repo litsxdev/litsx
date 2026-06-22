@@ -164,6 +164,24 @@ describe("@litsx/compiler", () => {
     assert.match(result.code, /return html`<shell><p>Alpha<\/p><\/shell>`;/);
   }, 20000);
 
+  it("compiles root fragments as component render output", () => {
+    const source = [
+      "export const Panel = ({ title }) => {",
+      "  return <>",
+      "    <h1>{title}</h1>",
+      "    <p>Ready</p>",
+      "  </>;",
+      "};",
+    ].join("\n");
+
+    const result = transformLitsxSync(source, {
+      filename: "/virtual/Panel.litsx",
+    });
+
+    assert.match(result.code, /class Panel extends LitElement/);
+    assert.match(result.code, /return html`<h1>\$\{this\.title\}<\/h1><p>Ready<\/p>`;/);
+  }, 20000);
+
   it("lowers authored JSX inside suspense content renderers", () => {
     const source = [
       'import { SuspenseBoundary } from "@litsx/core";',

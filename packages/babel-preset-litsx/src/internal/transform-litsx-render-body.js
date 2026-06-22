@@ -60,12 +60,20 @@ function throwFirstImplicitChildrenProjectionIssue(functionPath) {
   throw functionPath.buildCodeFrameError(issue.message);
 }
 
+function isRenderableJsx(node) {
+  return t.isJSXElement(node) || t.isJSXFragment(node);
+}
+
 function collectReturnStatement(functionPath, bindings, state) {
   let returnStatement = null;
 
   functionPath.traverse({
     ReturnStatement(returnPath) {
-      if (t.isJSXElement(returnPath.node.argument)) {
+      if (returnPath.getFunctionParent() !== functionPath) {
+        return;
+      }
+
+      if (isRenderableJsx(returnPath.node.argument)) {
         returnStatement = returnPath.node;
         transformJSXRendererCalls(returnPath, bindings, state);
         transformJSXExpressions(returnPath, bindings, state);
