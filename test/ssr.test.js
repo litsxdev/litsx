@@ -223,7 +223,7 @@ describe("@litsx/ssr", () => {
     assert.match(result.document, /<title>SSR Document<\/title>/);
     assert.match(result.document, /<meta name="description" content="doc-test">/);
     assert.match(result.document, /<body class="ssr-page">/);
-    assert.match(result.document, /import \{ hydratePage \} from "@litsx\/ssr-client";/);
+    assert.match(result.document, /import \{ hydratePage \} from "@litsx\/ssr\/client";/);
     assert.match(result.document, /register: \(\) =\\u003E import\("\/src\/main\.js"\)/);
     assert.match(result.document, /<script type="application\/json" id="__LITSX_HYDRATION__">/);
     assert.match(result.document, /<link rel="modulepreload" href="\/src\/ProductCard\.litsx">/);
@@ -349,7 +349,7 @@ describe("@litsx/ssr", () => {
     assert.match(result.document, /<header>Custom shell<\/header>/);
     assert.match(result.document, /<main data-slot="app">[\s\S]*Template Shoe[\s\S]*<\/main>/);
     assert.match(result.document, /<script type="application\/json" id="__LITSX_HYDRATION__">/);
-    assert.match(result.document, /import \{ hydratePage \} from "@litsx\/ssr-client";/);
+    assert.match(result.document, /import \{ hydratePage \} from "@litsx\/ssr\/client";/);
     assert.match(result.document, /register: \(\) =\\u003E import\("\/src\/main\.js"\)/);
     assert.doesNotMatch(result.document, /<meta charset="utf-8">/);
   });
