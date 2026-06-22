@@ -291,7 +291,6 @@ describe("create-litsx-app", () => {
 
     assert.strictEqual(result.template, "ssr");
     assert.ok(packageJson.dependencies["@litsx/ssr"]);
-    assert.ok(packageJson.dependencies["@litsx/ssr-client"]);
     assert.ok(packageJson.devDependencies["@litsx/compiler"]);
     assert.ok(packageJson.devDependencies["@lit-labs/ssr"]);
     assert.strictEqual(packageJson.scripts.dev, "node dev.mjs");
@@ -541,7 +540,6 @@ describe("create-litsx-app", () => {
       dependencies: {
         "@litsx/core": "^0.1.0",
         "@litsx/ssr": "^0.1.0",
-        "@litsx/ssr-client": "^0.1.0",
         lit: "^3.2.1",
       },
       devDependencies: {
@@ -558,7 +556,6 @@ describe("create-litsx-app", () => {
 
     assert.strictEqual(packageJson.dependencies["@litsx/core"], "workspace:^");
     assert.strictEqual(packageJson.dependencies["@litsx/ssr"], "workspace:^");
-    assert.strictEqual(packageJson.dependencies["@litsx/ssr-client"], "workspace:^");
     assert.strictEqual(packageJson.dependencies.lit, "^3.2.1");
     assert.strictEqual(packageJson.devDependencies["@litsx/compiler"], "workspace:^");
     assert.strictEqual(packageJson.devDependencies["@litsx/eslint-plugin"], "workspace:^");

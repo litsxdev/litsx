@@ -7,7 +7,6 @@ const LOCAL_WORKSPACE_PACKAGE_NAMES = [
   "@litsx/core",
   "@litsx/eslint-plugin",
   "@litsx/ssr",
-  "@litsx/ssr-client",
   "prettier-plugin-litsx",
   "@litsx/typescript",
   "@litsx/vite-plugin",
@@ -125,7 +124,6 @@ function createSsrPackageJson(packageName) {
 
   Object.assign(packageJson.dependencies, {
     "@litsx/ssr": publishedPackageVersions["@litsx/ssr"],
-    "@litsx/ssr-client": publishedPackageVersions["@litsx/ssr-client"],
   });
 
   Object.assign(packageJson.devDependencies, {
