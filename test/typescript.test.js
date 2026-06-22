@@ -61,6 +61,34 @@ async function withMockedTypeScript(mockFactory, callback) {
 }
 
 describe("@litsx/typescript", () => {
+  it("typechecks the published core JSX declarations without skipLibCheck", () => {
+    const repoRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
+    const program = ts.createProgram({
+      rootNames: [
+        path.join(repoRoot, "packages/core/src/index.d.ts"),
+        path.join(repoRoot, "packages/core/src/jsx-runtime.d.ts"),
+        path.join(repoRoot, "packages/core/src/jsx-dev-runtime.d.ts"),
+      ],
+      options: {
+        noEmit: true,
+        strict: true,
+        skipLibCheck: false,
+        module: ts.ModuleKind.ESNext,
+        moduleResolution: ts.ModuleResolutionKind.Bundler,
+        target: ts.ScriptTarget.ESNext,
+        lib: ["lib.esnext.d.ts", "lib.dom.d.ts"],
+      },
+    });
+
+    const diagnostics = ts.getPreEmitDiagnostics(program);
+    assert.deepStrictEqual(
+      diagnostics.map((diagnostic) =>
+        ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n")
+      ),
+      [],
+    );
+  });
+
   it("allows arbitrary attributes only on custom element intrinsic tags", () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-intrinsic-custom-attrs-"));
     const filePath = path.join(tempDir, "index.tsx");

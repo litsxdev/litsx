@@ -47,7 +47,7 @@ export namespace JSX {
     key?: string | number;
   }
 
-  interface IntrinsicElements extends LitsxIntrinsicElements {}
+  type IntrinsicElements = LitsxIntrinsicElements;
 
   interface IntrinsicClassAttributes<T> {
     ref?: LitsxRef<T>;

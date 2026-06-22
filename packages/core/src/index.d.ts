@@ -81,15 +81,25 @@ export type LitsxCustomElementProps =
     [attributeName: string]: unknown;
   };
 
+export type LitsxReservedIntrinsicElementName =
+  | "error-boundary"
+  | "suspense-boundary"
+  | "suspense-list";
+
+export type LitsxCustomIntrinsicElements = {
+  [TagName in `${string}-${string}` as TagName extends LitsxReservedIntrinsicElementName
+    ? never
+    : TagName]: LitsxCustomElementProps;
+};
+
 export type LitsxIntrinsicElements = {
   [TagName in keyof HTMLElementTagNameMap]: LitsxElementProps<
     HTMLElementTagNameMap[TagName]
   >;
-} & {
+} & LitsxCustomIntrinsicElements & {
   "error-boundary": LitsxElementProps<ErrorBoundary> & ErrorBoundaryProps;
   "suspense-boundary": LitsxElementProps<SuspenseBoundary> & SuspenseBoundaryProps;
   "suspense-list": LitsxElementProps<SuspenseList> & SuspenseListProps;
-  [customElementName: `${string}-${string}`]: LitsxCustomElementProps;
 };
 
 export type LitsxComponent<Props = Record<string, unknown>> =
