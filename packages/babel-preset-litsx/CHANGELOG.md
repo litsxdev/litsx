@@ -1,5 +1,11 @@
 # @litsx/babel-preset-litsx
 
+## 0.8.1
+
+### Patch Changes
+
+- 025ec7b: Support JSX fragments as the root return value of authored LitSX components.
+
 ## 0.8.0
 
 ### Minor Changes
