@@ -61,6 +61,64 @@ async function withMockedTypeScript(mockFactory, callback) {
 }
 
 describe("@litsx/typescript", () => {
+  it("allows arbitrary attributes only on custom element intrinsic tags", () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-intrinsic-custom-attrs-"));
+    const filePath = path.join(tempDir, "index.tsx");
+    const globalsPath = path.join(tempDir, "global.d.ts");
+    const repoRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
+    const jsxRuntimePath = path.join(repoRoot, "packages/core/src/jsx-runtime.d.ts").replaceAll("\\", "/");
+
+    try {
+      fs.writeFileSync(
+        globalsPath,
+        [
+          `import type { JSX as LitsxJSX } from "${jsxRuntimePath}";`,
+          "declare global {",
+          "  namespace JSX {",
+          "    interface Element extends LitsxJSX.Element {}",
+          "    interface IntrinsicElements extends LitsxJSX.IntrinsicElements {}",
+          "  }",
+          "}",
+          "export {};",
+          "",
+        ].join("\n"),
+      );
+      fs.writeFileSync(
+        filePath,
+        `
+          const custom = <vds-icon size="sm" data-test="icon" />;
+          const boundary = <error-boundary fallback="oops" />;
+          const native = <div foo="bar" />;
+        `,
+      );
+
+      const program = ts.createProgram({
+        rootNames: [filePath, globalsPath],
+        options: {
+          jsx: ts.JsxEmit.Preserve,
+          module: ts.ModuleKind.ESNext,
+          moduleResolution: ts.ModuleResolutionKind.Bundler,
+          target: ts.ScriptTarget.ESNext,
+          noEmit: true,
+          strict: true,
+          skipLibCheck: true,
+        },
+      });
+
+      const diagnostics = ts.getPreEmitDiagnostics(program).filter(
+        (diagnostic) => diagnostic.file?.fileName === filePath,
+      );
+
+      assert.strictEqual(diagnostics.length, 1);
+      assert.match(
+        ts.flattenDiagnosticMessageText(diagnostics[0].messageText, "\n"),
+        /Property 'foo' does not exist/,
+      );
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
   it("reports authored diagnostics for invalid lit bindings", () => {
     const source = `
       const view = (
