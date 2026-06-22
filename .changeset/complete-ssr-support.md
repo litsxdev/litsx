@@ -1,6 +1,5 @@
 ---
 "@litsx/ssr": minor
-"@litsx/ssr-client": minor
 "@litsx/core": patch
 "@litsx/vite-plugin": patch
 "@litsx/babel-preset-litsx": patch

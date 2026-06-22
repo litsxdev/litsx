@@ -149,7 +149,7 @@ export declare function installHydrationSupport(
  * then load the provided client module imports.
  *
  * This is the lowest-level document or element hydration helper exposed by
- * `@litsx/ssr-client`.
+ * `@litsx/ssr/client`.
  *
  * @usage Use this when you need explicit control over the root node being
  * hydrated or over how client imports are discovered and loaded.

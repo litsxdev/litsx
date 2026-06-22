@@ -14,7 +14,6 @@ export const packageDirsByName = new Map([
   ["prettier-plugin-litsx", "packages/prettier-plugin-litsx"],
   ["@litsx/scoped-registry-shim", "packages/scoped-registry-shim"],
   ["@litsx/ssr", "packages/ssr"],
-  ["@litsx/ssr-client", "packages/ssr-client"],
   ["@litsx/authoring", "packages/authoring"],
   ["@litsx/prop-types", "packages/prop-types"],
   ["@litsx/babel-preset-litsx", "packages/babel-preset-litsx"],
