@@ -9,7 +9,6 @@ export const npmReleasePackages = [
   "packages/prettier-plugin-litsx",
   "packages/scoped-registry-shim",
   "packages/ssr",
-  "packages/ssr-client",
   "packages/authoring",
   "packages/prop-types",
   "packages/babel-preset-litsx",

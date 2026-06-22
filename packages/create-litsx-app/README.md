@@ -120,7 +120,7 @@ Includes:
 Includes:
 
 - document-first SSR with `@litsx/ssr`
-- browser hydration with `@litsx/ssr-client`
+- browser hydration with `@litsx/ssr/client`
 - a local SSR dev server entry in `dev.mjs`
 - a static document render entry in `render.mjs`
 - a minimal authored LitSX SSR component under `src/`

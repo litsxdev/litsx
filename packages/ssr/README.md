@@ -173,7 +173,7 @@ result.renderModulePreloads();
   `null`
 - `renderClientImports()`: `<script type="module">` tags for `clientImports`
 - `renderClientImportsData()`: a JSON script tag readable by
-  `@litsx/ssr-client`
+  `@litsx/ssr/client`
 - `renderModulePreloads()`: `<link rel="modulepreload">` tags for
   `clientImports`
 - `renderHydrationData()`: a JSON hydration-payload script tag for scoped LitSX
@@ -387,7 +387,7 @@ That JSON helper emits:
 <script type="application/json" id="__LITSX_CLIENT_IMPORTS__">[...]</script>
 ```
 
-which `@litsx/ssr-client` can consume through `hydrateDocument(...)` or
+which `@litsx/ssr/client` can consume through `hydrateDocument(...)` or
 `readClientImports(...)`.
 
 When scoped LitSX roots are rendered, `renderHydrationData()` emits a matching
@@ -432,7 +432,7 @@ markers for hydration.
 
 ## Hydration Contract
 
-The public hydration protocol between `@litsx/ssr` and `@litsx/ssr-client` is:
+The public hydration protocol between `@litsx/ssr` and `@litsx/ssr/client` is:
 
 - `renderClientImportsData()` emits `__LITSX_CLIENT_IMPORTS__`
 - `renderHydrationData()` emits `__LITSX_HYDRATION__`
@@ -448,7 +448,7 @@ In the standard `clientEntry` flow, the emitted bootstrap script then:
 4. imports the emitted client modules
 
 Framework integrations can rely on that order when wiring their own hydration
-entry around `@litsx/ssr-client`.
+entry around `@litsx/ssr/client`.
 
 ## Supported Input
 
@@ -471,5 +471,4 @@ components. Third-party Lit components can still appear inside rendered
 templates, but they are not yet promoted into the full LitSX SSR component
 model by default.
 
-For the client-side entrypoint, see
-[`@litsx/ssr-client`](../ssr-client/README.md).
+For the client-side entrypoint, see `@litsx/ssr/client`.

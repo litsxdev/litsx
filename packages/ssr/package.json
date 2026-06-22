@@ -12,6 +12,12 @@
       "import": "./src/index.js",
       "require": "./dist/index.cjs",
       "default": "./src/index.js"
+    },
+    "./client": {
+      "types": "./src/client.d.ts",
+      "import": "./src/client.js",
+      "require": "./dist/client.cjs",
+      "default": "./src/client.js"
     }
   },
   "files": [
@@ -48,6 +54,7 @@
   },
   "dependencies": {
     "@lit-labs/ssr": "^4.0.0",
+    "@lit-labs/ssr-client": "^1.1.7",
     "@litsx/compiler": "workspace:*",
     "@litsx/core": "workspace:*",
     "@litsx/vite-plugin": "workspace:*"
