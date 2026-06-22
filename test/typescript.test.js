@@ -88,6 +88,8 @@ describe("@litsx/typescript", () => {
         `
           const custom = <vds-icon size="sm" data-test="icon" />;
           const boundary = <error-boundary fallback="oops" />;
+          const suspense = <suspense-boundary fallback="loading" />;
+          const list = <suspense-list revealOrder="forwards" tail="collapsed" />;
           const native = <div foo="bar" />;
         `,
       );

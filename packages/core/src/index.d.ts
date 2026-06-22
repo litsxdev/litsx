@@ -76,7 +76,7 @@ export type LitsxElementProps<TElement = HTMLElement> =
 
 export type LitsxCustomElementProps =
   & LitsxBaseAttributes
-  & LitsxDomAttributes<HTMLElement>
+  & LitsxDomAttributes<EventTarget>
   & {
     [attributeName: string]: unknown;
   };
