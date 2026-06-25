@@ -536,7 +536,10 @@ function getOrCreateModuleAnalysis(filename, context) {
 
   let programPath = null;
   try {
-    const ast = parser.parse(source, { sourceType: "module" });
+    const ast = parser.parse(source, {
+      sourceType: "module",
+      plugins: getParserPluginsForModule(normalizedFilename, source),
+    });
     traverse(ast, {
       Program(path) {
         if (!programPath) {
@@ -665,6 +668,73 @@ function resolveExportedHelper(moduleAnalysis, exportedName, context, seen = new
   return null;
 }
 
+function getParserPluginsForModule(filename, source) {
+  if (/\.(?:[cm]?ts|tsx|litsx)$/i.test(filename)) {
+    return ["typescript"];
+  }
+
+  if (/\b(?:as|satisfies)\s+[^;,)]+/.test(source)) {
+    return ["typescript"];
+  }
+
+  return [];
+}
+
+function unwrapNamespaceAliasExpression(node) {
+  let current = node;
+  while (
+    t.isTSAsExpression(current) ||
+    t.isTSTypeAssertion(current) ||
+    t.isTSNonNullExpression(current) ||
+    t.isTSSatisfiesExpression?.(current)
+  ) {
+    current = current.expression;
+  }
+  return current;
+}
+
+function getNamespaceMemberAliasInfo(candidateName, moduleAnalysis) {
+  const binding = moduleAnalysis.programPath.scope.getBinding(candidateName);
+  if (!binding || !isProgramLevelBinding(binding)) {
+    return null;
+  }
+
+  const declaratorPath = binding.path.isVariableDeclarator?.()
+    ? binding.path
+    : binding.path.parentPath;
+  if (!declaratorPath?.isVariableDeclarator?.()) {
+    return null;
+  }
+
+  const init = unwrapNamespaceAliasExpression(declaratorPath.node.init);
+  if (
+    !t.isMemberExpression(init) ||
+    init.computed ||
+    !t.isIdentifier(unwrapNamespaceAliasExpression(init.object)) ||
+    !t.isIdentifier(init.property)
+  ) {
+    return null;
+  }
+
+  const namespaceObject = unwrapNamespaceAliasExpression(init.object);
+  const namespaceImport = moduleAnalysis.importBindings.get(namespaceObject.name);
+  if (
+    !namespaceImport ||
+    namespaceImport.importedName !== "*" ||
+    !namespaceImport.resolvedSource
+  ) {
+    return null;
+  }
+
+  return {
+    localName: candidateName,
+    namespaceName: namespaceObject.name,
+    importedName: init.property.name,
+    sourceValue: namespaceImport.sourceValue,
+    resolvedSource: namespaceImport.resolvedSource,
+  };
+}
+
 function resolveImportedElementRequirement(candidateName, moduleAnalysis, context, rootFilename) {
   const binding = moduleAnalysis.programPath.scope.getBinding(candidateName);
   if (!binding || !isProgramLevelBinding(binding)) {
@@ -686,6 +756,20 @@ function resolveImportedElementRequirement(candidateName, moduleAnalysis, contex
         ? null
         : importInfo.sourceValue,
       importedName: importInfo.importedName,
+      originalName: candidateName,
+      tagName: candidateName.replace(/([a-z])([A-Z])/g, "$1-$2").toLowerCase(),
+      rootFilename,
+    };
+  }
+
+  const namespaceAliasInfo = getNamespaceMemberAliasInfo(candidateName, moduleAnalysis);
+  if (namespaceAliasInfo) {
+    return {
+      sourceFile: namespaceAliasInfo.resolvedSource,
+      sourceSpecifier: isRelativeSpecifier(namespaceAliasInfo.sourceValue)
+        ? null
+        : namespaceAliasInfo.sourceValue,
+      importedName: namespaceAliasInfo.importedName,
       originalName: candidateName,
       tagName: candidateName.replace(/([a-z])([A-Z])/g, "$1-$2").toLowerCase(),
       rootFilename,

@@ -402,6 +402,51 @@ describe("native element candidate internals", () => {
     }
   });
 
+  it("collects imported element requirements from namespace import object aliases cast as any", () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-candidate-namespace-alias-"));
+
+    try {
+      const rootFile = path.join(tempDir, "demo.litsx");
+      const helperFile = path.join(tempDir, "renderers.js");
+      const iconsFile = path.join(tempDir, "icons.js");
+
+      fs.writeFileSync(
+        helperFile,
+        [
+          'import * as VdsIcon from "./icons.js";',
+          "const MyComponent = (VdsIcon as any).VdsIcon;",
+          "export function renderHeader() {",
+          "  return <MyComponent />;",
+          "}",
+        ].join("\n")
+      );
+      fs.writeFileSync(iconsFile, "export const VdsIcon = () => <span />;");
+
+      const { programPath, functionPaths } = getPaths(`
+        import { renderHeader } from "./renderers.js";
+        import { GuideCard } from "./guide-card.litsx";
+        export function Card() {
+          return <GuideCard .header={renderHeader} />;
+        }
+      `);
+      programPath.hub = { file: { opts: { filename: rootFile } } };
+
+      const importedCandidates = getAnnotatedImportedElementCandidates(
+        functionPaths.get("Card"),
+        programPath,
+        { filename: rootFile }
+      );
+
+      assert.strictEqual(importedCandidates.length, 1);
+      assert.strictEqual(importedCandidates[0].importedName, "VdsIcon");
+      assert.strictEqual(importedCandidates[0].originalName, "MyComponent");
+      assert.strictEqual(importedCandidates[0].tagName, "my-component");
+      assert.strictEqual(importedCandidates[0].sourceFile, iconsFile);
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
   it("returns false for imported helpers that resolve to namespace or non-component leaves", () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-candidate-noncomponent-"));
 

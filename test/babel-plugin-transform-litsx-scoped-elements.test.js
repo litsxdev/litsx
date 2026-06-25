@@ -205,6 +205,26 @@ describe("@litsx/babel-plugin-transform-litsx-scoped-elements", () => {
     assert.match(code, /"fancy-button": FancyButton/);
   });
 
+  it("registers scoped element aliases created from namespace imports cast as any", () => {
+    const source = `
+      import * as VdsIcon from './icons.js';
+
+      const MyComponent = (VdsIcon as any).VdsIcon;
+
+      function IconButton() {
+        return <MyComponent size="sm" />;
+      }
+    `;
+
+    const { code } = transformWithNativePreset(source, {
+      parserPlugins: ["typescript"],
+    });
+
+    assert.match(code, /class IconButton extends ShadowDomMixin\(LitElement\)/);
+    assert.match(code, /static elements = \{\s*"my-component": MyComponent\s*\};/);
+    assert.match(code, /return <my-component size="sm"\s*\/>;/);
+  });
+
   it("inserts elements after existing properties", () => {
     const source = `
       import { LitElement, html } from 'lit';

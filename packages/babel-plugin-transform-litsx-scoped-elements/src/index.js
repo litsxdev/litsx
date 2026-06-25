@@ -305,8 +305,22 @@ function hasNamedImport(programPath, moduleName, importName) {
   });
 }
 
+function unwrapNamespaceAliasExpression(node) {
+  let current = node;
+  while (
+    t.isTSAsExpression(current) ||
+    t.isTSTypeAssertion(current) ||
+    t.isTSNonNullExpression(current) ||
+    t.isTSSatisfiesExpression?.(current)
+  ) {
+    current = current.expression;
+  }
+  return current;
+}
+
 function buildAvailableMap(programPath) {
   const availableMap = new Map();
+  const namespaceImports = new Set();
 
   programPath.get("body").forEach((nodePath) => {
     if (nodePath.isImportDeclaration()) {
@@ -315,6 +329,11 @@ function buildAvailableMap(programPath) {
           availableMap.set(specifier.local.name, {
             originalName: specifier.local.name,
           });
+          return;
+        }
+
+        if (t.isImportNamespaceSpecifier(specifier)) {
+          namespaceImports.add(specifier.local.name);
         }
       });
       return;
@@ -329,6 +348,33 @@ function buildAvailableMap(programPath) {
     availableMap.set(localName, {
       originalName: localName,
       local: true,
+    });
+  });
+
+  programPath.get("body").forEach((nodePath) => {
+    if (!nodePath.isVariableDeclaration()) {
+      return;
+    }
+
+    nodePath.node.declarations.forEach((declarator) => {
+      if (!t.isIdentifier(declarator.id)) {
+        return;
+      }
+
+      const init = unwrapNamespaceAliasExpression(declarator.init);
+      if (
+        !t.isMemberExpression(init) ||
+        init.computed ||
+        !t.isIdentifier(unwrapNamespaceAliasExpression(init.object)) ||
+        !t.isIdentifier(init.property) ||
+        !namespaceImports.has(unwrapNamespaceAliasExpression(init.object).name)
+      ) {
+        return;
+      }
+
+      availableMap.set(declarator.id.name, {
+        originalName: declarator.id.name,
+      });
     });
   });
 
