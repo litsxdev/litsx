@@ -18,6 +18,14 @@ const EXTRA_FILE_EXTENSIONS = [
     scriptKind: 2,
   },
 ];
+const SUPPORTED_SOURCE_EXTENSIONS = [
+  ".litsx.jsx",
+  ".litsx",
+  ".tsx",
+  ".ts",
+  ".jsx",
+  ".js",
+];
 const nodeRequire = (() => {
   try {
     return createRequire(import.meta.url);
@@ -94,12 +102,116 @@ function inferScriptKind(ts, filePath) {
   return undefined;
 }
 
+function getModuleExtension(ts, fileName) {
+  const normalized = normalizeFilePath(fileName);
+
+  if (normalized.endsWith(".litsx.jsx") || normalized.endsWith(".jsx")) {
+    return ts.Extension.Jsx;
+  }
+
+  if (normalized.endsWith(".litsx") || normalized.endsWith(".tsx")) {
+    return ts.Extension.Tsx;
+  }
+
+  if (normalized.endsWith(".ts")) {
+    return ts.Extension.Ts;
+  }
+
+  return ts.Extension.Js;
+}
+
+function isPathLikeModuleName(moduleName) {
+  return moduleName.startsWith("./") || moduleName.startsWith("../") || moduleName.startsWith("/");
+}
+
+function getTransparentResolutionCandidates(modulePath) {
+  const requestedExtension = SUPPORTED_SOURCE_EXTENSIONS.find((extension) => modulePath.endsWith(extension)) ?? null;
+
+  if (requestedExtension) {
+    return [
+      modulePath,
+      `${modulePath}/index${requestedExtension}`,
+    ];
+  }
+
+  return [
+    ...SUPPORTED_SOURCE_EXTENSIONS.map((extension) => `${modulePath}${extension}`),
+    ...SUPPORTED_SOURCE_EXTENSIONS.map((extension) => `${modulePath}/index${extension}`),
+  ];
+}
+
+function createResolvedModule(ts, resolvedFileName) {
+  return {
+    resolvedFileName: normalizeFilePath(resolvedFileName),
+    extension: getModuleExtension(ts, resolvedFileName),
+    isExternalLibraryImport: false,
+  };
+}
+
+function resolveTransparentModuleName(ts, moduleName, containingFile, fileExists) {
+  if (!isPathLikeModuleName(moduleName)) {
+    return null;
+  }
+
+  const containingDir = dirname(containingFile);
+  const candidateBase = moduleName.startsWith("/")
+    ? normalizeFilePath(moduleName)
+    : normalizeFilePath(`${containingDir}/${moduleName}`);
+
+  for (const candidate of getTransparentResolutionCandidates(candidateBase)) {
+    if (fileExists(candidate)) {
+      return createResolvedModule(ts, candidate);
+    }
+  }
+
+  return null;
+}
+
+function installTransparentModuleResolution(host, ts, compilerOptions, fileExists, readFile) {
+  function resolveModule(moduleName, containingFile) {
+    const resolved = ts.resolveModuleName(
+      moduleName,
+      containingFile,
+      compilerOptions,
+      {
+        fileExists,
+        readFile,
+        directoryExists(dirPath) {
+          return host.directoryExists?.(dirPath) ?? true;
+        },
+        getDirectories(dirPath) {
+          return host.getDirectories?.(dirPath) ?? [];
+        },
+        realpath(filePath) {
+          return host.realpath?.(filePath) ?? filePath;
+        },
+      },
+    ).resolvedModule;
+
+    return resolved ?? resolveTransparentModuleName(ts, moduleName, containingFile, fileExists);
+  }
+
+  host.resolveModuleNames = (moduleNames, containingFile) =>
+    moduleNames.map((moduleName) => resolveModule(moduleName, containingFile));
+
+  host.resolveModuleNameLiterals = (moduleLiterals, containingFile) =>
+    moduleLiterals.map(({ text }) => ({ resolvedModule: resolveModule(text, containingFile) }));
+}
+
 function defaultReadFile(filePath) {
   const fs = getNodeFs();
   if (!fs) {
     throw new Error("Disk-backed TypeScript sessions require Node fs access.");
   }
   return fs.readFileSync(filePath, "utf8");
+}
+
+function defaultFileExists(filePath) {
+  const fs = getNodeFs();
+  if (!fs) {
+    return false;
+  }
+  return fs.existsSync(filePath);
 }
 
 function getDiskFileVersion(filePath) {
@@ -303,6 +415,9 @@ function createProjectHost(session, config) {
       ? ts.createIncrementalCompilerHost(config.parsedCommandLine.options)
       : ts.createCompilerHost(config.parsedCommandLine.options);
   const originalReadFile = host.readFile.bind(host);
+  const originalFileExists = typeof host.fileExists === "function"
+    ? host.fileExists.bind(host)
+    : defaultFileExists;
   const originalGetSourceFile = host.getSourceFile.bind(host);
   host.extraFileExtensions = EXTRA_FILE_EXTENSIONS;
 
@@ -324,6 +439,11 @@ function createProjectHost(session, config) {
     }
 
     return getCachedSourceText(session, fileName, sourceText, "project", null);
+  };
+
+  host.fileExists = (fileName) => {
+    const normalizedFileName = normalizeFilePath(fileName);
+    return session.overlayFiles.has(normalizedFileName) || originalFileExists(fileName);
   };
 
   host.getSourceFile = (
@@ -378,6 +498,14 @@ function createProjectHost(session, config) {
     );
   };
 
+  installTransparentModuleResolution(
+    host,
+    ts,
+    config.parsedCommandLine.options,
+    host.fileExists,
+    host.readFile,
+  );
+
   return host;
 }
 
@@ -425,6 +553,14 @@ function createStandaloneHost(session, config) {
     );
   };
 
+  installTransparentModuleResolution(
+    host,
+    ts,
+    config.compilerOptions,
+    host.fileExists,
+    host.readFile,
+  );
+
   return host;
 }
 
@@ -438,7 +574,7 @@ function createInMemoryHost(session, config) {
   );
   const sourceDir = dirname(config.sourceFilename);
 
-  return {
+  const host = {
     extraFileExtensions: EXTRA_FILE_EXTENSIONS,
     getSourceFile(filePath, languageVersion) {
       const normalizedPath = normalizeFilePath(filePath);
@@ -485,6 +621,16 @@ function createInMemoryHost(session, config) {
       return "\n";
     },
   };
+
+  installTransparentModuleResolution(
+    host,
+    ts,
+    config.compilerOptions,
+    host.fileExists.bind(host),
+    host.readFile.bind(host),
+  );
+
+  return host;
 }
 
 function createProjectProgramKey(parsedCommandLine) {

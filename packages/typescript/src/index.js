@@ -1,4 +1,5 @@
 import fs from "fs";
+import path from "path";
 
 import {
   collectLitsxAuthoredDiagnostics,
@@ -18,6 +19,14 @@ export { createLitsxTypecheckSession, runLitsxTypecheck } from "./typecheck.js";
 
 const PROFILE_ENABLED = process.env.LITSX_PROFILE === "1";
 const EXTERNAL_FILES_CACHE = new WeakMap();
+const SUPPORTED_SOURCE_EXTENSIONS = [
+  ".litsx.jsx",
+  ".litsx",
+  ".tsx",
+  ".ts",
+  ".jsx",
+  ".js",
+];
 
 function profilePhase(namespace, name, callback) {
   if (!PROFILE_ENABLED) {
@@ -47,6 +56,65 @@ function readSnapshotText(snapshot) {
 
 function createSnapshot(ts, sourceText) {
   return ts.ScriptSnapshot.fromString(sourceText);
+}
+
+function getModuleExtension(ts, fileName) {
+  if (fileName.endsWith(".litsx.jsx") || fileName.endsWith(".jsx")) {
+    return ts.Extension.Jsx;
+  }
+
+  if (fileName.endsWith(".litsx") || fileName.endsWith(".tsx")) {
+    return ts.Extension.Tsx;
+  }
+
+  if (fileName.endsWith(".ts")) {
+    return ts.Extension.Ts;
+  }
+
+  return ts.Extension.Js;
+}
+
+function isPathLikeModuleName(moduleName) {
+  return moduleName.startsWith("./") || moduleName.startsWith("../") || moduleName.startsWith("/");
+}
+
+function getTransparentResolutionCandidates(modulePath) {
+  const requestedExtension = SUPPORTED_SOURCE_EXTENSIONS.find((extension) => modulePath.endsWith(extension)) ?? null;
+
+  if (requestedExtension) {
+    return [
+      modulePath,
+      path.join(modulePath, `index${requestedExtension}`),
+    ];
+  }
+
+  return [
+    ...SUPPORTED_SOURCE_EXTENSIONS.map((extension) => `${modulePath}${extension}`),
+    ...SUPPORTED_SOURCE_EXTENSIONS.map((extension) => path.join(modulePath, `index${extension}`)),
+  ];
+}
+
+function createResolvedModule(ts, resolvedFileName) {
+  return {
+    resolvedFileName,
+    extension: getModuleExtension(ts, resolvedFileName),
+    isExternalLibraryImport: false,
+  };
+}
+
+function resolveTransparentModuleName(ts, moduleName, containingFile, fileExists) {
+  if (!isPathLikeModuleName(moduleName)) {
+    return null;
+  }
+
+  const candidateBase = path.resolve(path.dirname(containingFile), moduleName);
+  for (const candidate of getTransparentResolutionCandidates(candidateBase)) {
+    if (fileExists(candidate)) {
+      return createResolvedModule(ts, candidate);
+    }
+  }
+
+  return null;
 }
 
 function remapDisplayParts(parts) {
@@ -636,6 +704,15 @@ export default function init(modules) {
       const originalGetScriptKind = typeof host.getScriptKind === "function"
         ? host.getScriptKind.bind(host)
         : null;
+      const originalResolveModuleNames = typeof host.resolveModuleNames === "function"
+        ? host.resolveModuleNames.bind(host)
+        : null;
+      const originalResolveModuleNameLiterals = typeof host.resolveModuleNameLiterals === "function"
+        ? host.resolveModuleNameLiterals.bind(host)
+        : null;
+      const originalFileExists = typeof host.fileExists === "function"
+        ? host.fileExists.bind(host)
+        : (fileName) => fs.existsSync(fileName);
 
       host.getScriptKind = (fileName) => {
         if (fileName.endsWith(".litsx")) {
@@ -647,6 +724,42 @@ export default function init(modules) {
         }
 
         return originalGetScriptKind?.(fileName);
+      };
+
+      function resolveTransparent(moduleName, containingFile) {
+        return resolveTransparentModuleName(
+          ts,
+          moduleName,
+          containingFile,
+          originalFileExists,
+        );
+      }
+
+      host.resolveModuleNames = (moduleNames, containingFile, ...rest) => {
+        const originalResults = originalResolveModuleNames
+          ? originalResolveModuleNames(moduleNames, containingFile, ...rest)
+          : [];
+
+        return moduleNames.map((moduleName, index) =>
+          originalResults[index] ?? resolveTransparent(moduleName, containingFile)
+        );
+      };
+
+      host.resolveModuleNameLiterals = (moduleLiterals, containingFile, ...rest) => {
+        const originalResults = originalResolveModuleNameLiterals
+          ? originalResolveModuleNameLiterals(moduleLiterals, containingFile, ...rest)
+          : [];
+
+        return moduleLiterals.map((moduleLiteral, index) => {
+          const originalResult = originalResults[index];
+          if (originalResult?.resolvedModule) {
+            return originalResult;
+          }
+
+          return {
+            resolvedModule: resolveTransparent(moduleLiteral.text, containingFile),
+          };
+        });
       };
 
       function getCachedRecord(fileName) {

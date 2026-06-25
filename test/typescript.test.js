@@ -2294,6 +2294,79 @@ describe("@litsx/typescript", () => {
     }
   }, 20_000);
 
+  it("resolves named exports from .litsx modules without manual ambient module declarations", () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-typecheck-module-resolution-"));
+    const srcDir = path.join(tempDir, "src");
+    const tsconfigPath = path.join(tempDir, "jsconfig.json");
+    const globalsPath = path.join(tempDir, "global.d.ts");
+    const buttonPath = path.join(srcDir, "vds-button.litsx");
+    const panelPath = path.join(srcDir, "vds-product-purchase-panel.litsx");
+    const storyPath = path.join(srcDir, "vds-product-purchase-panel.stories.tsx");
+    const originalCwd = process.cwd();
+    const originalWrite = process.stderr.write;
+
+    fs.mkdirSync(srcDir, { recursive: true });
+    fs.writeFileSync(
+      tsconfigPath,
+      JSON.stringify({
+        compilerOptions: {
+          jsx: "preserve",
+          allowJs: true,
+          allowArbitraryExtensions: true,
+          checkJs: true,
+          noEmit: true,
+        },
+        include: ["src/**/*", "global.d.ts"],
+      }),
+    );
+    fs.writeFileSync(globalsPath, TEMP_JSX_GLOBALS_DTS);
+    fs.writeFileSync(
+      buttonPath,
+      [
+        "export type VdsButtonProps = { label: string };",
+        "export const VdsButton = ({ label }: VdsButtonProps) => <button>{label}</button>;",
+        "",
+      ].join("\n"),
+    );
+    fs.writeFileSync(
+      panelPath,
+      [
+        'import { VdsButton } from "./vds-button.litsx";',
+        "export type VdsProductPurchasePanelProps = { ctaLabel: string };",
+        "export const VdsProductPurchasePanel = ({ ctaLabel }: VdsProductPurchasePanelProps) => (",
+        "  <section>",
+        "    <VdsButton label={ctaLabel} />",
+        "  </section>",
+        ");",
+        "",
+      ].join("\n"),
+    );
+    fs.writeFileSync(
+      storyPath,
+      [
+        'import { VdsButton } from "./vds-button.litsx";',
+        'import { VdsProductPurchasePanel } from "./vds-product-purchase-panel.litsx";',
+        "",
+        "const button = <VdsButton label=\"Buy\" />;",
+        "const panel = <VdsProductPurchasePanel ctaLabel=\"Add to cart\" />;",
+        "// @ts-expect-error .litsx named exports must not resolve as any",
+        "const typedAsNumber: number = VdsButton;",
+        "",
+      ].join("\n"),
+    );
+
+    process.stderr.write = () => true;
+
+    try {
+      process.chdir(tempDir);
+      assert.equal(runLitsxTypecheck(["-p", "jsconfig.json", "--noEmit"]), 0);
+    } finally {
+      process.chdir(originalCwd);
+      process.stderr.write = originalWrite;
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  }, 20_000);
+
   it("typechecks a LitSX-authored .litsx.jsx project end-to-end", () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-typecheck-valid-litsx-jsx-"));
     const tsconfigPath = path.join(tempDir, "tsconfig.json");
@@ -7171,6 +7244,69 @@ describe("@litsx/typescript", () => {
 
     const snapshot = languageServiceHost.getScriptSnapshot("/virtual/plain-react.tsx");
     assert.strictEqual(snapshot.getText(0, snapshot.getLength()), source);
+  });
+
+  it("resolves .litsx module imports in the TypeScript language-service plugin", () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-plugin-module-resolution-"));
+    const entryFile = path.join(tempDir, "entry.tsx");
+    const componentFile = path.join(tempDir, "vds-button.litsx");
+
+    try {
+      fs.writeFileSync(entryFile, 'import { VdsButton } from "./vds-button.litsx";\n');
+      fs.writeFileSync(componentFile, "export const VdsButton = () => <button />;\n");
+
+      const pluginModule = plugin({
+        typescript: ts,
+      });
+      const languageServiceHost = {
+        getScriptSnapshot(fileName) {
+          if (!fs.existsSync(fileName)) {
+            return undefined;
+          }
+          return ts.ScriptSnapshot.fromString(fs.readFileSync(fileName, "utf8"));
+        },
+        getScriptKind(fileName) {
+          return fileName.endsWith(".tsx") ? ts.ScriptKind.TSX : undefined;
+        },
+        fileExists(fileName) {
+          return fs.existsSync(fileName);
+        },
+        resolveModuleNames(moduleNames) {
+          return moduleNames.map(() => undefined);
+        },
+      };
+
+      pluginModule.create({
+        languageServiceHost,
+        languageService: {
+          getSyntacticDiagnostics() {
+            return [];
+          },
+          getSemanticDiagnostics() {
+            return [];
+          },
+          getSuggestionDiagnostics() {
+            return [];
+          },
+          getQuickInfoAtPosition() {
+            return undefined;
+          },
+          getCompletionsAtPosition() {
+            return null;
+          },
+        },
+      });
+
+      const [resolved] = languageServiceHost.resolveModuleNames(
+        ["./vds-button.litsx"],
+        entryFile,
+      );
+
+      assert.strictEqual(resolved.resolvedFileName, componentFile);
+      assert.strictEqual(resolved.extension, ts.Extension.Tsx);
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
   });
 
   it("virtualizes snapshots for TSX files after wrapping the language service host", () => {

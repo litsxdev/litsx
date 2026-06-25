@@ -177,4 +177,52 @@ describe("@litsx/typescript-session", () => {
       fs.rmSync(tempDir, { recursive: true, force: true });
     }
   });
+
+  it("resolves .litsx imports as project source modules", () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-project-session-import-"));
+    const entryFile = path.join(tempDir, "entry.tsx");
+    const componentFile = path.join(tempDir, "vds-button.litsx");
+
+    try {
+      fs.writeFileSync(
+        entryFile,
+        'import { VdsButton } from "./vds-button.litsx";\nexport const view = <VdsButton label="Buy" />;\n',
+        "utf8",
+      );
+      fs.writeFileSync(
+        componentFile,
+        "export const VdsButton = ({ label }: { label: string }) => <button>{label}</button>;\n",
+        "utf8",
+      );
+
+      const session = createProjectTsSession({
+        typescript: ts,
+        parsedCommandLine: {
+          options: {
+            target: ts.ScriptTarget.ESNext,
+            module: ts.ModuleKind.ESNext,
+            moduleResolution: ts.ModuleResolutionKind.Bundler,
+            jsx: ts.JsxEmit.Preserve,
+            allowNonTsExtensions: true,
+            skipLibCheck: true,
+          },
+          fileNames: [entryFile, componentFile],
+          projectReferences: [],
+          projectVersion: "1",
+        },
+      });
+
+      const program = session.getProgram();
+      assert(program.getSourceFile(entryFile));
+      assert(program.getSourceFile(componentFile));
+      assert.deepStrictEqual(
+        ts.getPreEmitDiagnostics(program)
+          .filter((diagnostic) => diagnostic.code === 2307)
+          .map((diagnostic) => ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n")),
+        [],
+      );
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
 });
