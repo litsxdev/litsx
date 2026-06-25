@@ -294,6 +294,7 @@ describe("create-litsx-app", () => {
     const dockerfile = result.files.get("Dockerfile.visual");
     const visualTest = result.files.get("tests/visual/storybook.spec.js");
     const storybookMain = result.files.get(".storybook/main.js");
+    const storyRegistrationPlugin = result.files.get(".storybook/litsx-story-registration-plugin.js");
     const previewSource = result.files.get(".storybook/preview.js");
     const buttonStory = result.files.get("src/stories/litsx-button.stories.litsx");
     const heroStory = result.files.get("src/stories/litsx-hero.stories.litsx");
@@ -313,23 +314,69 @@ describe("create-litsx-app", () => {
     assert.match(playwrightConfig, /timezoneId: "UTC"/);
     assert.match(dockerfile, /mcr\.microsoft\.com\/playwright/);
     assert.match(visualTest, /toHaveScreenshot/);
+    assert.match(storybookMain, /import \{ litsxStoryRegistrationPlugin \} from "\.\/litsx-story-registration-plugin\.js";/);
     assert.match(storybookMain, /const optimizeDeps = \{ \.\.\.\(config\.optimizeDeps \?\? \{\}\) \};/);
     assert.match(storybookMain, /delete optimizeDeps\.rollupOptions;/);
-    assert.match(storybookMain, /plugins: \[\.\.\.\(config\.plugins \?\? \[\]\), litsx\(\{ sourceMaps: true \}\)\]/);
+    assert.match(
+      storybookMain,
+      /plugins: \[\.\.\.\(config\.plugins \?\? \[\]\), litsxStoryRegistrationPlugin\(\), litsx\(\{ sourceMaps: true \}\)\]/,
+    );
+    assert.match(storyRegistrationPlugin, /enforce: "pre"/);
+    assert.match(storyRegistrationPlugin, /STORY_FILE_PATTERN = \/\\\.stories\\\.litsx/);
+    assert.match(storyRegistrationPlugin, /customElements\.define/);
     assert.match(previewSource, /import "@webcomponents\/scoped-custom-element-registry";/);
-    assert.match(buttonStory, /customElements\.define\("litsx-button", LitsxButton\)/);
-    assert.match(buttonStory, /component: "litsx-button"/);
-    assert.match(buttonStory, /<litsx-button \.label=\{label\} \.type=\{type\} \/>/);
-    assert.match(heroStory, /customElements\.define\("litsx-hero", LitsxHero\)/);
+    assert.doesNotMatch(buttonStory, /customElements\.define\("litsx-button", LitsxButton\)/);
+    assert.match(buttonStory, /const LitsxButtonStory = \(\{ label = "View on GitHub", type = "secondary" \} = \{\}\) => \{/);
+    assert.match(buttonStory, /return <LitsxButton label=\{label\} type=\{type\} \/>;/);
+    assert.match(buttonStory, /component: "litsx-button-story"/);
+    assert.match(buttonStory, /<LitsxButtonStory label=\{label\} type=\{type\} \/>/);
+    assert.doesNotMatch(heroStory, /customElements\.define\("litsx-hero", LitsxHero\)/);
     assert.match(heroStory, /component: "litsx-hero"/);
     assert.match(heroStory, /<litsx-hero/);
-    assert.match(starterGuideStory, /customElements\.define\("starter-guide", StarterGuide\)/);
+    assert.doesNotMatch(starterGuideStory, /customElements\.define\("starter-guide", StarterGuide\)/);
     assert.match(starterGuideStory, /component: "starter-guide"/);
     assert.match(starterGuideStory, /render: \(\) => <starter-guide \/>/);
     assert.match(starterGuideDocs, /import \{ Meta, Canvas \} from "@storybook\/addon-docs\/blocks";/);
     assert.match(starterGuideDocs, /import \* as StarterGuideStories from "\.\/starter-guide\.stories\.litsx";/);
     assert.match(starterGuideDocs, /<Meta of=\{StarterGuideStories\} \/>/);
     assert.match(starterGuideDocs, /<Canvas of=\{StarterGuideStories\.Default\} \/>/);
+  });
+
+  it("generates a Storybook pretransform that auto-registers imported and local story elements", async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "create-litsx-app-story-plugin-"));
+    tempDirs.push(tempDir);
+
+    const result = renderProjectFiles("/tmp/my-litsx-app", { template: "design-system" });
+    const pluginPath = path.join(tempDir, "litsx-story-registration-plugin.mjs");
+    fs.writeFileSync(pluginPath, result.files.get(".storybook/litsx-story-registration-plugin.js"), "utf8");
+
+    const { litsxStoryRegistrationPlugin } = await import(`${pluginPath}?cache=${Date.now()}`);
+    const plugin = litsxStoryRegistrationPlugin();
+    const source = [
+      'import { VdsButton, VdsDrawer as DrawerElement, type VdsButtonProps } from "../components/vds-button.litsx";',
+      'import { VdsModal } from "../components/vds-modal.litsx";',
+      'import type { VdsIgnoredStory } from "../components/vds-ignored-story.litsx";',
+      "",
+      "const VdsDrawerStory = () => <DrawerElement />;",
+      "function VdsModalStory() {",
+      "  return <VdsModal />;",
+      "}",
+      "",
+      "export const Default = { render: () => <VdsButton label=\"Buy\" /> };",
+      "",
+    ].join("\n");
+
+    const transformed = plugin.transform(source, "/project/src/stories/catalog.stories.litsx");
+
+    assert.strictEqual(plugin.enforce, "pre");
+    assert.match(transformed.code, /customElements\.define\("vds-button", VdsButton\);/);
+    assert.match(transformed.code, /customElements\.define\("vds-drawer", DrawerElement\);/);
+    assert.match(transformed.code, /customElements\.define\("vds-modal", VdsModal\);/);
+    assert.match(transformed.code, /customElements\.define\("vds-drawer-story", VdsDrawerStory\);/);
+    assert.match(transformed.code, /customElements\.define\("vds-modal-story", VdsModalStory\);/);
+    assert.doesNotMatch(transformed.code, /customElements\.define\("vds-button-props", VdsButtonProps\);/);
+    assert.doesNotMatch(transformed.code, /customElements\.define\("vds-ignored-story", VdsIgnoredStory\);/);
+    assert.strictEqual(plugin.transform(source, "/project/src/stories/catalog.stories.tsx"), null);
   });
 
   it("writes the scaffold to disk", () => {
@@ -345,6 +392,7 @@ describe("create-litsx-app", () => {
     assert.ok(!fs.existsSync(path.join(targetDir, "tools", "litsx-vite-plugin.js")));
     assert.ok(fs.existsSync(path.join(targetDir, ".storybook", "main.js")));
     assert.ok(fs.existsSync(path.join(targetDir, ".storybook", "preview.js")));
+    assert.ok(fs.existsSync(path.join(targetDir, ".storybook", "litsx-story-registration-plugin.js")));
     assert.ok(fs.existsSync(path.join(targetDir, "playwright.config.js")));
     assert.ok(fs.existsSync(path.join(targetDir, "Dockerfile.visual")));
     assert.ok(fs.existsSync(path.join(targetDir, "tests", "visual", "storybook.spec.js")));

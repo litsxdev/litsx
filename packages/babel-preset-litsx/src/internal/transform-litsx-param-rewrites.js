@@ -81,6 +81,34 @@ function createThisMemberExpression(propName) {
   return t.memberExpression(t.thisExpression(), t.identifier(propName));
 }
 
+function createPropsObjectExpression(bindingInfo, propertyMap = new Map()) {
+  if (
+    bindingInfo &&
+    typeof bindingInfo !== "object" &&
+    bindingInfo !== "props"
+  ) {
+    return null;
+  }
+
+  const propNames = new Set([
+    ...(bindingInfo && typeof bindingInfo === "object" && bindingInfo.kind === "alias"
+      ? Array.from(bindingInfo.properties?.keys?.() || [])
+      : []),
+    ...Array.from(propertyMap.keys?.() || []),
+  ]);
+  const properties = Array.from(propNames)
+    .filter((propName) => typeof propName === "string" && propName.length > 0)
+    .sort()
+    .map((propName) =>
+      t.objectProperty(
+        t.isValidIdentifier(propName) ? t.identifier(propName) : t.stringLiteral(propName),
+        createThisMemberExpression(propName)
+      )
+    );
+
+  return t.objectExpression(properties);
+}
+
 export function transformJSXExpressions(jsxPath, bindings, state = null) {
   const localNames = Array.from(bindings.keys());
 
@@ -218,10 +246,16 @@ export function replaceParamReferences(functionPath, bindings, propertyMap = new
           refPath.parentPath.isObjectProperty({ shorthand: true }) &&
           refPath.parentKey === "value"
         ) {
+          const propsObject = createPropsObjectExpression(bindingInfo, propertyMap);
+          if (propsObject) {
+            refPath.parentPath.node.shorthand = false;
+            refPath.replaceWith(propsObject);
+            return;
+          }
           return;
         }
 
-        refPath.replaceWith(t.thisExpression());
+        refPath.replaceWith(createPropsObjectExpression(bindingInfo, propertyMap) ?? t.thisExpression());
         return;
       }
 
@@ -299,6 +333,14 @@ export function replaceParamReferences(functionPath, bindings, propertyMap = new
           refPath.parentKey === "property" &&
           !refPath.parentPath.node.computed
         ) {
+          return;
+        }
+      }
+
+      if (localName === "props") {
+        const propsObject = createPropsObjectExpression(bindingInfo, propertyMap);
+        if (propsObject) {
+          refPath.replaceWith(propsObject);
           return;
         }
       }

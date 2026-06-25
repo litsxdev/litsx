@@ -18,6 +18,19 @@ const VOID_HTML_TAGS = new Set([
   "track",
   "wbr",
 ]);
+const ATTRIBUTE_PASSTHROUGH_NAMES = new Set([
+  "class",
+  "className",
+  "id",
+  "slot",
+  "style",
+  "part",
+  "exportparts",
+  "role",
+  "title",
+  "tabindex",
+  "tabIndex",
+]);
 
 export function setTemplateTypes(types) {
   t = types;
@@ -218,12 +231,14 @@ function getTag(node) {
     return {
       name: isCapitalized ? toKebab(originalName) : originalName,
       isComponent: false,
+      isAuthoredComponentTag: isCapitalized,
     };
   }
 
   return {
     name: stringifyJsxName(node.name),
     isComponent: true,
+    isAuthoredComponentTag: false,
   };
 }
 
@@ -300,9 +315,25 @@ function createComponentCallee(nameNode) {
   return t.identifier(stringifyJsxName(nameNode));
 }
 
+function shouldLowerAuthoredComponentAttributeAsProperty(attr, rawName) {
+  if (
+    rawName.startsWith(".") ||
+    rawName.startsWith("?") ||
+    rawName.startsWith("@") ||
+    rawName.startsWith("data-") ||
+    rawName.startsWith("aria-") ||
+    ATTRIBUTE_PASSTHROUGH_NAMES.has(rawName) ||
+    !/^[$_a-zA-Z][$_a-zA-Z0-9]*$/.test(rawName)
+  ) {
+    return false;
+  }
+
+  return !attr.value || attr.value.type === "JSXExpressionContainer";
+}
+
 const transforms = {
   JSXElement({ node, strings, keys }, opts) {
-    const { name, isComponent } = getTag(node.openingElement);
+    const { name, isComponent, isAuthoredComponentTag } = getTag(node.openingElement);
 
     if (isComponent) {
       addKey(strings, keys, createComponent(node, opts));
@@ -318,6 +349,18 @@ const transforms = {
 
       const rawName = decodeVirtualAttributeName(attr.name.name) ?? attr.name.name;
       const prefix = rawName[0];
+
+      if (isAuthoredComponentTag && shouldLowerAuthoredComponentAttributeAsProperty(attr, rawName)) {
+        addString(strings, keys, ` .${rawName}=`, attr);
+
+        if (attr.value) {
+          addKey(strings, keys, lowerEmbeddedJsx(attr.value.expression, opts));
+        } else {
+          addKey(strings, keys, t.booleanLiteral(true));
+        }
+
+        return;
+      }
 
       if (prefix === "." || prefix === "@" || prefix === "?") {
         const litName = `${prefix}${rawName.slice(1)}`;

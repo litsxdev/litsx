@@ -76,6 +76,50 @@ describe("@litsx/compiler", () => {
     assert.doesNotMatch(result.code, /type\s+[A-Za-z0-9_]+/);
   }, 20000);
 
+  it("lowers authored local story hosts with expression props as property bindings", () => {
+    const source = [
+      "const VdsDrawerStory = ({ defaultOpen = false, heading = '', description = '' }) => {",
+      "  return <div>{heading}{description}{String(defaultOpen)}</div>;",
+      "};",
+      "",
+      "export const Playground = {",
+      "  render: (args) => (",
+      "    <VdsDrawerStory",
+      "      defaultOpen={args.defaultOpen}",
+      "      heading={args.heading}",
+      "      description={args.description}",
+      "      class=\"story-shell\"",
+      "      data-testid={args.testId}",
+      "    />",
+      "  ),",
+      "};",
+    ].join("\n");
+
+    const result = transformLitsxSync(source, {
+      filename: "/virtual/vds-drawer.stories.litsx",
+    });
+
+    assert.match(result.code, /class VdsDrawerStory extends LitElement/);
+    assert.match(result.code, /html`<vds-drawer-story \.defaultOpen=\$\{args\.defaultOpen\} \.heading=\$\{args\.heading\} \.description=\$\{args\.description\} class="story-shell" data-testid="\$\{args\.testId\}"><\/vds-drawer-story>`/);
+    assert.doesNotMatch(result.code, /defaultOpen="\$\{args\.defaultOpen\}"/);
+  }, 20000);
+
+  it("materializes bare props references instead of reading a synthetic this.props", () => {
+    const source = [
+      "export function VdsOverlayBar(props) {",
+      "  console.log(\"VdsOverlayBar props:\", props);",
+      "  return <div>{props.heading}</div>;",
+      "}",
+    ].join("\n");
+
+    const result = transformLitsxSync(source, {
+      filename: "/virtual/VdsOverlayBar.litsx",
+    });
+
+    assert.match(result.code, /console\.log\("VdsOverlayBar props:", \{\s*heading: this\.heading\s*\}\);/);
+    assert.doesNotMatch(result.code, /this\.props/);
+  }, 20000);
+
   it("strips top-level TypeScript declarations from compiled .litsx output", () => {
     const source = [
       "interface ButtonProps {",

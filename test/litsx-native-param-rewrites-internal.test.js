@@ -236,6 +236,53 @@ describe("native param rewrite internals", () => {
     assert.strictEqual(labels.total.property.name, "count");
   });
 
+  it("materializes bare props alias references as prop snapshots", () => {
+    const { functionPath } = getPaths(`
+      function Card(props) {
+        console.log("Card props:", props);
+        return props.title;
+      }
+    `);
+
+    const bindings = new Map([
+      [
+        "props",
+        {
+          kind: "alias",
+          properties: new Map([
+            ["title", "title"],
+            ["count", "count"],
+          ]),
+        },
+      ],
+    ]);
+
+    const captured = replaceParamReferences(
+      functionPath,
+      bindings,
+      new Map([
+        ["title", true],
+        ["count", true],
+      ])
+    );
+    assert.deepStrictEqual(captured, []);
+
+    const consoleArg = functionPath.node.body.body[0].expression.arguments[1];
+    assert.strictEqual(consoleArg.type, "ObjectExpression");
+    assert.deepStrictEqual(
+      consoleArg.properties.map((property) => property.key.name),
+      ["count", "title"]
+    );
+    assert.strictEqual(consoleArg.properties[0].value.object.type, "ThisExpression");
+    assert.strictEqual(consoleArg.properties[0].value.property.name, "count");
+    assert.strictEqual(consoleArg.properties[1].value.object.type, "ThisExpression");
+    assert.strictEqual(consoleArg.properties[1].value.property.name, "title");
+
+    const returnArgument = functionPath.node.body.body[1].argument;
+    assert.strictEqual(returnArgument.object.type, "ThisExpression");
+    assert.strictEqual(returnArgument.property.name, "title");
+  });
+
   it("skips computed member properties and unsupported alias member reads", () => {
     const { functionPath } = getPaths(`
       function Card(props) {

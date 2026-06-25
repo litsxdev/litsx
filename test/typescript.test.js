@@ -2367,6 +2367,72 @@ describe("@litsx/typescript", () => {
     }
   }, 20_000);
 
+  it("typechecks authored local story hosts rendered with natural JSX props", () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-typecheck-story-host-"));
+    const srcDir = path.join(tempDir, "src");
+    const tsconfigPath = path.join(tempDir, "jsconfig.json");
+    const globalsPath = path.join(tempDir, "global.d.ts");
+    const storyPath = path.join(srcDir, "vds-drawer.stories.litsx");
+    const originalCwd = process.cwd();
+    const originalWrite = process.stderr.write;
+
+    fs.mkdirSync(srcDir, { recursive: true });
+    fs.writeFileSync(
+      tsconfigPath,
+      JSON.stringify({
+        compilerOptions: {
+          jsx: "preserve",
+          allowJs: true,
+          allowArbitraryExtensions: true,
+          checkJs: true,
+          noEmit: true,
+        },
+        include: ["src/**/*", "global.d.ts"],
+      }),
+    );
+    fs.writeFileSync(globalsPath, TEMP_JSX_GLOBALS_DTS);
+    fs.writeFileSync(
+      storyPath,
+      [
+        "type VdsDrawerStoryProps = {",
+        "  defaultOpen?: boolean;",
+        "  heading?: string;",
+        "  description?: string;",
+        "};",
+        "",
+        "const VdsDrawerStory = ({",
+        "  defaultOpen = false,",
+        "  heading = \"\",",
+        "  description = \"\",",
+        "}: VdsDrawerStoryProps) => {",
+        "  return <section>{heading}{description}{String(defaultOpen)}</section>;",
+        "};",
+        "",
+        "export const Playground = {",
+        "  render: (args: VdsDrawerStoryProps) => (",
+        "    <VdsDrawerStory",
+        "      defaultOpen={args.defaultOpen}",
+        "      heading={args.heading}",
+        "      description={args.description}",
+        "    />",
+        "  ),",
+        "};",
+        "",
+      ].join("\n"),
+    );
+
+    process.stderr.write = () => true;
+
+    try {
+      process.chdir(tempDir);
+      assert.equal(runLitsxTypecheck(["-p", "jsconfig.json", "--noEmit"]), 0);
+    } finally {
+      process.chdir(originalCwd);
+      process.stderr.write = originalWrite;
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  }, 20_000);
+
   it("typechecks a LitSX-authored .litsx.jsx project end-to-end", () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-typecheck-valid-litsx-jsx-"));
     const tsconfigPath = path.join(tempDir, "tsconfig.json");
