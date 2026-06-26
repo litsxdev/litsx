@@ -109,6 +109,14 @@ function createPropsObjectExpression(bindingInfo, propertyMap = new Map()) {
   return t.objectExpression(properties);
 }
 
+function isObjectDestructuringInitializer(refPath) {
+  return (
+    refPath.parentPath?.isVariableDeclarator() &&
+    refPath.parentKey === "init" &&
+    t.isObjectPattern(refPath.parentPath.node.id)
+  );
+}
+
 export function transformJSXExpressions(jsxPath, bindings, state = null) {
   const localNames = Array.from(bindings.keys());
 
@@ -255,7 +263,11 @@ export function replaceParamReferences(functionPath, bindings, propertyMap = new
           return;
         }
 
-        refPath.replaceWith(createPropsObjectExpression(bindingInfo, propertyMap) ?? t.thisExpression());
+        refPath.replaceWith(
+          isObjectDestructuringInitializer(refPath)
+            ? t.thisExpression()
+            : createPropsObjectExpression(bindingInfo, propertyMap) ?? t.thisExpression()
+        );
         return;
       }
 
