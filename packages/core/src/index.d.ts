@@ -374,6 +374,14 @@ export declare function useRef<T>(
  */
 export declare function useId(): string;
 /**
+ * Return a stable identifier for this authored callsite.
+ *
+ * LitSX tooling injects callsite metadata so this value is stable across SSR
+ * and client hydration and does not depend on render order or instance order.
+ * Use it for resource/cache/preload identity, not for unique DOM ids.
+ */
+export declare function useStableId(): string;
+/**
  * Run a callback ref through the component lifecycle.
  */
 export declare function useCallbackRef(

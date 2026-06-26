@@ -235,6 +235,31 @@ function assignHostArgument(callPath, state, t) {
   return true;
 }
 
+function createCallMetadata(callPath, state, t, helperName) {
+  const factory = state.callMetadataByHelper?.get(helperName);
+  if (typeof factory !== "function") {
+    return null;
+  }
+
+  return factory(callPath, state, t);
+}
+
+function appendHelperMetadataArgument(callPath, state, t, helperName) {
+  const metadata = createCallMetadata(callPath, state, t, helperName);
+  if (!metadata) {
+    return false;
+  }
+
+  const expectedIndex = 1;
+  const existing = callPath.node.arguments[expectedIndex];
+  if (existing && t.isNodesEquivalent(existing, metadata)) {
+    return false;
+  }
+
+  callPath.node.arguments.splice(expectedIndex, 0, metadata);
+  return true;
+}
+
 function processRuntimeCall(callPath, state, t, options) {
   const markHelperUsage = options ? options.markHelperUsage : undefined;
 
@@ -245,6 +270,7 @@ function processRuntimeCall(callPath, state, t, options) {
       state.usedHelpers.add(helperName);
     }
     const assigned = assignHostArgument(callPath, state, t);
+    appendHelperMetadataArgument(callPath, state, t, helperName);
     if (markHelperUsage) {
       state.prepareNeeded = true;
       markHelperUsage(helperName);
@@ -530,6 +556,7 @@ export function createRuntimeHooksTransform({
   runtimeModule,
   importSources,
   helperNames,
+  callMetadataByHelper,
 }) {
   if (!pluginName) {
     throw new Error("createRuntimeHooksTransform requires pluginName.");
@@ -546,6 +573,9 @@ export function createRuntimeHooksTransform({
 
   const importSourceSet = new Set(importSources);
   const helperSet = new Set(helperNames);
+  const resolvedCallMetadataByHelper = callMetadataByHelper instanceof Map
+    ? callMetadataByHelper
+    : new Map(Object.entries(callMetadataByHelper || {}));
 
   return function runtimeHooksTransform(api) {
     api.assertVersion(7);
@@ -559,6 +589,7 @@ export function createRuntimeHooksTransform({
             state.runtimeModule = runtimeModule;
             state.importSourceSet = importSourceSet;
             state.helperSet = helperSet;
+            state.callMetadataByHelper = resolvedCallMetadataByHelper;
             state.hookIdentifiers = new Map();
             state.runtimeNamespaceBindings = new Set();
             state.runtimeDefaultBindings = new Set();

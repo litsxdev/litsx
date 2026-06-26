@@ -8,6 +8,14 @@ export function useIdImpl(host) {
   return getController(host).resolveId();
 }
 
+export function useStableIdImpl(_host, callsiteId) {
+  if (typeof callsiteId === "string" && callsiteId.length > 0) {
+    return callsiteId;
+  }
+
+  return "litsx-stable-untransformed";
+}
+
 export function useCallbackRefImpl(host, getTarget, callback, deps) {
   if (typeof getTarget !== "function") {
     throw new TypeError("useCallbackRef expects a getter function");

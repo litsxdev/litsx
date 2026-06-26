@@ -23,7 +23,7 @@ The package also exposes `@litsx/core/jsx-runtime` and `@litsx/core/jsx-dev-runt
   - `useTransition`, `startTransition`, `useDeferredValue`
 - Host and ref primitives:
   - `useHost`, `useHostContent`, `useTextContent`, `useSlot`
-  - `useRef`, `useCallbackRef`, `useExpose`, `useId`
+  - `useRef`, `useCallbackRef`, `useExpose`, `useId`, `useStableId`
   - `useMemoValue`, `useStableCallback`, `useEvent`, `useEmit`, `usePrevious`
   - `useExternalStore`, `useStyle`
 - Async and error primitives:
@@ -85,3 +85,17 @@ Layout work runs immediately during `hostUpdated()`, while passive effects are d
 - You can mix manual registrations and transformed ones. Each Lit element instance gets its own `EffectsController` behind the scenes.
 
 The helpers are framework agnostic: they only assume that the host object exposes Lit’s controller lifecycle (`addController`, `hostUpdated`, `hostDisconnected`).
+
+## Stable Callsite Identity
+
+`useStableId()` returns an identifier for the authored callsite. The LitSX transform rewrites:
+
+```jsx
+const resourceKey = useStableId();
+```
+
+into a runtime call with hidden callsite metadata derived from the authored file and source position. The generated value is stable for that callsite across SSR and client hydration, does not depend on component instance order, and does not use runtime heuristics such as stack traces, function names, or `Function.toString()`.
+
+Use `useStableId()` for resource identity: cache keys, preload keys, serialized resource records, i18n message slots, or hydration metadata that must line up between server and client.
+
+Do not use `useStableId()` when you need unique DOM ids for multiple instances of the same component. Every instance of the same authored callsite receives the same value by design. Use `useId()` for instance-local DOM ids and accessibility relationships. `useId()` follows hook order within a host instance; `useStableId()` follows the authored callsite.

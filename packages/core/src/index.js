@@ -45,6 +45,7 @@ export {
   useDeferredValue,
   useRef,
   useId,
+  useStableId,
   useCallbackRef,
   useExpose,
   useExternalStore,

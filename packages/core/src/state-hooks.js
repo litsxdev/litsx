@@ -13,6 +13,7 @@ import {
   useExternalStoreImpl,
   useIdImpl,
   useRefImpl,
+  useStableIdImpl,
 } from "./state-imperative-hooks.js";
 
 /**
@@ -314,6 +315,19 @@ export function useRef(host, initialValue) {
  */
 export function useId(host) {
   return useIdImpl(host);
+}
+
+/**
+ * Return a stable identifier for the authored callsite.
+ * LitSX tooling injects callsite metadata so the returned value is stable across
+ * SSR and client hydration and does not depend on render order or instance
+ * order. Use this for resource/cache/preload identity, not for unique DOM ids.
+ * @param {import('lit').ReactiveControllerHost} host
+ * @param {string} [callsiteId]
+ * @returns {string}
+ */
+export function useStableId(host, callsiteId) {
+  return useStableIdImpl(host, callsiteId);
 }
 
 /**

@@ -13,6 +13,7 @@ import {
   useRef,
   useOnConnect,
   useId,
+  useStableId,
   useOnCommit,
   useEvent,
   useEmit,
@@ -1355,6 +1356,18 @@ describe("litsx effects controller", () => {
     assert.strictEqual(firstB, nextB);
     assert.notStrictEqual(firstA, firstB);
     assert.notStrictEqual(firstA, secondA);
+  });
+
+  it("returns stable callsite ids independent of host instances", () => {
+    const firstHost = new TestHost();
+    const secondHost = new TestHost();
+
+    assert.strictEqual(useStableId(firstHost, "litsx-stable-demo"), "litsx-stable-demo");
+    assert.strictEqual(useStableId(secondHost, "litsx-stable-demo"), "litsx-stable-demo");
+    assert.notStrictEqual(
+      useStableId(firstHost, "litsx-stable-demo"),
+      useStableId(firstHost, "litsx-stable-other"),
+    );
   });
 
   it("registers direct custom element constructors in the scoped registry", () => {

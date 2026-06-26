@@ -120,6 +120,33 @@ describe("@litsx/compiler", () => {
     assert.doesNotMatch(result.code, /this\.props/);
   }, 20000);
 
+  it("injects stable callsite metadata for useStableId", () => {
+    const source = [
+      'import { useStableId } from "@litsx/core";',
+      "export function StableIds() {",
+      "  const first = useStableId();",
+      "  const second = useStableId();",
+      "  return <div>{first}:{second}</div>;",
+      "}",
+    ].join("\n");
+    const options = {
+      filename: "/virtual/components/stable-ids.litsx",
+      sourceMaps: false,
+    };
+
+    const firstResult = transformLitsxSync(source, options);
+    const secondResult = transformLitsxSync(source, options);
+    const ids = [...firstResult.code.matchAll(/useStableId\(this, "([^"]+)"\)/g)]
+      .map((match) => match[1]);
+    const nextIds = [...secondResult.code.matchAll(/useStableId\(this, "([^"]+)"\)/g)]
+      .map((match) => match[1]);
+
+    assert.strictEqual(ids.length, 2);
+    assert.deepStrictEqual(ids, nextIds);
+    assert.notStrictEqual(ids[0], ids[1]);
+    assert.ok(ids.every((id) => id.startsWith("litsx-stable-")));
+  }, 20000);
+
   it("strips top-level TypeScript declarations from compiled .litsx output", () => {
     const source = [
       "interface ButtonProps {",

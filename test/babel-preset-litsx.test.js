@@ -66,6 +66,35 @@ describe("@litsx/babel-preset-litsx", () => {
     assert.strictEqual(presetResult.code, pluginResult.code);
   });
 
+  it("injects stable callsite metadata for useStableId in render and custom hooks", () => {
+    const source = [
+      'import { useStableId } from "@litsx/core";',
+      "function useResourceKey() {",
+      "  return useStableId();",
+      "}",
+      "export function StableIds() {",
+      "  const first = useStableId();",
+      "  const second = useResourceKey();",
+      "  return <div>{first}:{second}</div>;",
+      "}",
+    ].join("\n");
+
+    const result = transformFromAstSync(parser.parse(source, { sourceType: "module" }), source, {
+      configFile: false,
+      babelrc: false,
+      filename: "/virtual/stable-ids.litsx",
+      presets: [[nativePreset, { jsxTemplate: false }]],
+    });
+
+    const ids = [...result.code.matchAll(/useStableId\((?:this|_host), "([^"]+)"\)/g)]
+      .map((match) => match[1]);
+
+    assert.match(result.code, /function useResourceKey\(_host\)/);
+    assert.strictEqual(ids.length, 2);
+    assert.notStrictEqual(ids[0], ids[1]);
+    assert.ok(ids.every((id) => id.startsWith("litsx-stable-")));
+  });
+
   it("detects source features so the compiler can skip unnecessary native plugin passes", () => {
     const plainSource = [
       "export const Greeting = ({ label }) => {",
@@ -93,6 +122,11 @@ describe("@litsx/babel-preset-litsx", () => {
       domRefs: true,
       scopedElements: true,
     });
+
+    assert.strictEqual(
+      detectLitsxSourceFeatures('import { useStableId } from "@litsx/core"; useStableId();', {}).hooks,
+      true,
+    );
 
     assert.deepStrictEqual(
       detectLitsxSourceFeatures(
