@@ -1,5 +1,11 @@
 # litsx
 
+## 0.5.2
+
+### Patch Changes
+
+- d7cb8a1: Add `useStableId()` as a public callsite-stable identity primitive, with LitSX transform support that injects deterministic authored callsite metadata for SSR/client consistency.
+
 ## 0.5.1
 
 ### Patch Changes

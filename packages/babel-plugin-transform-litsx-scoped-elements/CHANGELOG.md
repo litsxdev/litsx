@@ -1,5 +1,15 @@
 # @litsx/babel-plugin-transform-litsx-scoped-elements
 
+## 0.4.3
+
+### Patch Changes
+
+- 05bb013: Resolve scoped element candidates declared as top-level aliases of namespace imports.
+- Updated dependencies [73790b9]
+- Updated dependencies [d7cb8a1]
+  - @litsx/typescript-session@0.2.3
+  - @litsx/babel-plugin-shared-hooks@0.3.1
+
 ## 0.4.2
 
 ### Patch Changes

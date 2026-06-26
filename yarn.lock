@@ -991,7 +991,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@litsx/babel-plugin-shared-hooks@npm:^0.3.0, @litsx/babel-plugin-shared-hooks@workspace:packages/babel-plugin-shared-hooks":
+"@litsx/babel-plugin-shared-hooks@npm:^0.3.0, @litsx/babel-plugin-shared-hooks@npm:^0.3.1, @litsx/babel-plugin-shared-hooks@workspace:packages/babel-plugin-shared-hooks":
   version: 0.0.0-use.local
   resolution: "@litsx/babel-plugin-shared-hooks@workspace:packages/babel-plugin-shared-hooks"
   dependencies:
@@ -1002,7 +1002,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@litsx/babel-plugin-transform-jsx-html-template@npm:^0.3.5, @litsx/babel-plugin-transform-jsx-html-template@workspace:packages/babel-plugin-transform-jsx-html-template":
+"@litsx/babel-plugin-transform-jsx-html-template@npm:^0.3.5, @litsx/babel-plugin-transform-jsx-html-template@npm:^0.3.6, @litsx/babel-plugin-transform-jsx-html-template@workspace:packages/babel-plugin-transform-jsx-html-template":
   version: 0.0.0-use.local
   resolution: "@litsx/babel-plugin-transform-jsx-html-template@workspace:packages/babel-plugin-transform-jsx-html-template"
   dependencies:
@@ -1018,14 +1018,14 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@litsx/babel-plugin-transform-litsx-scoped-elements@npm:^0.4.0, @litsx/babel-plugin-transform-litsx-scoped-elements@npm:^0.4.2, @litsx/babel-plugin-transform-litsx-scoped-elements@workspace:packages/babel-plugin-transform-litsx-scoped-elements":
+"@litsx/babel-plugin-transform-litsx-scoped-elements@npm:^0.4.0, @litsx/babel-plugin-transform-litsx-scoped-elements@npm:^0.4.3, @litsx/babel-plugin-transform-litsx-scoped-elements@workspace:packages/babel-plugin-transform-litsx-scoped-elements":
   version: 0.0.0-use.local
   resolution: "@litsx/babel-plugin-transform-litsx-scoped-elements@workspace:packages/babel-plugin-transform-litsx-scoped-elements"
   dependencies:
     "@babel/core": "npm:^7.29.0"
     "@babel/plugin-syntax-jsx": "npm:^7.28.6"
-    "@litsx/babel-plugin-shared-hooks": "npm:^0.3.0"
-    "@litsx/typescript-session": "npm:^0.2.1"
+    "@litsx/babel-plugin-shared-hooks": "npm:^0.3.1"
+    "@litsx/typescript-session": "npm:^0.2.3"
   peerDependencies:
     "@babel/core": ">=7"
   languageName: unknown
@@ -1040,10 +1040,10 @@ __metadata:
     "@babel/traverse": "npm:^7.28.5"
     "@litsx/authoring": "npm:^0.5.0"
     "@litsx/babel-parser": "npm:^0.2.5"
-    "@litsx/babel-plugin-shared-hooks": "npm:^0.3.0"
-    "@litsx/babel-plugin-transform-jsx-html-template": "npm:^0.3.5"
-    "@litsx/babel-plugin-transform-litsx-scoped-elements": "npm:^0.4.2"
-    "@litsx/typescript-session": "npm:^0.2.1"
+    "@litsx/babel-plugin-shared-hooks": "npm:^0.3.1"
+    "@litsx/babel-plugin-transform-jsx-html-template": "npm:^0.3.6"
+    "@litsx/babel-plugin-transform-litsx-scoped-elements": "npm:^0.4.3"
+    "@litsx/typescript-session": "npm:^0.2.3"
   peerDependencies:
     "@babel/core": ">=7"
   languageName: unknown
@@ -1132,7 +1132,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@litsx/typescript-session@npm:^0.2.1, @litsx/typescript-session@workspace:packages/typescript-session":
+"@litsx/typescript-session@npm:^0.2.1, @litsx/typescript-session@npm:^0.2.3, @litsx/typescript-session@workspace:packages/typescript-session":
   version: 0.0.0-use.local
   resolution: "@litsx/typescript-session@workspace:packages/typescript-session"
   peerDependencies:
@@ -1146,7 +1146,7 @@ __metadata:
   dependencies:
     "@babel/parser": "npm:^7.29.3"
     "@litsx/authoring": "npm:^0.5.0"
-    "@litsx/typescript-session": "npm:^0.2.1"
+    "@litsx/typescript-session": "npm:^0.2.3"
   peerDependencies:
     typescript: ">=5"
   bin:

@@ -1,5 +1,11 @@
 # create-litsx-app
 
+## 0.5.3
+
+### Patch Changes
+
+- d99b2f9: Improve authored Storybook DX by auto-registering imported LitSX components and local story hosts in generated scaffolds, allowing local PascalCase story hosts to be rendered directly with natural JSX props, and materializing bare `props` references as prop snapshots instead of reading a synthetic `this.props` field while preserving destructuring rewrites such as `const { title } = props`.
+
 ## 0.5.2
 
 ### Patch Changes

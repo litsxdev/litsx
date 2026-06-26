@@ -1,5 +1,13 @@
 # @litsx/typescript
 
+## 0.7.1
+
+### Patch Changes
+
+- 73790b9: Resolve `.litsx` and `.litsx.jsx` source module imports without requiring ambient `declare module "*.litsx"` declarations.
+- Updated dependencies [73790b9]
+  - @litsx/typescript-session@0.2.3
+
 ## 0.7.0
 
 ### Minor Changes

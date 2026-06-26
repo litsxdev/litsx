@@ -1,5 +1,21 @@
 # @litsx/babel-preset-litsx
 
+## 0.8.2
+
+### Patch Changes
+
+- 05bb013: Resolve scoped element candidates declared as top-level aliases of namespace imports.
+- d7cb8a1: Add `useStableId()` as a public callsite-stable identity primitive, with LitSX transform support that injects deterministic authored callsite metadata for SSR/client consistency.
+- d99b2f9: Improve authored Storybook DX by auto-registering imported LitSX components and local story hosts in generated scaffolds, allowing local PascalCase story hosts to be rendered directly with natural JSX props, and materializing bare `props` references as prop snapshots instead of reading a synthetic `this.props` field while preserving destructuring rewrites such as `const { title } = props`.
+- Updated dependencies [73790b9]
+- Updated dependencies [05bb013]
+- Updated dependencies [d7cb8a1]
+- Updated dependencies [d99b2f9]
+  - @litsx/typescript-session@0.2.3
+  - @litsx/babel-plugin-transform-litsx-scoped-elements@0.4.3
+  - @litsx/babel-plugin-shared-hooks@0.3.1
+  - @litsx/babel-plugin-transform-jsx-html-template@0.3.6
+
 ## 0.8.1
 
 ### Patch Changes
