@@ -1,6 +1,6 @@
 {
   "name": "@litsx/typescript",
-  "version": "0.7.1",
+  "version": "0.7.2",
   "description": "TypeScript language-service, typecheck, and editor support for LitSX authored syntax",
   "author": "LitSX Team",
   "homepage": "https://litsx.dev/",
@@ -66,7 +66,7 @@
   "dependencies": {
     "@babel/parser": "^7.29.3",
     "@litsx/authoring": "^0.5.0",
-    "@litsx/typescript-session": "^0.2.3"
+    "@litsx/typescript-session": "^0.2.4"
   },
   "peerDependencies": {
     "typescript": ">=5"

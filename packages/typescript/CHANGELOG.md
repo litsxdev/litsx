@@ -1,5 +1,13 @@
 # @litsx/typescript
 
+## 0.7.2
+
+### Patch Changes
+
+- a6c8424: Fix `litsx-tsc` virtualization for `.litsx` modules discovered through transparent module resolution, including projects that still keep a `declare module "*.litsx"` shim. Imported authored modules now pass through the same LitSX source virtualization as root files before TypeScript parses them.
+- Updated dependencies [a6c8424]
+  - @litsx/typescript-session@0.2.4
+
 ## 0.7.1
 
 ### Patch Changes
