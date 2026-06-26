@@ -389,16 +389,21 @@ function resolveParsedCommandLine(rawArgs) {
 
 function createTypecheckSession(parsedCommandLine, projectSession = null) {
   const virtualizationState = createVirtualizationState();
+  const resolvedProjectSession = projectSession || getOrCreateProjectTsSession(parsedCommandLine.__litsxSessionKey, {
+    typescript: ts,
+    parsedCommandLine,
+    transformSourceText(fileName, sourceText) {
+      return virtualizationState.getVirtualizedText(fileName, sourceText);
+    },
+  });
+
   return {
     parsedCommandLine,
     sessionKey: parsedCommandLine.__litsxSessionKey,
     virtualizationState,
     diagnosticsCacheKey: null,
     diagnosticsCacheResult: null,
-    projectSession: projectSession || getOrCreateProjectTsSession(parsedCommandLine.__litsxSessionKey, {
-      typescript: ts,
-      parsedCommandLine,
-    }),
+    projectSession: resolvedProjectSession,
   };
 }
 

@@ -338,13 +338,27 @@ function createSessionBase({
       return this.semanticCaches.get(name);
     },
     setOverlayFile(fileName, sourceText) {
-      this.overlayFiles.set(normalizeFilePath(fileName), sourceText);
+      const normalizedFileName = normalizeFilePath(fileName);
+      if (this.overlayFiles.get(normalizedFileName) === sourceText) {
+        return;
+      }
+      this.overlayFiles.set(normalizedFileName, sourceText);
+      this.invalidate();
     },
     clearOverlayFile(fileName) {
-      this.overlayFiles.delete(normalizeFilePath(fileName));
+      const normalizedFileName = normalizeFilePath(fileName);
+      if (!this.overlayFiles.has(normalizedFileName)) {
+        return;
+      }
+      this.overlayFiles.delete(normalizedFileName);
+      this.invalidate();
     },
     clearOverlayFiles() {
+      if (this.overlayFiles.size === 0) {
+        return;
+      }
       this.overlayFiles.clear();
+      this.invalidate();
     },
   };
 }
@@ -410,6 +424,9 @@ function attachSourceFileVersion(sourceFile, version) {
 
 function createProjectHost(session, config) {
   const ts = session.typescript;
+  const transformSourceText = typeof config.transformSourceText === "function"
+    ? config.transformSourceText
+    : null;
   const host =
     typeof ts.createIncrementalCompilerHost === "function"
       ? ts.createIncrementalCompilerHost(config.parsedCommandLine.options)
@@ -438,7 +455,13 @@ function createProjectHost(session, config) {
       return sourceText;
     }
 
-    return getCachedSourceText(session, fileName, sourceText, "project", null);
+    return getCachedSourceText(
+      session,
+      fileName,
+      sourceText,
+      transformSourceText ? "project:transform" : "project",
+      transformSourceText,
+    );
   };
 
   host.fileExists = (fileName) => {
@@ -491,8 +514,8 @@ function createProjectHost(session, config) {
         sourceText,
         languageVersion,
         scriptKind,
-        "project",
-        null,
+        transformSourceText ? "project:transform" : "project",
+        transformSourceText,
       ),
       sourceText,
     );
@@ -511,6 +534,9 @@ function createProjectHost(session, config) {
 
 function createStandaloneHost(session, config) {
   const ts = session.typescript;
+  const transformSourceText = typeof config.transformSourceText === "function"
+    ? config.transformSourceText
+    : null;
   const host = ts.createCompilerHost(config.compilerOptions, true);
   const originalReadFile = host.readFile.bind(host);
   const originalFileExists = host.fileExists.bind(host);
@@ -521,7 +547,10 @@ function createStandaloneHost(session, config) {
     if (session.overlayFiles.has(normalizedPath)) {
       return session.overlayFiles.get(normalizedPath);
     }
-    return getCachedDiskSourceText(filePath, originalReadFile);
+    const sourceText = getCachedDiskSourceText(filePath, originalReadFile);
+    return typeof sourceText === "string" && transformSourceText
+      ? getCachedSourceText(session, filePath, sourceText, "standalone:transform", transformSourceText)
+      : sourceText;
   };
 
   host.fileExists = (filePath) => {
@@ -544,12 +573,18 @@ function createStandaloneHost(session, config) {
         inferScriptKind(ts, filePath),
       );
     }
-    return getCachedDiskSourceFile(
+    const sourceText = getCachedDiskSourceText(filePath, originalReadFile);
+    if (typeof sourceText !== "string") {
+      return undefined;
+    }
+    return getCachedSourceFile(
+      session,
       filePath,
+      sourceText,
       languageVersion,
-      ts.createSourceFile,
-      originalReadFile,
-      (nextFilePath) => inferScriptKind(ts, nextFilePath),
+      inferScriptKind(ts, filePath),
+      transformSourceText ? "standalone:transform" : "standalone",
+      transformSourceText,
     );
   };
 
@@ -566,6 +601,9 @@ function createStandaloneHost(session, config) {
 
 function createInMemoryHost(session, config) {
   const ts = session.typescript;
+  const transformSourceText = typeof config.transformSourceText === "function"
+    ? config.transformSourceText
+    : null;
   const files = new Map(
     Object.entries(config.files || {}).map(([filePath, sourceText]) => [
       normalizeFilePath(filePath),
@@ -581,9 +619,12 @@ function createInMemoryHost(session, config) {
       const overlaySource = session.overlayFiles.get(normalizedPath);
       const fileSource = overlaySource ?? files.get(normalizedPath);
       if (fileSource == null) return undefined;
+      const sourceText = overlaySource == null && transformSourceText
+        ? getCachedSourceText(session, normalizedPath, fileSource, "in-memory:transform", transformSourceText)
+        : fileSource;
       return ts.createSourceFile(
         normalizedPath,
-        fileSource,
+        sourceText,
         languageVersion,
         true,
         inferScriptKind(ts, normalizedPath),
@@ -591,7 +632,14 @@ function createInMemoryHost(session, config) {
     },
     readFile(filePath) {
       const normalizedPath = normalizeFilePath(filePath);
-      return session.overlayFiles.get(normalizedPath) ?? files.get(normalizedPath);
+      const overlaySource = session.overlayFiles.get(normalizedPath);
+      if (overlaySource != null) {
+        return overlaySource;
+      }
+      const fileSource = files.get(normalizedPath);
+      return typeof fileSource === "string" && transformSourceText
+        ? getCachedSourceText(session, normalizedPath, fileSource, "in-memory:transform", transformSourceText)
+        : fileSource;
     },
     fileExists(filePath) {
       const normalizedPath = normalizeFilePath(filePath);
