@@ -1,0 +1,7 @@
+import { useScopedResource } from "./resource-hooks.litsx";
+
+export function ResourceConsumer({ name = "checkout" }) {
+  const resource = useScopedResource(name);
+  return <div>{resource}</div>;
+}
+

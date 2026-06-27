@@ -198,6 +198,12 @@ function getHostMiddlewareEntries(host) {
  * deduplicated. Resource-level dedupe belongs in each structural hook runtime.
  * Entries are composed in registration order. For every lifecycle method, the
  * generated host's base implementation is invoked as the final chain link.
+ *
+ * SSR/client consistency comes from the compiled structural plan: the same
+ * authored file and callsite path produce the same entry ids and paths on both
+ * sides. This generic runtime does not serialize arbitrary entry state; hooks
+ * that own serializable resources should use their stable callsite metadata as
+ * the key for their own SSR payloads.
  */
 export class HostMiddlewareRuntime {
   constructor(host, entries = []) {
@@ -276,7 +282,7 @@ export class HostMiddlewareRuntime {
         return dispatch(index + 1);
       };
 
-      return middleware(this.host, entry.state, next, args, entry);
+      return middleware(this.host, entry.state, next, args, entry.meta, entry);
     };
 
     return dispatch(0);

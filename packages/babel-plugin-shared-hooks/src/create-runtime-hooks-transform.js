@@ -102,9 +102,44 @@ function addStructuralDependenciesToCurrentPlan(state, hookInfo) {
   }
   const deps = state.structuralHookDependencies.get(hookInfo.label);
   if (!deps || deps.length === 0) {
+    const importedDependencyArg = getImportedStructuralHookDependencyArgument(hookInfo.calleePath, state, hookInfo.t);
+    if (!importedDependencyArg) {
+      return;
+    }
+    state.usedHelpers.add("getStructuralHookEntries");
+    state.activeStructuralEntries.push({
+      type: "spread",
+      argument: hookInfo.t.callExpression(hookInfo.t.identifier("getStructuralHookEntries"), [
+        importedDependencyArg,
+      ]),
+    });
     return;
   }
   state.activeStructuralEntries.push(...deps);
+}
+
+function getImportedStructuralHookDependencyArgument(calleePath, state, t) {
+  if (!calleePath?.node) {
+    return null;
+  }
+
+  if (calleePath.isIdentifier()) {
+    const binding = calleePath.scope.getBinding(calleePath.node.name);
+    if (!binding?.path?.isImportSpecifier()) {
+      return null;
+    }
+    return isStructuralHookReference(calleePath, state)
+      ? t.identifier(calleePath.node.name)
+      : null;
+  }
+
+  if (calleePath.isMemberExpression({ computed: false })) {
+    return isStructuralHookReference(calleePath, state)
+      ? t.cloneNode(calleePath.node, true)
+      : null;
+  }
+
+  return null;
 }
 
 function getImportedStructuralCustomHookDependencyArgument(calleePath, state, t) {
@@ -216,6 +251,22 @@ function attachStructuralCustomHookMetadata(programPath, state, t) {
       const statementPath = binding.path.getStatementParent();
       statementPath?.insertAfter(statement);
     }
+    state.usedHelpers.add("defineStructuralHookEntries");
+  }
+}
+
+function attachStructuralHookMetadata(programPath, state, t) {
+  for (const [hookName, entries] of state.structuralHookDependencies) {
+    if (!entries || entries.length === 0) {
+      continue;
+    }
+    const binding = programPath.scope.getBinding(hookName);
+    if (!binding?.path?.isVariableDeclarator()) {
+      continue;
+    }
+    const statement = createDefineStructuralHookEntriesStatement(hookName, entries, t);
+    const statementPath = binding.path.getStatementParent();
+    statementPath?.insertAfter(statement);
     state.usedHelpers.add("defineStructuralHookEntries");
   }
 }
@@ -400,7 +451,9 @@ function transformCustomHookDefinition(binding, state, t) {
   const hostId = ensureHostParamIdentifier(fnPath, state, t);
   state.processedCustomHooks.add(fnPath.node);
 
+  const previousStructuralEntries = state.activeStructuralEntries;
   pushHostExpression(state, hostId);
+  state.activeStructuralEntries = null;
   state.activeCustomHookBinding = binding;
   state.structuralPathStack.push(binding.identifier?.name || "custom-hook");
   fnPath.traverse({
@@ -410,6 +463,7 @@ function transformCustomHookDefinition(binding, state, t) {
   });
   state.structuralPathStack.pop();
   state.activeCustomHookBinding = null;
+  state.activeStructuralEntries = previousStructuralEntries;
   popHostExpression(state);
 }
 
@@ -523,6 +577,8 @@ function getStructuralHookCallInfo(callPath, calleePath, state, t) {
     }
     return {
       label: property.node.name,
+      calleePath,
+      t,
       definition: t.memberExpression(
         t.identifier(object.node.name),
         t.identifier(property.node.name)
@@ -537,6 +593,8 @@ function getStructuralHookCallInfo(callPath, calleePath, state, t) {
   if (state.structuralHookIdentifiers?.has(name)) {
     return {
       label: name,
+      calleePath,
+      t,
       definition: t.identifier(name),
     };
   }
@@ -547,6 +605,8 @@ function getStructuralHookCallInfo(callPath, calleePath, state, t) {
   state.structuralHookIdentifiers.add(name);
   return {
     label: name,
+    calleePath,
+    t,
     definition: t.identifier(name),
   };
 }
@@ -1232,6 +1292,7 @@ export function createRuntimeHooksTransform({
           },
           exit(path, state) {
             processDeclaredCustomHooks(path, state, t);
+            attachStructuralHookMetadata(path, state, t);
             attachStructuralCustomHookMetadata(path, state, t);
             ensurePrepareImport(path, state, t);
             mergeRuntimeImports(path, state, t);

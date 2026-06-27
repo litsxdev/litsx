@@ -1,0 +1,27 @@
+import { defineHook } from "@litsx/core";
+
+export const useResource = defineHook({
+  setup(_host, args, meta) {
+    return {
+      key: args[0],
+      path: meta.callsitePath,
+    };
+  },
+  use(_host, state, args) {
+    state.key = args[0];
+    return state.key;
+  },
+  middlewares: {
+    connectedCallback(_host, state, next) {
+      state.connected = true;
+      return next();
+    },
+  },
+});
+
+export const useScopedResource = defineHook({
+  use(_host, _state, args) {
+    return useResource(`scope:${args[0]}`);
+  },
+});
+

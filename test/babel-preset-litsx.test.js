@@ -154,6 +154,8 @@ describe("@litsx/babel-preset-litsx", () => {
     assert.match(result.code, /callsitePath: \["useMessage", "litsx-structural-[^"]+"\]/);
     assert.match(result.code, /class Greeting extends HostMiddlewareMixin\(LitElement\)/);
     assert.match(result.code, /useMessage\(this, 'hello'\)|useMessage\(this, "hello"\)/);
+    const staticEntries = result.code.match(/static structuralEntries = \[([\s\S]*?)\];/)?.[1] ?? "";
+    assert.strictEqual([...staticEntries.matchAll(/definition: useResource/g)].length, 1);
   });
 
   it("compiles imported structural hooks discovered from authored modules", () => {
@@ -362,6 +364,45 @@ describe("@litsx/babel-preset-litsx", () => {
     assert.notStrictEqual(firstIds[0], firstIds[1]);
   });
 
+  it("keeps structural callsite identity and paths consistent for SSR and client transforms", () => {
+    const source = [
+      'import { defineHook } from "@litsx/core";',
+      "const useResource = defineHook({",
+      "  use(_host, _state, args) {",
+      "    return args[0];",
+      "  },",
+      "});",
+      "const useScoped = defineHook({",
+      "  use(_host, _state, args) {",
+      "    return useResource(`scope:${args[0]}`);",
+      "  },",
+      "});",
+      "export function Panel({ name = 'checkout' }) {",
+      "  const value = useScoped(name);",
+      "  return <div>{value}</div>;",
+      "}",
+    ].join("\n");
+    const filename = "/virtual/ssr-client-structural.litsx";
+    const transform = () => transformFromAstSync(parser.parse(source, { sourceType: "module" }), source, {
+      configFile: false,
+      babelrc: false,
+      filename,
+      presets: [[nativePreset, { jsxTemplate: false }]],
+    });
+
+    const ssr = transform();
+    const client = transform();
+    const getEntries = (code) => [...code.matchAll(/callsiteId: "(litsx-structural-[^"]+)"[\s\S]*?callsitePath: \[([^\]]+)\]/g)]
+      .map((match) => ({
+        id: match[1],
+        path: match[2],
+      }));
+
+    assert.deepStrictEqual(getEntries(ssr.code), getEntries(client.code));
+    assert.match(ssr.code, /callsitePath: \["useScoped", "use", "litsx-structural-[^"]+"\]/);
+    assert.match(ssr.code, /callsitePath: \["litsx-structural-[^"]+"\]/);
+  });
+
   it("compiles structural hooks nested inside defineHook use readers", () => {
     const source = [
       'import { defineHook } from "@litsx/core";',
@@ -395,6 +436,34 @@ describe("@litsx/babel-preset-litsx", () => {
     assert.match(result.code, /useStructuralEntry\(host, 0, "litsx-structural-[^"]+", useInner, \[args\[0\]\]/);
     assert.match(result.code, /callsitePath: \["useOuter", "use", "litsx-structural-[^"]+"\]/);
     assert.match(result.code, /useStructuralEntry\(this, 1, "litsx-structural-[^"]+", useOuter, \['ok'\]|\["ok"\]/);
+  });
+
+  it("compiles the structural hooks authoring fixture end-to-end", () => {
+    const fixturePath = path.resolve("test/fixtures/structural-hooks/consumer.litsx");
+    const hooksPath = path.resolve("test/fixtures/structural-hooks/resource-hooks.litsx");
+    const source = fs.readFileSync(fixturePath, "utf8");
+    const hooksSource = fs.readFileSync(hooksPath, "utf8");
+
+    const result = transformFromAstSync(parser.parse(source, { sourceType: "module" }), source, {
+      configFile: false,
+      babelrc: false,
+      filename: fixturePath,
+      presets: [[nativePreset, { jsxTemplate: false }]],
+    });
+    const hooksResult = transformFromAstSync(parser.parse(hooksSource, { sourceType: "module" }), hooksSource, {
+      configFile: false,
+      babelrc: false,
+      filename: hooksPath,
+      presets: [[nativePreset, { jsxTemplate: false }]],
+    });
+
+    assert.match(result.code, /import \{ useScopedResource \} from "\.\/resource-hooks\.litsx";/);
+    assert.match(result.code, /class ResourceConsumer extends HostMiddlewareMixin\(LitElement\)/);
+    assert.match(result.code, /static structuralEntries = \[\{\s*id: "litsx-structural-[^"]+"/);
+    assert.match(result.code, /definition: useScopedResource/);
+    assert.match(result.code, /useStructuralEntry\(this, 0, "litsx-structural-[^"]+", useScopedResource, \[this\.name\]/);
+    assert.match(hooksResult.code, /defineStructuralHookEntries\(useScopedResource, \[/);
+    assert.match(hooksResult.code, /useStructuralEntry\(_host, 0, "litsx-structural-[^"]+", useResource, \[`scope:\$\{args\[0\]\}`\]/);
   });
 
   it("rejects structural hook aliases so callsites stay static", () => {

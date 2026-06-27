@@ -201,7 +201,7 @@ describe("HostMiddlewareRuntime", () => {
         args: sharedArgs,
         state: { value: "first" },
         middlewares: {
-          connectedCallback(_host, state, next, _args, nextEntry) {
+          connectedCallback(_host, state, next, _args, _meta, nextEntry) {
             calls.push([nextEntry.callsiteIndex, nextEntry.callsiteId, state.value]);
             return next();
           },
@@ -213,7 +213,7 @@ describe("HostMiddlewareRuntime", () => {
         args: sharedArgs,
         state: { value: "second" },
         middlewares: {
-          connectedCallback(_host, state, next, _args, nextEntry) {
+          connectedCallback(_host, state, next, _args, _meta, nextEntry) {
             calls.push([nextEntry.callsiteIndex, nextEntry.callsiteId, state.value]);
             return next();
           },
@@ -402,6 +402,54 @@ describe("HostMiddlewareRuntime", () => {
     });
   });
 
+  it("passes structural metadata to lifecycle middlewares", () => {
+    const calls = [];
+    const structuralHook = defineHook({
+      setup(_host, args, meta) {
+        return {
+          value: args[0],
+          setupPath: meta.callsitePath,
+        };
+      },
+      middlewares: {
+        connectedCallback(_host, state, next, args, meta, nextEntry) {
+          calls.push({
+            args,
+            value: state.value,
+            setupPath: state.setupPath,
+            middlewarePath: meta.callsitePath,
+            id: nextEntry.callsiteId,
+          });
+          return next();
+        },
+      },
+      use(_host, state) {
+        return state.value;
+      },
+    });
+    const runtime = new HostMiddlewareRuntime({}, [
+      {
+        callsiteId: "callsite-meta",
+        callsitePath: ["Component", "useMeta"],
+        definition: structuralHook,
+        args: ["ready"],
+      },
+    ]);
+
+    runtime.connectedCallback(["host-arg"], () => calls.push({ base: true }));
+
+    assert.deepStrictEqual(calls, [
+      {
+        args: ["host-arg"],
+        value: "ready",
+        setupPath: ["Component", "useMeta"],
+        middlewarePath: ["Component", "useMeta"],
+        id: "callsite-meta",
+      },
+      { base: true },
+    ]);
+  });
+
   it("lazily creates and refreshes structural entries from compiled reads", () => {
     const host = {};
     const structuralHook = defineHook({
@@ -448,6 +496,67 @@ describe("HostMiddlewareRuntime", () => {
       path: ["Host", "structural-a"],
     });
     assert.strictEqual(host.__litsxHostMiddlewareRuntime.entries.length, 1);
+  });
+
+  it("creates deterministic structural state for matching SSR and client plans", () => {
+    const structuralHook = defineHook({
+      setup(_host, args, meta, nextEntry) {
+        return {
+          initial: args[0],
+          id: nextEntry.callsiteId,
+          path: meta.callsitePath,
+        };
+      },
+      use(_host, state, args, meta) {
+        return {
+          initial: state.initial,
+          current: args[0],
+          path: meta.callsitePath,
+        };
+      },
+    });
+    const entries = [
+      {
+        callsiteIndex: 0,
+        callsiteId: "outer",
+        callsitePath: ["outer"],
+        definition: structuralHook,
+        args: ["outer-initial"],
+      },
+      {
+        callsiteIndex: 1,
+        callsiteId: "nested",
+        callsitePath: ["useOuter", "use", "nested"],
+        definition: structuralHook,
+        args: ["nested-initial"],
+      },
+    ];
+    const createRuntime = () => new HostMiddlewareRuntime({}, entries);
+    const serverRuntime = createRuntime();
+    const clientRuntime = createRuntime();
+
+    assert.deepStrictEqual(
+      serverRuntime.entries.map((entry) => ({
+        id: entry.callsiteId,
+        path: entry.callsitePath,
+        state: entry.state,
+      })),
+      clientRuntime.entries.map((entry) => ({
+        id: entry.callsiteId,
+        path: entry.callsitePath,
+        state: entry.state,
+      })),
+    );
+    assert.deepStrictEqual(clientRuntime.read(1, ["nested-current"]), {
+      initial: "nested-initial",
+      current: "nested-current",
+      path: ["useOuter", "use", "nested"],
+    });
+    assert.deepStrictEqual(clientRuntime.read(0, ["outer-current"]), {
+      initial: "outer-initial",
+      current: "outer-current",
+      path: ["outer"],
+    });
   });
 
   it("resolves compiled reads by callsite id when module-local indexes collide", () => {

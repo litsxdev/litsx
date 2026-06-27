@@ -215,18 +215,70 @@ export type LitsxHostMiddlewareLifecycleMethod =
 
 export type LitsxHostMiddlewareNext<TResult = unknown> = () => TResult;
 
-export type LitsxHostMiddleware<TResult = unknown> = (
+/**
+ * Compiler-provided metadata for one authored structural-hook callsite.
+ *
+ * `callsitePath` is the stable public field. It can be used for resource
+ * identity, diagnostics, SSR records, and debug tooling. Other fields are
+ * informational unless documented by LitSX.
+ */
+export interface LitsxStructuralMeta {
+  /**
+   * Stable authored expansion path for this structural callsite.
+   */
+  callsitePath: string[];
+  [key: string]: unknown;
+}
+
+/**
+ * Lifecycle middleware for a structural hook.
+ *
+ * Middleware wraps the host lifecycle method in structural entry order.
+ * `next()` invokes the next middleware and eventually the host base
+ * implementation. Middleware may run logic before `next()`, after `next()`,
+ * or both. Calling `next()` more than once is an error.
+ */
+export type LitsxHostMiddleware<TResult = unknown, TState = unknown> = (
   host: unknown,
-  state: unknown,
+  state: TState,
   next: LitsxHostMiddlewareNext<TResult>,
   args: unknown[],
+  meta: LitsxStructuralMeta,
   entry: LitsxStructuralEntry
 ) => TResult;
 
-export type LitsxHostMiddlewareMap = Partial<
-  Record<LitsxHostMiddlewareLifecycleMethod, LitsxHostMiddleware>
+export type LitsxHostMiddlewareMap<TState = unknown> = Partial<
+  Record<LitsxHostMiddlewareLifecycleMethod, LitsxHostMiddleware<unknown, TState>>
 >;
 
+/**
+ * Public structural-hook definition.
+ *
+ * Structural hooks are consumed like ordinary hooks:
+ *
+ * ```tsx
+ * const value = useSomething(args);
+ * ```
+ *
+ * The LitSX compiler rewrites that authored callsite to the host middleware
+ * runtime. Component authors do not manually register structural entries.
+ *
+ * `setup` creates persistent mutable state for one structural callsite in one
+ * host instance. The state is retained across updates and shared by `use` and
+ * lifecycle middleware. Use it for cached resources, host-linked handles,
+ * lifecycle coordination, or derived persistent data.
+ *
+ * `use` is the render-time hook reader. It may call normal hooks and
+ * structural hooks transitively, subject to the same static hook-order rules as
+ * ordinary hooks. Dynamic structural-hook lookup is not supported: aliases,
+ * object/array containers, runtime selection, and computed namespace access are
+ * build-time errors.
+ *
+ * `middlewares` wraps host lifecycle methods through `next()`. The host
+ * middleware runtime intentionally does not deduplicate entries: every authored
+ * callsite gets its own state and middleware entry. Resource dedupe belongs in
+ * hook-specific runtimes.
+ */
 export interface LitsxStructuralDefinition<
   TArgs extends unknown[] = unknown[],
   TResult = unknown,
@@ -236,24 +288,32 @@ export interface LitsxStructuralDefinition<
     host: unknown,
     state: TState,
     args: TArgs,
-    meta: Record<string, unknown>,
+    meta: LitsxStructuralMeta,
     entry: LitsxStructuralEntry
   ) => TResult;
   createState?: (
     host: unknown,
     args: TArgs,
-    meta: Record<string, unknown>,
+    meta: LitsxStructuralMeta,
     entry: LitsxStructuralEntry
   ) => TState;
   setup?: (
     host: unknown,
     args: TArgs,
-    meta: Record<string, unknown>,
+    meta: LitsxStructuralMeta,
     entry: LitsxStructuralEntry
   ) => TState;
-  middlewares?: LitsxHostMiddlewareMap;
+  middlewares?: LitsxHostMiddlewareMap<TState>;
 }
 
+/**
+ * Callable hook value returned by `defineHook`.
+ *
+ * The value is a normal callable hook from the author's point of view. LitSX
+ * attaches hidden compiler/runtime metadata to the function; that metadata is
+ * not public API. Calling this function without the LitSX transform is an error
+ * because structural hooks require compiled host wiring.
+ */
 export type LitsxStructuralHook<TArgs extends unknown[] = unknown[], TResult = unknown> = (
   ...args: TArgs
 ) => TResult;
@@ -279,7 +339,7 @@ export interface LitsxStructuralEntry {
   callsitePath: string[];
   definition: LitsxStructuralDefinition | unknown;
   args: unknown[];
-  meta: Record<string, unknown>;
+  meta: LitsxStructuralMeta;
   state: unknown;
   middlewares?: LitsxHostMiddlewareMap | null;
 }
@@ -338,6 +398,13 @@ export interface LitsxStructuralHostInstance {
   ): unknown;
 }
 
+/**
+ * Define a structural hook.
+ *
+ * The locked public authoring surface is `defineHook({ setup, middlewares,
+ * use })`. The returned value remains callable like a normal hook, while the
+ * compiler/runtime metadata bridge is carried internally on the function.
+ */
 export declare function defineHook<
   TArgs extends unknown[] = unknown[],
   TResult = unknown,
