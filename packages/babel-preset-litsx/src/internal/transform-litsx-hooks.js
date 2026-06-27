@@ -79,8 +79,9 @@ function normalizeInMemoryFiles(files) {
 
 function createStructuralHookResolver(options = {}) {
   const inMemoryFiles = normalizeInMemoryFiles(options.inMemoryFiles);
-  const moduleCache = new Map();
-  const resolvedImportCache = new Map();
+  const compilationSession = options.__litsxCompilationSession || null;
+  const moduleCache = compilationSession?.importedModuleAnalysisCache || new Map();
+  const resolvedImportCache = compilationSession?.resolvedImportCache || new Map();
   const providedTypescriptSession =
     options?.typescriptSession?.projectSession || options?.typescriptSession || null;
   const compilerOptionsCache = new Map();
@@ -246,6 +247,17 @@ function createStructuralHookResolver(options = {}) {
     return resolved;
   }
 
+  function resolveModuleReference(analysis, reference) {
+    if (!analysis || !reference?.source || reference.source === RUNTIME_MODULE) {
+      return reference?.resolvedSource || null;
+    }
+    if (Object.prototype.hasOwnProperty.call(reference, "resolvedSource")) {
+      return reference.resolvedSource;
+    }
+    reference.resolvedSource = resolveImport(analysis.filename, reference.source);
+    return reference.resolvedSource;
+  }
+
   function getParserPluginsForModule(filename, source) {
     if (/\.(?:[cm]?ts|tsx|litsx)$/i.test(filename)) {
       return ["typescript"];
@@ -326,12 +338,14 @@ function createStructuralHookResolver(options = {}) {
       filename: normalizedFilename,
       importBindings: new Map(),
       exportBindings: new Map(),
+      exportAllSources: [],
       defineHookLocals: new Set(),
       runtimeNamespaceLocals: new Set(),
       structuralLocals: new Set(),
       structuralLocalInfo: new Map(),
       customHookPaths: new Map(),
       customHookUsageCache: new Map(),
+      customHookRuntimeUsageCache: new Map(),
     };
     moduleCache.set(normalizedFilename, analysis);
 
@@ -353,7 +367,6 @@ function createStructuralHookResolver(options = {}) {
 
           if (statementPath.isImportDeclaration()) {
             const sourceValue = node.source.value;
-            const resolvedSource = resolveImport(normalizedFilename, sourceValue);
             for (const specifier of node.specifiers) {
               const localName = specifier.local?.name;
               if (!localName) continue;
@@ -361,7 +374,6 @@ function createStructuralHookResolver(options = {}) {
               analysis.importBindings.set(localName, {
                 importedName,
                 source: sourceValue,
-                resolvedSource,
               });
               if (sourceValue === RUNTIME_MODULE && importedName === "defineHook") {
                 analysis.defineHookLocals.add(localName);
@@ -408,6 +420,13 @@ function createStructuralHookResolver(options = {}) {
             }
           }
 
+          if (statementPath.isExportAllDeclaration()) {
+            analysis.exportAllSources.push({
+              source: node.source.value,
+            });
+            continue;
+          }
+
           if (statementPath.isExportNamedDeclaration()) {
             const exportNode = statementPath.node;
             const declaration = exportNode.declaration;
@@ -434,7 +453,7 @@ function createStructuralHookResolver(options = {}) {
               if (exportNode.source?.value) {
                 addExportBinding(analysis, exportedName, {
                   importedName: localName,
-                  resolvedSource: resolveImport(normalizedFilename, exportNode.source.value),
+                  source: exportNode.source.value,
                 });
               } else {
                 addExportBinding(analysis, exportedName, { localName });
@@ -450,13 +469,31 @@ function createStructuralHookResolver(options = {}) {
 
   function isNamespaceStructuralUse(analysis, objectName, propertyName, seen) {
     const importInfo = analysis.importBindings.get(objectName);
-    if (!importInfo?.resolvedSource || importInfo.importedName !== "*") {
+    const resolvedSource = resolveModuleReference(analysis, importInfo);
+    if (!resolvedSource || importInfo.importedName !== "*") {
       return false;
     }
-    const importedModule = analyzeModule(importInfo.resolvedSource);
+    const importedModule = analyzeModule(resolvedSource);
     return (
       isStructuralExport(importedModule, propertyName, seen) ||
       isStructuralCustomExport(importedModule, propertyName, seen)
+    );
+  }
+
+  function isNamespaceRuntimeHelperUse(analysis, objectName, propertyName) {
+    const importInfo = analysis.importBindings.get(objectName);
+    return (
+      importInfo?.source === RUNTIME_MODULE &&
+      importInfo.importedName === "*" &&
+      RUNTIME_HELPERS.includes(propertyName)
+    );
+  }
+
+  function isRuntimeHelperImport(analysis, localName) {
+    const importInfo = analysis.importBindings.get(localName);
+    return (
+      importInfo?.source === RUNTIME_MODULE &&
+      RUNTIME_HELPERS.includes(importInfo.importedName)
     );
   }
 
@@ -500,8 +537,9 @@ function createStructuralHookResolver(options = {}) {
             return;
           }
           const importInfo = analysis.importBindings.get(name);
-          if (importInfo?.resolvedSource && importInfo.importedName !== "*") {
-            const importedModule = analyzeModule(importInfo.resolvedSource);
+          const resolvedSource = resolveModuleReference(analysis, importInfo);
+          if (resolvedSource && importInfo.importedName !== "*") {
+            const importedModule = analyzeModule(resolvedSource);
             if (
               isStructuralExport(importedModule, importInfo.importedName, nextSeen) ||
               isStructuralCustomExport(importedModule, importInfo.importedName, nextSeen)
@@ -532,6 +570,85 @@ function createStructuralHookResolver(options = {}) {
     return usesStructural;
   }
 
+  function localCustomHookUsesRuntimeHook(analysis, localName, seen = new Set()) {
+    if (!analysis || !localName) return false;
+    const key = `${analysis.filename}:runtime-local:${localName}`;
+    if (analysis.customHookRuntimeUsageCache.has(localName)) {
+      return analysis.customHookRuntimeUsageCache.get(localName);
+    }
+    if (seen.has(key)) return false;
+    const nextSeen = new Set(seen);
+    nextSeen.add(key);
+
+    const fnPath = analysis.customHookPaths.get(localName);
+    if (!fnPath?.traverse) {
+      analysis.customHookRuntimeUsageCache.set(localName, false);
+      return false;
+    }
+
+    let usesRuntimeHook = false;
+    fnPath.traverse({
+      CallExpression(callPath) {
+        if (usesRuntimeHook) {
+          callPath.stop();
+          return;
+        }
+        const callee = callPath.get("callee");
+        if (callee.isIdentifier()) {
+          const name = callee.node.name;
+          if (isRuntimeHelperImport(analysis, name)) {
+            usesRuntimeHook = true;
+            callPath.stop();
+            return;
+          }
+          if (
+            analysis.customHookPaths.has(name) &&
+            localCustomHookUsesRuntimeHook(analysis, name, nextSeen)
+          ) {
+            usesRuntimeHook = true;
+            callPath.stop();
+            return;
+          }
+          const importInfo = analysis.importBindings.get(name);
+          const resolvedSource = resolveModuleReference(analysis, importInfo);
+          if (resolvedSource && importInfo.importedName !== "*") {
+            const importedModule = analyzeModule(resolvedSource);
+            if (isRuntimeCustomExport(importedModule, importInfo.importedName, nextSeen)) {
+              usesRuntimeHook = true;
+              callPath.stop();
+            }
+          }
+          return;
+        }
+
+        if (callee.isMemberExpression({ computed: false })) {
+          const object = callee.get("object");
+          const property = callee.get("property");
+          if (!object.isIdentifier() || !property.isIdentifier()) {
+            return;
+          }
+          if (isNamespaceRuntimeHelperUse(analysis, object.node.name, property.node.name)) {
+            usesRuntimeHook = true;
+            callPath.stop();
+            return;
+          }
+          const importInfo = analysis.importBindings.get(object.node.name);
+          const resolvedSource = resolveModuleReference(analysis, importInfo);
+          if (resolvedSource && importInfo.importedName === "*") {
+            const importedModule = analyzeModule(resolvedSource);
+            if (isRuntimeCustomExport(importedModule, property.node.name, nextSeen)) {
+              usesRuntimeHook = true;
+              callPath.stop();
+            }
+          }
+        }
+      },
+    });
+
+    analysis.customHookRuntimeUsageCache.set(localName, usesRuntimeHook);
+    return usesRuntimeHook;
+  }
+
   function getStructuralExportInfo(analysis, exportedName, seen = new Set()) {
     if (!analysis || !exportedName) return false;
     const key = `${analysis.filename}:${exportedName}`;
@@ -541,12 +658,23 @@ function createStructuralHookResolver(options = {}) {
 
     const exportInfo = analysis.exportBindings.get(exportedName);
     if (!exportInfo) {
+      for (const exportAll of analysis.exportAllSources || []) {
+        const resolvedSource = resolveModuleReference(analysis, exportAll);
+        if (!resolvedSource) continue;
+        const info = getStructuralExportInfo(
+          analyzeModule(resolvedSource),
+          exportedName,
+          nextSeen
+        );
+        if (info) return info;
+      }
       return false;
     }
 
-    if (exportInfo.resolvedSource) {
+    const exportSource = resolveModuleReference(analysis, exportInfo);
+    if (exportSource) {
       return getStructuralExportInfo(
-        analyzeModule(exportInfo.resolvedSource),
+        analyzeModule(exportSource),
         exportInfo.importedName,
         nextSeen
       );
@@ -563,9 +691,10 @@ function createStructuralHookResolver(options = {}) {
     }
 
     const importInfo = analysis.importBindings.get(exportInfo.localName);
-    if (importInfo?.resolvedSource && importInfo.importedName !== "*") {
+    const importSource = resolveModuleReference(analysis, importInfo);
+    if (importSource && importInfo.importedName !== "*") {
       return getStructuralExportInfo(
-        analyzeModule(importInfo.resolvedSource),
+        analyzeModule(importSource),
         importInfo.importedName,
         nextSeen
       );
@@ -587,12 +716,26 @@ function createStructuralHookResolver(options = {}) {
 
     const exportInfo = analysis.exportBindings.get(exportedName);
     if (!exportInfo) {
+      for (const exportAll of analysis.exportAllSources || []) {
+        const resolvedSource = resolveModuleReference(analysis, exportAll);
+        if (!resolvedSource) continue;
+        if (
+          isStructuralCustomExport(
+            analyzeModule(resolvedSource),
+            exportedName,
+            nextSeen
+          )
+        ) {
+          return true;
+        }
+      }
       return false;
     }
 
-    if (exportInfo.resolvedSource) {
+    const exportSource = resolveModuleReference(analysis, exportInfo);
+    if (exportSource) {
       return isStructuralCustomExport(
-        analyzeModule(exportInfo.resolvedSource),
+        analyzeModule(exportSource),
         exportInfo.importedName,
         nextSeen
       );
@@ -603,9 +746,10 @@ function createStructuralHookResolver(options = {}) {
     }
 
     const importInfo = analysis.importBindings.get(exportInfo.localName);
-    if (importInfo?.resolvedSource && importInfo.importedName !== "*") {
+    const importSource = resolveModuleReference(analysis, importInfo);
+    if (importSource && importInfo.importedName !== "*") {
       return isStructuralCustomExport(
-        analyzeModule(importInfo.resolvedSource),
+        analyzeModule(importSource),
         importInfo.importedName,
         nextSeen
       );
@@ -614,10 +758,103 @@ function createStructuralHookResolver(options = {}) {
     return false;
   }
 
-  return function structuralHookResolver({ filename, source, importedName }) {
+  function hasExportBinding(analysis, exportedName, seen = new Set()) {
+    if (!analysis || !exportedName) return "unresolved";
+    const key = `${analysis.filename}:has-export:${exportedName}`;
+    if (seen.has(key)) return false;
+    const nextSeen = new Set(seen);
+    nextSeen.add(key);
+
+    if (analysis.exportBindings.has(exportedName)) {
+      return true;
+    }
+
+    let sawUnresolvedExportAll = false;
+    for (const exportAll of analysis.exportAllSources || []) {
+      const resolvedSource = resolveModuleReference(analysis, exportAll);
+      if (!resolvedSource) {
+        sawUnresolvedExportAll = true;
+        continue;
+      }
+      const result = hasExportBinding(
+        analyzeModule(resolvedSource),
+        exportedName,
+        nextSeen
+      );
+      if (result === true) return true;
+      if (result === "unresolved") sawUnresolvedExportAll = true;
+    }
+
+    return sawUnresolvedExportAll ? "unresolved" : false;
+  }
+
+  function isRuntimeCustomExport(analysis, exportedName, seen = new Set()) {
+    if (!analysis || !exportedName) return false;
+    const key = `${analysis.filename}:runtime-custom:${exportedName}`;
+    if (seen.has(key)) return false;
+    const nextSeen = new Set(seen);
+    nextSeen.add(key);
+
+    const exportInfo = analysis.exportBindings.get(exportedName);
+    if (!exportInfo) {
+      for (const exportAll of analysis.exportAllSources || []) {
+        const resolvedSource = resolveModuleReference(analysis, exportAll);
+        if (!resolvedSource) continue;
+        if (
+          isRuntimeCustomExport(
+            analyzeModule(resolvedSource),
+            exportedName,
+            nextSeen
+          )
+        ) {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    const exportSource = resolveModuleReference(analysis, exportInfo);
+    if (exportSource) {
+      return isRuntimeCustomExport(
+        analyzeModule(exportSource),
+        exportInfo.importedName,
+        nextSeen
+      );
+    }
+
+    if (localCustomHookUsesRuntimeHook(analysis, exportInfo.localName, nextSeen)) {
+      return true;
+    }
+
+    const importInfo = analysis.importBindings.get(exportInfo.localName);
+    const importSource = resolveModuleReference(analysis, importInfo);
+    if (importSource && importInfo.importedName !== "*") {
+      return isRuntimeCustomExport(
+        analyzeModule(importSource),
+        importInfo.importedName,
+        nextSeen
+      );
+    }
+
+    return false;
+  }
+
+  return function structuralHookResolver({ filename, source, importedName, runtimeCustomOnly = false }) {
     const resolved = resolveImport(filename, source);
-    if (!resolved) return false;
+    if (!resolved) return runtimeCustomOnly ? "unresolved-custom-hook" : false;
     const analysis = analyzeModule(resolved);
+    if (!analysis && runtimeCustomOnly) {
+      return "unresolved-custom-hook";
+    }
+    if (runtimeCustomOnly) {
+      const exportStatus = hasExportBinding(analysis, importedName);
+      if (exportStatus !== true) {
+        return "unresolved-custom-hook";
+      }
+      return isRuntimeCustomExport(analysis, importedName)
+        ? "runtime-custom-hook"
+        : false;
+    }
     const structuralInfo = getStructuralExportInfo(analysis, importedName);
     if (structuralInfo) {
       return structuralInfo;
@@ -661,6 +898,8 @@ function createStableIdCallsiteMetadata(callPath, state, t) {
 }
 
 export default function transformLitsxHooks(api, options = {}) {
+  const structuralHookResolver = createStructuralHookResolver(options);
+  const ignoredCustomHookSources = new Set(options.ignoredCustomHookSources || []);
   const plugin = createRuntimeHooksTransform({
     pluginName: "transform-litsx-hooks",
     runtimeModule: RUNTIME_MODULE,
@@ -673,6 +912,21 @@ export default function transformLitsxHooks(api, options = {}) {
 
   return plugin(api, {
     ...options,
-    structuralHookResolver: createStructuralHookResolver(options),
+    structuralHookResolver,
+    customHookResolver({ filename, source, importedName }) {
+      if (ignoredCustomHookSources.has(source)) {
+        return false;
+      }
+      const result = structuralHookResolver({
+        filename,
+        source,
+        importedName,
+        runtimeCustomOnly: true,
+      });
+      if (result === "unresolved-custom-hook") {
+        return result;
+      }
+      return result === "runtime-custom-hook";
+    },
   });
 }

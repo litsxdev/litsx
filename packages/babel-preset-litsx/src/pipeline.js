@@ -16,9 +16,68 @@ const NATIVE_TRANSFORM_OPTION_KEYS = [
 ];
 
 const HOOK_FEATURE_PATTERN = /\b(?:defineHook|useOnConnect|useAfterUpdate|useOnCommit|useMemoValue|useStableCallback|useEvent|useEmit|usePrevious|useReducedState|useState|useControlledState|useAsyncState|useOptimistic|useExpose|useExternalStore|useHost|useHostContent|useSlot|useTextContent|useTransition|useDeferredValue|useStyle|useRef|useCallbackRef|useStableId)\b/;
+const DEFAULT_OR_NAMED_IMPORT_PATTERN = /\bimport\s+(?!type\b)([^'";]+?)\s+from\b/g;
+const NAMESPACE_IMPORT_PATTERN = /\bimport\s+(?!type\b)\*\s+as\s+([A-Za-z_$][\w$]*)\s+from\b/g;
 const REF_FEATURE_PATTERN = /\buseRef\b|\bref\s*=/;
 const SCOPED_ELEMENTS_PATTERN = /<\s*(?:[A-Z][\w.]*(?=[\s/>])|[a-z][\w]*-[\w-]*(?=[\s/>]))/;
 const LIGHT_DOM_PATTERN = /\^lightDom\b|static\s+lightDom\s*=\s*true\b/;
+
+function escapeRegExp(value) {
+  return String(value).replace(/[\\^$.*+?()[\]{}|]/g, "\\$&");
+}
+
+function hasCallToLocal(text, localName) {
+  return new RegExp(`\\b${escapeRegExp(localName)}\\s*\\(`).test(text);
+}
+
+function getImportedLocalNames(importClause) {
+  const locals = [];
+  const namedMatch = importClause.match(/\{([^}]*)\}/);
+  const beforeNamed = importClause.split("{", 1)[0].replace(/,$/, "").trim();
+
+  if (beforeNamed && !beforeNamed.includes("*")) {
+    locals.push(beforeNamed);
+  }
+
+  if (namedMatch) {
+    for (const rawSpecifier of namedMatch[1].split(",")) {
+      const specifier = rawSpecifier.trim();
+      if (!specifier || specifier.startsWith("type ")) continue;
+      const parts = specifier.split(/\s+as\s+/);
+      const localName = (parts[1] || parts[0]).trim();
+      if (localName) {
+        locals.push(localName);
+      }
+    }
+  }
+
+  return locals.filter((name) => /^use[A-Z0-9][A-Za-z0-9_$]*$/.test(name));
+}
+
+function hasImportedCustomHookCall(text) {
+  DEFAULT_OR_NAMED_IMPORT_PATTERN.lastIndex = 0;
+  let match;
+  while ((match = DEFAULT_OR_NAMED_IMPORT_PATTERN.exec(text))) {
+    for (const localName of getImportedLocalNames(match[1])) {
+      if (hasCallToLocal(text, localName)) {
+        return true;
+      }
+    }
+  }
+
+  NAMESPACE_IMPORT_PATTERN.lastIndex = 0;
+  while ((match = NAMESPACE_IMPORT_PATTERN.exec(text))) {
+    const namespaceName = match[1];
+    if (
+      new RegExp(`\\b${escapeRegExp(namespaceName)}\\s*\\.\\s*use[A-Z0-9][A-Za-z0-9_$]*\\s*\\(`)
+        .test(text)
+    ) {
+      return true;
+    }
+  }
+
+  return false;
+}
 
 export function normalizeTransformLitsxOptions(options = {}) {
   const transformLitsxOptions = {
@@ -39,7 +98,9 @@ export function detectLitsxSourceFeatures(source, options = {}) {
   const transformOptions = normalizeTransformLitsxOptions(options);
 
   return {
-    hooks: HOOK_FEATURE_PATTERN.test(text),
+    hooks:
+      HOOK_FEATURE_PATTERN.test(text) ||
+      hasImportedCustomHookCall(text),
     domRefs: REF_FEATURE_PATTERN.test(text),
     scopedElements:
       transformOptions.defaultDomMode === "light" ||

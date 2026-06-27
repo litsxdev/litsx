@@ -147,6 +147,178 @@ describe("@litsx/compiler", () => {
     assert.ok(ids.every((id) => id.startsWith("litsx-stable-")));
   }, 20000);
 
+  it("threads host through imported custom hooks that call LitSX runtime hooks", () => {
+    const hookSource = [
+      'import { useExternalStore, useMemoValue, useStableId } from "@litsx/core";',
+      "const subscribe = (listener: () => void) => {",
+      "  return () => {};",
+      "};",
+      "const getSnapshot = () => 0;",
+      "export function useDemo(input: string) {",
+      "  useExternalStore(subscribe, getSnapshot, getSnapshot);",
+      "  const id = useStableId();",
+      "  const value = useMemoValue(() => `${input}:${id}`, [input, id]);",
+      "  return value;",
+      "}",
+    ].join("\n");
+    const consumerSource = [
+      'import { useDemo } from "./use-demo";',
+      "export const DemoConsumer = () => {",
+      '  const value = useDemo("x");',
+      "  return <div>{value}</div>;",
+      "};",
+    ].join("\n");
+
+    const hookResult = transformLitsxSync(hookSource, {
+      filename: "/virtual/use-demo.tsx",
+      jsxTemplate: false,
+    });
+    const consumerResult = transformLitsxSync(consumerSource, {
+      filename: "/virtual/demo-consumer.litsx",
+      jsxTemplate: false,
+      inMemoryFiles: {
+        "/virtual/use-demo.tsx": hookSource,
+      },
+    });
+
+    assert.match(hookResult.code, /export function useDemo\(_host, input\)/);
+    assert.match(hookResult.code, /useExternalStore\(_host, subscribe, getSnapshot, getSnapshot\)/);
+    assert.match(hookResult.code, /useStableId\(_host, "litsx-stable-[^"]+"\)/);
+    assert.match(hookResult.code, /useMemoValue\(_host, \(\) => `\$\{input\}:\$\{id\}`, \[input, id\]\)/);
+    assert.match(consumerResult.code, /prepareEffects\(this\);/);
+    assert.match(consumerResult.code, /const value = useDemo\(this, "x"\);/);
+    assert.doesNotMatch(consumerResult.code, /const value = useDemo\("x"\);/);
+  }, 20000);
+
+  it("threads host through imported custom hooks re-exported from barrels", () => {
+    const hookSource = [
+      'import { useMemoValue, useStableId } from "@litsx/core";',
+      "export function useDemo(input: string) {",
+      "  const id = useStableId();",
+      "  return useMemoValue(() => `${input}:${id}`, [input, id]);",
+      "}",
+    ].join("\n");
+    const barrelSource = 'export * from "./use-demo";';
+    const consumerSource = [
+      'import { useDemo } from "./hooks";',
+      "export const DemoConsumer = () => {",
+      '  const value = useDemo("x");',
+      "  return <div>{value}</div>;",
+      "};",
+    ].join("\n");
+
+    const result = transformLitsxSync(consumerSource, {
+      filename: "/virtual/demo-consumer.litsx",
+      jsxTemplate: false,
+      inMemoryFiles: {
+        "/virtual/hooks/index.ts": barrelSource,
+        "/virtual/hooks/use-demo.ts": hookSource,
+      },
+    });
+
+    assert.match(result.code, /prepareEffects\(this\);/);
+    assert.match(result.code, /const value = useDemo\(this, "x"\);/);
+  }, 20000);
+
+  it("threads host through local custom hooks that wrap imported runtime custom hooks", () => {
+    const hookSource = [
+      'import { useMemoValue, useStableId } from "@litsx/core";',
+      "export function useDemo(input: string) {",
+      "  const id = useStableId();",
+      "  return useMemoValue(() => `${input}:${id}`, [input, id]);",
+      "}",
+    ].join("\n");
+    const consumerSource = [
+      'import { useDemo } from "./use-demo";',
+      "function useWrappedDemo(input: string) {",
+      "  return useDemo(input);",
+      "}",
+      "export const DemoConsumer = () => {",
+      '  const value = useWrappedDemo("x");',
+      "  return <div>{value}</div>;",
+      "};",
+    ].join("\n");
+
+    const result = transformLitsxSync(consumerSource, {
+      filename: "/virtual/demo-consumer.litsx",
+      jsxTemplate: false,
+      inMemoryFiles: {
+        "/virtual/use-demo.ts": hookSource,
+      },
+    });
+
+    assert.match(result.code, /function useWrappedDemo\(_host, input\)/);
+    assert.match(result.code, /return useDemo\(_host, input\);/);
+    assert.match(result.code, /const value = useWrappedDemo\(this, "x"\);/);
+  }, 20000);
+
+  it("throws when an imported custom hook call cannot be resolved for host analysis", () => {
+    const source = [
+      'import { useDemo } from "./missing";',
+      "export const DemoConsumer = () => {",
+      '  const value = useDemo("x");',
+      "  return <div>{value}</div>;",
+      "};",
+    ].join("\n");
+
+    assert.throws(
+      () => transformLitsxSync(source, {
+        filename: "/virtual/demo-consumer.litsx",
+        jsxTemplate: false,
+      }),
+      /Unable to resolve imported custom hook "useDemo" from "\.\/missing"/,
+    );
+  }, 20000);
+
+  it("does not thread host through imported use-prefixed functions without LitSX runtime hooks", () => {
+    const utilSource = [
+      "export function useFormat(input: string) {",
+      "  return input.toUpperCase();",
+      "}",
+    ].join("\n");
+    const consumerSource = [
+      'import { useFormat } from "./format";',
+      "export const DemoConsumer = () => {",
+      '  const value = useFormat("x");',
+      "  return <div>{value}</div>;",
+      "};",
+    ].join("\n");
+
+    const result = transformLitsxSync(consumerSource, {
+      filename: "/virtual/demo-consumer.litsx",
+      jsxTemplate: false,
+      inMemoryFiles: {
+        "/virtual/format.ts": utilSource,
+      },
+    });
+
+    assert.match(result.code, /const value = useFormat\("x"\);/);
+    assert.doesNotMatch(result.code, /useFormat\(this, "x"\)/);
+    assert.doesNotMatch(result.code, /prepareEffects\(this\);/);
+  }, 20000);
+
+  it("does not thread host through local use-prefixed functions without LitSX runtime hooks", () => {
+    const source = [
+      "function useFormat(input: string) {",
+      "  return input.toUpperCase();",
+      "}",
+      "export const DemoConsumer = () => {",
+      '  const value = useFormat("x");',
+      "  return <div>{value}</div>;",
+      "};",
+    ].join("\n");
+
+    const result = transformLitsxSync(source, {
+      filename: "/virtual/demo-consumer.litsx",
+      jsxTemplate: false,
+    });
+
+    assert.match(result.code, /function useFormat\(input\)/);
+    assert.match(result.code, /const value = useFormat\("x"\);/);
+    assert.doesNotMatch(result.code, /useFormat\(this, "x"\)/);
+    assert.doesNotMatch(result.code, /prepareEffects\(this\);/);
+  }, 20000);
+
   it("strips top-level TypeScript declarations from compiled .litsx output", () => {
     const source = [
       "interface ButtonProps {",

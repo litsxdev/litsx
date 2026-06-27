@@ -552,11 +552,99 @@ function transformCustomHookDefinition(binding, state, t) {
   popHostExpression(state);
 }
 
+function localCustomHookUsesHost(binding, state, t, seen = new WeakSet()) {
+  if (!binding || !isSupportedCustomHookBinding(binding.path)) {
+    return false;
+  }
+  if (typeof state.customHookResolver !== "function") {
+    return true;
+  }
+  const fnPath = getFunctionFromBinding(binding);
+  if (!fnPath?.node) {
+    return false;
+  }
+  if (seen.has(fnPath.node)) {
+    return false;
+  }
+
+  seen.add(fnPath.node);
+  let usesHost = false;
+  fnPath.traverse({
+    CallExpression(innerPath) {
+      if (usesHost) {
+        innerPath.stop();
+        return;
+      }
+      const callee = innerPath.get("callee");
+      if (detectRuntimeHelperFromCallee(callee, state, t)) {
+        usesHost = true;
+        innerPath.stop();
+        return;
+      }
+      if (getStructuralHookCallInfo(innerPath, callee, state, t)) {
+        usesHost = true;
+        innerPath.stop();
+        return;
+      }
+      if (!isCustomHookCall(callee, state, t)) {
+        return;
+      }
+      if (callee.isIdentifier()) {
+        const nestedBinding = innerPath.scope.getBinding(callee.node.name);
+        if (nestedBinding?.path?.isImportSpecifier()) {
+          const source = nestedBinding.path.parentPath?.node?.source?.value;
+          const imported = nestedBinding.path.node.imported;
+          const importedName = imported?.name ?? imported?.value ?? callee.node.name;
+          const result = resolveImportedHostAwareCustomHook(state, source, importedName);
+          if (result === "unresolved-custom-hook") {
+            throw callee.buildCodeFrameError(
+              `Unable to resolve imported custom hook "${callee.node.name}" from "${source}". LitSX must resolve imported custom hooks to determine whether the active host must be passed.`
+            );
+          }
+          if (result === true) {
+            usesHost = true;
+            innerPath.stop();
+          }
+          return;
+        }
+        if (nestedBinding && localCustomHookUsesHost(nestedBinding, state, t, seen)) {
+          usesHost = true;
+          innerPath.stop();
+        }
+        return;
+      }
+      if (callee.isMemberExpression({ computed: false })) {
+        const object = callee.get("object");
+        const property = callee.get("property");
+        if (!object.isIdentifier() || !property.isIdentifier()) {
+          return;
+        }
+        const objectBinding = object.scope.getBinding(object.node.name);
+        if (objectBinding?.path?.isImportNamespaceSpecifier()) {
+          const source = objectBinding.path.parentPath?.node?.source?.value;
+          const result = resolveImportedHostAwareCustomHook(state, source, property.node.name);
+          if (result === "unresolved-custom-hook") {
+            throw property.buildCodeFrameError(
+              `Unable to resolve imported custom hook "${property.node.name}" from "${source}". LitSX must resolve imported custom hooks to determine whether the active host must be passed.`
+            );
+          }
+          if (result === true) {
+            usesHost = true;
+            innerPath.stop();
+          }
+        }
+      }
+    },
+  });
+  return usesHost;
+}
+
 function processDeclaredCustomHooks(programPath, state, t) {
   const bindings = programPath.scope.getAllBindings();
   for (const name of Object.keys(bindings)) {
     if (!isCustomHookName(name)) continue;
     const binding = bindings[name];
+    if (!localCustomHookUsesHost(binding, state, t)) continue;
     transformCustomHookDefinition(binding, state, t);
   }
 }
@@ -723,6 +811,65 @@ function isImportedStructuralCustomHook(state, source, importedName) {
     importedName,
     filename: state.file?.opts?.filename || state.filename || "",
   }) === "structural-custom-hook";
+}
+
+function shouldTransformCustomHookCall(calleePath, state, t) {
+  if (calleePath.isIdentifier()) {
+    const binding = calleePath.scope.getBinding(calleePath.node.name);
+    if (!binding?.path) {
+      return true;
+    }
+    if (binding.path.isImportSpecifier()) {
+      const source = binding.path.parentPath?.node?.source?.value;
+      const imported = binding.path.node.imported;
+      const importedName = imported?.name ?? imported?.value ?? calleePath.node.name;
+      const result = resolveImportedHostAwareCustomHook(state, source, importedName);
+      if (result === "unresolved-custom-hook") {
+        throw calleePath.buildCodeFrameError(
+          `Unable to resolve imported custom hook "${calleePath.node.name}" from "${source}". LitSX must resolve imported custom hooks to determine whether the active host must be passed.`
+        );
+      }
+      return result === true;
+    }
+    return localCustomHookUsesHost(binding, state, t);
+  }
+
+  if (calleePath.isMemberExpression({ computed: false })) {
+    const object = calleePath.get("object");
+    const property = calleePath.get("property");
+    if (!object.isIdentifier() || !property.isIdentifier()) {
+      return false;
+    }
+    const binding = object.scope.getBinding(object.node.name);
+    if (binding?.path?.isImportNamespaceSpecifier()) {
+      const source = binding.path.parentPath?.node?.source?.value;
+      const result = resolveImportedHostAwareCustomHook(state, source, property.node.name);
+      if (result === "unresolved-custom-hook") {
+        throw property.buildCodeFrameError(
+          `Unable to resolve imported custom hook "${property.node.name}" from "${source}". LitSX must resolve imported custom hooks to determine whether the active host must be passed.`
+        );
+      }
+      return result === true;
+    }
+    return true;
+  }
+
+  return false;
+}
+
+function resolveImportedHostAwareCustomHook(state, source, importedName) {
+  if (isImportedStructuralCustomHook(state, source, importedName)) {
+    return true;
+  }
+  const resolver = state.customHookResolver;
+  if (typeof resolver !== "function") {
+    return true;
+  }
+  return resolver({
+    source,
+    importedName,
+    filename: state.file?.opts?.filename || state.filename || "",
+  });
 }
 
 function isStructuralHookReference(path, state) {
@@ -1068,6 +1215,10 @@ function processRuntimeCall(callPath, state, t, options) {
         return false;
       }
     }
+  }
+
+  if (!shouldTransformCustomHookCall(callee, state, t)) {
+    return false;
   }
 
   const assigned = assignHostArgument(callPath, state, t);
@@ -1421,6 +1572,12 @@ export function createRuntimeHooksTransform({
                 ? state.opts.structuralHookResolver
                 : typeof pluginOptions.structuralHookResolver === "function"
                   ? pluginOptions.structuralHookResolver
+                  : null;
+            state.customHookResolver =
+              typeof state.opts?.customHookResolver === "function"
+                ? state.opts.customHookResolver
+                : typeof pluginOptions.customHookResolver === "function"
+                  ? pluginOptions.customHookResolver
                   : null;
             state.activeCustomHookBinding = null;
             state.prepareImported = false;

@@ -49,7 +49,13 @@ export function createReactCompatPresetPlugins(options = {}) {
         getWrapperMetadata: getReactWrapperMetadata,
       },
     ],
-    [transformLitsxHooks, options.transformLitsxHooks || {}],
+    [
+      transformLitsxHooks,
+      {
+        ignoredCustomHookSources: ["react", "@litsx/core/context"],
+        ...(options.transformLitsxHooks || {}),
+      },
+    ],
     [transformLitsxDomRefs, options.transformLitsxDomRefs || {}],
     [reactHooks, options.reactHooks || {}],
     [reactUseState, { allowReactAttributes: true, ...(options.reactUseState || {}) }],

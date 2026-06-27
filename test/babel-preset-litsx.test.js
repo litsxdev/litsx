@@ -711,6 +711,35 @@ describe("@litsx/babel-preset-litsx", () => {
       true,
     );
 
+    assert.strictEqual(
+      detectLitsxSourceFeatures(
+        'import { useDemo } from "./use-demo"; export function App() { return useDemo(); }',
+        {},
+      ).hooks,
+      true,
+    );
+
+    assert.strictEqual(
+      detectLitsxSourceFeatures(
+        'import { useDemo } from "./use-demo"; export function App() { return <div />; }',
+        {},
+      ).hooks,
+      false,
+    );
+
+    assert.strictEqual(
+      detectLitsxSourceFeatures(
+        'function useFormat(value) { return String(value); } export function App() { return useFormat("x"); }',
+        {},
+      ).hooks,
+      false,
+    );
+
+    assert.strictEqual(
+      detectLitsxSourceFeatures('import type { useDemo } from "./types";', {}).hooks,
+      false,
+    );
+
     assert.deepStrictEqual(
       detectLitsxSourceFeatures(
         [
