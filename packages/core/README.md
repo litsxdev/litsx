@@ -29,6 +29,10 @@ The package also exposes `@litsx/core/jsx-runtime` and `@litsx/core/jsx-dev-runt
 - Async and error primitives:
   - `ErrorBoundary`, `SuspenseBoundary`, `SuspenseList`
   - `ensureLazyElement(...)` for host-registry-aware lazy custom element registration
+- Structural host middleware infrastructure:
+  - `HostMiddlewareRuntime`
+  - `HostMiddlewareMixin`
+  - `createHostMiddlewareRuntime(...)`
 
 All helpers accept the Lit element instance as the first argument. The Babel transforms insert it automatically, but you can also call the runtime manually.
 
@@ -99,3 +103,81 @@ into a runtime call with hidden callsite metadata derived from the authored file
 Use `useStableId()` for resource identity: cache keys, preload keys, serialized resource records, i18n message slots, or hydration metadata that must line up between server and client.
 
 Do not use `useStableId()` when you need unique DOM ids for multiple instances of the same component. Every instance of the same authored callsite receives the same value by design. Use `useId()` for instance-local DOM ids and accessibility relationships. `useId()` follows hook order within a host instance; `useStableId()` follows the authored callsite.
+
+## Structural Host Middleware Runtime
+
+LitSX also includes internal plumbing for future structural hooks that need to participate in the host lifecycle. This is separate from `EffectsController`.
+
+- `EffectsController` remains the render-time hook controller.
+- `HostMiddlewareRuntime` is the structural host layer for lifecycle middleware.
+- `HostMiddlewareMixin` is the reusable host mixin shape that generated components can use later.
+
+The public authored hook syntax for structural hooks is not finalized yet. The runtime layer is intentionally lower-level: it accepts structural entries that a future transform can generate.
+
+Conceptually, each authored structural-hook callsite becomes one entry:
+
+```js
+{
+  callsiteIndex: 0,
+  callsiteId: "litsx-stable-example",
+  definition,
+  args: [loaders],
+  meta: {},
+  state,
+  middlewares,
+}
+```
+
+Entries are **not deduplicated** by the host middleware runtime. Each entry is one authored callsite. Even if two callsites use the same hook definition and the same arguments, they remain separate entries with separate state and separate `runtime.read(index)` results.
+
+The identity split is:
+
+- `callsiteIndex`: stable local index for generated reads such as `runtime.read(0)`
+- `callsiteId`: stable serializable identity for diagnostics, SSR metadata, or hook-specific resource keys
+- `id`: compatibility alias for the stable callsite id
+
+Resource dedupe belongs below this layer, inside the hook or resource runtime that knows the domain semantics. For example, an i18n runtime can dedupe catalog loads by locale and loader identity, while the host middleware runtime still preserves separate authored callsites.
+
+Lifecycle middleware is composed in entry order, with the host base implementation as the final link. `next()` is the functional equivalent of `super.method()`:
+
+```js
+runtime.connectedCallback(() => super.connectedCallback());
+
+runtime.attributeChangedCallback(
+  [name, oldValue, newValue],
+  () => super.attributeChangedCallback(name, oldValue, newValue),
+);
+
+runtime.shouldUpdate(
+  [changedProperties],
+  () => super.shouldUpdate(changedProperties),
+);
+```
+
+Middleware can run work before and after `next()`:
+
+```js
+connectedCallback(host, state, next) {
+  state.connected = true;
+  const result = next();
+  state.afterBase = true;
+  return result;
+}
+```
+
+Async lifecycle methods can `await next()`. Calling `next()` twice from the same middleware is treated as an error.
+
+The runtime currently supports middleware for:
+
+- `connectedCallback`
+- `disconnectedCallback`
+- `attributeChangedCallback`
+- `scheduleUpdate`
+- `shouldUpdate`
+- `willUpdate`
+- `update`
+- `updated`
+- `firstUpdated`
+- `getUpdateComplete`
+
+It intentionally does not cover `render` or `createRenderRoot` in this phase.

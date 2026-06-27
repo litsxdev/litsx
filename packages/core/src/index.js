@@ -12,6 +12,11 @@ export {
 } from "./suspense-list.js";
 
 export { EffectsController } from "./effects-controller.js";
+export {
+  HostMiddlewareMixin,
+  HostMiddlewareRuntime,
+  createHostMiddlewareRuntime,
+} from "./host-middleware-runtime.js";
 
 export {
   prepareEffects,

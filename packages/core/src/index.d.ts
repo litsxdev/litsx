@@ -201,6 +201,127 @@ export { ErrorBoundary as ErrorBoundaryElement };
 export { SuspenseBoundary as SuspenseBoundaryElement };
 export { SuspenseList as SuspenseListElement };
 
+export type LitsxHostMiddlewareLifecycleMethod =
+  | "connectedCallback"
+  | "disconnectedCallback"
+  | "attributeChangedCallback"
+  | "scheduleUpdate"
+  | "shouldUpdate"
+  | "willUpdate"
+  | "update"
+  | "updated"
+  | "firstUpdated"
+  | "getUpdateComplete";
+
+export type LitsxHostMiddlewareNext<TResult = unknown> = () => TResult;
+
+export type LitsxHostMiddleware<TResult = unknown> = (
+  host: unknown,
+  state: unknown,
+  next: LitsxHostMiddlewareNext<TResult>,
+  args: unknown[],
+  entry: LitsxStructuralEntry
+) => TResult;
+
+export type LitsxHostMiddlewareMap = Partial<
+  Record<LitsxHostMiddlewareLifecycleMethod, LitsxHostMiddleware>
+>;
+
+export interface LitsxStructuralDefinition {
+  use?: (
+    host: unknown,
+    state: unknown,
+    args: unknown[],
+    meta: Record<string, unknown>,
+    entry: LitsxStructuralEntry
+  ) => unknown;
+  createState?: (
+    host: unknown,
+    args: unknown[],
+    meta: Record<string, unknown>,
+    entry: LitsxStructuralEntry
+  ) => unknown;
+  middlewares?: LitsxHostMiddlewareMap;
+}
+
+export interface LitsxStructuralEntry {
+  /**
+   * Backwards-compatible stable identifier for this authored callsite.
+   * Prefer `callsiteId` in newly generated code.
+   */
+  id: string;
+  /**
+   * Stable local index for runtime reads such as `runtime.read(index)`.
+   */
+  callsiteIndex: number;
+  /**
+   * Stable serializable identifier for diagnostics, SSR metadata, or hook-level
+   * resource runtimes. Entries are not deduplicated by this id.
+   */
+  callsiteId: string;
+  definition: LitsxStructuralDefinition | unknown;
+  args: unknown[];
+  meta: Record<string, unknown>;
+  state: unknown;
+  middlewares?: LitsxHostMiddlewareMap | null;
+}
+
+export interface LitsxStructuralEntryInput {
+  id?: string;
+  callsiteIndex?: number;
+  callsiteId?: string;
+  definition?: LitsxStructuralDefinition | unknown;
+  args?: unknown[];
+  meta?: Record<string, unknown>;
+  state?: unknown;
+  middlewares?: LitsxHostMiddlewareMap | null;
+}
+
+export declare class HostMiddlewareRuntime {
+  constructor(
+    host: unknown,
+    entries?: LitsxStructuralEntryInput[] | ((host: unknown) => LitsxStructuralEntryInput[])
+  );
+  readonly host: unknown;
+  readonly entries: LitsxStructuralEntry[];
+  getEntry(index: number): LitsxStructuralEntry | null;
+  read(index: number): unknown;
+  run(methodName: LitsxHostMiddlewareLifecycleMethod, base: () => unknown): unknown;
+  run(methodName: LitsxHostMiddlewareLifecycleMethod, args: unknown[], base: () => unknown): unknown;
+  connectedCallback(base: () => unknown): unknown;
+  connectedCallback(args: unknown[], base: () => unknown): unknown;
+  disconnectedCallback(base: () => unknown): unknown;
+  disconnectedCallback(args: unknown[], base: () => unknown): unknown;
+  attributeChangedCallback(args: unknown[], base: () => unknown): unknown;
+  scheduleUpdate(base: () => unknown): unknown;
+  scheduleUpdate(args: unknown[], base: () => unknown): unknown;
+  shouldUpdate(args: unknown[], base: () => unknown): unknown;
+  willUpdate(args: unknown[], base: () => unknown): unknown;
+  update(args: unknown[], base: () => unknown): unknown;
+  updated(args: unknown[], base: () => unknown): unknown;
+  firstUpdated(args: unknown[], base: () => unknown): unknown;
+  getUpdateComplete(base: () => unknown): unknown;
+  getUpdateComplete(args: unknown[], base: () => unknown): unknown;
+}
+
+export type LitsxStructuralHostConstructor<TInstance = object> = abstract new (
+  ...args: any[]
+) => TInstance;
+
+export interface LitsxStructuralHostInstance {
+  __litsxHostMiddlewareRuntime: HostMiddlewareRuntime;
+  __litsxReadStructuralEntry(index: number): unknown;
+}
+
+export declare function HostMiddlewareMixin<TBase extends LitsxStructuralHostConstructor>(
+  Base: TBase
+): LitsxStructuralHostConstructor<InstanceType<TBase> & LitsxStructuralHostInstance>;
+
+export declare function createHostMiddlewareRuntime(
+  host: unknown,
+  entries?: LitsxStructuralEntryInput[] | ((host: unknown) => LitsxStructuralEntryInput[])
+): HostMiddlewareRuntime;
+
 /**
  * Run an effect after the component finishes updating.
  */
