@@ -165,6 +165,9 @@ describe("@litsx/typescript", () => {
           const product: Product = { id: "sku-1" };
           const checked = true;
           const ref = (value: unknown) => {};
+          const handleQuantityChange = (event: CustomEvent<{ quantity: number }>) => {
+            event.detail.quantity.toFixed();
+          };
 
           const VdsProductCard = (props: {
             product?: Product;
@@ -175,7 +178,8 @@ describe("@litsx/typescript", () => {
           const valid = (
             <VdsProductCard
               __litsx_prop_product={product}
-              __litsx_event_click={(event) => event?.preventDefault()}
+              __litsx_event_click={(event) => event.clientX.toFixed()}
+              __litsx_event_quantity-change={handleQuantityChange}
               __litsx_bool_checked={checked}
               slot="content"
               ref={ref}
@@ -187,6 +191,13 @@ describe("@litsx/typescript", () => {
             >
               Buy
             </VdsProductCard>
+          );
+
+          const customElement = (
+            <vds-counter
+              __litsx_event_click={(event) => event.clientX.toFixed()}
+              __litsx_event_quantity-change={handleQuantityChange}
+            />
           );
 
           const invalid = <VdsProductCard foo="bar" />;
@@ -2487,6 +2498,9 @@ describe("@litsx/typescript", () => {
         const product: Product = { id: "sku-1" };
         const checked = true;
         const cardRef = (value: unknown) => {};
+        const handleQuantityChange = (event: CustomEvent<{ quantity: number }>) => {
+          event.detail.quantity.toFixed();
+        };
 
         const VdsProductCard = ({
           children,
@@ -2499,7 +2513,8 @@ describe("@litsx/typescript", () => {
         export const view = (
           <VdsProductCard
             .product={product}
-            @click={(event) => event?.preventDefault()}
+            @click={(event: MouseEvent) => event.clientX.toFixed()}
+            @quantity-change={handleQuantityChange}
             ?checked={checked}
             slot="content"
             ref={cardRef}
@@ -2511,6 +2526,13 @@ describe("@litsx/typescript", () => {
           >
             Buy
           </VdsProductCard>
+        );
+
+        export const customElementView = (
+          <vds-counter
+            @click={(event: MouseEvent) => event.clientX.toFixed()}
+            @quantity-change={handleQuantityChange}
+          />
         );
       `,
     );

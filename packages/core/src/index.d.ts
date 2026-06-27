@@ -40,29 +40,46 @@ export interface LitsxBaseAttributes {
   [attributeName: `aria-${string}`]: string | number | boolean | undefined;
 }
 
-export interface LitsxDomAttributes<Target = EventTarget> {
-  /**
-   * Reserved for future JSX-authored event typing.
-   * LitSX currently treats Lit listener syntax (`@event`) as a parser-level feature,
-   * so the public JSX type surface intentionally avoids React-style `onClick` props.
-   */
-  _currentTarget?: Target | undefined;
-  /**
-   * Tooling virtualizes authored `@event` bindings to `__litsx_event_*` attributes
-   * so TypeScript can parse and typecheck LitSX-authored JSX.
-   */
-  [attributeName: `__litsx_event_${string}`]: ((event?: Event) => unknown) | undefined;
-  /**
-   * Tooling virtualizes authored `.prop` bindings to `__litsx_prop_*` attributes
-   * while preserving the original source spans for editor features.
-   */
-  [attributeName: `__litsx_prop_${string}`]: unknown;
-  /**
-   * Tooling virtualizes authored `?attr` bindings to `__litsx_bool_*` attributes
-   * while preserving the original source spans for editor features.
-   */
-  [attributeName: `__litsx_bool_${string}`]: boolean | undefined;
-}
+export type LitsxEventHandler<TEvent extends Event = Event> = {
+  bivarianceHack(event: TEvent): unknown;
+}["bivarianceHack"];
+
+export type LitsxKnownDomEventAttributes<Target = EventTarget> = {
+  [EventName in keyof GlobalEventHandlersEventMap as `__litsx_event_${EventName & string}`]?: LitsxEventHandler<
+    GlobalEventHandlersEventMap[EventName] & { currentTarget: Target }
+  >;
+};
+
+export type LitsxCustomEventAttributes = {
+  [attributeName: `__litsx_event_${string}-${string}`]: LitsxEventHandler<CustomEvent<unknown>> | undefined;
+};
+
+export type LitsxAnyEventAttributes = {
+  [attributeName: `__litsx_event_${string}`]: LitsxEventHandler<Event | CustomEvent<unknown>> | undefined;
+};
+
+export type LitsxDomAttributes<Target = EventTarget> =
+  & LitsxKnownDomEventAttributes<Target>
+  & LitsxCustomEventAttributes
+  & LitsxAnyEventAttributes
+  & {
+    /**
+     * Reserved for future JSX-authored event typing.
+     * LitSX currently treats Lit listener syntax (`@event`) as a parser-level feature,
+     * so the public JSX type surface intentionally avoids React-style `onClick` props.
+     */
+    _currentTarget?: Target | undefined;
+    /**
+     * Tooling virtualizes authored `.prop` bindings to `__litsx_prop_*` attributes
+     * while preserving the original source spans for editor features.
+     */
+    [attributeName: `__litsx_prop_${string}`]: unknown;
+    /**
+     * Tooling virtualizes authored `?attr` bindings to `__litsx_bool_*` attributes
+     * while preserving the original source spans for editor features.
+     */
+    [attributeName: `__litsx_bool_${string}`]: boolean | undefined;
+  };
 
 export type LitsxHostElementProps<TElement> = Omit<
   Partial<TElement>,
