@@ -149,6 +149,84 @@ describe("@litsx/typescript", () => {
     }
   });
 
+  it("accepts LitSX virtualized authored bindings on PascalCase component JSX without allowing arbitrary props", () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-component-authored-bindings-"));
+    const filePath = path.join(tempDir, "index.tsx");
+
+    try {
+      fs.symlinkSync(path.resolve("node_modules"), path.join(tempDir, "node_modules"), "dir");
+      fs.writeFileSync(
+        filePath,
+        `
+          import type { LitsxRenderable } from "@litsx/core";
+
+          type Product = { id: string };
+
+          const product: Product = { id: "sku-1" };
+          const checked = true;
+          const ref = (value: unknown) => {};
+
+          const VdsProductCard = (props: {
+            product?: Product;
+            checked?: boolean;
+            children?: LitsxRenderable;
+          }) => null;
+
+          const valid = (
+            <VdsProductCard
+              __litsx_prop_product={product}
+              __litsx_event_click={(event) => event?.preventDefault()}
+              __litsx_bool_checked={checked}
+              slot="content"
+              ref={ref}
+              class="card"
+              style={{ color: "red" }}
+              part="surface"
+              data-kind="product"
+              aria-label="Product"
+            >
+              Buy
+            </VdsProductCard>
+          );
+
+          const invalid = <VdsProductCard foo="bar" />;
+        `,
+      );
+
+      const program = ts.createProgram({
+        rootNames: [filePath],
+        options: {
+          jsx: ts.JsxEmit.ReactJSX,
+          jsxImportSource: "@litsx/core",
+          module: ts.ModuleKind.ESNext,
+          moduleResolution: ts.ModuleResolutionKind.Bundler,
+          target: ts.ScriptTarget.ESNext,
+          noEmit: true,
+          strict: true,
+          skipLibCheck: true,
+        },
+      });
+
+      const diagnostics = ts.getPreEmitDiagnostics(program).filter(
+        (diagnostic) => diagnostic.file?.fileName === filePath,
+      );
+
+      assert.strictEqual(
+        diagnostics.length,
+        1,
+        diagnostics.map((diagnostic) =>
+          ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n")
+        ).join("\n"),
+      );
+      assert.match(
+        ts.flattenDiagnosticMessageText(diagnostics[0].messageText, "\n"),
+        /Property 'foo' does not exist/,
+      );
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
   it("infers defineHook argument and result types from structural definitions", () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-define-hook-types-"));
     const filePath = path.join(tempDir, "index.ts");
@@ -2359,6 +2437,81 @@ describe("@litsx/typescript", () => {
         const value = 1;
         const busy = false;
         export const view = ({ label }: { label: string }) => <button @click={handleClick} .value={value} ?disabled={busy}>{label}</button>;
+      `,
+    );
+
+    process.stderr.write = () => true;
+
+    try {
+      process.chdir(tempDir);
+      assert.equal(runLitsxTypecheck([]), 0);
+    } finally {
+      process.chdir(originalCwd);
+      process.stderr.write = originalWrite;
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  }, 20_000);
+
+  it("typechecks authored LitSX bindings on PascalCase components", () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-typecheck-component-bindings-"));
+    const tsconfigPath = path.join(tempDir, "tsconfig.json");
+    const filePath = path.join(tempDir, "index.litsx");
+    const originalCwd = process.cwd();
+    const originalWrite = process.stderr.write;
+
+    fs.symlinkSync(path.resolve("node_modules"), path.join(tempDir, "node_modules"), "dir");
+    fs.writeFileSync(
+      tsconfigPath,
+      JSON.stringify({
+        compilerOptions: {
+          jsx: "react-jsx",
+          jsxImportSource: "@litsx/core",
+          allowArbitraryExtensions: true,
+          noEmit: true,
+          strict: true,
+          module: "ESNext",
+          moduleResolution: "Bundler",
+          target: "ESNext",
+          skipLibCheck: true,
+        },
+        include: ["index.litsx"],
+      }),
+    );
+    fs.writeFileSync(
+      filePath,
+      `
+        import type { LitsxRenderable } from "@litsx/core";
+
+        type Product = { id: string };
+
+        const product: Product = { id: "sku-1" };
+        const checked = true;
+        const cardRef = (value: unknown) => {};
+
+        const VdsProductCard = ({
+          children,
+        }: {
+          product?: Product;
+          checked?: boolean;
+          children?: LitsxRenderable;
+        }) => <article>{children}</article>;
+
+        export const view = (
+          <VdsProductCard
+            .product={product}
+            @click={(event) => event?.preventDefault()}
+            ?checked={checked}
+            slot="content"
+            ref={cardRef}
+            class="card"
+            style={{ color: "red" }}
+            part="surface"
+            data-kind="product"
+            aria-label="Product"
+          >
+            Buy
+          </VdsProductCard>
+        );
       `,
     );
 

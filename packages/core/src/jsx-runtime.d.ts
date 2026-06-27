@@ -1,7 +1,9 @@
 import type {
   ErrorBoundary,
   ErrorBoundaryProps,
+  LitsxBaseAttributes,
   LitsxComponent,
+  LitsxDomAttributes,
   LitsxElementProps,
   LitsxIntrinsicElements,
   LitsxJsxNode,
@@ -56,10 +58,11 @@ export namespace JSX {
   type LitsxBoundaryElementProps<TElement, TProps> =
     LitsxElementProps<TElement> & TProps;
 
+  type LitsxComponentAuthoredAttributes =
+    LitsxBaseAttributes & LitsxDomAttributes<EventTarget>;
+
   type LitsxComponentElementProps<TProps> =
-    TProps & {
-      children?: LitsxRenderable;
-    };
+    TProps & LitsxComponentAuthoredAttributes;
 
   type LibraryManagedAttributes<Component, Props> =
     Component extends typeof ErrorBoundary ? LitsxBoundaryElementProps<ErrorBoundary, ErrorBoundaryProps> :
