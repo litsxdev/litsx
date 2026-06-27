@@ -259,12 +259,36 @@ jobs:
               }
             }
 
+            const releaseDate = release.releaseDate || new Date().toISOString().slice(0, 10);
+            const escapedReleaseDate = releaseDate.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+            const dailyReleasePattern = new RegExp(`^LitSX release ${escapedReleaseDate} #(\\d+)$`);
+            let releaseName = existingRelease?.name || null;
+
+            if (!releaseName) {
+              const releases = await github.paginate(github.rest.repos.listReleases, {
+                owner,
+                repo,
+                per_page: 100,
+              });
+              let maxDailyReleaseNumber = 0;
+
+              for (const existing of releases) {
+                const match = existing.name?.match(dailyReleasePattern);
+                if (!match) {
+                  continue;
+                }
+                maxDailyReleaseNumber = Math.max(maxDailyReleaseNumber, Number(match[1]));
+              }
+
+              releaseName = `LitSX release ${releaseDate} #${maxDailyReleaseNumber + 1}`;
+            }
+
             const payload = {
               owner,
               repo,
               tag_name: release.tagName,
               target_commitish: release.targetCommitish,
-              name: release.name,
+              name: releaseName,
               body: release.body,
               draft: false,
               prerelease: false,

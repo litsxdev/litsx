@@ -148,6 +148,7 @@ const releaseData = {
   tagName: `release-${shortSha}`,
   targetCommitish: releaseCommitSha,
   name: `LitSX release ${releaseCommitDate}`,
+  releaseDate: releaseCommitDate,
   body: buildReleaseBody(changes),
   commitSha: releaseCommitSha,
   packages: changes.map(({ name, version, packageDir, tagName }) => ({
