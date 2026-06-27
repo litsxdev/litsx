@@ -46,16 +46,21 @@ export type LitsxEventHandler<TEvent extends Event = Event> = {
 
 export type LitsxKnownDomEventAttributes<Target = EventTarget> = {
   [EventName in keyof GlobalEventHandlersEventMap as `__litsx_event_${EventName & string}`]?: LitsxEventHandler<
-    GlobalEventHandlersEventMap[EventName] & { currentTarget: Target }
+    GlobalEventHandlersEventMap[EventName] & CustomEvent<any> & { currentTarget: Target }
   >;
 };
 
 export type LitsxCustomEventAttributes = {
-  [attributeName: `__litsx_event_${string}-${string}`]: LitsxEventHandler<CustomEvent<unknown>> | undefined;
+  [attributeName: `__litsx_event_${string}-${string}`]: LitsxEventHandler<CustomEvent<any>> | undefined;
 };
 
 export type LitsxAnyEventAttributes = {
-  [attributeName: `__litsx_event_${string}`]: LitsxEventHandler<Event | CustomEvent<unknown>> | undefined;
+  /**
+   * Fallback for authored event names that do not have a reliable DOM event map entry.
+   * This stays intentionally broad so the catch-all index does not over-constrain
+   * known DOM events or Lit-style custom events when intersected with narrower maps.
+   */
+  [attributeName: `__litsx_event_${string}`]: LitsxEventHandler<any> | undefined;
 };
 
 export type LitsxDomAttributes<Target = EventTarget> =

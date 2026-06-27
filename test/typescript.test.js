@@ -168,6 +168,9 @@ describe("@litsx/typescript", () => {
           const handleQuantityChange = (event: CustomEvent<{ quantity: number }>) => {
             event.detail.quantity.toFixed();
           };
+          const handleCustomInput = (event: CustomEvent<{ value: string }>) => {
+            event.detail.value.toUpperCase();
+          };
 
           const VdsProductCard = (props: {
             product?: Product;
@@ -179,6 +182,7 @@ describe("@litsx/typescript", () => {
             <VdsProductCard
               __litsx_prop_product={product}
               __litsx_event_click={(event) => event.clientX.toFixed()}
+              __litsx_event_input={handleCustomInput}
               __litsx_event_quantity-change={handleQuantityChange}
               __litsx_bool_checked={checked}
               slot="content"
@@ -2501,6 +2505,9 @@ describe("@litsx/typescript", () => {
         const handleQuantityChange = (event: CustomEvent<{ quantity: number }>) => {
           event.detail.quantity.toFixed();
         };
+        const handleCustomInput = (event: CustomEvent<{ value: string }>) => {
+          event.detail.value.toUpperCase();
+        };
 
         const VdsProductCard = ({
           children,
@@ -2514,6 +2521,7 @@ describe("@litsx/typescript", () => {
           <VdsProductCard
             .product={product}
             @click={(event: MouseEvent) => event.clientX.toFixed()}
+            @input={handleCustomInput}
             @quantity-change={handleQuantityChange}
             ?checked={checked}
             slot="content"
