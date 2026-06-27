@@ -1,5 +1,11 @@
 # litsx
 
+## 0.6.2
+
+### Patch Changes
+
+- 5f520f3: Improve virtualized `@event` handler typing so known DOM events keep useful event types and custom authored events can use `CustomEvent` handlers instead of being forced to generic `Event`.
+
 ## 0.6.1
 
 ### Patch Changes
