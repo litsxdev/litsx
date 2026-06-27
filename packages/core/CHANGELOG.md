@@ -1,5 +1,11 @@
 # litsx
 
+## 0.6.3
+
+### Patch Changes
+
+- 346420e: Allow authored `@event` handlers to use `CustomEvent` payload types across DOM-named events, custom events with hyphenated names, and custom events with simple names, while preserving useful native DOM event typing for inline handlers.
+
 ## 0.6.2
 
 ### Patch Changes
