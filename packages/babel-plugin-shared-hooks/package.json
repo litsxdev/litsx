@@ -1,6 +1,6 @@
 {
   "name": "@litsx/babel-plugin-shared-hooks",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "description": "Shared hook transform utilities used by the LitSX Babel plugin family",
   "author": "LitSX Team",
   "type": "module",

@@ -1,5 +1,12 @@
 # @litsx/compiler
 
+## 0.8.1
+
+### Patch Changes
+
+- Updated dependencies [69264c9]
+  - @litsx/babel-preset-litsx@0.9.0
+
 ## 0.8.0
 
 ### Minor Changes
