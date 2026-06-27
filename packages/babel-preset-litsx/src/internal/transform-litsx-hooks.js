@@ -80,7 +80,7 @@ function normalizeInMemoryFiles(files) {
 function createStructuralHookResolver(options = {}) {
   const inMemoryFiles = normalizeInMemoryFiles(options.inMemoryFiles);
   const compilationSession = options.__litsxCompilationSession || null;
-  const moduleCache = compilationSession?.importedModuleAnalysisCache || new Map();
+  const moduleCache = compilationSession?.importedHookModuleAnalysisCache || new Map();
   const resolvedImportCache = compilationSession?.resolvedImportCache || new Map();
   const providedTypescriptSession =
     options?.typescriptSession?.projectSession || options?.typescriptSession || null;

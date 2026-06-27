@@ -293,6 +293,7 @@ function createCompilerCaches() {
     sourceFeatures: new Map(),
     authoredInput: new Map(),
     importedModuleAnalyses: new Map(),
+    importedHookModuleAnalyses: new Map(),
     resolvedImports: new Map(),
     presetPluginsByOptions: {
       default: new Map(),
@@ -326,6 +327,7 @@ export function createLitsxCompilationSession(sessionOptions = {}) {
     sourceFeaturesCache: caches.sourceFeatures,
     authoredInputCache: caches.authoredInput,
     importedModuleAnalysisCache: caches.importedModuleAnalyses,
+    importedHookModuleAnalysisCache: caches.importedHookModuleAnalyses,
     resolvedImportCache: caches.resolvedImports,
     transform(source, options = {}) {
       return transformLitsx(source, {
@@ -353,6 +355,7 @@ export function createLitsxCompilationSession(sessionOptions = {}) {
         this.sourceFeaturesCache.clear();
         this.authoredInputCache.clear();
         this.importedModuleAnalysisCache.clear();
+        this.importedHookModuleAnalysisCache.clear();
         this.resolvedImportCache.clear();
         this.typescriptSession?.invalidate?.({ host: true });
         return;
@@ -371,6 +374,7 @@ export function createLitsxCompilationSession(sessionOptions = {}) {
           }
         }
         this.importedModuleAnalysisCache.delete(normalizedFile);
+        this.importedHookModuleAnalysisCache.delete(normalizedFile);
         for (const key of [...this.resolvedImportCache.keys()]) {
           if (key.startsWith(`${normalizedFile}::`)) {
             this.resolvedImportCache.delete(key);

@@ -319,6 +319,70 @@ describe("@litsx/compiler", () => {
     assert.doesNotMatch(result.code, /prepareEffects\(this\);/);
   }, 20000);
 
+  it("keeps imported hook analysis isolated from imported renderer helper analysis", () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-hook-renderer-cache-"));
+
+    try {
+      const rootHookFile = path.join(tempDir, "hook-consumer.litsx");
+      const rootRendererFile = path.join(tempDir, "renderer-consumer.litsx");
+      const helperFile = path.join(tempDir, "helpers.tsx");
+      const buttonFile = path.join(tempDir, "litsx-button.litsx");
+
+      fs.writeFileSync(
+        helperFile,
+        [
+          'import { useMemoValue } from "@litsx/core";',
+          'import { LitsxButton } from "./litsx-button.litsx";',
+          "export function useDemo(input: string) {",
+          "  return useMemoValue(() => input, [input]);",
+          "}",
+          "export function renderHeader() {",
+          "  return <LitsxButton label='Save' />;",
+          "}",
+        ].join("\n")
+      );
+
+      fs.writeFileSync(
+        buttonFile,
+        [
+          "export const LitsxButton = ({ label = '' }) => {",
+          "  return <button>{label}</button>;",
+          "};",
+        ].join("\n")
+      );
+
+      const session = createLitsxCompilationSession();
+      const hookConsumer = [
+        'import { useDemo } from "./helpers";',
+        "export const HookConsumer = () => {",
+        '  const value = useDemo("x");',
+        "  return <div>{value}</div>;",
+        "};",
+      ].join("\n");
+      const rendererConsumer = [
+        'import { renderHeader } from "./helpers";',
+        "export const RendererConsumer = () => {",
+        "  return <guide-card .header={renderHeader} />;",
+        "};",
+      ].join("\n");
+
+      const hookResult = session.transformSync(hookConsumer, {
+        filename: rootHookFile,
+        jsxTemplate: false,
+      });
+      const rendererResult = session.transformSync(rendererConsumer, {
+        filename: rootRendererFile,
+        jsxTemplate: false,
+      });
+
+      assert.match(hookResult.code, /const value = useDemo\(this, "x"\);/);
+      assert.match(rendererResult.code, /\.header=\{bindRendererContext\(typeof this === "undefined" \? null : this,\s*renderHeader,\s*\{\s*projected: true\s*\}\)\}/);
+      assert.match(rendererResult.code, /static elements\s*=\s*\{[\s\S]*"litsx-button": (?:LitsxButton|__litsxImportedLitsxButton1)[\s\S]*\}/);
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  }, 20000);
+
   it("strips top-level TypeScript declarations from compiled .litsx output", () => {
     const source = [
       "interface ButtonProps {",
