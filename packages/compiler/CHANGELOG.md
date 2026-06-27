@@ -1,5 +1,13 @@
 # @litsx/compiler
 
+## 0.8.2
+
+### Patch Changes
+
+- ac837c5: Detect imported custom hooks that call LitSX runtime hooks and inject the active host at their callsites so the compiled hook signature and consumer calls stay aligned.
+- Updated dependencies [ac837c5]
+  - @litsx/babel-preset-litsx@0.9.1
+
 ## 0.8.1
 
 ### Patch Changes

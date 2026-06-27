@@ -1,5 +1,11 @@
 # @litsx/babel-plugin-shared-hooks
 
+## 0.4.1
+
+### Patch Changes
+
+- ac837c5: Detect imported custom hooks that call LitSX runtime hooks and inject the active host at their callsites so the compiled hook signature and consumer calls stay aligned.
+
 ## 0.4.0
 
 ### Minor Changes
