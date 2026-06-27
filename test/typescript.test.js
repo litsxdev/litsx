@@ -171,6 +171,9 @@ describe("@litsx/typescript", () => {
           const handleCustomInput = (event: CustomEvent<{ value: string }>) => {
             event.detail.value.toUpperCase();
           };
+          const handleSelect = (event: CustomEvent<{ id: string }>) => {
+            event.detail.id.toUpperCase();
+          };
 
           const VdsProductCard = (props: {
             product?: Product;
@@ -183,6 +186,7 @@ describe("@litsx/typescript", () => {
               __litsx_prop_product={product}
               __litsx_event_click={(event) => event.clientX.toFixed()}
               __litsx_event_input={handleCustomInput}
+              __litsx_event_select={handleSelect}
               __litsx_event_quantity-change={handleQuantityChange}
               __litsx_bool_checked={checked}
               slot="content"
@@ -200,6 +204,7 @@ describe("@litsx/typescript", () => {
           const customElement = (
             <vds-counter
               __litsx_event_click={(event) => event.clientX.toFixed()}
+              __litsx_event_select={handleSelect}
               __litsx_event_quantity-change={handleQuantityChange}
             />
           );
@@ -2508,6 +2513,9 @@ describe("@litsx/typescript", () => {
         const handleCustomInput = (event: CustomEvent<{ value: string }>) => {
           event.detail.value.toUpperCase();
         };
+        const handleSelect = (event: CustomEvent<{ id: string }>) => {
+          event.detail.id.toUpperCase();
+        };
 
         const VdsProductCard = ({
           children,
@@ -2522,6 +2530,7 @@ describe("@litsx/typescript", () => {
             .product={product}
             @click={(event: MouseEvent) => event.clientX.toFixed()}
             @input={handleCustomInput}
+            @select={handleSelect}
             @quantity-change={handleQuantityChange}
             ?checked={checked}
             slot="content"
@@ -2539,6 +2548,7 @@ describe("@litsx/typescript", () => {
         export const customElementView = (
           <vds-counter
             @click={(event: MouseEvent) => event.clientX.toFixed()}
+            @select={handleSelect}
             @quantity-change={handleQuantityChange}
           />
         );

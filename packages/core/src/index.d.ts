@@ -56,9 +56,10 @@ export type LitsxCustomEventAttributes = {
 
 export type LitsxAnyEventAttributes = {
   /**
-   * Fallback for authored event names that do not have a reliable DOM event map entry.
-   * This stays intentionally broad so the catch-all index does not over-constrain
-   * known DOM events or Lit-style custom events when intersected with narrower maps.
+   * Last-resort fallback for authored event names that do not have a reliable DOM event map entry.
+   * All authored events also accept CustomEvent handlers; this escape stays intentionally
+   * broad so the catch-all index does not over-constrain known DOM or custom events when
+   * intersected with narrower maps.
    */
   [attributeName: `__litsx_event_${string}`]: LitsxEventHandler<any> | undefined;
 };
