@@ -67,7 +67,12 @@ function createStructuralEntryExpression(entry, t) {
     t.objectProperty(t.identifier("callsiteIndex"), t.numericLiteral(entry.callsiteIndex)),
     t.objectProperty(t.identifier("callsitePath"), cloneForClassEntry(entry.callsitePath, t)),
     t.objectProperty(t.identifier("definition"), cloneForClassEntry(entry.definition, t)),
-    t.objectProperty(t.identifier("args"), t.arrayExpression([])),
+    t.objectProperty(
+      t.identifier("args"),
+      entry.argsExpression
+        ? cloneForClassEntry(entry.argsExpression, t)
+        : t.arrayExpression([])
+    ),
     t.objectProperty(
       t.identifier("meta"),
       t.objectExpression([
@@ -78,6 +83,72 @@ function createStructuralEntryExpression(entry, t) {
       ])
     ),
   ]);
+}
+
+function getStructuralDefinitionObjectFromBinding(binding, state) {
+  if (!binding?.path?.isVariableDeclarator()) {
+    return null;
+  }
+  const initPath = binding.path.get("init");
+  if (!initPath?.isCallExpression()) {
+    return null;
+  }
+  if (!isDefineHookCallee(initPath.get("callee"), state)) {
+    return null;
+  }
+  const firstArg = initPath.get("arguments.0");
+  return firstArg?.isObjectExpression() ? firstArg : null;
+}
+
+function hasObjectProperty(objectPath, name) {
+  if (!objectPath?.isObjectExpression()) {
+    return false;
+  }
+  return objectPath.get("properties").some((propertyPath) => {
+    if (!propertyPath.isObjectProperty() && !propertyPath.isObjectMethod()) {
+      return false;
+    }
+    const key = propertyPath.get("key");
+    return key.isIdentifier({ name }) || key.isStringLiteral({ value: name });
+  });
+}
+
+function getStructuralHookPhaseInfo(callPath, calleePath, state) {
+  if (!calleePath.isIdentifier()) {
+    return {
+      hasStaticPhase: false,
+      hasInstancePhase: true,
+    };
+  }
+  const binding = callPath.scope.getBinding(calleePath.node.name);
+  if (binding?.path?.isImportSpecifier()) {
+    const source = binding.path.parentPath?.node?.source?.value;
+    const imported = binding.path.node.imported;
+    const importedName = imported?.name ?? imported?.value ?? calleePath.node.name;
+    const info = getImportedStructuralHookInfo(state, source, importedName);
+    if (info && typeof info === "object") {
+      return {
+        hasStaticPhase: info.hasStaticPhase === true,
+        hasInstancePhase: info.hasInstancePhase !== false,
+      };
+    }
+  }
+  const objectPath = getStructuralDefinitionObjectFromBinding(binding, state);
+  if (!objectPath) {
+    return {
+      hasStaticPhase: false,
+      hasInstancePhase: true,
+    };
+  }
+  const hasStaticPhase = hasObjectProperty(objectPath, "static");
+  const hasInstancePhase =
+    hasObjectProperty(objectPath, "setup") ||
+    hasObjectProperty(objectPath, "createState") ||
+    hasObjectProperty(objectPath, "middlewares");
+  return {
+    hasStaticPhase,
+    hasInstancePhase,
+  };
 }
 
 function addStructuralEntryToCurrentPlan(state, entry) {
@@ -93,6 +164,12 @@ function addStructuralEntryToCurrentPlan(state, entry) {
     const deps = state.structuralHookDependencies.get(state.activeStructuralDefinitionName) || [];
     deps.push(entry);
     state.structuralHookDependencies.set(state.activeStructuralDefinitionName, deps);
+  }
+}
+
+function addStructuralStaticEntryToCurrentPlan(state, entry) {
+  if (state.activeStructuralStaticEntries) {
+    state.activeStructuralStaticEntries.push(entry);
   }
 }
 
@@ -190,6 +267,14 @@ function addCustomHookStructuralDependenciesToCurrentPlan(calleePath, state, t) 
 }
 
 function ensureStaticStructuralEntries(classPath, entries, t) {
+  return ensureStructuralEntriesProperty(classPath, "structuralEntries", entries, t);
+}
+
+function ensureStaticStructuralStaticEntries(classPath, entries, t) {
+  return ensureStructuralEntriesProperty(classPath, "structuralStaticEntries", entries, t);
+}
+
+function ensureStructuralEntriesProperty(classPath, propertyName, entries, t) {
   if (!entries || entries.length === 0) {
     return;
   }
@@ -197,7 +282,7 @@ function ensureStaticStructuralEntries(classPath, entries, t) {
   const body = classPath.get("body.body");
   const existing = body.find((memberPath) =>
     memberPath.node.static === true &&
-    t.isIdentifier(memberPath.node.key, { name: "structuralEntries" })
+    t.isIdentifier(memberPath.node.key, { name: propertyName })
   );
   const entryExpressions = entries
     .slice()
@@ -213,7 +298,7 @@ function ensureStaticStructuralEntries(classPath, entries, t) {
   }
 
   const property = t.classProperty(
-    t.identifier("structuralEntries"),
+    t.identifier(propertyName),
     t.arrayExpression(entryExpressions)
   );
   property.static = true;
@@ -579,6 +664,8 @@ function getStructuralHookCallInfo(callPath, calleePath, state, t) {
       label: property.node.name,
       calleePath,
       t,
+      hasStaticPhase: false,
+      hasInstancePhase: true,
       definition: t.memberExpression(
         t.identifier(object.node.name),
         t.identifier(property.node.name)
@@ -591,10 +678,12 @@ function getStructuralHookCallInfo(callPath, calleePath, state, t) {
   }
   const name = calleePath.node.name;
   if (state.structuralHookIdentifiers?.has(name)) {
+    const phaseInfo = getStructuralHookPhaseInfo(callPath, calleePath, state);
     return {
       label: name,
       calleePath,
       t,
+      ...phaseInfo,
       definition: t.identifier(name),
     };
   }
@@ -603,22 +692,28 @@ function getStructuralHookCallInfo(callPath, calleePath, state, t) {
     return null;
   }
   state.structuralHookIdentifiers.add(name);
+  const phaseInfo = getStructuralHookPhaseInfo(callPath, calleePath, state);
   return {
     label: name,
     calleePath,
     t,
+    ...phaseInfo,
     definition: t.identifier(name),
   };
 }
 
 function isImportedStructuralHook(state, source, importedName) {
+  const result = getImportedStructuralHookInfo(state, source, importedName);
+  return result === true || result === "structural-hook" || result?.kind === "structural-hook";
+}
+
+function getImportedStructuralHookInfo(state, source, importedName) {
   const resolver = state.structuralHookResolver;
-  const result = typeof resolver === "function" && resolver({
+  return typeof resolver === "function" && resolver({
     source,
     importedName,
     filename: state.file?.opts?.filename || state.filename || "",
   });
-  return result === true || result === "structural-hook";
 }
 
 function isImportedStructuralCustomHook(state, source, importedName) {
@@ -686,7 +781,13 @@ function rejectStructuralHookAlias(path, state) {
   if (!initPath?.node || isDefineHookCallee(initPath.get("callee"), state)) {
     return;
   }
-  if (initPath.isCallExpression() && initPath.get("callee").isIdentifier({ name: "useStructuralEntry" })) {
+  if (
+    initPath.isCallExpression() &&
+    (
+      initPath.get("callee").isIdentifier({ name: "useStructuralEntry" }) ||
+      initPath.get("callee").isIdentifier({ name: "useStructuralStaticEntry" })
+    )
+  ) {
     return;
   }
   if (initPath.isCallExpression() && containsStructuralHookReference(initPath.get("callee"), state)) {
@@ -870,6 +971,31 @@ function transformStructuralHookCall(callPath, state, t, hookInfo) {
     definition: t.cloneNode(hookInfo.definition, true),
   };
 
+  if (hookInfo.hasStaticPhase && !hookInfo.hasInstancePhase) {
+    addStructuralStaticEntryToCurrentPlan(state, {
+      ...entry,
+      argsExpression: t.cloneNode(argsArray, true),
+    });
+    addStructuralDependenciesToCurrentPlan(state, hookInfo);
+    callPath.replaceWith(
+      t.callExpression(t.identifier("useStructuralStaticEntry"), [
+        t.memberExpression(hostExpr, t.identifier("constructor")),
+        t.numericLiteral(callsiteIndex),
+        t.stringLiteral(callsiteId),
+        t.cloneNode(hookInfo.definition, true),
+        argsArray,
+        meta,
+      ])
+    );
+    callPath.skip();
+
+    state.usedHelpers.add("useStructuralStaticEntry");
+    if (state.activeCustomHookBinding?.identifier?.name) {
+      state.structuralCustomHookIdentifiers.add(state.activeCustomHookBinding.identifier.name);
+    }
+    return true;
+  }
+
   addStructuralEntryToCurrentPlan(state, entry);
   addStructuralDependenciesToCurrentPlan(state, hookInfo);
 
@@ -902,7 +1028,11 @@ function processRuntimeCall(callPath, state, t, options) {
     const handled = transformStructuralHookCall(callPath, state, t, structuralHookInfo);
     if (handled && markHelperUsage) {
       state.prepareNeeded = true;
-      markHelperUsage("structural");
+      markHelperUsage(
+        structuralHookInfo.hasStaticPhase && !structuralHookInfo.hasInstancePhase
+          ? "structural-static"
+          : "structural"
+      );
     }
     return handled;
   }
@@ -1180,10 +1310,13 @@ function transformClass(classPath, state, t) {
 
   let hookUsedInRender = false;
   let structuralHookUsedInRender = false;
+  let structuralStaticHookUsedInRender = false;
   const structuralEntries = [];
+  const structuralStaticEntries = [];
 
   pushHostExpression(state, t.thisExpression());
   state.activeStructuralEntries = structuralEntries;
+  state.activeStructuralStaticEntries = structuralStaticEntries;
 
   renderMethodPath.traverse({
     CallExpression(callPath) {
@@ -1193,6 +1326,9 @@ function transformClass(classPath, state, t) {
           if (kind === "structural") {
             structuralHookUsedInRender = true;
           }
+          if (kind === "structural-static") {
+            structuralStaticHookUsedInRender = true;
+          }
         },
       });
 
@@ -1201,6 +1337,7 @@ function transformClass(classPath, state, t) {
   });
 
   state.activeStructuralEntries = null;
+  state.activeStructuralStaticEntries = null;
   popHostExpression(state);
 
   if (hookUsedInRender) {
@@ -1220,6 +1357,9 @@ function transformClass(classPath, state, t) {
 
   if (structuralHookUsedInRender) {
     ensureStaticStructuralEntries(classPath, structuralEntries, t);
+  }
+  if (structuralStaticHookUsedInRender) {
+    ensureStaticStructuralStaticEntries(classPath, structuralStaticEntries, t);
   }
 }
 
@@ -1274,6 +1414,7 @@ export function createRuntimeHooksTransform({
             state.structuralCallsiteIndex = 0;
             state.structuralPathStack = [];
             state.activeStructuralEntries = null;
+            state.activeStructuralStaticEntries = null;
             state.activeStructuralDefinitionName = null;
             state.structuralHookResolver =
               typeof state.opts?.structuralHookResolver === "function"

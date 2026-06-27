@@ -9,6 +9,7 @@ import {
   createHostMiddlewareRuntime,
   isStructuralHook,
   useStructuralEntry,
+  useStructuralStaticEntry,
 } from "../packages/core/src/index.js";
 
 function entry(id, middlewares = {}, extras = {}) {
@@ -160,9 +161,9 @@ describe("HostMiddlewareRuntime", () => {
         meta: { source: "test" },
         state: { count: 2 },
         definition: {
-          use(nextHost, state, args, meta, nextEntry) {
+          use(host, state, args, meta, nextEntry) {
             return {
-              host: nextHost.name,
+              host: host.name,
               state: state.count,
               arg: args[0],
               source: meta.source,
@@ -400,6 +401,128 @@ describe("HostMiddlewareRuntime", () => {
       path: ["Component", "useThing"],
       id: "callsite-a",
     });
+  });
+
+  it("supports static-only hooks without host lifecycle middleware", () => {
+    const calls = [];
+    class StaticOwner {}
+    const structuralHook = defineHook({
+      static(name, meta) {
+        calls.push(["static", name, meta.callsitePath]);
+        return { label: name.toUpperCase() };
+      },
+      use(name, state, meta) {
+        return {
+          name,
+          label: state.static.label,
+          path: meta.callsitePath,
+          instance: state.instance,
+        };
+      },
+    });
+
+    StaticOwner.structuralStaticEntries = [
+      {
+        callsiteIndex: 0,
+        callsiteId: "static-callsite",
+        callsitePath: ["static-callsite"],
+        definition: structuralHook,
+        args: ["catalog"],
+      },
+    ];
+
+    const first = useStructuralStaticEntry(
+      StaticOwner,
+      0,
+      "static-callsite",
+      structuralHook,
+      ["catalog"],
+      { callsitePath: ["static-callsite"] },
+    );
+    const second = useStructuralStaticEntry(
+      StaticOwner,
+      0,
+      "static-callsite",
+      structuralHook,
+      ["catalog"],
+      { callsitePath: ["static-callsite"] },
+    );
+
+    assert.deepStrictEqual(first, {
+      name: "catalog",
+      label: "CATALOG",
+      path: ["static-callsite"],
+      instance: undefined,
+    });
+    assert.deepStrictEqual(second, first);
+    assert.deepStrictEqual(calls, [["static", "catalog", ["static-callsite"]]]);
+    const runtime = new HostMiddlewareRuntime(new StaticOwner(), []);
+    assert.deepStrictEqual(runtime.entries, []);
+  });
+
+  it("supports mixed static, setup, middleware, and use phases", () => {
+    const calls = [];
+    function Host() {}
+    const structuralHook = defineHook({
+      static(name, meta) {
+        calls.push(["static", name, meta.callsitePath]);
+        return { staticLabel: `static:${name}` };
+      },
+      setup(name, staticState, meta) {
+        calls.push(["setup", name, staticState.staticLabel, meta.callsitePath]);
+        return { connected: false, instanceLabel: `instance:${name}` };
+      },
+      middlewares: {
+        connectedCallback(next, state, meta) {
+          calls.push(["middleware", state.static.staticLabel, state.instance.instanceLabel, meta.callsitePath]);
+          state.instance.connected = true;
+          return next();
+        },
+      },
+      use(name, state, meta) {
+        return {
+          name,
+          staticLabel: state.static.staticLabel,
+          instanceLabel: state.instance.instanceLabel,
+          connected: state.instance.connected,
+          path: meta.callsitePath,
+        };
+      },
+    });
+    Host.structuralEntries = [
+      {
+        callsiteIndex: 0,
+        callsiteId: "mixed-callsite",
+        callsitePath: ["mixed-callsite"],
+        definition: structuralHook,
+        args: ["catalog"],
+      },
+    ];
+
+    const host = new Host();
+    const runtime = new HostMiddlewareRuntime(host, Host.structuralEntries);
+
+    assert.deepStrictEqual(runtime.read(0, ["catalog"]), {
+      name: "catalog",
+      staticLabel: "static:catalog",
+      instanceLabel: "instance:catalog",
+      connected: false,
+      path: ["mixed-callsite"],
+    });
+    runtime.connectedCallback(() => calls.push(["base"]));
+    assert.deepStrictEqual(runtime.read(0, ["catalog"]), {
+      name: "catalog",
+      staticLabel: "static:catalog",
+      instanceLabel: "instance:catalog",
+      connected: true,
+      path: ["mixed-callsite"],
+    });
+    assert.deepStrictEqual(calls, [
+      ["static", "catalog", ["mixed-callsite"]],
+      ["setup", "catalog", "static:catalog", ["mixed-callsite"]],
+      ["middleware", "static:catalog", "instance:catalog", ["mixed-callsite"]],
+      ["base"],
+    ]);
   });
 
   it("passes structural metadata to lifecycle middlewares", () => {

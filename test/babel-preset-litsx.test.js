@@ -124,6 +124,75 @@ describe("@litsx/babel-preset-litsx", () => {
     assert.match(result.code, /callsitePath: \["litsx-structural-[^"]+"\]/);
   });
 
+  it("compiles static-only structural hooks without host lifecycle wrapping", () => {
+    const source = [
+      'import { defineHook } from "@litsx/core";',
+      "const useStaticResource = defineHook({",
+      "  static(name, meta) {",
+      "    return { key: name, path: meta.callsitePath };",
+      "  },",
+      "  use(name, state, meta) {",
+      "    return `${state.static.key}:${meta.callsitePath.length}`;",
+      "  },",
+      "});",
+      "export function StaticCard() {",
+      "  static styles = `:host { display: block; }`;",
+      "  const value = useStaticResource('catalog');",
+      "  return <div>{value}</div>;",
+      "}",
+    ].join("\n");
+
+    const result = transformFromAstSync(parser.parse(source, { sourceType: "module" }), source, {
+      configFile: false,
+      babelrc: false,
+      filename: "/virtual/static-structural.litsx",
+      presets: [[nativePreset, { jsxTemplate: false }]],
+    });
+
+    assert.match(result.code, /import \{[^}]*useStructuralStaticEntry[^}]*defineHook[^}]*\} from "@litsx\/core";|import \{[^}]*defineHook[^}]*useStructuralStaticEntry[^}]*\} from "@litsx\/core";/);
+    assert.doesNotMatch(result.code, /HostMiddlewareMixin/);
+    assert.match(result.code, /class StaticCard extends (?:LitsxStaticHoistsMixin\(LitElement\)|LitElement)/);
+    assert.match(result.code, /static structuralStaticEntries = \[/);
+    assert.match(result.code, /args: \['catalog'\]|\["catalog"\]/);
+    assert.match(result.code, /useStructuralStaticEntry\(this\.constructor, 0, "litsx-structural-[^"]+", useStaticResource, \['catalog'\]|\["catalog"\]/);
+    assert.match(result.code, /static get styles\(\)/);
+  });
+
+  it("compiles mixed structural hooks through the instance middleware path", () => {
+    const source = [
+      'import { defineHook } from "@litsx/core";',
+      "const useMixedResource = defineHook({",
+      "  static(name) { return { key: name }; },",
+      "  setup(name, staticState) { return { label: `${staticState.key}:${name}` }; },",
+      "  middlewares: {",
+      "    connectedCallback(next, state) {",
+      "      state.instance.connected = true;",
+      "      return next();",
+      "    },",
+      "  },",
+      "  use(name, state) {",
+      "    return `${state.static.key}:${state.instance.label}:${name}`;",
+      "  },",
+      "});",
+      "export function MixedCard() {",
+      "  const value = useMixedResource('catalog');",
+      "  return <div>{value}</div>;",
+      "}",
+    ].join("\n");
+
+    const result = transformFromAstSync(parser.parse(source, { sourceType: "module" }), source, {
+      configFile: false,
+      babelrc: false,
+      filename: "/virtual/mixed-structural.litsx",
+      presets: [[nativePreset, { jsxTemplate: false }]],
+    });
+
+    assert.match(result.code, /class MixedCard extends HostMiddlewareMixin\(LitElement\)/);
+    assert.match(result.code, /static structuralEntries = \[/);
+    assert.doesNotMatch(result.code, /static structuralStaticEntries/);
+    assert.match(result.code, /useStructuralEntry\(this, 0, "litsx-structural-[^"]+", useMixedResource, \['catalog'\]|\["catalog"\]/);
+  });
+
   it("compiles structural hooks used transitively through local custom hooks", () => {
     const source = [
       'import { defineHook } from "@litsx/core";',
@@ -190,6 +259,43 @@ describe("@litsx/babel-preset-litsx", () => {
     assert.match(result.code, /class Greeting extends HostMiddlewareMixin\(LitElement\)/);
     assert.match(result.code, /static structuralEntries = \[/);
     assert.match(result.code, /useStructuralEntry\(this, 0, "litsx-structural-[^"]+", useLocale, \['en'\]|\["en"\]/);
+  });
+
+  it("compiles imported static-only structural hooks without host lifecycle wrapping", () => {
+    const source = [
+      'import { useStaticLocale } from "./hooks.litsx";',
+      "export function Greeting() {",
+      "  const locale = useStaticLocale('en');",
+      "  return <div>{locale}</div>;",
+      "}",
+    ].join("\n");
+    const hooksSource = [
+      'import { defineHook } from "@litsx/core";',
+      "export const useStaticLocale = defineHook({",
+      "  static(locale) {",
+      "    return { locale };",
+      "  },",
+      "  use(locale, state) {",
+      "    return `${state.static.locale}:${locale}`;",
+      "  },",
+      "});",
+    ].join("\n");
+
+    const result = transformFromAstSync(parser.parse(source, { sourceType: "module" }), source, {
+      configFile: false,
+      babelrc: false,
+      filename: "/virtual/imported-static-structural.litsx",
+      presets: [[nativePreset, {
+        jsxTemplate: false,
+        inMemoryFiles: {
+          "/virtual/hooks.litsx": hooksSource,
+        },
+      }]],
+    });
+
+    assert.doesNotMatch(result.code, /HostMiddlewareMixin/);
+    assert.match(result.code, /static structuralStaticEntries = \[/);
+    assert.match(result.code, /useStructuralStaticEntry\(this\.constructor, 0, "litsx-structural-[^"]+", useStaticLocale, \['en'\]|\["en"\]/);
   });
 
   it("compiles namespace imported structural hooks discovered from authored modules", () => {

@@ -120,27 +120,43 @@ Authored structural hooks are declared with `defineHook()`:
 import { defineHook } from "@litsx/core";
 
 const useLocale = defineHook({
-  setup(host, args, meta, entry) {
-    return { locale: args[0] };
+  static(locale, meta) {
+    return { key: locale, path: meta.callsitePath };
   },
-  use(host, state) {
-    return state.locale;
+  setup(locale, staticState, meta) {
+    return { locale, connected: false, key: staticState.key };
+  },
+  use(locale, state, meta) {
+    return `${state.static.key}:${state.instance.locale}`;
   },
   middlewares: {
-    connectedCallback(host, state, next) {
-      state.connected = true;
+    connectedCallback(next, state, meta) {
+      state.instance.connected = true;
       return next();
     },
   },
 });
 ```
 
+The phases are explicit:
+
+- `static(...args, meta)` runs in the class/type phase and never participates in host instance lifecycle.
+- `setup(...args, staticState, meta)` creates per-host-instance state.
+- `middlewares` wraps host lifecycle methods through `next()` and is instance-phase only.
+- `use(...args, state, meta)` is the render-time hook API consumed by authored code.
+
 When the `args` tuple and reader return are typed, `defineHook()` preserves those types for authored calls:
 
 ```ts
-const useLocale = defineHook({
-  use(host, state, args: [locale: string]) {
-    return args[0].toUpperCase();
+const useLocale = defineHook<[locale: string], string, { key: string }, { connected: boolean }>({
+  static(locale) {
+    return { key: locale.toUpperCase() };
+  },
+  setup(_locale, _staticState) {
+    return { connected: false };
+  },
+  use(locale, state) {
+    return `${state.static.key}:${state.instance.connected}:${locale}`;
   },
 });
 
@@ -166,6 +182,10 @@ const locale = useStructuralEntry(
 );
 ```
 
+Static-only hooks lower through `useStructuralStaticEntry(...)` and a generated `static structuralStaticEntries` table. They do not wrap the generated host with `HostMiddlewareMixin(...)` and do not pay lifecycle middleware overhead. Mixed hooks with `setup(...)` or `middlewares` lower through the instance structural runtime.
+
+Existing LitSX static hoists such as `static styles`, `static properties`, `static shadowRootOptions`, `static elements`, and `static lightDom` remain class/type-phase work. `static expose` still materializes as real static class methods. None of these hoists are modeled as instance lifecycle middleware.
+
 The hook can be declared in the same module or imported from another authored module with a statically discoverable `defineHook()` export:
 
 ```js
@@ -182,8 +202,8 @@ Structural hooks can also be used transitively through local or imported custom 
 
 ```js
 const useCatalog = defineHook({
-  use(host, state, args) {
-    return useLocaleResource(args[0]);
+  use(name, state) {
+    return useLocaleResource(name);
   },
 });
 ```
@@ -204,7 +224,7 @@ Conceptually, each authored structural-hook callsite becomes one entry:
   definition,
   args: [loaders],
   meta: { callsitePath: ["HostComponent", "useThing"] },
-  state,
+  state: { static: staticState, instance: instanceState },
   middlewares,
 }
 ```

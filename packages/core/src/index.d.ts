@@ -238,17 +238,30 @@ export interface LitsxStructuralMeta {
  * implementation. Middleware may run logic before `next()`, after `next()`,
  * or both. Calling `next()` more than once is an error.
  */
-export type LitsxHostMiddleware<TResult = unknown, TState = unknown> = (
-  host: unknown,
-  state: TState,
+export interface LitsxStructuralState<TStaticState = undefined, TInstanceState = undefined> {
+  /**
+   * Class/type-phase state produced by `static(...)`.
+   */
+  static: TStaticState;
+  /**
+   * Per-host-instance state produced by `setup(...)`.
+   */
+  instance: TInstanceState;
+}
+
+export type LitsxHostMiddleware<
+  TResult = unknown,
+  TStaticState = undefined,
+  TInstanceState = undefined
+> = (
   next: LitsxHostMiddlewareNext<TResult>,
-  args: unknown[],
+  state: LitsxStructuralState<TStaticState, TInstanceState>,
   meta: LitsxStructuralMeta,
   entry: LitsxStructuralEntry
 ) => TResult;
 
-export type LitsxHostMiddlewareMap<TState = unknown> = Partial<
-  Record<LitsxHostMiddlewareLifecycleMethod, LitsxHostMiddleware<unknown, TState>>
+export type LitsxHostMiddlewareMap<TStaticState = undefined, TInstanceState = undefined> = Partial<
+  Record<LitsxHostMiddlewareLifecycleMethod, LitsxHostMiddleware<unknown, TStaticState, TInstanceState>>
 >;
 
 /**
@@ -282,28 +295,41 @@ export type LitsxHostMiddlewareMap<TState = unknown> = Partial<
 export interface LitsxStructuralDefinition<
   TArgs extends unknown[] = unknown[],
   TResult = unknown,
-  TState = unknown
+  TStaticState = undefined,
+  TInstanceState = undefined
 > {
+  /**
+   * Class/type structural phase. It does not participate in host instance
+   * lifecycle and is not wired through lifecycle middleware.
+   */
+  static?: (
+    ...argsAndMeta: [...TArgs, meta: LitsxStructuralMeta, entry: LitsxStructuralEntry]
+  ) => TStaticState;
   use?: (
-    host: unknown,
-    state: TState,
-    args: TArgs,
-    meta: LitsxStructuralMeta,
-    entry: LitsxStructuralEntry
+    ...argsStateAndMeta: [
+      ...TArgs,
+      state: LitsxStructuralState<TStaticState, TInstanceState>,
+      meta: LitsxStructuralMeta,
+      entry: LitsxStructuralEntry
+    ]
   ) => TResult;
   createState?: (
-    host: unknown,
-    args: TArgs,
-    meta: LitsxStructuralMeta,
-    entry: LitsxStructuralEntry
-  ) => TState;
+    ...argsStaticAndMeta: [
+      ...TArgs,
+      staticState: TStaticState,
+      meta: LitsxStructuralMeta,
+      entry: LitsxStructuralEntry
+    ]
+  ) => TInstanceState;
   setup?: (
-    host: unknown,
-    args: TArgs,
-    meta: LitsxStructuralMeta,
-    entry: LitsxStructuralEntry
-  ) => TState;
-  middlewares?: LitsxHostMiddlewareMap<TState>;
+    ...argsStaticAndMeta: [
+      ...TArgs,
+      staticState: TStaticState,
+      meta: LitsxStructuralMeta,
+      entry: LitsxStructuralEntry
+    ]
+  ) => TInstanceState;
+  middlewares?: LitsxHostMiddlewareMap<TStaticState, TInstanceState>;
 }
 
 /**
@@ -341,6 +367,7 @@ export interface LitsxStructuralEntry {
   args: unknown[];
   meta: LitsxStructuralMeta;
   state: unknown;
+  staticState?: unknown;
   middlewares?: LitsxHostMiddlewareMap | null;
 }
 
@@ -354,6 +381,7 @@ export interface LitsxStructuralEntryInput {
   args?: unknown[];
   meta?: Record<string, unknown>;
   state?: unknown;
+  staticState?: unknown;
   middlewares?: LitsxHostMiddlewareMap | null;
 }
 
@@ -408,9 +436,10 @@ export interface LitsxStructuralHostInstance {
 export declare function defineHook<
   TArgs extends unknown[] = unknown[],
   TResult = unknown,
-  TState = unknown
+  TStaticState = undefined,
+  TInstanceState = undefined
 >(
-  definition: LitsxStructuralDefinition<TArgs, TResult, TState>
+  definition: LitsxStructuralDefinition<TArgs, TResult, TStaticState, TInstanceState>
 ): LitsxStructuralHook<TArgs, TResult>;
 
 export declare function isStructuralHook(value: unknown): value is LitsxStructuralHook;
@@ -426,6 +455,15 @@ export declare function getStructuralHookEntries(
 
 export declare function useStructuralEntry(
   host: unknown,
+  callsiteIndex: number,
+  callsiteId: string,
+  definition: unknown,
+  args?: unknown[],
+  meta?: Record<string, unknown>
+): unknown;
+
+export declare function useStructuralStaticEntry(
+  owner: unknown,
   callsiteIndex: number,
   callsiteId: string,
   definition: unknown,

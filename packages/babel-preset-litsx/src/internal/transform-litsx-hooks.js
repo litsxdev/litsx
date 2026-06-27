@@ -285,6 +285,30 @@ function createStructuralHookResolver(options = {}) {
     }
   }
 
+  function getDefineHookPhaseInfo(init) {
+    const definition = init?.arguments?.[0];
+    if (!definition || definition.type !== "ObjectExpression") {
+      return {
+        hasStaticPhase: false,
+        hasInstancePhase: true,
+      };
+    }
+    const hasProperty = (name) => definition.properties.some((property) => {
+      if (property.type !== "ObjectProperty" && property.type !== "ObjectMethod") {
+        return false;
+      }
+      const key = property.key;
+      return (
+        (key.type === "Identifier" && key.name === name) ||
+        (key.type === "StringLiteral" && key.value === name)
+      );
+    });
+    return {
+      hasStaticPhase: hasProperty("static"),
+      hasInstancePhase: hasProperty("setup") || hasProperty("createState") || hasProperty("middlewares"),
+    };
+  }
+
   function analyzeModule(filename) {
     const normalizedFilename = normalizeFilePath(filename);
     if (!normalizedFilename) return null;
@@ -305,6 +329,7 @@ function createStructuralHookResolver(options = {}) {
       defineHookLocals: new Set(),
       runtimeNamespaceLocals: new Set(),
       structuralLocals: new Set(),
+      structuralLocalInfo: new Map(),
       customHookPaths: new Map(),
       customHookUsageCache: new Map(),
     };
@@ -370,6 +395,7 @@ function createStructuralHookResolver(options = {}) {
               const init = declaratorPath.node.init;
               if (init?.type === "CallExpression" && isDefineHookCallee(init.callee, analysis)) {
                 analysis.structuralLocals.add(id.name);
+                analysis.structuralLocalInfo.set(id.name, getDefineHookPhaseInfo(init));
               } else if (
                 /^use[A-Z0-9]/.test(id.name) &&
                 (
@@ -506,7 +532,7 @@ function createStructuralHookResolver(options = {}) {
     return usesStructural;
   }
 
-  function isStructuralExport(analysis, exportedName, seen = new Set()) {
+  function getStructuralExportInfo(analysis, exportedName, seen = new Set()) {
     if (!analysis || !exportedName) return false;
     const key = `${analysis.filename}:${exportedName}`;
     if (seen.has(key)) return false;
@@ -519,7 +545,7 @@ function createStructuralHookResolver(options = {}) {
     }
 
     if (exportInfo.resolvedSource) {
-      return isStructuralExport(
+      return getStructuralExportInfo(
         analyzeModule(exportInfo.resolvedSource),
         exportInfo.importedName,
         nextSeen
@@ -527,12 +553,18 @@ function createStructuralHookResolver(options = {}) {
     }
 
     if (analysis.structuralLocals.has(exportInfo.localName)) {
-      return true;
+      return {
+        kind: "structural-hook",
+        ...(analysis.structuralLocalInfo.get(exportInfo.localName) || {
+          hasStaticPhase: false,
+          hasInstancePhase: true,
+        }),
+      };
     }
 
     const importInfo = analysis.importBindings.get(exportInfo.localName);
     if (importInfo?.resolvedSource && importInfo.importedName !== "*") {
-      return isStructuralExport(
+      return getStructuralExportInfo(
         analyzeModule(importInfo.resolvedSource),
         importInfo.importedName,
         nextSeen
@@ -540,6 +572,10 @@ function createStructuralHookResolver(options = {}) {
     }
 
     return false;
+  }
+
+  function isStructuralExport(analysis, exportedName, seen = new Set()) {
+    return Boolean(getStructuralExportInfo(analysis, exportedName, seen));
   }
 
   function isStructuralCustomExport(analysis, exportedName, seen = new Set()) {
@@ -582,8 +618,9 @@ function createStructuralHookResolver(options = {}) {
     const resolved = resolveImport(filename, source);
     if (!resolved) return false;
     const analysis = analyzeModule(resolved);
-    if (isStructuralExport(analysis, importedName)) {
-      return "structural-hook";
+    const structuralInfo = getStructuralExportInfo(analysis, importedName);
+    if (structuralInfo) {
+      return structuralInfo;
     }
     if (isStructuralCustomExport(analysis, importedName)) {
       return "structural-custom-hook";

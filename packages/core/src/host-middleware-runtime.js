@@ -1,6 +1,7 @@
 const EMPTY_ARGS = Object.freeze([]);
 const STRUCTURAL_HOOK_DEFINITION = Symbol.for("litsx.structuralHookDefinition");
 const STRUCTURAL_HOOK_ENTRIES = Symbol.for("litsx.structuralHookEntries");
+const STRUCTURAL_STATIC_STATE = Symbol.for("litsx.structuralStaticState");
 const LIFECYCLE_METHODS = [
   "connectedCallback",
   "disconnectedCallback",
@@ -125,6 +126,13 @@ function getDefinitionUse(definition) {
     : null;
 }
 
+function getDefinitionStatic(definition) {
+  const resolvedDefinition = resolveStructuralDefinition(definition);
+  return isObject(resolvedDefinition) && typeof resolvedDefinition.static === "function"
+    ? resolvedDefinition.static
+    : null;
+}
+
 function getDefinitionCreateState(definition) {
   const resolvedDefinition = resolveStructuralDefinition(definition);
   if (isObject(resolvedDefinition) && typeof resolvedDefinition.createState === "function") {
@@ -136,17 +144,103 @@ function getDefinitionCreateState(definition) {
   return null;
 }
 
+function getParameterNames(fn) {
+  const source = Function.prototype.toString.call(fn);
+  const argsMatch = source.match(/^[^(]*\(([^)]*)\)/);
+  if (argsMatch) {
+    return argsMatch[1]
+      .split(",")
+      .map((part) => part.trim().replace(/\s*=.*$/, ""))
+      .filter(Boolean);
+  }
+  const singleArgMatch = source.match(/^([^=\s(]+)\s*=>/);
+  return singleArgMatch?.[1] ? [singleArgMatch[1]] : [];
+}
+
+function getFirstParameterName(fn) {
+  return getParameterNames(fn)[0] ?? "";
+}
+
+function getSecondParameterName(fn) {
+  return getParameterNames(fn)[1] ?? "";
+}
+
+function callsLegacyHostFirst(fn) {
+  return /^_?host\b/.test(getFirstParameterName(fn));
+}
+
+function callsLegacySetup(createState) {
+  return typeof createState === "function" && callsLegacyHostFirst(createState);
+}
+
+function callsLegacyUse(use) {
+  return typeof use === "function" &&
+    callsLegacyHostFirst(use) &&
+    /^_?state\b/.test(getSecondParameterName(use));
+}
+
+function callsLegacyMiddleware(middleware) {
+  return typeof middleware === "function" && callsLegacyHostFirst(middleware);
+}
+
+function callsInjectedHostUse(use) {
+  return typeof use === "function" && callsLegacyHostFirst(use) && !callsLegacyUse(use);
+}
+
+function getStaticStateCache(owner) {
+  if (!owner) {
+    return null;
+  }
+  if (!owner[STRUCTURAL_STATIC_STATE]) {
+    Object.defineProperty(owner, STRUCTURAL_STATIC_STATE, {
+      value: new Map(),
+      configurable: true,
+    });
+  }
+  return owner[STRUCTURAL_STATIC_STATE];
+}
+
+function createStaticState(owner, definition, args, meta, entry) {
+  const staticReader = getDefinitionStatic(definition);
+  if (!staticReader) {
+    return undefined;
+  }
+  return staticReader(...args, meta, entry);
+}
+
+function getOrCreateStaticState(owner, definition, args, meta, entry) {
+  const cache = getStaticStateCache(owner);
+  const key = entry.callsiteId ?? entry.id;
+  if (!cache || !key) {
+    return createStaticState(owner, definition, args, meta, entry);
+  }
+  if (!cache.has(key)) {
+    cache.set(key, createStaticState(owner, definition, args, meta, entry));
+  }
+  return cache.get(key);
+}
+
 function createEntryState(host, definition, args, meta, entry) {
   if (Object.prototype.hasOwnProperty.call(entry, "state")) {
     return entry.state;
   }
 
+  const staticState = Object.prototype.hasOwnProperty.call(entry, "staticState")
+    ? entry.staticState
+    : getOrCreateStaticState(host?.constructor, definition, args, meta, entry);
   const createState = getDefinitionCreateState(definition);
+  const structuralState = {
+    static: staticState,
+    instance: undefined,
+  };
   if (createState) {
-    return createState(host, args, meta, entry);
+    if (callsLegacySetup(createState)) {
+      return createState(host, args, meta, entry);
+    }
+    structuralState.instance = createState(...args, staticState, meta, entry);
   }
 
-  return undefined;
+  return structuralState;
 }
 
 function normalizeStructuralEntry(host, entry, index) {
@@ -257,7 +351,14 @@ export class HostMiddlewareRuntime {
       throw new TypeError(`Host middleware entry "${entry.id}" does not define a render-time use() reader.`);
     }
 
-    return use(this.host, entry.state, entry.args, entry.meta, entry);
+    if (callsLegacyUse(use)) {
+      return use(this.host, entry.state, entry.args, entry.meta, entry);
+    }
+    if (callsInjectedHostUse(use)) {
+      return use(this.host, ...entry.args, entry.state, entry.meta, entry);
+    }
+
+    return use(...entry.args, entry.state, entry.meta, entry);
   }
 
   run(methodName, argsOrBase, maybeBase) {
@@ -282,7 +383,11 @@ export class HostMiddlewareRuntime {
         return dispatch(index + 1);
       };
 
-      return middleware(this.host, entry.state, next, args, entry.meta, entry);
+      if (callsLegacyMiddleware(middleware)) {
+        return middleware(this.host, entry.state, next, args, entry.meta, entry);
+      }
+
+      return middleware(next, entry.state, entry.meta, entry);
     };
 
     return dispatch(0);
@@ -320,6 +425,84 @@ export function useStructuralEntry(host, callsiteIndex, callsiteId, definition, 
   });
   const entryIndex = runtime.entries.indexOf(entry);
   return runtime.read(entryIndex >= 0 ? entryIndex : callsiteIndex, args, nextMeta);
+}
+
+function normalizeStaticEntry(owner, entry, index) {
+  const source = isObject(entry) ? entry : {};
+  const callsiteIndex = Number.isInteger(source.callsiteIndex)
+    ? source.callsiteIndex
+    : index;
+  const callsiteId = getStructuralEntryId(source.callsiteId ?? source.id, callsiteIndex);
+  const callsitePath = getEntryCallsitePath(source, callsiteId);
+  const args = Array.isArray(source.args) ? source.args : [];
+  const meta = getStructuralMeta(source.meta, callsitePath);
+  const staticEntry = {
+    id: callsiteId,
+    callsiteId,
+    callsiteIndex,
+    callsitePath,
+    definition: Object.prototype.hasOwnProperty.call(source, "definition")
+      ? source.definition
+      : null,
+    args,
+    meta,
+  };
+  staticEntry.staticState = getOrCreateStaticState(owner, staticEntry.definition, args, meta, staticEntry);
+  return staticEntry;
+}
+
+function getOrCreateStaticEntries(owner) {
+  if (!owner) {
+    return [];
+  }
+  if (!owner.__litsxStructuralStaticEntries) {
+    const entries = resolveHostEntries(
+      owner,
+      owner.structuralStaticEntries ?? owner.__litsxStaticStructuralEntries ?? [],
+    );
+    Object.defineProperty(owner, "__litsxStructuralStaticEntries", {
+      value: entries.map((entry, index) => normalizeStaticEntry(owner, entry, index)),
+      configurable: true,
+    });
+  }
+  return owner.__litsxStructuralStaticEntries;
+}
+
+export function useStructuralStaticEntry(owner, callsiteIndex, callsiteId, definition, args = [], meta = {}) {
+  const entries = getOrCreateStaticEntries(owner);
+  const existing = entries.find((entry) => entry.callsiteId === callsiteId);
+  const callsitePath = normalizeHookPath(meta?.callsitePath ?? [callsiteId]);
+  const nextMeta = getStructuralMeta(meta, callsitePath);
+  const entry = existing ?? normalizeStaticEntry(owner, {
+    id: callsiteId,
+    callsiteId,
+    callsiteIndex,
+    callsitePath,
+    definition,
+    args,
+    meta: nextMeta,
+  }, callsiteIndex);
+  if (!existing) {
+    entries[callsiteIndex] = entry;
+  }
+
+  entry.args = Array.isArray(args) ? args : entry.args;
+  entry.meta = nextMeta;
+  const use = getDefinitionUse(definition);
+  const state = {
+    static: entry.staticState,
+    instance: undefined,
+  };
+  if (!use) {
+    return entry.staticState;
+  }
+  if (callsLegacyUse(use)) {
+    return use(owner, state, entry.args, entry.meta, entry);
+  }
+  if (callsInjectedHostUse(use)) {
+    return use(owner, ...entry.args, state, entry.meta, entry);
+  }
+  return use(...entry.args, state, entry.meta, entry);
 }
 
 export function HostMiddlewareMixin(Base) {
