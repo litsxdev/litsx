@@ -1,5 +1,11 @@
 # litsx
 
+## 0.6.1
+
+### Patch Changes
+
+- 40171ca: Allow TypeScript tooling's internal virtualized LitSX bindings to typecheck on PascalCase component JSX while keeping arbitrary component props strict.
+
 ## 0.6.0
 
 ### Minor Changes

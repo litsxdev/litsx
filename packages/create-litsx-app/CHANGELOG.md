@@ -1,5 +1,11 @@
 # create-litsx-app
 
+## 0.5.4
+
+### Patch Changes
+
+- 607f553: Publish the scaffolded package version refresh so newly generated projects consume the matching `@litsx/core` and compiler versions from the structural hooks release.
+
 ## 0.5.3
 
 ### Patch Changes
