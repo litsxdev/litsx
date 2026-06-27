@@ -41,6 +41,11 @@
       "import": "./src/internal/transform-litsx-properties.js",
       "require": "./dist/internal/transform-litsx-properties.cjs",
       "default": "./src/internal/transform-litsx-properties.js"
+    },
+    "./internal/transform-litsx-static-ir": {
+      "import": "./src/internal/transform-litsx-static-ir.js",
+      "require": "./dist/internal/transform-litsx-static-ir.cjs",
+      "default": "./src/internal/transform-litsx-static-ir.js"
     }
   },
   "files": [

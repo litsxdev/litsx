@@ -51,16 +51,13 @@ function resolveTopLevelClassPath(nodePath) {
 
 function transformClass(classPath, programPath) {
   const { node } = classPath;
-  const precomputedCandidates = new Set(node._litsxElementCandidates || []);
-  const importedCandidates = [...(node._litsxImportedElementCandidates || [])];
-  const needsElementsRegistry = Boolean(node._needsElementsRegistry);
+  const staticIr = consumeStaticIr(node);
+  const precomputedCandidates = new Set(staticIr.elements.localCandidates);
+  const importedCandidates = [...staticIr.elements.importedCandidates];
+  const needsElementsRegistry = Boolean(staticIr.elements.needsRegistry);
   const lightDomRequested =
-    Boolean(node._litsxLightDom) ||
+    Boolean(staticIr.lightDom) ||
     hasMixinInSuperChain(node.superClass, LIGHT_MIXIN);
-  delete node._litsxElementCandidates;
-  delete node._litsxImportedElementCandidates;
-  delete node._needsElementsRegistry;
-  delete node._litsxLightDom;
 
   const filename = normalizeFilePath(programPath.hub.file?.opts?.filename || "");
   if (importedCandidates.length > 0 && filename) {
@@ -118,6 +115,33 @@ function transformClass(classPath, programPath) {
   }
 
   return needsLightDomMixin || needsElementsMixin;
+}
+
+function consumeStaticIr(node) {
+  const ir = normalizeStaticIr(node?._litsxStaticIr);
+
+  if (!node) {
+    return ir;
+  }
+
+  delete node._litsxStaticIr;
+  return ir;
+}
+
+function normalizeStaticIr(ir) {
+  return {
+    properties: {
+      inferred: [...(ir?.properties?.inferred || [])],
+      authored: [...(ir?.properties?.authored || [])],
+      legacy: [...(ir?.properties?.legacy || [])],
+    },
+    elements: {
+      localCandidates: [...(ir?.elements?.localCandidates || [])],
+      importedCandidates: [...(ir?.elements?.importedCandidates || [])],
+      needsRegistry: Boolean(ir?.elements?.needsRegistry),
+    },
+    lightDom: Boolean(ir?.lightDom),
+  };
 }
 
 function hasMixinInSuperChain(node, mixinName) {

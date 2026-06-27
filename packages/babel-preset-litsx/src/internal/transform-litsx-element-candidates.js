@@ -6,6 +6,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { normalizeFilePath } from "@litsx/typescript-session";
 import { ensureTypescriptModule } from "./transform-litsx-properties.js";
+import {
+  ensureStaticIr,
+  setStaticIrBabelTypes,
+} from "./transform-litsx-static-ir.js";
 
 const { declare } = helperPluginUtils;
 const traverse = babelTraverse.default || babelTraverse;
@@ -32,6 +36,7 @@ let t;
 
 export function setElementCandidatesBabelTypes(nextTypes) {
   t = nextTypes;
+  setStaticIrBabelTypes(nextTypes);
 }
 
 function isInsideFunctionOrClass(path) {
@@ -57,6 +62,13 @@ function createEmptyCandidateResult() {
     localCandidates: new Set(),
     importedCandidates: new Map(),
   };
+}
+
+function annotateElementCandidates(node, result) {
+  if (!node) return;
+  const staticIr = ensureStaticIr(node);
+  staticIr.elements.localCandidates = [...result.localCandidates];
+  staticIr.elements.importedCandidates = [...result.importedCandidates.values()];
 }
 
 function cloneCandidateResult(result) {
@@ -988,16 +1000,18 @@ function collectCandidateResult(functionPath, programPath, options = {}) {
 }
 
 export function getAnnotatedElementCandidates(path, programPath, options = {}) {
-  if (path?.node?._litsxElementCandidates instanceof Set) {
-    return new Set(path.node._litsxElementCandidates);
+  const localCandidates = path?.node?._litsxStaticIr?.elements?.localCandidates;
+  if (Array.isArray(localCandidates)) {
+    return new Set(localCandidates);
   }
 
   return collectCandidateResult(path, programPath, options).localCandidates;
 }
 
 export function getAnnotatedImportedElementCandidates(path, programPath, options = {}) {
-  if (Array.isArray(path?.node?._litsxImportedElementCandidates)) {
-    return [...path.node._litsxImportedElementCandidates];
+  const importedCandidates = path?.node?._litsxStaticIr?.elements?.importedCandidates;
+  if (Array.isArray(importedCandidates)) {
+    return [...importedCandidates];
   }
 
   return [...collectCandidateResult(path, programPath, options).importedCandidates.values()];
@@ -1210,8 +1224,7 @@ export default declare((api) => {
               filename: state.file?.opts?.filename || "",
             }
           );
-          path.node._litsxElementCandidates = result.localCandidates;
-          path.node._litsxImportedElementCandidates = [...result.importedCandidates.values()];
+          annotateElementCandidates(path.node, result);
         },
       },
       ArrowFunctionExpression: {
@@ -1229,8 +1242,7 @@ export default declare((api) => {
               filename: state.file?.opts?.filename || "",
             }
           );
-          path.node._litsxElementCandidates = result.localCandidates;
-          path.node._litsxImportedElementCandidates = [...result.importedCandidates.values()];
+          annotateElementCandidates(path.node, result);
         },
       },
       FunctionExpression: {
@@ -1248,8 +1260,7 @@ export default declare((api) => {
               filename: state.file?.opts?.filename || "",
             }
           );
-          path.node._litsxElementCandidates = result.localCandidates;
-          path.node._litsxImportedElementCandidates = [...result.importedCandidates.values()];
+          annotateElementCandidates(path.node, result);
         },
       },
     },

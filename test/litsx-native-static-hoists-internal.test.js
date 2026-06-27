@@ -7,6 +7,11 @@ import {
   processStaticHoists,
   setStaticHoistsBabelTypes,
 } from "../packages/babel-preset-litsx/src/internal/transform-litsx-static-hoists.js";
+import {
+  collectStaticIr,
+  setStaticIrInferredProperties,
+  setStaticIrBabelTypes,
+} from "../packages/babel-preset-litsx/src/internal/transform-litsx-static-ir.js";
 import { setPropertyBabelTypes } from "../packages/babel-preset-litsx/src/internal/transform-litsx-properties.js";
 
 const traverse = babelTraverse.default || babelTraverse;
@@ -52,10 +57,114 @@ function createStaticSymbolFactory() {
   };
 }
 
+function getStaticPropertiesGetterObjectProperties(member) {
+  return member.body.body[0].argument.arguments[1].body.arguments[0].properties;
+}
+
 setStaticHoistsBabelTypes(t);
+setStaticIrBabelTypes(t);
 setPropertyBabelTypes(t);
 
 describe("native static hoists internals", () => {
+  it("collects early static IR for properties, elements, and light DOM", () => {
+    const source = `
+      function Card() {
+        staticProps({
+          legacy: String,
+        });
+
+        static properties = {
+          title: String,
+        };
+
+        static lightDom = true;
+
+        return <ChildCard />;
+      }
+    `;
+
+    const { functionPath } = getFunctionContext(source);
+    const ir = collectStaticIr({
+      functionPath,
+      elementCandidates: new Set(["ChildCard"]),
+      importedElementCandidates: [
+        {
+          sourceFile: "/project/child-card.litsx",
+          importedName: "ChildCard",
+          tagName: "child-card",
+        },
+      ],
+    });
+
+    assert.strictEqual(ir.properties.authored.length, 1);
+    assert.strictEqual(ir.properties.legacy.length, 1);
+    assert.strictEqual(ir.properties.authored[0].index, 1);
+    assert.strictEqual(ir.properties.legacy[0].index, 0);
+    assert.deepStrictEqual(ir.elements.localCandidates, ["ChildCard"]);
+    assert.deepStrictEqual(ir.elements.importedCandidates, [
+      {
+        sourceFile: "/project/child-card.litsx",
+        importedName: "ChildCard",
+        tagName: "child-card",
+      },
+    ]);
+    assert.strictEqual(ir.lightDom, true);
+  });
+
+  it("processes static properties from early static IR", () => {
+    const source = `
+      function Card() {
+        staticProps({
+          legacy: Number,
+        });
+
+        static properties = {
+          title: String,
+        };
+
+        return <div>ready</div>;
+      }
+    `;
+
+    const { programPath, functionPath } = getFunctionContext(source);
+    const renderStatements = [...functionPath.node.body.body];
+    const propertiesStatic = [
+      t.objectProperty(
+        t.identifier("inferred"),
+        t.objectExpression([t.objectProperty(t.identifier("type"), t.identifier("String"))])
+      ),
+    ];
+    const staticIr = collectStaticIr({ functionPath });
+    setStaticIrInferredProperties(staticIr, propertiesStatic);
+    const classMembers = [];
+
+    const result = processStaticHoists({
+      functionPath,
+      node: functionPath.node,
+      renderStatements,
+      programPath,
+      staticIr,
+      classMembers,
+      options: {},
+      getOrCreateModuleStaticHoistSymbol: createStaticSymbolFactory(),
+    });
+
+    assert.strictEqual(renderStatements.length, 1);
+    assert.strictEqual(classMembers.length, 0);
+    const propertiesGetter = result.hoistMembers.find((member) => member.key.name === "properties");
+    assert.deepStrictEqual(
+      getStaticPropertiesGetterObjectProperties(propertiesGetter)
+        .filter((node) => t.isObjectProperty(node))
+        .map((node) => (t.isIdentifier(node.key) ? node.key.name : node.key.value))
+        .sort(),
+      ["inferred", "legacy"]
+    );
+    assert.deepStrictEqual(
+      result.hoistMembers.map((member) => member.key.name),
+      ["properties"]
+    );
+  });
+
   it("collects hoisted members, merges legacy static props, and marks css requirements", () => {
     const source = `
       const gap = "12px";
@@ -101,6 +210,8 @@ describe("native static hoists internals", () => {
         t.objectExpression([t.objectProperty(t.identifier("type"), t.identifier("String"))])
       ),
     ];
+    const staticIr = collectStaticIr({ functionPath });
+    setStaticIrInferredProperties(staticIr, propertiesStatic);
     const classMembers = [];
 
     const result = processStaticHoists({
@@ -108,7 +219,7 @@ describe("native static hoists internals", () => {
       node: functionPath.node,
       renderStatements,
       programPath,
-      propertiesStatic,
+      staticIr,
       classMembers,
       options: {},
       getOrCreateModuleStaticHoistSymbol: createStaticSymbolFactory(),
@@ -122,7 +233,8 @@ describe("native static hoists internals", () => {
     assert.strictEqual(classMembers.length, 0);
     assert.strictEqual(renderStatements.length, 1);
 
-    const propertyNames = propertiesStatic
+    const propertiesGetter = result.hoistMembers.find((member) => member.key.name === "properties");
+    const propertyNames = getStaticPropertiesGetterObjectProperties(propertiesGetter)
       .filter((node) => t.isObjectProperty(node))
       .map((node) => (t.isIdentifier(node.key) ? node.key.name : node.key.value))
       .sort();
@@ -137,7 +249,6 @@ describe("native static hoists internals", () => {
       "styles",
     ]);
 
-    const propertiesGetter = result.hoistMembers.find((member) => member.key.name === "properties");
     const stylesGetter = result.hoistMembers.find((member) => member.key.name === "styles");
     const shadowRootOptionsGetter = result.hoistMembers.find(
       (member) => member.key.name === "shadowRootOptions"
@@ -205,7 +316,6 @@ describe("native static hoists internals", () => {
         node: stylesFunctionPath.node,
         renderStatements: [...stylesFunctionPath.node.body.body],
         programPath: stylesProgramPath,
-        propertiesStatic: [],
         classMembers: [],
         options: {},
         getOrCreateModuleStaticHoistSymbol: createStaticSymbolFactory(),
@@ -230,7 +340,6 @@ describe("native static hoists internals", () => {
         node: exposeFunctionPath.node,
         renderStatements: [...exposeFunctionPath.node.body.body],
         programPath: exposeProgramPath,
-        propertiesStatic: [],
         classMembers: [],
         options: {},
         getOrCreateModuleStaticHoistSymbol: createStaticSymbolFactory(),
@@ -255,7 +364,6 @@ describe("native static hoists internals", () => {
         node: propertyFunctionPath.node,
         renderStatements: [...propertyFunctionPath.node.body.body],
         programPath: propertyProgramPath,
-        propertiesStatic: [],
         classMembers: [],
         options: {},
         getOrCreateModuleStaticHoistSymbol: createStaticSymbolFactory(),
@@ -280,7 +388,6 @@ describe("native static hoists internals", () => {
         node: hoistedPropertiesFunctionPath.node,
         renderStatements: [...hoistedPropertiesFunctionPath.node.body.body],
         programPath: hoistedPropertiesProgramPath,
-        propertiesStatic: [],
         classMembers: [],
         options: {},
         getOrCreateModuleStaticHoistSymbol: createStaticSymbolFactory(),
@@ -304,7 +411,6 @@ describe("native static hoists internals", () => {
       node: functionPath.node,
       renderStatements: [...functionPath.node.body.body],
       programPath,
-      propertiesStatic: [],
       classMembers: [],
       options: {},
       getOrCreateModuleStaticHoistSymbol: createStaticSymbolFactory(),
@@ -337,7 +443,6 @@ describe("native static hoists internals", () => {
       node: functionPath.node,
       renderStatements: [...functionPath.node.body.body],
       programPath,
-      propertiesStatic: [],
       classMembers,
       options: { defaultDomMode: "light" },
       getOrCreateModuleStaticHoistSymbol: createStaticSymbolFactory(),
@@ -374,7 +479,6 @@ describe("native static hoists internals", () => {
       node: functionPath.node,
       renderStatements: [...functionPath.node.body.body],
       programPath,
-      propertiesStatic: [],
       classMembers,
       options: {},
       getOrCreateModuleStaticHoistSymbol: createStaticSymbolFactory(),
@@ -411,7 +515,6 @@ describe("native static hoists internals", () => {
       node: functionPath.node,
       renderStatements: [...functionPath.node.body.body],
       programPath,
-      propertiesStatic: [],
       classMembers: [],
       options: {},
       getOrCreateModuleStaticHoistSymbol: createStaticSymbolFactory(),
@@ -458,7 +561,6 @@ describe("native static hoists internals", () => {
         node: lightDomFunctionPath.node,
         renderStatements: [...lightDomFunctionPath.node.body.body],
         programPath: lightDomProgramPath,
-        propertiesStatic: [],
         classMembers: [],
         options: {},
         getOrCreateModuleStaticHoistSymbol: createStaticSymbolFactory(),
@@ -479,7 +581,6 @@ describe("native static hoists internals", () => {
         node: genericFunctionPath.node,
         renderStatements: [...genericFunctionPath.node.body.body],
         programPath: genericProgramPath,
-        propertiesStatic: [],
         classMembers: [],
         options: {},
         getOrCreateModuleStaticHoistSymbol: createStaticSymbolFactory(),
@@ -500,7 +601,6 @@ describe("native static hoists internals", () => {
         node: genericDynamicFunctionPath.node,
         renderStatements: [...genericDynamicFunctionPath.node.body.body],
         programPath: genericDynamicProgramPath,
-        propertiesStatic: [],
         classMembers: [],
         options: {},
         getOrCreateModuleStaticHoistSymbol: createStaticSymbolFactory(),
@@ -525,7 +625,6 @@ describe("native static hoists internals", () => {
         node: exposeGetterFunctionPath.node,
         renderStatements: [...exposeGetterFunctionPath.node.body.body],
         programPath: exposeGetterProgramPath,
-        propertiesStatic: [],
         classMembers: [],
         options: {},
         getOrCreateModuleStaticHoistSymbol: createStaticSymbolFactory(),
@@ -548,7 +647,6 @@ describe("native static hoists internals", () => {
         node: exposeValueFunctionPath.node,
         renderStatements: [...exposeValueFunctionPath.node.body.body],
         programPath: exposeValueProgramPath,
-        propertiesStatic: [],
         classMembers: [],
         options: {},
         getOrCreateModuleStaticHoistSymbol: createStaticSymbolFactory(),
@@ -572,7 +670,6 @@ describe("native static hoists internals", () => {
       node: multiStylesResolverFunctionPath.node,
       renderStatements: [...multiStylesResolverFunctionPath.node.body.body],
       programPath: multiStylesResolverProgramPath,
-      propertiesStatic: [],
       classMembers: [],
       options: {},
       getOrCreateModuleStaticHoistSymbol: createStaticSymbolFactory(),

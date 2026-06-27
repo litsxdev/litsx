@@ -391,13 +391,23 @@ describe("@litsx/babel-plugin-transform-litsx-scoped-elements", () => {
           return <div>ready</div>;
         }
       }
-
-      MixedLightCard._litsxLightDom = true;
     `;
 
     const ast = parser.parse(source, { sourceType: "module" });
     const classDecl = ast.program.body.find((node) => node.type === "ClassDeclaration");
-    classDecl._litsxLightDom = true;
+    classDecl._litsxStaticIr = {
+      properties: {
+        inferred: [],
+        authored: [],
+        legacy: [],
+      },
+      elements: {
+        localCandidates: [],
+        importedCandidates: [],
+        needsRegistry: false,
+      },
+      lightDom: true,
+    };
 
     const { code } = transformFromAstSync(ast, source, {
       configFile: false,
@@ -408,6 +418,46 @@ describe("@litsx/babel-plugin-transform-litsx-scoped-elements", () => {
     const lightMixinMatches = code.match(/LightDomMixin\(/g) || [];
     assert.strictEqual(lightMixinMatches.length, 1);
     assert.match(code, /class MixedLightCard extends withTheme\(LightDomMixin\(LitElement\)\)/);
+  });
+
+  it("consumes early static IR for element candidates and light DOM", () => {
+    const source = `
+      import { LitElement } from 'lit';
+      import { ChildCard } from './child-card.litsx';
+
+      class HostCard extends LitElement {
+        render() {
+          return <ChildCard />;
+        }
+      }
+    `;
+
+    const ast = parser.parse(source, { sourceType: "module" });
+    const classDecl = ast.program.body.find((node) => node.type === "ClassDeclaration");
+    classDecl._litsxStaticIr = {
+      properties: {
+        inferred: [],
+        authored: [],
+        legacy: [],
+      },
+      elements: {
+        localCandidates: ["ChildCard"],
+        importedCandidates: [],
+        needsRegistry: false,
+      },
+      lightDom: true,
+    };
+
+    const { code } = transformFromAstSync(ast, source, {
+      configFile: false,
+      babelrc: false,
+      plugins: [plugin],
+    });
+
+    assert.match(code, /import \{[^}]*LightDomMixin[^}]*\} from "@litsx\/core\/elements"|import \{[^}]*LightDomMixin[^}]*\} from '@litsx\/core\/elements'/);
+    assert.match(code, /class HostCard extends LightDomMixin\(LitElement\)/);
+    assert.match(code, /static elements = \{\s*"child-card": ChildCard\s*\}/);
+    assert.match(code, /return <child-card \/>/);
   });
 
   it("rewrites JSX opening tags with attributes to kebab-case consistently", () => {

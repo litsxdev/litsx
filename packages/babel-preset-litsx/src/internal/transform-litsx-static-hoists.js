@@ -238,6 +238,46 @@ function mergeStaticPropsIntoProperties(propertiesStatic, staticProps) {
   });
 }
 
+function normalizePropertiesIr(staticIr, renderStatements) {
+  const properties = {
+    inferred: (staticIr?.properties?.inferred || []).map((entry, index) => ({
+      index: entry.index ?? index,
+      expression: entry.expression ? t.cloneNode(entry.expression) : null,
+    })),
+    authored: (staticIr?.properties?.authored || []).map((entry, index) => ({
+      index: entry.index ?? index,
+      expression: entry.expression ? t.cloneNode(entry.expression) : null,
+    })),
+    legacy: (staticIr?.properties?.legacy || []).map((entry, index) => ({
+      index: entry.index ?? index,
+      expression: entry.expression ? t.cloneNode(entry.expression) : null,
+    })),
+  };
+
+  if (!staticIr && Array.isArray(renderStatements)) {
+    renderStatements.forEach((statement, index) => {
+      const propertyOptions = getStaticPropsExpression(statement);
+      if (!propertyOptions) return;
+
+      if (propertyOptions.__litsxHoistedProperties) {
+        properties.authored.push({
+          index,
+          expression: propertyOptions.expression,
+        });
+      } else {
+        properties.legacy.push({
+          index,
+          expression: propertyOptions,
+        });
+      }
+    });
+  }
+
+  properties.authored.sort((left, right) => left.index - right.index);
+  properties.legacy.sort((left, right) => left.index - right.index);
+  return properties;
+}
+
 function normalizeStylesTemplate(argument, functionPath) {
   if (t.isTemplateLiteral(argument)) {
     if (
@@ -615,28 +655,30 @@ export function processStaticHoists({
   node,
   renderStatements,
   programPath,
-  propertiesStatic,
+  staticIr = null,
   classMembers,
   options = {},
   getOrCreateModuleStaticHoistSymbol,
 }) {
   const staticStyles = [];
-  const staticProps = [];
-  const staticHoists = [];
+  const propertiesIr = normalizePropertiesIr(staticIr, renderStatements);
+  const effectivePropertiesStatic = propertiesIr.inferred
+    .map((entry) => entry.expression)
+    .filter(Boolean);
+  const staticProps = propertiesIr.legacy
+    .map((entry) => entry.expression)
+    .filter(Boolean);
+  const staticHoists = propertiesIr.authored
+    .map((entry) => ({
+      name: "properties",
+      expression: entry.expression,
+    }));
   let lightDomRequested = options.defaultDomMode === "light";
 
   if (t.isBlockStatement(node.body)) {
     for (let index = renderStatements.length - 1; index >= 0; index -= 1) {
       const propertyOptions = getStaticPropsExpression(renderStatements[index]);
       if (propertyOptions) {
-        if (propertyOptions.__litsxHoistedProperties) {
-          staticHoists.unshift({
-            name: "properties",
-            expression: propertyOptions.expression,
-          });
-        } else {
-          staticProps.unshift(propertyOptions);
-        }
         renderStatements.splice(index, 1);
         continue;
       }
@@ -678,14 +720,14 @@ export function processStaticHoists({
   }
 
   if (staticProps.length > 0) {
-    mergeStaticPropsIntoProperties(propertiesStatic, staticProps);
+    mergeStaticPropsIntoProperties(effectivePropertiesStatic, staticProps);
   }
 
   const hasHoistedProperties = staticHoists.some((entry) => entry.name === "properties");
-  if (propertiesStatic.length > 0 && !hasHoistedProperties) {
+  if (effectivePropertiesStatic.length > 0 && !hasHoistedProperties) {
     const classProperties = t.classProperty(
       t.identifier("properties"),
-      t.objectExpression(propertiesStatic),
+      t.objectExpression(effectivePropertiesStatic),
       null,
       [],
       false
@@ -729,7 +771,7 @@ export function processStaticHoists({
       return createStaticHoistGetter(
         "properties",
         symbolId,
-        createPropertiesHoistResolver(propertiesStatic, staticProps, hoist.expression)
+        createPropertiesHoistResolver(effectivePropertiesStatic, staticProps, hoist.expression)
       );
     }
 

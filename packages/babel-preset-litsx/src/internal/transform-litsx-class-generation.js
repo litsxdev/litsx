@@ -103,7 +103,6 @@ export function createComponentClass({
 
   classNode._needsCss = needsCss;
   classNode._needsUnsafeCss = needsUnsafeCss;
-  classNode._litsxLightDom = lightDomRequested;
   classNode._needsCallbackRef = needsCallbackRef;
   return classNode;
 }

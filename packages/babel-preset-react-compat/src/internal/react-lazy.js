@@ -2,6 +2,10 @@ import helperPluginUtils from "@babel/helper-plugin-utils";
 import jsxSyntaxPlugin from "@babel/plugin-syntax-jsx";
 import { isLitElementSuperClass } from "@litsx/babel-plugin-shared-hooks";
 import {
+  ensureStaticIr,
+  setStaticIrBabelTypes,
+} from "@litsx/babel-preset-litsx/internal/transform-litsx-static-ir";
+import {
   cloneLazyMarked,
   isLazyCallee,
   setReactLazyAnalysisBabelTypes,
@@ -15,6 +19,7 @@ const INFRASTRUCTURE_MODULE = "@litsx/core/elements";
 export default declare((api) => {
   api.assertVersion(7);
   const t = api.types;
+  setStaticIrBabelTypes(t);
 
   function isScopedElementsWrapped(superClass) {
     return (
@@ -43,10 +48,19 @@ export default declare((api) => {
   }
 
   function isLightDomClass(classNode) {
+    const staticIr = getOrCreateStaticIr(classNode);
     return (
-      Boolean(classNode._litsxLightDom) ||
+      Boolean(staticIr.lightDom) ||
       hasMixinInSuperChain(classNode.superClass, "LightDomMixin")
     );
+  }
+
+  function getOrCreateStaticIr(classNode) {
+    return ensureStaticIr(classNode);
+  }
+
+  function markNeedsElementsRegistry(classNode) {
+    getOrCreateStaticIr(classNode).elements.needsRegistry = true;
   }
 
   function buildRuntimeImport(programPath, state) {
@@ -302,7 +316,7 @@ export default declare((api) => {
 
     const classPath = renderPath.findParent((path) => path.isClassDeclaration() || path.isClassExpression());
     if (classPath) {
-      classPath.node._needsElementsRegistry = true;
+      markNeedsElementsRegistry(classPath.node);
       if (
         isLitElementSuperClass(classPath.node.superClass, t) &&
         !isScopedElementsWrapped(classPath.node.superClass)

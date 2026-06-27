@@ -42,6 +42,25 @@ function getPaths(source) {
   return { ast, programPath, functionPaths, arrowPaths };
 }
 
+function createStaticIr({
+  localCandidates = [],
+  importedCandidates = [],
+} = {}) {
+  return {
+    properties: {
+      inferred: [],
+      authored: [],
+      legacy: [],
+    },
+    elements: {
+      localCandidates,
+      importedCandidates,
+      needsRegistry: false,
+    },
+    lightDom: false,
+  };
+}
+
 describe("native element candidate internals", () => {
   beforeAll(() => {
     setElementCandidatesBabelTypes(t);
@@ -55,12 +74,14 @@ describe("native element candidate internals", () => {
     `);
 
     const cardPath = functionPaths.get("Card");
-    cardPath.node._litsxElementCandidates = new Set(["FancyButton"]);
+    cardPath.node._litsxStaticIr = createStaticIr({
+      localCandidates: ["FancyButton"],
+    });
 
     const candidates = getAnnotatedElementCandidates(cardPath, programPath);
 
     assert.deepStrictEqual([...candidates], ["FancyButton"]);
-    assert.notStrictEqual(candidates, cardPath.node._litsxElementCandidates);
+    assert.notStrictEqual(candidates, cardPath.node._litsxStaticIr.elements.localCandidates);
   });
 
   it("returns annotated imported candidates without sharing the original array", () => {
@@ -72,12 +93,14 @@ describe("native element candidate internals", () => {
 
     const imported = [{ sourceFile: "/tmp/FancyButton.litsx", importedName: "FancyButton", tagName: "fancy-button" }];
     const cardPath = functionPaths.get("Card");
-    cardPath.node._litsxImportedElementCandidates = imported;
+    cardPath.node._litsxStaticIr = createStaticIr({
+      importedCandidates: imported,
+    });
 
     const candidates = getAnnotatedImportedElementCandidates(cardPath, programPath);
 
     assert.deepStrictEqual(candidates, imported);
-    assert.notStrictEqual(candidates, imported);
+    assert.notStrictEqual(candidates, cardPath.node._litsxStaticIr.elements.importedCandidates);
   });
 
   it("returns an empty set when the component or program path is missing", () => {
@@ -236,8 +259,8 @@ describe("native element candidate internals", () => {
       },
     });
 
-    assert.deepStrictEqual([...topLevelArrow._litsxElementCandidates], ["FancyButton"]);
-    assert.strictEqual(nestedArrow._litsxElementCandidates, undefined);
+    assert.deepStrictEqual(topLevelArrow._litsxStaticIr.elements.localCandidates, ["FancyButton"]);
+    assert.strictEqual(nestedArrow._litsxStaticIr, undefined);
   });
 
   it("annotates top-level anonymous default functions and function expressions", () => {
@@ -280,8 +303,8 @@ describe("native element candidate internals", () => {
       },
     });
 
-    assert.deepStrictEqual([...defaultFn._litsxElementCandidates], ["FancyButton"]);
-    assert.deepStrictEqual([...cardFn._litsxElementCandidates], ["FancyButton"]);
+    assert.deepStrictEqual(defaultFn._litsxStaticIr.elements.localCandidates, ["FancyButton"]);
+    assert.deepStrictEqual(cardFn._litsxStaticIr.elements.localCandidates, ["FancyButton"]);
   });
 
   it("annotates top-level functions without plugin options and skips nested scopes", () => {
@@ -343,10 +366,10 @@ describe("native element candidate internals", () => {
       },
     });
 
-    assert.deepStrictEqual([...cardFn._litsxElementCandidates], ["FancyButton"]);
-    assert.deepStrictEqual([...arrowCard._litsxElementCandidates], ["FancyButton"]);
-    assert.deepStrictEqual([...exprCard._litsxElementCandidates], ["FancyButton"]);
-    assert.strictEqual(nestedFn._litsxElementCandidates, undefined);
+    assert.deepStrictEqual(cardFn._litsxStaticIr.elements.localCandidates, ["FancyButton"]);
+    assert.deepStrictEqual(arrowCard._litsxStaticIr.elements.localCandidates, ["FancyButton"]);
+    assert.deepStrictEqual(exprCard._litsxStaticIr.elements.localCandidates, ["FancyButton"]);
+    assert.strictEqual(nestedFn._litsxStaticIr, undefined);
   });
 
   it("collects imported element requirements for default exports and reexports", () => {
