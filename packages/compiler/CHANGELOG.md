@@ -1,5 +1,13 @@
 # @litsx/compiler
 
+## 0.8.3
+
+### Patch Changes
+
+- 0427477: Keep imported custom-hook module analysis in its own compiler-session cache so shared-hook analysis cannot poison element-candidate analysis for imported renderer helpers.
+- Updated dependencies [0427477]
+  - @litsx/babel-preset-litsx@0.9.2
+
 ## 0.8.2
 
 ### Patch Changes
