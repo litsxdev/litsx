@@ -104,15 +104,95 @@ Use `useStableId()` for resource identity: cache keys, preload keys, serialized 
 
 Do not use `useStableId()` when you need unique DOM ids for multiple instances of the same component. Every instance of the same authored callsite receives the same value by design. Use `useId()` for instance-local DOM ids and accessibility relationships. `useId()` follows hook order within a host instance; `useStableId()` follows the authored callsite.
 
-## Structural Host Middleware Runtime
+## Structural Hooks And Host Middleware
 
-LitSX also includes internal plumbing for future structural hooks that need to participate in the host lifecycle. This is separate from `EffectsController`.
+LitSX also includes plumbing for structural hooks that need to participate in the host lifecycle. This is separate from `EffectsController`.
 
 - `EffectsController` remains the render-time hook controller.
 - `HostMiddlewareRuntime` is the structural host layer for lifecycle middleware.
-- `HostMiddlewareMixin` is the reusable host mixin shape that generated components can use later.
+- `HostMiddlewareMixin` is the reusable host mixin shape used by generated components that contain structural hooks.
+- `defineHook()` marks a hook definition as structural.
+- `useStructuralEntry()` is the compiler-facing runtime read used for generated structural hook callsites.
 
-The public authored hook syntax for structural hooks is not finalized yet. The runtime layer is intentionally lower-level: it accepts structural entries that a future transform can generate.
+Authored structural hooks are declared with `defineHook()`:
+
+```js
+import { defineHook } from "@litsx/core";
+
+const useLocale = defineHook({
+  setup(host, args, meta, entry) {
+    return { locale: args[0] };
+  },
+  use(host, state) {
+    return state.locale;
+  },
+  middlewares: {
+    connectedCallback(host, state, next) {
+      state.connected = true;
+      return next();
+    },
+  },
+});
+```
+
+When the `args` tuple and reader return are typed, `defineHook()` preserves those types for authored calls:
+
+```ts
+const useLocale = defineHook({
+  use(host, state, args: [locale: string]) {
+    return args[0].toUpperCase();
+  },
+});
+
+const locale: string = useLocale("en");
+```
+
+The LitSX transform rewrites static calls to structural hook identifiers:
+
+```jsx
+const locale = useLocale("en");
+```
+
+into a compiler-facing read:
+
+```js
+const locale = useStructuralEntry(
+  this,
+  0,
+  "litsx-structural-...",
+  useLocale,
+  ["en"],
+  { callsitePath: ["litsx-structural-..."] },
+);
+```
+
+The hook can be declared in the same module or imported from another authored module with a statically discoverable `defineHook()` export:
+
+```js
+import { useLocale } from "./locale-hooks.litsx";
+import * as resources from "./resource-hooks.litsx";
+
+const locale = useLocale("en");
+const catalog = resources.useCatalog("checkout");
+```
+
+Generated component classes are wrapped with `HostMiddlewareMixin(...)` so lifecycle middleware is composed with the host lifecycle. For direct structural hook calls whose definitions are in scope, the transform also emits a static `structuralEntries` table so lifecycle middleware is available before the first render; render-time reads still refresh args through `useStructuralEntry(...)`.
+
+Structural hooks can also be used transitively through local or imported custom hooks and inside another structural hook's `use(...)` reader:
+
+```js
+const useCatalog = defineHook({
+  use(host, state, args) {
+    return useLocaleResource(args[0]);
+  },
+});
+```
+
+The transform is intentionally static: dynamic hook lookup is not structural-hook syntax. Aliasing a structural hook, storing it in an object or array, choosing it at runtime, or reading a namespace import through a computed property is a build-time error with a code-frame diagnostic. LitSX needs a direct authored callsite such as `useLocale("en")` or `hooks.useLocale("en")` so it can assign reliable callsite identity.
+
+This phase emits static entries for direct structural hook callsites when the hook definition can be referenced from the generated component module. Custom hooks that contain structural hooks also receive compiled structural metadata, so importing and calling that custom hook lets the consuming host include those entries in its static plan with `getStructuralHookEntries(...)`.
+
+The import analysis is static and intentionally conservative: authored modules are inspected for `defineHook()` exports and for exported custom hooks that call structural hooks. Relative imports, TypeScript `paths`/`baseUrl`, and TypeScript module resolution are supported when the compiler session/options are available. The runtime API carries `callsitePath` metadata so nested authored paths remain stable as the compiler grows.
 
 Conceptually, each authored structural-hook callsite becomes one entry:
 
@@ -120,9 +200,10 @@ Conceptually, each authored structural-hook callsite becomes one entry:
 {
   callsiteIndex: 0,
   callsiteId: "litsx-stable-example",
+  callsitePath: ["HostComponent", "useThing"],
   definition,
   args: [loaders],
-  meta: {},
+  meta: { callsitePath: ["HostComponent", "useThing"] },
   state,
   middlewares,
 }
@@ -134,6 +215,7 @@ The identity split is:
 
 - `callsiteIndex`: stable local index for generated reads such as `runtime.read(0)`
 - `callsiteId`: stable serializable identity for diagnostics, SSR metadata, or hook-specific resource keys
+- `callsitePath`: stable authored expansion path for nested structural usage
 - `id`: compatibility alias for the stable callsite id
 
 Resource dedupe belongs below this layer, inside the hook or resource runtime that knows the domain semantics. For example, an i18n runtime can dedupe catalog loads by locale and loader identity, while the host middleware runtime still preserves separate authored callsites.

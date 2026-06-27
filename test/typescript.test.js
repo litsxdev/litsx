@@ -149,6 +149,60 @@ describe("@litsx/typescript", () => {
     }
   });
 
+  it("infers defineHook argument and result types from structural definitions", () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-define-hook-types-"));
+    const filePath = path.join(tempDir, "index.ts");
+    const repoRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
+    const coreRuntimePath = path.join(repoRoot, "packages/core/src/index.js").replaceAll("\\", "/");
+
+    try {
+      fs.writeFileSync(
+        filePath,
+        [
+          `import { defineHook } from "${coreRuntimePath}";`,
+          "",
+          "const useLocale = defineHook({",
+          "  setup(_host, args: [locale: string]) {",
+          "    return { initial: args[0] };",
+          "  },",
+          "  use(_host, state: { initial: string }, args: [locale: string]) {",
+          "    return `${state.initial}:${args[0]}`;",
+          "  },",
+          "});",
+          "",
+          "const value: string = useLocale('en');",
+          "// @ts-expect-error wrong structural hook argument",
+          "useLocale(123);",
+          "// @ts-expect-error structural hook result is string",
+          "const numberValue: number = useLocale('en');",
+          "",
+        ].join("\n"),
+      );
+
+      const program = ts.createProgram({
+        rootNames: [filePath],
+        options: {
+          noEmit: true,
+          strict: true,
+          skipLibCheck: true,
+          module: ts.ModuleKind.ESNext,
+          moduleResolution: ts.ModuleResolutionKind.Bundler,
+          target: ts.ScriptTarget.ESNext,
+          lib: ["lib.esnext.d.ts", "lib.dom.d.ts"],
+        },
+      });
+      const diagnostics = ts.getPreEmitDiagnostics(program);
+      assert.deepStrictEqual(
+        diagnostics.map((diagnostic) =>
+          ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n")
+        ),
+        [],
+      );
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
   it("reports authored diagnostics for invalid lit bindings", () => {
     const source = `
       const view = (
@@ -2214,6 +2268,8 @@ describe("@litsx/typescript", () => {
     const globalsPath = path.join(tempDir, "global.d.ts");
     const originalCwd = process.cwd();
     const originalWrite = process.stderr.write;
+    const repoRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
+    const coreRuntimePath = path.join(repoRoot, "packages/core/src/index.js").replaceAll("\\", "/");
 
     fs.writeFileSync(
       tsconfigPath,
@@ -2360,6 +2416,101 @@ describe("@litsx/typescript", () => {
     try {
       process.chdir(tempDir);
       assert.equal(runLitsxTypecheck(["-p", "jsconfig.json", "--noEmit"]), 0);
+    } finally {
+      process.chdir(originalCwd);
+      process.stderr.write = originalWrite;
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  }, 20_000);
+
+  it("typechecks structural hooks imported between .litsx modules without ambient declarations", () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-typecheck-structural-hooks-"));
+    const srcDir = path.join(tempDir, "src");
+    const tsconfigPath = path.join(tempDir, "jsconfig.json");
+    const globalsPath = path.join(tempDir, "global.d.ts");
+    const hooksPath = path.join(srcDir, "hooks.litsx");
+    const componentPath = path.join(srcDir, "card.litsx");
+    const corePackageDir = path.join(tempDir, "node_modules", "@litsx", "core");
+    const originalCwd = process.cwd();
+    const originalWrite = process.stderr.write;
+    const repoRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
+    const coreTypesPath = path.join(repoRoot, "packages/core/src/index.d.ts").replaceAll("\\", "/");
+    let stderrOutput = "";
+
+    fs.mkdirSync(srcDir, { recursive: true });
+    fs.mkdirSync(corePackageDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(corePackageDir, "package.json"),
+      JSON.stringify({
+        name: "@litsx/core",
+        type: "module",
+        types: coreTypesPath,
+      }),
+    );
+    fs.writeFileSync(
+      tsconfigPath,
+      JSON.stringify({
+        compilerOptions: {
+          jsx: "preserve",
+          moduleResolution: "bundler",
+          allowJs: true,
+          allowArbitraryExtensions: true,
+          checkJs: true,
+          noEmit: true,
+          baseUrl: ".",
+          ignoreDeprecations: "6.0",
+          paths: {
+            "@/*": ["src/*"],
+          },
+        },
+        include: ["src/**/*", "global.d.ts"],
+      }),
+    );
+    fs.writeFileSync(globalsPath, TEMP_JSX_GLOBALS_DTS);
+    fs.writeFileSync(
+      hooksPath,
+      [
+        'import { defineHook } from "@litsx/core";',
+        "",
+        "export const useLocale = defineHook({",
+        "  setup(_host, args: [locale: string]) {",
+        "    return { initial: args[0] };",
+        "  },",
+        "  use(_host, state: { initial: string }, args: [locale: string]) {",
+        "    return `${state.initial}:${args[0]}`;",
+        "  },",
+        "});",
+        "",
+        "export function useMessage(name: string) {",
+        "  return useLocale(name);",
+        "}",
+        "",
+      ].join("\n"),
+    );
+    fs.writeFileSync(
+      componentPath,
+      [
+        'import { useLocale, useMessage } from "./hooks.litsx";',
+        "",
+        "export function Card({ locale }: { locale: string }) {",
+        "  const direct = useLocale(locale);",
+        "  const nested = useMessage(locale);",
+        "  const directText: string = direct;",
+        "  const nestedText: string = nested;",
+        "  return <section>{directText}{nestedText}</section>;",
+        "}",
+        "",
+      ].join("\n"),
+    );
+
+    process.stderr.write = (chunk) => {
+      stderrOutput += String(chunk);
+      return true;
+    };
+
+    try {
+      process.chdir(tempDir);
+      assert.equal(runLitsxTypecheck(["-p", "jsconfig.json", "--noEmit"]), 0, stderrOutput);
     } finally {
       process.chdir(originalCwd);
       process.stderr.write = originalWrite;

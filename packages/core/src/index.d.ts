@@ -227,22 +227,36 @@ export type LitsxHostMiddlewareMap = Partial<
   Record<LitsxHostMiddlewareLifecycleMethod, LitsxHostMiddleware>
 >;
 
-export interface LitsxStructuralDefinition {
+export interface LitsxStructuralDefinition<
+  TArgs extends unknown[] = unknown[],
+  TResult = unknown,
+  TState = unknown
+> {
   use?: (
     host: unknown,
-    state: unknown,
-    args: unknown[],
+    state: TState,
+    args: TArgs,
     meta: Record<string, unknown>,
     entry: LitsxStructuralEntry
-  ) => unknown;
+  ) => TResult;
   createState?: (
     host: unknown,
-    args: unknown[],
+    args: TArgs,
     meta: Record<string, unknown>,
     entry: LitsxStructuralEntry
-  ) => unknown;
+  ) => TState;
+  setup?: (
+    host: unknown,
+    args: TArgs,
+    meta: Record<string, unknown>,
+    entry: LitsxStructuralEntry
+  ) => TState;
   middlewares?: LitsxHostMiddlewareMap;
 }
+
+export type LitsxStructuralHook<TArgs extends unknown[] = unknown[], TResult = unknown> = (
+  ...args: TArgs
+) => TResult;
 
 export interface LitsxStructuralEntry {
   /**
@@ -259,6 +273,10 @@ export interface LitsxStructuralEntry {
    * resource runtimes. Entries are not deduplicated by this id.
    */
   callsiteId: string;
+  /**
+   * Stable authored expansion path for nested structural hook usage.
+   */
+  callsitePath: string[];
   definition: LitsxStructuralDefinition | unknown;
   args: unknown[];
   meta: Record<string, unknown>;
@@ -270,6 +288,8 @@ export interface LitsxStructuralEntryInput {
   id?: string;
   callsiteIndex?: number;
   callsiteId?: string;
+  callsitePath?: string[];
+  path?: string[];
   definition?: LitsxStructuralDefinition | unknown;
   args?: unknown[];
   meta?: Record<string, unknown>;
@@ -285,7 +305,8 @@ export declare class HostMiddlewareRuntime {
   readonly host: unknown;
   readonly entries: LitsxStructuralEntry[];
   getEntry(index: number): LitsxStructuralEntry | null;
-  read(index: number): unknown;
+  ensureEntry(index: number, entry: LitsxStructuralEntryInput): LitsxStructuralEntry;
+  read(index: number, args?: unknown[] | null, meta?: Record<string, unknown> | null): unknown;
   run(methodName: LitsxHostMiddlewareLifecycleMethod, base: () => unknown): unknown;
   run(methodName: LitsxHostMiddlewareLifecycleMethod, args: unknown[], base: () => unknown): unknown;
   connectedCallback(base: () => unknown): unknown;
@@ -310,8 +331,40 @@ export type LitsxStructuralHostConstructor<TInstance = object> = abstract new (
 
 export interface LitsxStructuralHostInstance {
   __litsxHostMiddlewareRuntime: HostMiddlewareRuntime;
-  __litsxReadStructuralEntry(index: number): unknown;
+  __litsxReadStructuralEntry(
+    index: number,
+    args?: unknown[] | null,
+    meta?: Record<string, unknown> | null
+  ): unknown;
 }
+
+export declare function defineHook<
+  TArgs extends unknown[] = unknown[],
+  TResult = unknown,
+  TState = unknown
+>(
+  definition: LitsxStructuralDefinition<TArgs, TResult, TState>
+): LitsxStructuralHook<TArgs, TResult>;
+
+export declare function isStructuralHook(value: unknown): value is LitsxStructuralHook;
+
+export declare function defineStructuralHookEntries<T extends Function>(
+  hook: T,
+  entries: LitsxStructuralEntryInput[]
+): T;
+
+export declare function getStructuralHookEntries(
+  hook: unknown
+): LitsxStructuralEntryInput[];
+
+export declare function useStructuralEntry(
+  host: unknown,
+  callsiteIndex: number,
+  callsiteId: string,
+  definition: unknown,
+  args?: unknown[],
+  meta?: Record<string, unknown>
+): unknown;
 
 export declare function HostMiddlewareMixin<TBase extends LitsxStructuralHostConstructor>(
   Base: TBase

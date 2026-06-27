@@ -13,9 +13,14 @@ export {
 
 export { EffectsController } from "./effects-controller.js";
 export {
+  defineHook,
+  defineStructuralHookEntries,
+  getStructuralHookEntries,
   HostMiddlewareMixin,
   HostMiddlewareRuntime,
   createHostMiddlewareRuntime,
+  isStructuralHook,
+  useStructuralEntry,
 } from "./host-middleware-runtime.js";
 
 export {

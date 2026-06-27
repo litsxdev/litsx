@@ -95,6 +95,409 @@ describe("@litsx/babel-preset-litsx", () => {
     assert.ok(ids.every((id) => id.startsWith("litsx-stable-")));
   });
 
+  it("compiles local structural hooks to host middleware reads", () => {
+    const source = [
+      'import { defineHook } from "@litsx/core";',
+      "const useLocale = defineHook({",
+      "  use(_host, _state, args) {",
+      "    return args[0];",
+      "  },",
+      "});",
+      "export function Greeting() {",
+      "  const locale = useLocale('en');",
+      "  return <div>{locale}</div>;",
+      "}",
+    ].join("\n");
+
+    const result = transformFromAstSync(parser.parse(source, { sourceType: "module" }), source, {
+      configFile: false,
+      babelrc: false,
+      filename: "/virtual/structural.litsx",
+      presets: [[nativePreset, { jsxTemplate: false }]],
+    });
+
+    assert.match(result.code, /import \{[^}]*defineHook[^}]*useStructuralEntry[^}]*HostMiddlewareMixin[^}]*\} from "@litsx\/core";|import \{[^}]*HostMiddlewareMixin[^}]*defineHook[^}]*useStructuralEntry[^}]*\} from "@litsx\/core";/);
+    assert.match(result.code, /class Greeting extends HostMiddlewareMixin\(LitElement\)/);
+    assert.match(result.code, /static structuralEntries = \[/);
+    assert.match(result.code, /callsiteIndex: 0/);
+    assert.match(result.code, /useStructuralEntry\(this, 0, "litsx-structural-[^"]+", useLocale, \['en'\]|\["en"\]/);
+    assert.match(result.code, /callsitePath: \["litsx-structural-[^"]+"\]/);
+  });
+
+  it("compiles structural hooks used transitively through local custom hooks", () => {
+    const source = [
+      'import { defineHook } from "@litsx/core";',
+      "const useResource = defineHook({",
+      "  use(_host, _state, args) {",
+      "    return args[0];",
+      "  },",
+      "});",
+      "function useMessage(name) {",
+      "  return useResource(name);",
+      "}",
+      "export function Greeting() {",
+      "  const message = useMessage('hello');",
+      "  return <div>{message}</div>;",
+      "}",
+    ].join("\n");
+
+    const result = transformFromAstSync(parser.parse(source, { sourceType: "module" }), source, {
+      configFile: false,
+      babelrc: false,
+      filename: "/virtual/structural-custom.litsx",
+      presets: [[nativePreset, { jsxTemplate: false }]],
+    });
+
+    assert.match(result.code, /function useMessage\(_host, name\)/);
+    assert.match(result.code, /static structuralEntries = \[/);
+    assert.match(result.code, /useStructuralEntry\(_host, 0, "litsx-structural-[^"]+", useResource, \[name\]/);
+    assert.match(result.code, /callsitePath: \["useMessage", "litsx-structural-[^"]+"\]/);
+    assert.match(result.code, /class Greeting extends HostMiddlewareMixin\(LitElement\)/);
+    assert.match(result.code, /useMessage\(this, 'hello'\)|useMessage\(this, "hello"\)/);
+  });
+
+  it("compiles imported structural hooks discovered from authored modules", () => {
+    const source = [
+      'import { useLocale } from "./hooks.litsx";',
+      "export function Greeting() {",
+      "  const locale = useLocale('en');",
+      "  return <div>{locale}</div>;",
+      "}",
+    ].join("\n");
+    const hooksSource = [
+      'import { defineHook } from "@litsx/core";',
+      "export const useLocale = defineHook({",
+      "  use(_host, _state, args) {",
+      "    return args[0];",
+      "  },",
+      "});",
+    ].join("\n");
+
+    const result = transformFromAstSync(parser.parse(source, { sourceType: "module" }), source, {
+      configFile: false,
+      babelrc: false,
+      filename: "/virtual/imported-structural.litsx",
+      presets: [[nativePreset, {
+        jsxTemplate: false,
+        inMemoryFiles: {
+          "/virtual/hooks.litsx": hooksSource,
+        },
+      }]],
+    });
+
+    assert.match(result.code, /class Greeting extends HostMiddlewareMixin\(LitElement\)/);
+    assert.match(result.code, /static structuralEntries = \[/);
+    assert.match(result.code, /useStructuralEntry\(this, 0, "litsx-structural-[^"]+", useLocale, \['en'\]|\["en"\]/);
+  });
+
+  it("compiles namespace imported structural hooks discovered from authored modules", () => {
+    const source = [
+      'import * as hooks from "./hooks.litsx";',
+      "export function Greeting() {",
+      "  const locale = hooks.useLocale('en');",
+      "  return <div>{locale}</div>;",
+      "}",
+    ].join("\n");
+    const hooksSource = [
+      'import { defineHook } from "@litsx/core";',
+      "const useLocale = defineHook({",
+      "  use(_host, _state, args) {",
+      "    return args[0];",
+      "  },",
+      "});",
+      "export { useLocale };",
+    ].join("\n");
+
+    const result = transformFromAstSync(parser.parse(source, { sourceType: "module" }), source, {
+      configFile: false,
+      babelrc: false,
+      filename: "/virtual/imported-namespace-structural.litsx",
+      presets: [[nativePreset, {
+        jsxTemplate: false,
+        inMemoryFiles: {
+          "/virtual/hooks.litsx": hooksSource,
+        },
+      }]],
+    });
+
+    assert.match(result.code, /class Greeting extends HostMiddlewareMixin\(LitElement\)/);
+    assert.match(result.code, /static structuralEntries = \[/);
+    assert.match(result.code, /useStructuralEntry\(this, 0, "litsx-structural-[^"]+", hooks\.useLocale, \['en'\]|\["en"\]/);
+  });
+
+  it("resolves imported structural hooks through TypeScript path aliases", () => {
+    const source = [
+      'import { useLocale } from "@/hooks.litsx";',
+      "export function Greeting() {",
+      "  const locale = useLocale('en');",
+      "  return <div>{locale}</div>;",
+      "}",
+    ].join("\n");
+    const hooksSource = [
+      'import { defineHook } from "@litsx/core";',
+      "export const useLocale = defineHook({",
+      "  use(_host, _state, args) {",
+      "    return args[0];",
+      "  },",
+      "});",
+    ].join("\n");
+
+    const result = transformFromAstSync(parser.parse(source, { sourceType: "module" }), source, {
+      configFile: false,
+      babelrc: false,
+      filename: "/virtual/src/path-alias-structural.litsx",
+      presets: [[nativePreset, {
+        jsxTemplate: false,
+        compilerOptions: {
+          baseUrl: "/virtual/src",
+          paths: {
+            "@/*": ["*"],
+          },
+        },
+        inMemoryFiles: {
+          "/virtual/src/hooks.litsx": hooksSource,
+        },
+      }]],
+    });
+
+    assert.match(result.code, /class Greeting extends HostMiddlewareMixin\(LitElement\)/);
+    assert.match(result.code, /static structuralEntries = \[/);
+    assert.match(result.code, /useStructuralEntry\(this, 0, "litsx-structural-[^"]+", useLocale, \['en'\]|\["en"\]/);
+  });
+
+  it("wraps hosts that call imported custom hooks containing structural hooks", () => {
+    const source = [
+      'import { useMessage } from "./hooks.litsx";',
+      "export function Greeting() {",
+      "  const message = useMessage('hello');",
+      "  return <div>{message}</div>;",
+      "}",
+    ].join("\n");
+    const hooksSource = [
+      'import { defineHook } from "@litsx/core";',
+      "const useResource = defineHook({",
+      "  use(_host, _state, args) {",
+      "    return args[0];",
+      "  },",
+      "});",
+      "export function useMessage(name) {",
+      "  return useResource(name);",
+      "}",
+    ].join("\n");
+
+    const result = transformFromAstSync(parser.parse(source, { sourceType: "module" }), source, {
+      configFile: false,
+      babelrc: false,
+      filename: "/virtual/imported-structural-custom.litsx",
+      presets: [[nativePreset, {
+        jsxTemplate: false,
+        inMemoryFiles: {
+          "/virtual/hooks.litsx": hooksSource,
+        },
+      }]],
+    });
+
+    assert.match(result.code, /class Greeting extends HostMiddlewareMixin\(LitElement\)/);
+    assert.match(result.code, /static structuralEntries = \[\s*...getStructuralHookEntries\(useMessage\)/);
+    assert.match(result.code, /useMessage\(this, 'hello'\)|useMessage\(this, "hello"\)/);
+    assert.doesNotMatch(result.code, /useStructuralEntry\(this, 0, "litsx-structural-[^"]+", useMessage/);
+  });
+
+  it("attaches structural metadata to custom hooks that contain structural hooks", () => {
+    const source = [
+      'import { defineHook } from "@litsx/core";',
+      "const useResource = defineHook({",
+      "  use(_host, _state, args) {",
+      "    return args[0];",
+      "  },",
+      "});",
+      "export function useMessage(name) {",
+      "  return useResource(name);",
+      "}",
+    ].join("\n");
+
+    const result = transformFromAstSync(parser.parse(source, { sourceType: "module" }), source, {
+      configFile: false,
+      babelrc: false,
+      filename: "/virtual/hooks-with-metadata.litsx",
+      presets: [[nativePreset, { jsxTemplate: false }]],
+    });
+
+    assert.match(result.code, /import \{[^}]*defineHook[^}]*useStructuralEntry[^}]*defineStructuralHookEntries[^}]*\} from "@litsx\/core";|import \{[^}]*defineStructuralHookEntries[^}]*defineHook[^}]*useStructuralEntry[^}]*\} from "@litsx\/core";/);
+    assert.match(result.code, /export function useMessage\(_host, name\)/);
+    assert.match(result.code, /defineStructuralHookEntries\(useMessage, \[/);
+    assert.match(result.code, /useStructuralEntry\(_host, 0, "litsx-structural-[^"]+", useResource, \[name\]/);
+  });
+
+  it("keeps structural callsite identity stable across repeated transforms", () => {
+    const source = [
+      'import { defineHook } from "@litsx/core";',
+      "const useResource = defineHook({",
+      "  use(_host, _state, args) {",
+      "    return args[0];",
+      "  },",
+      "});",
+      "export function Greeting() {",
+      "  const first = useResource('a');",
+      "  const second = useResource('b');",
+      "  return <div>{first}{second}</div>;",
+      "}",
+    ].join("\n");
+    const options = {
+      configFile: false,
+      babelrc: false,
+      filename: "/virtual/structural-stability.litsx",
+      presets: [[nativePreset, { jsxTemplate: false }]],
+    };
+
+    const first = transformFromAstSync(parser.parse(source, { sourceType: "module" }), source, options);
+    const second = transformFromAstSync(parser.parse(source, { sourceType: "module" }), source, options);
+    const firstIds = [...first.code.matchAll(/callsiteId: "(litsx-structural-[^"]+)"/g)]
+      .map((match) => match[1]);
+    const secondIds = [...second.code.matchAll(/callsiteId: "(litsx-structural-[^"]+)"/g)]
+      .map((match) => match[1]);
+
+    assert.strictEqual(firstIds.length, 2);
+    assert.deepStrictEqual(firstIds, secondIds);
+    assert.notStrictEqual(firstIds[0], firstIds[1]);
+  });
+
+  it("compiles structural hooks nested inside defineHook use readers", () => {
+    const source = [
+      'import { defineHook } from "@litsx/core";',
+      "const useInner = defineHook({",
+      "  use(_host, _state, args) {",
+      "    return args[0];",
+      "  },",
+      "});",
+      "const useOuter = defineHook({",
+      "  use(host, _state, args) {",
+      "    return useInner(args[0]);",
+      "  },",
+      "});",
+      "export function Greeting() {",
+      "  const value = useOuter('ok');",
+      "  return <div>{value}</div>;",
+      "}",
+    ].join("\n");
+
+    const result = transformFromAstSync(parser.parse(source, { sourceType: "module" }), source, {
+      configFile: false,
+      babelrc: false,
+      filename: "/virtual/nested-structural.litsx",
+      presets: [[nativePreset, { jsxTemplate: false }]],
+    });
+
+    assert.match(result.code, /use: function \(host, _state, args\)|use\(host, _state, args\)/);
+    assert.match(result.code, /static structuralEntries = \[/);
+    assert.match(result.code, /callsiteIndex: 0/);
+    assert.match(result.code, /callsiteIndex: 1/);
+    assert.match(result.code, /useStructuralEntry\(host, 0, "litsx-structural-[^"]+", useInner, \[args\[0\]\]/);
+    assert.match(result.code, /callsitePath: \["useOuter", "use", "litsx-structural-[^"]+"\]/);
+    assert.match(result.code, /useStructuralEntry\(this, 1, "litsx-structural-[^"]+", useOuter, \['ok'\]|\["ok"\]/);
+  });
+
+  it("rejects structural hook aliases so callsites stay static", () => {
+    const source = [
+      'import { defineHook } from "@litsx/core";',
+      "const useLocale = defineHook({",
+      "  use(_host) { return 'en'; },",
+      "});",
+      "const useAlias = useLocale;",
+      "export function Greeting() {",
+      "  return <div>{useAlias()}</div>;",
+      "}",
+    ].join("\n");
+
+    assert.throws(
+      () => transformFromAstSync(parser.parse(source, { sourceType: "module" }), source, {
+        configFile: false,
+        babelrc: false,
+        filename: "/virtual/invalid-structural.litsx",
+        presets: [[nativePreset, { jsxTemplate: false }]],
+      }),
+      /cannot be created through an alias/,
+    );
+  });
+
+  it("rejects dynamic structural hook selection so callsites stay static", () => {
+    const source = [
+      'import { defineHook } from "@litsx/core";',
+      "const useLocale = defineHook({ use(_host) { return 'en'; } });",
+      "const useTheme = defineHook({ use(_host) { return 'dark'; } });",
+      "const useSelected = ready ? useLocale : useTheme;",
+      "export function Greeting() {",
+      "  return <div>{useSelected()}</div>;",
+      "}",
+    ].join("\n");
+
+    assert.throws(
+      () => transformFromAstSync(parser.parse(source, { sourceType: "module" }), source, {
+        configFile: false,
+        babelrc: false,
+        filename: "/virtual/invalid-dynamic-structural.litsx",
+        presets: [[nativePreset, { jsxTemplate: false }]],
+      }),
+      /cannot be created through an alias/,
+    );
+  });
+
+  it("rejects structural hooks stored in containers", () => {
+    const objectSource = [
+      'import { defineHook } from "@litsx/core";',
+      "const useLocale = defineHook({ use(_host) { return 'en'; } });",
+      "const hooks = { useLocale };",
+      "export function Greeting() { return <div />; }",
+    ].join("\n");
+    const arraySource = [
+      'import { defineHook } from "@litsx/core";',
+      "const useLocale = defineHook({ use(_host) { return 'en'; } });",
+      "const hooks = [useLocale];",
+      "export function Greeting() { return <div />; }",
+    ].join("\n");
+
+    for (const source of [objectSource, arraySource]) {
+      assert.throws(
+        () => transformFromAstSync(parser.parse(source, { sourceType: "module" }), source, {
+          configFile: false,
+          babelrc: false,
+          filename: "/virtual/invalid-container-structural.litsx",
+          presets: [[nativePreset, { jsxTemplate: false }]],
+        }),
+        /cannot be stored in object or array containers/,
+      );
+    }
+  });
+
+  it("rejects computed namespace access for imported structural hooks", () => {
+    const source = [
+      'import * as hooks from "./hooks.litsx";',
+      "const name = 'useLocale';",
+      "export function Greeting() {",
+      "  return <div>{hooks[name]('en')}</div>;",
+      "}",
+    ].join("\n");
+    const hooksSource = [
+      'import { defineHook } from "@litsx/core";',
+      "export const useLocale = defineHook({ use(_host, _state, args) { return args[0]; } });",
+    ].join("\n");
+
+    assert.throws(
+      () => transformFromAstSync(parser.parse(source, { sourceType: "module" }), source, {
+        configFile: false,
+        babelrc: false,
+        filename: "/virtual/invalid-computed-namespace-structural.litsx",
+        presets: [[nativePreset, {
+          jsxTemplate: false,
+          inMemoryFiles: {
+            "/virtual/hooks.litsx": hooksSource,
+          },
+        }]],
+      }),
+      /must be accessed with a static property/,
+    );
+  });
+
   it("detects source features so the compiler can skip unnecessary native plugin passes", () => {
     const plainSource = [
       "export const Greeting = ({ label }) => {",
@@ -125,6 +528,11 @@ describe("@litsx/babel-preset-litsx", () => {
 
     assert.strictEqual(
       detectLitsxSourceFeatures('import { useStableId } from "@litsx/core"; useStableId();', {}).hooks,
+      true,
+    );
+
+    assert.strictEqual(
+      detectLitsxSourceFeatures('import { defineHook } from "@litsx/core"; defineHook({});', {}).hooks,
       true,
     );
 

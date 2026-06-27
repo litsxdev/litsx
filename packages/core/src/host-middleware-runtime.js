@@ -1,4 +1,6 @@
 const EMPTY_ARGS = Object.freeze([]);
+const STRUCTURAL_HOOK_DEFINITION = Symbol.for("litsx.structuralHookDefinition");
+const STRUCTURAL_HOOK_ENTRIES = Symbol.for("litsx.structuralHookEntries");
 const LIFECYCLE_METHODS = [
   "connectedCallback",
   "disconnectedCallback",
@@ -14,6 +16,50 @@ const LIFECYCLE_METHODS = [
 
 function isObject(value) {
   return value !== null && typeof value === "object";
+}
+
+function resolveStructuralDefinition(definition) {
+  return typeof definition === "function" && definition[STRUCTURAL_HOOK_DEFINITION]
+    ? definition[STRUCTURAL_HOOK_DEFINITION]
+    : definition;
+}
+
+function createStructuralHookCallable() {
+  return function structuralHookMustBeCompiled() {
+    throw new Error(
+      "Structural hooks created with defineHook() must be compiled by LitSX before they can be called."
+    );
+  };
+}
+
+export function defineHook(definition) {
+  const hook = createStructuralHookCallable();
+  Object.defineProperty(hook, STRUCTURAL_HOOK_DEFINITION, {
+    value: definition,
+    configurable: true,
+  });
+  return hook;
+}
+
+export function isStructuralHook(value) {
+  return typeof value === "function" && Boolean(value[STRUCTURAL_HOOK_DEFINITION]);
+}
+
+export function defineStructuralHookEntries(hook, entries) {
+  if (typeof hook !== "function") {
+    return hook;
+  }
+  Object.defineProperty(hook, STRUCTURAL_HOOK_ENTRIES, {
+    value: Array.isArray(entries) ? entries : [],
+    configurable: true,
+  });
+  return hook;
+}
+
+export function getStructuralHookEntries(hook) {
+  return typeof hook === "function" && Array.isArray(hook[STRUCTURAL_HOOK_ENTRIES])
+    ? hook[STRUCTURAL_HOOK_ENTRIES]
+    : [];
 }
 
 function normalizeArgs(args) {
@@ -34,10 +80,60 @@ function normalizeInvocation(argsOrBase, maybeBase) {
   };
 }
 
+function normalizeHookPath(path) {
+  return Array.isArray(path)
+    ? path.map((part) => String(part))
+    : [];
+}
+
+function getStructuralEntryId(callsiteId, callsiteIndex) {
+  return typeof callsiteId === "string" && callsiteId
+    ? callsiteId
+    : `structural:${callsiteIndex}`;
+}
+
+function getStructuralMeta(meta, callsitePath) {
+  const nextMeta = isObject(meta) ? { ...meta } : {};
+  const normalizedPath = normalizeHookPath(callsitePath);
+  if (normalizedPath.length > 0 && !Array.isArray(nextMeta.callsitePath)) {
+    nextMeta.callsitePath = normalizedPath;
+  }
+  return nextMeta;
+}
+
+function getEntryCallsitePath(source, callsiteId) {
+  return normalizeHookPath(source.callsitePath ?? source.path ?? source.meta?.callsitePath ?? [callsiteId]);
+}
+
+function refreshEntryArgsAndMeta(entry, args = null, meta = null) {
+  entry.args = Array.isArray(args) ? args : entry.args;
+  entry.meta = isObject(meta) ? getStructuralMeta(meta, entry.callsitePath) : entry.meta;
+  return entry;
+}
+
 function getDefinitionMiddlewares(definition) {
-  return isObject(definition) && isObject(definition.middlewares)
-    ? definition.middlewares
+  const resolvedDefinition = resolveStructuralDefinition(definition);
+  return isObject(resolvedDefinition) && isObject(resolvedDefinition.middlewares)
+    ? resolvedDefinition.middlewares
     : null;
+}
+
+function getDefinitionUse(definition) {
+  const resolvedDefinition = resolveStructuralDefinition(definition);
+  return isObject(resolvedDefinition) && typeof resolvedDefinition.use === "function"
+    ? resolvedDefinition.use
+    : null;
+}
+
+function getDefinitionCreateState(definition) {
+  const resolvedDefinition = resolveStructuralDefinition(definition);
+  if (isObject(resolvedDefinition) && typeof resolvedDefinition.createState === "function") {
+    return resolvedDefinition.createState;
+  }
+  if (isObject(resolvedDefinition) && typeof resolvedDefinition.setup === "function") {
+    return resolvedDefinition.setup;
+  }
+  return null;
 }
 
 function createEntryState(host, definition, args, meta, entry) {
@@ -45,8 +141,9 @@ function createEntryState(host, definition, args, meta, entry) {
     return entry.state;
   }
 
-  if (isObject(definition) && typeof definition.createState === "function") {
-    return definition.createState(host, args, meta, entry);
+  const createState = getDefinitionCreateState(definition);
+  if (createState) {
+    return createState(host, args, meta, entry);
   }
 
   return undefined;
@@ -57,20 +154,18 @@ function normalizeStructuralEntry(host, entry, index) {
   const callsiteIndex = Number.isInteger(source.callsiteIndex)
     ? source.callsiteIndex
     : index;
-  const callsiteId = typeof source.callsiteId === "string"
-    ? source.callsiteId
-    : typeof source.id === "string"
-      ? source.id
-      : `structural:${callsiteIndex}`;
+  const callsiteId = getStructuralEntryId(source.callsiteId ?? source.id, callsiteIndex);
+  const callsitePath = getEntryCallsitePath(source, callsiteId);
   const definition = Object.prototype.hasOwnProperty.call(source, "definition")
     ? source.definition
     : null;
   const args = Array.isArray(source.args) ? source.args : [];
-  const meta = isObject(source.meta) ? source.meta : {};
+  const meta = getStructuralMeta(source.meta, callsitePath);
   const normalized = {
     id: callsiteId,
     callsiteId,
     callsiteIndex,
+    callsitePath,
     definition,
     args,
     meta,
@@ -116,15 +211,41 @@ export class HostMiddlewareRuntime {
     return this.entries[index] ?? null;
   }
 
-  read(index) {
+  findEntryIndexByCallsiteId(callsiteId) {
+    return this.entries.findIndex((entry) => entry?.callsiteId === callsiteId);
+  }
+
+  ensureEntry(index, entry) {
+    const existing = this.entries[index];
+    if (existing && existing.callsiteId === (entry?.callsiteId ?? entry?.id)) {
+      return refreshEntryArgsAndMeta(existing, entry?.args, entry?.meta);
+    }
+
+    const callsiteId = entry?.callsiteId ?? entry?.id;
+    if (typeof callsiteId === "string") {
+      const existingIndex = this.findEntryIndexByCallsiteId(callsiteId);
+      if (existingIndex >= 0) {
+        return refreshEntryArgsAndMeta(this.entries[existingIndex], entry?.args, entry?.meta);
+      }
+    }
+
+    const normalized = normalizeStructuralEntry(this.host, entry, index);
+    if (existing) {
+      this.entries.push(normalized);
+    } else {
+      this.entries[index] = normalized;
+    }
+    return normalized;
+  }
+
+  read(index, args = null, meta = null) {
     const entry = this.getEntry(index);
     if (!entry) {
       throw new RangeError(`Host middleware entry ${index} does not exist.`);
     }
 
-    const use = isObject(entry.definition) && typeof entry.definition.use === "function"
-      ? entry.definition.use
-      : null;
+    refreshEntryArgsAndMeta(entry, args, meta);
+    const use = getDefinitionUse(entry.definition);
 
     if (!use) {
       throw new TypeError(`Host middleware entry "${entry.id}" does not define a render-time use() reader.`);
@@ -178,6 +299,23 @@ function getOrCreateHostRuntime(host) {
   return host.__litsxHostMiddlewareRuntime;
 }
 
+export function useStructuralEntry(host, callsiteIndex, callsiteId, definition, args = [], meta = {}) {
+  const runtime = getOrCreateHostRuntime(host);
+  const callsitePath = normalizeHookPath(meta?.callsitePath ?? [callsiteId]);
+  const nextMeta = getStructuralMeta(meta, callsitePath);
+  const entry = runtime.ensureEntry(callsiteIndex, {
+    id: callsiteId,
+    callsiteId,
+    callsiteIndex,
+    callsitePath,
+    definition,
+    args,
+    meta: nextMeta,
+  });
+  const entryIndex = runtime.entries.indexOf(entry);
+  return runtime.read(entryIndex >= 0 ? entryIndex : callsiteIndex, args, nextMeta);
+}
+
 export function HostMiddlewareMixin(Base) {
   class HostMiddlewareHost extends Base {
     constructor(...args) {
@@ -188,8 +326,8 @@ export function HostMiddlewareMixin(Base) {
       );
     }
 
-    __litsxReadStructuralEntry(index) {
-      return getOrCreateHostRuntime(this).read(index);
+    __litsxReadStructuralEntry(index, args, meta) {
+      return getOrCreateHostRuntime(this).read(index, args, meta);
     }
 
     connectedCallback(...args) {

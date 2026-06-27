@@ -1,9 +1,14 @@
 import assert from "assert";
 import { describe, it } from "vitest";
 import {
+  defineHook,
+  defineStructuralHookEntries,
+  getStructuralHookEntries,
   HostMiddlewareMixin,
   HostMiddlewareRuntime,
   createHostMiddlewareRuntime,
+  isStructuralHook,
+  useStructuralEntry,
 } from "../packages/core/src/index.js";
 
 function entry(id, middlewares = {}, extras = {}) {
@@ -362,8 +367,137 @@ describe("HostMiddlewareRuntime", () => {
 
     assert.deepStrictEqual(runtime.read(0), {
       args: ["arg"],
-      meta: { key: "value" },
+      meta: { key: "value", callsitePath: ["created"] },
     });
+  });
+
+  it("supports defineHook callables as structural entry definitions", () => {
+    const structuralHook = defineHook({
+      setup(_host, args, meta, nextEntry) {
+        return {
+          value: args[0],
+          path: meta.callsitePath,
+          id: nextEntry.callsiteId,
+        };
+      },
+      use(_host, state) {
+        return state;
+      },
+    });
+
+    const runtime = new HostMiddlewareRuntime({}, [
+      {
+        callsiteId: "callsite-a",
+        callsitePath: ["Component", "useThing"],
+        definition: structuralHook,
+        args: ["ready"],
+      },
+    ]);
+
+    assert.strictEqual(isStructuralHook(structuralHook), true);
+    assert.deepStrictEqual(runtime.read(0), {
+      value: "ready",
+      path: ["Component", "useThing"],
+      id: "callsite-a",
+    });
+  });
+
+  it("lazily creates and refreshes structural entries from compiled reads", () => {
+    const host = {};
+    const structuralHook = defineHook({
+      setup(_host, args) {
+        return { initial: args[0] };
+      },
+      use(_host, state, args, meta, nextEntry) {
+        return {
+          initial: state.initial,
+          current: args[0],
+          id: nextEntry.callsiteId,
+          path: meta.callsitePath,
+        };
+      },
+    });
+
+    const first = useStructuralEntry(
+      host,
+      0,
+      "structural-a",
+      structuralHook,
+      ["first"],
+      { callsitePath: ["Host", "structural-a"] },
+    );
+    const second = useStructuralEntry(
+      host,
+      0,
+      "structural-a",
+      structuralHook,
+      ["second"],
+      { callsitePath: ["Host", "structural-a"] },
+    );
+
+    assert.deepStrictEqual(first, {
+      initial: "first",
+      current: "first",
+      id: "structural-a",
+      path: ["Host", "structural-a"],
+    });
+    assert.deepStrictEqual(second, {
+      initial: "first",
+      current: "second",
+      id: "structural-a",
+      path: ["Host", "structural-a"],
+    });
+    assert.strictEqual(host.__litsxHostMiddlewareRuntime.entries.length, 1);
+  });
+
+  it("resolves compiled reads by callsite id when module-local indexes collide", () => {
+    const host = {};
+    const firstHook = defineHook({
+      use(_host, _state, args) {
+        return `first:${args[0]}`;
+      },
+    });
+    const secondHook = defineHook({
+      use(_host, _state, args) {
+        return `second:${args[0]}`;
+      },
+    });
+    host.constructor = {
+      structuralEntries: [
+        {
+          callsiteIndex: 0,
+          callsiteId: "first",
+          definition: firstHook,
+          args: [],
+          meta: { callsitePath: ["first"] },
+        },
+        {
+          callsiteIndex: 0,
+          callsiteId: "second",
+          definition: secondHook,
+          args: [],
+          meta: { callsitePath: ["second"] },
+        },
+      ],
+    };
+
+    assert.strictEqual(
+      useStructuralEntry(host, 0, "second", secondHook, ["value"], { callsitePath: ["second"] }),
+      "second:value",
+    );
+    assert.strictEqual(
+      useStructuralEntry(host, 0, "first", firstHook, ["value"], { callsitePath: ["first"] }),
+      "first:value",
+    );
+  });
+
+  it("attaches structural entries metadata to custom hook functions", () => {
+    function useCustomHook() {}
+    const entries = [{ callsiteId: "nested", definition: {} }];
+
+    assert.strictEqual(defineStructuralHookEntries(useCustomHook, entries), useCustomHook);
+    assert.strictEqual(getStructuralHookEntries(useCustomHook), entries);
+    assert.deepStrictEqual(getStructuralHookEntries(() => undefined), []);
   });
 });
 
