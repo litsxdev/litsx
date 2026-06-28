@@ -14,15 +14,18 @@ const { transformFromAstSync } = babelCore;
 let nativePreset;
 let createLitsxPresetPlugins;
 let detectLitsxSourceFeatures;
+let isLitsxRuntimeHookName;
 
 beforeAll(async () => {
-  const [presetMod] = await Promise.all([
+  const [presetMod, runtimeHooksMod] = await Promise.all([
     import("../packages/babel-preset-litsx/src/index.js"),
+    import("../packages/babel-preset-litsx/src/internal/runtime-hooks.js"),
   ]);
 
   nativePreset = interopDefault(presetMod);
   createLitsxPresetPlugins = presetMod.createLitsxPresetPlugins;
   detectLitsxSourceFeatures = presetMod.detectLitsxSourceFeatures;
+  isLitsxRuntimeHookName = runtimeHooksMod.isLitsxRuntimeHookName;
 });
 
 describe("@litsx/babel-preset-litsx", () => {
@@ -116,11 +119,11 @@ describe("@litsx/babel-preset-litsx", () => {
       presets: [[nativePreset, { jsxTemplate: false }]],
     });
 
-    assert.match(result.code, /import \{[^}]*defineHook[^}]*useStructuralEntry[^}]*HostMiddlewareMixin[^}]*\} from "@litsx\/core";|import \{[^}]*HostMiddlewareMixin[^}]*defineHook[^}]*useStructuralEntry[^}]*\} from "@litsx\/core";/);
+    assert.match(result.code, /import \{[^}]*defineHook[^}]*resolveStructuralEntry[^}]*HostMiddlewareMixin[^}]*\} from "@litsx\/core";|import \{[^}]*HostMiddlewareMixin[^}]*defineHook[^}]*resolveStructuralEntry[^}]*\} from "@litsx\/core";/);
     assert.match(result.code, /class Greeting extends HostMiddlewareMixin\(LitElement\)/);
     assert.match(result.code, /static structuralEntries = \[/);
     assert.match(result.code, /callsiteIndex: 0/);
-    assert.match(result.code, /useStructuralEntry\(this, 0, "litsx-structural-[^"]+", useLocale, \['en'\]|\["en"\]/);
+    assert.match(result.code, /resolveStructuralEntry\(this, 0, "litsx-structural-[^"]+", useLocale, \['en'\]|\["en"\]/);
     assert.match(result.code, /callsitePath: \["litsx-structural-[^"]+"\]/);
   });
 
@@ -149,12 +152,12 @@ describe("@litsx/babel-preset-litsx", () => {
       presets: [[nativePreset, { jsxTemplate: false }]],
     });
 
-    assert.match(result.code, /import \{[^}]*useStructuralStaticEntry[^}]*defineHook[^}]*\} from "@litsx\/core";|import \{[^}]*defineHook[^}]*useStructuralStaticEntry[^}]*\} from "@litsx\/core";/);
+    assert.match(result.code, /import \{[^}]*resolveStructuralStaticEntry[^}]*defineHook[^}]*\} from "@litsx\/core";|import \{[^}]*defineHook[^}]*resolveStructuralStaticEntry[^}]*\} from "@litsx\/core";/);
     assert.doesNotMatch(result.code, /HostMiddlewareMixin/);
     assert.match(result.code, /class StaticCard extends (?:LitsxStaticHoistsMixin\(LitElement\)|LitElement)/);
     assert.match(result.code, /static structuralStaticEntries = \[/);
     assert.match(result.code, /args: \['catalog'\]|\["catalog"\]/);
-    assert.match(result.code, /useStructuralStaticEntry\(this\.constructor, 0, "litsx-structural-[^"]+", useStaticResource, \['catalog'\]|\["catalog"\]/);
+    assert.match(result.code, /resolveStructuralStaticEntry\(this\.constructor, 0, "litsx-structural-[^"]+", useStaticResource, \['catalog'\]|\["catalog"\]/);
     assert.match(result.code, /static get styles\(\)/);
   });
 
@@ -190,7 +193,7 @@ describe("@litsx/babel-preset-litsx", () => {
     assert.match(result.code, /class MixedCard extends HostMiddlewareMixin\(LitElement\)/);
     assert.match(result.code, /static structuralEntries = \[/);
     assert.doesNotMatch(result.code, /static structuralStaticEntries/);
-    assert.match(result.code, /useStructuralEntry\(this, 0, "litsx-structural-[^"]+", useMixedResource, \['catalog'\]|\["catalog"\]/);
+    assert.match(result.code, /resolveStructuralEntry\(this, 0, "litsx-structural-[^"]+", useMixedResource, \['catalog'\]|\["catalog"\]/);
   });
 
   it("compiles structural hooks used transitively through local custom hooks", () => {
@@ -219,7 +222,7 @@ describe("@litsx/babel-preset-litsx", () => {
 
     assert.match(result.code, /function useMessage\(_host, name\)/);
     assert.match(result.code, /static structuralEntries = \[/);
-    assert.match(result.code, /useStructuralEntry\(_host, 0, "litsx-structural-[^"]+", useResource, \[name\]/);
+    assert.match(result.code, /resolveStructuralEntry\(_host, 0, "litsx-structural-[^"]+", useResource, \[name\]/);
     assert.match(result.code, /callsitePath: \["useMessage", "litsx-structural-[^"]+"\]/);
     assert.match(result.code, /class Greeting extends HostMiddlewareMixin\(LitElement\)/);
     assert.match(result.code, /useMessage\(this, 'hello'\)|useMessage\(this, "hello"\)/);
@@ -258,7 +261,7 @@ describe("@litsx/babel-preset-litsx", () => {
 
     assert.match(result.code, /class Greeting extends HostMiddlewareMixin\(LitElement\)/);
     assert.match(result.code, /static structuralEntries = \[/);
-    assert.match(result.code, /useStructuralEntry\(this, 0, "litsx-structural-[^"]+", useLocale, \['en'\]|\["en"\]/);
+    assert.match(result.code, /resolveStructuralEntry\(this, 0, "litsx-structural-[^"]+", useLocale, \['en'\]|\["en"\]/);
   });
 
   it("compiles imported static-only structural hooks without host lifecycle wrapping", () => {
@@ -295,7 +298,7 @@ describe("@litsx/babel-preset-litsx", () => {
 
     assert.doesNotMatch(result.code, /HostMiddlewareMixin/);
     assert.match(result.code, /static structuralStaticEntries = \[/);
-    assert.match(result.code, /useStructuralStaticEntry\(this\.constructor, 0, "litsx-structural-[^"]+", useStaticLocale, \['en'\]|\["en"\]/);
+    assert.match(result.code, /resolveStructuralStaticEntry\(this\.constructor, 0, "litsx-structural-[^"]+", useStaticLocale, \['en'\]|\["en"\]/);
   });
 
   it("compiles namespace imported structural hooks discovered from authored modules", () => {
@@ -330,7 +333,7 @@ describe("@litsx/babel-preset-litsx", () => {
 
     assert.match(result.code, /class Greeting extends HostMiddlewareMixin\(LitElement\)/);
     assert.match(result.code, /static structuralEntries = \[/);
-    assert.match(result.code, /useStructuralEntry\(this, 0, "litsx-structural-[^"]+", hooks\.useLocale, \['en'\]|\["en"\]/);
+    assert.match(result.code, /resolveStructuralEntry\(this, 0, "litsx-structural-[^"]+", hooks\.useLocale, \['en'\]|\["en"\]/);
   });
 
   it("resolves imported structural hooks through TypeScript path aliases", () => {
@@ -370,7 +373,7 @@ describe("@litsx/babel-preset-litsx", () => {
 
     assert.match(result.code, /class Greeting extends HostMiddlewareMixin\(LitElement\)/);
     assert.match(result.code, /static structuralEntries = \[/);
-    assert.match(result.code, /useStructuralEntry\(this, 0, "litsx-structural-[^"]+", useLocale, \['en'\]|\["en"\]/);
+    assert.match(result.code, /resolveStructuralEntry\(this, 0, "litsx-structural-[^"]+", useLocale, \['en'\]|\["en"\]/);
   });
 
   it("wraps hosts that call imported custom hooks containing structural hooks", () => {
@@ -408,7 +411,7 @@ describe("@litsx/babel-preset-litsx", () => {
     assert.match(result.code, /class Greeting extends HostMiddlewareMixin\(LitElement\)/);
     assert.match(result.code, /static structuralEntries = \[\s*...getStructuralHookEntries\(useMessage\)/);
     assert.match(result.code, /useMessage\(this, 'hello'\)|useMessage\(this, "hello"\)/);
-    assert.doesNotMatch(result.code, /useStructuralEntry\(this, 0, "litsx-structural-[^"]+", useMessage/);
+    assert.doesNotMatch(result.code, /resolveStructuralEntry\(this, 0, "litsx-structural-[^"]+", useMessage/);
   });
 
   it("attaches structural metadata to custom hooks that contain structural hooks", () => {
@@ -431,10 +434,10 @@ describe("@litsx/babel-preset-litsx", () => {
       presets: [[nativePreset, { jsxTemplate: false }]],
     });
 
-    assert.match(result.code, /import \{[^}]*defineHook[^}]*useStructuralEntry[^}]*defineStructuralHookEntries[^}]*\} from "@litsx\/core";|import \{[^}]*defineStructuralHookEntries[^}]*defineHook[^}]*useStructuralEntry[^}]*\} from "@litsx\/core";/);
+    assert.match(result.code, /import \{[^}]*defineHook[^}]*resolveStructuralEntry[^}]*defineStructuralHookEntries[^}]*\} from "@litsx\/core";|import \{[^}]*defineStructuralHookEntries[^}]*defineHook[^}]*resolveStructuralEntry[^}]*\} from "@litsx\/core";/);
     assert.match(result.code, /export function useMessage\(_host, name\)/);
     assert.match(result.code, /defineStructuralHookEntries\(useMessage, \[/);
-    assert.match(result.code, /useStructuralEntry\(_host, 0, "litsx-structural-[^"]+", useResource, \[name\]/);
+    assert.match(result.code, /resolveStructuralEntry\(_host, 0, "litsx-structural-[^"]+", useResource, \[name\]/);
   });
 
   it("keeps structural callsite identity stable across repeated transforms", () => {
@@ -539,9 +542,9 @@ describe("@litsx/babel-preset-litsx", () => {
     assert.match(result.code, /static structuralEntries = \[/);
     assert.match(result.code, /callsiteIndex: 0/);
     assert.match(result.code, /callsiteIndex: 1/);
-    assert.match(result.code, /useStructuralEntry\(host, 0, "litsx-structural-[^"]+", useInner, \[args\[0\]\]/);
+    assert.match(result.code, /resolveStructuralEntry\(host, 0, "litsx-structural-[^"]+", useInner, \[args\[0\]\]/);
     assert.match(result.code, /callsitePath: \["useOuter", "use", "litsx-structural-[^"]+"\]/);
-    assert.match(result.code, /useStructuralEntry\(this, 1, "litsx-structural-[^"]+", useOuter, \['ok'\]|\["ok"\]/);
+    assert.match(result.code, /resolveStructuralEntry\(this, 1, "litsx-structural-[^"]+", useOuter, \['ok'\]|\["ok"\]/);
   });
 
   it("compiles the structural hooks authoring fixture end-to-end", () => {
@@ -567,9 +570,9 @@ describe("@litsx/babel-preset-litsx", () => {
     assert.match(result.code, /class ResourceConsumer extends HostMiddlewareMixin\(LitElement\)/);
     assert.match(result.code, /static structuralEntries = \[\{\s*id: "litsx-structural-[^"]+"/);
     assert.match(result.code, /definition: useScopedResource/);
-    assert.match(result.code, /useStructuralEntry\(this, 0, "litsx-structural-[^"]+", useScopedResource, \[this\.name\]/);
+    assert.match(result.code, /resolveStructuralEntry\(this, 0, "litsx-structural-[^"]+", useScopedResource, \[this\.name\]/);
     assert.match(hooksResult.code, /defineStructuralHookEntries\(useScopedResource, \[/);
-    assert.match(hooksResult.code, /useStructuralEntry\(_host, 0, "litsx-structural-[^"]+", useResource, \[`scope:\$\{args\[0\]\}`\]/);
+    assert.match(hooksResult.code, /resolveStructuralEntry\(_host, 0, "litsx-structural-[^"]+", useResource, \[`scope:\$\{args\[0\]\}`\]/);
   });
 
   it("rejects structural hook aliases so callsites stay static", () => {
@@ -707,6 +710,16 @@ describe("@litsx/babel-preset-litsx", () => {
     );
 
     assert.strictEqual(
+      detectLitsxSourceFeatures('import { useId } from "@litsx/core"; useId();', {}).hooks,
+      true,
+    );
+
+    assert.strictEqual(
+      detectLitsxSourceFeatures('import { useContext } from "@litsx/core/context"; useContext(ThemeContext);', {}).hooks,
+      true,
+    );
+
+    assert.strictEqual(
       detectLitsxSourceFeatures('import { defineHook } from "@litsx/core"; defineHook({});', {}).hooks,
       true,
     );
@@ -764,6 +777,32 @@ describe("@litsx/babel-preset-litsx", () => {
     assert.strictEqual(
       createLitsxPresetPlugins({}, detectLitsxSourceFeatures(featureSource, {})).length,
       6,
+    );
+  });
+
+  it("keeps authored runtime hook detection aligned with @litsx/core naming", () => {
+    const coreTypes = fs.readFileSync(
+      path.join(process.cwd(), "packages/core/src/index.d.ts"),
+      "utf8",
+    );
+    const contextTypes = fs.readFileSync(
+      path.join(process.cwd(), "packages/core/src/context.d.ts"),
+      "utf8",
+    );
+    const publicUseExports = [
+      ...Array.from(
+        coreTypes.matchAll(/export declare function (use[A-Z]\w*)\b/g),
+        (match) => match[1],
+      ).filter((name) => !name.startsWith("useStructural")),
+      ...Array.from(
+        contextTypes.matchAll(/export declare function (use[A-Z]\w*)\b/g),
+        (match) => match[1],
+      ),
+    ];
+
+    assert.deepStrictEqual(
+      publicUseExports.filter((name) => !isLitsxRuntimeHookName(name)),
+      [],
     );
   });
 

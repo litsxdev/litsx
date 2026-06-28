@@ -476,7 +476,7 @@ export declare function getStructuralHookEntries(
   hook: unknown
 ): LitsxStructuralEntryInput[];
 
-export declare function useStructuralEntry(
+export declare function resolveStructuralEntry(
   host: unknown,
   callsiteIndex: number,
   callsiteId: string,
@@ -485,7 +485,7 @@ export declare function useStructuralEntry(
   meta?: Record<string, unknown>
 ): unknown;
 
-export declare function useStructuralStaticEntry(
+export declare function resolveStructuralStaticEntry(
   owner: unknown,
   callsiteIndex: number,
   callsiteId: string,

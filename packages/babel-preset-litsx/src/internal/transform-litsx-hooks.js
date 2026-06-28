@@ -4,37 +4,16 @@ import path from "node:path";
 import traverse from "@babel/traverse";
 import parser from "@litsx/babel-parser";
 import { ensureTypescriptModule } from "./transform-litsx-properties.js";
+import {
+  isLitsxRuntimeHookName,
+  isLitsxRuntimeImportSource,
+  LITSX_PRESERVED_RUNTIME_IMPORT_SOURCES,
+  LITSX_RUNTIME_IMPORT_SOURCES,
+  LITSX_RUNTIME_MODULE,
+} from "./runtime-hooks.js";
 
-const RUNTIME_MODULE = "@litsx/core";
-const IMPORT_SOURCES = [RUNTIME_MODULE];
-
-const RUNTIME_HELPERS = [
-  "useOnConnect",
-  "useAfterUpdate",
-  "useOnCommit",
-  "useMemoValue",
-  "useStableCallback",
-  "useEvent",
-  "useEmit",
-  "usePrevious",
-  "useReducedState",
-  "useState",
-  "useControlledState",
-  "useAsyncState",
-  "useOptimistic",
-  "useExpose",
-  "useExternalStore",
-  "useHost",
-  "useHostContent",
-  "useSlot",
-  "useTextContent",
-  "useTransition",
-  "useDeferredValue",
-  "useStyle",
-  "useRef",
-  "useCallbackRef",
-  "useStableId",
-];
+const RUNTIME_MODULE = LITSX_RUNTIME_MODULE;
+const IMPORT_SOURCES = LITSX_RUNTIME_IMPORT_SOURCES;
 
 const SOURCE_EXTENSIONS = [
   "",
@@ -483,17 +462,17 @@ function createStructuralHookResolver(options = {}) {
   function isNamespaceRuntimeHelperUse(analysis, objectName, propertyName) {
     const importInfo = analysis.importBindings.get(objectName);
     return (
-      importInfo?.source === RUNTIME_MODULE &&
+      isLitsxRuntimeImportSource(importInfo?.source) &&
       importInfo.importedName === "*" &&
-      RUNTIME_HELPERS.includes(propertyName)
+      isLitsxRuntimeHookName(propertyName)
     );
   }
 
   function isRuntimeHelperImport(analysis, localName) {
     const importInfo = analysis.importBindings.get(localName);
     return (
-      importInfo?.source === RUNTIME_MODULE &&
-      RUNTIME_HELPERS.includes(importInfo.importedName)
+      isLitsxRuntimeImportSource(importInfo?.source) &&
+      isLitsxRuntimeHookName(importInfo.importedName)
     );
   }
 
@@ -904,7 +883,8 @@ export default function transformLitsxHooks(api, options = {}) {
     pluginName: "transform-litsx-hooks",
     runtimeModule: RUNTIME_MODULE,
     importSources: IMPORT_SOURCES,
-    helperNames: RUNTIME_HELPERS,
+    preservedRuntimeImportSources: LITSX_PRESERVED_RUNTIME_IMPORT_SOURCES,
+    helperNames: isLitsxRuntimeHookName,
     callMetadataByHelper: {
       useStableId: createStableIdCallsiteMetadata,
     },

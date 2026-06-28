@@ -20,8 +20,8 @@ export {
   HostMiddlewareRuntime,
   createHostMiddlewareRuntime,
   isStructuralHook,
-  useStructuralEntry,
-  useStructuralStaticEntry,
+  resolveStructuralEntry,
+  resolveStructuralStaticEntry,
 } from "./host-middleware-runtime.js";
 
 export {

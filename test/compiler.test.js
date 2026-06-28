@@ -190,6 +190,78 @@ describe("@litsx/compiler", () => {
     assert.doesNotMatch(consumerResult.code, /const value = useDemo\("x"\);/);
   }, 20000);
 
+  it("recognizes useId from @litsx/core as a runtime hook inside imported custom hooks", () => {
+    const hookSource = [
+      'import { useId } from "@litsx/core";',
+      "export function useDemoHook() {",
+      "  const id = useId();",
+      "  return id;",
+      "}",
+    ].join("\n");
+    const consumerSource = [
+      'import { useDemoHook } from "./demo-hook";',
+      "export const DemoComponent = () => {",
+      "  const id = useDemoHook();",
+      "  return <div>{id}</div>;",
+      "};",
+    ].join("\n");
+
+    const hookResult = transformLitsxSync(hookSource, {
+      filename: "/virtual/demo-hook.tsx",
+      jsxTemplate: false,
+    });
+    const consumerResult = transformLitsxSync(consumerSource, {
+      filename: "/virtual/demo-component.litsx",
+      jsxTemplate: false,
+      inMemoryFiles: {
+        "/virtual/demo-hook.tsx": hookSource,
+      },
+    });
+
+    assert.match(hookResult.code, /export function useDemoHook\(_host\)/);
+    assert.match(hookResult.code, /const id = useId\(_host\);/);
+    assert.match(consumerResult.code, /const id = useDemoHook\(this\);/);
+    assert.doesNotMatch(
+      consumerResult.code,
+      /Unable to resolve imported custom hook/
+    );
+  }, 20000);
+
+  it("recognizes useContext from @litsx/core/context as a runtime hook inside imported custom hooks", () => {
+    const hookSource = [
+      'import { createContext, useContext } from "@litsx/core/context";',
+      'export const ThemeContext = createContext("light");',
+      "export function useThemeName() {",
+      "  return useContext(ThemeContext);",
+      "}",
+    ].join("\n");
+    const consumerSource = [
+      'import { useThemeName } from "./theme-hook";',
+      "export const DemoComponent = () => {",
+      "  const theme = useThemeName();",
+      "  return <div>{theme}</div>;",
+      "};",
+    ].join("\n");
+
+    const hookResult = transformLitsxSync(hookSource, {
+      filename: "/virtual/theme-hook.tsx",
+      jsxTemplate: false,
+    });
+    const consumerResult = transformLitsxSync(consumerSource, {
+      filename: "/virtual/demo-component.litsx",
+      jsxTemplate: false,
+      inMemoryFiles: {
+        "/virtual/theme-hook.tsx": hookSource,
+      },
+    });
+
+    assert.match(hookResult.code, /import \{ createContext, useContext \} from "@litsx\/core\/context";/);
+    assert.doesNotMatch(hookResult.code, /import \{[^}]*useContext[^}]*\} from "@litsx\/core";/);
+    assert.match(hookResult.code, /export function useThemeName\(_host\)/);
+    assert.match(hookResult.code, /return useContext\(_host, ThemeContext\);/);
+    assert.match(consumerResult.code, /const theme = useThemeName\(this\);/);
+  }, 20000);
+
   it("threads host through imported custom hooks re-exported from barrels", () => {
     const hookSource = [
       'import { useMemoValue, useStableId } from "@litsx/core";',

@@ -479,7 +479,7 @@ function detectRuntimeHelperFromCallee(calleePath, state, t) {
         state.runtimeNamespaceBindings.has(object.node.name) ||
         state.runtimeDefaultBindings.has(object.node.name)
       ) {
-        if (state.helperSet.has(property.node.name)) {
+        if (state.isHelperName(property.node.name)) {
           return property.node.name;
         }
       }
@@ -931,8 +931,8 @@ function rejectStructuralHookAlias(path, state) {
   if (
     initPath.isCallExpression() &&
     (
-      initPath.get("callee").isIdentifier({ name: "useStructuralEntry" }) ||
-      initPath.get("callee").isIdentifier({ name: "useStructuralStaticEntry" })
+      initPath.get("callee").isIdentifier({ name: "resolveStructuralEntry" }) ||
+      initPath.get("callee").isIdentifier({ name: "resolveStructuralStaticEntry" })
     )
   ) {
     return;
@@ -960,7 +960,7 @@ function rejectStructuralHookContainer(path, state) {
     if (isDefineHookCallee(calleePath, state)) {
       return;
     }
-    if (calleePath.isIdentifier({ name: "useStructuralEntry" })) {
+    if (calleePath.isIdentifier({ name: "resolveStructuralEntry" })) {
       return;
     }
   }
@@ -1125,7 +1125,7 @@ function transformStructuralHookCall(callPath, state, t, hookInfo) {
     });
     addStructuralDependenciesToCurrentPlan(state, hookInfo);
     callPath.replaceWith(
-      t.callExpression(t.identifier("useStructuralStaticEntry"), [
+      t.callExpression(t.identifier("resolveStructuralStaticEntry"), [
         t.memberExpression(hostExpr, t.identifier("constructor")),
         t.numericLiteral(callsiteIndex),
         t.stringLiteral(callsiteId),
@@ -1136,7 +1136,7 @@ function transformStructuralHookCall(callPath, state, t, hookInfo) {
     );
     callPath.skip();
 
-    state.usedHelpers.add("useStructuralStaticEntry");
+    state.usedHelpers.add("resolveStructuralStaticEntry");
     if (state.activeCustomHookBinding?.identifier?.name) {
       state.structuralCustomHookIdentifiers.add(state.activeCustomHookBinding.identifier.name);
     }
@@ -1147,7 +1147,7 @@ function transformStructuralHookCall(callPath, state, t, hookInfo) {
   addStructuralDependenciesToCurrentPlan(state, hookInfo);
 
   callPath.replaceWith(
-    t.callExpression(t.identifier("useStructuralEntry"), [
+    t.callExpression(t.identifier("resolveStructuralEntry"), [
       hostExpr,
       t.numericLiteral(callsiteIndex),
       t.stringLiteral(callsiteId),
@@ -1158,7 +1158,7 @@ function transformStructuralHookCall(callPath, state, t, hookInfo) {
   );
   callPath.skip();
 
-  state.usedHelpers.add("useStructuralEntry");
+  state.usedHelpers.add("resolveStructuralEntry");
   state.usedHelpers.add("HostMiddlewareMixin");
   if (state.activeCustomHookBinding?.identifier?.name) {
     state.structuralCustomHookIdentifiers.add(state.activeCustomHookBinding.identifier.name);
@@ -1427,22 +1427,31 @@ function ensureHelperImports(programPath, state, t) {
   }
 
   const runtimeImports = [];
+  const availableHelpers = new Set();
   programPath.get("body").forEach((child) => {
     if (!child.isImportDeclaration()) return;
-    if (child.node.source.value !== state.runtimeModule) return;
+    if (!state.importSourceSet.has(child.node.source.value)) return;
     runtimeImports.push(child);
   });
 
-  const existingNamed = new Set();
   for (const importPath of runtimeImports) {
     for (const spec of importPath.node.specifiers) {
       if (t.isImportSpecifier(spec) && t.isIdentifier(spec.imported)) {
-        existingNamed.add(spec.imported.name);
+        availableHelpers.add(spec.imported.name);
+      } else if (
+        (t.isImportNamespaceSpecifier(spec) || t.isImportDefaultSpecifier(spec)) &&
+        state.preservedRuntimeImportSourceSet.has(importPath.node.source.value)
+      ) {
+        for (const helperName of helperNames) {
+          if (state.isHelperName(helperName)) {
+            availableHelpers.add(helperName);
+          }
+        }
       }
     }
   }
 
-  const missingHelpers = Array.from(helperNames).filter((name) => !existingNamed.has(name));
+  const missingHelpers = Array.from(helperNames).filter((name) => !availableHelpers.has(name));
   if (missingHelpers.length === 0) {
     return;
   }
@@ -1518,6 +1527,7 @@ export function createRuntimeHooksTransform({
   pluginName,
   runtimeModule,
   importSources,
+  preservedRuntimeImportSources,
   helperNames,
   callMetadataByHelper,
 }) {
@@ -1530,12 +1540,19 @@ export function createRuntimeHooksTransform({
   if (!Array.isArray(importSources) || importSources.length === 0) {
     throw new Error("createRuntimeHooksTransform requires importSources.");
   }
-  if (!Array.isArray(helperNames) || helperNames.length === 0) {
+  if (
+    typeof helperNames !== "function" &&
+    (!Array.isArray(helperNames) || helperNames.length === 0)
+  ) {
     throw new Error("createRuntimeHooksTransform requires helperNames.");
   }
 
   const importSourceSet = new Set(importSources);
-  const helperSet = new Set(helperNames);
+  const preservedRuntimeImportSourceSet = new Set(preservedRuntimeImportSources || []);
+  const helperSet = typeof helperNames === "function" ? null : new Set(helperNames);
+  const isHelperName = typeof helperNames === "function"
+    ? helperNames
+    : (name) => helperSet.has(name);
   const resolvedCallMetadataByHelper = callMetadataByHelper instanceof Map
     ? callMetadataByHelper
     : new Map(Object.entries(callMetadataByHelper || {}));
@@ -1551,7 +1568,9 @@ export function createRuntimeHooksTransform({
           enter(path, state) {
             state.runtimeModule = runtimeModule;
             state.importSourceSet = importSourceSet;
+            state.preservedRuntimeImportSourceSet = preservedRuntimeImportSourceSet;
             state.helperSet = helperSet;
+            state.isHelperName = isHelperName;
             state.callMetadataByHelper = resolvedCallMetadataByHelper;
             state.hookIdentifiers = new Map();
             state.runtimeNamespaceBindings = new Set();
@@ -1625,7 +1644,10 @@ export function createRuntimeHooksTransform({
             return;
           }
 
-          if (path.node.source.value !== state.runtimeModule) {
+          if (
+            path.node.source.value !== state.runtimeModule &&
+            !state.preservedRuntimeImportSourceSet.has(path.node.source.value)
+          ) {
             path.node.source = t.stringLiteral(state.runtimeModule);
           }
 
@@ -1640,7 +1662,7 @@ export function createRuntimeHooksTransform({
               if (importedName === "defineHook") {
                 state.defineHookIdentifiers.add(specifier.local.name);
               }
-              if (importedName && state.helperSet.has(importedName)) {
+              if (importedName && state.isHelperName(importedName)) {
                 state.hookIdentifiers.set(specifier.local.name, importedName);
               }
             } else if (t.isImportNamespaceSpecifier(specifier)) {

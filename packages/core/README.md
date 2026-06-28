@@ -112,7 +112,7 @@ LitSX also includes plumbing for structural hooks that need to participate in th
 - `HostMiddlewareRuntime` is the structural host layer for lifecycle middleware.
 - `HostMiddlewareMixin` is the reusable host mixin shape used by generated components that contain structural hooks.
 - `defineHook()` marks a hook definition as structural.
-- `useStructuralEntry()` is the compiler-facing runtime read used for generated structural hook callsites.
+- `resolveStructuralEntry()` is the compiler-facing runtime resolver used for generated structural hook callsites.
 
 Authored structural hooks are declared with `defineHook()`:
 
@@ -169,10 +169,10 @@ The LitSX transform rewrites static calls to structural hook identifiers:
 const locale = useLocale("en");
 ```
 
-into a compiler-facing read:
+into a compiler-facing runtime resolution:
 
 ```js
-const locale = useStructuralEntry(
+const locale = resolveStructuralEntry(
   this,
   0,
   "litsx-structural-...",
@@ -182,7 +182,7 @@ const locale = useStructuralEntry(
 );
 ```
 
-Static-only hooks lower through `useStructuralStaticEntry(...)` and a generated `static structuralStaticEntries` table. They do not wrap the generated host with `HostMiddlewareMixin(...)` and do not pay lifecycle middleware overhead. Mixed hooks with `setup(...)` or `middlewares` lower through the instance structural runtime.
+Static-only hooks lower through `resolveStructuralStaticEntry(...)` and a generated `static structuralStaticEntries` table. They do not wrap the generated host with `HostMiddlewareMixin(...)` and do not pay lifecycle middleware overhead. Mixed hooks with `setup(...)` or `middlewares` lower through the instance structural runtime.
 
 Existing LitSX static hoists such as `static styles`, `static properties`, `static shadowRootOptions`, `static elements`, and `static lightDom` remain class/type-phase work. `static expose` still materializes as real static class methods. None of these hoists are modeled as instance lifecycle middleware.
 
@@ -196,7 +196,7 @@ const locale = useLocale("en");
 const catalog = resources.useCatalog("checkout");
 ```
 
-Generated component classes are wrapped with `HostMiddlewareMixin(...)` so lifecycle middleware is composed with the host lifecycle. For direct structural hook calls whose definitions are in scope, the transform also emits a static `structuralEntries` table so lifecycle middleware is available before the first render; render-time reads still refresh args through `useStructuralEntry(...)`.
+Generated component classes are wrapped with `HostMiddlewareMixin(...)` so lifecycle middleware is composed with the host lifecycle. For direct structural hook calls whose definitions are in scope, the transform also emits a static `structuralEntries` table so lifecycle middleware is available before the first render; render-time reads still refresh args through `resolveStructuralEntry(...)`.
 
 Structural hooks can also be used transitively through local or imported custom hooks and inside another structural hook's `use(...)` reader:
 

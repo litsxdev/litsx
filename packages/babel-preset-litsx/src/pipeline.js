@@ -15,7 +15,7 @@ const NATIVE_TRANSFORM_OPTION_KEYS = [
   "__litsxCompilationSession",
 ];
 
-const HOOK_FEATURE_PATTERN = /\b(?:defineHook|useOnConnect|useAfterUpdate|useOnCommit|useMemoValue|useStableCallback|useEvent|useEmit|usePrevious|useReducedState|useState|useControlledState|useAsyncState|useOptimistic|useExpose|useExternalStore|useHost|useHostContent|useSlot|useTextContent|useTransition|useDeferredValue|useStyle|useRef|useCallbackRef|useStableId)\b/;
+const HOOK_FEATURE_PATTERN = /\bdefineHook\b/;
 const DEFAULT_OR_NAMED_IMPORT_PATTERN = /\bimport\s+(?!type\b)([^'";]+?)\s+from\b/g;
 const NAMESPACE_IMPORT_PATTERN = /\bimport\s+(?!type\b)\*\s+as\s+([A-Za-z_$][\w$]*)\s+from\b/g;
 const REF_FEATURE_PATTERN = /\buseRef\b|\bref\s*=/;

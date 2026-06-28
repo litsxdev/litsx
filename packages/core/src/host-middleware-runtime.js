@@ -410,7 +410,7 @@ function getOrCreateHostRuntime(host) {
   return host.__litsxHostMiddlewareRuntime;
 }
 
-export function useStructuralEntry(host, callsiteIndex, callsiteId, definition, args = [], meta = {}) {
+export function resolveStructuralEntry(host, callsiteIndex, callsiteId, definition, args = [], meta = {}) {
   const runtime = getOrCreateHostRuntime(host);
   const callsitePath = normalizeHookPath(meta?.callsitePath ?? [callsiteId]);
   const nextMeta = getStructuralMeta(meta, callsitePath);
@@ -468,7 +468,7 @@ function getOrCreateStaticEntries(owner) {
   return owner.__litsxStructuralStaticEntries;
 }
 
-export function useStructuralStaticEntry(owner, callsiteIndex, callsiteId, definition, args = [], meta = {}) {
+export function resolveStructuralStaticEntry(owner, callsiteIndex, callsiteId, definition, args = [], meta = {}) {
   const entries = getOrCreateStaticEntries(owner);
   const existing = entries.find((entry) => entry.callsiteId === callsiteId);
   const callsitePath = normalizeHookPath(meta?.callsitePath ?? [callsiteId]);

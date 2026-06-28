@@ -8,8 +8,8 @@ import {
   HostMiddlewareRuntime,
   createHostMiddlewareRuntime,
   isStructuralHook,
-  useStructuralEntry,
-  useStructuralStaticEntry,
+  resolveStructuralEntry,
+  resolveStructuralStaticEntry,
 } from "../packages/core/src/index.js";
 
 function entry(id, middlewares = {}, extras = {}) {
@@ -431,7 +431,7 @@ describe("HostMiddlewareRuntime", () => {
       },
     ];
 
-    const first = useStructuralStaticEntry(
+    const first = resolveStructuralStaticEntry(
       StaticOwner,
       0,
       "static-callsite",
@@ -439,7 +439,7 @@ describe("HostMiddlewareRuntime", () => {
       ["catalog"],
       { callsitePath: ["static-callsite"] },
     );
-    const second = useStructuralStaticEntry(
+    const second = resolveStructuralStaticEntry(
       StaticOwner,
       0,
       "static-callsite",
@@ -589,7 +589,7 @@ describe("HostMiddlewareRuntime", () => {
       },
     });
 
-    const first = useStructuralEntry(
+    const first = resolveStructuralEntry(
       host,
       0,
       "structural-a",
@@ -597,7 +597,7 @@ describe("HostMiddlewareRuntime", () => {
       ["first"],
       { callsitePath: ["Host", "structural-a"] },
     );
-    const second = useStructuralEntry(
+    const second = resolveStructuralEntry(
       host,
       0,
       "structural-a",
@@ -714,11 +714,11 @@ describe("HostMiddlewareRuntime", () => {
     };
 
     assert.strictEqual(
-      useStructuralEntry(host, 0, "second", secondHook, ["value"], { callsitePath: ["second"] }),
+      resolveStructuralEntry(host, 0, "second", secondHook, ["value"], { callsitePath: ["second"] }),
       "second:value",
     );
     assert.strictEqual(
-      useStructuralEntry(host, 0, "first", firstHook, ["value"], { callsitePath: ["first"] }),
+      resolveStructuralEntry(host, 0, "first", firstHook, ["value"], { callsitePath: ["first"] }),
       "first:value",
     );
   });
