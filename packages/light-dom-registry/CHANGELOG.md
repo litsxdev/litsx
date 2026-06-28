@@ -1,5 +1,13 @@
 # @litsx/light-dom-registry
 
+## 0.2.5
+
+### Patch Changes
+
+- a53199b: Upgrade existing host children when reconnecting contextual light DOM registries so reused hosts recover scoped custom elements after rerenders.
+
+  Define scoped elements again when reusing existing shadow roots so shadow DOM hosts preserve their scoped registries across hydration and host reuse paths.
+
 ## 0.2.4
 
 ### Patch Changes
