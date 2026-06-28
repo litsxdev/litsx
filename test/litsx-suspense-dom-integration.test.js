@@ -320,8 +320,8 @@ describe("litsx suspense DOM integration", () => {
         return html`
           <litsx-suspense-renderer-list reveal-order="forwards" tail="hidden">
             <litsx-suspense-renderer-boundary
-              .fallbackRenderer=${() => null}
-              .contentRenderer=${() => {
+              .fallback=${() => null}
+              .content=${() => {
                 suspendUntil(pendingStepsRef, 0, revealedCount);
                 return html`
                   <litsx-suspense-renderer-card
@@ -333,8 +333,8 @@ describe("litsx suspense DOM integration", () => {
               }}
             ></litsx-suspense-renderer-boundary>
             <litsx-suspense-renderer-boundary
-              .fallbackRenderer=${() => null}
-              .contentRenderer=${() => {
+              .fallback=${() => null}
+              .content=${() => {
                 suspendUntil(pendingStepsRef, 1, revealedCount);
                 return html`
                   <litsx-suspense-renderer-card
