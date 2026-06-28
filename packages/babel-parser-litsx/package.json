@@ -51,11 +51,11 @@
     "@litsx/authoring": "^0.5.0"
   },
   "devDependencies": {
-    "@babel/code-frame": "^7.29.0",
-    "@babel/helper-check-duplicate-nodes": "^7.28.6",
-    "@babel/helper-fixtures": "^7.28.6",
-    "@babel/helper-string-parser": "^7.25.9",
-    "@babel/helper-validator-identifier": "^7.28.5",
+    "@babel/code-frame": "^7.29.7",
+    "@babel/helper-check-duplicate-nodes": "^7.29.7",
+    "@babel/helper-fixtures": "^7.29.7",
+    "@babel/helper-string-parser": "^7.29.7",
+    "@babel/helper-validator-identifier": "^7.29.7",
     "charcodes": "^0.2.0"
   },
   "bin": "./dist/babel-parser.js",
