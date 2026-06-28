@@ -1,5 +1,19 @@
 # @litsx/babel-preset-react-compat
 
+## 0.5.0
+
+### Minor Changes
+
+- 47c474e: Route soft suspense through an internal capture scope so SuspenseBoundary can capture async work from projected descendant updates without relying on DOM boundary lookup.
+
+  SuspenseBoundary and ErrorBoundary now use the authored `fallback` + children contract and the compiler lowers that shape to internal `.fallback`/`.content` renderers. The old boundary-specific `.fallbackRenderer`/`.contentRenderer` contract is removed.
+
+### Patch Changes
+
+- Updated dependencies [c36e6f5]
+- Updated dependencies [47c474e]
+  - @litsx/babel-preset-litsx@0.11.0
+
 ## 0.4.3
 
 ### Patch Changes

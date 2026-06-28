@@ -1,6 +1,6 @@
 {
   "name": "prettier-plugin-litsx",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "description": "Official Prettier plugin for LitSX-authored source",
   "author": "LitSX Team",
   "type": "module",

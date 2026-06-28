@@ -1,5 +1,17 @@
 # @litsx/babel-preset-litsx
 
+## 0.11.0
+
+### Minor Changes
+
+- 47c474e: Route soft suspense through an internal capture scope so SuspenseBoundary can capture async work from projected descendant updates without relying on DOM boundary lookup.
+
+  SuspenseBoundary and ErrorBoundary now use the authored `fallback` + children contract and the compiler lowers that shape to internal `.fallback`/`.content` renderers. The old boundary-specific `.fallbackRenderer`/`.contentRenderer` contract is removed.
+
+### Patch Changes
+
+- c36e6f5: Remove the deprecated `@litsx/babel-parser` adapter from internal tooling. LitSX Babel and Prettier integrations now use `@litsx/authoring/parser` directly with `@babel/parser`.
+
 ## 0.10.0
 
 ### Minor Changes

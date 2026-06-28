@@ -1,5 +1,11 @@
 # prettier-plugin-litsx
 
+## 0.3.4
+
+### Patch Changes
+
+- c36e6f5: Remove the deprecated `@litsx/babel-parser` adapter from internal tooling. LitSX Babel and Prettier integrations now use `@litsx/authoring/parser` directly with `@babel/parser`.
+
 ## 0.3.3
 
 ### Patch Changes

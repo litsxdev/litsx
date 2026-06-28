@@ -1,5 +1,14 @@
 # @litsx/compiler
 
+## 0.8.5
+
+### Patch Changes
+
+- Updated dependencies [c36e6f5]
+- Updated dependencies [47c474e]
+  - @litsx/babel-preset-litsx@0.11.0
+  - @litsx/typescript@0.8.0
+
 ## 0.8.4
 
 ### Patch Changes

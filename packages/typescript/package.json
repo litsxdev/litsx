@@ -1,6 +1,6 @@
 {
   "name": "@litsx/typescript",
-  "version": "0.7.2",
+  "version": "0.8.0",
   "description": "TypeScript language-service, typecheck, and editor support for LitSX authored syntax",
   "author": "LitSX Team",
   "homepage": "https://litsx.dev/",

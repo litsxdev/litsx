@@ -1,5 +1,13 @@
 # create-litsx-app
 
+## 0.5.6
+
+### Patch Changes
+
+- 47c474e: Route soft suspense through an internal capture scope so SuspenseBoundary can capture async work from projected descendant updates without relying on DOM boundary lookup.
+
+  SuspenseBoundary and ErrorBoundary now use the authored `fallback` + children contract and the compiler lowers that shape to internal `.fallback`/`.content` renderers. The old boundary-specific `.fallbackRenderer`/`.contentRenderer` contract is removed.
+
 ## 0.5.5
 
 ### Patch Changes
