@@ -224,6 +224,16 @@ export { ErrorBoundary as ErrorBoundaryElement };
 export { SuspenseBoundary as SuspenseBoundaryElement };
 export { SuspenseList as SuspenseListElement };
 
+export declare function renderWithSoftSuspense<T>(
+  host: object,
+  render: () => T
+): T;
+
+export declare function collectSoftSuspenseThenables<T>(
+  collector: { add(thenable: Promise<unknown>): void },
+  render: () => T
+): T;
+
 export type LitsxHostMiddlewareLifecycleMethod =
   | "connectedCallback"
   | "disconnectedCallback"

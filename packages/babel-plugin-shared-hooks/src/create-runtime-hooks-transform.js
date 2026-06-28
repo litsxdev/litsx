@@ -1,4 +1,7 @@
-import { ensurePrepareEffectsCall } from "./prepare-effects.js";
+import {
+  ensurePrepareEffectsCall,
+  ensureSoftSuspenseRenderWrapper,
+} from "./prepare-effects.js";
 import { ensureRuntimeNamedImports } from "./runtime-imports.js";
 
 const HOST_PARAM_PATTERN = /^_?host/;
@@ -1502,6 +1505,8 @@ function transformClass(classPath, state, t) {
 
   if (hookUsedInRender) {
     ensurePrepareEffectsCall(renderMethodPath, t);
+    ensureSoftSuspenseRenderWrapper(renderMethodPath, t);
+    state.usedHelpers.add("renderWithSoftSuspense");
   }
 
   if (structuralHookUsedInRender && !classPath.node.__litsxHostMiddlewareWrapped) {

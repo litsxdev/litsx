@@ -164,10 +164,9 @@ describe("@litsx/babel-plugin-shared-hooks createRuntimeHooksTransform", () => {
     const code = run(source);
 
     assert.match(code, /import \* as runtime from "@litsx\/core";/);
-    assert.match(
-      code,
-      /import \{ prepareEffects, useStyle \} from "@litsx\/core";|import \{ useStyle, prepareEffects \} from "@litsx\/core";/
-    );
+    assert.match(code, /import \{[^}]*prepareEffects[^}]*\} from "@litsx\/core";/);
+    assert.match(code, /import \{[^}]*useStyle[^}]*\} from "@litsx\/core";/);
+    assert.match(code, /import \{[^}]*renderWithSoftSuspense[^}]*\} from "@litsx\/core";/);
     assert.match(code, /runtime\.useStyle\(this, "--accent", this\.accent\);/);
     assert.match(code, /prepareEffects\(this\);/);
   });
@@ -187,10 +186,9 @@ describe("@litsx/babel-plugin-shared-hooks createRuntimeHooksTransform", () => {
     const code = run(source);
 
     assert.strictEqual((code.match(/prepareEffects/g) || []).length, 2);
-    assert.match(
-      code,
-      /import \{ prepareEffects, useAfterUpdate \} from "@litsx\/core";|import \{ useAfterUpdate, prepareEffects \} from "@litsx\/core";/
-    );
+    assert.match(code, /import \{[^}]*prepareEffects[^}]*\} from "@litsx\/core";/);
+    assert.match(code, /import \{[^}]*useAfterUpdate[^}]*\} from "@litsx\/core";/);
+    assert.match(code, /import \{[^}]*renderWithSoftSuspense[^}]*\} from "@litsx\/core";/);
     assert.match(code, /useAfterUpdate\(this, \(\) => this\.sync\(\), \[]\);/);
     assert.match(code, /prepareEffects\(this\);/);
   });
@@ -271,10 +269,9 @@ describe("@litsx/babel-plugin-shared-hooks createRuntimeHooksTransform", () => {
 
     const code = run(source);
 
-    assert.match(
-      code,
-      /import \{ useAfterUpdate, prepareEffects \} from "@litsx\/core";|import \{ prepareEffects, useAfterUpdate \} from "@litsx\/core";/
-    );
+    assert.match(code, /import \{[^}]*useAfterUpdate[^}]*\} from "@litsx\/core";/);
+    assert.match(code, /import \{[^}]*prepareEffects[^}]*\} from "@litsx\/core";/);
+    assert.match(code, /import \{[^}]*renderWithSoftSuspense[^}]*\} from "@litsx\/core";/);
     assert.match(code, /hooks\.useCounter\(this\);/);
     assert.match(code, /useAfterUpdate\(this, \(\) => this\.sync\(\), \[]\);/);
     assert.match(code, /prepareEffects\(this\);/);
@@ -293,10 +290,8 @@ describe("@litsx/babel-plugin-shared-hooks createRuntimeHooksTransform", () => {
     `;
 
     const hookCode = run(hookSource);
-    assert.match(
-      hookCode,
-      /import \{ prepareEffects \} from "@litsx\/core";/
-    );
+    assert.match(hookCode, /import \{[^}]*prepareEffects[^}]*\} from "@litsx\/core";/);
+    assert.match(hookCode, /import \{[^}]*renderWithSoftSuspense[^}]*\} from "@litsx\/core";/);
     assert.match(hookCode, /hooks\.useCounter\(this\);/);
     assert.match(hookCode, /prepareEffects\(this\);/);
 
@@ -332,7 +327,8 @@ describe("@litsx/babel-plugin-shared-hooks createRuntimeHooksTransform", () => {
 
     const code = run(source);
 
-    assert.match(code, /import \{ prepareEffects \} from "@litsx\/core";/);
+    assert.match(code, /import \{[^}]*prepareEffects[^}]*\} from "@litsx\/core";/);
+    assert.match(code, /import \{[^}]*renderWithSoftSuspense[^}]*\} from "@litsx\/core";/);
     assert.match(code, /function useCounterEffects\(_host\) \{/);
     assert.match(code, /useCounterEffects\(this\);/);
     assert.match(code, /prepareEffects\(this\);/);

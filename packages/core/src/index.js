@@ -13,6 +13,10 @@ export {
 
 export { EffectsController } from "./effects-controller.js";
 export {
+  collectSoftSuspenseThenables,
+  renderWithSoftSuspense,
+} from "./runtime-suspense.js";
+export {
   defineHook,
   defineStructuralHookEntries,
   getStructuralHookEntries,

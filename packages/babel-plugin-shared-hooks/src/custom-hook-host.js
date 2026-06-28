@@ -54,6 +54,26 @@ export function resolveHostInfo(callPath, t) {
   if (!funcPath) return null;
 
   if (
+    typeof funcPath.isArrowFunctionExpression === "function" &&
+    funcPath.isArrowFunctionExpression() &&
+    funcPath.parentPath?.isCallExpression() &&
+    funcPath.parentPath.get("callee").isIdentifier({ name: "renderWithSoftSuspense" }) &&
+    funcPath.parentPath.get("arguments.0").isThisExpression()
+  ) {
+    const wrapperFuncPath = funcPath.parentPath.getFunctionParent();
+    if (
+      wrapperFuncPath?.isClassMethod({ kind: "method" }) &&
+      t.isIdentifier(wrapperFuncPath.node.key, { name: "render" })
+    ) {
+      return {
+        expression: t.thisExpression(),
+        type: HOST_TYPE_RENDER,
+        functionPath: wrapperFuncPath,
+      };
+    }
+  }
+
+  if (
     funcPath.isClassMethod({ kind: 'method' }) &&
     t.isIdentifier(funcPath.node.key, { name: 'render' })
   ) {

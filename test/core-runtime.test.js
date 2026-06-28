@@ -1,6 +1,8 @@
 import { beforeAll, afterAll } from 'vitest';
 import assert from "assert";
+import { nothing } from "lit";
 import {
+  collectSoftSuspenseThenables,
   EffectsController,
   ensureLazyElement,
   prepareEffects,
@@ -28,6 +30,7 @@ import {
   useCallbackRef,
   useExpose,
   useExternalStore,
+  renderWithSoftSuspense,
 } from "../packages/core/src/index.js";
 
 class TestHost extends EventTarget {
@@ -73,6 +76,16 @@ class TestHost extends EventTarget {
     this.isConnected = true;
     this.controllers.forEach((controller) => controller.hostConnected());
   }
+}
+
+function deferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
 }
 
 describe("litsx effects controller", () => {
@@ -1803,5 +1816,52 @@ describe("litsx effects controller", () => {
 
     assert.strictEqual(host.styleAssignments.get("--panel-gap"), "20px");
     assert.strictEqual(computes, 3);
+  });
+});
+
+describe("litsx soft suspense runtime", () => {
+  it("captures rootless thenables and requests an update when they resolve", async () => {
+    const host = new TestHost();
+    const pending = deferred();
+
+    const value = renderWithSoftSuspense(host, () => {
+      throw pending.promise;
+    });
+
+    assert.strictEqual(value, nothing);
+    assert.strictEqual(host.updates, 0);
+
+    pending.resolve();
+    await pending.promise;
+    await Promise.resolve();
+
+    assert.strictEqual(host.updates, 1);
+  });
+
+  it("rethrows thenables when a suspense boundary is above the host", () => {
+    const host = new TestHost();
+    host.closest = (selector) => selector === "suspense-boundary" ? {} : null;
+    const pending = deferred();
+
+    assert.throws(() => {
+      renderWithSoftSuspense(host, () => {
+        throw pending.promise;
+      });
+    }, (error) => error === pending.promise);
+  });
+
+  it("collects rootless thenables for SSR retry loops", () => {
+    const host = new TestHost();
+    const pending = deferred();
+    const collected = new Set();
+
+    const value = collectSoftSuspenseThenables(collected, () =>
+      renderWithSoftSuspense(host, () => {
+        throw pending.promise;
+      })
+    );
+
+    assert.strictEqual(value, nothing);
+    assert.deepStrictEqual([...collected], [pending.promise]);
   });
 });
