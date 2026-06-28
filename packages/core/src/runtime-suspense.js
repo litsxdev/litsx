@@ -75,11 +75,22 @@ export function collectSoftSuspenseThenables(collector, render) {
   // suspensions are awaitable instead of being serialized as empty output.
   const previousCollector = currentSoftSuspenseCollector;
   currentSoftSuspenseCollector = collector;
+  let result;
   try {
-    return render();
-  } finally {
+    result = render();
+  } catch (error) {
     currentSoftSuspenseCollector = previousCollector;
+    throw error;
   }
+
+  if (isThenable(result)) {
+    return Promise.resolve(result).finally(() => {
+      currentSoftSuspenseCollector = previousCollector;
+    });
+  }
+
+  currentSoftSuspenseCollector = previousCollector;
+  return result;
 }
 
 export function renderWithSoftSuspense(host, render) {
