@@ -1,6 +1,7 @@
+import * as babelParser from "@babel/parser";
 import jsxSyntaxPlugin from "@babel/plugin-syntax-jsx";
 import { isLitElementSuperClass } from "@litsx/babel-plugin-shared-hooks";
-import parser from "@litsx/babel-parser";
+import { parseWithLitsxVirtualization } from "@litsx/authoring/parser";
 import fs from "node:fs";
 import path from "node:path";
 import { normalizeFilePath } from "@litsx/typescript-session";
@@ -448,7 +449,7 @@ function getLightDomExports(fileName) {
 
   let ast;
   try {
-    ast = parser.parse(sourceText, { sourceType: "module" });
+    ast = parseWithLitsxVirtualization(babelParser.parse, sourceText, { sourceType: "module" });
   } catch {
     const empty = new Set();
     LIGHT_DOM_EXPORTS_BY_FILE.set(normalizedFileName, empty);

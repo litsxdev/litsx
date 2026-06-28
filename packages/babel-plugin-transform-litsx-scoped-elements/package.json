@@ -41,8 +41,9 @@
     "@babel/core": ">=7"
   },
   "dependencies": {
+    "@babel/parser": "^7.29.3",
     "@babel/plugin-syntax-jsx": "^7.28.6",
-    "@litsx/babel-parser": "workspace:*",
+    "@litsx/authoring": "^0.5.0",
     "@litsx/babel-plugin-shared-hooks": "^0.5.0",
     "@litsx/typescript-session": "^0.2.3"
   },
