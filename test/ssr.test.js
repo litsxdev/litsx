@@ -21,9 +21,20 @@ import {
 } from "../packages/core/src/context.js";
 import {
   ErrorBoundary,
+  renderWithSoftSuspense,
   SuspenseBoundary,
   SuspenseList,
 } from "../packages/core/src/index.js";
+
+function createDeferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}
 
 describe("@litsx/ssr", () => {
   it("renders scoped LitSX elements with nested declarative shadow DOM", async () => {
@@ -191,6 +202,129 @@ describe("@litsx/ssr", () => {
     assert.deepStrictEqual(metadata.clientImports, expected.clientImports);
     assert.deepStrictEqual(metadata.hydrationData, expected.hydrationData);
     assert.deepStrictEqual(metadata.hydrationData.payload, expected.hydrationData.payload);
+  });
+
+  it("waits for rootless soft suspense before serializing SSR output", async () => {
+    const pending = createDeferred();
+    const firstPass = createDeferred();
+    let ready = false;
+    let renderPasses = 0;
+
+    class AsyncCard extends LitElement {
+      static [LITSX_MODULE_ID] = "/src/AsyncCard.litsx";
+
+      render() {
+        return renderWithSoftSuspense(this, () => {
+          prepareEffects(this);
+          renderPasses += 1;
+
+          if (!ready) {
+            firstPass.resolve();
+            throw pending.promise;
+          }
+
+          return html`<article data-ready="true">ready:${renderPasses}</article>`;
+        });
+      }
+    }
+
+    const renderPromise = renderToString(
+      html`<async-card></async-card>`,
+      {
+        elements: {
+          "async-card": AsyncCard,
+        },
+      },
+    );
+
+    await firstPass.promise;
+    ready = true;
+    pending.resolve();
+    const result = await renderPromise;
+
+    assert.strictEqual(renderPasses, 2);
+    assert.match(result.html, /<article data-ready="true">[\s\S]*ready:[\s\S]*2[\s\S]*<\/article>/);
+    assert.doesNotMatch(result.html, /ready:1/);
+    assert.deepStrictEqual(result.hydrationData.roots, [
+      {
+        id: "litsx-root-0",
+        tagName: "async-card",
+        moduleId: "/src/AsyncCard.litsx",
+      },
+    ]);
+  });
+
+  it("waits for rootless soft suspense before streaming SSR output", async () => {
+    const pending = createDeferred();
+    const firstPass = createDeferred();
+    let ready = false;
+
+    class AsyncStreamCard extends LitElement {
+      render() {
+        return renderWithSoftSuspense(this, () => {
+          prepareEffects(this);
+
+          if (!ready) {
+            firstPass.resolve();
+            throw pending.promise;
+          }
+
+          return html`<article>stream-ready</article>`;
+        });
+      }
+    }
+
+    const streamed = await renderToStream(
+      html`<async-stream-card></async-stream-card>`,
+      {
+        elements: {
+          "async-stream-card": AsyncStreamCard,
+        },
+      },
+    );
+    const reader = streamed.stream.getReader();
+    const readPromise = reader.read();
+
+    await firstPass.promise;
+    ready = true;
+    pending.resolve();
+
+    const firstChunk = await readPromise;
+    assert.strictEqual(firstChunk.done, false);
+    assert.match(firstChunk.value, /stream-ready/);
+    const metadata = await streamed.allReady;
+    assert.deepStrictEqual(metadata.clientImports, []);
+    assert.deepStrictEqual(metadata.hydrationData.roots, [
+      {
+        id: "litsx-root-0",
+        tagName: "async-stream-card",
+      },
+    ]);
+    assert.strictEqual(typeof metadata.renderHydrationData, "function");
+  });
+
+  it("fails clearly when rootless soft suspense does not converge during SSR", async () => {
+    class AlwaysSuspends extends LitElement {
+      render() {
+        return renderWithSoftSuspense(this, () => {
+          throw Promise.resolve();
+        });
+      }
+    }
+
+    await assert.rejects(
+      () =>
+        renderToString(
+          html`<always-suspends></always-suspends>`,
+          {
+            elements: {
+              "always-suspends": AlwaysSuspends,
+            },
+            maxSuspensePasses: 2,
+          },
+        ),
+      /LitSX SSR exceeded 2 suspense render passes/,
+    );
   });
 
   it("renders a full HTML document around the SSR fragment", async () => {
