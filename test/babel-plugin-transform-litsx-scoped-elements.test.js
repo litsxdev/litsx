@@ -622,7 +622,7 @@ describe("@litsx/babel-plugin-transform-litsx-scoped-elements", () => {
     assert.match(code, /class Screen extends ShadowDomMixin\(LitElement\)/);
     assert.match(
       code,
-      /return <section>\s*<suspense-boundary fallback=\{<span>loading<\/span>\}>\s*<span>ready<\/span>\s*<\/suspense-boundary>\s*<\/section>;/s
+      /return <section>\s*<suspense-boundary \.fallback=\{\(\) => <span>loading<\/span>\} \.content=\{\(\) => <span>ready<\/span>\}><\/suspense-boundary>\s*<\/section>;/s
     );
     assert.match(
       code,
@@ -653,7 +653,7 @@ describe("@litsx/babel-plugin-transform-litsx-scoped-elements", () => {
     assert.match(code, /class Screen extends ShadowDomMixin\(LitElement\)/);
     assert.match(
       code,
-      /keyed\(this\.cycle,\s*<suspense-boundary fallback=\{<span>loading<\/span>\}>\s*<span>ready<\/span>\s*<\/suspense-boundary>\s*\)/s
+      /keyed\(this\.cycle,\s*<suspense-boundary \.fallback=\{\(\) => <span>loading<\/span>\} \.content=\{\(\) => <span>ready<\/span>\}><\/suspense-boundary>\s*\)/s
     );
     assert.match(
       code,

@@ -302,7 +302,7 @@ describe("@litsx/babel-preset-react-compat", () => {
     assert.match(code, /import \{ ShadowDomMixin \} from "@litsx\/core\/elements";/);
     assert.match(code, /const ResultsPanel = \(\) => import\("\.\/ResultsPanel\.js"\);/);
     assert.match(code, /ensureLazyElement\(this, "results-panel", ResultsPanel\);/);
-    assert.match(code, /html`<error-boundary \.fallbackRenderer=\$\{\(\) => html`<p>Oops<\/p>`\} \.contentRenderer=\$\{bindRendererContext\([\s\S]*?\(\) => html`<suspense-boundary \.fallbackRenderer=\$\{\(\) => html`<p>Loading<\/p>`\} \.contentRenderer=\$\{bindRendererContext\([\s\S]*?\(\) => html`<results-panel value="ready"><\/results-panel>`, \{\s*projected: true\s*\}\)\}><\/suspense-boundary>`, \{\s*projected: true\s*\}\)\}><\/error-boundary>`;/);
+    assert.match(code, /html`<error-boundary \.fallbackRenderer=\$\{\(\) => html`<p>Oops<\/p>`\} \.contentRenderer=\$\{bindRendererContext\([\s\S]*?\(\) => html`<suspense-boundary \.fallback=\$\{\(\) => html`<p>Loading<\/p>`\} \.content=\$\{bindRendererContext\([\s\S]*?\(\) => html`<results-panel value="ready"><\/results-panel>`, \{\s*projected: true\s*\}\)\}><\/suspense-boundary>`, \{\s*projected: true\s*\}\)\}><\/error-boundary>`;/);
     assert.match(code, /static elements = \{[\s\S]*"error-boundary": ErrorBoundary[\s\S]*"suspense-boundary": SuspenseBoundary[\s\S]*\}|static elements = \{[\s\S]*"suspense-boundary": SuspenseBoundary[\s\S]*"error-boundary": ErrorBoundary[\s\S]*\}/);
     assert.doesNotMatch(code, /<ErrorBoundary/);
     assert.doesNotMatch(code, /<Suspense/);

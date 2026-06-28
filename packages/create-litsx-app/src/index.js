@@ -1029,8 +1029,9 @@ export const StarterGuide = () => {
     <section class="guide" aria-label="Getting started with LitSX">
       <SuspenseList class="guide-list" reveal-order="forwards" tail="hidden">
         <SuspenseBoundary
-          .fallbackRenderer={() => null}
-          .contentRenderer={() => {
+          fallback={null}
+        >
+          {(() => {
             suspendUntil(pendingStepsRef, 0, revealedCount);
             return (
               <GuideCard
@@ -1046,12 +1047,13 @@ export const StarterGuide = () => {
                 )}
               />
             );
-          }}
-        />
+          })()}
+        </SuspenseBoundary>
 
         <SuspenseBoundary
-          .fallbackRenderer={() => null}
-          .contentRenderer={() => {
+          fallback={null}
+        >
+          {(() => {
             suspendUntil(pendingStepsRef, 1, revealedCount);
             return (
               <GuideCard
@@ -1067,12 +1069,13 @@ export const StarterGuide = () => {
                 )}
               />
             );
-          }}
-        />
+          })()}
+        </SuspenseBoundary>
 
         <SuspenseBoundary
-          .fallbackRenderer={() => null}
-          .contentRenderer={() => {
+          fallback={null}
+        >
+          {(() => {
             suspendUntil(pendingStepsRef, 2, revealedCount);
             return (
               <GuideCard
@@ -1088,8 +1091,8 @@ export const StarterGuide = () => {
                 )}
               />
             );
-          }}
-        />
+          })()}
+        </SuspenseBoundary>
       </SuspenseList>
     </section>
   );

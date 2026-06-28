@@ -67,8 +67,8 @@ describe("@litsx/babel-preset-react-compat suspense boundaries", () => {
     assert.match(code, /import \{[^}]*SuspenseBoundary[^}]*\} from ["']@litsx\/core["']/);
     assert.match(code, /static elements = \{[\s\S]*"suspense-boundary": SuspenseBoundary[\s\S]*\}/);
     assert.match(code, /<suspense-boundary/);
-    assert.match(code, /\.fallbackRenderer=\{\(\)\s*=>\s*<span>loading<\/span>\}/);
-    assert.match(code, /\.contentRenderer=\{\(\)\s*=>\s*<div>ready<\/div>\}/);
+    assert.match(code, /\.fallback=\{\(\)\s*=>\s*<span>loading<\/span>\}/);
+    assert.match(code, /\.content=\{\(\)\s*=>\s*<div>ready<\/div>\}/);
     assert.doesNotMatch(code, /suspenseBoundary\(/);
   });
 
@@ -122,7 +122,7 @@ describe("@litsx/babel-preset-react-compat suspense boundaries", () => {
 
     assert.match(
       code,
-      /\.contentRenderer=\{bindRendererContext\([\s\S]*?\(\)\s*=>\s*\{[\s\S]*ensureLazyElement\(this,\s*"fancy-button",\s*FancyButton\);[\s\S]*return <fancy-button \/>;[\s\S]*\}\)\}/s
+      /\.content=\{bindRendererContext\([\s\S]*?\(\)\s*=>\s*\{[\s\S]*ensureLazyElement\(this,\s*"fancy-button",\s*FancyButton\);[\s\S]*return <fancy-button \/>;[\s\S]*\}\)\}/s
     );
     assert.doesNotMatch(
       code,
@@ -155,11 +155,11 @@ describe("@litsx/babel-preset-react-compat suspense boundaries", () => {
 
     assert.match(
       code,
-      /<suspense-boundary[\s\S]*\.contentRenderer=\{bindRendererContext\([\s\S]*?\(\)\s*=>\s*\{[\s\S]*ensureLazyElement\(this,\s*"alpha-panel",\s*AlphaPanel\);[\s\S]*return <alpha-panel \/>;[\s\S]*\}\)\}[\s\S]*<\/suspense-boundary>/s
+      /<suspense-boundary[\s\S]*\.content=\{bindRendererContext\([\s\S]*?\(\)\s*=>\s*\{[\s\S]*ensureLazyElement\(this,\s*"alpha-panel",\s*AlphaPanel\);[\s\S]*return <alpha-panel \/>;[\s\S]*\}\)\}[\s\S]*<\/suspense-boundary>/s
     );
     assert.match(
       code,
-      /<suspense-boundary[\s\S]*\.contentRenderer=\{bindRendererContext\([\s\S]*?\(\)\s*=>\s*\{[\s\S]*ensureLazyElement\(this,\s*"beta-panel",\s*BetaPanel\);[\s\S]*return <beta-panel \/>;[\s\S]*\}\)\}[\s\S]*<\/suspense-boundary>/s
+      /<suspense-boundary[\s\S]*\.content=\{bindRendererContext\([\s\S]*?\(\)\s*=>\s*\{[\s\S]*ensureLazyElement\(this,\s*"beta-panel",\s*BetaPanel\);[\s\S]*return <beta-panel \/>;[\s\S]*\}\)\}[\s\S]*<\/suspense-boundary>/s
     );
   });
 
@@ -202,8 +202,8 @@ describe("@litsx/babel-preset-react-compat suspense boundaries", () => {
     const code = run(source);
 
     assert.match(code, /<suspense-boundary/);
-    assert.match(code, /\.fallbackRenderer=\{\(\)\s*=>\s*null\}/);
-    assert.match(code, /\.contentRenderer=\{\(\)\s*=>\s*null\}/);
+    assert.match(code, /\.fallback=\{\(\)\s*=>\s*null\}/);
+    assert.match(code, /\.content=\{\(\)\s*=>\s*null\}/);
   });
 
   it("preserves fragment children inside the suspense content renderer", () => {
@@ -224,7 +224,7 @@ describe("@litsx/babel-preset-react-compat suspense boundaries", () => {
 
     const code = run(source);
 
-    assert.match(code, /\.contentRenderer=\{\(\)\s*=>\s*<>\s*<div>alpha<\/div>\s*<div>beta<\/div>\s*<\/>\}/s);
+    assert.match(code, /\.content=\{\(\)\s*=>\s*<>\s*<div>alpha<\/div>\s*<div>beta<\/div>\s*<\/>\}/s);
   });
 
   it("supports boolean fallbacks and single expression children", () => {
@@ -239,8 +239,8 @@ describe("@litsx/babel-preset-react-compat suspense boundaries", () => {
     const code = run(source);
 
     assert.match(code, /<suspense-boundary/);
-    assert.match(code, /\.fallbackRenderer=\{\(\)\s*=>\s*true\}/);
-    assert.match(code, /\.contentRenderer=\{\(\)\s*=>\s*this\.readyView\}/);
+    assert.match(code, /\.fallback=\{\(\)\s*=>\s*true\}/);
+    assert.match(code, /\.content=\{\(\)\s*=>\s*this\.readyView\}/);
   });
 
   it("supports string fallbacks and plain text children", () => {
@@ -254,8 +254,8 @@ describe("@litsx/babel-preset-react-compat suspense boundaries", () => {
 
     const code = run(source);
 
-    assert.match(code, /\.fallbackRenderer=\{\(\)\s*=>\s*\"loading\"\}/);
-    assert.match(code, /\.contentRenderer=\{\(\)\s*=>\s*\"ready\"\}/);
+    assert.match(code, /\.fallback=\{\(\)\s*=>\s*\"loading\"\}/);
+    assert.match(code, /\.content=\{\(\)\s*=>\s*\"ready\"\}/);
   });
 
   it("treats empty fallback expressions as boolean true instead of crashing", () => {
@@ -273,8 +273,8 @@ describe("@litsx/babel-preset-react-compat suspense boundaries", () => {
 
     const code = transformAst(ast, source);
 
-    assert.match(code, /\.fallbackRenderer=\{\(\)\s*=>\s*true\}/);
-    assert.match(code, /\.contentRenderer=\{\(\)\s*=>\s*<div>ready<\/div>\}/);
+    assert.match(code, /\.fallback=\{\(\)\s*=>\s*true\}/);
+    assert.match(code, /\.content=\{\(\)\s*=>\s*<div>ready<\/div>\}/);
   });
 
   it("leaves non-React namespace suspense lookalikes untouched", () => {
@@ -325,8 +325,8 @@ describe("@litsx/babel-preset-react-compat suspense boundaries", () => {
 
     const code = run(source);
 
-    assert.match(code, /\.fallbackRenderer=\{\(\)\s*=>\s*404\}/);
-    assert.match(code, /\.contentRenderer=\{\(\)\s*=>\s*null\}/);
+    assert.match(code, /\.fallback=\{\(\)\s*=>\s*404\}/);
+    assert.match(code, /\.content=\{\(\)\s*=>\s*null\}/);
   });
 
   it("moves only matching ensureLazyElement calls into suspense content renderers", () => {
@@ -354,7 +354,7 @@ describe("@litsx/babel-preset-react-compat suspense boundaries", () => {
 
     assert.match(
       code,
-      /\.contentRenderer=\{bindRendererContext\([\s\S]*?\(\)\s*=>\s*\{[\s\S]*ensureLazyElement\(this,\s*'alpha-panel',\s*AlphaPanel\);[\s\S]*return <alpha-panel \/>;[\s\S]*\}\)\}/s
+      /\.content=\{bindRendererContext\([\s\S]*?\(\)\s*=>\s*\{[\s\S]*ensureLazyElement\(this,\s*'alpha-panel',\s*AlphaPanel\);[\s\S]*return <alpha-panel \/>;[\s\S]*\}\)\}/s
     );
     assert.match(code, /ensureLazyElement\(this,\s*'beta-panel',\s*BetaPanel\);/);
   });
@@ -417,7 +417,7 @@ describe("@litsx/babel-preset-react-compat suspense boundaries", () => {
 
     assert.match(code, /import \{[^}]*SuspenseBoundary[^}]*ErrorBoundary[^}]*\} from "@litsx\/core"|import \{[^}]*ErrorBoundary[^}]*SuspenseBoundary[^}]*\} from "@litsx\/core"/);
     assert.match(code, /import \{ ShadowDomMixin \} from "@litsx\/core\/elements";/);
-    assert.match(code, /return html`<suspense-boundary \.fallbackRenderer=\$\{\(\) => html`<span>loading<\/span>`\} \.contentRenderer=\$\{\(\) => html`<div>ready<\/div>`\}><\/suspense-boundary>`;/);
+    assert.match(code, /return html`<suspense-boundary \.fallback=\$\{\(\) => html`<span>loading<\/span>`\} \.content=\$\{\(\) => html`<div>ready<\/div>`\}><\/suspense-boundary>`;/);
     assert.doesNotMatch(code, /<Suspense/);
   });
 

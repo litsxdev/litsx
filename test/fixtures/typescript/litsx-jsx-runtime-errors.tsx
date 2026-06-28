@@ -17,8 +17,8 @@ export function BrokenScreen() {
       {/* @ts-expect-error invalid tail */}
       <suspense-list tail="visible" />
 
-      {/* @ts-expect-error fallbackRenderer must be a function */}
-      <SuspenseBoundary fallbackRenderer="loading" />
+      {/* @ts-expect-error fallbackRenderer is not part of the SuspenseBoundary authoring contract */}
+      <SuspenseBoundary fallbackRenderer={() => "loading"} />
 
       {/* @ts-expect-error ActionButton requires a label */}
       <ActionButton />

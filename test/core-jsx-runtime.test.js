@@ -75,7 +75,7 @@ describe("litsx jsx runtime", () => {
     const declarations = fs.readFileSync(new URL("../packages/core/src/jsx-runtime.d.ts", import.meta.url), "utf8");
 
     assert.match(declarations, /Component extends typeof SuspenseList \? LitsxBoundaryElementProps<SuspenseList, SuspenseListProps> :/);
-    assert.match(declarations, /Component extends typeof SuspenseBoundary \? LitsxBoundaryElementProps<SuspenseBoundary, SuspenseBoundaryProps> :/);
+    assert.match(declarations, /Component extends typeof SuspenseBoundary \? LitsxSuspenseBoundaryElementProps :/);
     assert.match(declarations, /Component extends typeof ErrorBoundary \? LitsxBoundaryElementProps<ErrorBoundary, ErrorBoundaryProps> :/);
   });
 });

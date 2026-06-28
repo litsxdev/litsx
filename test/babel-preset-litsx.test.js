@@ -696,12 +696,14 @@ describe("@litsx/babel-preset-litsx", () => {
       hooks: false,
       domRefs: false,
       scopedElements: false,
+      suspenseBoundary: false,
     });
 
     assert.deepStrictEqual(detectLitsxSourceFeatures(featureSource, {}), {
       hooks: true,
       domRefs: true,
       scopedElements: true,
+      suspenseBoundary: false,
     });
 
     assert.strictEqual(
@@ -721,6 +723,11 @@ describe("@litsx/babel-preset-litsx", () => {
 
     assert.strictEqual(
       detectLitsxSourceFeatures('import { defineHook } from "@litsx/core"; defineHook({});', {}).hooks,
+      true,
+    );
+
+    assert.strictEqual(
+      detectLitsxSourceFeatures('import { SuspenseBoundary } from "@litsx/core"; <SuspenseBoundary fallback={null} />;', {}).suspenseBoundary,
       true,
     );
 
@@ -767,6 +774,7 @@ describe("@litsx/babel-preset-litsx", () => {
         hooks: false,
         domRefs: false,
         scopedElements: true,
+        suspenseBoundary: false,
       },
     );
 

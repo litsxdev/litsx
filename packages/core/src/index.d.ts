@@ -97,6 +97,12 @@ export type LitsxElementProps<TElement = HTMLElement> =
   & LitsxDomAttributes<TElement>
   & LitsxHostElementProps<TElement>;
 
+export type LitsxSuspenseBoundaryElementProps =
+  & LitsxBaseAttributes
+  & LitsxDomAttributes<SuspenseBoundary>
+  & Omit<LitsxHostElementProps<SuspenseBoundary>, "fallback" | "content">
+  & SuspenseBoundaryProps;
+
 export type LitsxCustomElementProps =
   & LitsxBaseAttributes
   & LitsxDomAttributes<EventTarget>
@@ -121,7 +127,7 @@ export type LitsxIntrinsicElements = {
   >;
 } & LitsxCustomIntrinsicElements & {
   "error-boundary": LitsxElementProps<ErrorBoundary> & ErrorBoundaryProps;
-  "suspense-boundary": LitsxElementProps<SuspenseBoundary> & SuspenseBoundaryProps;
+  "suspense-boundary": LitsxSuspenseBoundaryElementProps;
   "suspense-list": LitsxElementProps<SuspenseList> & SuspenseListProps;
 };
 
@@ -199,17 +205,13 @@ export declare class SuspenseBoundary extends LitElement {
   showing: string;
   phase: string;
   /**
-   * Renderer props declared by a parent keep the parent's authored render context.
-   * LitSX may project renderer output through slots when the subtree contains custom elements,
-   * and render it inline when the subtree is intrinsic-only.
+   * Internal renderer generated from the authored fallback prop.
    */
-  fallbackRenderer: (() => unknown) | null;
+  fallback: (() => unknown) | null;
   /**
-   * Renderer props declared by a parent keep the parent's authored render context.
-   * LitSX may project renderer output through slots when the subtree contains custom elements,
-   * and render it inline when the subtree is intrinsic-only.
+   * Internal renderer generated from authored children.
    */
-  contentRenderer: (() => unknown) | null;
+  content: (() => unknown) | null;
 }
 
 /**

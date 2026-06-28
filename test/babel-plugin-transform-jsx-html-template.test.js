@@ -237,7 +237,7 @@ describe("@litsx/babel-plugin-transform-jsx-html-template", () => {
   it("keeps Lit-style prefixed attributes on kebab-case custom elements", () => {
     const source = `
       const view = (
-        <suspense-boundary .contentRenderer={() => <span>ready</span>} @resolve={handleResolve} ?pending={isPending}>
+        <suspense-boundary .content={() => <span>ready</span>} @resolve={handleResolve} ?pending={isPending}>
           <span>fallback</span>
         </suspense-boundary>
       );
@@ -252,7 +252,7 @@ describe("@litsx/babel-plugin-transform-jsx-html-template", () => {
 
     assert.match(
       code,
-      /<suspense-boundary \.contentRenderer=\$\{\(\) => html`<span>ready<\/span>`\} @resolve=\$\{handleResolve\} \?pending=\$\{isPending\}>/
+      /<suspense-boundary \.content=\$\{\(\) => html`<span>ready<\/span>`\} @resolve=\$\{handleResolve\} \?pending=\$\{isPending\}>/
     );
     assert.match(code, /<\/suspense-boundary>`/);
   });

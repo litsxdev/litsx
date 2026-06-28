@@ -7,6 +7,7 @@ import {
   SuspenseBoundary,
   SuspenseList,
   prepareEffects,
+  renderWithSoftSuspense,
   useOnConnect,
   useRef,
   useState,
@@ -59,6 +60,67 @@ afterEach(() => {
 });
 
 describe("litsx suspense DOM integration", () => {
+  it("captures soft suspension from descendant custom element updates inside a boundary", async () => {
+    const boundaryTag = "litsx-suspense-descendant-boundary-integration";
+    const hostTag = "litsx-suspense-descendant-host-integration";
+    const childTag = "litsx-suspense-descendant-child-integration";
+    const pending = createDeferred();
+    let resolved = false;
+
+    class TestBoundary extends SuspenseBoundary {}
+
+    class AsyncChild extends LitElement {
+      render() {
+        return renderWithSoftSuspense(this, () => {
+          if (!resolved) {
+            throw pending.promise;
+          }
+          return html`<span data-ready>ready</span>`;
+        });
+      }
+    }
+
+    class TestHost extends LitElement {
+      render() {
+        return html`
+          <litsx-suspense-descendant-boundary-integration
+            .fallback=${() => html`<span data-fallback>loading</span>`}
+            .content=${() => html`
+              <litsx-suspense-descendant-child-integration>
+              </litsx-suspense-descendant-child-integration>
+            `}
+          ></litsx-suspense-descendant-boundary-integration>
+        `;
+      }
+    }
+
+    defineTestElement(boundaryTag, TestBoundary);
+    defineTestElement(childTag, AsyncChild);
+    defineTestElement(hostTag, TestHost);
+
+    const host = document.createElement(hostTag);
+    document.body.appendChild(host);
+    await host.updateComplete;
+    const boundary = host.shadowRoot.querySelector(boundaryTag);
+    await boundary.updateComplete;
+    await Promise.resolve();
+    await boundary.updateComplete;
+
+    assert.strictEqual(boundary.pending, true);
+    assert.match(boundary.innerHTML, /data-fallback/);
+
+    resolved = true;
+    pending.resolve();
+    await pending.promise;
+    await boundary.updateComplete;
+    const child = boundary.querySelector(childTag);
+    await child.updateComplete;
+    await boundary.updateComplete;
+
+    assert.strictEqual(boundary.pending, false);
+    assert.match(child.shadowRoot.innerHTML, /data-ready/);
+  });
+
   it("replays suspense content when a new host instance mounts after the previous one disconnected", async () => {
     const boundaryTag = "litsx-suspense-boundary-integration";
     const listTag = "litsx-suspense-list-integration";
@@ -113,15 +175,15 @@ describe("litsx suspense DOM integration", () => {
         return html`
           <litsx-suspense-list-integration reveal-order="forwards" tail="hidden">
             <litsx-suspense-boundary-integration
-              .fallbackRenderer=${() => null}
-              .contentRenderer=${() => {
+              .fallback=${() => null}
+              .content=${() => {
                 suspendUntil(pendingStepsRef, 0, revealedCount);
                 return html`<div data-step="0">alpha</div>`;
               }}
             ></litsx-suspense-boundary-integration>
             <litsx-suspense-boundary-integration
-              .fallbackRenderer=${() => null}
-              .contentRenderer=${() => {
+              .fallback=${() => null}
+              .content=${() => {
                 suspendUntil(pendingStepsRef, 1, revealedCount);
                 return html`<div data-step="1">beta</div>`;
               }}

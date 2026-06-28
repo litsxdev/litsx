@@ -1,7 +1,9 @@
 import { nothing } from "lit";
 
 const SOFT_SUSPENSE = Symbol("litsx.softSuspense");
+const SUSPENSE_CAPTURE = Symbol("litsx.suspenseCapture");
 let currentSoftSuspenseCollector = null;
+let currentSuspenseCapture = null;
 
 function isThenable(value) {
   return (
@@ -17,18 +19,6 @@ function reportAsyncError(error) {
   });
 }
 
-function hasSuspenseBoundary(host) {
-  if (!host || typeof host.closest !== "function") {
-    return false;
-  }
-
-  try {
-    return Boolean(host.closest("suspense-boundary"));
-  } catch {
-    return false;
-  }
-}
-
 function getSoftSuspenseState(host) {
   if (!host[SOFT_SUSPENSE]) {
     Object.defineProperty(host, SOFT_SUSPENSE, {
@@ -40,6 +30,44 @@ function getSoftSuspenseState(host) {
     });
   }
   return host[SOFT_SUSPENSE];
+}
+
+export function withSuspenseCapture(capture, render) {
+  const previousCapture = currentSuspenseCapture;
+  currentSuspenseCapture = capture ?? null;
+  try {
+    return render();
+  } finally {
+    currentSuspenseCapture = previousCapture;
+  }
+}
+
+export function getCurrentSuspenseCapture() {
+  return currentSuspenseCapture;
+}
+
+export function setHostSuspenseCapture(host, capture) {
+  if (!host || (typeof host !== "object" && typeof host !== "function")) {
+    return;
+  }
+
+  if (capture == null) {
+    try {
+      delete host[SUSPENSE_CAPTURE];
+    } catch {
+      // Some host-like objects may reject deletes; leave them untouched.
+    }
+    return;
+  }
+
+  Object.defineProperty(host, SUSPENSE_CAPTURE, {
+    value: capture,
+    configurable: true,
+  });
+}
+
+function getHostSuspenseCapture(host) {
+  return host?.[SUSPENSE_CAPTURE] ?? null;
 }
 
 export function collectSoftSuspenseThenables(collector, render) {
@@ -58,8 +86,14 @@ export function renderWithSoftSuspense(host, render) {
   try {
     return render();
   } catch (thrown) {
-    if (!isThenable(thrown) || hasSuspenseBoundary(host)) {
+    if (!isThenable(thrown)) {
       throw thrown;
+    }
+
+    const capture = getCurrentSuspenseCapture() ?? getHostSuspenseCapture(host);
+    if (capture && typeof capture.capture === "function") {
+      capture.capture(thrown);
+      return nothing;
     }
 
     const state = getSoftSuspenseState(host);

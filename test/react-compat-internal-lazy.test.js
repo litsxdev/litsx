@@ -115,7 +115,7 @@ describe("react compat internal lazy", () => {
     );
     assert.match(
       code,
-      /<suspense-boundary[\s\S]*\.fallbackRenderer=\{\(\)\s*=>\s*<span>loading<\/span>\}[\s\S]*\.contentRenderer=\{bindRendererContext\([\s\S]*?\(\)\s*=>\s*\{[\s\S]*ensureLazyElement\(this,\s*"fancy-button",\s*FancyButton\);[\s\S]*return <fancy-button label=['"]Save['"] \/>;[\s\S]*\}\)\}[\s\S]*><\/suspense-boundary>/s
+      /<suspense-boundary[\s\S]*\.fallback=\{\(\)\s*=>\s*<span>loading<\/span>\}[\s\S]*\.content=\{bindRendererContext\([\s\S]*?\(\)\s*=>\s*\{[\s\S]*ensureLazyElement\(this,\s*"fancy-button",\s*FancyButton\);[\s\S]*return <fancy-button label=['"]Save['"] \/>;[\s\S]*\}\)\}[\s\S]*><\/suspense-boundary>/s
     );
     assert.doesNotMatch(
       code,
@@ -581,7 +581,7 @@ describe("react compat internal lazy", () => {
     );
     assert.match(
       code,
-      /<suspense-boundary[\s\S]*\.contentRenderer=\{bindRendererContext\([\s\S]*?\(\)\s*=>\s*\{[\s\S]*ensureLazyElement\(this,\s*"primary-action",\s*PrimaryAction\);[\s\S]*return <primary-action \/>;[\s\S]*\}\)\}[\s\S]*><\/suspense-boundary>/s
+      /<suspense-boundary[\s\S]*\.content=\{bindRendererContext\([\s\S]*?\(\)\s*=>\s*\{[\s\S]*ensureLazyElement\(this,\s*"primary-action",\s*PrimaryAction\);[\s\S]*return <primary-action \/>;[\s\S]*\}\)\}[\s\S]*><\/suspense-boundary>/s
     );
   });
 

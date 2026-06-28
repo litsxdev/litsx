@@ -175,10 +175,10 @@ export default declare((api) => {
 
     return createComponentElement("SuspenseBoundary", [
       createRendererAttribute(
-        "fallbackRenderer",
+        "fallback",
         t.arrowFunctionExpression([], fallbackExpression)
       ),
-      createRendererAttribute("contentRenderer", contentRenderer),
+      createRendererAttribute("content", contentRenderer),
     ], [], "_litsxSuspenseTransformed");
   }
 

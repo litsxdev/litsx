@@ -65,7 +65,7 @@ const PROP_COMPLETIONS_BY_TAG = {
   option: ["selected", "value"],
   video: ["currentTime", "muted", "volume", "playbackRate"],
   audio: ["currentTime", "muted", "volume", "playbackRate"],
-  "suspense-boundary": ["fallbackRenderer", "contentRenderer", "pending", "resolved", "showing", "phase"],
+  "suspense-boundary": ["fallback", "content", "pending", "resolved", "showing", "phase"],
   "suspense-list": ["revealOrder", "tail"],
 };
 

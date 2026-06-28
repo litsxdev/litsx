@@ -4,6 +4,7 @@ import transformLitsxDomRefs from "./internal/transform-litsx-dom-refs.js";
 import transformLitsxHooks from "./internal/transform-litsx-hooks.js";
 import transformLitsxComponents from "./internal/transform-litsx-components.js";
 import transformLitsxRendererProps from "./internal/transform-litsx-renderer-props.js";
+import transformLitsxSuspenseBoundary from "./internal/transform-litsx-suspense-boundary.js";
 
 const NATIVE_TRANSFORM_OPTION_KEYS = [
   "defaultDomMode",
@@ -21,6 +22,7 @@ const NAMESPACE_IMPORT_PATTERN = /\bimport\s+(?!type\b)\*\s+as\s+([A-Za-z_$][\w$
 const REF_FEATURE_PATTERN = /\buseRef\b|\bref\s*=/;
 const SCOPED_ELEMENTS_PATTERN = /<\s*(?:[A-Z][\w.]*(?=[\s/>])|[a-z][\w]*-[\w-]*(?=[\s/>]))/;
 const LIGHT_DOM_PATTERN = /\^lightDom\b|static\s+lightDom\s*=\s*true\b/;
+const SUSPENSE_BOUNDARY_PATTERN = /\bSuspenseBoundary\b/;
 
 function escapeRegExp(value) {
   return String(value).replace(/[\\^$.*+?()[\]{}|]/g, "\\$&");
@@ -106,6 +108,7 @@ export function detectLitsxSourceFeatures(source, options = {}) {
       transformOptions.defaultDomMode === "light" ||
       LIGHT_DOM_PATTERN.test(text) ||
       SCOPED_ELEMENTS_PATTERN.test(text),
+    suspenseBoundary: SUSPENSE_BOUNDARY_PATTERN.test(text),
   };
 }
 
@@ -118,10 +121,19 @@ function shouldIncludeFeaturePlugin(sourceFeatures, key) {
 }
 
 export function createLitsxPresetPlugins(options = {}, sourceFeatures = null) {
-  const plugins = [
+  const plugins = [];
+
+  if (shouldIncludeFeaturePlugin(sourceFeatures, "suspenseBoundary")) {
+    plugins.push([
+      transformLitsxSuspenseBoundary,
+      options.transformLitsxSuspenseBoundary || {},
+    ]);
+  }
+
+  plugins.push(
     [transformLitsxRendererProps, options.transformLitsxRendererProps || {}],
     [transformLitsxComponents, normalizeTransformLitsxOptions(options)],
-  ];
+  );
 
   if (shouldIncludeFeaturePlugin(sourceFeatures, "hooks")) {
     plugins.push([

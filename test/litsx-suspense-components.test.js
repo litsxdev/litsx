@@ -6,6 +6,7 @@ import {
   SuspenseBoundaryElement,
   SuspenseList,
   SuspenseListElement,
+  renderWithSoftSuspense,
 } from "../packages/core/src/index.js";
 
 const DOCUMENT_POSITION_PRECEDING =
@@ -280,10 +281,10 @@ describe("litsx suspense components", () => {
     boundary._suspenseList = list;
     boundary.resolved = true;
     boundary._lastContent = "ready";
-    boundary.contentRenderer = () => {
+    boundary.content = () => {
       throw Promise.resolve();
     };
-    boundary.fallbackRenderer = () => "loading";
+    boundary.fallback = () => "loading";
 
     const rendered = boundary.render();
 
@@ -308,10 +309,10 @@ describe("litsx suspense components", () => {
     boundary._suspenseList = list;
     boundary.resolved = true;
     boundary._lastContent = "ready";
-    boundary.contentRenderer = () => {
+    boundary.content = () => {
       throw Promise.resolve();
     };
-    boundary.fallbackRenderer = () => "loading";
+    boundary.fallback = () => "loading";
 
     const rendered = boundary.render();
 
@@ -339,8 +340,8 @@ describe("litsx suspense components", () => {
       return other === sibling ? DOCUMENT_POSITION_FOLLOWING : 0;
     };
     boundary._suspenseList = list;
-    boundary.contentRenderer = () => "ready";
-    boundary.fallbackRenderer = () => "loading";
+    boundary.content = () => "ready";
+    boundary.fallback = () => "loading";
 
     list.registerBoundary(boundary);
     list.registerBoundary(sibling);
@@ -373,8 +374,8 @@ describe("litsx suspense components", () => {
       return other === sibling ? DOCUMENT_POSITION_PRECEDING : 0;
     };
     boundary._suspenseList = list;
-    boundary.contentRenderer = () => "ready";
-    boundary.fallbackRenderer = () => "loading";
+    boundary.content = () => "ready";
+    boundary.fallback = () => "loading";
 
     list.registerBoundary(sibling);
     list.registerBoundary(boundary);
@@ -441,10 +442,10 @@ describe("litsx suspense components", () => {
     boundary.requestUpdate = () => {
       updates += 1;
     };
-    boundary.contentRenderer = () => {
+    boundary.content = () => {
       throw deferred.promise;
     };
-    boundary.fallbackRenderer = () => "loading";
+    boundary.fallback = () => "loading";
 
     boundary.render();
     assert.strictEqual(boundary.pending, true);
@@ -466,8 +467,8 @@ describe("litsx suspense components", () => {
     boundary.requestUpdate = () => {
       updates += 1;
     };
-    boundary.contentRenderer = () => "ready";
-    boundary.fallbackRenderer = () => "loading";
+    boundary.content = () => "ready";
+    boundary.fallback = () => "loading";
     boundary.render();
     boundary.syncErrorByHost.set(boundary.contentHost, deferred.promise);
 
@@ -502,8 +503,8 @@ describe("litsx suspense components", () => {
     boundary.requestUpdate = () => {
       updates += 1;
     };
-    boundary.contentRenderer = () => "ready";
-    boundary.fallbackRenderer = () => "loading";
+    boundary.content = () => "ready";
+    boundary.fallback = () => "loading";
     boundary.render();
     boundary.syncErrorByHost.set(boundary.contentHost, deferred.promise);
     boundary.updated();
@@ -537,8 +538,8 @@ describe("litsx suspense components", () => {
     boundary.requestUpdate = () => {
       updates += 1;
     };
-    boundary.contentRenderer = () => "ready";
-    boundary.fallbackRenderer = () => "loading";
+    boundary.content = () => "ready";
+    boundary.fallback = () => "loading";
     boundary.render();
     boundary.syncErrorByHost.set(boundary.contentHost, Promise.resolve());
     boundary.syncErrorByHost.set(boundary.fallbackHost, deferred.promise);
@@ -554,6 +555,28 @@ describe("litsx suspense components", () => {
     assert.strictEqual(updates, 2);
   });
 
+  it("keeps fallback hidden when fallback rendering soft-suspends", () => {
+    const deferred = createDeferred();
+    const boundary = new TestSuspenseBoundaryElement();
+
+    boundary.content = () => {
+      throw Promise.resolve();
+    };
+    boundary.fallback = () =>
+      renderWithSoftSuspense(boundary, () => {
+        throw deferred.promise;
+      });
+
+    assert.doesNotThrow(() => boundary.render());
+
+    assert.strictEqual(boundary.pending, true);
+    assert.strictEqual(boundary.showing, "hidden");
+    assert.strictEqual(boundary.phase, "pending");
+    assert.strictEqual(boundary._contentVisible, false);
+    assert.strictEqual(boundary._fallbackVisible, false);
+    assert.strictEqual(boundary._pendingPromise, deferred.promise);
+  });
+
   it("reports non-thenable errors thrown while syncing projected content in updated", () => {
     const queued = [];
     globalThis.queueMicrotask = (callback) => {
@@ -562,8 +585,8 @@ describe("litsx suspense components", () => {
 
     const boundary = new ProjectedSyncSuspenseBoundaryElement();
     const error = new Error("projected boom");
-    boundary.contentRenderer = () => "ready";
-    boundary.fallbackRenderer = () => "loading";
+    boundary.content = () => "ready";
+    boundary.fallback = () => "loading";
     boundary.render();
     boundary.syncErrorByHost.set(boundary.contentHost, error);
 
@@ -603,20 +626,20 @@ describe("litsx suspense components", () => {
     first.compareDocumentPosition = (other) => {
       return other === second ? DOCUMENT_POSITION_FOLLOWING : 0;
     };
-    first.contentRenderer = () => {
+    first.content = () => {
       if (firstShouldSuspend) {
         throw firstDeferred.promise;
       }
       return "first-ready";
     };
-    first.fallbackRenderer = () => "first-loading";
+    first.fallback = () => "first-loading";
 
     const second = new TestSuspenseBoundaryElement();
     second.compareDocumentPosition = (other) => {
       return other === first ? DOCUMENT_POSITION_PRECEDING : 0;
     };
-    second.contentRenderer = () => "second-ready";
-    second.fallbackRenderer = () => "second-loading";
+    second.content = () => "second-ready";
+    second.fallback = () => "second-loading";
 
     first._suspenseList = list;
     second._suspenseList = list;
@@ -665,15 +688,15 @@ describe("litsx suspense components", () => {
 
       alpha._suspenseList = list;
       beta._suspenseList = list;
-      alpha.fallbackRenderer = () => "alpha-loading";
-      beta.fallbackRenderer = () => "beta-loading";
-      alpha.contentRenderer = () => {
+      alpha.fallback = () => "alpha-loading";
+      beta.fallback = () => "beta-loading";
+      alpha.content = () => {
         if (!alphaResolved) {
           throw alphaDeferred.promise;
         }
         return "alpha-ready";
       };
-      beta.contentRenderer = () => {
+      beta.content = () => {
         if (!betaResolved) {
           throw betaDeferred.promise;
         }
@@ -763,15 +786,15 @@ describe("litsx suspense components", () => {
 
     alpha.closest = () => list;
     beta.closest = () => list;
-    alpha.fallbackRenderer = () => "alpha-loading";
-    beta.fallbackRenderer = () => "beta-loading";
-    alpha.contentRenderer = () => {
+    alpha.fallback = () => "alpha-loading";
+    beta.fallback = () => "beta-loading";
+    alpha.content = () => {
       if (!alphaResolved) {
         throw alphaDeferred.promise;
       }
       return "alpha-ready";
     };
-    beta.contentRenderer = () => {
+    beta.content = () => {
       if (!betaResolved) {
         throw betaDeferred.promise;
       }
@@ -858,15 +881,15 @@ describe("litsx suspense components", () => {
 
       alpha.closest = () => list;
       beta.closest = () => list;
-      alpha.fallbackRenderer = () => "alpha-loading";
-      beta.fallbackRenderer = () => "beta-loading";
-      alpha.contentRenderer = () => {
+      alpha.fallback = () => "alpha-loading";
+      beta.fallback = () => "beta-loading";
+      alpha.content = () => {
         if (!alphaResolved) {
           throw alphaDeferred.promise;
         }
         return "alpha-ready";
       };
-      beta.contentRenderer = () => {
+      beta.content = () => {
         if (!betaResolved) {
           throw betaDeferred.promise;
         }
@@ -956,13 +979,13 @@ describe("litsx suspense components", () => {
     const deferred = createDeferred();
     let shouldSuspend = true;
 
-    boundary.contentRenderer = () => {
+    boundary.content = () => {
       if (shouldSuspend) {
         throw deferred.promise;
       }
       return "ready";
     };
-    boundary.fallbackRenderer = () => "loading";
+    boundary.fallback = () => "loading";
 
     boundary.render();
     assert.strictEqual(boundary.phase, "pending");
@@ -990,13 +1013,13 @@ describe("litsx suspense components", () => {
     const deferred = createDeferred();
     let shouldSuspend = true;
 
-    boundary.contentRenderer = () => {
+    boundary.content = () => {
       if (shouldSuspend) {
         throw deferred.promise;
       }
       return "ready";
     };
-    boundary.fallbackRenderer = () => "loading";
+    boundary.fallback = () => "loading";
 
     boundary.render();
     shouldSuspend = false;
@@ -1022,7 +1045,7 @@ describe("litsx suspense components", () => {
 
     const boundary = new TestSuspenseBoundaryElement();
     const error = new Error("boom");
-    boundary.contentRenderer = () => {
+    boundary.content = () => {
       throw error;
     };
 
@@ -1052,10 +1075,10 @@ describe("litsx suspense components", () => {
         errored += 1;
       },
     };
-    boundary.contentRenderer = () => {
+    boundary.content = () => {
       throw deferred.promise;
     };
-    boundary.fallbackRenderer = () => "loading";
+    boundary.fallback = () => "loading";
 
     boundary.render();
     deferred.reject(new Error("nope"));

@@ -4,6 +4,10 @@ import {
   invokeRenderer,
   syncRendererHost,
 } from "./rendering.js";
+import {
+  setHostSuspenseCapture,
+  withSuspenseCapture,
+} from "./runtime-suspense.js";
 
 function isThenable(value) {
   return (
@@ -45,8 +49,8 @@ export class SuspenseBoundary extends LitElement {
     resolved: { type: Boolean, reflect: true },
     showing: { type: String, reflect: true },
     phase: { type: String, reflect: true },
-    fallbackRenderer: { attribute: false },
-    contentRenderer: { attribute: false },
+    fallback: { attribute: false },
+    content: { attribute: false },
   };
 
   constructor() {
@@ -55,8 +59,8 @@ export class SuspenseBoundary extends LitElement {
     this.resolved = false;
     this.showing = "content";
     this.phase = "content";
-    this.fallbackRenderer = null;
-    this.contentRenderer = null;
+    this.fallback = null;
+    this.content = null;
 
     this._version = 0;
     this._pendingPromise = null;
@@ -74,6 +78,13 @@ export class SuspenseBoundary extends LitElement {
     this._isRevealing = false;
     this._revealTimeout = null;
     this._lastListSnapshot = "";
+    this._contentSuspenseCapture = {
+      capture: (thenable) => this.captureContentSuspension(thenable),
+    };
+    this._fallbackSuspenseCapture = {
+      capture: (thenable) => this.captureFallbackSuspension(thenable),
+    };
+    this._fallbackSuspendedDuringRender = false;
   }
 
   createRenderRoot() {
@@ -128,7 +139,9 @@ export class SuspenseBoundary extends LitElement {
         value: resolvedContent = nothing,
         context: contentContext = null,
         projected: contentProjected = false,
-      } = invokeRenderer(this.contentRenderer);
+      } = this.withContentSuspenseCapture(() =>
+        invokeRenderer(this.content)
+      );
       const content = resolvedContent ?? nothing;
       const contentRender = {
         value: content,
@@ -142,13 +155,16 @@ export class SuspenseBoundary extends LitElement {
         value: resolvedFallback = nothing,
         context: fallbackContext = null,
         projected: fallbackProjected = false,
-      } = invokeRenderer(this.fallbackRenderer);
+      } = this.invokeFallbackRenderer();
       const fallback = resolvedFallback ?? nothing;
       const fallbackRender = {
         value: fallback,
         context: fallbackContext,
         projected: fallbackProjected,
       };
+      if (this._fallbackSuspendedDuringRender) {
+        return this.renderHosts();
+      }
 
       if (this._pendingPromise) {
         this._lastContent = content;
@@ -239,7 +255,12 @@ export class SuspenseBoundary extends LitElement {
     const fallbackHost = this.querySelector('[data-litsx-suspense-region="fallback"]');
 
     try {
-      this.syncRenderedHost(contentHost, this._contentHostState, this._contentVisible);
+      this.syncRenderedHost(
+        contentHost,
+        this._contentHostState,
+        this._contentVisible,
+        this._contentSuspenseCapture,
+      );
     } catch (thrown) {
       if (!isThenable(thrown)) {
         reportAsyncError(thrown);
@@ -251,7 +272,12 @@ export class SuspenseBoundary extends LitElement {
     }
 
     try {
-      this.syncRenderedHost(fallbackHost, this._fallbackHostState, this._fallbackVisible);
+      this.syncRenderedHost(
+        fallbackHost,
+        this._fallbackHostState,
+        this._fallbackVisible,
+        this._fallbackSuspenseCapture,
+      );
     } catch (thrown) {
       if (!isThenable(thrown)) {
         reportAsyncError(thrown);
@@ -263,10 +289,13 @@ export class SuspenseBoundary extends LitElement {
     }
   }
 
-  syncRenderedHost(host, rendered, visible) {
-    syncRendererHost(host, rendered, {
-      render: renderLightDom,
-      visible,
+  syncRenderedHost(host, rendered, visible, capture) {
+    withSuspenseCapture(capture, () => {
+      syncRendererHost(host, rendered, {
+        render: renderLightDom,
+        visible,
+      });
+      this.propagateSuspenseCapture(host, capture);
     });
   }
 
@@ -275,7 +304,7 @@ export class SuspenseBoundary extends LitElement {
       value: resolvedFallback = nothing,
       context: fallbackContext = null,
       projected: fallbackProjected = false,
-    } = invokeRenderer(this.fallbackRenderer);
+    } = this.invokeFallbackRenderer();
     const fallback = resolvedFallback ?? nothing;
     return {
       value: fallback,
@@ -290,6 +319,9 @@ export class SuspenseBoundary extends LitElement {
     let fallbackRender;
     try {
       fallbackRender = this.createFallbackRender();
+      if (this._fallbackSuspendedDuringRender) {
+        return this.renderHosts();
+      }
     } catch (fallbackThrown) {
       if (!isThenable(fallbackThrown)) {
         reportAsyncError(fallbackThrown);
@@ -356,6 +388,43 @@ export class SuspenseBoundary extends LitElement {
     this._contentVisible = false;
     this._fallbackVisible = false;
     this.notifyListState();
+  }
+
+  captureContentSuspension(thrown) {
+    this.handleSuspension(thrown);
+    this.requestUpdate();
+  }
+
+  captureFallbackSuspension(thrown) {
+    this._fallbackSuspendedDuringRender = true;
+    this.handleFallbackSuspension(thrown);
+    this.requestUpdate();
+  }
+
+  withContentSuspenseCapture(render) {
+    return withSuspenseCapture(this._contentSuspenseCapture, render);
+  }
+
+  withFallbackSuspenseCapture(render) {
+    return withSuspenseCapture(this._fallbackSuspenseCapture, render);
+  }
+
+  invokeFallbackRenderer() {
+    this._fallbackSuspendedDuringRender = false;
+    return this.withFallbackSuspenseCapture(() =>
+      invokeRenderer(this.fallback)
+    );
+  }
+
+  propagateSuspenseCapture(host, capture) {
+    setHostSuspenseCapture(host, capture);
+    if (!host || typeof host.querySelectorAll !== "function") {
+      return;
+    }
+
+    for (const element of host.querySelectorAll("*")) {
+      setHostSuspenseCapture(element, capture);
+    }
   }
 
   renderHosts() {

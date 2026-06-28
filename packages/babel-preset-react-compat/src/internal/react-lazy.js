@@ -269,7 +269,7 @@ export default declare((api) => {
         const contentRendererAttr = path.node.attributes.find(
           (attribute) =>
             t.isJSXAttribute(attribute) &&
-            t.isJSXIdentifier(attribute.name, { name: ".contentRenderer" }) &&
+            t.isJSXIdentifier(attribute.name, { name: ".content" }) &&
             t.isJSXExpressionContainer(attribute.value)
         );
 
@@ -281,7 +281,7 @@ export default declare((api) => {
             (attributePath) =>
               attributePath.isJSXAttribute() &&
               t.isJSXIdentifier(attributePath.node.name, {
-                name: ".contentRenderer",
+                name: ".content",
               })
           );
 

@@ -32,6 +32,7 @@ import {
   useExternalStore,
   renderWithSoftSuspense,
 } from "../packages/core/src/index.js";
+import { withSuspenseCapture } from "../packages/core/src/runtime-suspense.js";
 
 class TestHost extends EventTarget {
   constructor() {
@@ -1838,16 +1839,20 @@ describe("litsx soft suspense runtime", () => {
     assert.strictEqual(host.updates, 1);
   });
 
-  it("rethrows thenables when a suspense boundary is above the host", () => {
+  it("hands thenables to the active suspense capture scope", () => {
     const host = new TestHost();
-    host.closest = (selector) => selector === "suspense-boundary" ? {} : null;
     const pending = deferred();
+    const captured = [];
 
-    assert.throws(() => {
+    const value = withSuspenseCapture({ capture: (thenable) => captured.push(thenable) }, () =>
       renderWithSoftSuspense(host, () => {
         throw pending.promise;
-      });
-    }, (error) => error === pending.promise);
+      })
+    );
+
+    assert.strictEqual(value, nothing);
+    assert.deepStrictEqual(captured, [pending.promise]);
+    assert.strictEqual(host.updates, 0);
   });
 
   it("collects rootless thenables for SSR retry loops", () => {

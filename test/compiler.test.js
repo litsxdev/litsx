@@ -568,9 +568,10 @@ describe("@litsx/compiler", () => {
       "export const Demo = () => {",
       "  return (",
       "    <SuspenseBoundary",
-      "      .fallbackRenderer={() => null}",
-      '      .contentRenderer={() => <GuideCard .eyebrow={"x"} .titleRenderer={() => "y"} .contentRenderer={() => <p>z</p>} />}',
-      "    />",
+      "      fallback={null}",
+      '    >',
+      '      <GuideCard .eyebrow={"x"} .titleRenderer={() => "y"} .contentRenderer={() => <p>z</p>} />',
+      "    </SuspenseBoundary>",
       "  );",
       "};",
     ].join("\n");
@@ -586,7 +587,7 @@ describe("@litsx/compiler", () => {
     assert.match(result.code, /bindRendererContext/);
     assert.doesNotMatch(result.code, /\.titleRenderer=\{bindRendererContext\(typeof this === "undefined" \? null : this,\s*\(\) => "y"\)\}/);
     assert.doesNotMatch(result.code, /\.contentRenderer=\{bindRendererContext\(typeof this === "undefined" \? null : this,\s*\(\) => <p>z<\/p>\)\}/);
-    assert.match(result.code, /\.contentRenderer=\{bindRendererContext\(typeof this === "undefined" \? null : this,\s*\(\) => <guide-card[\s\S]*\/>,\s*\{\s*projected: true\s*\}\)\}/);
+    assert.match(result.code, /\.content=\{bindRendererContext\(typeof this === "undefined" \? null : this,\s*\(\) => <guide-card[\s\S]*\/>,\s*\{\s*projected: true\s*\}\)\}/);
   }, 20000);
 
   it("binds only function props whose returned JSX needs component context", () => {
@@ -598,7 +599,7 @@ describe("@litsx/compiler", () => {
       "export const Demo = () => {",
       "  return (",
       "    <>",
-      '      <SuspenseBoundary .contentRenderer={renderHeader} />',
+      '      <SuspenseBoundary .content={renderHeader} />',
       '      <guide-card .header={renderPanel} />',
       '      <GuideCard .title={renderHeader} />',
       '      <button .onclick={renderHeader}></button>',
@@ -612,7 +613,7 @@ describe("@litsx/compiler", () => {
       jsxTemplate: false,
     });
 
-    assert.doesNotMatch(result.code, /\.contentRenderer=\{bindRendererContext\(typeof this === "undefined" \? null : this,\s*renderHeader\)\}/);
+    assert.doesNotMatch(result.code, /\.content=\{bindRendererContext\(typeof this === "undefined" \? null : this,\s*renderHeader\)\}/);
     assert.match(result.code, /\.header=\{bindRendererContext\(typeof this === "undefined" \? null : this,\s*renderPanel,\s*\{\s*projected: true\s*\}\)\}/);
     assert.doesNotMatch(result.code, /\.title=\{bindRendererContext\(typeof this === "undefined" \? null : this,\s*renderHeader\)\}/);
     assert.doesNotMatch(result.code, /\.onclick=\{bindRendererContext\(/);
