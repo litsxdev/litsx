@@ -296,6 +296,39 @@ describe("@litsx/light-dom-registry", () => {
     host.remove();
   });
 
+  it("does not upgrade pending stand-ins from a stale registry after the host scope changes", () => {
+    const tagName = nextTag();
+    const scopeTag = nextTag();
+    const host = document.createElement("section");
+
+    class StaleElement extends HTMLElement {
+      connectedCallback() {
+        this.kind = "stale";
+      }
+    }
+
+    class ScopeMarker extends HTMLElement {}
+
+    ensureLightDomProxy(tagName);
+    const firstRegistry = connectLightDomRegistry(host, {});
+    host.innerHTML = `<${tagName}></${tagName}>`;
+    document.body.appendChild(host);
+
+    const element = host.firstElementChild;
+    const secondRegistry = connectLightDomRegistry(host, {
+      [scopeTag]: ScopeMarker,
+    });
+
+    assert.notStrictEqual(firstRegistry, secondRegistry);
+
+    firstRegistry.define(tagName, StaleElement);
+
+    assert.notStrictEqual(Object.getPrototypeOf(element), StaleElement.prototype);
+    assert.strictEqual(element.kind, undefined);
+
+    host.remove();
+  });
+
   it("keeps resolving scoped constructors for a new host instance after the previous host disconnects", () => {
     const tagName = nextTag();
 

@@ -742,6 +742,34 @@ function getRuntime() {
     upgradeTree(node, registry) {
       upgradeConnectedTree(node, registry);
     },
+    retargetPendingTree(node, fromRegistry, toRegistry) {
+      if (!node || !fromRegistry || !toRegistry || fromRegistry === toRegistry) {
+        return;
+      }
+
+      const pending = [node];
+      while (pending.length > 0) {
+        const current = pending.shift();
+        if (current.nodeType === Node.ELEMENT_NODE) {
+          if (pendingRegistryForElement.get(current) === fromRegistry) {
+            const tagName = current.localName || current.tagName?.toLowerCase?.();
+            fromRegistry._upgradeWhenDefined?.(current, tagName, false);
+            pendingRegistryForElement.set(current, toRegistry);
+
+            const nextDefinition = tagName ? toRegistry._getDefinition?.(tagName) : null;
+            if (nextDefinition) {
+              customize(current, nextDefinition, current.isConnected);
+            } else if (current.isConnected && tagName) {
+              toRegistry._upgradeWhenDefined?.(current, tagName, true);
+            }
+          }
+        }
+
+        for (const child of current.children ?? []) {
+          pending.push(child);
+        }
+      }
+    },
     withCreationContext(scope, callback) {
       creationContext.push(scope ?? document);
       try {
@@ -855,6 +883,9 @@ export function connectLightDomRegistry(host, elements) {
   host[HOST_ELEMENTS] = { ...nextElements };
   host[HOST_REGISTRY] = registry;
   host.registry = registry;
+  if (existingRegistry && existingRegistry !== registry) {
+    runtime.retargetPendingTree(host, existingRegistry, registry);
+  }
   runtime.upgradeTree(host, registry);
   return registry;
 }

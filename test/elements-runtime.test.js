@@ -433,7 +433,7 @@ describe("litsx elements runtime", () => {
     }
   });
 
-  it("does not mix scoped definitions into a registry only discovered from a reused shadow root", () => {
+  it("defines scoped elements into the registry adopted from a reused shadow root", () => {
     const originalCustomElementRegistry = globalThis.CustomElementRegistry;
 
     class FakeRegistry {
@@ -483,7 +483,61 @@ describe("litsx elements runtime", () => {
       assert.strictEqual(shadowRoot, host.shadowRoot);
       assert.strictEqual(host.registry, shadowRoot.registry);
       assert.strictEqual(host.registry.get("ambient-child"), AmbientChild);
-      assert.strictEqual(host.registry.get("demo-ambient-shadow-child"), undefined);
+      assert.strictEqual(host.registry.get("demo-ambient-shadow-child"), DemoChild);
+    } finally {
+      globalThis.CustomElementRegistry = originalCustomElementRegistry;
+    }
+  });
+
+  it("adopts the registry exposed by a reused shadow root over a divergent host registry", () => {
+    const originalCustomElementRegistry = globalThis.CustomElementRegistry;
+
+    class FakeRegistry {
+      constructor() {
+        this.definitions = new Map();
+      }
+
+      define(tagName, elementClass) {
+        if (this.definitions.has(tagName)) {
+          throw new Error(`duplicate definition: ${tagName}`);
+        }
+        this.definitions.set(tagName, elementClass);
+      }
+
+      get(tagName) {
+        return this.definitions.get(tagName);
+      }
+    }
+
+    class RootChild extends HTMLElement {}
+
+    class Base {
+      constructor() {
+        const hostRegistry = new FakeRegistry();
+        const rootRegistry = new FakeRegistry();
+        hostRegistry.define("host-child", class HostChild extends HTMLElement {});
+        rootRegistry.define("root-child", RootChild);
+        this.registry = hostRegistry;
+        this.shadowRoot = {
+          host: this,
+          registry: rootRegistry,
+          customElements: rootRegistry,
+          customElementRegistry: rootRegistry,
+        };
+      }
+    }
+
+    try {
+      globalThis.CustomElementRegistry = FakeRegistry;
+
+      const Host = ShadowDomMixin(Base);
+      const host = new Host();
+      const shadowRoot = host.createRenderRoot();
+
+      assert.strictEqual(shadowRoot, host.shadowRoot);
+      assert.strictEqual(host.registry, shadowRoot.registry);
+      assert.strictEqual(host.registry.get("root-child"), RootChild);
+      assert.strictEqual(host.registry.get("host-child"), undefined);
     } finally {
       globalThis.CustomElementRegistry = originalCustomElementRegistry;
     }

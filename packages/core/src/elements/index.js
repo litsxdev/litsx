@@ -315,9 +315,20 @@ export const ShadowDomMixin = dedupeMixin((Base) =>
     createRenderRoot() {
       const existingRoot = this.shadowRoot;
       if (existingRoot) {
-        const hostRegistry = this.registry;
-        this.registry ??= existingRoot.registry ?? existingRoot.customElements ?? existingRoot.customElementRegistry ?? null;
-        if (hostRegistry && this.registry) {
+        const rootRegistry =
+          existingRoot.registry ??
+          existingRoot.customElements ??
+          existingRoot.customElementRegistry ??
+          null;
+
+        if (rootRegistry) {
+          this.registry = rootRegistry;
+        } else {
+          this.registry ??= createScopedRegistryForHost(this).registry;
+          assignShadowRootRegistry(existingRoot, this.registry);
+        }
+
+        if (this.registry) {
           defineScopedElements(this.registry, this.constructor.elements ?? {});
           if (typeof this.registry._getDefinition === "function") {
             upgradeLightDomTree(existingRoot, this.registry);
