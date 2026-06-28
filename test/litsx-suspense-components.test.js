@@ -41,6 +41,36 @@ class MotionSuspenseBoundaryElement extends TestSuspenseBoundaryElement {
   }
 }
 
+class ProjectedSyncSuspenseBoundaryElement extends TestSuspenseBoundaryElement {
+  constructor() {
+    super();
+    this.contentHost = { hidden: false };
+    this.fallbackHost = { hidden: false };
+    this.syncedHosts = [];
+    this.syncErrorByHost = new Map();
+  }
+
+  querySelector(selector) {
+    if (selector.includes("content")) {
+      return this.contentHost;
+    }
+    if (selector.includes("fallback")) {
+      return this.fallbackHost;
+    }
+    return null;
+  }
+
+  syncRenderedHost(host, rendered, visible) {
+    const thrown = this.syncErrorByHost.get(host);
+    if (thrown) {
+      this.syncErrorByHost.delete(host);
+      throw thrown;
+    }
+    host.hidden = !visible;
+    this.syncedHosts.push({ host, rendered, visible });
+  }
+}
+
 function templateSource(templateResult) {
   return Array.isArray(templateResult?.strings)
     ? templateResult.strings.join("")
@@ -426,6 +456,120 @@ describe("litsx suspense components", () => {
 
     assert.strictEqual(boundary.pending, false);
     assert.ok(updates >= 1);
+  });
+
+  it("captures thenables thrown while syncing projected content in updated", () => {
+    const deferred = createDeferred();
+    const boundary = new ProjectedSyncSuspenseBoundaryElement();
+    let updates = 0;
+
+    boundary.requestUpdate = () => {
+      updates += 1;
+    };
+    boundary.contentRenderer = () => "ready";
+    boundary.fallbackRenderer = () => "loading";
+    boundary.render();
+    boundary.syncErrorByHost.set(boundary.contentHost, deferred.promise);
+
+    assert.doesNotThrow(() => boundary.updated());
+
+    assert.strictEqual(boundary.pending, true);
+    assert.strictEqual(boundary.showing, "fallback");
+    assert.strictEqual(boundary.phase, "pending");
+    assert.strictEqual(boundary._contentVisible, false);
+    assert.strictEqual(boundary._fallbackVisible, true);
+    assert.strictEqual(boundary._pendingPromise, deferred.promise);
+    assert.strictEqual(updates, 1);
+    assert.deepStrictEqual(
+      boundary.syncedHosts.map((entry) => [entry.host, entry.visible, entry.rendered?.value]),
+      [[boundary.fallbackHost, true, "loading"]],
+    );
+
+    boundary.render();
+
+    assert.strictEqual(boundary.pending, true);
+    assert.strictEqual(boundary.showing, "fallback");
+    assert.strictEqual(boundary.phase, "pending");
+    assert.strictEqual(boundary._contentVisible, false);
+    assert.strictEqual(boundary._fallbackVisible, true);
+  });
+
+  it("retries projected content after a thenable thrown during updated resolves", async () => {
+    const deferred = createDeferred();
+    const boundary = new ProjectedSyncSuspenseBoundaryElement();
+    let updates = 0;
+
+    boundary.requestUpdate = () => {
+      updates += 1;
+    };
+    boundary.contentRenderer = () => "ready";
+    boundary.fallbackRenderer = () => "loading";
+    boundary.render();
+    boundary.syncErrorByHost.set(boundary.contentHost, deferred.promise);
+    boundary.updated();
+
+    deferred.resolve();
+    await deferred.promise;
+    await Promise.resolve();
+
+    assert.strictEqual(boundary.pending, false);
+    assert.ok(updates >= 2);
+
+    boundary.render();
+    boundary.updated();
+
+    assert.strictEqual(boundary.showing, "content");
+    assert.strictEqual(boundary._contentVisible, true);
+    assert.ok(
+      boundary.syncedHosts.some((entry) =>
+        entry.host === boundary.contentHost &&
+        entry.visible === true &&
+        entry.rendered?.value === "ready"
+      ),
+    );
+  });
+
+  it("captures thenables thrown while syncing projected fallback in updated", () => {
+    const deferred = createDeferred();
+    const boundary = new ProjectedSyncSuspenseBoundaryElement();
+    let updates = 0;
+
+    boundary.requestUpdate = () => {
+      updates += 1;
+    };
+    boundary.contentRenderer = () => "ready";
+    boundary.fallbackRenderer = () => "loading";
+    boundary.render();
+    boundary.syncErrorByHost.set(boundary.contentHost, Promise.resolve());
+    boundary.syncErrorByHost.set(boundary.fallbackHost, deferred.promise);
+
+    assert.doesNotThrow(() => boundary.updated());
+
+    assert.strictEqual(boundary.pending, true);
+    assert.strictEqual(boundary.showing, "hidden");
+    assert.strictEqual(boundary.phase, "pending");
+    assert.strictEqual(boundary._contentVisible, false);
+    assert.strictEqual(boundary._fallbackVisible, false);
+    assert.strictEqual(boundary._pendingPromise, deferred.promise);
+    assert.strictEqual(updates, 2);
+  });
+
+  it("reports non-thenable errors thrown while syncing projected content in updated", () => {
+    const queued = [];
+    globalThis.queueMicrotask = (callback) => {
+      queued.push(callback);
+    };
+
+    const boundary = new ProjectedSyncSuspenseBoundaryElement();
+    const error = new Error("projected boom");
+    boundary.contentRenderer = () => "ready";
+    boundary.fallbackRenderer = () => "loading";
+    boundary.render();
+    boundary.syncErrorByHost.set(boundary.contentHost, error);
+
+    assert.doesNotThrow(() => boundary.updated());
+    assert.strictEqual(queued.length, 1);
+    assert.throws(() => queued[0](), /projected boom/);
   });
 
   it("starts fresh when a new suspense boundary instance replaces the previous one", () => {

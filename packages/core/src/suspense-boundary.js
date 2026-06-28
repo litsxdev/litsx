@@ -150,6 +150,12 @@ export class SuspenseBoundary extends LitElement {
         projected: fallbackProjected,
       };
 
+      if (this._pendingPromise) {
+        this._lastContent = content;
+        this._lastContentRender = contentRender;
+        return this.applyPendingFallbackRender(fallbackRender);
+      }
+
       this._pendingPromise = null;
       this._lastContent = content;
       this._lastContentRender = contentRender;
@@ -224,60 +230,7 @@ export class SuspenseBoundary extends LitElement {
         return nothing;
       }
 
-      this.attachPendingPromise(Promise.resolve(thrown));
-
-      const {
-        value: resolvedFallback = nothing,
-        context: fallbackContext = null,
-        projected: fallbackProjected = false,
-      } = invokeRenderer(this.fallbackRenderer);
-      const fallback = resolvedFallback ?? nothing;
-      const fallbackRender = {
-        value: fallback,
-        context: fallbackContext,
-        projected: fallbackProjected,
-      };
-
-      this.pending = true;
-      this._lastFallback = fallback;
-      this._lastFallbackRender = fallbackRender;
-      const disposition = this._suspenseList
-        ? this._suspenseList.getFallbackDisposition(this)
-        : "show";
-
-      if (disposition === "show") {
-        this._displayValue = fallback;
-        this.showing = "fallback";
-        this.phase = "pending";
-        this._contentHostState = this._lastContentRender;
-        this._fallbackHostState = fallbackRender;
-        this._contentVisible = false;
-        this._fallbackVisible = true;
-        this.notifyListState();
-        return this.renderHosts();
-      }
-
-      if (disposition === "collapsed" && this.resolved) {
-        this._displayValue = this._lastContent;
-        this.showing = "content";
-        this.phase = "content";
-        this._contentHostState = this._lastContentRender;
-        this._fallbackHostState = fallbackRender;
-        this._contentVisible = true;
-        this._fallbackVisible = false;
-        this.notifyListState();
-        return this.renderHosts();
-      }
-
-      this._displayValue = nothing;
-      this.showing = "hidden";
-      this.phase = "hidden";
-      this._contentHostState = this._lastContentRender;
-      this._fallbackHostState = fallbackRender;
-      this._contentVisible = false;
-      this._fallbackVisible = false;
-      this.notifyListState();
-      return this.renderHosts();
+      return this.handleSuspension(thrown);
     }
   }
 
@@ -285,14 +238,124 @@ export class SuspenseBoundary extends LitElement {
     const contentHost = this.querySelector('[data-litsx-suspense-region="content"]');
     const fallbackHost = this.querySelector('[data-litsx-suspense-region="fallback"]');
 
-    syncRendererHost(contentHost, this._contentHostState, {
+    try {
+      this.syncRenderedHost(contentHost, this._contentHostState, this._contentVisible);
+    } catch (thrown) {
+      if (!isThenable(thrown)) {
+        reportAsyncError(thrown);
+        return;
+      }
+
+      this.handleSuspension(thrown);
+      this.requestUpdate();
+    }
+
+    try {
+      this.syncRenderedHost(fallbackHost, this._fallbackHostState, this._fallbackVisible);
+    } catch (thrown) {
+      if (!isThenable(thrown)) {
+        reportAsyncError(thrown);
+        return;
+      }
+
+      this.handleFallbackSuspension(thrown);
+      this.requestUpdate();
+    }
+  }
+
+  syncRenderedHost(host, rendered, visible) {
+    syncRendererHost(host, rendered, {
       render: renderLightDom,
-      visible: this._contentVisible,
+      visible,
     });
-    syncRendererHost(fallbackHost, this._fallbackHostState, {
-      render: renderLightDom,
-      visible: this._fallbackVisible,
-    });
+  }
+
+  createFallbackRender() {
+    const {
+      value: resolvedFallback = nothing,
+      context: fallbackContext = null,
+      projected: fallbackProjected = false,
+    } = invokeRenderer(this.fallbackRenderer);
+    const fallback = resolvedFallback ?? nothing;
+    return {
+      value: fallback,
+      context: fallbackContext,
+      projected: fallbackProjected,
+    };
+  }
+
+  handleSuspension(thrown) {
+    this.attachPendingPromise(Promise.resolve(thrown));
+
+    let fallbackRender;
+    try {
+      fallbackRender = this.createFallbackRender();
+    } catch (fallbackThrown) {
+      if (!isThenable(fallbackThrown)) {
+        reportAsyncError(fallbackThrown);
+        return nothing;
+      }
+
+      this.handleFallbackSuspension(fallbackThrown);
+      return this.renderHosts();
+    }
+
+    const fallback = fallbackRender.value ?? nothing;
+    return this.applyPendingFallbackRender(fallbackRender, fallback);
+  }
+
+  applyPendingFallbackRender(fallbackRender, fallback = fallbackRender?.value ?? nothing) {
+    this.pending = true;
+    this._lastFallback = fallback;
+    this._lastFallbackRender = fallbackRender;
+    const disposition = this._suspenseList
+      ? this._suspenseList.getFallbackDisposition(this)
+      : "show";
+
+    if (disposition === "show") {
+      this._displayValue = fallback;
+      this.showing = "fallback";
+      this.phase = "pending";
+      this._contentHostState = this._lastContentRender;
+      this._fallbackHostState = fallbackRender;
+      this._contentVisible = false;
+      this._fallbackVisible = true;
+      this.notifyListState();
+      return this.renderHosts();
+    }
+
+    if (disposition === "collapsed" && this.resolved) {
+      this._displayValue = this._lastContent;
+      this.showing = "content";
+      this.phase = "content";
+      this._contentHostState = this._lastContentRender;
+      this._fallbackHostState = fallbackRender;
+      this._contentVisible = true;
+      this._fallbackVisible = false;
+      this.notifyListState();
+      return this.renderHosts();
+    }
+
+    this._displayValue = nothing;
+    this.showing = "hidden";
+    this.phase = "hidden";
+    this._contentHostState = this._lastContentRender;
+    this._fallbackHostState = fallbackRender;
+    this._contentVisible = false;
+    this._fallbackVisible = false;
+    this.notifyListState();
+    return this.renderHosts();
+  }
+
+  handleFallbackSuspension(thrown) {
+    this.attachPendingPromise(Promise.resolve(thrown));
+    this.pending = true;
+    this._displayValue = nothing;
+    this.showing = "hidden";
+    this.phase = "pending";
+    this._contentVisible = false;
+    this._fallbackVisible = false;
+    this.notifyListState();
   }
 
   renderHosts() {
