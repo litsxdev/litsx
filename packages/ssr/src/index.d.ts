@@ -57,6 +57,11 @@ export interface LitsxSsrRenderOptions {
   context?: LitsxSsrContext;
   assetResolver?: LitsxSsrAssetResolver;
   /**
+   * Maximum number of SSR render passes allowed while rootless async hooks
+   * suspend and retry. Defaults to 25.
+   */
+  maxSuspensePasses?: number;
+  /**
    * Local scoped custom element registry used to resolve LitSX-authored tags
    * inside the provided render value.
    */
