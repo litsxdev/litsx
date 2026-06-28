@@ -231,6 +231,71 @@ describe("@litsx/light-dom-registry", () => {
     assert.strictEqual(registry.get(tagName), CardElement);
   });
 
+  it("creates a fresh host registry when a reused host receives a different scope", () => {
+    const firstTag = nextTag();
+    const secondTag = nextTag();
+    const host = document.createElement("section");
+
+    class FirstElement extends HTMLElement {}
+    class SecondElement extends HTMLElement {}
+
+    const firstRegistry = connectLightDomRegistry(host, {
+      [firstTag]: FirstElement,
+    });
+    const secondRegistry = connectLightDomRegistry(host, {
+      [secondTag]: SecondElement,
+    });
+
+    assert.notStrictEqual(secondRegistry, firstRegistry);
+    assert.strictEqual(secondRegistry.get(firstTag), null);
+    assert.strictEqual(secondRegistry.get(secondTag), SecondElement);
+  });
+
+  it("creates a fresh host registry when the same scoped tag maps to a new constructor", () => {
+    const tagName = nextTag();
+    const host = document.createElement("section");
+
+    class FirstElement extends HTMLElement {}
+    class SecondElement extends HTMLElement {}
+
+    const firstRegistry = connectLightDomRegistry(host, {
+      [tagName]: FirstElement,
+    });
+    const secondRegistry = connectLightDomRegistry(host, {
+      [tagName]: SecondElement,
+    });
+
+    assert.notStrictEqual(secondRegistry, firstRegistry);
+    assert.strictEqual(secondRegistry.get(tagName), SecondElement);
+  });
+
+  it("upgrades existing host children when a registry is reconnected after render", () => {
+    const tagName = nextTag();
+    const host = document.createElement("section");
+
+    class LateScopedElement extends HTMLElement {
+      connectedCallback() {
+        this.connected = true;
+      }
+    }
+
+    ensureLightDomProxy(tagName);
+    host.innerHTML = `<${tagName}></${tagName}>`;
+    document.body.appendChild(host);
+
+    const element = host.firstElementChild;
+    assert.notStrictEqual(Object.getPrototypeOf(element), LateScopedElement.prototype);
+
+    connectLightDomRegistry(host, {
+      [tagName]: LateScopedElement,
+    });
+
+    assert.strictEqual(Object.getPrototypeOf(element), LateScopedElement.prototype);
+    assert.equal(element.connected, true);
+
+    host.remove();
+  });
+
   it("keeps resolving scoped constructors for a new host instance after the previous host disconnects", () => {
     const tagName = nextTag();
 

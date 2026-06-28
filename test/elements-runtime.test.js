@@ -376,6 +376,119 @@ describe("litsx elements runtime", () => {
     }
   });
 
+  it("defines scoped elements on reused shadow roots when the host already owns the registry", () => {
+    const originalCustomElementRegistry = globalThis.CustomElementRegistry;
+
+    class FakeRegistry {
+      constructor() {
+        this.definitions = new Map();
+      }
+
+      define(tagName, elementClass) {
+        if (this.definitions.has(tagName)) {
+          throw new Error(`duplicate definition: ${tagName}`);
+        }
+        this.definitions.set(tagName, elementClass);
+      }
+
+      get(tagName) {
+        return this.definitions.get(tagName);
+      }
+    }
+
+    class DemoChild extends HTMLElement {}
+
+    class Base {
+      constructor() {
+        const registry = new FakeRegistry();
+        this.registry = registry;
+        this.shadowRoot = {
+          host: this,
+          registry,
+          customElements: registry,
+          customElementRegistry: registry,
+        };
+      }
+
+      static elements = {
+        "demo-reused-shadow-child": DemoChild,
+      };
+    }
+
+    try {
+      globalThis.CustomElementRegistry = FakeRegistry;
+
+      const Host = ShadowDomMixin(Base);
+      const host = new Host();
+      const shadowRoot = host.createRenderRoot();
+
+      assert.strictEqual(shadowRoot, host.shadowRoot);
+      assert.strictEqual(host.registry, shadowRoot.registry);
+      assert.strictEqual(
+        host.registry.get("demo-reused-shadow-child"),
+        DemoChild,
+      );
+    } finally {
+      globalThis.CustomElementRegistry = originalCustomElementRegistry;
+    }
+  });
+
+  it("does not mix scoped definitions into a registry only discovered from a reused shadow root", () => {
+    const originalCustomElementRegistry = globalThis.CustomElementRegistry;
+
+    class FakeRegistry {
+      constructor() {
+        this.definitions = new Map();
+      }
+
+      define(tagName, elementClass) {
+        if (this.definitions.has(tagName)) {
+          throw new Error(`duplicate definition: ${tagName}`);
+        }
+        this.definitions.set(tagName, elementClass);
+      }
+
+      get(tagName) {
+        return this.definitions.get(tagName);
+      }
+    }
+
+    class AmbientChild extends HTMLElement {}
+    class DemoChild extends HTMLElement {}
+
+    class Base {
+      constructor() {
+        const registry = new FakeRegistry();
+        registry.define("ambient-child", AmbientChild);
+        this.shadowRoot = {
+          host: this,
+          registry,
+          customElements: registry,
+          customElementRegistry: registry,
+        };
+      }
+
+      static elements = {
+        "demo-ambient-shadow-child": DemoChild,
+      };
+    }
+
+    try {
+      globalThis.CustomElementRegistry = FakeRegistry;
+
+      const Host = ShadowDomMixin(Base);
+      const host = new Host();
+      const shadowRoot = host.createRenderRoot();
+
+      assert.strictEqual(shadowRoot, host.shadowRoot);
+      assert.strictEqual(host.registry, shadowRoot.registry);
+      assert.strictEqual(host.registry.get("ambient-child"), AmbientChild);
+      assert.strictEqual(host.registry.get("demo-ambient-shadow-child"), undefined);
+    } finally {
+      globalThis.CustomElementRegistry = originalCustomElementRegistry;
+    }
+  });
+
   it("supports late scoped definitions through this.registry", () => {
     const originalCustomElementRegistry = globalThis.CustomElementRegistry;
     const originalAttachShadow = Element.prototype.attachShadow;

@@ -538,14 +538,17 @@ function getRuntime() {
       !registry ||
       typeof registry._getDefinition !== "function"
     ) {
-      return;
+      return false;
     }
 
     const tagName = element.localName || element.tagName?.toLowerCase?.();
     const definition = tagName ? registry._getDefinition(tagName) : null;
     if (definition) {
       customize(element, definition, element.isConnected);
+      return true;
     }
+
+    return false;
   }
 
   function upgradeCreatedTree(node, registry) {
@@ -596,10 +599,6 @@ function getRuntime() {
       }
 
       upgradeCreatedElement(current, registry);
-      const definition = definitionForElement.get(current);
-      if (definition?.connectedCallback && current.isConnected) {
-        definition.connectedCallback.call(current);
-      }
 
       for (const child of current.children ?? []) {
         pending.push(child);
@@ -820,18 +819,31 @@ export function createLightDomRegistry(host, initialElements = {}) {
   return registry;
 }
 
+function hasSameElementDefinitions(previousElements, nextElements) {
+  const previousEntries = Object.entries(previousElements || {});
+  const nextEntries = Object.entries(nextElements || {});
+  if (previousEntries.length !== nextEntries.length) {
+    return false;
+  }
+
+  return nextEntries.every(([tagName, ctor]) => previousElements?.[tagName] === ctor);
+}
+
 export function connectLightDomRegistry(host, elements) {
   const runtime = getRuntime();
   if (!runtime || !host) {
     return null;
   }
 
-  const registry = isRegistryLike(host[HOST_REGISTRY])
-    ? host[HOST_REGISTRY]
-    : createLightDomRegistry(host, {});
-
   const nextElements = elements || {};
   const previousElements = host[HOST_ELEMENTS] || {};
+  const existingRegistry = isRegistryLike(host[HOST_REGISTRY])
+    ? host[HOST_REGISTRY]
+    : null;
+  const registry = existingRegistry &&
+    hasSameElementDefinitions(previousElements, nextElements)
+    ? existingRegistry
+    : createLightDomRegistry(host, {});
 
   for (const [tagName, ctor] of Object.entries(nextElements)) {
     if (previousElements[tagName] === ctor && registry.get(tagName) === ctor) {
@@ -843,6 +855,7 @@ export function connectLightDomRegistry(host, elements) {
   host[HOST_ELEMENTS] = { ...nextElements };
   host[HOST_REGISTRY] = registry;
   host.registry = registry;
+  runtime.upgradeTree(host, registry);
   return registry;
 }
 
