@@ -1,5 +1,12 @@
 # litsx
 
+## 0.7.1
+
+### Patch Changes
+
+- 7b7a4fa: Add framework-level soft suspense for render hooks without an enclosing SuspenseBoundary. Compiled render methods now wrap hook execution so thrown thenables suspend the host, render `nothing`, and request an update when resolved, while preserving explicit SuspenseBoundary handling.
+- c8067aa: Capture thenables thrown while `SuspenseBoundary` syncs projected content in `updated()`, so projected custom-element subtrees suspend through the boundary instead of leaking pending promises to Lit.
+
 ## 0.7.0
 
 ### Minor Changes

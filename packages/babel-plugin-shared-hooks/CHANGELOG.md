@@ -1,5 +1,11 @@
 # @litsx/babel-plugin-shared-hooks
 
+## 0.5.1
+
+### Patch Changes
+
+- 7b7a4fa: Add framework-level soft suspense for render hooks without an enclosing SuspenseBoundary. Compiled render methods now wrap hook execution so thrown thenables suspend the host, render `nothing`, and request an update when resolved, while preserving explicit SuspenseBoundary handling.
+
 ## 0.5.0
 
 ### Minor Changes
