@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import { collectSoftSuspenseThenables } from "@litsx/core";
 import { __litsxScopedTemplate } from "@litsx/core/elements";
 
 /**
@@ -17,6 +18,7 @@ const DEV_TEMPLATE_TITLE_MARKER = "<!--app-title-->";
 const DEV_TEMPLATE_HEAD_MARKER = "<!--app-head-->";
 const DEV_TEMPLATE_HTML_MARKER = "<!--app-html-->";
 const DEV_TEMPLATE_BOOTSTRAP_MARKER = "<!--app-bootstrap-->";
+const DEFAULT_MAX_SUSPENSE_PASSES = 25;
 
 let ssrRuntimePromise;
 
@@ -548,6 +550,45 @@ async function renderResolvedValue(value, context) {
   });
 }
 
+function normalizeMaxSuspensePasses(value) {
+  if (value == null) {
+    return DEFAULT_MAX_SUSPENSE_PASSES;
+  }
+
+  const normalized = Number(value);
+  if (!Number.isFinite(normalized) || normalized < 1) {
+    throw new TypeError("maxSuspensePasses must be a positive finite number.");
+  }
+
+  return Math.floor(normalized);
+}
+
+async function renderResolvedValueWithSoftSuspense(value, options) {
+  const maxPasses = normalizeMaxSuspensePasses(options.maxSuspensePasses);
+
+  for (let pass = 0; pass < maxPasses; pass += 1) {
+    const context = await createSsrContext(options);
+    const pendingThenables = new Set();
+    const html = await collectSoftSuspenseThenables(pendingThenables, async () =>
+      renderResolvedValue(
+        normalizeSsrRenderable(await Promise.resolve(value), options.elements),
+        context,
+      )
+    );
+
+    if (pendingThenables.size === 0) {
+      return { html, context };
+    }
+
+    await Promise.all([...pendingThenables]);
+  }
+
+  throw new Error(
+    `LitSX SSR exceeded ${maxPasses} suspense render passes. ` +
+      "A rootless async hook is still suspending after every retry."
+  );
+}
+
 /**
  * Render a Lit or LitSX template to HTML using the scoped SSR runtime.
  *
@@ -567,11 +608,7 @@ export async function renderToString(value, options = {}) {
     return renderToString(authored.value, authored.options);
   }
 
-  const context = await createSsrContext(options);
-  const html = await renderResolvedValue(
-    normalizeSsrRenderable(await Promise.resolve(value), options.elements),
-    context,
-  );
+  const { html, context } = await renderResolvedValueWithSoftSuspense(value, options);
   return createSsrResult(html, context);
 }
 
@@ -657,7 +694,6 @@ export async function renderToStream(value, options = {}) {
     return renderToStream(authored.value, authored.options);
   }
 
-  const context = await createSsrContext(options);
   let resolveAllReady;
   let rejectAllReady;
   const allReady = new Promise((resolve, reject) => {
@@ -668,10 +704,7 @@ export async function renderToStream(value, options = {}) {
   const stream = new ReadableStream({
     async start(controller) {
       try {
-        const html = await renderResolvedValue(
-          normalizeSsrRenderable(await Promise.resolve(value), options.elements),
-          context,
-        );
+        const { html, context } = await renderResolvedValueWithSoftSuspense(value, options);
         controller.enqueue(html);
         controller.close();
         const result = createSsrResult(html, context);
