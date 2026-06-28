@@ -37,8 +37,8 @@ export class ErrorBoundary extends LitElement {
     failed: { type: Boolean, reflect: true },
     error: { attribute: false },
     onError: { attribute: false },
-    fallbackRenderer: { attribute: false },
-    contentRenderer: { attribute: false },
+    fallback: { attribute: false },
+    content: { attribute: false },
   };
 
   constructor() {
@@ -46,8 +46,8 @@ export class ErrorBoundary extends LitElement {
     this.failed = false;
     this.error = null;
     this.onError = null;
-    this.fallbackRenderer = null;
-    this.contentRenderer = null;
+    this.fallback = null;
+    this.content = null;
     this._contentHostState = null;
     this._fallbackHostState = null;
     this._contentVisible = true;
@@ -64,7 +64,7 @@ export class ErrorBoundary extends LitElement {
       context: fallbackContext = null,
       projected: fallbackProjected = false,
     } = invokeRenderer(
-      this.fallbackRenderer,
+      this.fallback,
       this.error,
     );
     this._contentHostState = null;
@@ -90,7 +90,7 @@ export class ErrorBoundary extends LitElement {
         context: contentContext = null,
         projected: contentProjected = false,
       } = invokeRenderer(
-        this.contentRenderer,
+        this.content,
       );
 
       this.error = null;

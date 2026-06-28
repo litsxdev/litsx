@@ -56,8 +56,8 @@ describe("react compat internal error boundary", () => {
 
     assert.match(code, /import \{ ErrorBoundary \} from "@litsx\/core";/);
     assert.match(code, /<ErrorBoundary/);
-    assert.match(code, /\.fallbackRenderer=\{\(\) => <p>Oops<\/p>\}/);
-    assert.match(code, /\.contentRenderer=\{\(\) => <Widget \/>\}/);
+    assert.match(code, /\.fallback=\{\(\) => <p>Oops<\/p>\}/);
+    assert.match(code, /\.content=\{\(\) => <Widget \/>\}/);
     assert.match(code, /\.onError=\{handleError\}/);
     assert.doesNotMatch(code, /errorBoundary\(/);
     assert.doesNotMatch(code, /prepareEffects\(/);
@@ -84,7 +84,7 @@ describe("react compat internal error boundary", () => {
     assert.match(code, /import \{ keyed \} from "lit\/directives\/keyed\.js";/);
     assert.match(
       code,
-      /keyed\(this\.route,\s*<ErrorBoundary[\s\S]*\.fallbackRenderer=\{error => error\.message\}[\s\S]*\.contentRenderer=\{\(\) => <Outlet \/>\}[\s\S]*<\/ErrorBoundary>\s*\)/s
+      /keyed\(this\.route,\s*<ErrorBoundary[\s\S]*\.fallback=\{error => error\.message\}[\s\S]*\.content=\{\(\) => <Outlet \/>\}[\s\S]*<\/ErrorBoundary>\s*\)/s
     );
   });
 
@@ -114,12 +114,12 @@ describe("react compat internal error boundary", () => {
 
     const boundaryMatches = code.match(/<ErrorBoundary/g) || [];
     assert.strictEqual(boundaryMatches.length, 2);
-    assert.match(code, /\.fallbackRenderer=\{\(\) => 'Oops'\}/);
-    assert.match(code, /\.fallbackRenderer=\{\(\) => null\}/);
-    assert.match(code, /\.contentRenderer=\{\(\) => <div>alpha<\/div>\}/);
+    assert.match(code, /\.fallback=\{\(\) => 'Oops'\}/);
+    assert.match(code, /\.fallback=\{\(\) => null\}/);
+    assert.match(code, /\.content=\{\(\) => <div>alpha<\/div>\}/);
     assert.match(
       code,
-      /\.contentRenderer=\{\(\) => <>\s*<div>beta<\/div>\s*<div>gamma<\/div>\s*<\/>\}/s
+      /\.content=\{\(\) => <>\s*<div>beta<\/div>\s*<div>gamma<\/div>\s*<\/>\}/s
     );
     assert.doesNotMatch(code, /ReactErrorBoundary\.ErrorBoundary/);
     assert.doesNotMatch(code, /ErrorBoundaryNS\.ErrorBoundary/);
@@ -139,7 +139,7 @@ describe("react compat internal error boundary", () => {
 
     assert.match(code, /import React, \{ useEffect \} from 'react';|import React, \{\s*useEffect\s*\} from "react";/);
     assert.match(code, /import \{ ErrorBoundary \} from "@litsx\/core";/);
-    assert.match(code, /\.fallbackRenderer=\{\(\) => 404\}/);
+    assert.match(code, /\.fallback=\{\(\) => 404\}/);
     assert.doesNotMatch(code, /import .*ErrorBoundary.* from 'react'/);
   });
 
@@ -160,7 +160,7 @@ describe("react compat internal error boundary", () => {
 
     const code = run(source);
 
-    assert.match(code, /<>\s*\{keyed\('route-a',\s*<ErrorBoundary[\s\S]*\.contentRenderer=\{\(\) => null\}[\s\S]*<\/ErrorBoundary>\)\}\s*<\/>/s);
+    assert.match(code, /<>\s*\{keyed\('route-a',\s*<ErrorBoundary[\s\S]*\.content=\{\(\) => null\}[\s\S]*<\/ErrorBoundary>\)\}\s*<\/>/s);
   });
 
   it("treats comment-only content as empty boundary content", () => {
@@ -178,8 +178,8 @@ describe("react compat internal error boundary", () => {
 
     const code = run(source);
 
-    assert.match(code, /\.fallbackRenderer=\{\(\) => 'Oops'\}/);
-    assert.match(code, /\.contentRenderer=\{\(\) => null\}/);
+    assert.match(code, /\.fallback=\{\(\) => 'Oops'\}/);
+    assert.match(code, /\.content=\{\(\) => null\}/);
   });
 
   it("treats empty fallback and onError expressions as boolean true instead of crashing", () => {
@@ -202,8 +202,8 @@ describe("react compat internal error boundary", () => {
 
     const code = runAst(ast, source);
 
-    assert.match(code, /\.fallbackRenderer=\{\(\) => true\}/);
-    assert.match(code, /\.contentRenderer=\{\(\) => <div>ready<\/div>\}/);
+    assert.match(code, /\.fallback=\{\(\) => true\}/);
+    assert.match(code, /\.content=\{\(\) => <div>ready<\/div>\}/);
     assert.match(code, /\.onError=\{true\}/);
   });
 });

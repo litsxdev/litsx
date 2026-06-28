@@ -31,13 +31,13 @@ describe("litsx error boundary components", () => {
     const boundary = new TestErrorBoundaryElement();
     let shouldThrow = true;
 
-    boundary.contentRenderer = () => {
+    boundary.content = () => {
       if (shouldThrow) {
         throw new Error("boom");
       }
       return "ok";
     };
-    boundary.fallbackRenderer = (error) => `fallback:${error.message}`;
+    boundary.fallback = (error) => `fallback:${error.message}`;
 
     const first = boundary.render();
     assert.strictEqual(boundary.failed, true);
@@ -54,10 +54,10 @@ describe("litsx error boundary components", () => {
     const boundary = new TestErrorBoundaryElement();
     const promise = Promise.resolve();
 
-    boundary.contentRenderer = () => {
+    boundary.content = () => {
       throw promise;
     };
-    boundary.fallbackRenderer = () => "fallback";
+    boundary.fallback = () => "fallback";
 
     assert.throws(() => boundary.render(), (error) => error === promise);
     assert.strictEqual(boundary.failed, false);
@@ -68,10 +68,10 @@ describe("litsx error boundary components", () => {
     const boundary = new TestErrorBoundaryElement();
     const calls = [];
 
-    boundary.contentRenderer = () => {
+    boundary.content = () => {
       throw new Error("boom");
     };
-    boundary.fallbackRenderer = () => nothing;
+    boundary.fallback = () => nothing;
     boundary.onError = (error) => {
       calls.push(error.message);
     };
@@ -85,11 +85,11 @@ describe("litsx error boundary components", () => {
   it("falls back to lit nothing when renderers are not functions", () => {
     const boundary = new TestErrorBoundaryElement();
 
-    boundary.fallbackRenderer = "not-a-function";
+    boundary.fallback = "not-a-function";
     const fallback = boundary.renderFallback();
     assert.match(templateSource(fallback), /part="fallback"/);
 
-    boundary.contentRenderer = "not-a-function";
+    boundary.content = "not-a-function";
     const content = boundary.render();
     assert.strictEqual(boundary.failed, false);
     assert.match(templateSource(content), /part="content"/);

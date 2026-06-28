@@ -59,31 +59,42 @@ function createRendererAttribute(name, expression) {
   );
 }
 
-function getJsxName(node) {
-  return t.isJSXIdentifier(node) ? node.name : null;
+function createFallbackAttribute(expression) {
+  const fallbackExpression =
+    t.isArrowFunctionExpression(expression) || t.isFunctionExpression(expression)
+      ? expression
+      : t.arrowFunctionExpression([], expression);
+  return t.jsxAttribute(
+    t.jsxIdentifier(".fallback"),
+    t.jsxExpressionContainer(fallbackExpression),
+  );
 }
 
-function isSuspenseBoundaryName(nameNode, state) {
-  const name = getJsxName(nameNode);
-  return state.suspenseBoundaryLocalNames.has(name);
+function getJsxName(node) {
+  return t.isJSXIdentifier(node) ? node.name : null;
 }
 
 function isAttributeNamed(attribute, name) {
   return t.isJSXAttribute(attribute) && getJsxName(attribute.name) === name;
 }
 
-export default function transformLitsxSuspenseBoundary(api) {
+function getBoundaryKind(nameNode, state) {
+  const name = getJsxName(nameNode);
+  return state.litsxBoundaryLocalNames.get(name) ?? null;
+}
+
+export default function transformLitsxBoundaries(api) {
   api.assertVersion?.(7);
   t = api.types;
 
   return {
-    name: "transform-litsx-suspense-boundary",
+    name: "transform-litsx-boundaries",
     inherits: jsxSyntaxPlugin.default || jsxSyntaxPlugin,
     visitor: {
       Program: {
         enter(_, state) {
-          state.suspenseBoundaryLocalNames = new Set();
-          state.__litsxSkipSuspenseBoundaryTransform = true;
+          state.litsxBoundaryLocalNames = new Map();
+          state.__litsxSkipBoundaryTransform = true;
         },
       },
       ImportDeclaration(path, state) {
@@ -98,21 +109,24 @@ export default function transformLitsxSuspenseBoundary(api) {
           const importedName = t.isIdentifier(specifier.imported)
             ? specifier.imported.name
             : null;
-          if (importedName === "SuspenseBoundary") {
-            state.suspenseBoundaryLocalNames.add(specifier.local.name);
-            state.__litsxSkipSuspenseBoundaryTransform = false;
+          if (importedName === "SuspenseBoundary" || importedName === "ErrorBoundary") {
+            state.litsxBoundaryLocalNames.set(specifier.local.name, importedName);
+            state.__litsxSkipBoundaryTransform = false;
           }
         }
       },
       JSXElement(path, state) {
-        if (state.__litsxSkipSuspenseBoundaryTransform) {
+        if (state.__litsxSkipBoundaryTransform) {
           return;
         }
+
         const { node } = path;
-        if (node._litsxSuspenseBoundaryLowered) {
+        if (node._litsxBoundaryLowered) {
           return;
         }
-        if (!isSuspenseBoundaryName(node.openingElement.name, state)) {
+
+        const boundaryKind = getBoundaryKind(node.openingElement.name, state);
+        if (!boundaryKind) {
           return;
         }
 
@@ -136,7 +150,11 @@ export default function transformLitsxSuspenseBoundary(api) {
           const fallbackExpression = fallbackAttr
             ? attributeValueToExpression(fallbackAttr.value)
             : t.nullLiteral();
-          nextAttributes.push(createRendererAttribute("fallback", fallbackExpression));
+          nextAttributes.push(
+            boundaryKind === "ErrorBoundary"
+              ? createFallbackAttribute(fallbackExpression)
+              : createRendererAttribute("fallback", fallbackExpression)
+          );
         }
 
         if (!hasContentAttr) {
@@ -151,7 +169,7 @@ export default function transformLitsxSuspenseBoundary(api) {
         if (!node.closingElement) {
           node.closingElement = t.jsxClosingElement(t.cloneNode(node.openingElement.name));
         }
-        node._litsxSuspenseBoundaryLowered = true;
+        node._litsxBoundaryLowered = true;
       },
     },
   };

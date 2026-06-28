@@ -65,6 +65,7 @@ const PROP_COMPLETIONS_BY_TAG = {
   option: ["selected", "value"],
   video: ["currentTime", "muted", "volume", "playbackRate"],
   audio: ["currentTime", "muted", "volume", "playbackRate"],
+  "error-boundary": ["fallback", "content", "failed", "error", "onError"],
   "suspense-boundary": ["fallback", "content", "pending", "resolved", "showing", "phase"],
   "suspense-list": ["revealOrder", "tail"],
 };

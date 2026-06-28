@@ -1,4 +1,4 @@
-import { SuspenseBoundary, SuspenseList } from "@litsx/core";
+import { ErrorBoundary, SuspenseBoundary, SuspenseList } from "@litsx/core";
 
 type ButtonProps = {
   label: string;
@@ -19,6 +19,9 @@ export function BrokenScreen() {
 
       {/* @ts-expect-error fallbackRenderer is not part of the SuspenseBoundary authoring contract */}
       <SuspenseBoundary fallbackRenderer={() => "loading"} />
+
+      {/* @ts-expect-error contentRenderer is not part of the ErrorBoundary authoring contract */}
+      <ErrorBoundary contentRenderer={() => "ready"} />
 
       {/* @ts-expect-error ActionButton requires a label */}
       <ActionButton />

@@ -76,6 +76,6 @@ describe("litsx jsx runtime", () => {
 
     assert.match(declarations, /Component extends typeof SuspenseList \? LitsxBoundaryElementProps<SuspenseList, SuspenseListProps> :/);
     assert.match(declarations, /Component extends typeof SuspenseBoundary \? LitsxSuspenseBoundaryElementProps :/);
-    assert.match(declarations, /Component extends typeof ErrorBoundary \? LitsxBoundaryElementProps<ErrorBoundary, ErrorBoundaryProps> :/);
+    assert.match(declarations, /Component extends typeof ErrorBoundary \? LitsxErrorBoundaryElementProps :/);
   });
 });

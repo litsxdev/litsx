@@ -62,8 +62,8 @@ export default declare((api) => {
     const fallbackRenderer = buildFallbackFunction(fallbackAttr);
 
     const element = createComponentElement(RUNTIME_PRIMITIVE, [
-      createRendererAttribute("fallbackRenderer", fallbackRenderer),
-      createRendererAttribute("contentRenderer", contentRenderer),
+      createRendererAttribute("fallback", fallbackRenderer),
+      createRendererAttribute("content", contentRenderer),
       ...(onErrorAttr
         ? [
             createRendererAttribute(
