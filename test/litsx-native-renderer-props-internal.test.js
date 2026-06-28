@@ -3,7 +3,7 @@ import babelCore from "@babel/core";
 import fs from "fs";
 import os from "os";
 import path from "path";
-import parser from "../packages/babel-parser-litsx/src/index.js";
+import parser from "./helpers/litsx-parser.js";
 import transformLitsxRendererProps from "../packages/babel-preset-litsx/src/internal/transform-litsx-renderer-props.js";
 import { setElementCandidatesBabelTypes } from "../packages/babel-preset-litsx/src/internal/transform-litsx-element-candidates.js";
 

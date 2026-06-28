@@ -1,6 +1,6 @@
 import assert from "assert";
 import babelCore from "@babel/core";
-import parser from "../packages/babel-parser-litsx/src/index.js";
+import parser from "./helpers/litsx-parser.js";
 import { beforeAll } from "vitest";
 import { interopDefault } from "./helpers/interop-default.js";
 

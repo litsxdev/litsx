@@ -22,7 +22,7 @@ import {
   getLitsxVirtualizationMetadata,
   parseWithLitsxVirtualization,
 } from "../packages/authoring/src/parser.js";
-import parser from "../packages/babel-parser-litsx/src/index.js";
+import parser from "./helpers/litsx-parser.js";
 
 describe("@litsx/authoring", () => {
   it("virtualizes lit-flavoured jsx attribute prefixes into ts-safe names", () => {

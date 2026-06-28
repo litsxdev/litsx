@@ -78,10 +78,10 @@
   },
   "dependencies": {
     "@babel/helper-plugin-utils": "^7.28.6",
+    "@babel/parser": "^7.29.3",
     "@babel/plugin-syntax-jsx": "^7.28.6",
     "@babel/traverse": "^7.28.5",
     "@litsx/authoring": "^0.5.0",
-    "@litsx/babel-parser": "^0.2.5",
     "@litsx/babel-plugin-shared-hooks": "^0.5.0",
     "@litsx/babel-plugin-transform-jsx-html-template": "^0.3.6",
     "@litsx/babel-plugin-transform-litsx-scoped-elements": "^0.4.5",

@@ -122,15 +122,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@babel/helper-check-duplicate-nodes@npm:^7.28.6":
-  version: 7.28.6
-  resolution: "@babel/helper-check-duplicate-nodes@npm:7.28.6"
-  dependencies:
-    "@babel/types": "npm:^7.28.6"
-  checksum: 10c0/6626c0680149736e4f988fd76ccc6681b0894c8b133c14017929ba66b8eaf5af1e934931a7875010d37e699af644b8944aacad2f2ecc6cbb22e62e11fb255dce
-  languageName: node
-  linkType: hard
-
 "@babel/helper-compilation-targets@npm:^7.28.6":
   version: 7.28.6
   resolution: "@babel/helper-compilation-targets@npm:7.28.6"
@@ -158,16 +149,6 @@ __metadata:
   peerDependencies:
     "@babel/core": ^7.0.0
   checksum: 10c0/9fff94d27d2c468c38303d2e4624c72501a182f9c5e2e6f123d5bfd24c36ab2de5983ce50b60a05c97cce0b28c4809155f0669f349266072b9a5fc1047238e86
-  languageName: node
-  linkType: hard
-
-"@babel/helper-fixtures@npm:^7.28.6":
-  version: 7.28.6
-  resolution: "@babel/helper-fixtures@npm:7.28.6"
-  dependencies:
-    "@jridgewell/gen-mapping": "npm:^0.3.12"
-    semver: "npm:^6.3.1"
-  checksum: 10c0/88303515c6a3621183a83dba20543f63d0eab86adf44739fb5196298c857e01a737a12020ef43c0bd0240bd6decd63ac45cad22e4a9e8b8bd9496cc109c3fc77
   languageName: node
   linkType: hard
 
@@ -250,7 +231,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@babel/helper-string-parser@npm:^7.25.9, @babel/helper-string-parser@npm:^7.27.1":
+"@babel/helper-string-parser@npm:^7.27.1":
   version: 7.27.1
   resolution: "@babel/helper-string-parser@npm:7.27.1"
   checksum: 10c0/8bda3448e07b5583727c103560bcf9c4c24b3c1051a4c516d4050ef69df37bb9a4734a585fe12725b8c2763de0a265aa1e909b485a4e3270b7cfd3e4dbe4b602
@@ -961,24 +942,6 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@litsx/babel-parser@npm:^0.2.5, @litsx/babel-parser@workspace:packages/babel-parser-litsx":
-  version: 0.0.0-use.local
-  resolution: "@litsx/babel-parser@workspace:packages/babel-parser-litsx"
-  dependencies:
-    "@babel/code-frame": "npm:^7.29.0"
-    "@babel/helper-check-duplicate-nodes": "npm:^7.28.6"
-    "@babel/helper-fixtures": "npm:^7.28.6"
-    "@babel/helper-string-parser": "npm:^7.25.9"
-    "@babel/helper-validator-identifier": "npm:^7.28.5"
-    "@babel/parser": "npm:^7.29.3"
-    "@babel/types": "npm:^7.29.0"
-    "@litsx/authoring": "npm:^0.5.0"
-    charcodes: "npm:^0.2.0"
-  bin:
-    babel-parser: ./dist/babel-parser.js
-  languageName: unknown
-  linkType: soft
-
 "@litsx/babel-plugin-litsx-proptypes@npm:^0.2.0, @litsx/babel-plugin-litsx-proptypes@workspace:packages/babel-plugin-litsx-proptypes":
   version: 0.0.0-use.local
   resolution: "@litsx/babel-plugin-litsx-proptypes@workspace:packages/babel-plugin-litsx-proptypes"
@@ -1036,10 +999,10 @@ __metadata:
   resolution: "@litsx/babel-preset-litsx@workspace:packages/babel-preset-litsx"
   dependencies:
     "@babel/helper-plugin-utils": "npm:^7.28.6"
+    "@babel/parser": "npm:^7.29.3"
     "@babel/plugin-syntax-jsx": "npm:^7.28.6"
     "@babel/traverse": "npm:^7.28.5"
     "@litsx/authoring": "npm:^0.5.0"
-    "@litsx/babel-parser": "npm:^0.2.5"
     "@litsx/babel-plugin-shared-hooks": "npm:^0.5.0"
     "@litsx/babel-plugin-transform-jsx-html-template": "npm:^0.3.6"
     "@litsx/babel-plugin-transform-litsx-scoped-elements": "npm:^0.4.5"
@@ -2182,13 +2145,6 @@ __metadata:
   version: 3.0.0
   resolution: "character-entities-legacy@npm:3.0.0"
   checksum: 10c0/ec4b430af873661aa754a896a2b55af089b4e938d3d010fad5219299a6b6d32ab175142699ee250640678cd64bdecd6db3c9af0b8759ab7b155d970d84c4c7d1
-  languageName: node
-  linkType: hard
-
-"charcodes@npm:^0.2.0":
-  version: 0.2.1
-  resolution: "charcodes@npm:0.2.1"
-  checksum: 10c0/81b3177782e4a80d99ea873c73d8bedb76beeb98816d7350c09939e6a888581898cdf639423f69e4a21436a6337500cb6ade93371145be3c7057ed3d4340eb62
   languageName: node
   linkType: hard
 
@@ -3868,8 +3824,8 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "prettier-plugin-litsx@workspace:packages/prettier-plugin-litsx"
   dependencies:
+    "@babel/parser": "npm:^7.29.3"
     "@litsx/authoring": "npm:^0.5.0"
-    "@litsx/babel-parser": "npm:^0.2.5"
   peerDependencies:
     prettier: ^3.0.0
   languageName: unknown

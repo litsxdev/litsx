@@ -134,7 +134,7 @@ That is the public default for Vite-based LitSX projects.
 
 That means generated apps do not need to know about:
 
-- `@litsx/babel-parser`
+- LitSX authored-syntax virtualization
 - LitSX Babel plugin ordering
 - sourcemap chaining details
 

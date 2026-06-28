@@ -2,7 +2,7 @@ import * as babelParser from "@babel/parser";
 import {
   getLitsxVirtualizationMetadata,
   parseWithLitsxVirtualization,
-} from "@litsx/authoring/parser";
+} from "../../packages/authoring/src/parser.js";
 
 export { getLitsxVirtualizationMetadata };
 
@@ -16,11 +16,9 @@ export function parseExpression(code, options) {
 
 export const tokTypes = babelParser.tokTypes;
 
-const parserApi = {
+export default {
   getLitsxVirtualizationMetadata,
   parse,
   parseExpression,
   tokTypes,
 };
-
-export default parserApi;

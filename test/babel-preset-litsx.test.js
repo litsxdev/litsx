@@ -5,7 +5,7 @@ import path from "path";
 import babelCore from "@babel/core";
 import { beforeAll, describe, it } from "vitest";
 
-import parser from "../packages/babel-parser-litsx/src/index.js";
+import parser from "./helpers/litsx-parser.js";
 import { interopDefault } from "./helpers/interop-default.js";
 import { PLAYGROUND_TYPE_FILES } from "./helpers/playground-virtual-types.js";
 

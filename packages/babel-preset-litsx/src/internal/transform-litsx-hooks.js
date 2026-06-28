@@ -1,8 +1,9 @@
 import { createRuntimeHooksTransform } from "@litsx/babel-plugin-shared-hooks";
+import * as babelParser from "@babel/parser";
 import fs from "node:fs";
 import path from "node:path";
 import traverse from "@babel/traverse";
-import parser from "@litsx/babel-parser";
+import { parseWithLitsxVirtualization } from "@litsx/authoring/parser";
 import { ensureTypescriptModule } from "./transform-litsx-properties.js";
 import {
   isLitsxRuntimeHookName,
@@ -330,7 +331,7 @@ function createStructuralHookResolver(options = {}) {
 
     let ast;
     try {
-      ast = parser.parse(source, {
+      ast = parseWithLitsxVirtualization(babelParser.parse, source, {
         sourceType: "module",
         plugins: getParserPluginsForModule(normalizedFilename, source),
       });

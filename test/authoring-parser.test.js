@@ -1,11 +1,16 @@
 import assert from "assert";
-import fs from "fs";
-import os from "os";
-import path from "path";
-import { spawnSync } from "child_process";
-import parser from "../packages/babel-parser-litsx/src/index.js";
+import * as babelParser from "@babel/parser";
+import { parseWithLitsxVirtualization } from "../packages/authoring/src/parser.js";
 
-describe("@litsx/babel-parser", () => {
+function parse(code, options) {
+  return parseWithLitsxVirtualization(babelParser.parse, code, options);
+}
+
+function parseExpression(code, options) {
+  return parseWithLitsxVirtualization(babelParser.parseExpression, code, options);
+}
+
+describe("@litsx/authoring parser", () => {
   it("parses lit-html prefixed attributes", () => {
     const code = `
       const view = (
@@ -13,7 +18,7 @@ describe("@litsx/babel-parser", () => {
       );
     `;
 
-    const ast = parser.parse(code);
+    const ast = parse(code);
     const declaration = ast.program.body[0];
     const jsxElement = declaration.declarations[0].init;
     const attributes = jsxElement.openingElement.attributes;
@@ -29,7 +34,7 @@ describe("@litsx/babel-parser", () => {
   });
 
   it("infers JSX plugin when not explicitly passed", () => {
-    const ast = parser.parse("const tpl = <div ?hidden></div>;");
+    const ast = parse("const tpl = <div ?hidden></div>;");
     const attrs = ast.program.body[0].declarations[0].init.openingElement.attributes;
 
     assert.strictEqual(attrs[0].name.name, "?hidden");
@@ -43,7 +48,7 @@ describe("@litsx/babel-parser", () => {
       );
     `;
 
-    const ast = parser.parse(source, {
+    const ast = parse(source, {
       sourceType: "module",
       plugins: ["typescript"],
     });
@@ -73,7 +78,7 @@ describe("@litsx/babel-parser", () => {
     const code = "const tpl = <span />;";
 
     assert.doesNotThrow(() => {
-      parser.parse(code, {
+      parse(code, {
         sourceType: "module",
         plugins: [["jsx", { runtime: "classic" }]],
       });
@@ -81,7 +86,7 @@ describe("@litsx/babel-parser", () => {
   });
 
   it("exposes parseExpression helper", () => {
-    const expr = parser.parseExpression("<button .label={value} />", {
+    const expr = parseExpression("<button .label={value} />", {
       plugins: ["typescript"],
     });
 
@@ -100,7 +105,7 @@ describe("@litsx/babel-parser", () => {
       }
     `;
 
-    const ast = parser.parse(source, { sourceType: "module", plugins: ["typescript"] });
+    const ast = parse(source, { sourceType: "module", plugins: ["typescript"] });
     const body = ast.program.body[0].body.body;
 
     assert.strictEqual(body[0].expression.callee.name, "__litsx_static_styles");
@@ -118,7 +123,7 @@ describe("@litsx/babel-parser", () => {
       }
     `;
 
-    const ast = parser.parse(source, { sourceType: "module", plugins: ["typescript"] });
+    const ast = parse(source, { sourceType: "module", plugins: ["typescript"] });
     const body = ast.program.body[0].body.body;
 
     assert.strictEqual(body[0].expression.callee.name, "__litsx_static_styles");
@@ -132,68 +137,16 @@ describe("@litsx/babel-parser", () => {
     `;
 
     assert.throws(() => {
-      parser.parse(source, { sourceType: "module", plugins: ["typescript"] });
+      parse(source, { sourceType: "module", plugins: ["typescript"] });
     });
   });
 
-  it("exposes parser token types and supports plugin tuples", () => {
-    assert.ok(parser.tokTypes, "parser should expose token types");
-
-    const expr = parser.parseExpression("<span />", {
+  it("supports plugin tuples for expressions", () => {
+    const expr = parseExpression("<span />", {
       plugins: [["jsx", { runtime: "classic" }]],
     });
 
     assert.strictEqual(expr.type, "JSXElement");
     assert.strictEqual(expr.openingElement.name.name, "span");
   });
-
-  it("exposes the adapter default export", () => {
-    assert.strictEqual(parser.default ?? parser, parser);
-
-    const ast = parser.parse("const view = <main />;", {});
-    assert.strictEqual(ast.program.body[0].declarations[0].init.openingElement.name.name, "main");
-  });
-
-  it("runs the CLI and prints parsed AST JSON for a valid file", () => {
-    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-parser-cli-"));
-    const filePath = path.join(tempDir, "view.litsx");
-
-    try {
-      fs.writeFileSync(filePath, "const view = <button .label={text} />;\n");
-
-      const result = spawnSync(process.execPath, [
-        path.resolve("packages/babel-parser-litsx/src/cli.js"),
-        filePath,
-      ], {
-        cwd: process.cwd(),
-        encoding: "utf8",
-      });
-
-      assert.strictEqual(result.status, 0, result.stderr);
-      assert.strictEqual(result.stderr, "");
-
-      const parsed = JSON.parse(result.stdout);
-      const declaration = parsed.program.body[0];
-      assert.strictEqual(declaration.type, "VariableDeclaration");
-      assert.strictEqual(
-        declaration.declarations[0].init.openingElement.attributes[0].name.name,
-        ".label",
-      );
-    } finally {
-      fs.rmSync(tempDir, { recursive: true, force: true });
-    }
-  });
-
-  it("fails the CLI when no filename is provided", () => {
-    const result = spawnSync(process.execPath, [
-      path.resolve("packages/babel-parser-litsx/src/cli.js"),
-    ], {
-      cwd: process.cwd(),
-      encoding: "utf8",
-    });
-
-    assert.strictEqual(result.status, 1);
-    assert.match(result.stderr, /no filename specified/);
-  });
-
 });

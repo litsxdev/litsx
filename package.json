@@ -6,7 +6,6 @@
   "packageManager": "yarn@4.10.3",
   "workspaces": [
     "packages/authoring",
-    "packages/babel-parser-litsx",
     "packages/babel-plugin-litsx-proptypes",
     "packages/babel-plugin-shared-hooks",
     "packages/babel-plugin-transform-jsx-html-template",

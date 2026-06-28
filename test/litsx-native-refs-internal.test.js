@@ -1,7 +1,7 @@
 import assert from "assert";
 import * as t from "@babel/types";
 import babelTraverse from "@babel/traverse";
-import parser from "../packages/babel-parser-litsx/src/index.js";
+import parser from "./helpers/litsx-parser.js";
 import {
   createComponentInstanceRefSyncStatement,
   hasRefProp,

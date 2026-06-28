@@ -1,7 +1,7 @@
 import assert from "assert";
 import babelCore from "@babel/core";
 import jsxPluginModule from "@babel/plugin-syntax-jsx";
-import parser from "../packages/babel-parser-litsx/src/index.js";
+import parser from "./helpers/litsx-parser.js";
 import { beforeAll, describe, it } from "vitest";
 import { interopDefault } from "./helpers/interop-default.js";
 import { reactUseState } from "../packages/babel-preset-react-compat/src/internal/react-shared-hooks.js";

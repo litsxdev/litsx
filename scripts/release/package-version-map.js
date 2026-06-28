@@ -13,7 +13,6 @@ export const packageDirsByName = new Map([
   ["create-litsx-app", "packages/create-litsx-app"],
   ["prettier-plugin-litsx", "packages/prettier-plugin-litsx"],
   ["@litsx/light-dom-registry", "packages/light-dom-registry"],
-  ["@litsx/babel-parser", "packages/babel-parser-litsx"],
   ["@litsx/authoring", "packages/authoring"],
   ["@litsx/prop-types", "packages/prop-types"],
   ["@litsx/babel-preset-litsx", "packages/babel-preset-litsx"],

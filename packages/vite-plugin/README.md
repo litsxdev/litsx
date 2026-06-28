@@ -40,7 +40,7 @@ This transforms authored `.jsx` and `.tsx` modules before the rest of the Vite p
 
 The plugin applies the supported LitSX compilation pipeline through `@litsx/compiler`, including:
 
-- `@litsx/babel-parser`
+- LitSX authored-syntax virtualization
 - LitSX Babel plugin ordering
 - virtualization sourcemap chaining
 - final Lit-style attribute sourcemap patching

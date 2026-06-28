@@ -1,7 +1,8 @@
 import helperPluginUtils from "@babel/helper-plugin-utils";
+import * as babelParser from "@babel/parser";
 import babelTraverse from "@babel/traverse";
 import jsxSyntaxPlugin from "@babel/plugin-syntax-jsx";
-import parser from "@litsx/babel-parser";
+import { parseWithLitsxVirtualization } from "@litsx/authoring/parser";
 import fs from "node:fs";
 import path from "node:path";
 import { normalizeFilePath } from "@litsx/typescript-session";
@@ -548,7 +549,7 @@ function getOrCreateModuleAnalysis(filename, context) {
 
   let programPath = null;
   try {
-    const ast = parser.parse(source, {
+    const ast = parseWithLitsxVirtualization(babelParser.parse, source, {
       sourceType: "module",
       plugins: getParserPluginsForModule(normalizedFilename, source),
     });

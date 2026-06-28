@@ -1,7 +1,7 @@
 import assert from "assert";
 import babelTraverse from "@babel/traverse";
 import * as t from "@babel/types";
-import parser from "../packages/babel-parser-litsx/src/index.js";
+import parser from "./helpers/litsx-parser.js";
 import {
   assertStaticHoistsStayTopLevel,
   processStaticHoists,

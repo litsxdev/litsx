@@ -1,8 +1,9 @@
-import parser from "@litsx/babel-parser";
+import * as babelParser from "@babel/parser";
 import {
   createVirtualLitsxJsxSource,
   remapVirtualText,
 } from "@litsx/authoring";
+import { parseWithLitsxVirtualization } from "@litsx/authoring/parser";
 import { format as prettierFormat } from "prettier";
 import babelPlugin from "prettier/plugins/babel";
 import estreePlugin from "prettier/plugins/estree";
@@ -21,7 +22,7 @@ function createRootNode(text, mode, options) {
   });
 
   const parsePlugins = mode === "litsx" ? ["typescript", "jsx"] : ["jsx"];
-  const authoredAst = parser.parse(text, {
+  const authoredAst = parseWithLitsxVirtualization(babelParser.parse, text, {
     sourceType: "module",
     plugins: parsePlugins,
     sourceFileName: options.filepath,

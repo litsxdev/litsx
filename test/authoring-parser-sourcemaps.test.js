@@ -3,7 +3,7 @@ import babelCore from "@babel/core";
 import { TraceMap, originalPositionFor } from "@jridgewell/trace-mapping";
 import parser, {
   getLitsxVirtualizationMetadata,
-} from "../packages/babel-parser-litsx/src/index.js";
+} from "./helpers/litsx-parser.js";
 import { beforeAll, describe, it } from "vitest";
 import { interopDefault } from "./helpers/interop-default.js";
 
@@ -44,7 +44,7 @@ beforeAll(async () => {
   ));
 });
 
-describe("@litsx/babel-parser sourcemaps", () => {
+describe("@litsx/authoring parser sourcemaps", () => {
   it("keeps virtualization maps aligned to authored lit-flavoured attributes", () => {
     const source = [
       "export function Counter(){",
