@@ -2,14 +2,15 @@ import { LitElement, html, nothing } from "lit";
 import { render as renderLightDom } from "lit/html.js";
 import {
   invokeRenderer,
+  resolveRenderedValueForSsr,
   syncRendererHost,
 } from "./rendering.js";
 import {
+  collectSuspenseThenable,
   setHostSuspenseCapture,
   withSuspenseCapture,
 } from "./runtime-suspense.js";
-import { LightDomMixin } from "./elements/index.js";
-import { LightDomMixin } from "./elements/index.js";
+import { LightDomMixin, LITSX_SSR_CONTEXT } from "./elements/index.js";
 
 function isThenable(value) {
   return (
@@ -23,6 +24,10 @@ function reportAsyncError(error) {
   queueMicrotask(() => {
     throw error;
   });
+}
+
+function isSsrHost(host) {
+  return Boolean(host?.[LITSX_SSR_CONTEXT]);
 }
 
 /**
@@ -312,7 +317,9 @@ export class SuspenseBoundary extends LightDomMixin(LitElement) {
   }
 
   handleSuspension(thrown) {
-    this.attachPendingPromise(Promise.resolve(thrown));
+    this.attachPendingPromise(
+      collectSuspenseThenable(thrown) ?? Promise.resolve(thrown)
+    );
 
     let fallbackRender;
     try {
@@ -338,6 +345,18 @@ export class SuspenseBoundary extends LightDomMixin(LitElement) {
     this.pending = true;
     this._lastFallback = fallback;
     this._lastFallbackRender = fallbackRender;
+    if (isSsrHost(this)) {
+      this._displayValue = nothing;
+      this.showing = "hidden";
+      this.phase = "pending";
+      this._contentHostState = this._lastContentRender;
+      this._fallbackHostState = fallbackRender;
+      this._contentVisible = false;
+      this._fallbackVisible = false;
+      this.notifyListState();
+      return this.renderHosts();
+    }
+
     const disposition = this._suspenseList
       ? this._suspenseList.getFallbackDisposition(this)
       : "show";
@@ -378,7 +397,9 @@ export class SuspenseBoundary extends LightDomMixin(LitElement) {
   }
 
   handleFallbackSuspension(thrown) {
-    this.attachPendingPromise(Promise.resolve(thrown));
+    this.attachPendingPromise(
+      collectSuspenseThenable(thrown) ?? Promise.resolve(thrown)
+    );
     this.pending = true;
     this._displayValue = nothing;
     this.showing = "hidden";
@@ -443,6 +464,13 @@ export class SuspenseBoundary extends LightDomMixin(LitElement) {
   }
 
   renderHosts() {
+    const fallbackContent = isSsrHost(this) && this._fallbackVisible
+      ? resolveRenderedValueForSsr(this._fallbackHostState)
+      : nothing;
+    const contentContent = isSsrHost(this) && this._contentVisible
+      ? resolveRenderedValueForSsr(this._contentHostState)
+      : nothing;
+
     return html`
       <div
         part="fallback"
@@ -451,7 +479,7 @@ export class SuspenseBoundary extends LightDomMixin(LitElement) {
         data-showing="fallback"
         ?hidden=${!this._fallbackVisible}
         data-phase=${this.phase}
-      ></div>
+      >${fallbackContent}</div>
       <div
         part="content"
         data-litsx-suspense-region="content"
@@ -459,7 +487,7 @@ export class SuspenseBoundary extends LightDomMixin(LitElement) {
         data-showing="content"
         ?hidden=${!this._contentVisible}
         data-phase=${this.phase}
-      ></div>
+      >${contentContent}</div>
     `;
   }
 
