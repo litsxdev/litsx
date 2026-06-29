@@ -12,6 +12,7 @@ import {
   __isLitsxServerComponentCall,
   LITSX_SSR_CONTEXT,
 } from "./elements/index.js";
+import { withSuspenseCapture } from "./runtime-suspense.js";
 import { getCurrentSsrCustomElementInstanceStack } from "./runtime-ssr-state.js";
 
 /**
@@ -425,6 +426,22 @@ export function invokeRenderer(renderer, ...args) {
     context,
     projected: Boolean(context?.projected),
   };
+}
+
+export function resolveRenderedValueForSsr(rendered) {
+  if (!rendered) {
+    return nothing;
+  }
+
+  const currentSsrEntry = getCurrentSsrCustomElementInstanceStack()?.at(-1) ?? null;
+  const currentSsrHost = currentSsrEntry?.element ?? currentSsrEntry ?? null;
+  const ssrContext = currentSsrHost?.[LITSX_SSR_CONTEXT]?.context ?? null;
+
+  return resolveRendererSsrValueWithContext(rendered.value ?? nothing, ssrContext);
+}
+
+export function withRendererSsrSuspenseCapture(capture, render) {
+  return withSuspenseCapture(capture ?? null, render);
 }
 
 export function renderWithRendererContext(render, container, value, context, options = {}) {

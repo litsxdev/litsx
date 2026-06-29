@@ -9,6 +9,7 @@ import {
   LITSX_SSR_CONTEXT,
 } from "@litsx/core/elements";
 import { LitsxContextProviderElement } from "@litsx/core/context";
+import { withRendererSsrSuspenseCapture } from "@litsx/core/rendering";
 import { withCurrentSsrCustomElementInstanceStack } from "./ssr-state.js";
 
 const scopedRegistryStack = [];
@@ -247,6 +248,14 @@ export class ScopedLitElementRenderer extends LitElementRenderer {
     return ctor?._$litElement$ === true;
   }
 
+  get shadowRootOptions() {
+    if (isLightDomElement(this.element?.constructor)) {
+      return undefined;
+    }
+
+    return super.shadowRootOptions;
+  }
+
   constructor(tagName) {
     super(tagName);
     ensureSsrElementShape(this.element);
@@ -330,7 +339,11 @@ export class ScopedLitElementRenderer extends LitElementRenderer {
     }
 
     const elements = getScopedElements(this.element?.constructor);
-    const render = () => renderValue(this.element.render(), renderInfo);
+    const render = () =>
+      withRendererSsrSuspenseCapture(
+        this.element?._contentSuspenseCapture ?? null,
+        () => renderValue(this.element.render(), renderInfo)
+      );
 
     if (!elements || Object.keys(elements).length === 0) {
       return [render];
