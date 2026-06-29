@@ -2,9 +2,10 @@ import { LitElement, html, nothing } from "lit";
 import { render as renderLightDom } from "lit/html.js";
 import {
   invokeRenderer,
+  resolveRenderedValueForSsr,
   syncRendererHost,
 } from "./rendering.js";
-import { LightDomMixin } from "./elements/index.js";
+import { LightDomMixin, LITSX_SSR_CONTEXT } from "./elements/index.js";
 
 function isThenable(value) {
   return (
@@ -12,6 +13,10 @@ function isThenable(value) {
     (typeof value === "object" || typeof value === "function") &&
     typeof value.then === "function"
   );
+}
+
+function isSsrHost(host) {
+  return Boolean(host?.[LITSX_SSR_CONTEXT]);
 }
 
 /**
@@ -139,6 +144,13 @@ export class ErrorBoundary extends LightDomMixin(LitElement) {
   }
 
   renderHosts() {
+    const fallbackContent = isSsrHost(this) && this._fallbackVisible
+      ? resolveRenderedValueForSsr(this._fallbackHostState)
+      : nothing;
+    const contentContent = isSsrHost(this) && this._contentVisible
+      ? resolveRenderedValueForSsr(this._contentHostState)
+      : nothing;
+
     return html`
       <div
         part="fallback"
@@ -146,14 +158,14 @@ export class ErrorBoundary extends LightDomMixin(LitElement) {
         data-litsx-projected-root="light"
         data-showing="fallback"
         ?hidden=${!this._fallbackVisible}
-      ></div>
+      >${fallbackContent}</div>
       <div
         part="content"
         data-litsx-error-region="content"
         data-litsx-projected-root="light"
         data-showing="content"
         ?hidden=${!this._contentVisible}
-      ></div>
+      >${contentContent}</div>
     `;
   }
 }

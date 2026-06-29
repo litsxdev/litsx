@@ -1,6 +1,7 @@
 import assert from "assert";
 import { describe, it } from "vitest";
 import { LitElement, html } from "lit";
+import { renderLight } from "@lit-labs/ssr-client/directives/render-light.js";
 import {
   __litsxServerComponentCall,
   LITSX_MODULE_ID,
@@ -494,14 +495,14 @@ describe("@litsx/ssr", () => {
         html`
           <suspense-list reveal-order="forwards" tail="hidden">
             <suspense-boundary
-              .fallbackRenderer=${() => html`<span>Loading...</span>`}
-              .contentRenderer=${() => html`<article>Loaded</article>`}
-            ></suspense-boundary>
+              .fallback=${() => html`<span>Loading...</span>`}
+              .content=${() => html`<article>Loaded</article>`}
+            >${renderLight()}</suspense-boundary>
           </suspense-list>
           <error-boundary
-            .fallbackRenderer=${() => html`<span>Errored</span>`}
-            .contentRenderer=${() => html`<article>Stable</article>`}
-          ></error-boundary>
+            .fallback=${() => html`<span>Errored</span>`}
+            .content=${() => html`<article>Stable</article>`}
+          >${renderLight()}</error-boundary>
         `,
         {
           "suspense-list": SuspenseList,
@@ -527,10 +528,60 @@ describe("@litsx/ssr", () => {
       result.html,
       /<suspense-boundary\b/,
     );
+    assert.match(result.html, /<article>Loaded<\/article>/);
     assert.match(
       result.html,
       /<error-boundary\b/,
     );
+    assert.match(result.html, /<article>Stable<\/article>/);
+  });
+
+  it("waits for suspense-boundary content before final SSR serialization", async () => {
+    const pending = createDeferred();
+    const firstPass = createDeferred();
+    let ready = false;
+    let renders = 0;
+
+    class AsyncCard extends LitElement {
+      render() {
+        return renderWithSoftSuspense(this, () => {
+          renders += 1;
+          if (!ready) {
+            firstPass.resolve();
+            throw pending.promise;
+          }
+
+          return html`<article data-ready="true">ready:${renders}</article>`;
+        });
+      }
+    }
+
+    const renderPromise = renderToString(
+      html`
+        <suspense-boundary
+          .fallback=${() => html`<span>Loading...</span>`}
+          .content=${() => html`<async-card></async-card>`}
+        >${renderLight()}</suspense-boundary>
+      `,
+      {
+        elements: {
+          "suspense-boundary": SuspenseBoundary,
+          "async-card": AsyncCard,
+        },
+      },
+    );
+
+    await firstPass.promise;
+    ready = true;
+    pending.resolve();
+    const result = await renderPromise;
+
+    assert.strictEqual(renders, 2);
+    assert.match(
+      result.html,
+      /<article data-ready="true">ready:[\s\S]*2[\s\S]*<\/article>/,
+    );
+    assert.doesNotMatch(result.html, /Loading\.\.\./);
   });
 
   it("passes through unknown custom elements and plain template results", async () => {
