@@ -257,7 +257,7 @@ describe("@litsx/babel-preset-react-compat", () => {
     assert.match(code, /return html`<label data-ref="_refElement">\$\{this\.title\}<\/label>`;/);
   });
 
-  it("can force light DOM output for react-compat migrations", () => {
+  it("rejects forced light DOM output for react-compat migrations when scoped elements are required", () => {
     const source = `
       import FancyButton from './FancyButton.js';
 
@@ -270,11 +270,10 @@ describe("@litsx/babel-preset-react-compat", () => {
       };
     `;
 
-    const code = run(source, { preset: { domMode: "light" } });
-
-    assert.match(code, /export class LightForm extends LightDomMixin\(LitElement\)/);
-    assert.doesNotMatch(code, /ShadowDomMixin/);
-    assert.match(code, /return html`<section><fancy-button \.label=\$\{this\.label\}><\/fancy-button><\/section>`;/);
+    assert.throws(
+      () => run(source, { preset: { domMode: "light" } }),
+      /does not support scoped elements in light DOM/
+    );
   });
 
   it("rewrites ErrorBoundary and Suspense together to final Lit output", () => {

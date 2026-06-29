@@ -1,4 +1,4 @@
-# @litsx/light-dom-registry
+# @litsx/scoped-registry-shim
 
 ## 0.2.5
 

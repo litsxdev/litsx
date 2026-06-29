@@ -144,12 +144,14 @@ export class ErrorBoundary extends LitElement {
       <div
         part="fallback"
         data-litsx-error-region="fallback"
+        data-litsx-projected-root="light"
         data-showing="fallback"
         ?hidden=${!this._fallbackVisible}
       ></div>
       <div
         part="content"
         data-litsx-error-region="content"
+        data-litsx-projected-root="light"
         data-showing="content"
         ?hidden=${!this._contentVisible}
       ></div>

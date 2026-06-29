@@ -22,8 +22,19 @@ export interface ShadowDomStatics {
   readonly scopedElements: Record<string, unknown>;
 }
 
-export interface DomMixinInstance {
-  registry: CustomElementRegistry | null;
+export interface LitsxScopedRegistryLike {
+  define(tagName: string, elementClass: CustomElementConstructor): unknown;
+  get(tagName: string): CustomElementConstructor | null | undefined;
+}
+
+export interface ShadowDomHostInstance {
+  /**
+   * Active scoped registry for this shadow host.
+   * LitSX may provide either a native CustomElementRegistry or an internal shim
+   * with the same define/get surface when native scoped registries are not
+   * available.
+   */
+  registry: LitsxScopedRegistryLike | null;
 }
 
 export type ShadowDomHost<TBase extends LitsxConstructor> =
@@ -31,12 +42,16 @@ export type ShadowDomHost<TBase extends LitsxConstructor> =
 
 export declare function ShadowDomMixin<TBase extends LitsxConstructor>(
   Base: TBase
-): LitsxConstructor<InstanceType<TBase> & DomMixinInstance> &
+): LitsxConstructor<InstanceType<TBase> & ShadowDomHostInstance> &
   ShadowDomStatics;
 
 export interface LightDomHost {
+  /**
+   * LightDomMixin keeps Lit rendering in light DOM.
+   * Scoped elements are not supported in this mode.
+   */
   createRenderRoot(): this;
-  registry: Map<string, unknown> | null;
+  registry: null;
 }
 
 export declare function LightDomMixin<TBase extends LitsxConstructor>(

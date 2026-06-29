@@ -1,10 +1,9 @@
 import { adoptStyles } from "@lit/reactive-element";
 import {
-  connectLightDomRegistry,
   createLightDomRegistry,
-  disconnectLightDomRegistry,
-  upgradeLightDomTree,
-} from "@litsx/light-dom-registry";
+  isLightDomRegistryRuntimeActive,
+  upgradeScopedRegistryTree,
+} from "@litsx/scoped-registry-shim";
 
 const DEDUPE_MIXIN_MARK = Symbol("litsx.dedupeMixinMark");
 const LIGHT_DOM_STYLE_ELEMENT = Symbol("litsx.lightDomStyleElement");
@@ -159,9 +158,11 @@ function createScopedRegistryForHost(host) {
   let attachKey = null;
 
   if (!registry) {
-    attachKey = getShadowDomRegistryAttachKey();
-    if (attachKey) {
-      registry = new CustomElementRegistry();
+    if (!isLightDomRegistryRuntimeActive()) {
+      attachKey = getShadowDomRegistryAttachKey();
+      if (attachKey) {
+        registry = new CustomElementRegistry();
+      }
     }
   }
 
@@ -320,6 +321,37 @@ function hasScopedElements(host) {
   return elements && typeof elements === "object" && Object.keys(elements).length > 0;
 }
 
+function assertNoScopedLightDomElements(host) {
+  if (!hasScopedElements(host)) {
+    return;
+  }
+
+  const ctorName = host?.constructor?.name || "LightDom component";
+  throw new Error(
+    `${ctorName} cannot use static elements with LightDomMixin. Scoped elements in light DOM are not supported in this runtime.`,
+  );
+}
+
+function syncShadowRootCreationScope(host, shadowRoot, registry) {
+  if (!host?.renderOptions) {
+    return;
+  }
+
+  const canUseScopedCreationScope =
+    typeof shadowRoot?.importNode === "function" &&
+    typeof registry?._getDefinition === "function";
+
+  if (canUseScopedCreationScope) {
+    host.renderOptions.creationScope = shadowRoot;
+    host.renderOptions.renderBefore ??= shadowRoot.firstChild;
+    return;
+  }
+
+  if (host.renderOptions.creationScope === shadowRoot) {
+    delete host.renderOptions.creationScope;
+  }
+}
+
 export const ShadowDomMixin = dedupeMixin((Base) =>
   class ShadowDomHost extends Base {
     static get scopedElements() {
@@ -353,9 +385,10 @@ export const ShadowDomMixin = dedupeMixin((Base) =>
         if (this.registry) {
           defineScopedElements(this.registry, this.constructor.elements ?? {});
           if (typeof this.registry._getDefinition === "function") {
-            upgradeLightDomTree(existingRoot, this.registry);
+            upgradeScopedRegistryTree(existingRoot, this.registry);
           }
         }
+        syncShadowRootCreationScope(this, existingRoot, this.registry);
         return existingRoot;
       }
 
@@ -375,10 +408,7 @@ export const ShadowDomMixin = dedupeMixin((Base) =>
       if (!attachKey) {
         assignShadowRootRegistry(shadowRoot, registry);
       }
-      if (this.renderOptions && typeof shadowRoot.importNode === "function") {
-        this.renderOptions.creationScope = shadowRoot;
-        this.renderOptions.renderBefore ??= shadowRoot.firstChild;
-      }
+      syncShadowRootCreationScope(this, shadowRoot, registry);
       adoptStyles(shadowRoot, ctor.elementStyles ?? []);
       return shadowRoot;
     }
@@ -388,7 +418,7 @@ export const ShadowDomMixin = dedupeMixin((Base) =>
         super.update(...args);
       }
       if (this.registry && typeof this.registry._getDefinition === "function") {
-        upgradeLightDomTree(this.shadowRoot, this.registry);
+        upgradeScopedRegistryTree(this.shadowRoot, this.registry);
       }
     }
   }
@@ -398,9 +428,9 @@ export const LightDomMixin = dedupeMixin((Base) =>
   class LightDomHost extends Base {
     constructor(...args) {
       super(...args);
-      if (hasScopedElements(this)) {
-        this.registry = connectLightDomRegistry(this, this.constructor.elements ?? {});
-      }
+      // Light DOM remains supported as a render-root mode, but scoped element
+      // resolution now belongs exclusively to the shadow-based path.
+      assertNoScopedLightDomElements(this);
     }
 
     createRenderRoot() {
@@ -411,17 +441,12 @@ export const LightDomMixin = dedupeMixin((Base) =>
       if (typeof super.connectedCallback === "function") {
         super.connectedCallback(...args);
       }
-      if (hasScopedElements(this)) {
-        this.registry = connectLightDomRegistry(this, this.constructor.elements ?? {});
-      }
+      assertNoScopedLightDomElements(this);
     }
 
     disconnectedCallback(...args) {
       if (typeof super.disconnectedCallback === "function") {
         super.disconnectedCallback(...args);
-      }
-      if (hasScopedElements(this)) {
-        disconnectLightDomRegistry(this);
       }
     }
 

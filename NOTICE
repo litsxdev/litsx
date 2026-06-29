@@ -1,6 +1,6 @@
 Litsx includes third-party code and adaptations from the following project:
 
-- packages/light-dom-registry/src/index.js
+- packages/scoped-registry-shim/src/index.js
   Portions of this file are adapted from code by The Polymer Project Authors.
   Original licensing notice:
 

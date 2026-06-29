@@ -19,7 +19,7 @@ LitSX releases are managed with Changesets.
 - `@litsx/eslint-plugin`
 - `create-litsx-app`
 - `prettier-plugin-litsx`
-- `@litsx/light-dom-registry`
+- `@litsx/scoped-registry-shim`
 - `@litsx/babel-parser`
 - `@litsx/authoring`
 - `@litsx/prop-types`

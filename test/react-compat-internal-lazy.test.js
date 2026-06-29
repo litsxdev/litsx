@@ -625,7 +625,7 @@ describe("react compat internal lazy", () => {
     assert.match(code, /ensureLazyElement\(this,\s*"fancy-button",\s*FancyButton\);/);
   });
 
-  it("keeps classes already wrapped with DOM mixins and supports light DOM lazy components", () => {
+  it("rejects light DOM classes that would need scoped lazy components", () => {
     const source = [
       "import { lazy } from 'react';",
       "import { LightDomMixin } from '@litsx/core/elements';",
@@ -640,17 +640,10 @@ describe("react compat internal lazy", () => {
       "}",
     ].join("\n");
 
-    const code = run(source);
-
-    assert.match(
-      code,
-      /class Screen extends LightDomMixin\(LitElement\)/
+    assert.throws(
+      () => run(source),
+      /does not support scoped elements in light DOM/
     );
-    assert.doesNotMatch(code, /ShadowDomMixin/);
-    const lightDomMixinMatches = code.match(/LightDomMixin/g) || [];
-    assert.strictEqual(lightDomMixinMatches.length, 2);
-    assert.match(code, /ensureLazyElement\(this,\s*"fancy-button",\s*FancyButton\);/);
-    assert.match(code, /return <fancy-button \/>;/);
   });
 
   it("rewrites special member attributes and preserves registration before the return", () => {
@@ -749,7 +742,7 @@ describe("react compat internal lazy", () => {
     assert.doesNotMatch(code, /ensureLazyElement\(/);
   });
 
-  it("extends existing elements imports when a light-dom class needs lazy elements", () => {
+  it("rejects extending existing elements imports when a light-dom class needs lazy elements", () => {
     const source = [
       "import React from 'react';",
       "import { LightDomMixin } from '@litsx/core/elements';",
@@ -764,14 +757,9 @@ describe("react compat internal lazy", () => {
       "}",
     ].join("\n");
 
-    const code = run(source);
-
-    assert.match(
-      code,
-      /import \{ LightDomMixin \} from '@litsx\/core\/elements';|import \{ LightDomMixin \} from "@litsx\/core\/elements";/
+    assert.throws(
+      () => run(source),
+      /does not support scoped elements in light DOM/
     );
-    assert.match(code, /class Screen extends LightDomMixin\(LitElement\)/);
-    assert.doesNotMatch(code, /ShadowDomMixin/);
-    assert.match(code, /ensureLazyElement\(this,\s*"fancy-button",\s*FancyButton\);/);
   });
 });

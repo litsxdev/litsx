@@ -3,7 +3,7 @@
 import assert from "assert";
 import { LitElement, html } from "lit";
 import { describe, it } from "vitest";
-import { connectLightDomRegistry } from "../packages/light-dom-registry/src/index.js";
+import { connectLightDomRegistry } from "../packages/scoped-registry-shim/src/index.js";
 import { prepareEffects, useOnConnect, useState } from "../packages/core/src/index.js";
 import {
   LightDomMixin,
@@ -59,11 +59,10 @@ describe("litsx elements runtime", () => {
     );
   });
 
-  it("maps scoped elements and manages light-dom styles without duplicating the style tag", () => {
+  it("manages light-dom styles without duplicating the style tag", () => {
     const hostTag = nextTag("litsx-runtime-light-host");
 
     class Base extends HTMLElement {
-      static elements = { "demo-child": class DemoChild extends HTMLElement {} };
       static elementStyles = [{ cssText: "button { color: red; }" }];
       static finalizeCalls = 0;
 
@@ -81,7 +80,7 @@ describe("litsx elements runtime", () => {
     const shadowCtor = ShadowDomMixin(ShadowHost);
 
     assert.strictEqual(shadowCtor, ShadowHost);
-    assert.deepStrictEqual(ShadowHost.scopedElements, Base.elements);
+    assert.deepStrictEqual(ShadowHost.scopedElements, {});
 
     const host = defineTestElement(hostTag, LightHost);
     document.body.appendChild(host);
@@ -178,7 +177,7 @@ describe("litsx elements runtime", () => {
     }
   });
 
-  it("connects and disconnects light-dom element registries through the mixin lifecycle", () => {
+  it("rejects scoped elements on LightDomMixin hosts", () => {
     const childTag = nextTag("litsx-runtime-child");
     const hostTag = nextTag("litsx-runtime-elements-host");
 
@@ -200,18 +199,10 @@ describe("litsx elements runtime", () => {
       };
     }
 
-    const host = defineTestElement(hostTag, HostElement);
-
-    assert(host.registry);
-    assert.strictEqual(host.registry.get(childTag), ChildElement);
-
-    host.connectedCallback();
-    assert.equal(host.connected, true);
-    assert.strictEqual(host.registry.get(childTag), ChildElement);
-
-    host.disconnectedCallback();
-    assert.equal(host.disconnected, true);
-    assert.equal(host.registry, null);
+    assert.throws(
+      () => defineTestElement(hostTag, HostElement),
+      /cannot use static elements with LightDomMixin/
+    );
   });
 
   it("dedupes repeated light-dom element mixin applications", () => {
@@ -320,7 +311,7 @@ describe("litsx elements runtime", () => {
     }
   });
 
-  it("passes a scoped creationScope to Lit when shadow roots expose importNode", () => {
+  it("falls back to shimmed shadow registries once the light-dom runtime is active", () => {
     const originalCustomElementRegistry = globalThis.CustomElementRegistry;
     const originalAttachShadow = Element.prototype.attachShadow;
 
@@ -365,13 +356,83 @@ describe("litsx elements runtime", () => {
     }
 
     try {
+      const runtimeHost = document.createElement("div");
+      connectLightDomRegistry(runtimeHost, {});
+
+      const Host = ShadowDomMixin(Base);
+      const host = new Host();
+      const shadowRoot = host.createRenderRoot();
+
+      assert.notStrictEqual(host.registry?.constructor, FakeRegistry);
+      assert.strictEqual(typeof host.registry?._getDefinition, "function");
+      assert.strictEqual(host.renderOptions.creationScope, shadowRoot);
+    } finally {
+      globalThis.CustomElementRegistry = originalCustomElementRegistry;
+      Element.prototype.attachShadow = originalAttachShadow;
+    }
+  });
+
+  it("passes a scoped creationScope to Lit for shimmed shadow registries", () => {
+    const originalAttachShadow = Element.prototype.attachShadow;
+
+    class FakeRegistry {
+      constructor() {
+        this.definitions = new Map();
+      }
+
+      define(tagName, elementClass) {
+        this.definitions.set(tagName, elementClass);
+      }
+
+      get(tagName) {
+        return this.definitions.get(tagName);
+      }
+
+      _getDefinition(tagName) {
+        const elementClass = this.definitions.get(tagName);
+        return elementClass ? { elementClass } : undefined;
+      }
+    }
+
+    Element.prototype.attachShadow = function attachShadow() {
+      const shadowRoot = {
+        host: this,
+        registry: null,
+        customElements: null,
+        firstChild: null,
+        importNode(node) {
+          return node;
+        },
+        appendChild() {},
+      };
+      Object.defineProperty(this, "shadowRoot", {
+        configurable: true,
+        value: shadowRoot,
+      });
+      return shadowRoot;
+    };
+
+    class Base {
+      constructor() {
+        this.shadowRoot = null;
+        this.renderOptions = {};
+        this.registry = new FakeRegistry();
+      }
+
+      attachShadow(init) {
+        return Element.prototype.attachShadow.call(this, init);
+      }
+
+      static finalize() {}
+    }
+
+    try {
       const Host = ShadowDomMixin(Base);
       const host = new Host();
       const shadowRoot = host.createRenderRoot();
 
       assert.strictEqual(host.renderOptions.creationScope, shadowRoot);
     } finally {
-      globalThis.CustomElementRegistry = originalCustomElementRegistry;
       Element.prototype.attachShadow = originalAttachShadow;
     }
   });

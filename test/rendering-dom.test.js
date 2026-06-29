@@ -12,9 +12,6 @@ import {
   LightDomMixin,
   ShadowDomMixin,
 } from "../packages/core/src/elements/index.js";
-import {
-  withLightDomCreationContext,
-} from "../packages/light-dom-registry/src/index.js";
 
 let tagCounter = 0;
 
@@ -38,6 +35,35 @@ async function settleHost(host) {
 afterEach(() => {
   document.body.innerHTML = "";
 });
+
+function findProjectedMount(scope) {
+  const root = scope instanceof ShadowRoot ? scope : scope?.shadowRoot ?? scope;
+  if (!root || typeof root.querySelectorAll !== "function") {
+    return null;
+  }
+
+  for (const element of root.querySelectorAll("*")) {
+    if (element.shadowRoot) {
+      return element;
+    }
+  }
+
+  return null;
+}
+
+function queryProjected(scope, selector) {
+  const mount = findProjectedMount(scope);
+  return mount?.shadowRoot?.querySelector?.(selector) ?? null;
+}
+
+function findProjectedHost(scope) {
+  const root = scope instanceof ShadowRoot ? scope : scope?.shadowRoot ?? scope;
+  if (!root || typeof root.querySelector !== "function") {
+    return null;
+  }
+
+  return root.querySelector('div[style*="display: contents"]');
+}
 
 describe("runtime renderer context DOM integration", () => {
   it("projects renderer-created scoped elements through a shadow DOM host", async () => {
@@ -81,8 +107,8 @@ describe("runtime renderer context DOM integration", () => {
     document.body.appendChild(host);
     await settleHost(host);
 
-    const projectedHost = host.shadowRoot.querySelector("div[style*='contents'], div");
-    const child = host.shadowRoot.querySelector(childTag);
+    const projectedHost = findProjectedMount(host.shadowRoot);
+    const child = queryProjected(host.shadowRoot, childTag);
 
     assert(projectedHost);
     assert(child);
@@ -91,7 +117,7 @@ describe("runtime renderer context DOM integration", () => {
     assert.equal(child.textContent, "shadow child");
   });
 
-  it("projects renderer-created scoped elements through a light DOM host", async () => {
+  it("rejects renderer-created scoped elements through a light DOM host", async () => {
     const hostTag = nextTag("litsx-render-light-host");
     const childTag = nextTag("litsx-render-light-child");
 
@@ -128,19 +154,49 @@ describe("runtime renderer context DOM integration", () => {
 
     defineTestElement(hostTag, LightHost);
 
+    assert.throws(
+      () => document.createElement(hostTag),
+      /cannot use static elements with LightDomMixin/
+    );
+  });
+
+  it("projects plain renderer output directly through a light DOM host", async () => {
+    const hostTag = nextTag("litsx-render-light-plain-host");
+
+    class LightHost extends LightDomMixin(LitElement) {
+      constructor() {
+        super();
+        this.itemRenderer = (label) => html`<span class="light-projected">${label}</span>`;
+      }
+
+      render() {
+        return html`
+          <section>
+            ${renderRendererCall(
+              bindRendererContext(this, this.itemRenderer, { projected: true }),
+              "light child",
+            )}
+          </section>
+        `;
+      }
+    }
+
+    defineTestElement(hostTag, LightHost);
+
     const host = document.createElement(hostTag);
     document.body.appendChild(host);
     await settleHost(host);
 
-    const child = host.querySelector(childTag);
+    const projectedHost = findProjectedHost(host);
+    const child = projectedHost?.querySelector?.(".light-projected") ?? null;
 
-    assert(child);
-    assert.strictEqual(Object.getPrototypeOf(child), ScopedChild.prototype);
-    assert.equal(child.connected, true);
-    assert.equal(child.textContent, "light child");
+    assert(projectedHost, "expected a renderer host placeholder in light DOM");
+    assert.strictEqual(findProjectedMount(host), null);
+    assert(child, "expected projected light DOM content to render directly");
+    assert.equal(child.textContent.trim(), "light child");
   });
 
-  it("projects renderer props with scoped custom elements through nested light DOM components", async () => {
+  it("rejects renderer props with scoped custom elements through nested light DOM components", async () => {
     const hostTag = nextTag("litsx-render-light-prop-host");
     const panelTag = "litsx-render-light-prop-panel";
     const childTag = "litsx-render-light-prop-child";
@@ -187,27 +243,10 @@ describe("runtime renderer context DOM integration", () => {
 
     defineTestElement(hostTag, LightHost);
 
-    const host = document.createElement(hostTag);
-    document.body.appendChild(host);
-    await host.updateComplete;
-
-    const panel = withLightDomCreationContext(host, () =>
-      document.createElement(panelTag)
+    assert.throws(
+      () => document.createElement(hostTag),
+      /cannot use static elements with LightDomMixin/
     );
-    panel.footerRenderer = bindRendererContext(host, host.renderFooter, { projected: true });
-    host.appendChild(panel);
-    await settleHost(panel);
-
-    const child = panel?.querySelector(childTag);
-
-    assert(panel, "expected the nested light DOM panel to render");
-    assert(child, "expected the renderer-created scoped child to render");
-    assert.strictEqual(Object.getPrototypeOf(panel), LightPanel.prototype);
-    assert.strictEqual(Object.getPrototypeOf(child), ScopedChild.prototype);
-    assert.equal(child.connected, true);
-    assert.equal(child.textContent, "projected child");
-    assert.strictEqual(host.shadowRoot, null);
-    assert.strictEqual(panel.shadowRoot, null);
   });
 
   it("projects renderer props with scoped custom elements through nested shadow DOM components", async () => {
@@ -269,7 +308,7 @@ describe("runtime renderer context DOM integration", () => {
 
     const panel = host.shadowRoot.querySelector(panelTag);
     await settleHost(panel);
-    const child = panel.shadowRoot.querySelector(childTag);
+    const child = queryProjected(panel.shadowRoot, childTag);
 
     assert(panel, "expected the nested shadow panel to render");
     assert(child, "expected the renderer-created scoped shadow child to render");
@@ -277,6 +316,60 @@ describe("runtime renderer context DOM integration", () => {
     assert.strictEqual(Object.getPrototypeOf(child), ScopedChild.prototype);
     assert.equal(child.connected, true);
     assert.equal(child.textContent.trim(), "projected shadow child");
+  });
+
+  it("projects renderer props with plain content through nested light DOM components", async () => {
+    const hostTag = nextTag("litsx-render-light-prop-plain-host");
+    const panelTag = nextTag("litsx-render-light-prop-plain-panel");
+
+    class LightPanel extends LightDomMixin(LitElement) {
+      static properties = {
+        footerRenderer: { attribute: false },
+      };
+
+      constructor() {
+        super();
+        this.footerRenderer = null;
+      }
+
+      render() {
+        return html`
+          <article>
+            <footer>
+              ${renderRendererCall(this.footerRenderer)}
+            </footer>
+          </article>
+        `;
+      }
+    }
+
+    class LightHost extends LightDomMixin(LitElement) {
+      renderFooter() {
+        return html`<span class="plain-footer">projected light footer</span>`;
+      }
+
+      render() {
+        const panel = document.createElement(panelTag);
+        panel.footerRenderer = bindRendererContext(this, this.renderFooter, { projected: true });
+        return panel;
+      }
+    }
+
+    defineTestElement(panelTag, LightPanel);
+    defineTestElement(hostTag, LightHost);
+
+    const host = document.createElement(hostTag);
+    document.body.appendChild(host);
+    await settleHost(host);
+
+    const panel = host.querySelector(panelTag);
+    await settleHost(panel);
+    const footer = panel.querySelector(".plain-footer");
+
+    assert(panel, "expected the nested light panel to render");
+    assert.strictEqual(findProjectedMount(panel), null);
+    assert(footer, "expected projected plain light DOM content to render directly");
+    assert.equal(footer.textContent.trim(), "projected light footer");
   });
 
   it("resolves different constructors for the same tag across nested shadow DOM scopes", async () => {
@@ -347,7 +440,7 @@ describe("runtime renderer context DOM integration", () => {
     assert.equal(innerAction.textContent.trim(), "inner action");
   });
 
-  it("resolves different constructors for the same tag across nested light DOM scopes", async () => {
+  it("rejects different constructors for the same tag across nested light DOM scopes", async () => {
     const hostTag = nextTag("litsx-render-light-nested-host");
     const panelTag = nextTag("litsx-render-light-nested-panel");
     const sharedTag = nextTag("litsx-render-light-nested-action");
@@ -394,27 +487,10 @@ describe("runtime renderer context DOM integration", () => {
 
     defineTestElement(hostTag, OuterHost);
 
-    const host = document.createElement(hostTag);
-    document.body.appendChild(host);
-    await settleHost(host);
-
-    const outerAction = host.querySelector(sharedTag);
-    const panel = host.querySelector(panelTag);
-    await settleHost(panel);
-    const innerAction = panel.querySelector(sharedTag);
-
-    assert(outerAction, "expected the outer scoped element to render");
-    assert(panel, "expected the nested scoped light component to render");
-    assert(innerAction, "expected the inner scoped element to render");
-    assert.strictEqual(Object.getPrototypeOf(outerAction), OuterAction.prototype);
-    assert.strictEqual(Object.getPrototypeOf(panel), InnerPanel.prototype);
-    assert.strictEqual(Object.getPrototypeOf(innerAction), InnerAction.prototype);
-    assert.equal(outerAction.scope, "outer");
-    assert.equal(innerAction.scope, "inner");
-    assert.equal(outerAction.textContent.trim(), "outer action");
-    assert.equal(innerAction.textContent.trim(), "inner action");
-    assert.strictEqual(host.shadowRoot, null);
-    assert.strictEqual(panel.shadowRoot, null);
+    assert.throws(
+      () => document.createElement(hostTag),
+      /cannot use static elements with LightDomMixin/
+    );
   });
 
   it("keeps projected renderer output valid when a global definition appears between renders", async () => {
@@ -469,7 +545,7 @@ describe("runtime renderer context DOM integration", () => {
     document.body.appendChild(host);
     await settleHost(host);
 
-    const firstChild = host.shadowRoot.querySelector(childTag);
+    const firstChild = queryProjected(host.shadowRoot, childTag);
     assert.strictEqual(Object.getPrototypeOf(firstChild), ScopedChild.prototype);
     assert.equal(firstChild.kind, "scoped");
 
@@ -477,7 +553,7 @@ describe("runtime renderer context DOM integration", () => {
     host.label = "second";
     await settleHost(host);
 
-    const secondChild = host.shadowRoot.querySelector(childTag);
+    const secondChild = queryProjected(host.shadowRoot, childTag);
     const globalChild = document.createElement(childTag);
     document.body.appendChild(globalChild);
 
@@ -551,8 +627,8 @@ describe("runtime renderer context DOM integration", () => {
     document.body.appendChild(host);
     await settleHost(host);
 
-    const firstChild = host.shadowRoot.querySelector(firstTag);
-    const firstStatus = host.shadowRoot.querySelector(".projected-status");
+    const firstChild = queryProjected(host.shadowRoot, firstTag);
+    const firstStatus = queryProjected(host.shadowRoot, ".projected-status");
     assert(firstStatus, "expected initial projected shadow status");
     assert(firstChild, "expected initial projected shadow component");
     assert.strictEqual(Object.getPrototypeOf(firstChild), FirstProjected.prototype);
@@ -565,8 +641,8 @@ describe("runtime renderer context DOM integration", () => {
     host.label = "updated shadow label";
     await settleHost(host);
 
-    const updatedFirstChild = host.shadowRoot.querySelector(firstTag);
-    const updatedFirstStatus = host.shadowRoot.querySelector(".projected-status");
+    const updatedFirstChild = queryProjected(host.shadowRoot, firstTag);
+    const updatedFirstStatus = queryProjected(host.shadowRoot, ".projected-status");
     assert(updatedFirstStatus, "expected updated projected shadow status");
     assert(updatedFirstChild, "expected updated projected shadow component");
     assert.strictEqual(Object.getPrototypeOf(updatedFirstChild), FirstProjected.prototype);
@@ -579,9 +655,9 @@ describe("runtime renderer context DOM integration", () => {
     host.label = "replacement shadow label";
     await settleHost(host);
 
-    const removedFirstChild = host.shadowRoot.querySelector(firstTag);
-    const secondChild = host.shadowRoot.querySelector(secondTag);
-    const secondStatus = host.shadowRoot.querySelector(".projected-status");
+    const removedFirstChild = queryProjected(host.shadowRoot, firstTag);
+    const secondChild = queryProjected(host.shadowRoot, secondTag);
+    const secondStatus = queryProjected(host.shadowRoot, ".projected-status");
     assert.strictEqual(removedFirstChild, null);
     assert(secondStatus, "expected replacement projected shadow status");
     assert(secondChild, "expected replacement projected shadow component");
@@ -592,7 +668,7 @@ describe("runtime renderer context DOM integration", () => {
     assert.equal(secondChild.textContent.trim(), "second projected action");
   });
 
-  it("updates attributes, text, and component type in light DOM projected renderer output", async () => {
+  it("rejects light DOM projected renderer output that depends on scoped elements", async () => {
     const hostTag = nextTag("litsx-render-light-update-host");
     const firstTag = nextTag("litsx-render-light-update-first");
     const secondTag = nextTag("litsx-render-light-update-second");
@@ -651,50 +727,9 @@ describe("runtime renderer context DOM integration", () => {
 
     defineTestElement(hostTag, LightHost);
 
-    const host = document.createElement(hostTag);
-    document.body.appendChild(host);
-    await settleHost(host);
-
-    const firstChild = host.querySelector(firstTag);
-    const firstStatus = host.querySelector(".projected-status");
-    assert(firstStatus, "expected initial projected light status");
-    assert(firstChild, "expected initial projected light component");
-    assert.strictEqual(Object.getPrototypeOf(firstChild), FirstProjected.prototype);
-    assert.equal(firstChild.kind, "first");
-    assert.equal(firstStatus.getAttribute("data-state"), "initial");
-    assert.equal(firstStatus.textContent.trim(), "initial light label");
-    assert.equal(firstChild.textContent.trim(), "first projected action");
-    assert.strictEqual(host.shadowRoot, null);
-
-    host.state = "updated";
-    host.label = "updated light label";
-    await settleHost(host);
-
-    const updatedFirstChild = host.querySelector(firstTag);
-    const updatedFirstStatus = host.querySelector(".projected-status");
-    assert(updatedFirstStatus, "expected updated projected light status");
-    assert(updatedFirstChild, "expected updated projected light component");
-    assert.strictEqual(Object.getPrototypeOf(updatedFirstChild), FirstProjected.prototype);
-    assert.equal(updatedFirstStatus.getAttribute("data-state"), "updated");
-    assert.equal(updatedFirstStatus.textContent.trim(), "updated light label");
-    assert.equal(updatedFirstChild.textContent.trim(), "first projected action");
-
-    host.mode = "second";
-    host.state = "replaced";
-    host.label = "replacement light label";
-    await settleHost(host);
-
-    const removedFirstChild = host.querySelector(firstTag);
-    const secondChild = host.querySelector(secondTag);
-    const secondStatus = host.querySelector(".projected-status");
-    assert.strictEqual(removedFirstChild, null);
-    assert(secondStatus, "expected replacement projected light status");
-    assert(secondChild, "expected replacement projected light component");
-    assert.strictEqual(Object.getPrototypeOf(secondChild), SecondProjected.prototype);
-    assert.equal(secondChild.kind, "second");
-    assert.equal(secondStatus.getAttribute("data-state"), "replaced");
-    assert.equal(secondStatus.textContent.trim(), "replacement light label");
-    assert.equal(secondChild.textContent.trim(), "second projected action");
-    assert.strictEqual(host.shadowRoot, null);
+    assert.throws(
+      () => document.createElement(hostTag),
+      /cannot use static elements with LightDomMixin/
+    );
   });
 });

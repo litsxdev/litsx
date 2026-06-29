@@ -276,7 +276,7 @@ describe("@litsx/babel-plugin-transform-litsx-scoped-elements", () => {
     assert.doesNotMatch(code, /static elements/);
   });
 
-  it("uses LightDomMixin for light DOM dependencies", () => {
+  it("rejects scoped elements in light DOM components", () => {
     const source = `
       import FancyButton from './FancyButton.js';
 
@@ -286,13 +286,13 @@ describe("@litsx/babel-plugin-transform-litsx-scoped-elements", () => {
       }
     `;
 
-    const { code } = transformWithNativePreset(source, {
-      parserPlugins: ["typescript"],
-    });
-
-    assert.match(code, /LightDomMixin\(LitElement\)/);
-    assert.match(code, /static elements = \{\s*"fancy-button": FancyButton\s*\};/);
-    assert.match(code, /return <fancy-button\s*\/>;/);
+    assert.throws(
+      () =>
+        transformWithNativePreset(source, {
+          parserPlugins: ["typescript"],
+        }),
+      /does not support scoped elements in light DOM/
+    );
   });
 
   it("uses LightDomMixin for light DOM components without element dependencies", () => {
@@ -309,6 +309,7 @@ describe("@litsx/babel-plugin-transform-litsx-scoped-elements", () => {
 
     assert.match(code, /import \{ LightDomMixin \} from "@litsx\/core\/elements";/);
     assert.match(code, /class LightCard extends LightDomMixin\(LitElement\)/);
+    assert.doesNotMatch(code, /static elements\s*=/);
   });
 
   it("reuses an existing ShadowDomMixin import", () => {
@@ -448,16 +449,15 @@ describe("@litsx/babel-plugin-transform-litsx-scoped-elements", () => {
       lightDom: true,
     };
 
-    const { code } = transformFromAstSync(ast, source, {
-      configFile: false,
-      babelrc: false,
-      plugins: [plugin],
-    });
-
-    assert.match(code, /import \{[^}]*LightDomMixin[^}]*\} from "@litsx\/core\/elements"|import \{[^}]*LightDomMixin[^}]*\} from '@litsx\/core\/elements'/);
-    assert.match(code, /class HostCard extends LightDomMixin\(LitElement\)/);
-    assert.match(code, /static elements = \{\s*"child-card": ChildCard\s*\}/);
-    assert.match(code, /return <child-card \/>/);
+    assert.throws(
+      () =>
+        transformFromAstSync(ast, source, {
+          configFile: false,
+          babelrc: false,
+          plugins: [plugin],
+        }),
+      /does not support scoped elements in light DOM/
+    );
   });
 
   it("rewrites JSX opening tags with attributes to kebab-case consistently", () => {
@@ -558,22 +558,25 @@ describe("@litsx/babel-plugin-transform-litsx-scoped-elements", () => {
       }
     `;
 
-    const resultA = transformWithNativePreset(sourceA, {
-      filename: "/app/screens/FirstScreen.tsx",
-      parserPlugins: ["typescript"],
-    });
-    const resultB = transformWithNativePreset(sourceB, {
-      filename: "/app/screens/SecondScreen.tsx",
-      parserPlugins: ["typescript"],
-    });
-
-    assert.match(resultA.code, /static elements = \{\s*"profile-chip": ProfileChip\s*\}/);
-    assert.match(resultB.code, /static elements = \{\s*"profile-chip": ProfileChip\s*\}/);
-    assert.match(resultA.code, /return <profile-chip\s*\/>;/);
-    assert.match(resultB.code, /return <profile-chip\s*\/>;/);
+    assert.throws(
+      () =>
+        transformWithNativePreset(sourceA, {
+          filename: "/app/screens/FirstScreen.tsx",
+          parserPlugins: ["typescript"],
+        }),
+      /does not support scoped elements in light DOM/
+    );
+    assert.throws(
+      () =>
+        transformWithNativePreset(sourceB, {
+          filename: "/app/screens/SecondScreen.tsx",
+          parserPlugins: ["typescript"],
+        }),
+      /does not support scoped elements in light DOM/
+    );
   }, 30000);
 
-  it("keeps the same light DOM tag for the same imported constructor source", () => {
+  it("rejects repeated light DOM components that require scoped elements from the same source", () => {
     const source = `
       import ProfileChip from './profile/ProfileChip.js';
 
@@ -588,18 +591,14 @@ describe("@litsx/babel-plugin-transform-litsx-scoped-elements", () => {
       }
     `;
 
-    const { code } = transformWithNativePreset(source, {
-      filename: "/app/screens/SharedScreens.tsx",
-      parserPlugins: ["typescript"],
-    });
-
-    const tags = [...code.matchAll(/"(?<tag>profile-chip)": ProfileChip/g)].map(
-      (match) => match.groups?.tag
+    assert.throws(
+      () =>
+        transformWithNativePreset(source, {
+          filename: "/app/screens/SharedScreens.tsx",
+          parserPlugins: ["typescript"],
+        }),
+      /does not support scoped elements in light DOM/
     );
-
-    assert.strictEqual(tags.length, 2);
-    assert.strictEqual(tags[0], "profile-chip");
-    assert.strictEqual(tags[1], "profile-chip");
   }, 30000);
 
   it("still rewrites scoped tags when candidates were precomputed by transform-litsx", () => {

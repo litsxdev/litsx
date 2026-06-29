@@ -417,13 +417,30 @@ export class SuspenseBoundary extends LitElement {
   }
 
   propagateSuspenseCapture(host, capture) {
-    setHostSuspenseCapture(host, capture);
-    if (!host || typeof host.querySelectorAll !== "function") {
+    if (!host) {
       return;
     }
 
-    for (const element of host.querySelectorAll("*")) {
-      setHostSuspenseCapture(element, capture);
+    const pending = [host];
+    while (pending.length > 0) {
+      const current = pending.shift();
+      setHostSuspenseCapture(current, capture);
+
+      if (typeof current.querySelectorAll === "function") {
+        for (const element of current.children ?? []) {
+          pending.push(element);
+        }
+      }
+
+      if (current.shadowRoot) {
+        pending.push(current.shadowRoot);
+      }
+
+      if (current instanceof ShadowRoot) {
+        for (const element of current.children ?? []) {
+          pending.push(element);
+        }
+      }
     }
   }
 
@@ -432,6 +449,7 @@ export class SuspenseBoundary extends LitElement {
       <div
         part="fallback"
         data-litsx-suspense-region="fallback"
+        data-litsx-projected-root="light"
         data-showing="fallback"
         ?hidden=${!this._fallbackVisible}
         data-phase=${this.phase}
@@ -439,6 +457,7 @@ export class SuspenseBoundary extends LitElement {
       <div
         part="content"
         data-litsx-suspense-region="content"
+        data-litsx-projected-root="light"
         data-showing="content"
         ?hidden=${!this._contentVisible}
         data-phase=${this.phase}

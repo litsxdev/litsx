@@ -37,7 +37,7 @@ Because plain `tsc` does not parse this authored syntax directly, editor support
 - [`packages/typescript`](./packages/typescript): TypeScript language-service support and `litsx-tsc` for LitSX-authored JSX
 - [`packages/authoring`](./packages/authoring): shared authored JSX language model and parser helpers
 - [`packages/babel-parser-litsx`](./packages/babel-parser-litsx): Babel parser adapter for LitSX-authored JSX
-- [`packages/light-dom-registry`](./packages/light-dom-registry): contextual light DOM registry runtime
+- [`packages/scoped-registry-shim`](./packages/scoped-registry-shim): internal shimmed scoped-registry runtime used by shadow hosts and renderer mounts
 - [`packages/vite-plugin`](./packages/vite-plugin): Vite integration
 
 ### Babel toolchain

@@ -73,8 +73,15 @@ function transformClass(classPath, programPath) {
   } = detectElementsFromClass(classPath, availableMap, precomputedCandidates);
   const needsElements = detectedElements.length > 0;
   const hasExistingElementsStatic = hasStaticElementsMember(node);
+  const needsScopedElements =
+    needsElements ||
+    needsElementsRegistry ||
+    hasExistingElementsStatic;
 
-  const elementsStatic = hasExistingElementsStatic
+  // `static elements` belongs to the shadow/scoped-elements path only.
+  // Light DOM components may still be valid, but only when they do not require
+  // scoped element resolution at all.
+  const elementsStatic = hasExistingElementsStatic || lightDomRequested
     ? null
     : createClassProperty("elements", detectedElements);
   const needsElementsMixin =
@@ -85,6 +92,12 @@ function transformClass(classPath, programPath) {
 
   if (!hasRenderableTemplate && !needsElements && !needsElementsRegistry && !needsLightDomMixin) {
     return false;
+  }
+
+  if (needsLightDomMixin && needsScopedElements) {
+    throw classPath.buildCodeFrameError(
+      "LitSX does not support scoped elements in light DOM. Remove `static lightDom`, remove `static elements`, or switch the component to shadow DOM."
+    );
   }
 
   if (

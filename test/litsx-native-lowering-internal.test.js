@@ -1571,6 +1571,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
     assert.match(code, /class Card extends LightDomMixin\(LitElement\)/);
     assert.doesNotMatch(code, /createRenderRoot\(\)\s*\{\s*return this;\s*\}/s);
     assert.doesNotMatch(code, /static get lightDom\(\)/);
+    assert.doesNotMatch(code, /static get elements\(\)/);
   });
 
   it("uses ShadowDomMixin when static elements is authored explicitly", () => {
@@ -1615,7 +1616,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
     assert.doesNotMatch(code, /static elements = \{\s*"child-two": ChildTwo\s*\}/);
   });
 
-  it("uses LightDomMixin when static elements and static lightDom are authored explicitly", () => {
+  it("rejects static elements when static lightDom is authored explicitly", () => {
     const source = `
       import { FancyButton } from "./fancy-button.litsx";
 
@@ -1629,18 +1630,13 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
       }
     `;
 
-    const { code } = transformWithNativePreset(source);
-
-    assert.match(
-      code,
-      /import \{[^}]*LightDomMixin[^}]*\} from "@litsx\/core\/elements";/
+    assert.throws(
+      () => transformWithNativePreset(source),
+      /does not support scoped elements in light DOM/
     );
-    assert.match(code, /class Card extends LightDomMixin\(LitsxStaticHoistsMixin\(LitElement\)\)|class Card extends LitsxStaticHoistsMixin\(LightDomMixin\(LitElement\)\)/);
-    assert.match(code, /static get elements\(\)/);
-    assert.doesNotMatch(code, /static get lightDom\(\)/);
   });
 
-  it("does not wrap light-dom element classes in ShadowDomMixin on repeated scoped passes", () => {
+  it("rejects repeated light-dom scoped element passes", () => {
     const source = `
       import { LightDomMixin } from "@litsx/core/elements";
       import { LitElement } from "lit";
@@ -1657,10 +1653,10 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
       }
     `;
 
-    const { code } = transformWithNativePreset(source);
-
-    assert.match(code, /class Card extends LightDomMixin\(LitElement\)/);
-    assert.doesNotMatch(code, /ShadowDomMixin/);
+    assert.throws(
+      () => transformWithNativePreset(source),
+      /does not support scoped elements in light DOM/
+    );
   });
 
   it("ignores static shadowRootOptions when static lightDom is present", () => {

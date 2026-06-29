@@ -4,11 +4,14 @@ import { PartType } from "lit/directive.js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const withLightDomCreationContext = vi.fn((scope, callback) => callback());
-const connectLightDomRegistry = vi.fn();
+const createLightDomRegistry = vi.fn(() => ({
+  define: vi.fn(),
+  get: vi.fn(() => null),
+}));
 const renderLightDom = vi.fn();
 
-vi.mock("@litsx/light-dom-registry", () => ({
-  connectLightDomRegistry,
+vi.mock("@litsx/scoped-registry-shim", () => ({
+  createLightDomRegistry,
   withLightDomCreationContext,
 }));
 
@@ -19,7 +22,7 @@ vi.mock("lit/html.js", () => ({
 describe("runtime renderer context", () => {
   beforeEach(() => {
     withLightDomCreationContext.mockClear();
-    connectLightDomRegistry.mockClear();
+    createLightDomRegistry.mockClear();
     renderLightDom.mockClear();
   });
 
@@ -61,7 +64,7 @@ describe("runtime renderer context", () => {
     assert.strictEqual(rendered.context.host, host);
     assert.strictEqual(rendered.context.creationScope, creationScope);
     assert.strictEqual(rendered.projected, true);
-    expect(withLightDomCreationContext).toHaveBeenCalledWith(host, expect.any(Function));
+    expect(withLightDomCreationContext).not.toHaveBeenCalled();
     expect(renderer).toHaveBeenCalledWith("alpha");
   });
 
@@ -104,6 +107,7 @@ describe("runtime renderer context", () => {
     expect(render).toHaveBeenCalledWith("value", container, {
       host,
       creationScope,
+      renderMode: "light",
     });
   });
 
@@ -148,6 +152,7 @@ describe("runtime renderer context", () => {
       mode: "open",
       host,
       creationScope,
+      renderMode: "light",
     });
   });
 
@@ -177,10 +182,6 @@ describe("runtime renderer context", () => {
     );
 
     assert.strictEqual(host.hidden, true);
-    expect(connectLightDomRegistry).toHaveBeenCalledWith(
-      host,
-      ContextualHost.scopedElements
-    );
     expect(withLightDomCreationContext).toHaveBeenCalledWith(
       contextualHost,
       expect.any(Function)
@@ -188,6 +189,7 @@ describe("runtime renderer context", () => {
     expect(render).toHaveBeenCalledWith(nothing, host, {
       host: contextualHost,
       creationScope: { id: "scope" },
+      renderMode: "light",
     });
   });
 
@@ -230,10 +232,10 @@ describe("runtime renderer context", () => {
 
     assert.strictEqual(rendered.value, "value");
     expect(withLightDomCreationContext).not.toHaveBeenCalled();
-    expect(connectLightDomRegistry).not.toHaveBeenCalled();
     expect(render).toHaveBeenCalledWith("value", container, {
       host: contextualHost,
       creationScope,
+      renderMode: "light",
     });
   });
 
@@ -251,7 +253,17 @@ describe("runtime renderer context", () => {
     const contextualHost = {
       constructor: ContextualHost,
     };
-    const projectedHost = {};
+    const shadowRoot = {};
+    const mountHost = {
+      style: {},
+      attachShadow: vi.fn(() => shadowRoot),
+    };
+    const projectedHost = {
+      ownerDocument: {
+        createElement: vi.fn(() => mountHost),
+      },
+      appendChild: vi.fn(),
+    };
     const render = vi.fn();
 
     syncRendererHost(
@@ -267,17 +279,54 @@ describe("runtime renderer context", () => {
       { render }
     );
 
-    expect(connectLightDomRegistry).toHaveBeenCalledWith(
+    expect(createLightDomRegistry).toHaveBeenCalledWith(shadowRoot, {});
+    expect(withLightDomCreationContext).not.toHaveBeenCalled();
+    expect(render).toHaveBeenCalledWith("value", shadowRoot, {
+      host: contextualHost,
+      creationContextHost: projectedHost,
+      renderMode: "shadow",
+    });
+  });
+
+  it("renders projected output directly in light DOM when the host opts into direct projection", async () => {
+    const { syncRendererHost } = await import("../packages/core/src/rendering.js");
+
+    function ContextualHost() {}
+    ContextualHost.scopedElements = {
+      "fancy-button": class FancyButton {},
+    };
+    const contextualHost = {
+      constructor: ContextualHost,
+    };
+    const projectedHost = {
+      getAttribute(name) {
+        return name === "data-litsx-projected-root" ? "light" : null;
+      },
+    };
+    const render = vi.fn();
+
+    syncRendererHost(
       projectedHost,
-      ContextualHost.scopedElements
+      {
+        value: "value",
+        context: {
+          host: contextualHost,
+          creationScope: { id: "scope" },
+          projected: true,
+        },
+      },
+      { render }
     );
-    expect(withLightDomCreationContext).toHaveBeenCalledWith(
-      projectedHost,
-      expect.any(Function)
-    );
+
+    expect(createLightDomRegistry).not.toHaveBeenCalled();
     expect(render).toHaveBeenCalledWith("value", projectedHost, {
       host: contextualHost,
+      renderMode: "light",
     });
+    expect(withLightDomCreationContext).toHaveBeenCalledWith(
+      contextualHost,
+      expect.any(Function)
+    );
   });
 
   it("skips renderer host sync when host or render function is missing", async () => {
@@ -286,7 +335,6 @@ describe("runtime renderer context", () => {
     syncRendererHost(null, { value: "x", context: null }, { render: vi.fn() });
     syncRendererHost({}, { value: "x", context: null }, { render: null });
 
-    expect(connectLightDomRegistry).not.toHaveBeenCalled();
     expect(renderLightDom).not.toHaveBeenCalled();
   });
 

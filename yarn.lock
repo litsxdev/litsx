@@ -1052,7 +1052,7 @@ __metadata:
   dependencies:
     "@lit/context": "npm:^1.1.6"
     "@lit/reactive-element": "npm:^2.1.2"
-    "@litsx/light-dom-registry": "npm:^0.2.5"
+    "@litsx/scoped-registry-shim": "npm:^0.2.5"
     lit: "npm:^3.2.1"
   peerDependencies:
     lit: ">=3"
@@ -1075,15 +1075,15 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@litsx/light-dom-registry@npm:^0.2.5, @litsx/light-dom-registry@workspace:packages/light-dom-registry":
-  version: 0.0.0-use.local
-  resolution: "@litsx/light-dom-registry@workspace:packages/light-dom-registry"
-  languageName: unknown
-  linkType: soft
-
 "@litsx/prop-types@npm:^0.2.2, @litsx/prop-types@workspace:packages/prop-types":
   version: 0.0.0-use.local
   resolution: "@litsx/prop-types@workspace:packages/prop-types"
+  languageName: unknown
+  linkType: soft
+
+"@litsx/scoped-registry-shim@npm:^0.2.5, @litsx/scoped-registry-shim@workspace:packages/scoped-registry-shim":
+  version: 0.0.0-use.local
+  resolution: "@litsx/scoped-registry-shim@workspace:packages/scoped-registry-shim"
   languageName: unknown
   linkType: soft
 
@@ -2723,12 +2723,31 @@ __metadata:
   languageName: node
   linkType: hard
 
+"fsevents@npm:2.3.2":
+  version: 2.3.2
+  resolution: "fsevents@npm:2.3.2"
+  dependencies:
+    node-gyp: "npm:latest"
+  checksum: 10c0/be78a3efa3e181cda3cf7a4637cb527bcebb0bd0ea0440105a3bb45b86f9245b307dc10a2507e8f4498a7d4ec349d1910f4d73e4d4495b16103106e07eee735b
+  conditions: os=darwin
+  languageName: node
+  linkType: hard
+
 "fsevents@npm:~2.3.2, fsevents@npm:~2.3.3":
   version: 2.3.3
   resolution: "fsevents@npm:2.3.3"
   dependencies:
     node-gyp: "npm:latest"
   checksum: 10c0/a1f0c44595123ed717febbc478aa952e47adfc28e2092be66b8ab1635147254ca6cfe1df792a8997f22716d4cbafc73309899ff7bfac2ac3ad8cf2e4ecc3ec60
+  conditions: os=darwin
+  languageName: node
+  linkType: hard
+
+"fsevents@patch:fsevents@npm%3A2.3.2#optional!builtin<compat/fsevents>":
+  version: 2.3.2
+  resolution: "fsevents@patch:fsevents@npm%3A2.3.2#optional!builtin<compat/fsevents>::version=2.3.2&hash=df0bf1"
+  dependencies:
+    node-gyp: "npm:latest"
   conditions: os=darwin
   languageName: node
   linkType: hard
@@ -3352,6 +3371,7 @@ __metadata:
     happy-dom: "npm:^20.9.0"
     jsdom: "npm:^29.1.1"
     magic-string: "npm:^0.30.21"
+    playwright: "npm:^1.54.1"
     prettier: "npm:^3.8.3"
     rollup: "npm:^4.60.2"
     typescript: "npm:^6.0.0"
@@ -3799,6 +3819,30 @@ __metadata:
   version: 4.0.1
   resolution: "pify@npm:4.0.1"
   checksum: 10c0/6f9d404b0d47a965437403c9b90eca8bb2536407f03de165940e62e72c8c8b75adda5516c6b9b23675a5877cc0bcac6bdfb0ef0e39414cd2476d5495da40e7cf
+  languageName: node
+  linkType: hard
+
+"playwright-core@npm:1.61.1":
+  version: 1.61.1
+  resolution: "playwright-core@npm:1.61.1"
+  bin:
+    playwright-core: cli.js
+  checksum: 10c0/c28896ba82a602182e240ed4f9c467fb0dd9cb57d510f8aba9f25183fe1cde3a0105725a29baffa4157fe885bbb11e228032a2aad0424111584fde45303f07bd
+  languageName: node
+  linkType: hard
+
+"playwright@npm:^1.54.1":
+  version: 1.61.1
+  resolution: "playwright@npm:1.61.1"
+  dependencies:
+    fsevents: "npm:2.3.2"
+    playwright-core: "npm:1.61.1"
+  dependenciesMeta:
+    fsevents:
+      optional: true
+  bin:
+    playwright: cli.js
+  checksum: 10c0/cea1bc4d2a64ec3ef683891606774029da7b8a8036ed98332565cec2f8e89549ca1fab9a89fbfba4e08e27e0d7e7d148031e965af66d5ff97bb3c34058cfcad0
   languageName: node
   linkType: hard
 

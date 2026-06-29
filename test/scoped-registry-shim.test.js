@@ -7,8 +7,9 @@ import {
   createLightDomRegistry,
   disconnectLightDomRegistry,
   ensureLightDomProxy,
+  upgradeScopedRegistryTree,
   withLightDomCreationContext,
-} from "../packages/light-dom-registry/src/index.js";
+} from "../packages/scoped-registry-shim/src/index.js";
 
 let tagCounter = 0;
 const RUNTIME_KEY = Symbol.for("litsx.lightDomRegistry.runtime");
@@ -18,7 +19,7 @@ function nextTag(prefix = "litsx-light-test") {
   return `${prefix}-${tagCounter}`;
 }
 
-describe("@litsx/light-dom-registry", () => {
+describe("@litsx/scoped-registry-shim shim runtime", () => {
   it("registers a stand-in once per base tag and reuses it", () => {
     const tagName = nextTag();
 
@@ -40,7 +41,7 @@ describe("@litsx/light-dom-registry", () => {
     assert.notStrictEqual(standIn, ExternalElement);
   });
 
-  it("upgrades light DOM elements in place without creating wrapper children", async () => {
+  it("upgrades shimmed host elements in place without creating wrapper children", async () => {
     const tagName = nextTag();
 
     class FancyButton extends HTMLElement {
@@ -72,7 +73,7 @@ describe("@litsx/light-dom-registry", () => {
     host.remove();
   });
 
-  it("uses the nearest host context when the same tag base maps to different constructors", () => {
+  it("uses the nearest shimmed host context when the same tag base maps to different constructors", () => {
     const tagName = nextTag();
 
     class OuterElement extends HTMLElement {
@@ -327,6 +328,131 @@ describe("@litsx/light-dom-registry", () => {
     assert.strictEqual(element.kind, undefined);
 
     host.remove();
+  });
+
+  it("retargets already-upgraded scoped elements when a reused host receives a new constructor for the same tag", () => {
+    const tagName = nextTag();
+    const host = document.createElement("section");
+
+    class FirstElement extends HTMLElement {
+      connectedCallback() {
+        this.kind = "first";
+      }
+    }
+
+    class SecondElement extends HTMLElement {
+      connectedCallback() {
+        this.kind = "second";
+      }
+    }
+
+    connectLightDomRegistry(host, {
+      [tagName]: FirstElement,
+    });
+    host.innerHTML = `<${tagName}></${tagName}>`;
+    document.body.appendChild(host);
+
+    const element = host.firstElementChild;
+    assert.strictEqual(Object.getPrototypeOf(element), FirstElement.prototype);
+    assert.strictEqual(element.kind, "first");
+
+    connectLightDomRegistry(host, {
+      [tagName]: SecondElement,
+    });
+
+    assert.strictEqual(Object.getPrototypeOf(element), SecondElement.prototype);
+    assert.strictEqual(element.kind, "second");
+
+    host.remove();
+  });
+
+  it("retargets already-upgraded scoped elements when a shadow root adopts a new registry for the same tag", () => {
+    const tagName = nextTag();
+    const host = document.createElement("section");
+    const shadowRoot = host.attachShadow({ mode: "open" });
+
+    class FirstElement extends HTMLElement {
+      connectedCallback() {
+        this.kind = "first";
+      }
+    }
+
+    class SecondElement extends HTMLElement {
+      connectedCallback() {
+        this.kind = "second";
+      }
+    }
+
+    const firstRegistry = createLightDomRegistry(host, {
+      [tagName]: FirstElement,
+    });
+    shadowRoot.registry = firstRegistry;
+    shadowRoot.innerHTML = `<${tagName}></${tagName}>`;
+    document.body.appendChild(host);
+
+    const element = shadowRoot.querySelector(tagName);
+    assert.strictEqual(Object.getPrototypeOf(element), FirstElement.prototype);
+    assert.strictEqual(element.kind, "first");
+
+    const secondRegistry = createLightDomRegistry(host, {
+      [tagName]: SecondElement,
+    });
+    shadowRoot.registry = secondRegistry;
+    shadowRoot.customElements = secondRegistry;
+    shadowRoot.customElementRegistry = secondRegistry;
+    upgradeScopedRegistryTree(shadowRoot, secondRegistry);
+
+    assert.strictEqual(Object.getPrototypeOf(element), SecondElement.prototype);
+    assert.strictEqual(element.kind, "second");
+
+    host.remove();
+  });
+
+  it("does not retarget already-upgraded descendants that belong to a nearer nested scope", () => {
+    const tagName = nextTag();
+    const outerHost = document.createElement("section");
+    const innerHost = document.createElement("article");
+
+    class OuterElement extends HTMLElement {
+      connectedCallback() {
+        this.kind = "outer";
+      }
+    }
+
+    class InnerElement extends HTMLElement {
+      connectedCallback() {
+        this.kind = "inner";
+      }
+    }
+
+    class NextOuterElement extends HTMLElement {
+      connectedCallback() {
+        this.kind = "next-outer";
+      }
+    }
+
+    connectLightDomRegistry(outerHost, {
+      [tagName]: OuterElement,
+    });
+    connectLightDomRegistry(innerHost, {
+      [tagName]: InnerElement,
+    });
+    innerHost.innerHTML = `<${tagName}></${tagName}>`;
+    outerHost.appendChild(innerHost);
+    document.body.appendChild(outerHost);
+
+    const element = innerHost.firstElementChild;
+    assert.strictEqual(Object.getPrototypeOf(element), InnerElement.prototype);
+    assert.strictEqual(element.kind, "inner");
+
+    connectLightDomRegistry(outerHost, {
+      [tagName]: NextOuterElement,
+    });
+
+    assert.strictEqual(Object.getPrototypeOf(element), InnerElement.prototype);
+    assert.strictEqual(element.kind, "inner");
+
+    outerHost.remove();
   });
 
   it("keeps resolving scoped constructors for a new host instance after the previous host disconnects", () => {

@@ -12,7 +12,7 @@ export const packageDirsByName = new Map([
   ["@litsx/eslint-plugin", "packages/eslint-plugin-litsx"],
   ["create-litsx-app", "packages/create-litsx-app"],
   ["prettier-plugin-litsx", "packages/prettier-plugin-litsx"],
-  ["@litsx/light-dom-registry", "packages/light-dom-registry"],
+  ["@litsx/scoped-registry-shim", "packages/scoped-registry-shim"],
   ["@litsx/authoring", "packages/authoring"],
   ["@litsx/prop-types", "packages/prop-types"],
   ["@litsx/babel-preset-litsx", "packages/babel-preset-litsx"],

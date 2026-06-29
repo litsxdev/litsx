@@ -1,7 +1,7 @@
 {
-  "name": "@litsx/light-dom-registry",
+  "name": "@litsx/scoped-registry-shim",
   "version": "0.2.5",
-  "description": "Contextual light DOM registry runtime for LitSX element delegation",
+  "description": "Internal shimmed scoped-registry runtime used by LitSX shadow and renderer mounts",
   "author": "LitSX Team",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -35,6 +35,6 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/litsxdev/litsx.git",
-    "directory": "packages/light-dom-registry"
+    "directory": "packages/scoped-registry-shim"
   }
 }

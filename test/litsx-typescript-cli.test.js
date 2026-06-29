@@ -4,6 +4,7 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 import { describe, it } from "vitest";
+import { runLitsxTypecheck } from "../packages/typescript/src/typecheck.js";
 
 const fixtureDir = path.resolve("test/fixtures/typescript");
 const tsconfigPath = path.join(fixtureDir, "tsconfig.litsx-jsx.json");
@@ -16,7 +17,7 @@ describe("litsx typescript cli", () => {
     });
   }, 30000);
 
-  it("virtualizes imported .litsx modules discovered through module resolution", () => {
+  it("virtualizes imported .litsx modules discovered through module resolution", async () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-tsc-imported-module-"));
     const srcDir = path.join(tempDir, "src");
     const componentDir = path.join(srcDir, "components");
@@ -84,10 +85,8 @@ describe("litsx typescript cli", () => {
         "utf8",
       );
 
-      execFileSync("node", ["packages/typescript/src/litsx-tsc.js", "-p", jsconfigPath, "--noEmit"], {
-        cwd: path.resolve("."),
-        stdio: "pipe",
-      });
+      const exitCode = await runLitsxTypecheck(["-p", jsconfigPath, "--noEmit"]);
+      assert.strictEqual(exitCode, 0);
     } finally {
       fs.rmSync(tempDir, { recursive: true, force: true });
     }

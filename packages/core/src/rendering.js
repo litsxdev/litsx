@@ -1,10 +1,11 @@
+import { adoptStyles } from "@lit/reactive-element";
 import { nothing } from "lit";
 import { render as renderLightDom } from "lit/html.js";
 import { Directive, PartType, directive } from "lit/directive.js";
 import {
-  connectLightDomRegistry,
+  createLightDomRegistry,
   withLightDomCreationContext,
-} from "@litsx/light-dom-registry";
+} from "@litsx/scoped-registry-shim";
 
 /**
  * Rendering helpers used by LitSX transforms when authored JSX passes renderer
@@ -17,6 +18,26 @@ import {
 
 const RENDERER_CONTEXT = Symbol("litsx.rendererContext");
 const RENDERER_HOST_INITIALIZED = Symbol("litsx.rendererHostInitialized");
+const RENDERER_MOUNT_HOST = Symbol("litsx.rendererMountHost");
+const RENDERER_MOUNT_ROOT = Symbol("litsx.rendererMountRoot");
+const RENDERER_MOUNT_ELEMENTS = Symbol("litsx.rendererMountElements");
+const RENDERER_SHADOW_CONTAINER = Symbol("litsx.rendererShadowContainer");
+const PROJECTED_LIGHT_DOM_ATTRIBUTE = "data-litsx-projected-root";
+let rendererRegistryAttachKey;
+let rendererRegistryAttachShadowRef;
+let rendererRegistryCtorRef;
+let rendererRegistryNativeSupport;
+
+function getElementAttachShadowRef() {
+  return typeof Element !== "undefined" ? Element.prototype.attachShadow : undefined;
+}
+
+function isShadowRootContainer(value) {
+  return (
+    (typeof ShadowRoot !== "undefined" && value instanceof ShadowRoot) ||
+    value?.[RENDERER_SHADOW_CONTAINER] === true
+  );
+}
 
 function captureCreationScope(host) {
   if (!host || typeof host !== "object") {
@@ -44,6 +65,196 @@ function getContextualElements(context) {
   return elements && typeof elements === "object" ? elements : null;
 }
 
+function getContextualStyles(context) {
+  const styles = context?.host?.constructor?.elementStyles;
+  return Array.isArray(styles) ? styles : [];
+}
+
+function hasSameElementDefinitions(previousElements, nextElements) {
+  const previousEntries = Object.entries(previousElements || {});
+  const nextEntries = Object.entries(nextElements || {});
+  if (previousEntries.length !== nextEntries.length) {
+    return false;
+  }
+
+  return nextEntries.every(([tagName, ctor]) => previousElements?.[tagName] === ctor);
+}
+
+function getRendererRegistryAttachKey() {
+  if (
+    rendererRegistryAttachKey !== undefined &&
+    rendererRegistryAttachShadowRef === getElementAttachShadowRef() &&
+    rendererRegistryCtorRef === globalThis.CustomElementRegistry &&
+    rendererRegistryNativeSupport !== undefined
+  ) {
+    return rendererRegistryAttachKey;
+  }
+
+  if (
+    typeof document === "undefined" ||
+    typeof CustomElementRegistry !== "function" ||
+    typeof Element === "undefined"
+  ) {
+    rendererRegistryAttachKey = null;
+    rendererRegistryAttachShadowRef = getElementAttachShadowRef();
+    rendererRegistryCtorRef = globalThis.CustomElementRegistry;
+    rendererRegistryNativeSupport = false;
+    return null;
+  }
+
+  let registry;
+  try {
+    registry = new CustomElementRegistry();
+  } catch {
+    rendererRegistryAttachKey = null;
+    rendererRegistryAttachShadowRef = getElementAttachShadowRef();
+    rendererRegistryCtorRef = globalThis.CustomElementRegistry;
+    rendererRegistryNativeSupport = false;
+    return null;
+  }
+
+  for (const key of ["registry", "customElements", "customElementRegistry"]) {
+    const host = document.createElement("div");
+    try {
+      const shadowRoot = host.attachShadow({
+        mode: "open",
+        [key]: registry,
+      });
+      if (shadowRoot?.[key] === registry) {
+        const supportKey = `litsx-renderer-support-${Math.random().toString(36).slice(2)}`;
+        class SupportElement extends HTMLElement {}
+        try {
+          registry.define(supportKey, SupportElement);
+          shadowRoot.innerHTML = `<${supportKey}></${supportKey}>`;
+          const upgraded = shadowRoot.querySelector(supportKey);
+          rendererRegistryNativeSupport = Object.getPrototypeOf(upgraded) === SupportElement.prototype;
+        } catch {
+          rendererRegistryNativeSupport = false;
+        }
+
+        rendererRegistryAttachKey = rendererRegistryNativeSupport ? key : null;
+        rendererRegistryAttachShadowRef = getElementAttachShadowRef();
+        rendererRegistryCtorRef = globalThis.CustomElementRegistry;
+        return rendererRegistryAttachKey;
+      }
+    } catch {
+      // Try the next known attach option.
+    }
+  }
+
+  rendererRegistryAttachKey = null;
+  rendererRegistryAttachShadowRef = getElementAttachShadowRef();
+  rendererRegistryCtorRef = globalThis.CustomElementRegistry;
+  rendererRegistryNativeSupport = false;
+  return null;
+}
+
+function defineScopedElements(registry, elements = {}) {
+  for (const [tagName, elementClass] of Object.entries(elements)) {
+    if (!tagName || typeof elementClass !== "function") {
+      continue;
+    }
+
+    const existing = registry.get?.(tagName) ?? null;
+    if (existing === elementClass) {
+      continue;
+    }
+
+    if (existing && existing !== elementClass) {
+      throw new Error(
+        `Projected renderer host cannot redefine scoped element "${tagName}" with a different constructor.`,
+      );
+    }
+
+    registry.define(tagName, elementClass);
+  }
+}
+
+function assignShadowRootRegistry(shadowRoot, registry) {
+  for (const key of ["registry", "customElements", "customElementRegistry"]) {
+    try {
+      shadowRoot[key] = registry;
+    } catch {
+      // Ignore readonly experimental aliases.
+    }
+  }
+}
+
+function createRendererMount(host, context) {
+  const attachKey = getRendererRegistryAttachKey();
+  const elements = getContextualElements(context) ?? {};
+  const hasScopedElements = Object.keys(elements).length > 0;
+  const mountHost = host.ownerDocument.createElement("div");
+  mountHost.style.display = "contents";
+
+  let registry = null;
+  const useNativeScopedRegistry =
+    hasScopedElements &&
+    Boolean(attachKey) &&
+    typeof CustomElementRegistry === "function";
+
+  const shadowRoot = mountHost.attachShadow({
+    mode: "open",
+    ...(useNativeScopedRegistry ? { [attachKey]: new CustomElementRegistry() } : {}),
+  });
+  shadowRoot[RENDERER_SHADOW_CONTAINER] = true;
+
+  if (useNativeScopedRegistry) {
+    registry = shadowRoot[attachKey] ?? null;
+    defineScopedElements(registry, elements);
+    assignShadowRootRegistry(shadowRoot, registry);
+  } else if (hasScopedElements) {
+    registry = createLightDomRegistry(shadowRoot, {});
+    defineScopedElements(registry, elements);
+  }
+
+  adoptStyles(shadowRoot, getContextualStyles(context));
+
+  mountHost[RENDERER_MOUNT_ROOT] = shadowRoot;
+  mountHost[RENDERER_MOUNT_ELEMENTS] = { ...elements };
+  host.appendChild(mountHost);
+  host[RENDERER_MOUNT_HOST] = mountHost;
+  return mountHost;
+}
+
+function ensureRendererMount(host, context) {
+  const elements = getContextualElements(context) ?? {};
+  let mountHost = host[RENDERER_MOUNT_HOST] ?? null;
+
+  if (
+    mountHost &&
+    !hasSameElementDefinitions(mountHost[RENDERER_MOUNT_ELEMENTS], elements)
+  ) {
+    renderLightDom(nothing, mountHost[RENDERER_MOUNT_ROOT] ?? mountHost);
+    mountHost.remove();
+    mountHost = null;
+    host[RENDERER_MOUNT_HOST] = null;
+  }
+
+  if (!mountHost) {
+    mountHost = createRendererMount(host, context);
+  }
+
+  const shadowRoot = mountHost?.[RENDERER_MOUNT_ROOT] ?? null;
+  if (!shadowRoot) {
+    return null;
+  }
+
+  adoptStyles(shadowRoot, getContextualStyles(context));
+  return shadowRoot;
+}
+
+function clearRendererMount(host) {
+  const mountHost = host?.[RENDERER_MOUNT_HOST] ?? null;
+  if (!mountHost) {
+    return;
+  }
+
+  renderLightDom(nothing, mountHost[RENDERER_MOUNT_ROOT] ?? mountHost);
+  mountHost.remove?.();
+  host[RENDERER_MOUNT_HOST] = null;
+}
+
 function getScopedRegistry(scope) {
   for (const key of ["registry", "customElements", "customElementRegistry"]) {
     const registry = scope?.[key];
@@ -57,21 +268,6 @@ function getScopedRegistry(scope) {
   }
 
   return null;
-}
-
-function assignProjectedHostRegistry(host, registry) {
-  for (const key of ["registry", "customElements", "customElementRegistry"]) {
-    try {
-      host[key] = registry;
-    } catch {
-      // Some DOM implementations expose readonly scoped registry aliases.
-    }
-  }
-}
-
-function hasExternalScopedRegistry(scope) {
-  const registry = getScopedRegistry(scope);
-  return Boolean(registry && typeof registry._getDefinition !== "function");
 }
 
 function resolveContextCreationScope(context) {
@@ -90,25 +286,25 @@ function resolveContextCreationScope(context) {
   return creationScope;
 }
 
-function syncProjectedHostRegistry(host, context) {
-  const elements = getContextualElements(context);
-  if (!host || !elements) {
-    return;
+function hasExternalScopedRegistry(scope) {
+  const registry = getScopedRegistry(scope);
+  return Boolean(registry && typeof registry._getDefinition !== "function");
+}
+
+function prefersDirectProjectedLightDom(host) {
+  return host?.getAttribute?.(PROJECTED_LIGHT_DOM_ATTRIBUTE) === "light";
+}
+
+function shouldUseProjectedLightDom(host, context) {
+  if (!context?.projected) {
+    return false;
   }
 
-  if (context?.projected) {
-    connectLightDomRegistry(host, elements);
-    return;
+  if (prefersDirectProjectedLightDom(host)) {
+    return true;
   }
 
-  const creationScope = resolveContextCreationScope(context);
-  const scopedRegistry = getScopedRegistry(creationScope);
-  if (scopedRegistry && hasExternalScopedRegistry(creationScope)) {
-    assignProjectedHostRegistry(host, scopedRegistry);
-    return;
-  }
-
-  connectLightDomRegistry(host, elements);
+  return resolveContextCreationScope(context) == null;
 }
 
 export function bindRendererContext(host, renderer, options = {}) {
@@ -126,6 +322,9 @@ export function bindRendererContext(host, renderer, options = {}) {
 
   const boundRenderer = (...args) => {
     const render = () => renderer(...args);
+    if (projected) {
+      return render();
+    }
     const creationScope = resolveContextCreationScope(context);
     if (hasExternalScopedRegistry(creationScope)) {
       return render();
@@ -150,6 +349,13 @@ export function invokeRenderer(renderer, ...args) {
 
   const context = renderer[RENDERER_CONTEXT] ?? null;
   const render = () => renderer(...args);
+  if (context?.projected) {
+    return {
+      value: render() ?? nothing,
+      context,
+      projected: true,
+    };
+  }
   const creationScope = resolveContextCreationScope(context);
   const value = !context?.host
     ? render()
@@ -164,6 +370,16 @@ export function invokeRenderer(renderer, ...args) {
 }
 
 export function renderWithRendererContext(render, container, value, context, options = {}) {
+  const resolvedRenderMode = isShadowRootContainer(container) ? "shadow" : "light";
+
+  if (resolvedRenderMode === "shadow") {
+    return render(value, container, {
+      ...options,
+      renderMode: resolvedRenderMode,
+      ...(context?.host ? { host: context.host } : {}),
+    });
+  }
+
   const creationScope = resolveContextCreationScope(context);
   const projectedCreationHost = context?.projected
     ? options.creationContextHost ?? null
@@ -172,6 +388,7 @@ export function renderWithRendererContext(render, container, value, context, opt
   const renderValue = () =>
     render(value, container, {
       ...renderOptions,
+      renderMode: resolvedRenderMode,
       ...(context?.host ? { host: context.host } : {}),
       ...(creationScope && !projectedCreationHost ? { creationScope } : {}),
     });
@@ -197,17 +414,34 @@ export function syncRendererHost(
     return;
   }
 
-  syncProjectedHostRegistry(host, rendered?.context ?? null);
+  const useProjectedLightDom = shouldUseProjectedLightDom(
+    host,
+    rendered?.context ?? null,
+  );
+  const useShadowMount =
+    rendered?.context?.projected &&
+    !useProjectedLightDom;
+
+  const rendererRoot = useShadowMount
+    ? ensureRendererMount(host, rendered?.context ?? null)
+    : null;
+  if (!useShadowMount) {
+    clearRendererMount(host);
+  }
+  const creationContextHost =
+    useProjectedLightDom
+      ? rendered?.context?.host ?? host
+      : host;
   host.hidden = !visible;
   if (!visible && !rendered?.context && !host[RENDERER_HOST_INITIALIZED]) {
     return;
   }
   renderWithRendererContext(
     render,
-    host,
+    rendererRoot ?? host,
     visible ? rendered?.value ?? nothing : nothing,
     rendered?.context ?? null,
-    { creationContextHost: host },
+    { creationContextHost },
   );
   host[RENDERER_HOST_INITIALIZED] = true;
 }

@@ -11,7 +11,7 @@
  * subject to an additional IP rights grant found at
  * http://polymer.github.io/PATENTS.txt
  *
- * Adapted for LitSX light DOM contextual registries.
+ * Adapted for LitSX shimmed scoped-registry runtime.
  */
 
 const RUNTIME_KEY = Symbol.for("litsx.lightDomRegistry.runtime");
@@ -534,7 +534,6 @@ function getRuntime() {
     if (
       !element ||
       element.nodeType !== Node.ELEMENT_NODE ||
-      definitionForElement.has(element) ||
       !registry ||
       typeof registry._getDefinition !== "function"
     ) {
@@ -543,6 +542,18 @@ function getRuntime() {
 
     const tagName = element.localName || element.tagName?.toLowerCase?.();
     const definition = tagName ? registry._getDefinition(tagName) : null;
+    const currentDefinition = definitionForElement.get(element) ?? null;
+    const effectiveRegistry = registryForNode(element);
+    if (effectiveRegistry && effectiveRegistry !== registry) {
+      return false;
+    }
+    if (
+      currentDefinition &&
+      (!definition || currentDefinition.elementClass === definition.elementClass)
+    ) {
+      return false;
+    }
+
     if (definition) {
       customize(element, definition, element.isConnected);
       return true;
@@ -631,7 +642,7 @@ function getRuntime() {
         return Reflect.construct(NativeHTMLElement, [], this.constructor);
       } catch {
         throw new TypeError(
-          "Illegal constructor (custom element class must be registered with the LitSX light DOM registry to be newable)"
+          "Illegal constructor (custom element class must be registered with the LitSX scoped-registry shim runtime to be newable)"
         );
       }
     }
@@ -829,6 +840,10 @@ export function ensureLightDomProxy(tagName) {
   return runtime.ensureLightDomProxy(tagName);
 }
 
+export function isLightDomRegistryRuntimeActive() {
+  return isBrowserLikeEnvironment() && Boolean(window[RUNTIME_KEY]);
+}
+
 export function createLightDomRegistry(host, initialElements = {}) {
   const runtime = getRuntime();
   if (!runtime) {
@@ -908,7 +923,7 @@ export function withLightDomCreationContext(scope, callback) {
   return runtime.withCreationContext(scope, callback);
 }
 
-export function upgradeLightDomTree(node, registry) {
+export function upgradeScopedRegistryTree(node, registry) {
   const runtime = getRuntime();
   if (!runtime || !node || !isRegistryLike(registry)) {
     return;

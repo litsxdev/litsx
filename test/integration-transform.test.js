@@ -290,7 +290,7 @@ describe("integration: parser + all plugins", () => {
     assert.doesNotMatch(code, /<ErrorBoundary/);
   });
 
-  it("can force light DOM output for react-compat migrations", () => {
+  it("rejects forced light DOM output when scoped elements are required", () => {
     const source = `
       import FancyButton from './FancyButton.js';
 
@@ -304,19 +304,17 @@ describe("integration: parser + all plugins", () => {
     `;
 
     const ast = parser.parse(source, { sourceType: "module" });
-    const { code } = transformFromAstSync(ast, source, {
-      configFile: false,
-      babelrc: false,
-      presets: [[REACT_COMPAT_PRESET, { domMode: "light", jsxTemplate: false }]],
-      generatorOpts: { decoratorsBeforeExport: true },
-    });
 
-    assert.match(
-      code,
-      /import \{ LightDomMixin \} from "@litsx\/core\/elements";/
+    assert.throws(
+      () =>
+        transformFromAstSync(ast, source, {
+          configFile: false,
+          babelrc: false,
+          presets: [[REACT_COMPAT_PRESET, { domMode: "light", jsxTemplate: false }]],
+          generatorOpts: { decoratorsBeforeExport: true },
+        }),
+      /does not support scoped elements in light DOM/
     );
-    assert.match(code, /export class LightForm extends LightDomMixin\(LitElement\)/);
-    assert.doesNotMatch(code, /ShadowDomMixin/);
   });
 
   it("ignores shadowRootOptions when forcing light DOM", () => {

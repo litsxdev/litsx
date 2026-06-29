@@ -35,6 +35,22 @@ function createDeferred() {
   return { promise, resolve };
 }
 
+function getRegionMount(regionHost) {
+  const firstChild = regionHost?.firstElementChild ?? null;
+  if (firstChild?.localName === "div" && firstChild.style?.display === "contents") {
+    return firstChild;
+  }
+  return null;
+}
+
+function getRegionRoot(boundary, region) {
+  const regionHost = boundary?.querySelector?.(
+    `[data-litsx-suspense-region="${region}"]`,
+  ) ?? null;
+  const mount = getRegionMount(regionHost);
+  return mount?.shadowRoot ?? regionHost ?? null;
+}
+
 function getPendingSteps(pendingStepsRef) {
   pendingStepsRef.current ??= new Map();
   return pendingStepsRef.current;
@@ -107,13 +123,13 @@ describe("litsx suspense DOM integration", () => {
     await boundary.updateComplete;
 
     assert.strictEqual(boundary.pending, true);
-    assert.match(boundary.innerHTML, /data-fallback/);
+    assert.match(getRegionRoot(boundary, "fallback")?.innerHTML ?? "", /data-fallback/);
 
     resolved = true;
     pending.resolve();
     await pending.promise;
     await boundary.updateComplete;
-    const child = boundary.querySelector(childTag);
+    const child = getRegionRoot(boundary, "content")?.querySelector?.(childTag) ?? null;
     await child.updateComplete;
     await boundary.updateComplete;
 
@@ -205,8 +221,9 @@ describe("litsx suspense DOM integration", () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
     await first.updateComplete;
 
-    assert.match(first.shadowRoot.innerHTML, /data-step="0"/);
-    assert.match(first.shadowRoot.innerHTML, /data-step="1"/);
+    const firstBoundaries = first.shadowRoot.querySelectorAll(boundaryTag);
+    assert.match(getRegionRoot(firstBoundaries[0], "content")?.innerHTML ?? "", /data-step="0"/);
+    assert.match(getRegionRoot(firstBoundaries[1], "content")?.innerHTML ?? "", /data-step="1"/);
 
     first.remove();
 
@@ -218,7 +235,8 @@ describe("litsx suspense DOM integration", () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
     await second.updateComplete;
 
-    assert.match(second.shadowRoot.innerHTML, /data-step="0"/);
-    assert.match(second.shadowRoot.innerHTML, /data-step="1"/);
+    const secondBoundaries = second.shadowRoot.querySelectorAll(boundaryTag);
+    assert.match(getRegionRoot(secondBoundaries[0], "content")?.innerHTML ?? "", /data-step="0"/);
+    assert.match(getRegionRoot(secondBoundaries[1], "content")?.innerHTML ?? "", /data-step="1"/);
   });
 });

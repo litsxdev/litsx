@@ -1126,7 +1126,7 @@ describe("@litsx/compiler", () => {
     assert.match(result.code, /"litsx-button": LitsxButton/);
   }, 20000);
 
-  it("supports slots and renderer props on the same component", () => {
+  it("keeps renderer projection working for light DOM components when no scoped host elements are required", () => {
     const source = [
       "import { LitsxButton } from './litsx-button.litsx';",
       "export function Shell({ header }) {",
@@ -1145,7 +1145,6 @@ describe("@litsx/compiler", () => {
     assert.match(result.code, /class Shell extends LightDomMixin\(LitElement\)/);
     assert.match(result.code, /<shell \.header=\$\{bindRendererContext\(typeof this === "undefined" \? null : this,\s*\(\) => html`<litsx-button type="primary" label="Mixed"><\/litsx-button>`,\s*\{\s*projected: true\s*\}\)\}>Body<\/shell>/);
     assert.match(result.code, /return html`<section><header>\$\{renderRendererCall\(this\.header\)\}<\/header><slot><\/slot><\/section>`;/);
-    assert.match(result.code, /"litsx-button": LitsxButton/);
   }, 20000);
 
   it("does not rewrite ordinary callback props as renderer calls", () => {
