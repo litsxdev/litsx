@@ -256,7 +256,10 @@ export function createLitsxPresetPlugins(options = {}, sourceFeatures = null) {
   if (shouldIncludeFeaturePlugin(sourceFeatures, "boundaries")) {
     plugins.push([
       transformLitsxBoundaries,
-      options.transformLitsxBoundaries || {},
+      {
+        ...normalizedTransformOptions,
+        ...(options.transformLitsxBoundaries || {}),
+      },
     ]);
   }
 

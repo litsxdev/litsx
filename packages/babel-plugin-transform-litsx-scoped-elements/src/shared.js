@@ -1,4 +1,9 @@
 let t;
+const CORE_LIGHT_DOM_EXPORTS = new Set([
+  "ErrorBoundary",
+  "SuspenseBoundary",
+  "SuspenseList",
+]);
 
 export function setTypes(apiTypes) {
   t = apiTypes;
@@ -13,10 +18,16 @@ export function buildAvailableMap(programPath) {
 
   programPath.get("body").forEach((nodePath) => {
     if (nodePath.isImportDeclaration()) {
+      const isCoreImport = nodePath.node.source.value === "@litsx/core";
       nodePath.node.specifiers.forEach((specifier) => {
         if (t.isImportSpecifier(specifier) || t.isImportDefaultSpecifier(specifier)) {
+          const importedName =
+            isCoreImport && t.isImportSpecifier(specifier)
+              ? specifier.imported.name
+              : null;
           availableMap.set(specifier.local.name, {
             originalName: specifier.local.name,
+            lightDom: Boolean(importedName && CORE_LIGHT_DOM_EXPORTS.has(importedName)),
           });
         }
       });
