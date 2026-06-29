@@ -12,6 +12,11 @@ const SHADOW_DOM_REGISTRY = Symbol("litsx.shadowDomRegistry");
 let shadowDomRegistryAttachKey;
 let shadowDomRegistryAttachShadowRef;
 let shadowDomRegistryCtorRef;
+let shadowDomRegistryNativeSupport;
+
+function getElementAttachShadowRef() {
+  return typeof Element !== "undefined" ? Element.prototype.attachShadow : undefined;
+}
 
 function isPolyfilledScopedRegistry(registry) {
   return Boolean(registry && "h" in registry && "m" in registry);
@@ -49,8 +54,9 @@ function getShadowDomRegistryAttachKey(registryOverride = null) {
 
   if (
     shadowDomRegistryAttachKey !== undefined &&
-    shadowDomRegistryAttachShadowRef === Element?.prototype?.attachShadow &&
-    shadowDomRegistryCtorRef === globalThis.CustomElementRegistry
+    shadowDomRegistryAttachShadowRef === getElementAttachShadowRef() &&
+    shadowDomRegistryCtorRef === globalThis.CustomElementRegistry &&
+    shadowDomRegistryNativeSupport !== undefined
   ) {
     return shadowDomRegistryAttachKey;
   }
@@ -61,8 +67,9 @@ function getShadowDomRegistryAttachKey(registryOverride = null) {
     typeof Element === "undefined"
   ) {
     shadowDomRegistryAttachKey = null;
-    shadowDomRegistryAttachShadowRef = Element?.prototype?.attachShadow;
+    shadowDomRegistryAttachShadowRef = getElementAttachShadowRef();
     shadowDomRegistryCtorRef = globalThis.CustomElementRegistry;
+    shadowDomRegistryNativeSupport = false;
     return null;
   }
 
@@ -71,15 +78,17 @@ function getShadowDomRegistryAttachKey(registryOverride = null) {
     registry = new CustomElementRegistry();
   } catch {
     shadowDomRegistryAttachKey = null;
-    shadowDomRegistryAttachShadowRef = Element.prototype.attachShadow;
+    shadowDomRegistryAttachShadowRef = getElementAttachShadowRef();
     shadowDomRegistryCtorRef = globalThis.CustomElementRegistry;
+    shadowDomRegistryNativeSupport = false;
     return null;
   }
 
   if (isPolyfilledScopedRegistry(registry)) {
     shadowDomRegistryAttachKey = null;
-    shadowDomRegistryAttachShadowRef = Element.prototype.attachShadow;
+    shadowDomRegistryAttachShadowRef = getElementAttachShadowRef();
     shadowDomRegistryCtorRef = globalThis.CustomElementRegistry;
+    shadowDomRegistryNativeSupport = false;
     return null;
   }
 
@@ -91,10 +100,22 @@ function getShadowDomRegistryAttachKey(registryOverride = null) {
         [key]: registry,
       });
       if (shadowRoot?.[key] === registry) {
-        shadowDomRegistryAttachKey = key;
-        shadowDomRegistryAttachShadowRef = Element.prototype.attachShadow;
+        const supportKey = `litsx-shadow-support-${Math.random().toString(36).slice(2)}`;
+        class SupportElement extends HTMLElement {}
+        try {
+          registry.define(supportKey, SupportElement);
+          shadowRoot.innerHTML = `<${supportKey}></${supportKey}>`;
+          const upgraded = shadowRoot.querySelector(supportKey);
+          shadowDomRegistryNativeSupport =
+            Object.getPrototypeOf(upgraded) === SupportElement.prototype;
+        } catch {
+          shadowDomRegistryNativeSupport = false;
+        }
+
+        shadowDomRegistryAttachKey = shadowDomRegistryNativeSupport ? key : null;
+        shadowDomRegistryAttachShadowRef = getElementAttachShadowRef();
         shadowDomRegistryCtorRef = globalThis.CustomElementRegistry;
-        return key;
+        return shadowDomRegistryAttachKey;
       }
     } catch {
       // Try the next known option name.
@@ -102,8 +123,9 @@ function getShadowDomRegistryAttachKey(registryOverride = null) {
   }
 
   shadowDomRegistryAttachKey = null;
-  shadowDomRegistryAttachShadowRef = Element.prototype.attachShadow;
+  shadowDomRegistryAttachShadowRef = getElementAttachShadowRef();
   shadowDomRegistryCtorRef = globalThis.CustomElementRegistry;
+  shadowDomRegistryNativeSupport = false;
   return null;
 }
 

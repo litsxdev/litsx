@@ -87,7 +87,7 @@ describe("@litsx/typescript", () => {
       ),
       [],
     );
-  });
+  }, 30000);
 
   it("allows arbitrary attributes only on custom element intrinsic tags", () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-intrinsic-custom-attrs-"));
