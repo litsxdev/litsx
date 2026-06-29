@@ -1,6 +1,8 @@
 import jsxSyntaxPlugin from "@babel/plugin-syntax-jsx";
 
 let t;
+const RENDER_LIGHT_MODULE = "@lit-labs/ssr-client/directives/render-light.js";
+const RENDER_LIGHT_IMPORT = "renderLight";
 
 function attributeValueToExpression(value) {
   if (!value) {
@@ -81,6 +83,55 @@ function isAttributeNamed(attribute, name) {
 function getBoundaryKind(nameNode, state) {
   const name = getJsxName(nameNode);
   return state.litsxBoundaryLocalNames.get(name) ?? null;
+}
+
+function ensureUniqueLocalName(programPath, baseName) {
+  programPath.scope.crawl();
+  if (!programPath.scope.hasBinding(baseName)) {
+    return baseName;
+  }
+
+  let index = 1;
+  while (programPath.scope.hasBinding(`__litsx${baseName}${index}`)) {
+    index += 1;
+  }
+
+  return `__litsx${baseName}${index}`;
+}
+
+function ensureRenderLightImport(programPath) {
+  const existing = programPath.get("body").find(
+    (nodePath) =>
+      nodePath.isImportDeclaration() &&
+      nodePath.node.source.value === RENDER_LIGHT_MODULE
+  );
+
+  if (existing) {
+    const specifier = existing.node.specifiers.find((entry) =>
+      t.isImportSpecifier(entry) &&
+      t.isIdentifier(entry.imported, { name: RENDER_LIGHT_IMPORT })
+    );
+
+    if (specifier?.local?.name) {
+      return t.identifier(specifier.local.name);
+    }
+
+    const localName = ensureUniqueLocalName(programPath, RENDER_LIGHT_IMPORT);
+    existing.node.specifiers.push(
+      t.importSpecifier(t.identifier(localName), t.identifier(RENDER_LIGHT_IMPORT))
+    );
+    return t.identifier(localName);
+  }
+
+  const localName = ensureUniqueLocalName(programPath, RENDER_LIGHT_IMPORT);
+  programPath.unshiftContainer(
+    "body",
+    t.importDeclaration(
+      [t.importSpecifier(t.identifier(localName), t.identifier(RENDER_LIGHT_IMPORT))],
+      t.stringLiteral(RENDER_LIGHT_MODULE)
+    )
+  );
+  return t.identifier(localName);
 }
 
 export default function transformLitsxBoundaries(api) {
@@ -165,6 +216,13 @@ export default function transformLitsxBoundaries(api) {
 
         node.openingElement.attributes = nextAttributes;
         node.children = [];
+        if (state.opts?.ssr === true) {
+          node.children.push(
+            t.jsxExpressionContainer(
+              t.callExpression(ensureRenderLightImport(path.findParent((parentPath) => parentPath.isProgram())), [])
+            ),
+          );
+        }
         node.openingElement.selfClosing = false;
         if (!node.closingElement) {
           node.closingElement = t.jsxClosingElement(t.cloneNode(node.openingElement.name));
