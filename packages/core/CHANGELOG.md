@@ -1,5 +1,11 @@
 # litsx
 
+## 0.8.2
+
+### Patch Changes
+
+- 0dacd77: Fix shadow scoped-registry capability detection so LitSX only uses the native shadow registry path when the browser actually upgrades elements created under that registry.
+
 ## 0.8.1
 
 ### Patch Changes
