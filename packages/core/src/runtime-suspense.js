@@ -93,6 +93,16 @@ export function collectSoftSuspenseThenables(collector, render) {
   return result;
 }
 
+export function collectSuspenseThenable(thenable) {
+  if (!currentSoftSuspenseCollector || !isThenable(thenable)) {
+    return null;
+  }
+
+  const promise = Promise.resolve(thenable);
+  currentSoftSuspenseCollector.add(promise);
+  return promise;
+}
+
 export function renderWithSoftSuspense(host, render) {
   try {
     return render();
@@ -108,11 +118,7 @@ export function renderWithSoftSuspense(host, render) {
     }
 
     const state = getSoftSuspenseState(host);
-    const promise = Promise.resolve(thrown);
-
-    if (currentSoftSuspenseCollector) {
-      currentSoftSuspenseCollector.add(promise);
-    }
+    const promise = collectSuspenseThenable(thrown) ?? Promise.resolve(thrown);
 
     if (state.pendingThenable === thrown) {
       return nothing;
