@@ -1,5 +1,13 @@
 # litsx
 
+## 0.8.3
+
+### Patch Changes
+
+- 4401039: Fix scoped registry runtime behavior across shadow mounts and publish the extracted scoped registry shim dependency used by `@litsx/core`.
+- Updated dependencies [4401039]
+  - @litsx/scoped-registry-shim@0.2.6
+
 ## 0.8.2
 
 ### Patch Changes

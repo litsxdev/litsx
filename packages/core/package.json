@@ -1,6 +1,6 @@
 {
   "name": "@litsx/core",
-  "version": "0.8.2",
+  "version": "0.8.3",
   "description": "Native LitSX runtime primitives, JSX runtime entrypoints, and web component utilities",
   "author": "LitSX Team",
   "type": "module",
@@ -75,7 +75,7 @@
   "dependencies": {
     "@lit/context": "^1.1.6",
     "@lit/reactive-element": "^2.1.2",
-    "@litsx/scoped-registry-shim": "^0.2.5"
+    "@litsx/scoped-registry-shim": "^0.2.6"
   },
   "devDependencies": {
     "lit": "^3.2.1"

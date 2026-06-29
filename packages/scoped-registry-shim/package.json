@@ -1,6 +1,6 @@
 {
   "name": "@litsx/scoped-registry-shim",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "description": "Internal shimmed scoped-registry runtime used by LitSX shadow and renderer mounts",
   "author": "LitSX Team",
   "type": "module",
