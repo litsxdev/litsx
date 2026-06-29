@@ -238,7 +238,7 @@ describe("litsx elements runtime", () => {
     );
   });
 
-  it("upgrades existing light-dom children when a light-dom host is upgraded", async () => {
+  it("rejects existing light-dom children when a light-dom host declares scoped elements", async () => {
     const childTag = nextTag("litsx-runtime-light-upgrade-child");
     const hostTag = nextTag("litsx-runtime-light-upgrade-host");
 
@@ -258,18 +258,10 @@ describe("litsx elements runtime", () => {
 
     customElements.define(hostTag, HostElement);
 
-    const host = document.createElement(hostTag);
-    document.body.appendChild(host);
-    host.innerHTML = `<${childTag}></${childTag}>`;
-    await globalThis.happyDOM.whenAsyncComplete();
-    const child = host.querySelector(childTag);
-
-    assert(host.registry);
-    assert.strictEqual(host.registry.get(childTag), ChildElement);
-    assert.strictEqual(Object.getPrototypeOf(child), ChildElement.prototype);
-    assert.strictEqual(child.getAttribute("data-upgraded"), "yes");
-
-    document.body.innerHTML = "";
+    assert.throws(
+      () => document.createElement(hostTag),
+      /cannot use static elements with LightDomMixin/
+    );
   });
 
   it("dedupes repeated light-dom element mixin applications", () => {
@@ -378,7 +370,7 @@ describe("litsx elements runtime", () => {
     }
   });
 
-  it("falls back to shimmed shadow registries once the light-dom runtime is active", () => {
+  it("still prefers native shadow registries when available after the light-dom runtime is active", () => {
     const originalCustomElementRegistry = globalThis.CustomElementRegistry;
     const originalAttachShadow = Element.prototype.attachShadow;
 
@@ -430,9 +422,9 @@ describe("litsx elements runtime", () => {
       const host = new Host();
       const shadowRoot = host.createRenderRoot();
 
-      assert.notStrictEqual(host.registry?.constructor, FakeRegistry);
-      assert.strictEqual(typeof host.registry?._getDefinition, "function");
-      assert.strictEqual(host.renderOptions.creationScope, shadowRoot);
+      assert.strictEqual(host.registry?.constructor, FakeRegistry);
+      assert.strictEqual(typeof host.registry?.get, "function");
+      assert.strictEqual(host.renderOptions.creationScope, undefined);
     } finally {
       globalThis.CustomElementRegistry = originalCustomElementRegistry;
       Element.prototype.attachShadow = originalAttachShadow;
@@ -1084,7 +1076,7 @@ describe("litsx elements runtime", () => {
     host.remove();
   });
 
-  it("lets shadow-dom and light-dom registries coexist in the same runtime", () => {
+  it("lets native shadow registries coexist with light-dom registries in the same runtime", () => {
     const lightChildTag = nextTag("litsx-runtime-light-child");
     const shadowChildTag = nextTag("litsx-runtime-shadow-child");
     const originalCustomElementRegistry = globalThis.CustomElementRegistry;
@@ -1169,10 +1161,10 @@ describe("litsx elements runtime", () => {
       const shadowHost = new ShadowHost();
       shadowHost.createRenderRoot();
 
-      assert.notStrictEqual(shadowHost.registry?.constructor, FakeRegistry);
-      assert.strictEqual(typeof shadowHost.registry?._getDefinition, "function");
+      assert.strictEqual(shadowHost.registry?.constructor, FakeRegistry);
+      assert.strictEqual(typeof shadowHost.registry?.get, "function");
       assert.strictEqual(shadowHost.registry.get(shadowChildTag), ShadowChild);
-      assert.strictEqual(shadowHost.registry.get(lightChildTag), null);
+      assert.strictEqual(shadowHost.registry.get(lightChildTag), undefined);
       assert.strictEqual(lightHost.registry.get(shadowChildTag), null);
 
       lightHost.remove();

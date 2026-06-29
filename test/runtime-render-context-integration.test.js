@@ -7,7 +7,7 @@ import { describe, it } from "vitest";
 import {
   connectLightDomRegistry,
   createLightDomRegistry,
-} from "../packages/light-dom-registry/src/index.js";
+} from "../packages/scoped-registry-shim/src/index.js";
 import {
   bindRendererContext,
   renderRendererCall,
@@ -64,16 +64,17 @@ describe("runtime renderer context integration", () => {
     document.body.appendChild(host);
     await globalThis.happyDOM.whenAsyncComplete();
 
-    const child = host.shadowRoot.querySelector(childTag);
-    const projectedHost = child.parentElement?.registry
-      ? child.parentElement
-      : host.shadowRoot.querySelector("div");
+    const rendererHost = host.shadowRoot.querySelector("section > div");
+    const projectedMount = rendererHost?.querySelector("div");
+    const child = projectedMount?.shadowRoot?.querySelector(childTag) ?? null;
+    const projectedHost = projectedMount ?? null;
 
     assert(child);
     assert.strictEqual(Object.getPrototypeOf(child), ProjectedChild.prototype);
     assert.strictEqual(child.getAttribute("data-upgraded"), "shadow");
-    assert(projectedHost.registry);
-    assert.strictEqual(projectedHost.registry.get(childTag), ProjectedChild);
+    assert(projectedHost);
+    assert(projectedHost.shadowRoot?.registry);
+    assert.strictEqual(projectedHost.shadowRoot.registry.get(childTag), ProjectedChild);
 
     document.body.innerHTML = "";
   });
