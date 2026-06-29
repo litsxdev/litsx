@@ -64,6 +64,7 @@
     "release:check:undeclared-runtime-deps": "node scripts/release/check-undeclared-runtime-dependencies.js",
     "release:preflight-local": "yarn install --mode=skip-build && yarn release:check:internal-ranges && yarn release:check:undeclared-runtime-deps && yarn changeset:status && node scripts/release/check-release-packages.js",
     "changeset:version": "node scripts/release/changeset-version.js",
+    "changeset:version:snapshot": "node scripts/release/changeset-version-snapshot.js",
     "changeset:publish": "changeset publish",
     "release:build:public": "node scripts/release/build-public-packages.js",
     "release:check": "yarn release:build:public && yarn release:check:undeclared-runtime-deps && node scripts/release/check-release-packages.js",

@@ -1,0 +1,162 @@
+name: Branch Prerelease
+
+on:
+  workflow_run:
+    workflows:
+      - Release Validate
+    types:
+      - completed
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: branch-prerelease-${{ github.event.workflow_run.head_branch || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  plan:
+    name: Detect Ready Branch Prerelease
+    if: github.event_name == 'workflow_run'
+    runs-on: ubuntu-latest
+    outputs:
+      ready: ${{ steps.gate.outputs.ready }}
+      has_changesets: ${{ steps.pending.outputs.has_changesets }}
+      snapshot_tag: ${{ steps.tag.outputs.snapshot_tag }}
+    steps:
+      - name: Check branch eligibility
+        id: gate
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const run = context.payload.workflow_run;
+            const branch = run?.head_branch || "";
+            const eventName = run?.event || "";
+            const conclusion = run?.conclusion || "";
+
+            if (!branch || branch === "main" || eventName !== "push" || conclusion !== "success") {
+              core.setOutput("ready", "false");
+              return;
+            }
+
+            core.setOutput("ready", "true");
+
+      - name: Compute branch snapshot tag
+        id: tag
+        if: steps.gate.outputs.ready == 'true'
+        shell: bash
+        run: |
+          branch="${{ github.event.workflow_run.head_branch }}"
+          sanitized="$(printf '%s' "$branch" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//; s/-+/-/g')"
+          sanitized="${sanitized:0:80}"
+          if [ -z "$sanitized" ]; then
+            sanitized="branch"
+          fi
+          echo "snapshot_tag=canary-${sanitized}" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout repository
+        if: steps.gate.outputs.ready == 'true'
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        if: steps.gate.outputs.ready == 'true'
+        uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          package-manager-cache: false
+
+      - name: Enable Yarn
+        if: steps.gate.outputs.ready == 'true'
+        run: |
+          corepack enable
+          corepack prepare yarn@4.10.3 --activate
+
+      - name: Cache Yarn state
+        if: steps.gate.outputs.ready == 'true'
+        uses: actions/cache@v5
+        with:
+          path: |
+            .yarn/install-state.gz
+            .yarn-cache
+          key: ${{ runner.os }}-yarn4-${{ hashFiles('yarn.lock', '.yarnrc.yml', 'package.json') }}
+          restore-keys: |
+            ${{ runner.os }}-yarn4-
+
+      - name: Install dependencies
+        if: steps.gate.outputs.ready == 'true'
+        run: corepack yarn install --immutable
+
+      - name: Detect pending changesets
+        id: pending
+        if: steps.gate.outputs.ready == 'true'
+        run: |
+          if find .changeset -maxdepth 1 -name '*.md' ! -name 'README.md' -print -quit | grep -q .; then
+            echo "has_changesets=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_changesets=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  publish:
+    name: Publish Branch Snapshot Packages
+    needs: plan
+    if: needs.plan.outputs.ready == 'true' && needs.plan.outputs.has_changesets == 'true'
+    runs-on: ubuntu-latest
+    environment: npm-release
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          package-manager-cache: false
+          registry-url: https://registry.npmjs.org
+
+      - name: Enable Yarn
+        run: |
+          corepack enable
+          corepack prepare yarn@4.10.3 --activate
+
+      - name: Cache Yarn state
+        uses: actions/cache@v5
+        with:
+          path: |
+            .yarn/install-state.gz
+            .yarn-cache
+          key: ${{ runner.os }}-yarn4-${{ hashFiles('yarn.lock', '.yarnrc.yml', 'package.json') }}
+          restore-keys: |
+            ${{ runner.os }}-yarn4-
+
+      - name: Install dependencies
+        run: corepack yarn install --immutable
+
+      - name: Materialize snapshot versions
+        env:
+          LITSX_SNAPSHOT_TAG: ${{ needs.plan.outputs.snapshot_tag }}
+        run: corepack yarn changeset:version:snapshot
+
+      - name: Refresh lockfile after snapshot versioning
+        env:
+          YARN_ENABLE_IMMUTABLE_INSTALLS: false
+        run: corepack yarn install
+
+      - name: Validate snapshot packages
+        run: |
+          corepack yarn release:check
+          corepack yarn release:smoke:scaffolds
+
+      - name: Publish snapshot packages
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: corepack yarn changeset publish --tag ${{ needs.plan.outputs.snapshot_tag }}

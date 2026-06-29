@@ -5,49 +5,45 @@ LitSX releases are managed with Changesets.
 ## Model
 
 - package versioning is independent
-- public npm packages are released from `main`
-- version bumps and changelogs are generated from `.changeset/*.md`
-- release publication is gated by the `npm-release` GitHub environment
-- `vscode-litsx` remains a separate manual Marketplace release
+- stable npm releases publish from `main`
+- branch pushes can publish automatic snapshot prereleases
+- npm publication is gated by the `npm-release` GitHub environment
+- stable releases create version/changelog commits, tags, and GitHub Releases
+- branch prereleases do not persist changelog edits, do not create tags, and do not create GitHub Releases
 
 ## Public npm packages
 
-- `litsx`
-- `@litsx/compiler`
-- `@litsx/vite-plugin`
-- `@litsx/typescript`
-- `@litsx/eslint-plugin`
-- `create-litsx-app`
-- `prettier-plugin-litsx`
-- `@litsx/scoped-registry-shim`
-- `@litsx/babel-parser`
+The release pipeline currently publishes these workspace packages:
+
 - `@litsx/authoring`
-- `@litsx/prop-types`
-- `@litsx/babel-preset-litsx`
-- `@litsx/babel-preset-react-compat`
-- `@litsx/babel-plugin-transform-jsx-html-template`
-- `@litsx/babel-plugin-transform-litsx-scoped-elements`
 - `@litsx/babel-plugin-litsx-proptypes`
 - `@litsx/babel-plugin-shared-hooks`
+- `@litsx/babel-plugin-transform-jsx-html-template`
+- `@litsx/babel-plugin-transform-litsx-scoped-elements`
+- `@litsx/babel-preset-litsx`
+- `@litsx/babel-preset-react-compat`
+- `@litsx/compiler`
+- `@litsx/core`
+- `create-litsx-app`
+- `@litsx/eslint-plugin-litsx`
+- `prettier-plugin-litsx`
+- `@litsx/prop-types`
+- `@litsx/scoped-registry-shim`
+- `@litsx/typescript`
 - `@litsx/typescript-session`
+- `@litsx/vite-plugin`
 
-## Ignored packages
+The source of truth for this set is [scripts/release/release-packages.js](/Users/rafabernad/Workspace/litsx/scripts/release/release-packages.js).
 
-These stay outside npm publication and are ignored by Changesets:
+## Private packages
 
-- `vscode-litsx`
-- `@litsx/playground`
-- `@litsx/vitepress`
+These workspace packages stay private and outside npm publication:
 
-`vscode-litsx` remains private to the workspace package graph and is released manually to
-the VS Code Marketplace only.
-
-`test/fixtures/dx-smoke-app` remains in the repository as a fixture for authored-source
-tests and stays outside the active Yarn workspaces graph and release machinery.
+- `@litsx/shiki-languages`
 
 ## Contributor workflow
 
-If a pull request changes one or more public packages, add a changeset:
+If a change affects one or more public npm packages, add a changeset:
 
 ```sh
 yarn changeset
@@ -57,7 +53,7 @@ That file records:
 
 - which packages change
 - the bump type
-- the changelog summary used later for package changelogs and GitHub Releases
+- the summary used later for package changelogs and stable GitHub Releases
 
 ## Local validation
 
@@ -76,17 +72,48 @@ Useful release commands:
 yarn changeset
 yarn changeset:status
 yarn changeset:version
+yarn changeset:version:snapshot
 yarn release:publish
 ```
+
+## Stable releases
+
+Stable releases come from `main` through the `Release` workflow.
+
+When pending changesets exist, that workflow:
+
+- waits for `Test` and `Release Validate`
+- runs `yarn changeset:version`
+- refreshes generated internal dependency ranges
+- publishes public npm packages
+- commits version and changelog updates back to `main`
+- pushes git tags
+- creates a GitHub Release
+
+## Branch prereleases
+
+Non-`main` branch pushes can publish automatic snapshot prereleases.
+
+Properties of that flow:
+
+- it runs only for successful `push` workflows on non-`main` branches
+- it is triggered after `Release Validate`
+- it uses Changesets snapshot versioning, not persistent prerelease mode
+- it publishes under a branch-specific npm dist-tag shaped like `canary-<branch>`
+- it does **not** commit version bumps back to the branch
+- it restores package changelogs after versioning so the repository does not accumulate prerelease changelog noise
+- it does **not** create git tags
+- it does **not** create GitHub Releases
+
+This flow is meant for unstable validation builds, not for a curated “next” channel.
 
 ## GitHub workflows
 
 ### `Test`
 
-- runs on pushes to branches
-- runs on all pull requests, including forks
+- runs on pushes to branches and on pull requests
 - stays secret-free
-- validates the full test suite
+- validates the full test suite and reports coverage
 
 ### `Changeset Status`
 
@@ -96,84 +123,48 @@ yarn release:publish
 
 ### `Release Validate`
 
-- runs on pushes to `main`
-- runs on pull requests
+- runs on pushes and pull requests
 - stays secret-free
+- materializes stable version bumps when changesets are present
 - validates release surfaces and scaffold smoke
-- uploads preview npm tarballs and VSIX artifacts on `main`
-
-### `Deploy Docs`
-
-- runs on pushes to `main`
-- builds the VitePress site with `yarn docs:build`
-- deploys `website/docs/.vitepress/dist` to GitHub Pages
-- assumes custom-domain hosting at:
-  - `https://litsx.dev/`
-- publishes `website/docs/public/CNAME` so the Pages artifact keeps the custom domain attached
-- can inject site analytics at build time through repository variables
+- uploads preview npm tarballs on `main`
 
 ### `Release`
 
-- runs on pushes to `main`
-- stays idle when no pending `.changeset/*.md` files are present
-- when pending changesets exist:
-  - waits for approval through the `npm-release` environment
-  - runs `yarn changeset:version`
-  - commits the resulting version and changelog updates back to `main`
-  - publishes public npm packages with `yarn release:publish`
-- does not create a release PR
-- does not publish `vscode-litsx`
+- runs from `main`
+- publishes stable npm releases
+- creates version/changelog commits, tags, and GitHub Releases
 
-### `Publish VS Code Extension`
+### `Branch Prerelease`
+
+- runs automatically after `Release Validate` for successful non-`main` branch pushes
+- publishes snapshot npm builds under branch-specific `canary-...` dist-tags
+- skips release commits, tags, and GitHub Releases
+
+### `Backfill GitHub Releases`
 
 - remains manual
-- stays outside npm publication and Changesets versioning
-- packages a `.vsix`
-- generates a GitHub artifact attestation for that `.vsix`
-- publishes `vscode-litsx` to the Marketplace with `VSCE_PAT`
+- rebuilds or previews GitHub Releases from existing release commits
 
 ## Required GitHub setup
 
 - environment: `npm-release`
   - secret: `NPM_TOKEN`
-- environment: `vscode-marketplace`
-  - secret: `VSCE_PAT`
 
 Recommended repository setup:
 
 - protect `main`
-- require the `Test / test` job
-- require the `Release Validate / validate` job
-- enable GitHub Pages with source set to `GitHub Actions`
-- configure the custom domain `litsx.dev` in the repository Pages settings
-- if you want traffic analytics on the docs site, configure repository variables for one provider:
-  - `LITSX_ANALYTICS_PROVIDER=ga4` and `LITSX_GA_MEASUREMENT_ID=G-...`
-  - or `LITSX_ANALYTICS_PROVIDER=plausible`, `LITSX_PLAUSIBLE_DOMAIN=litsx.dev`, and optionally `LITSX_PLAUSIBLE_API_HOST=https://plausible.io`
+- require `Test / Test Suite`
+- require `Release Validate / Validate Release Surface`
 - install the `changeset-bot` GitHub App so PRs get nudged when a changeset is missing
 
 ## Scaffold version sync
 
-`create-litsx-app` embeds published dependency ranges for:
+`create-litsx-app` embeds published dependency ranges for selected public packages.
 
-- `litsx`
-- `@litsx/eslint-plugin`
-- `@litsx/typescript`
-- `@litsx/vite-plugin`
-- `prettier-plugin-litsx`
+Those ranges are synchronized during:
 
-Those ranges are synchronized during `yarn changeset:version`, so the scaffold stays aligned with whatever versions Changesets has just written.
+- `yarn changeset:version`
+- `yarn changeset:version:snapshot`
 
-## VS Code extension release
-
-`vscode-litsx` stays private in the workspace and is not published by Changesets or npm.
-
-Public npm packages opt into npm provenance through `publishConfig.provenance: true`. npm publication runs from the `Release` workflow after `npm-release` environment approval and requires a valid `NPM_TOKEN`.
-
-Before Marketplace publish:
-
-```sh
-yarn release:vscode:build
-yarn release:vscode:package
-```
-
-Then use the `Publish VS Code Extension` workflow.
+so generated apps stay aligned with the versions that the release pipeline has just materialized.

@@ -2,8 +2,6 @@ name: Release Validate
 
 on:
   push:
-    branches:
-      - main
   pull_request:
 
 permissions:
