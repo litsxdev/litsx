@@ -1995,6 +1995,34 @@ describe("@litsx/babel-preset-litsx", () => {
     );
   });
 
+  it("injects SSR light DOM rendering for core suspense boundaries", () => {
+    const source = [
+      'import { SuspenseBoundary } from "@litsx/core";',
+      "export function Parent() {",
+      "  return <SuspenseBoundary fallback={<span>loading</span>}><article>ready</article></SuspenseBoundary>;",
+      "}",
+    ].join("\n");
+
+    const result = transformFromAstSync(
+      parser.parse(source, { sourceType: "module" }),
+      source,
+      {
+        configFile: false,
+        babelrc: false,
+        presets: [[nativePreset, { ssr: true }]],
+      },
+    );
+
+    assert.match(
+      result.code,
+      /import \{ renderLight \} from "@lit-labs\/ssr-client\/directives\/render-light\.js";/,
+    );
+    assert.match(
+      result.code,
+      /<suspense-boundary[\s\S]*>\$\{renderLight\(\)\}<\/suspense-boundary>/,
+    );
+  });
+
   it("does not lower React-only wrappers in the native preset", () => {
     const source = [
       "import { forwardRef, memo } from 'react';",
