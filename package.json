@@ -75,7 +75,7 @@
     "release:github": "node scripts/release/build-github-release.js",
     "release:github:backfill": "node scripts/release/backfill-github-releases.js",
     "release:publish": "yarn release:check && yarn release:smoke:scaffolds && yarn changeset:publish",
-    "release:test": "vitest run test/create-litsx-app.test.js test/prettier-plugin-litsx.test.js test/shiki-languages.test.js test/typescript-plugin-litsx.test.js test/vite-plugin.test.js test/compiler.test.js test/compiler-authored-input.test.js"
+    "release:test": "vitest run test/release-manifest.test.js test/create-litsx-app.test.js test/prettier-plugin-litsx.test.js test/shiki-languages.test.js test/typescript-plugin-litsx.test.js test/vite-plugin.test.js test/compiler.test.js test/compiler-authored-input.test.js"
   },
   "author": "LitSX Team",
   "license": "Apache-2.0",

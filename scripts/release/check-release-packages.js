@@ -3,8 +3,10 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { excludedPrivatePackages, npmReleasePackages } from "./release-packages.js";
+import { stageReleasePackage } from "./release-manifest.js";
 
 const repoRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
+const stagingRoot = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-release-stage-"));
 
 function fail(message) {
   console.error(`release check failed: ${message}`);
@@ -13,10 +15,6 @@ function fail(message) {
 
 function readJson(relativePath) {
   return JSON.parse(fs.readFileSync(path.join(repoRoot, relativePath), "utf8"));
-}
-
-function fileExists(relativePath) {
-  return fs.existsSync(path.join(repoRoot, relativePath));
 }
 
 function normalizeExportTargets(value, results = new Set()) {
@@ -53,27 +51,27 @@ function assertCommonManifestFields(packageDir, manifest) {
   }
 }
 
-function assertFileList(packageDir, manifest) {
+function assertFileList(packageDir, packageRoot, manifest) {
   if (!Array.isArray(manifest.files) || manifest.files.length === 0) {
     fail(`${packageDir} must declare a non-empty files list`);
     return;
   }
   for (const entry of manifest.files) {
-    if (!fileExists(path.join(packageDir, entry))) {
+    if (!fs.existsSync(path.join(packageRoot, entry))) {
       fail(`${packageDir} files entry does not exist: ${entry}`);
     }
   }
 
-  const hasReadmeOnDisk = fileExists(path.join(packageDir, "README.md"));
+  const hasReadmeOnDisk = fs.existsSync(path.join(packageRoot, "README.md"));
   const filesSet = new Set(manifest.files);
   if (hasReadmeOnDisk && !filesSet.has("README.md")) {
     fail(`${packageDir} has a README.md but does not include it in files`);
   }
 }
 
-function assertEntrypoints(packageDir, manifest) {
+function assertEntrypoints(packageDir, packageRoot, manifest) {
   for (const field of ["main", "module", "types"]) {
-    if (manifest[field] && !fileExists(path.join(packageDir, manifest[field]))) {
+    if (manifest[field] && !fs.existsSync(path.join(packageRoot, manifest[field]))) {
       fail(`${packageDir} ${field} target does not exist: ${manifest[field]}`);
     }
   }
@@ -81,7 +79,7 @@ function assertEntrypoints(packageDir, manifest) {
   if (manifest.exports) {
     for (const target of normalizeExportTargets(manifest.exports)) {
       if (target.includes("*")) continue;
-      if (!fileExists(path.join(packageDir, target))) {
+      if (!fs.existsSync(path.join(packageRoot, target))) {
         fail(`${packageDir} exports target does not exist: ${target}`);
       }
     }
@@ -89,12 +87,12 @@ function assertEntrypoints(packageDir, manifest) {
 
   if (manifest.bin) {
     if (typeof manifest.bin === "string") {
-      if (!fileExists(path.join(packageDir, manifest.bin))) {
+      if (!fs.existsSync(path.join(packageRoot, manifest.bin))) {
         fail(`${packageDir} bin target does not exist: ${manifest.bin}`);
       }
     } else {
       for (const target of Object.values(manifest.bin)) {
-        if (!fileExists(path.join(packageDir, target))) {
+        if (!fs.existsSync(path.join(packageRoot, target))) {
           fail(`${packageDir} bin target does not exist: ${target}`);
         }
       }
@@ -102,13 +100,29 @@ function assertEntrypoints(packageDir, manifest) {
   }
 }
 
-function assertPackOutput(packageDir) {
+function assertNoSrcReleaseTargets(packageDir, manifest) {
+  for (const field of ["module", "types"]) {
+    if (typeof manifest[field] === "string" && manifest[field].startsWith("./src/")) {
+      fail(`${packageDir} ${field} must point at dist in the release manifest: ${manifest[field]}`);
+    }
+  }
+
+  if (manifest.exports) {
+    for (const target of normalizeExportTargets(manifest.exports)) {
+      if (typeof target === "string" && target.startsWith("./src/")) {
+        fail(`${packageDir} exports target must point at dist in the release manifest: ${target}`);
+      }
+    }
+  }
+}
+
+function assertPackOutput(packageDir, packageRoot) {
   const npmCacheDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-npm-pack-cache-"));
   const output = execFileSync(
     "npm",
     ["pack", "--json", "--dry-run"],
     {
-      cwd: path.join(repoRoot, packageDir),
+      cwd: packageRoot,
       encoding: "utf8",
       env: {
         ...process.env,
@@ -149,15 +163,22 @@ function assertNoWorkspaceProtocols(packageDir, manifest) {
 }
 
 for (const packageDir of npmReleasePackages) {
-  const manifest = readJson(path.join(packageDir, "package.json"));
+  const packageRoot = path.join(repoRoot, packageDir);
+  const { releaseManifest, stagingDir } = stageReleasePackage({
+    packageDir,
+    packageRoot,
+    stagingRoot,
+  });
+  const manifest = releaseManifest;
   if (manifest.private === true) {
     fail(`${packageDir} is still private`);
   }
   assertCommonManifestFields(packageDir, manifest);
   assertNoWorkspaceProtocols(packageDir, manifest);
-  assertFileList(packageDir, manifest);
-  assertEntrypoints(packageDir, manifest);
-  assertPackOutput(packageDir);
+  assertNoSrcReleaseTargets(packageDir, manifest);
+  assertFileList(packageDir, stagingDir, manifest);
+  assertEntrypoints(packageDir, stagingDir, manifest);
+  assertPackOutput(packageDir, stagingDir);
 }
 
 for (const packageDir of excludedPrivatePackages) {
