@@ -1567,7 +1567,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
       presets: [[nativePreset, { jsxTemplate: false }]],
     });
 
-    assert.match(code, /import \{ LightDomMixin \} from "@litsx\/core\/elements";/);
+    assert.match(code, /import \{[^}]*LightDomMixin[^}]*\} from "@litsx\/core\/elements";/);
     assert.match(code, /class Card extends LightDomMixin\(LitElement\)/);
     assert.doesNotMatch(code, /createRenderRoot\(\)\s*\{\s*return this;\s*\}/s);
     assert.doesNotMatch(code, /static get lightDom\(\)/);
@@ -1710,7 +1710,8 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
     assert.match(code, /static createConfig\(\)\s*\{/);
     assert.match(code, /return \{\s*modal: true\s*\};/s);
     assert.doesNotMatch(code, /LitsxStaticHoistsMixin/);
-    assert.doesNotMatch(code, /@litsx\/core\/elements/);
+    assert.match(code, /static \[Symbol\.for\("litsx\.hostTypeId"\)\] = "litsx-host-type-/);
+    assert.match(code, /static \[Symbol\.for\("litsx\.component"\)\] = true;/);
     assert.doesNotMatch(code, /_litsx_static_expose/);
   });
 

@@ -5,10 +5,13 @@ import {
   collectSoftSuspenseThenables,
   EffectsController,
   ensureLazyElement,
+  isLitsxComponentClass,
+  isLitsxHook,
   prepareEffects,
   useMemoValue,
   useAfterUpdate,
   useHost,
+  useHostTypeId,
   useHostContent,
   useSlot,
   useTextContent,
@@ -32,6 +35,8 @@ import {
   useExternalStore,
   renderWithSoftSuspense,
 } from "../packages/core/src/index.js";
+import { LITSX_COMPONENT, LITSX_HOST_TYPE_ID } from "../packages/core/src/elements/index.js";
+import { LITSX_HOOK } from "../packages/core/src/index.js";
 import { withSuspenseCapture } from "../packages/core/src/runtime-suspense.js";
 
 class TestHost extends EventTarget {
@@ -1382,6 +1387,45 @@ describe("litsx effects controller", () => {
       useStableId(firstHost, "litsx-stable-demo"),
       useStableId(firstHost, "litsx-stable-other"),
     );
+  });
+
+  it("returns stable host-type ids from LitSX-compiled component constructors", () => {
+    class TypedHost extends TestHost {}
+    TypedHost[LITSX_COMPONENT] = true;
+    TypedHost[LITSX_HOST_TYPE_ID] = "litsx-host-type-demo";
+
+    const firstHost = new TypedHost();
+    const secondHost = new TypedHost();
+
+    assert.strictEqual(useHostTypeId(firstHost), "litsx-host-type-demo");
+    assert.strictEqual(useHostTypeId(secondHost), "litsx-host-type-demo");
+  });
+
+  it("throws when host-type metadata is missing", () => {
+    const host = new TestHost();
+
+    assert.throws(
+      () => useHostTypeId(host),
+      /LitSX-compiled component host with stable host-type metadata/
+    );
+  });
+
+  it("marks compiled hooks with LitSX hook metadata", () => {
+    const hook = () => "value";
+    hook[LITSX_HOOK] = true;
+    assert.strictEqual(isLitsxHook(hook), true);
+    assert.strictEqual(isLitsxHook(() => "other"), false);
+  });
+
+  it("detects LitSX component classes from published metadata", () => {
+    class LitsxHost extends TestHost {}
+    class PlainHost extends TestHost {}
+
+    LitsxHost[LITSX_COMPONENT] = true;
+    LitsxHost[LITSX_HOST_TYPE_ID] = "litsx-host-type-demo";
+
+    assert.strictEqual(isLitsxComponentClass(LitsxHost), true);
+    assert.strictEqual(isLitsxComponentClass(PlainHost), false);
   });
 
   it("registers direct custom element constructors in the scoped registry", () => {

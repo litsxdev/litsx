@@ -98,6 +98,42 @@ describe("@litsx/babel-preset-litsx", () => {
     assert.ok(ids.every((id) => id.startsWith("litsx-stable-")));
   });
 
+  it("injects stable class metadata for generated component classes", () => {
+    const source = [
+      "export function PrimaryCard() {",
+      "  return <div>one</div>;",
+      "}",
+      "export function SecondaryCard() {",
+      "  return <div>two</div>;",
+      "}",
+    ].join("\n");
+
+    const firstResult = transformFromAstSync(parser.parse(source, { sourceType: "module" }), source, {
+      configFile: false,
+      babelrc: false,
+      filename: "/virtual/stable-class-ids.litsx",
+      presets: [[nativePreset, { jsxTemplate: false }]],
+    });
+    const secondResult = transformFromAstSync(parser.parse(source, { sourceType: "module" }), source, {
+      configFile: false,
+      babelrc: false,
+      filename: "/virtual/stable-class-ids.litsx",
+      presets: [[nativePreset, { jsxTemplate: false }]],
+    });
+
+    const firstIds = [...firstResult.code.matchAll(/\[Symbol\.for\("litsx\.hostTypeId"\)\] = "([^"]+)"/g)]
+      .map((match) => match[1]);
+    const secondIds = [...secondResult.code.matchAll(/\[Symbol\.for\("litsx\.hostTypeId"\)\] = "([^"]+)"/g)]
+      .map((match) => match[1]);
+
+    assert.doesNotMatch(firstResult.code, /@litsx\/core\/elements/);
+    assert.match(firstResult.code, /static \[Symbol\.for\("litsx\.component"\)\] = true;/);
+    assert.strictEqual(firstIds.length, 2);
+    assert.deepStrictEqual(firstIds, secondIds);
+    assert.notStrictEqual(firstIds[0], firstIds[1]);
+    assert.ok(firstIds.every((id) => id.startsWith("litsx-host-type-")));
+  });
+
   it("compiles local structural hooks to host middleware reads", () => {
     const source = [
       'import { defineHook } from "@litsx/core";',
@@ -409,7 +445,7 @@ describe("@litsx/babel-preset-litsx", () => {
     });
 
     assert.match(result.code, /class Greeting extends HostMiddlewareMixin\(LitElement\)/);
-    assert.match(result.code, /static structuralEntries = \[\s*...getStructuralHookEntries\(useMessage\)/);
+    assert.match(result.code, /static structuralEntries = \[\s*\.\.\.\(useMessage\[Symbol\.for\("litsx\.structuralHookEntries"\)\] \|\| \[\]\)/);
     assert.match(result.code, /useMessage\(this, 'hello'\)|useMessage\(this, "hello"\)/);
     assert.doesNotMatch(result.code, /resolveStructuralEntry\(this, 0, "litsx-structural-[^"]+", useMessage/);
   });
@@ -434,9 +470,9 @@ describe("@litsx/babel-preset-litsx", () => {
       presets: [[nativePreset, { jsxTemplate: false }]],
     });
 
-    assert.match(result.code, /import \{[^}]*defineHook[^}]*resolveStructuralEntry[^}]*defineStructuralHookEntries[^}]*\} from "@litsx\/core";|import \{[^}]*defineStructuralHookEntries[^}]*defineHook[^}]*resolveStructuralEntry[^}]*\} from "@litsx\/core";/);
+    assert.match(result.code, /import \{[^}]*defineHook[^}]*resolveStructuralEntry[^}]*\} from "@litsx\/core";|import \{[^}]*resolveStructuralEntry[^}]*defineHook[^}]*\} from "@litsx\/core";/);
     assert.match(result.code, /export function useMessage\(_host, name\)/);
-    assert.match(result.code, /defineStructuralHookEntries\(useMessage, \[/);
+    assert.match(result.code, /useMessage\[Symbol\.for\("litsx\.structuralHookEntries"\)\] = \[/);
     assert.match(result.code, /resolveStructuralEntry\(_host, 0, "litsx-structural-[^"]+", useResource, \[name\]/);
   });
 
@@ -571,7 +607,7 @@ describe("@litsx/babel-preset-litsx", () => {
     assert.match(result.code, /static structuralEntries = \[\{\s*id: "litsx-structural-[^"]+"/);
     assert.match(result.code, /definition: useScopedResource/);
     assert.match(result.code, /resolveStructuralEntry\(this, 0, "litsx-structural-[^"]+", useScopedResource, \[this\.name\]/);
-    assert.match(hooksResult.code, /defineStructuralHookEntries\(useScopedResource, \[/);
+    assert.match(hooksResult.code, /useScopedResource\[Symbol\.for\("litsx\.structuralHookEntries"\)\] = \[/);
     assert.match(hooksResult.code, /resolveStructuralEntry\(_host, 0, "litsx-structural-[^"]+", useResource, \[`scope:\$\{args\[0\]\}`\]/);
   });
 

@@ -1,6 +1,6 @@
 const EMPTY_ARGS = Object.freeze([]);
 const STRUCTURAL_HOOK_DEFINITION = Symbol.for("litsx.structuralHookDefinition");
-const STRUCTURAL_HOOK_ENTRIES = Symbol.for("litsx.structuralHookEntries");
+export const STRUCTURAL_HOOK_ENTRIES = Symbol.for("litsx.structuralHookEntries");
 const STRUCTURAL_STATIC_STATE = Symbol.for("litsx.structuralStaticState");
 const LIFECYCLE_METHODS = [
   "connectedCallback",
@@ -44,23 +44,6 @@ export function defineHook(definition) {
 
 export function isStructuralHook(value) {
   return typeof value === "function" && Boolean(value[STRUCTURAL_HOOK_DEFINITION]);
-}
-
-export function defineStructuralHookEntries(hook, entries) {
-  if (typeof hook !== "function") {
-    return hook;
-  }
-  Object.defineProperty(hook, STRUCTURAL_HOOK_ENTRIES, {
-    value: Array.isArray(entries) ? entries : [],
-    configurable: true,
-  });
-  return hook;
-}
-
-export function getStructuralHookEntries(hook) {
-  return typeof hook === "function" && Array.isArray(hook[STRUCTURAL_HOOK_ENTRIES])
-    ? hook[STRUCTURAL_HOOK_ENTRIES]
-    : [];
 }
 
 function normalizeArgs(args) {

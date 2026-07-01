@@ -307,7 +307,7 @@ describe("@litsx/babel-plugin-transform-litsx-scoped-elements", () => {
       parserPlugins: ["typescript"],
     });
 
-    assert.match(code, /import \{ LightDomMixin \} from "@litsx\/core\/elements";/);
+    assert.match(code, /import \{[^}]*LightDomMixin[^}]*\} from "@litsx\/core\/elements";/);
     assert.match(code, /class LightCard extends LightDomMixin\(LitElement\)/);
     assert.doesNotMatch(code, /static elements\s*=/);
   });

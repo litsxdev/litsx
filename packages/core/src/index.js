@@ -17,9 +17,17 @@ export {
   renderWithSoftSuspense,
 } from "./runtime-suspense.js";
 export {
+  LITSX_HOOK,
+  isLitsxHook,
+} from "./hook-metadata.js";
+export {
+  LITSX_COMPONENT,
+  LITSX_HOST_TYPE_ID,
+  isLitsxComponentClass,
+} from "./elements/index.js";
+export {
+  STRUCTURAL_HOOK_ENTRIES,
   defineHook,
-  defineStructuralHookEntries,
-  getStructuralHookEntries,
   HostMiddlewareMixin,
   HostMiddlewareRuntime,
   createHostMiddlewareRuntime,
@@ -42,6 +50,7 @@ export {
 
 export {
   useHost,
+  useHostTypeId,
   useHostContent,
   useTextContent,
   useSlot,

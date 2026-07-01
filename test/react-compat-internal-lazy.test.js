@@ -42,7 +42,7 @@ describe("react compat internal lazy", () => {
 
     assert.match(
       code,
-      /import \{ ShadowDomMixin \} from "@litsx\/core\/elements";/
+      /import \{[^}]*ShadowDomMixin[^}]*\} from "@litsx\/core\/elements";/
     );
     assert.match(code, /class Screen extends ShadowDomMixin\(LitElement\)/);
     assert.match(

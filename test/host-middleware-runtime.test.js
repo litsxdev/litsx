@@ -2,8 +2,7 @@ import assert from "assert";
 import { describe, it } from "vitest";
 import {
   defineHook,
-  defineStructuralHookEntries,
-  getStructuralHookEntries,
+  STRUCTURAL_HOOK_ENTRIES,
   HostMiddlewareMixin,
   HostMiddlewareRuntime,
   createHostMiddlewareRuntime,
@@ -727,9 +726,10 @@ describe("HostMiddlewareRuntime", () => {
     function useCustomHook() {}
     const entries = [{ callsiteId: "nested", definition: {} }];
 
-    assert.strictEqual(defineStructuralHookEntries(useCustomHook, entries), useCustomHook);
-    assert.strictEqual(getStructuralHookEntries(useCustomHook), entries);
-    assert.deepStrictEqual(getStructuralHookEntries(() => undefined), []);
+    useCustomHook[STRUCTURAL_HOOK_ENTRIES] = entries;
+
+    assert.strictEqual(useCustomHook[STRUCTURAL_HOOK_ENTRIES], entries);
+    assert.strictEqual((() => undefined)[STRUCTURAL_HOOK_ENTRIES], undefined);
   });
 });
 

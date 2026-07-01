@@ -88,6 +88,25 @@ function createStructuralEntryExpression(entry, t) {
   ]);
 }
 
+function createRuntimeMetadataSymbolExpression(t, symbolKey) {
+  return t.callExpression(
+    t.memberExpression(t.identifier("Symbol"), t.identifier("for")),
+    [t.stringLiteral(symbolKey)]
+  );
+}
+
+function isRuntimeMetadataSymbolFor(node, t, symbolKey) {
+  return (
+    t.isCallExpression(node) &&
+    t.isMemberExpression(node.callee) &&
+    !node.callee.computed &&
+    t.isIdentifier(node.callee.object, { name: "Symbol" }) &&
+    t.isIdentifier(node.callee.property, { name: "for" }) &&
+    node.arguments.length === 1 &&
+    t.isStringLiteral(node.arguments[0], { value: symbolKey })
+  );
+}
+
 function getStructuralDefinitionObjectFromBinding(binding, state) {
   if (!binding?.path?.isVariableDeclarator()) {
     return null;
@@ -186,12 +205,17 @@ function addStructuralDependenciesToCurrentPlan(state, hookInfo) {
     if (!importedDependencyArg) {
       return;
     }
-    state.usedHelpers.add("getStructuralHookEntries");
     state.activeStructuralEntries.push({
       type: "spread",
-      argument: hookInfo.t.callExpression(hookInfo.t.identifier("getStructuralHookEntries"), [
-        importedDependencyArg,
-      ]),
+      argument: hookInfo.t.logicalExpression(
+        "||",
+        hookInfo.t.memberExpression(
+          importedDependencyArg,
+          createRuntimeMetadataSymbolExpression(hookInfo.t, "litsx.structuralHookEntries"),
+          true
+        ),
+        hookInfo.t.arrayExpression([])
+      ),
     });
     return;
   }
@@ -260,12 +284,17 @@ function addCustomHookStructuralDependenciesToCurrentPlan(calleePath, state, t) 
     return;
   }
 
-  state.usedHelpers.add("getStructuralHookEntries");
   state.activeStructuralEntries.push({
     type: "spread",
-    argument: t.callExpression(t.identifier("getStructuralHookEntries"), [
-      importedDependencyArg,
-    ]),
+    argument: t.logicalExpression(
+      "||",
+      t.memberExpression(
+        importedDependencyArg,
+        createRuntimeMetadataSymbolExpression(t, "litsx.structuralHookEntries"),
+        true
+      ),
+      t.arrayExpression([])
+    ),
   });
 }
 
@@ -316,11 +345,102 @@ function ensureStructuralEntriesProperty(classPath, propertyName, entries, t) {
 
 function createDefineStructuralHookEntriesStatement(hookName, entries, t) {
   return t.expressionStatement(
-    t.callExpression(t.identifier("defineStructuralHookEntries"), [
-      t.identifier(hookName),
-      t.arrayExpression(entries.map((entry) => createStructuralEntryExpression(entry, t))),
-    ])
+    t.assignmentExpression(
+      "=",
+      t.memberExpression(
+        t.identifier(hookName),
+        createRuntimeMetadataSymbolExpression(t, "litsx.structuralHookEntries"),
+        true
+      ),
+      t.arrayExpression(entries.map((entry) => createStructuralEntryExpression(entry, t)))
+    )
   );
+}
+
+function createMarkLitsxHookStatement(hookName, t) {
+  return t.expressionStatement(
+    t.assignmentExpression(
+      "=",
+      t.memberExpression(
+        t.identifier(hookName),
+        createRuntimeMetadataSymbolExpression(t, "litsx.hook"),
+        true
+      ),
+      t.booleanLiteral(true)
+    )
+  );
+}
+
+function isHookMarkerAssignmentStatement(statementPath, hookName, state, t) {
+  if (!statementPath?.isExpressionStatement()) {
+    return false;
+  }
+
+  const expression = statementPath.node.expression;
+  if (!t.isAssignmentExpression(expression, { operator: "=" })) {
+    return false;
+  }
+  if (
+    !t.isMemberExpression(expression.left, { computed: true }) ||
+    !t.isIdentifier(expression.left.object, { name: hookName }) ||
+    !isRuntimeMetadataSymbolFor(expression.left.property, t, "litsx.hook")
+  ) {
+    return false;
+  }
+
+  return t.isBooleanLiteral(expression.right, { value: true });
+}
+
+function isCompiledCustomHookBinding(binding, state, t) {
+  if (!binding?.identifier?.name) {
+    return false;
+  }
+
+  const hookName = binding.identifier.name;
+  const statementPath = binding.path.getStatementParent?.();
+  if (!statementPath?.parentPath?.isProgram?.()) {
+    return false;
+  }
+
+  const bodyPaths = statementPath.parentPath.get("body");
+  const statementIndex = statementPath.key;
+  for (let index = statementIndex + 1; index < bodyPaths.length; index += 1) {
+    const siblingPath = bodyPaths[index];
+    if (isHookMarkerAssignmentStatement(siblingPath, hookName, state, t)) {
+      return true;
+    }
+    if (
+      siblingPath.isFunctionDeclaration() ||
+      siblingPath.isVariableDeclaration() ||
+      siblingPath.isClassDeclaration() ||
+      siblingPath.isExportNamedDeclaration() ||
+      siblingPath.isExportDefaultDeclaration()
+    ) {
+      break;
+    }
+  }
+
+  return false;
+}
+
+function isCompiledLitsxComponentClass(classPath, state, t) {
+  if (classPath.node?.__litsxGeneratedComponent === true) {
+    return false;
+  }
+  const bodyPaths = classPath.get("body.body");
+  return bodyPaths.some((memberPath) => {
+    if (!memberPath.isClassProperty()) {
+      return false;
+    }
+    const keyPath = memberPath.get("key");
+    const valuePath = memberPath.get("value");
+    return (
+      memberPath.node.static === true &&
+      memberPath.node.computed === true &&
+      isRuntimeMetadataSymbolFor(keyPath.node, t, "litsx.component") &&
+      valuePath.isBooleanLiteral({ value: true })
+    );
+  });
 }
 
 function attachStructuralCustomHookMetadata(programPath, state, t) {
@@ -339,7 +459,6 @@ function attachStructuralCustomHookMetadata(programPath, state, t) {
       const statementPath = binding.path.getStatementParent();
       statementPath?.insertAfter(statement);
     }
-    state.usedHelpers.add("defineStructuralHookEntries");
   }
 }
 
@@ -355,7 +474,22 @@ function attachStructuralHookMetadata(programPath, state, t) {
     const statement = createDefineStructuralHookEntriesStatement(hookName, entries, t);
     const statementPath = binding.path.getStatementParent();
     statementPath?.insertAfter(statement);
-    state.usedHelpers.add("defineStructuralHookEntries");
+  }
+}
+
+function attachCompiledCustomHookMetadata(programPath, state, t) {
+  for (const hookName of state.compiledCustomHookNames || []) {
+    const binding = programPath.scope.getBinding(hookName);
+    if (!binding?.path?.node) {
+      continue;
+    }
+    const statement = createMarkLitsxHookStatement(hookName, t);
+    if (binding.path.isFunctionDeclaration()) {
+      binding.path.insertAfter(statement);
+    } else if (binding.path.isVariableDeclarator()) {
+      const statementPath = binding.path.getStatementParent();
+      statementPath?.insertAfter(statement);
+    }
   }
 }
 
@@ -525,6 +659,9 @@ function transformCustomHookDefinition(binding, state, t) {
   if (!binding || !isSupportedCustomHookBinding(binding.path)) {
     return;
   }
+  if (isCompiledCustomHookBinding(binding, state, t)) {
+    return;
+  }
 
   if (!state.processedCustomHooks) {
     state.processedCustomHooks = new WeakSet();
@@ -553,11 +690,17 @@ function transformCustomHookDefinition(binding, state, t) {
   state.activeCustomHookBinding = null;
   state.activeStructuralEntries = previousStructuralEntries;
   popHostExpression(state);
+  if (binding.identifier?.name) {
+    state.compiledCustomHookNames.add(binding.identifier.name);
+  }
 }
 
 function localCustomHookUsesHost(binding, state, t, seen = new WeakSet()) {
   if (!binding || !isSupportedCustomHookBinding(binding.path)) {
     return false;
+  }
+  if (isCompiledCustomHookBinding(binding, state, t)) {
+    return true;
   }
   if (typeof state.customHookResolver !== "function") {
     return true;
@@ -1581,6 +1724,8 @@ export function createRuntimeHooksTransform({
             state.runtimeNamespaceBindings = new Set();
             state.runtimeDefaultBindings = new Set();
             state.defineHookIdentifiers = new Set();
+            state.hookMarkerIdentifiers = new Set();
+            state.componentMarkerIdentifiers = new Set();
             state.structuralHookIdentifiers = new Set();
             state.structuralNamespaceImports = new Map();
             state.structuralCustomHookIdentifiers = new Set();
@@ -1611,11 +1756,13 @@ export function createRuntimeHooksTransform({
             state.processedStructuralDefinitionUses = new WeakSet();
             state.customHookHostParams = new WeakMap();
             state.usedHelpers = new Set();
+            state.compiledCustomHookNames = new Set();
           },
           exit(path, state) {
             processDeclaredCustomHooks(path, state, t);
             attachStructuralHookMetadata(path, state, t);
             attachStructuralCustomHookMetadata(path, state, t);
+            attachCompiledCustomHookMetadata(path, state, t);
             ensurePrepareImport(path, state, t);
             mergeRuntimeImports(path, state, t);
             ensureHelperImports(path, state, t);
@@ -1667,8 +1814,21 @@ export function createRuntimeHooksTransform({
               if (importedName === "defineHook") {
                 state.defineHookIdentifiers.add(specifier.local.name);
               }
+              if (importedName === "LITSX_HOOK") {
+                state.hookMarkerIdentifiers.add(specifier.local.name);
+              }
               if (importedName && state.isHelperName(importedName)) {
                 state.hookIdentifiers.set(specifier.local.name, importedName);
+              }
+            } else if (
+              t.isImportSpecifier(specifier) &&
+              path.node.source.value === "@litsx/core/elements"
+            ) {
+              const importedName = t.isIdentifier(specifier.imported)
+                ? specifier.imported.name
+                : null;
+              if (importedName === "LITSX_COMPONENT") {
+                state.componentMarkerIdentifiers.add(specifier.local.name);
               }
             } else if (t.isImportNamespaceSpecifier(specifier)) {
               state.runtimeNamespaceBindings.add(specifier.local.name);
@@ -1705,9 +1865,15 @@ export function createRuntimeHooksTransform({
           rejectDynamicStructuralNamespaceAccess(path, state);
         },
         ClassDeclaration(path, state) {
+          if (isCompiledLitsxComponentClass(path, state, t)) {
+            return;
+          }
           transformClass(path, state, t);
         },
         ClassExpression(path, state) {
+          if (isCompiledLitsxComponentClass(path, state, t)) {
+            return;
+          }
           transformClass(path, state, t);
         },
       },

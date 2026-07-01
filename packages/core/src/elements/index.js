@@ -8,10 +8,16 @@ import {
 const DEDUPE_MIXIN_MARK = Symbol("litsx.dedupeMixinMark");
 const LIGHT_DOM_STYLE_ELEMENT = Symbol("litsx.lightDomStyleElement");
 const SHADOW_DOM_REGISTRY = Symbol("litsx.shadowDomRegistry");
+export const LITSX_COMPONENT = Symbol.for("litsx.component");
+export const LITSX_HOST_TYPE_ID = Symbol.for("litsx.hostTypeId");
 let shadowDomRegistryAttachKey;
 let shadowDomRegistryAttachShadowRef;
 let shadowDomRegistryCtorRef;
 let shadowDomRegistryNativeSupport;
+
+export function isLitsxComponentClass(value) {
+  return typeof value === "function" && value[LITSX_COMPONENT] === true;
+}
 
 function getElementAttachShadowRef() {
   return typeof Element !== "undefined" ? Element.prototype.attachShadow : undefined;

@@ -1,4 +1,5 @@
 import { resolveRuntimeHost } from "./runtime-controller.js";
+import { LITSX_HOST_TYPE_ID } from "./elements/index.js";
 import {
   isReactiveControllerHostLike,
   createHostContentSnapshot,
@@ -38,6 +39,34 @@ export function useHost(host) {
     );
   }
   return resolvedHost;
+}
+
+/**
+ * Return the stable LitSX host-type identity for the current component definition.
+ * Use this when resource identity should follow the authored component type rather than the current host instance or an individual hook callsite.
+ * @usage Call useHostTypeId inside a Lit<sup>sx</sup> component or custom hook during render when caches, SSR records, or hydration metadata must be keyed to the component type.
+ * @usage Prefer useStableId when identity should follow one authored hook callsite, and useId when identity should be unique per host instance.
+ * @behavior Returns the same value for every instance of the same Lit<sup>sx</sup>-compiled component type.
+ * @behavior Throws when the current host does not expose Lit<sup>sx</sup> host-type metadata, because a weak fallback would break SSR/cache semantics.
+ * @mentalModel useHostTypeId reads the stable identity of the component definition currently rendering, not the identity of this specific mounted element.
+ * @pitfall Do not use this for unique DOM ids. All instances of the same component type intentionally share the same value.
+ * @example
+ * const hostTypeId = useHostTypeId();
+ * const resourceKey = `${hostTypeId}:${locale}`;
+ * @param {import('lit').ReactiveControllerHost} host
+ * @returns {string}
+ */
+export function useHostTypeId(host) {
+  const resolvedHost = useHost(host);
+  const hostTypeId = resolvedHost?.constructor?.[LITSX_HOST_TYPE_ID];
+
+  if (typeof hostTypeId === "string" && hostTypeId.length > 0) {
+    return hostTypeId;
+  }
+
+  throw new TypeError(
+    "useHostTypeId requires a LitSX-compiled component host with stable host-type metadata."
+  );
 }
 
 /**

@@ -416,7 +416,7 @@ describe("@litsx/babel-preset-react-compat suspense boundaries", () => {
     const code = runFinal(source);
 
     assert.match(code, /import \{[^}]*SuspenseBoundary[^}]*ErrorBoundary[^}]*\} from "@litsx\/core"|import \{[^}]*ErrorBoundary[^}]*SuspenseBoundary[^}]*\} from "@litsx\/core"/);
-    assert.match(code, /import \{ ShadowDomMixin \} from "@litsx\/core\/elements";/);
+    assert.match(code, /import \{[^}]*ShadowDomMixin[^}]*\} from "@litsx\/core\/elements";/);
     assert.match(code, /return html`<suspense-boundary \.fallback=\$\{\(\) => html`<span>loading<\/span>`\} \.content=\$\{\(\) => html`<div>ready<\/div>`\}><\/suspense-boundary>`;/);
     assert.doesNotMatch(code, /<Suspense/);
   });
@@ -453,7 +453,7 @@ describe("@litsx/babel-preset-react-compat suspense boundaries", () => {
       /import \{[^}]*ensureLazyElement[^}]*ErrorBoundary[^}]*SuspenseBoundary[^}]*SuspenseList[^}]*\} from "@litsx\/core"|import \{[^}]*ensureLazyElement[^}]*ErrorBoundary[^}]*SuspenseList[^}]*SuspenseBoundary[^}]*\} from "@litsx\/core"|import \{[^}]*ErrorBoundary[^}]*SuspenseBoundary[^}]*SuspenseList[^}]*ensureLazyElement[^}]*\} from "@litsx\/core"/
     );
     assert.match(code, /import \{ LitElement, html \} from "lit";/);
-    assert.match(code, /import \{ ShadowDomMixin \} from "@litsx\/core\/elements";/);
+    assert.match(code, /import \{[^}]*ShadowDomMixin[^}]*\} from "@litsx\/core\/elements";/);
     assert.match(code, /ensureLazyElement\(this, "alpha-panel", AlphaPanel\);/);
     assert.match(code, /<error-boundary/);
     assert.match(code, /<suspense-list revealOrder="forwards">/);

@@ -210,7 +210,7 @@ const useCatalog = defineHook({
 
 The transform is intentionally static: dynamic hook lookup is not structural-hook syntax. Aliasing a structural hook, storing it in an object or array, choosing it at runtime, or reading a namespace import through a computed property is a build-time error with a code-frame diagnostic. LitSX needs a direct authored callsite such as `useLocale("en")` or `hooks.useLocale("en")` so it can assign reliable callsite identity.
 
-This phase emits static entries for direct structural hook callsites when the hook definition can be referenced from the generated component module. Custom hooks that contain structural hooks also receive compiled structural metadata, so importing and calling that custom hook lets the consuming host include those entries in its static plan with `getStructuralHookEntries(...)`.
+This phase emits static entries for direct structural hook callsites when the hook definition can be referenced from the generated component module. Custom hooks that contain structural hooks also receive compiled structural metadata on `STRUCTURAL_HOOK_ENTRIES`, so importing and calling that custom hook lets the consuming host include those entries in its static plan.
 
 The import analysis is static and intentionally conservative: authored modules are inspected for `defineHook()` exports and for exported custom hooks that call structural hooks. Relative imports, TypeScript `paths`/`baseUrl`, and TypeScript module resolution are supported when the compiler session/options are available. The runtime API carries `callsitePath` metadata so nested authored paths remain stable as the compiler grows.
 

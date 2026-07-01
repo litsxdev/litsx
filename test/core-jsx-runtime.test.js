@@ -51,10 +51,40 @@ describe("litsx jsx runtime", () => {
   it("publishes jsx runtime entrypoints and type declarations", () => {
     assert.ok(packageJson.exports["./jsx-runtime"]);
     assert.ok(packageJson.exports["./jsx-dev-runtime"]);
+    assert.strictEqual(packageJson.module, "./src/index.js");
     assert.strictEqual(packageJson.types, "./src/index.d.ts");
+    assert.strictEqual(packageJson.exports["."].import, "./src/index.js");
+    assert.strictEqual(packageJson.exports["."].types, "./src/index.d.ts");
+    assert.strictEqual(packageJson.exports["./jsx-runtime"].import, "./src/jsx-runtime.js");
+    assert.strictEqual(packageJson.exports["./jsx-runtime"].types, "./src/jsx-runtime.d.ts");
+    assert.strictEqual(packageJson.exports["./jsx-dev-runtime"].import, "./src/jsx-dev-runtime.js");
+    assert.strictEqual(packageJson.exports["./jsx-dev-runtime"].types, "./src/jsx-dev-runtime.d.ts");
+    assert.strictEqual(packageJson.exports["./elements"].import, "./src/elements/index.js");
+    assert.strictEqual(packageJson.exports["./elements"].types, "./src/elements/index.d.ts");
+    assert.strictEqual(packageJson.exports["./rendering"].import, "./src/rendering.js");
+    assert.strictEqual(packageJson.exports["./context"].import, "./src/context.js");
+    assert.strictEqual(packageJson.exports["./context"].types, "./src/context.d.ts");
+    assert.ok(fs.existsSync(new URL("../packages/core/src/index.js", import.meta.url)));
+    assert.ok(fs.existsSync(new URL("../packages/core/src/jsx-runtime.js", import.meta.url)));
+    assert.ok(fs.existsSync(new URL("../packages/core/src/jsx-dev-runtime.js", import.meta.url)));
+    assert.ok(fs.existsSync(new URL("../packages/core/src/elements/index.js", import.meta.url)));
+    assert.ok(fs.existsSync(new URL("../packages/core/src/rendering.js", import.meta.url)));
+    assert.ok(fs.existsSync(new URL("../packages/core/src/context.js", import.meta.url)));
     assert.ok(fs.existsSync(new URL("../packages/core/src/index.d.ts", import.meta.url)));
     assert.ok(fs.existsSync(new URL("../packages/core/src/jsx-runtime.d.ts", import.meta.url)));
     assert.ok(fs.existsSync(new URL("../packages/core/src/jsx-dev-runtime.d.ts", import.meta.url)));
+  });
+
+  it("keeps runtime metadata markers in source entrypoints", () => {
+    const rootSource = fs.readFileSync(new URL("../packages/core/src/index.js", import.meta.url), "utf8");
+    const hookMetadataSource = fs.readFileSync(new URL("../packages/core/src/hook-metadata.js", import.meta.url), "utf8");
+    const elementsSource = fs.readFileSync(new URL("../packages/core/src/elements/index.js", import.meta.url), "utf8");
+
+    assert.match(rootSource, /from "\.\/hook-metadata\.js"/);
+    assert.match(rootSource, /from "\.\/elements\/index\.js"/);
+    assert.match(hookMetadataSource, /Symbol\.for\("litsx\.hook"\)/);
+    assert.match(elementsSource, /Symbol\.for\("litsx\.component"\)/);
+    assert.match(elementsSource, /Symbol\.for\("litsx\.hostTypeId"\)/);
   });
 
   it("types useEmit as a hook that returns an emit function", () => {

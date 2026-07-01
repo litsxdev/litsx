@@ -19,6 +19,23 @@ export type LitsxRenderable =
   | Iterable<unknown>;
 
 export type LitsxRef<T> = T | ((value: T | null) => void) | null;
+export declare const LITSX_HOOK: unique symbol;
+export declare const LITSX_COMPONENT: unique symbol;
+export declare const LITSX_HOST_TYPE_ID: unique symbol;
+export declare const STRUCTURAL_HOOK_ENTRIES: unique symbol;
+export interface LitsxHook {
+  readonly [LITSX_HOOK]: true;
+}
+export interface LitsxComponentStatic {
+  readonly [LITSX_COMPONENT]: true;
+}
+export interface LitsxHostTypeIdStatic extends LitsxComponentStatic {
+  readonly [LITSX_HOST_TYPE_ID]: string;
+}
+export declare function isLitsxHook(value: unknown): value is LitsxHook;
+export declare function isLitsxComponentClass(
+  value: unknown
+): value is LitsxComponentStatic;
 
 export interface LitsxBaseAttributes {
   key?: string | number;
@@ -481,15 +498,6 @@ export declare function defineHook<
 
 export declare function isStructuralHook(value: unknown): value is LitsxStructuralHook;
 
-export declare function defineStructuralHookEntries<T extends Function>(
-  hook: T,
-  entries: LitsxStructuralEntryInput[]
-): T;
-
-export declare function getStructuralHookEntries(
-  hook: unknown
-): LitsxStructuralEntryInput[];
-
 export declare function resolveStructuralEntry(
   host: unknown,
   callsiteIndex: number,
@@ -689,6 +697,14 @@ export declare function useRef<T>(
  * Generate a stable id for the current component instance.
  */
 export declare function useId(): string;
+/**
+ * Return a stable identifier for the current LitSX component type.
+ *
+ * All instances of the same compiled component share this value. Use it for
+ * cache keys, SSR resource identity, or hydration metadata that should follow
+ * the component definition rather than the instance or a single hook callsite.
+ */
+export declare function useHostTypeId(): string;
 /**
  * Return a stable identifier for this authored callsite.
  *

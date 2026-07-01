@@ -54,6 +54,7 @@ import {
   finalizeProgram,
   setProgramBabelTypes,
 } from "./transform-litsx-program.js";
+import { createStableIdentity } from "./stable-identity.js";
 
 let t;
 
@@ -480,6 +481,7 @@ function transformFunction(functionPath, programPath, className, options = {}) {
     classMembers,
     hoistMembers,
     hoistSymbolDeclarations,
+    hostTypeId: createStableIdentity("litsx-host-type-", functionPath, options.state || {}),
     needsStaticHoistsMixin,
     lightDomRequested,
     needsCss,

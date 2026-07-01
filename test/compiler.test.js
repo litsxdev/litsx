@@ -5,6 +5,7 @@ import { TraceMap, originalPositionFor } from "@jridgewell/trace-mapping";
 import os from "os";
 import path from "path";
 import { describe, it, vi } from "vitest";
+import packageJson from "../packages/compiler/package.json" with { type: "json" };
 import * as jsxTemplateModule from "../packages/babel-plugin-transform-jsx-html-template/src/index.js";
 import * as presetModule from "../packages/babel-preset-litsx/src/index.js";
 import { createLitsxTypecheckSession } from "../packages/typescript/src/typecheck.js";
@@ -41,6 +42,16 @@ function findPosition(text, needle) {
 }
 
 describe("@litsx/compiler", () => {
+  it("publishes compiler runtime and declarations from dist", () => {
+    assert.strictEqual(packageJson.module, "./src/index.js");
+    assert.strictEqual(packageJson.types, "./src/index.d.ts");
+    assert.strictEqual(packageJson.exports["."].import, "./src/index.js");
+    assert.strictEqual(packageJson.exports["."].types, "./src/index.d.ts");
+    assert.strictEqual(packageJson.exports["./authored-input"].import, "./src/authored-input.js");
+    assert.strictEqual(packageJson.exports["./authored-input"].types, "./src/authored-input.d.ts");
+    assert.deepStrictEqual(packageJson.files, ["dist", "src", "README.md"]);
+  });
+
   it("compiles authored LitSX source and returns metadata", () => {
     const source = [
       "export const Counter = ({ label = 'Save' }) => {",
@@ -147,6 +158,69 @@ describe("@litsx/compiler", () => {
     assert.ok(ids.every((id) => id.startsWith("litsx-stable-")));
   }, 20000);
 
+  it("injects stable host-type metadata for generated component classes", () => {
+    const source = [
+      "export function PrimaryCard() {",
+      "  return <div>one</div>;",
+      "}",
+      "export function SecondaryCard() {",
+      "  return <div>two</div>;",
+      "}",
+    ].join("\n");
+    const options = {
+      filename: "/virtual/components/stable-class-ids.litsx",
+      sourceMaps: false,
+    };
+
+    const firstResult = transformLitsxSync(source, options);
+    const secondResult = transformLitsxSync(source, options);
+    const ids = [...firstResult.code.matchAll(/\[Symbol\.for\("litsx\.hostTypeId"\)\] = "([^"]+)"/g)]
+      .map((match) => match[1]);
+    const nextIds = [...secondResult.code.matchAll(/\[Symbol\.for\("litsx\.hostTypeId"\)\] = "([^"]+)"/g)]
+      .map((match) => match[1]);
+
+    assert.doesNotMatch(firstResult.code, /@litsx\/core\/elements/);
+    assert.match(firstResult.code, /static \[Symbol\.for\("litsx\.component"\)\] = true;/);
+    assert.strictEqual(ids.length, 2);
+    assert.deepStrictEqual(ids, nextIds);
+    assert.notStrictEqual(ids[0], ids[1]);
+    assert.ok(ids.every((id) => id.startsWith("litsx-host-type-")));
+  }, 20000);
+
+  it("threads host through useHostTypeId inside imported custom hooks", () => {
+    const hookSource = [
+      'import { useHostTypeId, useMemoValue } from "@litsx/core";',
+      "export function useDemoType() {",
+      "  const hostTypeId = useHostTypeId();",
+      "  return useMemoValue(() => hostTypeId, [hostTypeId]);",
+      "}",
+    ].join("\n");
+    const consumerSource = [
+      'import { useDemoType } from "./demo-type";',
+      "export const DemoComponent = () => {",
+      "  const hostTypeId = useDemoType();",
+      "  return <div>{hostTypeId}</div>;",
+      "};",
+    ].join("\n");
+
+    const hookResult = transformLitsxSync(hookSource, {
+      filename: "/virtual/demo-type.tsx",
+      jsxTemplate: false,
+    });
+    const consumerResult = transformLitsxSync(consumerSource, {
+      filename: "/virtual/demo-component.litsx",
+      jsxTemplate: false,
+      inMemoryFiles: {
+        "/virtual/demo-type.tsx": hookSource,
+      },
+    });
+
+    assert.match(hookResult.code, /export function useDemoType\(_host\)/);
+    assert.match(hookResult.code, /const hostTypeId = useHostTypeId\(_host\);/);
+    assert.match(hookResult.code, /useDemoType\[Symbol\.for\("litsx\.hook"\)\] = true;/);
+    assert.match(consumerResult.code, /const hostTypeId = useDemoType\(this\);/);
+  }, 20000);
+
   it("threads host through imported custom hooks that call LitSX runtime hooks", () => {
     const hookSource = [
       'import { useExternalStore, useMemoValue, useStableId } from "@litsx/core";',
@@ -185,9 +259,153 @@ describe("@litsx/compiler", () => {
     assert.match(hookResult.code, /useExternalStore\(_host, subscribe, getSnapshot, getSnapshot\)/);
     assert.match(hookResult.code, /useStableId\(_host, "litsx-stable-[^"]+"\)/);
     assert.match(hookResult.code, /useMemoValue\(_host, \(\) => `\$\{input\}:\$\{id\}`, \[input, id\]\)/);
+    assert.match(hookResult.code, /useDemo\[Symbol\.for\("litsx\.hook"\)\] = true;/);
     assert.match(consumerResult.code, /prepareEffects\(this\);/);
     assert.match(consumerResult.code, /const value = useDemo\(this, "x"\);/);
     assert.doesNotMatch(consumerResult.code, /const value = useDemo\("x"\);/);
+  }, 20000);
+
+  it("recognizes precompiled LitSX runtime custom hooks from published metadata", () => {
+    const hookSource = [
+      'import { useMemoValue, useStableId } from "@litsx/core";',
+      "export function useDemo(input: string) {",
+      "  const id = useStableId();",
+      "  return useMemoValue(() => `${input}:${id}`, [input, id]);",
+      "}",
+    ].join("\n");
+    const compiledHookResult = transformLitsxSync(hookSource, {
+      filename: "/virtual/use-demo.tsx",
+      jsxTemplate: false,
+    });
+    const consumerSource = [
+      'import { useDemo } from "./use-demo.js";',
+      "export const DemoConsumer = () => {",
+      '  const value = useDemo("x");',
+      "  return <div>{value}</div>;",
+      "};",
+    ].join("\n");
+
+    const consumerResult = transformLitsxSync(consumerSource, {
+      filename: "/virtual/demo-consumer.litsx",
+      jsxTemplate: false,
+      inMemoryFiles: {
+        "/virtual/use-demo.js": compiledHookResult.code,
+      },
+    });
+
+    assert.match(compiledHookResult.code, /useDemo\[Symbol\.for\("litsx\.hook"\)\] = true;/);
+    assert.match(consumerResult.code, /const value = useDemo\(this, "x"\);/);
+  }, 20000);
+
+  it("recognizes precompiled LitSX runtime custom hooks from direct Symbol.for metadata", () => {
+    const compiledHookSource = [
+      "export function useDemo(input) {",
+      "  return `${input}:ok`;",
+      "}",
+      'useDemo[Symbol.for("litsx.hook")] = true;',
+    ].join("\n");
+    const consumerSource = [
+      'import { useDemo } from "./use-demo.js";',
+      "export const DemoConsumer = () => {",
+      '  const value = useDemo("x");',
+      "  return <div>{value}</div>;",
+      "};",
+    ].join("\n");
+
+    const consumerResult = transformLitsxSync(consumerSource, {
+      filename: "/virtual/demo-consumer.litsx",
+      jsxTemplate: false,
+      inMemoryFiles: {
+        "/virtual/use-demo.js": compiledHookSource,
+      },
+    });
+
+    assert.match(consumerResult.code, /const value = useDemo\(this, "x"\);/);
+  }, 20000);
+
+  it("recognizes precompiled LitSX runtime custom hooks through namespace imports", () => {
+    const hookSource = [
+      'import { useMemoValue, useStableId } from "@litsx/core";',
+      "export function useDemo(input: string) {",
+      "  const id = useStableId();",
+      "  return useMemoValue(() => `${input}:${id}`, [input, id]);",
+      "}",
+    ].join("\n");
+    const compiledHookResult = transformLitsxSync(hookSource, {
+      filename: "/virtual/use-demo.tsx",
+      jsxTemplate: false,
+    });
+    const consumerSource = [
+      'import * as DemoHooks from "./use-demo.js";',
+      "export const DemoConsumer = () => {",
+      '  const value = DemoHooks.useDemo("x");',
+      "  return <div>{value}</div>;",
+      "};",
+    ].join("\n");
+
+    const consumerResult = transformLitsxSync(consumerSource, {
+      filename: "/virtual/demo-consumer.litsx",
+      jsxTemplate: false,
+      inMemoryFiles: {
+        "/virtual/use-demo.js": compiledHookResult.code,
+      },
+    });
+
+    assert.match(consumerResult.code, /const value = DemoHooks\.useDemo\(this, "x"\);/);
+  }, 20000);
+
+  it("recognizes precompiled LitSX runtime custom hooks through compiled barrel re-exports", () => {
+    const hookSource = [
+      'import { useMemoValue, useStableId } from "@litsx/core";',
+      "export function useDemo(input: string) {",
+      "  const id = useStableId();",
+      "  return useMemoValue(() => `${input}:${id}`, [input, id]);",
+      "}",
+    ].join("\n");
+    const compiledHookResult = transformLitsxSync(hookSource, {
+      filename: "/virtual/use-demo.tsx",
+      jsxTemplate: false,
+    });
+    const barrelSource = 'export * from "./use-demo.js";';
+    const consumerSource = [
+      'import { useDemo } from "./hooks/index.js";',
+      "export const DemoConsumer = () => {",
+      '  const value = useDemo("x");',
+      "  return <div>{value}</div>;",
+      "};",
+    ].join("\n");
+
+    const consumerResult = transformLitsxSync(consumerSource, {
+      filename: "/virtual/demo-consumer.litsx",
+      jsxTemplate: false,
+      inMemoryFiles: {
+        "/virtual/hooks/use-demo.js": compiledHookResult.code,
+        "/virtual/hooks/index.js": barrelSource,
+      },
+    });
+
+    assert.match(consumerResult.code, /const value = useDemo\(this, "x"\);/);
+  }, 20000);
+
+  it("does not reprocess custom hooks already marked as compiled", () => {
+    const source = [
+      'import { useMemoValue, useStableId } from "@litsx/core";',
+      "export function useDemo(_host, input) {",
+      '  const id = useStableId(_host, "litsx-stable-demo");',
+      "  return useMemoValue(_host, () => `${input}:${id}`, [input, id]);",
+      "}",
+      'useDemo[Symbol.for("litsx.hook")] = true;',
+    ].join("\n");
+
+    const result = transformLitsxSync(source, {
+      filename: "/virtual/use-demo.js",
+      jsxTemplate: false,
+    });
+
+    const markerMatches = result.code.match(/useDemo\[Symbol\.for\("litsx\.hook"\)\] = true;/g) || [];
+    assert.strictEqual(markerMatches.length, 1);
+    assert.match(result.code, /export function useDemo\(_host, input\)/);
+    assert.doesNotMatch(result.code, /export function useDemo\(_host, _host, input\)/);
   }, 20000);
 
   it("recognizes useId from @litsx/core as a runtime hook inside imported custom hooks", () => {
@@ -290,6 +508,128 @@ describe("@litsx/compiler", () => {
 
     assert.match(result.code, /prepareEffects\(this\);/);
     assert.match(result.code, /const value = useDemo\(this, "x"\);/);
+  }, 20000);
+
+  it("recognizes precompiled structural custom hooks from published metadata", () => {
+    const hookSource = [
+      'import { defineHook } from "@litsx/core";',
+      "const useLocale = defineHook({",
+      "  use(_host, _state, args) {",
+      "    return args[0];",
+      "  },",
+      "});",
+      "export function useMessage() {",
+      "  return useLocale('en');",
+      "}",
+    ].join("\n");
+    const compiledHookResult = transformLitsxSync(hookSource, {
+      filename: "/virtual/use-message.tsx",
+      jsxTemplate: false,
+    });
+    const consumerSource = [
+      'import { useMessage } from "./use-message.js";',
+      "export function Greeting() {",
+      "  const locale = useMessage();",
+      "  return <div>{locale}</div>;",
+      "}",
+    ].join("\n");
+
+    const consumerResult = transformLitsxSync(consumerSource, {
+      filename: "/virtual/greeting.litsx",
+      jsxTemplate: false,
+      inMemoryFiles: {
+        "/virtual/use-message.js": compiledHookResult.code,
+      },
+    });
+
+    assert.match(compiledHookResult.code, /useMessage\[Symbol\.for\("litsx\.structuralHookEntries"\)\] = \[/);
+    assert.match(compiledHookResult.code, /useMessage\[Symbol\.for\("litsx\.hook"\)\] = true;/);
+    assert.match(consumerResult.code, /extends HostMiddlewareMixin\(LitElement\)/);
+    assert.match(consumerResult.code, /static structuralEntries = \[\s*\.\.\.\(useMessage\[Symbol\.for\("litsx\.structuralHookEntries"\)\] \|\| \[\]\)/);
+    assert.match(consumerResult.code, /const locale = useMessage\(this\);/);
+  }, 20000);
+
+  it("recognizes precompiled structural custom hooks through namespace imports", () => {
+    const hookSource = [
+      'import { defineHook } from "@litsx/core";',
+      "const useLocale = defineHook({",
+      "  use(_host, _state, args) {",
+      "    return args[0];",
+      "  },",
+      "});",
+      "export function useMessage() {",
+      "  return useLocale('en');",
+      "}",
+    ].join("\n");
+    const compiledHookResult = transformLitsxSync(hookSource, {
+      filename: "/virtual/use-message.tsx",
+      jsxTemplate: false,
+    });
+    const consumerSource = [
+      'import * as MessageHooks from "./use-message.js";',
+      "export function Greeting() {",
+      "  const locale = MessageHooks.useMessage();",
+      "  return <div>{locale}</div>;",
+      "}",
+    ].join("\n");
+
+    const consumerResult = transformLitsxSync(consumerSource, {
+      filename: "/virtual/greeting.litsx",
+      jsxTemplate: false,
+      inMemoryFiles: {
+        "/virtual/use-message.js": compiledHookResult.code,
+      },
+    });
+
+    assert.match(consumerResult.code, /static structuralEntries = \[\s*\.\.\.\(MessageHooks\.useMessage\[Symbol\.for\("litsx\.structuralHookEntries"\)\] \|\| \[\]\)/);
+    assert.match(consumerResult.code, /const locale = MessageHooks\.useMessage\(this\);/);
+  }, 20000);
+
+  it("does not reprocess component classes already marked as compiled", () => {
+    const source = [
+      'import { LitElement } from "lit";',
+      "export class DemoComponent extends LitElement {",
+      '  static [Symbol.for("litsx.component")] = true;',
+      '  static [Symbol.for("litsx.hostTypeId")] = "litsx-host-type-demo";',
+      "  render() {",
+      "    return <div>demo</div>;",
+      "  }",
+      "}",
+    ].join("\n");
+
+    const result = transformLitsxSync(source, {
+      filename: "/virtual/demo-component.js",
+      jsxTemplate: false,
+    });
+
+    const markerMatches = result.code.match(/static \[Symbol\.for\("litsx\.component"\)\] = true;/g) || [];
+    assert.strictEqual(markerMatches.length, 1);
+    assert.match(result.code, /class DemoComponent extends LitElement/);
+    assert.doesNotMatch(result.code, /extends HostMiddlewareMixin\(LitElement\)/);
+  }, 20000);
+
+  it("does not reprocess compiled structural component classes", () => {
+    const source = [
+      'import { HostMiddlewareMixin } from "@litsx/core";',
+      'import { LitElement } from "lit";',
+      "export class DemoComponent extends HostMiddlewareMixin(LitElement) {",
+      '  static [Symbol.for("litsx.component")] = true;',
+      '  static [Symbol.for("litsx.hostTypeId")] = "litsx-host-type-demo";',
+      "  static structuralEntries = [];",
+      "  render() {",
+      "    return <div>demo</div>;",
+      "  }",
+      "}",
+    ].join("\n");
+
+    const result = transformLitsxSync(source, {
+      filename: "/virtual/demo-component.js",
+      jsxTemplate: false,
+    });
+
+    assert.strictEqual((result.code.match(/static \[Symbol\.for\("litsx\.component"\)\] = true;/g) || []).length, 1);
+    assert.strictEqual((result.code.match(/static structuralEntries = \[];/g) || []).length, 1);
+    assert.strictEqual((result.code.match(/HostMiddlewareMixin\(LitElement\)/g) || []).length, 1);
   }, 20000);
 
   it("threads host through local custom hooks that wrap imported runtime custom hooks", () => {
@@ -1302,6 +1642,250 @@ describe("@litsx/compiler", () => {
     assert.strictEqual(result.metadata.litsxWarnings.length, 1);
     assert.strictEqual(result.metadata.litsxWarnings[0].code, 91016);
     assert.match(result.metadata.litsxWarnings[0].message, /migration wrapper only/);
+  }, 20000);
+
+  it("warns when external PascalCase imports are inferred as web components by usage", () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-external-pascal-warning-"));
+    const nodeModulesDir = path.join(tempDir, "node_modules", "fancy-wc");
+    const filename = path.join(tempDir, "consumer.litsx");
+
+    try {
+      fs.mkdirSync(nodeModulesDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(nodeModulesDir, "package.json"),
+        JSON.stringify({ name: "fancy-wc", type: "module", exports: "./index.js" })
+      );
+      fs.writeFileSync(
+        path.join(nodeModulesDir, "index.js"),
+        [
+          "export class FancyBox extends HTMLElement {}",
+        ].join("\n")
+      );
+
+      const source = [
+        'import { FancyBox } from "fancy-wc";',
+        "export function Demo() {",
+        "  return <FancyBox />;",
+        "}",
+      ].join("\n");
+
+      const result = transformLitsxSync(source, {
+        filename,
+        jsxTemplate: false,
+      });
+
+      assert.ok(Array.isArray(result.metadata.litsxWarnings));
+      assert.strictEqual(result.metadata.litsxWarnings.length, 1);
+      assert.strictEqual(
+        result.metadata.litsxWarnings[0].code,
+        "LITSX_EXTERNAL_PASCAL_COMPONENT_INFERRED"
+      );
+      assert.match(result.metadata.litsxWarnings[0].message, /inferred imported PascalCase JSX "FancyBox"/);
+      assert.match(result.metadata.litsxWarnings[0].message, /external module "fancy-wc"/);
+      assert.match(result.metadata.litsxWarnings[0].message, /cannot verify at build time that this import is a web component/);
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  }, 20000);
+
+  it("does not warn for external PascalCase imports that carry LitSX component metadata", () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-external-pascal-compiled-"));
+    const nodeModulesDir = path.join(tempDir, "node_modules", "fancy-litsx");
+    const filename = path.join(tempDir, "consumer.litsx");
+
+    try {
+      fs.mkdirSync(nodeModulesDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(nodeModulesDir, "package.json"),
+        JSON.stringify({ name: "fancy-litsx", type: "module", exports: "./index.js" })
+      );
+      fs.writeFileSync(
+        path.join(nodeModulesDir, "index.js"),
+        [
+          "export class FancyBox extends HTMLElement {",
+          '  static [Symbol.for("litsx.component")] = true;',
+          '  static [Symbol.for("litsx.hostTypeId")] = "litsx-host-type-fancy-box";',
+          "}",
+        ].join("\n")
+      );
+
+      const source = [
+        'import { FancyBox } from "fancy-litsx";',
+        "export function Demo() {",
+        "  return <FancyBox />;",
+        "}",
+      ].join("\n");
+
+      const result = transformLitsxSync(source, {
+        filename,
+        jsxTemplate: false,
+      });
+
+      assert.ok(Array.isArray(result.metadata.litsxWarnings));
+      assert.deepStrictEqual(result.metadata.litsxWarnings, []);
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  }, 20000);
+
+  it("warns for aliased external PascalCase imports inferred as web components", () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-external-pascal-alias-"));
+    const nodeModulesDir = path.join(tempDir, "node_modules", "fancy-wc");
+    const filename = path.join(tempDir, "consumer.litsx");
+
+    try {
+      fs.mkdirSync(nodeModulesDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(nodeModulesDir, "package.json"),
+        JSON.stringify({ name: "fancy-wc", type: "module", exports: "./index.js" })
+      );
+      fs.writeFileSync(
+        path.join(nodeModulesDir, "index.js"),
+        'export class FancyBox extends HTMLElement {}'
+      );
+
+      const source = [
+        'import { FancyBox as Card } from "fancy-wc";',
+        "export function Demo() {",
+        "  return <Card />;",
+        "}",
+      ].join("\n");
+
+      const result = transformLitsxSync(source, {
+        filename,
+        jsxTemplate: false,
+      });
+
+      assert.ok(Array.isArray(result.metadata.litsxWarnings));
+      assert.strictEqual(result.metadata.litsxWarnings.length, 1);
+      assert.strictEqual(result.metadata.litsxWarnings[0].code, "LITSX_EXTERNAL_PASCAL_COMPONENT_INFERRED");
+      assert.match(result.metadata.litsxWarnings[0].message, /"Card"/);
+      assert.match(result.metadata.litsxWarnings[0].message, /"fancy-wc"/);
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  }, 20000);
+
+  it("warns for default external PascalCase imports inferred as web components", () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-external-pascal-default-"));
+    const nodeModulesDir = path.join(tempDir, "node_modules", "fancy-wc");
+    const filename = path.join(tempDir, "consumer.litsx");
+
+    try {
+      fs.mkdirSync(nodeModulesDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(nodeModulesDir, "package.json"),
+        JSON.stringify({ name: "fancy-wc", type: "module", exports: "./index.js" })
+      );
+      fs.writeFileSync(
+        path.join(nodeModulesDir, "index.js"),
+        [
+          "export default class FancyBox extends HTMLElement {}",
+        ].join("\n")
+      );
+
+      const source = [
+        'import FancyBox from "fancy-wc";',
+        "export function Demo() {",
+        "  return <FancyBox />;",
+        "}",
+      ].join("\n");
+
+      const result = transformLitsxSync(source, {
+        filename,
+        jsxTemplate: false,
+      });
+
+      assert.ok(Array.isArray(result.metadata.litsxWarnings));
+      assert.strictEqual(result.metadata.litsxWarnings.length, 1);
+      assert.strictEqual(result.metadata.litsxWarnings[0].code, "LITSX_EXTERNAL_PASCAL_COMPONENT_INFERRED");
+      assert.match(result.metadata.litsxWarnings[0].message, /"FancyBox"/);
+      assert.match(result.metadata.litsxWarnings[0].message, /"fancy-wc"/);
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  }, 20000);
+
+  it("warns for namespace external PascalCase imports inferred as web components", () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-external-pascal-namespace-"));
+    const nodeModulesDir = path.join(tempDir, "node_modules", "fancy-wc");
+    const filename = path.join(tempDir, "consumer.litsx");
+
+    try {
+      fs.mkdirSync(nodeModulesDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(nodeModulesDir, "package.json"),
+        JSON.stringify({ name: "fancy-wc", type: "module", exports: "./index.js" })
+      );
+      fs.writeFileSync(
+        path.join(nodeModulesDir, "index.js"),
+        'export class FancyBox extends HTMLElement {}'
+      );
+
+      const source = [
+        'import * as Fancy from "fancy-wc";',
+        "const FancyBox = Fancy.FancyBox;",
+        "export function Demo() {",
+        "  return <FancyBox />;",
+        "}",
+      ].join("\n");
+
+      const result = transformLitsxSync(source, {
+        filename,
+        jsxTemplate: false,
+      });
+
+      assert.ok(Array.isArray(result.metadata.litsxWarnings));
+      assert.strictEqual(result.metadata.litsxWarnings.length, 1);
+      assert.strictEqual(result.metadata.litsxWarnings[0].code, "LITSX_EXTERNAL_PASCAL_COMPONENT_INFERRED");
+      assert.match(result.metadata.litsxWarnings[0].message, /"FancyBox"/);
+      assert.match(result.metadata.litsxWarnings[0].message, /"fancy-wc"/);
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  }, 20000);
+
+  it("warns for external PascalCase imports routed through package barrels", () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-external-pascal-barrel-"));
+    const nodeModulesDir = path.join(tempDir, "node_modules", "fancy-wc");
+    const filename = path.join(tempDir, "consumer.litsx");
+
+    try {
+      fs.mkdirSync(nodeModulesDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(nodeModulesDir, "package.json"),
+        JSON.stringify({
+          name: "fancy-wc",
+          type: "module",
+          exports: {
+            ".": "./index.js",
+            "./components": "./components.js",
+          },
+        })
+      );
+      fs.writeFileSync(path.join(nodeModulesDir, "index.js"), 'export * from "./components.js";');
+      fs.writeFileSync(path.join(nodeModulesDir, "components.js"), 'export class FancyBox extends HTMLElement {}');
+
+      const source = [
+        'import { FancyBox } from "fancy-wc/components";',
+        "export function Demo() {",
+        "  return <FancyBox />;",
+        "}",
+      ].join("\n");
+
+      const result = transformLitsxSync(source, {
+        filename,
+        jsxTemplate: false,
+      });
+
+      assert.ok(Array.isArray(result.metadata.litsxWarnings));
+      assert.strictEqual(result.metadata.litsxWarnings.length, 1);
+      assert.strictEqual(result.metadata.litsxWarnings[0].code, "LITSX_EXTERNAL_PASCAL_COMPONENT_INFERRED");
+      assert.match(result.metadata.litsxWarnings[0].message, /"FancyBox"/);
+      assert.match(result.metadata.litsxWarnings[0].message, /"fancy-wc\/components"/);
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
   }, 20000);
 
   it("throws when implicit children are used outside direct JSX child projection", () => {

@@ -8,6 +8,24 @@ function createThisMemberExpression(propName) {
   return t.memberExpression(t.thisExpression(), t.identifier(propName));
 }
 
+function createRuntimeMetadataSymbolExpression(symbolKey) {
+  return t.callExpression(
+    t.memberExpression(t.identifier("Symbol"), t.identifier("for")),
+    [t.stringLiteral(symbolKey)]
+  );
+}
+
+function createStaticRuntimeMetadataProperty(symbolKey, valueNode) {
+  const property = t.classProperty(
+    t.identifier("__litsx_placeholder"),
+    valueNode
+  );
+  property.key = createRuntimeMetadataSymbolExpression(symbolKey);
+  property.computed = true;
+  property.static = true;
+  return property;
+}
+
 export function buildClassMembers({
   classMembers = [],
   defaults,
@@ -67,6 +85,7 @@ export function createComponentClass({
   classMembers,
   hoistMembers,
   hoistSymbolDeclarations,
+  hostTypeId,
   needsStaticHoistsMixin,
   lightDomRequested,
   needsCss,
@@ -78,6 +97,20 @@ export function createComponentClass({
     t.identifier("LitElement"),
     t.classBody(classMembers)
   );
+  classNode.__litsxGeneratedComponent = true;
+
+  if (hostTypeId) {
+    const componentMarkerProperty = createStaticRuntimeMetadataProperty(
+      "litsx.component",
+      t.booleanLiteral(true)
+    );
+    const hostTypeIdProperty = createStaticRuntimeMetadataProperty(
+      "litsx.hostTypeId",
+      t.stringLiteral(hostTypeId)
+    );
+    classNode.body.body.unshift(componentMarkerProperty);
+    classNode.body.body.unshift(hostTypeIdProperty);
+  }
 
   if (hoistMembers.length > 0) {
     classNode.body.body.unshift(...hoistMembers);

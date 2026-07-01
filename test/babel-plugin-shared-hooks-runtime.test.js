@@ -99,8 +99,92 @@ describe("@litsx/babel-plugin-shared-hooks createRuntimeHooksTransform", () => {
     assert.match(code, /const useCounterEffects = _host => \{/);
     assert.match(code, /useAfterUpdate\(_host, \(\) => sideEffect\(\), \[]\);/);
     assert.match(code, /useOnCommit\(_host, \(\) => commitEffect\(\), \[]\);/);
+    assert.match(code, /useCounterEffects\[Symbol\.for\("litsx\.hook"\)\] = true;/);
     assert.match(code, /useCounterEffects\(this\);/);
     assert.match(code, /prepareEffects\(this\);/);
+  });
+
+  it("marks structural custom hooks with direct structural metadata assignments", () => {
+    const plugin = createRuntimeHooksTransform({
+      pluginName: "test-shared-hooks-runtime-structural",
+      runtimeModule: "@litsx/core",
+      importSources: ["@litsx/core"],
+      helperNames: ["defineHook", "resolveStructuralEntry"],
+      structuralHookResolver() {
+        return false;
+      },
+    });
+
+    const source = `
+      import { defineHook } from "@litsx/core";
+
+      const useLocale = defineHook({
+        use(_host, _state, args) {
+          return args[0];
+        }
+      });
+
+      export function useMessage(name) {
+        return useLocale(name);
+      }
+    `;
+
+    const ast = parser.parse(source, { sourceType: "module", plugins: ["typescript"] });
+    const result = transformFromAstSync(ast, source, {
+      configFile: false,
+      babelrc: false,
+      plugins: [plugin],
+    });
+    const code = result.code;
+
+    assert.match(code, /useMessage\[Symbol\.for\("litsx\.structuralHookEntries"\)\] = \[/);
+    assert.match(code, /useMessage\[Symbol\.for\("litsx\.hook"\)\] = true;/);
+    assert.doesNotMatch(code, /defineStructuralHookEntries\(/);
+    assert.doesNotMatch(code, /getStructuralHookEntries\(/);
+  });
+
+  it("does not reprocess custom hooks already marked as compiled", () => {
+    const source = `
+      export function useCounterEffects(_host) {
+        useAfterUpdate(_host, () => sideEffect(), []);
+      }
+
+      useCounterEffects[Symbol.for("litsx.hook")] = true;
+
+      class Card {
+        render() {
+          useCounterEffects();
+          return this.value;
+        }
+      }
+    `;
+
+    const code = run(source);
+
+    assert.strictEqual((code.match(/useCounterEffects\[Symbol\.for\("litsx\.hook"\)\] = true;/g) || []).length, 1);
+    assert.match(code, /export function useCounterEffects\(_host\)/);
+    assert.doesNotMatch(code, /export function useCounterEffects\(_host, _host\)/);
+    assert.match(code, /useCounterEffects\(this\);/);
+  });
+
+  it("does not reprocess classes already marked as compiled LitSX components", () => {
+    const source = `
+      import { LitElement } from "lit";
+
+      export class Card extends LitElement {
+        static [Symbol.for("litsx.component")] = true;
+        static [Symbol.for("litsx.hostTypeId")] = "litsx-host-type-card";
+
+        render() {
+          return <div>ok</div>;
+        }
+      }
+    `;
+
+    const code = run(source);
+
+    assert.strictEqual((code.match(/static \[Symbol\.for\("litsx\.component"\)\] = true;/g) || []).length, 1);
+    assert.doesNotMatch(code, /prepareEffects\(this\);/);
   });
 
   it("reuses an existing host-like first parameter in local custom hooks", () => {

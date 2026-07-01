@@ -12,6 +12,7 @@ import {
   LITSX_RUNTIME_IMPORT_SOURCES,
   LITSX_RUNTIME_MODULE,
 } from "./runtime-hooks.js";
+import { createStableIdentity, normalizeStableIdentityPath } from "./stable-identity.js";
 
 const RUNTIME_MODULE = LITSX_RUNTIME_MODULE;
 const IMPORT_SOURCES = LITSX_RUNTIME_IMPORT_SOURCES;
@@ -38,7 +39,22 @@ const DEFAULT_MODULE_RESOLUTION_OPTIONS = {
 };
 
 function normalizeFilePath(value) {
-  return normalizePath(value);
+  return normalizeStableIdentityPath(value);
+}
+
+function isSymbolForMarker(node, markerKey) {
+  return (
+    node?.type === "CallExpression" &&
+    node.callee?.type === "MemberExpression" &&
+    node.callee.computed === false &&
+    node.callee.object?.type === "Identifier" &&
+    node.callee.object.name === "Symbol" &&
+    node.callee.property?.type === "Identifier" &&
+    node.callee.property.name === "for" &&
+    node.arguments?.length === 1 &&
+    node.arguments[0]?.type === "StringLiteral" &&
+    node.arguments[0].value === markerKey
+  );
 }
 
 function getTraverse() {
@@ -320,9 +336,13 @@ function createStructuralHookResolver(options = {}) {
       exportBindings: new Map(),
       exportAllSources: [],
       defineHookLocals: new Set(),
+      structuralHookEntriesLocals: new Set(),
+      hookMarkerLocals: new Set(),
       runtimeNamespaceLocals: new Set(),
       structuralLocals: new Set(),
       structuralLocalInfo: new Map(),
+      compiledRuntimeHookLocals: new Set(),
+      compiledStructuralCustomHookLocals: new Set(),
       customHookPaths: new Map(),
       customHookUsageCache: new Map(),
       customHookRuntimeUsageCache: new Map(),
@@ -357,6 +377,12 @@ function createStructuralHookResolver(options = {}) {
               });
               if (sourceValue === RUNTIME_MODULE && importedName === "defineHook") {
                 analysis.defineHookLocals.add(localName);
+              }
+              if (sourceValue === RUNTIME_MODULE && importedName === "STRUCTURAL_HOOK_ENTRIES") {
+                analysis.structuralHookEntriesLocals.add(localName);
+              }
+              if (sourceValue === RUNTIME_MODULE && importedName === "LITSX_HOOK") {
+                analysis.hookMarkerLocals.add(localName);
               }
               if (
                 sourceValue === RUNTIME_MODULE &&
@@ -405,6 +431,34 @@ function createStructuralHookResolver(options = {}) {
               source: node.source.value,
             });
             continue;
+          }
+
+          if (
+            statementPath.isExpressionStatement() &&
+            node.expression?.type === "AssignmentExpression" &&
+            node.expression.operator === "="
+          ) {
+            const left = node.expression.left;
+            const right = node.expression.right;
+            if (
+              left?.type === "MemberExpression" &&
+              left.computed === true &&
+              left.object?.type === "Identifier" &&
+              isSymbolForMarker(left.property, "litsx.hook") &&
+              right?.type === "BooleanLiteral" &&
+              right.value === true
+            ) {
+              analysis.compiledRuntimeHookLocals.add(left.object.name);
+            }
+            if (
+              left?.type === "MemberExpression" &&
+              left.computed === true &&
+              left.object?.type === "Identifier" &&
+              isSymbolForMarker(left.property, "litsx.structuralHookEntries") &&
+              right?.type === "ArrayExpression"
+            ) {
+              analysis.compiledStructuralCustomHookLocals.add(left.object.name);
+            }
           }
 
           if (statementPath.isExportNamedDeclaration()) {
@@ -725,6 +779,10 @@ function createStructuralHookResolver(options = {}) {
       return true;
     }
 
+    if (analysis.compiledStructuralCustomHookLocals.has(exportInfo.localName)) {
+      return true;
+    }
+
     const importInfo = analysis.importBindings.get(exportInfo.localName);
     const importSource = resolveModuleReference(analysis, importInfo);
     if (importSource && importInfo.importedName !== "*") {
@@ -806,6 +864,10 @@ function createStructuralHookResolver(options = {}) {
       return true;
     }
 
+    if (analysis.compiledRuntimeHookLocals.has(exportInfo.localName)) {
+      return true;
+    }
+
     const importInfo = analysis.importBindings.get(exportInfo.localName);
     const importSource = resolveModuleReference(analysis, importInfo);
     if (importSource && importInfo.importedName !== "*") {
@@ -846,35 +908,8 @@ function createStructuralHookResolver(options = {}) {
   };
 }
 
-function normalizePath(value) {
-  return String(value || "").replace(/\\/g, "/");
-}
-
-function hashStableId(value) {
-  let hash = 2166136261;
-  const text = String(value);
-  for (let index = 0; index < text.length; index += 1) {
-    hash ^= text.charCodeAt(index);
-    hash = Math.imul(hash, 16777619);
-  }
-  return (hash >>> 0).toString(36);
-}
-
 function createStableIdCallsiteMetadata(callPath, state, t) {
-  const filename =
-    state.file?.opts?.sourceFileName ||
-    state.file?.opts?.filename ||
-    state.filename ||
-    "";
-  const normalizedFilename = normalizePath(filename);
-  const loc = callPath.node.loc?.start ?? null;
-  const start = typeof callPath.node.start === "number"
-    ? callPath.node.start
-    : 0;
-  const line = loc?.line ?? 0;
-  const column = loc?.column ?? 0;
-  const seed = `${normalizedFilename}:${line}:${column}:${start}`;
-  return t.stringLiteral(`litsx-stable-${hashStableId(seed)}`);
+  return t.stringLiteral(createStableIdentity("litsx-stable-", callPath, state));
 }
 
 export default function transformLitsxHooks(api, options = {}) {

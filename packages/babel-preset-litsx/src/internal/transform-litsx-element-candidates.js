@@ -411,6 +411,31 @@ function buildModuleAnalysis(programPath, filename, context) {
   const helperPaths = getOrCreateHelperPaths(programPath);
   const importBindings = new Map();
   const exportBindings = new Map();
+  const componentMarkerLocals = new Set();
+  const compiledComponentLocals = new Set();
+
+  const markCompiledClassIfNeeded = (classPath) => {
+    if (!classPath?.isClassDeclaration?.() || !classPath.node.id?.name) {
+      return;
+    }
+
+    const hasCompiledMarker = classPath.get("body.body").some((memberPath) => {
+      if (!memberPath.isClassProperty()) {
+        return false;
+      }
+
+      return (
+        memberPath.node.static === true &&
+        memberPath.node.computed === true &&
+        isSymbolForMarker(memberPath.node.key, "litsx.component") &&
+        memberPath.get("value").isBooleanLiteral({ value: true })
+      );
+    });
+
+    if (hasCompiledMarker) {
+      compiledComponentLocals.add(classPath.node.id.name);
+    }
+  };
 
   programPath.get("body").forEach((nodePath) => {
     if (nodePath.isImportDeclaration()) {
@@ -437,13 +462,27 @@ function buildModuleAnalysis(programPath, filename, context) {
           sourceValue,
           resolvedSource,
         });
+
+        if (
+          sourceValue === "@litsx/core/elements" &&
+          importedName === "LITSX_COMPONENT"
+        ) {
+          componentMarkerLocals.add(specifier.local.name);
+        }
       });
 
       return;
     }
 
+    if (nodePath.isClassDeclaration()) {
+      markCompiledClassIfNeeded(nodePath);
+    }
+
     if (nodePath.isExportNamedDeclaration()) {
       const declarationPath = nodePath.get("declaration");
+      if (declarationPath?.isClassDeclaration?.()) {
+        markCompiledClassIfNeeded(declarationPath);
+      }
       if (declarationPath?.node) {
         if (declarationPath.isFunctionDeclaration() || declarationPath.isClassDeclaration()) {
           const localName = declarationPath.node.id?.name;
@@ -527,7 +566,68 @@ function buildModuleAnalysis(programPath, filename, context) {
     importBindings,
     exportBindings,
     compatPascalNames: new Set(),
+    compiledComponentLocals,
   };
+}
+
+function isCompiledComponentExport(moduleAnalysis, importedName) {
+  if (!moduleAnalysis || !importedName) {
+    return false;
+  }
+
+  const exportInfo = moduleAnalysis.exportBindings.get(importedName);
+  if (!exportInfo) {
+    return false;
+  }
+
+  return moduleAnalysis.compiledComponentLocals.has(exportInfo.localName);
+}
+
+function isExternalCompilationImport(requirement) {
+  if (!requirement?.sourceFile || !requirement?.sourceSpecifier) {
+    return false;
+  }
+
+  return normalizeFilePath(requirement.sourceFile).includes("/node_modules/");
+}
+
+function warnExternalPascalComponentInference(candidateName, requirement, moduleAnalysis, context, jsxPath) {
+  if (typeof context.options?.warn !== "function") {
+    return;
+  }
+
+  if (!isExternalCompilationImport(requirement)) {
+    return;
+  }
+
+  if (!requirement?.sourceFile || !requirement?.importedName) {
+    return;
+  }
+
+  const importedModule = getOrCreateModuleAnalysis(requirement.sourceFile, context);
+  if (isCompiledComponentExport(importedModule, requirement.importedName)) {
+    return;
+  }
+
+  const warningKey =
+    `${context.rootFilename}:${candidateName}:${requirement.sourceSpecifier}:${requirement.importedName}`;
+  context.externalPascalInferenceWarnings ||= new Set();
+  if (context.externalPascalInferenceWarnings.has(warningKey)) {
+    return;
+  }
+  context.externalPascalInferenceWarnings.add(warningKey);
+
+  const originalName = jsxPath.node.name.__scopedOriginal || jsxPath.node.name.name;
+  context.options.warn({
+    code: "LITSX_EXTERNAL_PASCAL_COMPONENT_INFERRED",
+    message:
+      `LitSX inferred imported PascalCase JSX "${originalName}" from external module "${requirement.sourceSpecifier}" as a web component by usage. ` +
+      "LitSX cannot verify at build time that this import is a web component.",
+    componentName: originalName,
+    sourceSpecifier: requirement.sourceSpecifier,
+    line: jsxPath.node.name.loc?.start?.line ?? null,
+    column: jsxPath.node.name.loc?.start?.column ?? null,
+  });
 }
 
 function getOrCreateModuleAnalysis(filename, context) {
@@ -693,6 +793,18 @@ function getParserPluginsForModule(filename, source) {
   return [];
 }
 
+function isSymbolForMarker(node, markerKey) {
+  return (
+    t.isCallExpression(node) &&
+    t.isMemberExpression(node.callee) &&
+    node.callee.computed === false &&
+    t.isIdentifier(node.callee.object, { name: "Symbol" }) &&
+    t.isIdentifier(node.callee.property, { name: "for" }) &&
+    node.arguments.length === 1 &&
+    t.isStringLiteral(node.arguments[0], { value: markerKey })
+  );
+}
+
 function unwrapNamespaceAliasExpression(node) {
   let current = node;
   while (
@@ -820,6 +932,50 @@ function resolveImportedElementRequirement(candidateName, moduleAnalysis, contex
   };
 }
 
+function resolveDirectImportRequirement(candidateName, moduleAnalysis, context, rootFilename) {
+  const binding = moduleAnalysis.programPath.scope.getBinding(candidateName);
+  if (!binding || !isProgramLevelBinding(binding)) {
+    return null;
+  }
+
+  if (
+    binding.path.isImportSpecifier?.() ||
+    binding.path.isImportDefaultSpecifier?.()
+  ) {
+    const importInfo = moduleAnalysis.importBindings.get(candidateName);
+    if (!importInfo?.resolvedSource || importInfo.importedName === "*") {
+      return null;
+    }
+
+    return {
+      sourceFile: importInfo.resolvedSource,
+      sourceSpecifier: isRelativeSpecifier(importInfo.sourceValue)
+        ? null
+        : importInfo.sourceValue,
+      importedName: importInfo.importedName,
+      originalName: candidateName,
+      tagName: candidateName.replace(/([a-z])([A-Z])/g, "$1-$2").toLowerCase(),
+      rootFilename,
+    };
+  }
+
+  const namespaceAliasInfo = getNamespaceMemberAliasInfo(candidateName, moduleAnalysis);
+  if (!namespaceAliasInfo) {
+    return null;
+  }
+
+  return {
+    sourceFile: namespaceAliasInfo.resolvedSource,
+    sourceSpecifier: isRelativeSpecifier(namespaceAliasInfo.sourceValue)
+      ? null
+      : namespaceAliasInfo.sourceValue,
+    importedName: namespaceAliasInfo.importedName,
+    originalName: candidateName,
+    tagName: candidateName.replace(/([a-z])([A-Z])/g, "$1-$2").toLowerCase(),
+    rootFilename,
+  };
+}
+
 function collectCandidateResult(functionPath, programPath, options = {}) {
   const result = createEmptyCandidateResult();
   if (!programPath || !functionPath?.node) return result;
@@ -894,6 +1050,7 @@ function collectCandidateResult(functionPath, programPath, options = {}) {
     helperCandidateCache,
     moduleAnalysisCache,
     resolvedImportCache,
+    externalPascalInferenceWarnings: new Set(),
     ...createCompilerContextResolver(options),
   };
 
@@ -926,6 +1083,21 @@ function collectCandidateResult(functionPath, programPath, options = {}) {
         const candidate = validateComponentName(jsxPath.node.name, jsxPath, scanContext);
         if (candidate) {
           if (moduleAnalysis.filename === context.rootFilename) {
+            const directImportRequirement = resolveDirectImportRequirement(
+              candidate,
+              moduleAnalysis,
+              context,
+              context.rootFilename
+            );
+            if (directImportRequirement) {
+              warnExternalPascalComponentInference(
+                candidate,
+                directImportRequirement,
+                moduleAnalysis,
+                context,
+                jsxPath
+              );
+            }
             localResult.localCandidates.add(candidate);
           } else {
             const requirement = resolveImportedElementRequirement(
@@ -935,6 +1107,13 @@ function collectCandidateResult(functionPath, programPath, options = {}) {
               context.rootFilename
             );
             if (requirement) {
+              warnExternalPascalComponentInference(
+                candidate,
+                requirement,
+                moduleAnalysis,
+                context,
+                jsxPath
+              );
               localResult.importedCandidates.set(
                 toImportRecordKey(requirement),
                 requirement

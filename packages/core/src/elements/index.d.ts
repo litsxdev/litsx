@@ -2,6 +2,21 @@ export type LitsxConstructor<TInstance = object> = abstract new (
   ...args: any[]
 ) => TInstance;
 
+export declare const LITSX_COMPONENT: unique symbol;
+export declare const LITSX_HOST_TYPE_ID: unique symbol;
+
+export interface LitsxComponentStatic {
+  readonly [LITSX_COMPONENT]: true;
+}
+
+export interface LitsxHostTypeIdStatic extends LitsxComponentStatic {
+  readonly [LITSX_HOST_TYPE_ID]: string;
+}
+
+export declare function isLitsxComponentClass(
+  value: unknown
+): value is LitsxComponentStatic;
+
 export interface LitsxStaticHoistsStatics {
   __litsxStatic<T>(cacheKey: PropertyKey, compute: () => T): T;
   __litsxResolveStaticValue<T>(value: T): T;
