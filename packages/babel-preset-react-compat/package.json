@@ -42,8 +42,8 @@
     "@babel/core": ">=7"
   },
   "dependencies": {
-    "@babel/helper-plugin-utils": "^7.28.6",
-    "@babel/plugin-syntax-jsx": "^7.28.6",
+    "@babel/helper-plugin-utils": "^7.29.7",
+    "@babel/plugin-syntax-jsx": "^7.29.7",
     "@litsx/babel-plugin-litsx-proptypes": "^0.2.0",
     "@litsx/babel-plugin-shared-hooks": "^0.5.0",
     "@litsx/babel-plugin-transform-jsx-html-template": "^0.3.5",
@@ -51,7 +51,7 @@
     "@litsx/babel-preset-litsx": "^0.11.0"
   },
   "devDependencies": {
-    "@babel/core": "^7.29.0"
+    "@babel/core": "^7.29.7"
   },
   "scripts": {
     "build": "../../node_modules/.bin/rollup --config rollup.config.js",
