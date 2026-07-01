@@ -1029,10 +1029,7 @@ __metadata:
     "@babel/core": "npm:^7.29.0"
     "@babel/parser": "npm:^7.29.3"
     "@babel/plugin-syntax-jsx": "npm:^7.28.6"
-<<<<<<< HEAD
-=======
     "@litsx/authoring": "npm:^0.5.0"
->>>>>>> f9a67da (refactor(authoring): remove babel parser adapter package)
     "@litsx/babel-plugin-shared-hooks": "npm:^0.5.0"
     "@litsx/typescript-session": "npm:^0.2.3"
   peerDependencies:
@@ -1075,7 +1072,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@litsx/compiler@npm:^0.8.0, @litsx/compiler@workspace:packages/compiler":
+"@litsx/compiler@npm:^0.8.0, @litsx/compiler@workspace:*, @litsx/compiler@workspace:packages/compiler":
   version: 0.0.0-use.local
   resolution: "@litsx/compiler@workspace:packages/compiler"
   dependencies:
@@ -1092,7 +1089,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@litsx/core@npm:^0.4.0, @litsx/core@workspace:packages/core":
+"@litsx/core@workspace:*, @litsx/core@workspace:packages/core":
   version: 0.0.0-use.local
   resolution: "@litsx/core@workspace:packages/core"
   dependencies:
@@ -1141,23 +1138,22 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@litsx/ssr-client@workspace:packages/ssr-client":
-  version: 0.0.0-use.local
-  resolution: "@litsx/ssr-client@workspace:packages/ssr-client"
-  dependencies:
-    "@lit-labs/ssr-client": "npm:^1.1.7"
-  languageName: unknown
-  linkType: soft
-
 "@litsx/ssr@workspace:packages/ssr":
   version: 0.0.0-use.local
   resolution: "@litsx/ssr@workspace:packages/ssr"
   dependencies:
     "@lit-labs/ssr": "npm:^4.0.0"
-    "@litsx/core": "npm:^0.4.0"
+    "@lit-labs/ssr-client": "npm:^1.1.7"
+    "@litsx/compiler": "workspace:*"
+    "@litsx/core": "workspace:*"
+    "@litsx/vite-plugin": "workspace:*"
     lit: "npm:^3.2.1"
   peerDependencies:
     lit: ">=3"
+    vite: ^7.3.2 || ^8.0.0
+  peerDependenciesMeta:
+    vite:
+      optional: true
   languageName: unknown
   linkType: soft
 
@@ -1183,7 +1179,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@litsx/vite-plugin@workspace:packages/vite-plugin":
+"@litsx/vite-plugin@workspace:*, @litsx/vite-plugin@workspace:packages/vite-plugin":
   version: 0.0.0-use.local
   resolution: "@litsx/vite-plugin@workspace:packages/vite-plugin"
   dependencies:
@@ -4000,12 +3996,36 @@ __metadata:
   languageName: node
   linkType: hard
 
+"playwright-core@npm:1.60.0":
+  version: 1.60.0
+  resolution: "playwright-core@npm:1.60.0"
+  bin:
+    playwright-core: cli.js
+  checksum: 10c0/99ccd43923b6e9355e0723b7fe221e6326efd4687f8dafff951313662aea11db51f542a9c2122c704c445fb9baae1c9ec9fa6f895126bbddd9fe92313f6942c9
+  languageName: node
+  linkType: hard
+
 "playwright-core@npm:1.61.1":
   version: 1.61.1
   resolution: "playwright-core@npm:1.61.1"
   bin:
     playwright-core: cli.js
   checksum: 10c0/c28896ba82a602182e240ed4f9c467fb0dd9cb57d510f8aba9f25183fe1cde3a0105725a29baffa4157fe885bbb11e228032a2aad0424111584fde45303f07bd
+  languageName: node
+  linkType: hard
+
+"playwright@npm:1.60.0":
+  version: 1.60.0
+  resolution: "playwright@npm:1.60.0"
+  dependencies:
+    fsevents: "npm:2.3.2"
+    playwright-core: "npm:1.60.0"
+  dependenciesMeta:
+    fsevents:
+      optional: true
+  bin:
+    playwright: cli.js
+  checksum: 10c0/714ad76d85b4865d7e43c0012f9039800c1485373388973ed39d79339cee5ad467052d1e2f1eaeca107a1cb6e65342186a8578a4c3504853d84c3a691250d5db
   languageName: node
   linkType: hard
 

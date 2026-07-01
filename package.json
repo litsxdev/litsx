@@ -16,11 +16,11 @@
     "packages/core",
     "packages/create-litsx-app",
     "packages/eslint-plugin-litsx",
-    "packages/scoped-registry-shim",
-    "packages/ssr",
     "packages/prettier-plugin-litsx",
     "packages/prop-types",
+    "packages/scoped-registry-shim",
     "packages/shiki-languages",
+    "packages/ssr",
     "packages/typescript",
     "packages/typescript-session",
     "packages/vite-plugin"
@@ -79,7 +79,6 @@
     "release:github": "node scripts/release/build-github-release.js",
     "release:github:backfill": "node scripts/release/backfill-github-releases.js",
     "release:publish": "yarn release:check && yarn release:smoke:scaffolds && yarn changeset:publish",
-<<<<<<< HEAD
     "release:test": "vitest run test/release-manifest.test.js test/create-litsx-app.test.js test/prettier-plugin-litsx.test.js test/shiki-languages.test.js test/typescript-plugin-litsx.test.js test/vite-plugin.test.js test/compiler.test.js test/compiler-authored-input.test.js test/ssr.test.js test/ssr-client.test.js"
   },
   "author": "LitSX Team",
