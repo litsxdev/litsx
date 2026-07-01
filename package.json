@@ -16,11 +16,11 @@
     "packages/core",
     "packages/create-litsx-app",
     "packages/eslint-plugin-litsx",
-    "packages/scoped-registry-shim",
-    "packages/ssr",
     "packages/prettier-plugin-litsx",
     "packages/prop-types",
+    "packages/scoped-registry-shim",
     "packages/shiki-languages",
+    "packages/ssr",
     "packages/typescript",
     "packages/typescript-session",
     "packages/vite-plugin"
