@@ -55,9 +55,32 @@ function isSourceModuleTarget(target) {
   return normalized.startsWith("src/") && /\.(?:m?js)$/.test(normalized);
 }
 
-function deriveSourceTargetFromExportTarget(exportTarget, manifest) {
+function isDistEsmTarget(target) {
+  if (typeof target !== "string") {
+    return false;
+  }
+
+  const normalized = stripLeadingDotSlash(normalizePathSlashes(target));
+  return normalized.startsWith("dist/") && /\.(?:m?js)$/.test(normalized);
+}
+
+function deriveSourceTargetFromDistTarget(target, packageDir) {
+  if (!isDistEsmTarget(target)) {
+    return null;
+  }
+
+  const normalized = stripLeadingDotSlash(normalizePathSlashes(target));
+  const candidate = normalized.replace(/^dist\//, "src/");
+  const candidatePath = path.join(packageDir, candidate);
+  return fs.existsSync(candidatePath) ? candidate : null;
+}
+
+function deriveSourceTargetFromExportTarget(exportTarget, manifest, packageDir) {
   if (typeof exportTarget === "string") {
-    return isSourceModuleTarget(exportTarget) ? exportTarget : null;
+    return (
+      (isSourceModuleTarget(exportTarget) ? exportTarget : null) ||
+      deriveSourceTargetFromDistTarget(exportTarget, packageDir)
+    );
   }
 
   if (!exportTarget || typeof exportTarget !== "object") {
@@ -67,31 +90,51 @@ function deriveSourceTargetFromExportTarget(exportTarget, manifest) {
   if (isSourceModuleTarget(exportTarget.import)) {
     return exportTarget.import;
   }
+  if (deriveSourceTargetFromDistTarget(exportTarget.import, packageDir)) {
+    return deriveSourceTargetFromDistTarget(exportTarget.import, packageDir);
+  }
 
   if (isSourceModuleTarget(exportTarget.default)) {
     return exportTarget.default;
+  }
+  if (deriveSourceTargetFromDistTarget(exportTarget.default, packageDir)) {
+    return deriveSourceTargetFromDistTarget(exportTarget.default, packageDir);
   }
 
   if (isSourceModuleTarget(exportTarget.module)) {
     return exportTarget.module;
   }
+  if (deriveSourceTargetFromDistTarget(exportTarget.module, packageDir)) {
+    return deriveSourceTargetFromDistTarget(exportTarget.module, packageDir);
+  }
 
   if (isSourceModuleTarget(manifest.module) && exportTarget.require === manifest.main) {
     return manifest.module;
+  }
+  if (
+    exportTarget.require === manifest.main &&
+    deriveSourceTargetFromDistTarget(manifest.module, packageDir)
+  ) {
+    return deriveSourceTargetFromDistTarget(manifest.module, packageDir);
   }
 
   return null;
 }
 
-function deriveManifestInputs(manifest) {
+function deriveManifestInputs(manifest, packageDir) {
   const inputs = {};
   const exportsField = manifest.exports;
 
   if (!exportsField || typeof exportsField !== "object" || Array.isArray(exportsField)) {
     if (typeof manifest.main === "string" && typeof manifest.module === "string") {
       const entryName = deriveEntryNameFromRequireTarget(manifest.main);
-      if (entryName && isSourceModuleTarget(manifest.module)) {
-        inputs[entryName] = stripLeadingDotSlash(normalizePathSlashes(manifest.module));
+      const sourceTarget =
+        (isSourceModuleTarget(manifest.module)
+          ? stripLeadingDotSlash(normalizePathSlashes(manifest.module))
+          : null) ||
+        deriveSourceTargetFromDistTarget(manifest.module, packageDir);
+      if (entryName && sourceTarget) {
+        inputs[entryName] = sourceTarget;
       }
     }
     return inputs;
@@ -107,7 +150,7 @@ function deriveManifestInputs(manifest) {
     }
 
     const entryName = deriveEntryNameFromRequireTarget(exportTarget.require);
-    const sourceTarget = deriveSourceTargetFromExportTarget(exportTarget, manifest);
+    const sourceTarget = deriveSourceTargetFromExportTarget(exportTarget, manifest, packageDir);
     if (!entryName || !sourceTarget) {
       continue;
     }
@@ -172,11 +215,48 @@ function deriveManifestCliEntries(manifest, packageDir) {
     .filter(Boolean);
 }
 
+function copyDeclarationFiles(sourceDir, targetDir) {
+  if (!fs.existsSync(sourceDir)) {
+    return;
+  }
+
+  for (const entry of fs.readdirSync(sourceDir, { withFileTypes: true })) {
+    const sourcePath = path.join(sourceDir, entry.name);
+    const targetPath = path.join(targetDir, entry.name);
+
+    if (entry.isDirectory()) {
+      copyDeclarationFiles(sourcePath, targetPath);
+      continue;
+    }
+
+    if (!entry.isFile() || !entry.name.endsWith(".d.ts")) {
+      continue;
+    }
+
+    fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+    fs.copyFileSync(sourcePath, targetPath);
+  }
+}
+
+function createCopyDeclarationsPlugin(packageDir) {
+  return {
+    name: "copy-declarations-to-dist",
+    writeBundle() {
+      copyDeclarationFiles(
+        path.join(packageDir, "src"),
+        path.join(packageDir, "dist")
+      );
+    },
+  };
+}
+
 export function createPackageRollupConfig({
   packageDir,
   input,
   cliEntries = [],
   extraPlugins = [],
+  esmOutputs = false,
+  copyDeclarations = false,
 }) {
   const packageJsonPath = path.join(packageDir, "package.json");
   const manifest = JSON.parse(fs.readFileSync(packageJsonPath, "utf8"));
@@ -186,7 +266,7 @@ export function createPackageRollupConfig({
     fs.rmSync(distDir, { recursive: true, force: true });
   }
 
-  const manifestInputs = deriveManifestInputs(manifest);
+  const manifestInputs = deriveManifestInputs(manifest, packageDir);
   const resolvedInput =
     input && Object.keys(input).length > 0
       ? { ...manifestInputs, ...input }
@@ -204,6 +284,7 @@ export function createPackageRollupConfig({
     json(),
     commonjs(),
     ...extraPlugins,
+    ...(copyDeclarations ? [createCopyDeclarationsPlugin(packageDir)] : []),
   ];
 
   return [
@@ -211,14 +292,25 @@ export function createPackageRollupConfig({
       input: resolvedInput,
       external,
       plugins,
-      output: {
-        dir: "dist",
-        format: "cjs",
-        exports: "named",
-        entryFileNames: "[name].cjs",
-        chunkFileNames: "shared/[name]-[hash].cjs",
-        sourcemap: true,
-      },
+      output: [
+        {
+          dir: "dist",
+          format: "cjs",
+          exports: "named",
+          entryFileNames: "[name].cjs",
+          chunkFileNames: "shared/[name]-[hash].cjs",
+          sourcemap: true,
+        },
+        ...(esmOutputs
+          ? [{
+              dir: "dist",
+              format: "esm",
+              entryFileNames: "[name].js",
+              chunkFileNames: "shared/[name]-[hash].js",
+              sourcemap: true,
+            }]
+          : []),
+      ],
     },
     ...resolvedCliEntries.map((entry) => ({
       input: entry.input,

@@ -3,11 +3,20 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 import { describe, it, vi } from "vitest";
+import packageJson from "../packages/vite-plugin/package.json" with { type: "json" };
 
 import { litsx } from "../packages/vite-plugin/src/index.js";
 import * as compilerModule from "../packages/compiler/src/index.js";
 
 describe("@litsx/vite-plugin", () => {
+  it("publishes the Vite plugin runtime and declarations from dist", () => {
+    assert.strictEqual(packageJson.module, "./src/index.js");
+    assert.strictEqual(packageJson.types, "./src/index.d.ts");
+    assert.strictEqual(packageJson.exports["."].import, "./src/index.js");
+    assert.strictEqual(packageJson.exports["."].types, "./src/index.d.ts");
+    assert.deepStrictEqual(packageJson.files, ["dist", "src", "README.md"]);
+  });
+
   it("transforms jsx and returns code with a sourcemap", async () => {
     const plugin = litsx({ sourceMaps: true });
     const source = [
