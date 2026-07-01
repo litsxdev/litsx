@@ -1,5 +1,13 @@
 # litsx
 
+## 0.9.0
+
+### Minor Changes
+
+- 1e586fa: Publish compiled LitSX runtime metadata for hooks and components, preserve that
+  metadata in built package outputs, and align the compiler/runtime pipeline so
+  compiled entities can be recognized reliably across package boundaries.
+
 ## 0.8.3
 
 ### Patch Changes

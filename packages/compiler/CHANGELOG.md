@@ -1,5 +1,18 @@
 # @litsx/compiler
 
+## 0.9.0
+
+### Minor Changes
+
+- 1e586fa: Publish compiled LitSX runtime metadata for hooks and components, preserve that
+  metadata in built package outputs, and align the compiler/runtime pipeline so
+  compiled entities can be recognized reliably across package boundaries.
+
+### Patch Changes
+
+- Updated dependencies [1e586fa]
+  - @litsx/babel-preset-litsx@0.12.0
+
 ## 0.8.5
 
 ### Patch Changes

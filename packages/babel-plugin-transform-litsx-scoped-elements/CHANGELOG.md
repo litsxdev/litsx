@@ -1,5 +1,12 @@
 # @litsx/babel-plugin-transform-litsx-scoped-elements
 
+## 0.4.6
+
+### Patch Changes
+
+- Updated dependencies [1e586fa]
+  - @litsx/babel-plugin-shared-hooks@0.6.0
+
 ## 0.4.5
 
 ### Patch Changes
