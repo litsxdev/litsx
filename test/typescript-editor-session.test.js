@@ -7,17 +7,62 @@ import { describe, it } from "vitest";
 
 import { createLitsxEditorSession } from "../packages/typescript/src/editor-session.js";
 
-function createCompletionKinds() {
+const COMPLETION_KINDS = {
+  Keyword: 14,
+  Variable: 6,
+  Property: 10,
+  Function: 3,
+  Class: 7,
+  Interface: 8,
+  Module: 9,
+  Text: 0,
+  Event: 23,
+};
+
+function createTempDir(prefix) {
+  return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+}
+
+function writeJson(filePath, value) {
+  fs.writeFileSync(filePath, JSON.stringify(value));
+}
+
+function createProjectSessionFixture({
+  prefix,
+  compilerOptions,
+  include,
+  files,
+  sessionOptions = {},
+  linkCorePackage = false,
+}) {
+  const tempDir = createTempDir(prefix);
+
+  if (linkCorePackage) {
+    const packageDir = path.join(tempDir, "node_modules", "@litsx");
+    fs.mkdirSync(packageDir, { recursive: true });
+    fs.symlinkSync(path.join(process.cwd(), "packages", "core"), path.join(packageDir, "core"), "dir");
+  }
+
+  writeJson(path.join(tempDir, "tsconfig.json"), {
+    compilerOptions,
+    include,
+  });
+
+  for (const [relativePath, sourceText] of Object.entries(files)) {
+    const filePath = path.join(tempDir, relativePath);
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    fs.writeFileSync(filePath, sourceText);
+  }
+
   return {
-    Keyword: 14,
-    Variable: 6,
-    Property: 10,
-    Function: 3,
-    Class: 7,
-    Interface: 8,
-    Module: 9,
-    Text: 0,
-    Event: 23,
+    tempDir,
+    session: createLitsxEditorSession({
+      typescript: ts,
+      ...sessionOptions,
+    }),
+    resolve(relativePath) {
+      return path.join(tempDir, relativePath);
+    },
   };
 }
 
@@ -150,360 +195,230 @@ describe("@litsx/typescript editor-session", () => {
     assert.ok(completions.some((entry) => entry.label === "value"));
   }, 15000);
 
-  it("provides project-backed diagnostics, hover, and completions", () => {
-    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-editor-session-"));
-    const filePath = path.join(tempDir, "component.litsx");
-    const sourceText = [
-      "const count: number = 1;",
-      "const broken: number = 'nope';",
-      "const view = <button @cl>{cou}</button>;",
-      "",
-    ].join("\n");
+  it("provides project-backed diagnostics, resolution, and intrinsic completions", () => {
+    const fixture = createProjectSessionFixture({
+      prefix: "litsx-editor-session-project-backed-",
+      compilerOptions: {
+        jsx: "preserve",
+        target: "ES2022",
+        module: "ESNext",
+        strict: true,
+      },
+      include: ["*.litsx"],
+      files: {
+        "component-basic.litsx": [
+          "const count: number = 1;",
+          "const broken: number = 'nope';",
+          "const view = <button @cl>{cou}</button>;",
+          "",
+        ].join("\n"),
+        "litsx-button.litsx": [
+          'export const buttonLabel = "Primary";',
+          "",
+        ].join("\n"),
+        "component-resolve.litsx": [
+          'import { buttonLabel } from "./litsx-button";',
+          'import { wrongButtonLabel } from "./litsx-button.litsx.jsx";',
+          "const view = <input .valuee={buttonLabel} @cl />;",
+          "wrongButtonLabel;",
+          "",
+        ].join("\n"),
+        "component-markup.litsx": "const view = <button  />;\n",
+        "component-click.litsx": [
+          "const count = 1;",
+          "const view = <input .value={count} @click={() => count.toFixed()} ?disabled />;",
+          "",
+        ].join("\n"),
+        "component-after-handler.litsx": [
+          "const count = 1;",
+          "const view = <input .value={count} @click={() => count.toFixed()}  />;",
+          "",
+        ].join("\n"),
+      },
+    });
 
-    fs.writeFileSync(
-      path.join(tempDir, "tsconfig.json"),
-      JSON.stringify({
-        compilerOptions: {
-          jsx: "preserve",
-          target: "ES2022",
-          module: "ESNext",
-          strict: true,
-        },
-        include: ["component.litsx"],
-      }),
-    );
-    fs.writeFileSync(filePath, sourceText);
-
-    const session = createLitsxEditorSession({ typescript: ts });
-    const diagnostics = session.getDiagnostics(filePath, sourceText, "litsx");
-    const hover = session.getHover(filePath, sourceText, "litsx", sourceText.indexOf("count") + 1);
-    const completions = session.getCompletions(
-      filePath,
-      sourceText,
+    const basicPath = fixture.resolve("component-basic.litsx");
+    const basicSource = fs.readFileSync(basicPath, "utf8");
+    const basicDiagnostics = fixture.session.getDiagnostics(basicPath, basicSource, "litsx");
+    const basicHover = fixture.session.getHover(
+      basicPath,
+      basicSource,
       "litsx",
-      sourceText.indexOf("@cl") + 3,
-      createCompletionKinds(),
+      basicSource.indexOf("count") + 1,
+    );
+    const basicCompletions = fixture.session.getCompletions(
+      basicPath,
+      basicSource,
+      "litsx",
+      basicSource.indexOf("@cl") + 3,
+      COMPLETION_KINDS,
     );
 
-    assert.ok(diagnostics.some((diagnostic) => diagnostic.code === 2322));
-    assert.match(hover.code, /const count: number/);
-    assert.match(hover.markdown, /```tsx/);
-    assert.match(hover.markdown, /const count: number/);
-    assert.ok(completions.some((entry) => entry.label === "@click" && entry.kind === 23));
-    const clickCompletion = completions.find((entry) => entry.label === "@click");
+    assert.ok(basicDiagnostics.some((diagnostic) => diagnostic.code === 2322));
+    assert.match(basicHover.code, /const count: number/);
+    assert.match(basicHover.markdown, /```tsx/);
+    assert.match(basicHover.markdown, /const count: number/);
+    assert.ok(basicCompletions.some((entry) => entry.label === "@click" && entry.kind === 23));
+    const clickCompletion = basicCompletions.find((entry) => entry.label === "@click");
     assert.strictEqual(clickCompletion.insertText, "click");
     assert.strictEqual(clickCompletion.filterText, "click");
-  }, 15000);
 
-  it("preserves LitSX import resolution and filters virtual names", () => {
-    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-editor-session-resolve-"));
-    const filePath = path.join(tempDir, "component.litsx");
-    const sourceText = [
-      'import { buttonLabel } from "./litsx-button";',
-      'import { wrongButtonLabel } from "./litsx-button.litsx.jsx";',
-      "const view = <input .valuee={buttonLabel} @cl />;",
-      "wrongButtonLabel;",
-      "",
-    ].join("\n");
-
-    fs.writeFileSync(
-      path.join(tempDir, "tsconfig.json"),
-      JSON.stringify({
-        compilerOptions: {
-          jsx: "preserve",
-          target: "ES2022",
-          module: "ESNext",
-          strict: true,
-        },
-        include: ["component.litsx", "litsx-button.litsx"],
-      }),
-    );
-    fs.writeFileSync(
-      path.join(tempDir, "litsx-button.litsx"),
-      [
-        'export const buttonLabel = "Primary";',
-        "",
-      ].join("\n"),
-    );
-    fs.writeFileSync(filePath, sourceText);
-
-    const session = createLitsxEditorSession({ typescript: ts });
-    const diagnostics = session.getDiagnostics(filePath, sourceText, "litsx");
-    const completions = session.getCompletions(
-      filePath,
-      sourceText,
+    const resolvePath = fixture.resolve("component-resolve.litsx");
+    const resolveSource = fs.readFileSync(resolvePath, "utf8");
+    const resolveDiagnostics = fixture.session.getDiagnostics(resolvePath, resolveSource, "litsx");
+    const resolveCompletions = fixture.session.getCompletions(
+      resolvePath,
+      resolveSource,
       "litsx",
-      sourceText.indexOf("@cl") + 3,
-      createCompletionKinds(),
+      resolveSource.indexOf("@cl") + 3,
+      COMPLETION_KINDS,
     );
 
-    assert.ok(diagnostics.some((diagnostic) => diagnostic.code === 91004));
+    assert.ok(resolveDiagnostics.some((diagnostic) => diagnostic.code === 91004));
     assert.ok(
-      diagnostics.some((diagnostic) => (
+      resolveDiagnostics.some((diagnostic) => (
         diagnostic.code === 2307 &&
         String(diagnostic.messageText).includes("./litsx-button.litsx.jsx")
       )),
     );
-    assert.ok(completions.every((entry) => !entry.label.startsWith("__litsx_")));
-  }, 15000);
+    assert.ok(resolveCompletions.every((entry) => !entry.label.startsWith("__litsx_")));
 
-  it("prefers markup-facing completions in opening tags", () => {
-    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-editor-session-markup-"));
-    const filePath = path.join(tempDir, "component.litsx");
-    const sourceText = "const view = <button  />;\n";
-
-    fs.writeFileSync(
-      path.join(tempDir, "tsconfig.json"),
-      JSON.stringify({
-        compilerOptions: {
-          jsx: "preserve",
-          target: "ES2022",
-          module: "ESNext",
-          strict: true,
-        },
-        include: ["component.litsx"],
-      }),
-    );
-    fs.writeFileSync(filePath, sourceText);
-
-    const session = createLitsxEditorSession({ typescript: ts });
-    const completions = session.getCompletions(
-      filePath,
-      sourceText,
+    const markupPath = fixture.resolve("component-markup.litsx");
+    const markupSource = fs.readFileSync(markupPath, "utf8");
+    const markupCompletions = fixture.session.getCompletions(
+      markupPath,
+      markupSource,
       "litsx",
-      sourceText.indexOf("<button ") + "<button ".length,
-      createCompletionKinds(),
+      markupSource.indexOf("<button ") + "<button ".length,
+      COMPLETION_KINDS,
     );
 
     assert.deepStrictEqual(
-      completions.slice(0, 8).map((entry) => entry.label),
+      markupCompletions.slice(0, 8).map((entry) => entry.label),
       ["class", "id", "title", "style", "role", "slot", "part", "tabIndex"],
     );
-    assert.ok(completions.some((entry) => entry.label === "@click"));
-    assert.ok(completions.some((entry) => entry.label === "?disabled"));
-    assert.ok(!completions.some((entry) => entry.label === "_currentTarget"));
-    assert.ok(!completions.some((entry) => entry.label === "addEventListener"));
-  }, 15000);
+    assert.ok(markupCompletions.some((entry) => entry.label === "@click"));
+    assert.ok(markupCompletions.some((entry) => entry.label === "?disabled"));
+    assert.ok(!markupCompletions.some((entry) => entry.label === "_currentTarget"));
+    assert.ok(!markupCompletions.some((entry) => entry.label === "addEventListener"));
 
-  it("accepts click listeners on interactive intrinsic elements", () => {
-    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-editor-session-input-click-"));
-    const filePath = path.join(tempDir, "component.litsx");
-    const sourceText = [
-      "const count = 1;",
-      "const view = <input .value={count} @click={() => count.toFixed()} ?disabled />;",
-      "",
-    ].join("\n");
+    const clickPath = fixture.resolve("component-click.litsx");
+    const clickSource = fs.readFileSync(clickPath, "utf8");
+    const clickDiagnostics = fixture.session.getDiagnostics(clickPath, clickSource, "litsx");
 
-    fs.writeFileSync(
-      path.join(tempDir, "tsconfig.json"),
-      JSON.stringify({
-        compilerOptions: {
-          jsx: "preserve",
-          target: "ES2022",
-          module: "ESNext",
-          strict: true,
-        },
-        include: ["component.litsx"],
-      }),
-    );
-    fs.writeFileSync(filePath, sourceText);
+    assert.ok(!clickDiagnostics.some((diagnostic) => diagnostic.code === 91006));
 
-    const session = createLitsxEditorSession({ typescript: ts });
-    const diagnostics = session.getDiagnostics(filePath, sourceText, "litsx");
-
-    assert.ok(!diagnostics.some((diagnostic) => diagnostic.code === 91006));
-  }, 15000);
-
-  it("keeps markup completions available after handler expressions inside the same opening tag", () => {
-    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-editor-session-after-handler-"));
-    const filePath = path.join(tempDir, "component.litsx");
-    const sourceText = [
-      "const count = 1;",
-      "const view = <input .value={count} @click={() => count.toFixed()}  />;",
-      "",
-    ].join("\n");
-
-    fs.writeFileSync(
-      path.join(tempDir, "tsconfig.json"),
-      JSON.stringify({
-        compilerOptions: {
-          jsx: "preserve",
-          target: "ES2022",
-          module: "ESNext",
-          strict: true,
-        },
-        include: ["component.litsx"],
-      }),
-    );
-    fs.writeFileSync(filePath, sourceText);
-
-    const session = createLitsxEditorSession({ typescript: ts });
-    const completions = session.getCompletions(
-      filePath,
-      sourceText,
+    const afterHandlerPath = fixture.resolve("component-after-handler.litsx");
+    const afterHandlerSource = fs.readFileSync(afterHandlerPath, "utf8");
+    const afterHandlerCompletions = fixture.session.getCompletions(
+      afterHandlerPath,
+      afterHandlerSource,
       "litsx",
-      sourceText.indexOf("/>") - 1,
-      createCompletionKinds(),
+      afterHandlerSource.indexOf("/>") - 1,
+      COMPLETION_KINDS,
     );
 
-    assert.ok(completions.some((entry) => entry.label === "@click"));
-    assert.ok(completions.some((entry) => entry.label === "?disabled"));
-    assert.ok(completions.some((entry) => entry.label === "class"));
+    assert.ok(afterHandlerCompletions.some((entry) => entry.label === "@click"));
+    assert.ok(afterHandlerCompletions.some((entry) => entry.label === "?disabled"));
+    assert.ok(afterHandlerCompletions.some((entry) => entry.label === "class"));
   }, 15000);
 
-  it("surfaces imported component props in opening tags", () => {
-    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-editor-session-component-props-"));
-    const componentFilePath = path.join(tempDir, "button.litsx");
-    const filePath = path.join(tempDir, "component.litsx");
-    const sourceText = [
-      'import { Button } from "./button.litsx";',
-      "const view = <Button  />;",
-      "",
-    ].join("\n");
+  it("surfaces imported component props and events in opening tags", () => {
+    const fixture = createProjectSessionFixture({
+      prefix: "litsx-editor-session-component-metadata-",
+      compilerOptions: {
+        jsx: "react-jsx",
+        jsxImportSource: "@litsx/core",
+        target: "ES2022",
+        module: "ESNext",
+        strict: true,
+        moduleResolution: "Bundler",
+        allowArbitraryExtensions: true,
+      },
+      include: ["*.litsx"],
+      files: {
+        "typed-button.litsx": "export const TypedButton = ({ kind = 'primary', disabled = false, count = 0 } = {}) => <button>{kind}{count}</button>;\n",
+        "typed-consumer.litsx": [
+          'import { TypedButton } from "./typed-button.litsx";',
+          "const view = <TypedButton  />;",
+          "",
+        ].join("\n"),
+        "static-button.litsx": [
+          "export const StaticButton = () => {",
+          "  static properties = {",
+          "    label: { type: String },",
+          "    kind: { type: String },",
+          "    disabled: { type: Boolean },",
+          "  };",
+          "  return <button />;",
+          "};",
+          "",
+        ].join("\n"),
+        "static-consumer.litsx": [
+          'import { StaticButton } from "./static-button.litsx";',
+          "const view = <StaticButton  />;",
+          "",
+        ].join("\n"),
+        "event-button.litsx": [
+          'import { useEmit } from "@litsx/core";',
+          "",
+          "export const EventButton = () => {",
+          "  const emit = useEmit();",
+          '  emit("primary-action");',
+          '  emit("secondary-action");',
+          "  return <button />;",
+          "};",
+          "",
+        ].join("\n"),
+        "event-consumer.litsx": [
+          'import { EventButton } from "./event-button.litsx";',
+          "const view = <EventButton @pr />;",
+          "",
+        ].join("\n"),
+      },
+    });
 
-    fs.writeFileSync(
-      path.join(tempDir, "tsconfig.json"),
-      JSON.stringify({
-        compilerOptions: {
-          jsx: "react-jsx",
-          jsxImportSource: "@litsx/core",
-          target: "ES2022",
-          module: "ESNext",
-          strict: true,
-          moduleResolution: "Bundler",
-          allowArbitraryExtensions: true,
-        },
-        include: ["*.litsx"],
-      }),
-    );
-    fs.writeFileSync(
-      componentFilePath,
-      "export const Button = ({ kind = 'primary', disabled = false, count = 0 } = {}) => <button>{kind}{count}</button>;\n",
-    );
-    fs.writeFileSync(filePath, sourceText);
-
-    const session = createLitsxEditorSession({ typescript: ts });
-    const completions = session.getCompletions(
-      filePath,
-      sourceText,
+    const typedConsumerPath = fixture.resolve("typed-consumer.litsx");
+    const typedConsumerSource = fs.readFileSync(typedConsumerPath, "utf8");
+    const typedCompletions = fixture.session.getCompletions(
+      typedConsumerPath,
+      typedConsumerSource,
       "litsx",
-      sourceText.indexOf("<Button ") + "<Button ".length,
-      createCompletionKinds(),
+      typedConsumerSource.indexOf("<TypedButton ") + "<TypedButton ".length,
+      COMPLETION_KINDS,
     );
 
     assert.deepStrictEqual(
-      completions.slice(0, 3).map((entry) => entry.label),
+      typedCompletions.slice(0, 3).map((entry) => entry.label),
       ["count", "disabled", "kind"],
     );
-  }, 15000);
 
-  it("falls back to static properties hoists for component prop completions when typed props are absent", () => {
-    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-editor-session-static-props-"));
-    const componentFilePath = path.join(tempDir, "button.litsx");
-    const filePath = path.join(tempDir, "component.litsx");
-    const sourceText = [
-      'import { Button } from "./button.litsx";',
-      "const view = <Button  />;",
-      "",
-    ].join("\n");
-
-    fs.writeFileSync(
-      path.join(tempDir, "tsconfig.json"),
-      JSON.stringify({
-        compilerOptions: {
-          jsx: "react-jsx",
-          jsxImportSource: "@litsx/core",
-          target: "ES2022",
-          module: "ESNext",
-          strict: true,
-          moduleResolution: "Bundler",
-          allowArbitraryExtensions: true,
-        },
-        include: ["*.litsx"],
-      }),
-    );
-    fs.writeFileSync(
-      componentFilePath,
-      [
-        "export const Button = () => {",
-        "  static properties = {",
-        "    label: { type: String },",
-        "    kind: { type: String },",
-        "    disabled: { type: Boolean },",
-        "  };",
-        "  return <button />;",
-        "};",
-        "",
-      ].join("\n"),
-    );
-    fs.writeFileSync(filePath, sourceText);
-
-    const session = createLitsxEditorSession({ typescript: ts });
-    const completions = session.getCompletions(
-      filePath,
-      sourceText,
+    const staticConsumerPath = fixture.resolve("static-consumer.litsx");
+    const staticConsumerSource = fs.readFileSync(staticConsumerPath, "utf8");
+    const staticCompletions = fixture.session.getCompletions(
+      staticConsumerPath,
+      staticConsumerSource,
       "litsx",
-      sourceText.indexOf("<Button ") + "<Button ".length,
-      createCompletionKinds(),
+      staticConsumerSource.indexOf("<StaticButton ") + "<StaticButton ".length,
+      COMPLETION_KINDS,
     );
 
-    assert.ok(completions.some((entry) => entry.label === "label"));
-    assert.ok(completions.some((entry) => entry.label === "kind"));
-    assert.ok(completions.some((entry) => entry.label === "disabled"));
-  }, 15000);
+    assert.ok(staticCompletions.some((entry) => entry.label === "label"));
+    assert.ok(staticCompletions.some((entry) => entry.label === "kind"));
+    assert.ok(staticCompletions.some((entry) => entry.label === "disabled"));
 
-  it("infers emitted component events for listener completions on imported LitSX components", () => {
-    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-editor-session-component-events-"));
-    const componentFilePath = path.join(tempDir, "button.litsx");
-    const filePath = path.join(tempDir, "consumer.litsx");
-    const sourceText = [
-      'import { Button } from "./button.litsx";',
-      "const view = <Button @pr />;",
-      "",
-    ].join("\n");
-
-    fs.writeFileSync(
-      path.join(tempDir, "tsconfig.json"),
-      JSON.stringify({
-        compilerOptions: {
-          jsx: "react-jsx",
-          jsxImportSource: "@litsx/core",
-          target: "ES2022",
-          module: "ESNext",
-          strict: true,
-          moduleResolution: "Bundler",
-          allowArbitraryExtensions: true,
-        },
-        include: ["*.litsx"],
-      }),
-    );
-    fs.writeFileSync(
-      componentFilePath,
-      [
-        'import { useEmit } from "@litsx/core";',
-        "",
-        "export const Button = () => {",
-        "  const emit = useEmit();",
-        '  emit("primary-action");',
-        '  emit("secondary-action");',
-        "  return <button />;",
-        "};",
-        "",
-      ].join("\n"),
-    );
-    fs.writeFileSync(filePath, sourceText);
-
-    const session = createLitsxEditorSession({ typescript: ts });
-    const completions = session.getCompletions(
-      filePath,
-      sourceText,
+    const eventConsumerPath = fixture.resolve("event-consumer.litsx");
+    const eventConsumerSource = fs.readFileSync(eventConsumerPath, "utf8");
+    const eventCompletions = fixture.session.getCompletions(
+      eventConsumerPath,
+      eventConsumerSource,
       "litsx",
-      sourceText.indexOf("@pr") + 3,
-      createCompletionKinds(),
+      eventConsumerSource.indexOf("@pr") + 3,
+      COMPLETION_KINDS,
     );
 
-    assert.ok(completions.some((entry) => entry.label === "@primary-action"));
-    assert.ok(!completions.some((entry) => entry.label === "@secondary-action"));
+    assert.ok(eventCompletions.some((entry) => entry.label === "@primary-action"));
+    assert.ok(!eventCompletions.some((entry) => entry.label === "@secondary-action"));
   }, 15000);
 
   it("prioritizes @litsx/core exports over noisy globals in component bodies", () => {
@@ -536,7 +451,7 @@ describe("@litsx/typescript editor-session", () => {
       sourceText,
       "litsx",
       sourceText.indexOf("useS") + 4,
-      createCompletionKinds(),
+      COMPLETION_KINDS,
     );
 
     const topTen = completions.slice(0, 10).map((entry) => entry.label);
@@ -591,7 +506,7 @@ describe("@litsx/typescript editor-session", () => {
       sourceText,
       "litsx",
       sourceText.indexOf("use") + 3,
-      createCompletionKinds(),
+      COMPLETION_KINDS,
     );
 
     const topTen = completions.slice(0, 10).map((entry) => entry.label);

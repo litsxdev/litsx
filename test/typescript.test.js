@@ -39,6 +39,76 @@ declare namespace JSX {
 }
 `;
 
+function withMutedStderr(callback) {
+  const originalWrite = process.stderr.write;
+  process.stderr.write = () => true;
+
+  try {
+    return callback();
+  } finally {
+    process.stderr.write = originalWrite;
+  }
+}
+
+function createTempDir(prefix) {
+  return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+}
+
+function writeJson(filePath, value) {
+  fs.writeFileSync(filePath, JSON.stringify(value), "utf8");
+}
+
+function createTypecheckProjectFixture({
+  prefix,
+  configFileName = "tsconfig.json",
+  compilerOptions,
+  include,
+  files = {},
+  linksNodeModules = false,
+}) {
+  const tempDir = createTempDir(prefix);
+  const configPath = path.join(tempDir, configFileName);
+
+  if (linksNodeModules) {
+    fs.symlinkSync(path.resolve("node_modules"), path.join(tempDir, "node_modules"), "dir");
+  }
+
+  writeJson(configPath, {
+    compilerOptions,
+    include,
+  });
+
+  for (const [relativePath, sourceText] of Object.entries(files)) {
+    const filePath = path.join(tempDir, relativePath);
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    fs.writeFileSync(filePath, sourceText);
+  }
+
+  return {
+    tempDir,
+    configPath,
+    configFileName,
+    resolve(relativePath) {
+      return path.join(tempDir, relativePath);
+    },
+    cleanup() {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    },
+  };
+}
+
+function runTypecheckFixture(fixture, args = [], { muteStderr = true } = {}) {
+  const originalCwd = process.cwd();
+
+  try {
+    process.chdir(fixture.tempDir);
+    const run = () => runLitsxTypecheck(args);
+    return muteStderr ? withMutedStderr(run) : run();
+  } finally {
+    process.chdir(originalCwd);
+  }
+}
+
 async function withMockedTypeScript(mockFactory, callback) {
   const actualTs = await vi.importActual("typescript");
 
@@ -2383,123 +2453,71 @@ describe("@litsx/typescript", () => {
     );
   });
 
-  it("typechecks a LitSX-authored JSX project end-to-end", () => {
-    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-typecheck-valid-"));
-    const tsconfigPath = path.join(tempDir, "tsconfig.json");
-    const filePath = path.join(tempDir, "index.jsx");
-    const globalsPath = path.join(tempDir, "global.d.ts");
-    const originalCwd = process.cwd();
-    const originalWrite = process.stderr.write;
-    const repoRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
-    const coreRuntimePath = path.join(repoRoot, "packages/core/src/index.js").replaceAll("\\", "/");
-
-    fs.writeFileSync(
-      tsconfigPath,
-      JSON.stringify({
-        compilerOptions: {
-          jsx: "preserve",
-          allowJs: true,
-          checkJs: true,
-          noEmit: true,
-        },
-        include: ["index.jsx", "global.d.ts"],
-      }),
-    );
-    fs.writeFileSync(globalsPath, TEMP_JSX_GLOBALS_DTS);
-    fs.writeFileSync(
-      filePath,
-      `
+  it("typechecks authored LitSX projects across supported entry extensions", () => {
+    const fixture = createTypecheckProjectFixture({
+      prefix: "litsx-typecheck-valid-entries-",
+      compilerOptions: {
+        jsx: "preserve",
+        allowJs: true,
+        allowArbitraryExtensions: true,
+        checkJs: true,
+        noEmit: true,
+      },
+      include: ["index.jsx", "index.litsx", "index.litsx.jsx", "hoists.jsx", "global.d.ts"],
+      files: {
+        "global.d.ts": TEMP_JSX_GLOBALS_DTS,
+        "index.jsx": `
         const handleClick = () => {};
         const value = 1;
         const busy = false;
-        const view = <button @click={handleClick} .value={value} ?disabled={busy}>Save</button>;
+        export const view = <button @click={handleClick} .value={value} ?disabled={busy}>Save</button>;
       `,
-    );
-
-    process.stderr.write = () => true;
-
-    try {
-      process.chdir(tempDir);
-      assert.equal(runLitsxTypecheck([]), 0);
-    } finally {
-      process.chdir(originalCwd);
-      process.stderr.write = originalWrite;
-      fs.rmSync(tempDir, { recursive: true, force: true });
-    }
-  }, 20_000);
-
-  it("typechecks a LitSX-authored .litsx project end-to-end", () => {
-    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-typecheck-valid-litsx-"));
-    const tsconfigPath = path.join(tempDir, "tsconfig.json");
-    const filePath = path.join(tempDir, "index.litsx");
-    const globalsPath = path.join(tempDir, "global.d.ts");
-    const originalCwd = process.cwd();
-    const originalWrite = process.stderr.write;
-
-    fs.writeFileSync(
-      tsconfigPath,
-      JSON.stringify({
-        compilerOptions: {
-          jsx: "preserve",
-          allowJs: true,
-          allowArbitraryExtensions: true,
-          checkJs: true,
-          noEmit: true,
-        },
-        include: ["index.litsx", "global.d.ts"],
-      }),
-    );
-    fs.writeFileSync(globalsPath, TEMP_JSX_GLOBALS_DTS);
-    fs.writeFileSync(
-      filePath,
-      `
+        "index.litsx": `
         const handleClick = () => {};
         const value = 1;
         const busy = false;
         export const view = ({ label }: { label: string }) => <button @click={handleClick} .value={value} ?disabled={busy}>{label}</button>;
       `,
-    );
-
-    process.stderr.write = () => true;
+        "index.litsx.jsx": `
+        const handleClick = () => {};
+        const value = 1;
+        const busy = false;
+        export const view = <button @click={handleClick} .value={value} ?disabled={busy}>Save</button>;
+      `,
+        "hoists.jsx": `
+        export const Card = ({ title = "Smoke" }) => {
+          static styles = \`:host { display: block; }\`;
+          return <button>{title}</button>;
+        };
+      `,
+      },
+    });
 
     try {
-      process.chdir(tempDir);
-      assert.equal(runLitsxTypecheck([]), 0);
+      assert.equal(runTypecheckFixture(fixture), 0);
     } finally {
-      process.chdir(originalCwd);
-      process.stderr.write = originalWrite;
-      fs.rmSync(tempDir, { recursive: true, force: true });
+      fixture.cleanup();
     }
   }, 20_000);
 
   it("typechecks authored LitSX bindings on PascalCase components", () => {
-    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-typecheck-component-bindings-"));
-    const tsconfigPath = path.join(tempDir, "tsconfig.json");
-    const filePath = path.join(tempDir, "index.litsx");
-    const originalCwd = process.cwd();
-    const originalWrite = process.stderr.write;
-
-    fs.symlinkSync(path.resolve("node_modules"), path.join(tempDir, "node_modules"), "dir");
-    fs.writeFileSync(
-      tsconfigPath,
-      JSON.stringify({
-        compilerOptions: {
-          jsx: "react-jsx",
-          jsxImportSource: "@litsx/core",
-          allowArbitraryExtensions: true,
-          noEmit: true,
-          strict: true,
-          module: "ESNext",
-          moduleResolution: "Bundler",
-          target: "ESNext",
-          skipLibCheck: true,
-        },
-        include: ["index.litsx"],
-      }),
-    );
-    fs.writeFileSync(
-      filePath,
-      `
+    const fixture = createTypecheckProjectFixture({
+      prefix: "litsx-typecheck-component-bindings-",
+      linksNodeModules: true,
+      compilerOptions: {
+        jsx: "react-jsx",
+        jsxImportSource: "@litsx/core",
+        allowArbitraryExtensions: true,
+        noEmit: true,
+        strict: true,
+        module: "ESNext",
+        moduleResolution: "Bundler",
+        target: "ESNext",
+        skipLibCheck: true,
+      },
+      include: ["index.litsx"],
+      files: {
+        "index.litsx": `
         import type { LitsxRenderable } from "@litsx/core";
 
         type Product = { id: string };
@@ -2553,57 +2571,36 @@ describe("@litsx/typescript", () => {
           />
         );
       `,
-    );
-
-    process.stderr.write = () => true;
+      },
+    });
 
     try {
-      process.chdir(tempDir);
-      assert.equal(runLitsxTypecheck([]), 0);
+      assert.equal(runTypecheckFixture(fixture), 0);
     } finally {
-      process.chdir(originalCwd);
-      process.stderr.write = originalWrite;
-      fs.rmSync(tempDir, { recursive: true, force: true });
+      fixture.cleanup();
     }
   }, 20_000);
 
   it("resolves named exports from .litsx modules without manual ambient module declarations", () => {
-    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-typecheck-module-resolution-"));
-    const srcDir = path.join(tempDir, "src");
-    const tsconfigPath = path.join(tempDir, "jsconfig.json");
-    const globalsPath = path.join(tempDir, "global.d.ts");
-    const buttonPath = path.join(srcDir, "vds-button.litsx");
-    const panelPath = path.join(srcDir, "vds-product-purchase-panel.litsx");
-    const storyPath = path.join(srcDir, "vds-product-purchase-panel.stories.tsx");
-    const originalCwd = process.cwd();
-    const originalWrite = process.stderr.write;
-
-    fs.mkdirSync(srcDir, { recursive: true });
-    fs.writeFileSync(
-      tsconfigPath,
-      JSON.stringify({
-        compilerOptions: {
-          jsx: "preserve",
-          allowJs: true,
-          allowArbitraryExtensions: true,
-          checkJs: true,
-          noEmit: true,
-        },
-        include: ["src/**/*", "global.d.ts"],
-      }),
-    );
-    fs.writeFileSync(globalsPath, TEMP_JSX_GLOBALS_DTS);
-    fs.writeFileSync(
-      buttonPath,
-      [
+    const fixture = createTypecheckProjectFixture({
+      prefix: "litsx-typecheck-module-resolution-",
+      configFileName: "jsconfig.json",
+      compilerOptions: {
+        jsx: "preserve",
+        allowJs: true,
+        allowArbitraryExtensions: true,
+        checkJs: true,
+        noEmit: true,
+      },
+      include: ["src/**/*", "global.d.ts"],
+      files: {
+        "global.d.ts": TEMP_JSX_GLOBALS_DTS,
+        "src/vds-button.litsx": [
         "export type VdsButtonProps = { label: string };",
         "export const VdsButton = ({ label }: VdsButtonProps) => <button>{label}</button>;",
         "",
       ].join("\n"),
-    );
-    fs.writeFileSync(
-      panelPath,
-      [
+        "src/vds-product-purchase-panel.litsx": [
         'import { VdsButton } from "./vds-button.litsx";',
         "export type VdsProductPurchasePanelProps = { ctaLabel: string };",
         "export const VdsProductPurchasePanel = ({ ctaLabel }: VdsProductPurchasePanelProps) => (",
@@ -2613,10 +2610,7 @@ describe("@litsx/typescript", () => {
         ");",
         "",
       ].join("\n"),
-    );
-    fs.writeFileSync(
-      storyPath,
-      [
+        "src/vds-product-purchase-panel.stories.tsx": [
         'import { VdsButton } from "./vds-button.litsx";',
         'import { VdsProductPurchasePanel } from "./vds-product-purchase-panel.litsx";',
         "",
@@ -2626,32 +2620,31 @@ describe("@litsx/typescript", () => {
         "const typedAsNumber: number = VdsButton;",
         "",
       ].join("\n"),
-    );
-
-    process.stderr.write = () => true;
+      },
+    });
 
     try {
-      process.chdir(tempDir);
-      assert.equal(runLitsxTypecheck(["-p", "jsconfig.json", "--noEmit"]), 0);
+      assert.equal(runTypecheckFixture(fixture, ["-p", "jsconfig.json", "--noEmit"]), 0);
     } finally {
-      process.chdir(originalCwd);
-      process.stderr.write = originalWrite;
-      fs.rmSync(tempDir, { recursive: true, force: true });
+      fixture.cleanup();
     }
   }, 20_000);
 
   it("typechecks structural hooks imported between .litsx modules without ambient declarations", () => {
-    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-typecheck-structural-hooks-"));
+    const tempDir = createTempDir("litsx-typecheck-structural-hooks-");
+    const fixture = {
+      tempDir,
+      cleanup() {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+      },
+    };
+    const repoRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
+    const coreTypesPath = path.join(repoRoot, "packages/core/src/index.d.ts").replaceAll("\\", "/");
     const srcDir = path.join(tempDir, "src");
     const tsconfigPath = path.join(tempDir, "jsconfig.json");
-    const globalsPath = path.join(tempDir, "global.d.ts");
     const hooksPath = path.join(srcDir, "hooks.litsx");
     const componentPath = path.join(srcDir, "card.litsx");
     const corePackageDir = path.join(tempDir, "node_modules", "@litsx", "core");
-    const originalCwd = process.cwd();
-    const originalWrite = process.stderr.write;
-    const repoRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
-    const coreTypesPath = path.join(repoRoot, "packages/core/src/index.d.ts").replaceAll("\\", "/");
     let stderrOutput = "";
 
     fs.mkdirSync(srcDir, { recursive: true });
@@ -2664,26 +2657,23 @@ describe("@litsx/typescript", () => {
         types: coreTypesPath,
       }),
     );
-    fs.writeFileSync(
-      tsconfigPath,
-      JSON.stringify({
-        compilerOptions: {
-          jsx: "preserve",
-          moduleResolution: "bundler",
-          allowJs: true,
-          allowArbitraryExtensions: true,
-          checkJs: true,
-          noEmit: true,
-          baseUrl: ".",
-          ignoreDeprecations: "6.0",
-          paths: {
-            "@/*": ["src/*"],
-          },
+    writeJson(tsconfigPath, {
+      compilerOptions: {
+        jsx: "preserve",
+        moduleResolution: "bundler",
+        allowJs: true,
+        allowArbitraryExtensions: true,
+        checkJs: true,
+        noEmit: true,
+        baseUrl: ".",
+        ignoreDeprecations: "6.0",
+        paths: {
+          "@/*": ["src/*"],
         },
-        include: ["src/**/*", "global.d.ts"],
-      }),
-    );
-    fs.writeFileSync(globalsPath, TEMP_JSX_GLOBALS_DTS);
+      },
+      include: ["src/**/*", "global.d.ts"],
+    });
+    fs.writeFileSync(path.join(tempDir, "global.d.ts"), TEMP_JSX_GLOBALS_DTS);
     fs.writeFileSync(
       hooksPath,
       [
@@ -2720,48 +2710,38 @@ describe("@litsx/typescript", () => {
       ].join("\n"),
     );
 
-    process.stderr.write = (chunk) => {
-      stderrOutput += String(chunk);
-      return true;
-    };
-
     try {
-      process.chdir(tempDir);
-      assert.equal(runLitsxTypecheck(["-p", "jsconfig.json", "--noEmit"]), 0, stderrOutput);
+      const originalWrite = process.stderr.write;
+      process.stderr.write = (chunk) => {
+        stderrOutput += String(chunk);
+        return true;
+      };
+
+      try {
+        assert.equal(runTypecheckFixture(fixture, ["-p", "jsconfig.json", "--noEmit"], { muteStderr: false }), 0, stderrOutput);
+      } finally {
+        process.stderr.write = originalWrite;
+      }
     } finally {
-      process.chdir(originalCwd);
-      process.stderr.write = originalWrite;
-      fs.rmSync(tempDir, { recursive: true, force: true });
+      fixture.cleanup();
     }
   }, 20_000);
 
   it("typechecks authored local story hosts rendered with natural JSX props", () => {
-    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-typecheck-story-host-"));
-    const srcDir = path.join(tempDir, "src");
-    const tsconfigPath = path.join(tempDir, "jsconfig.json");
-    const globalsPath = path.join(tempDir, "global.d.ts");
-    const storyPath = path.join(srcDir, "vds-drawer.stories.litsx");
-    const originalCwd = process.cwd();
-    const originalWrite = process.stderr.write;
-
-    fs.mkdirSync(srcDir, { recursive: true });
-    fs.writeFileSync(
-      tsconfigPath,
-      JSON.stringify({
-        compilerOptions: {
-          jsx: "preserve",
-          allowJs: true,
-          allowArbitraryExtensions: true,
-          checkJs: true,
-          noEmit: true,
-        },
-        include: ["src/**/*", "global.d.ts"],
-      }),
-    );
-    fs.writeFileSync(globalsPath, TEMP_JSX_GLOBALS_DTS);
-    fs.writeFileSync(
-      storyPath,
-      [
+    const fixture = createTypecheckProjectFixture({
+      prefix: "litsx-typecheck-story-host-",
+      configFileName: "jsconfig.json",
+      compilerOptions: {
+        jsx: "preserve",
+        allowJs: true,
+        allowArbitraryExtensions: true,
+        checkJs: true,
+        noEmit: true,
+      },
+      include: ["src/**/*", "global.d.ts"],
+      files: {
+        "global.d.ts": TEMP_JSX_GLOBALS_DTS,
+        "src/vds-drawer.stories.litsx": [
         "type VdsDrawerStoryProps = {",
         "  defaultOpen?: boolean;",
         "  heading?: string;",
@@ -2787,139 +2767,37 @@ describe("@litsx/typescript", () => {
         "};",
         "",
       ].join("\n"),
-    );
-
-    process.stderr.write = () => true;
+      },
+    });
 
     try {
-      process.chdir(tempDir);
-      assert.equal(runLitsxTypecheck(["-p", "jsconfig.json", "--noEmit"]), 0);
+      assert.equal(runTypecheckFixture(fixture, ["-p", "jsconfig.json", "--noEmit"]), 0);
     } finally {
-      process.chdir(originalCwd);
-      process.stderr.write = originalWrite;
-      fs.rmSync(tempDir, { recursive: true, force: true });
+      fixture.cleanup();
     }
   }, 20_000);
 
-  it("typechecks a LitSX-authored .litsx.jsx project end-to-end", () => {
-    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-typecheck-valid-litsx-jsx-"));
-    const tsconfigPath = path.join(tempDir, "tsconfig.json");
-    const filePath = path.join(tempDir, "index.litsx.jsx");
-    const globalsPath = path.join(tempDir, "global.d.ts");
+  it("reports missing and invalid tsconfig files through the CLI entrypoint", () => {
+    const missingConfigDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-typecheck-missing-config-"));
+    const invalidConfigDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-typecheck-invalid-config-"));
     const originalCwd = process.cwd();
-    const originalWrite = process.stderr.write;
 
-    fs.writeFileSync(
-      tsconfigPath,
-      JSON.stringify({
-        compilerOptions: {
-          jsx: "preserve",
-          allowJs: true,
-          allowArbitraryExtensions: true,
-          checkJs: true,
-          noEmit: true,
-        },
-        include: ["index.litsx.jsx", "global.d.ts"],
-      }),
-    );
-    fs.writeFileSync(globalsPath, TEMP_JSX_GLOBALS_DTS);
-    fs.writeFileSync(
-      filePath,
-      `
-        const handleClick = () => {};
-        const value = 1;
-        const busy = false;
-        const view = <button @click={handleClick} .value={value} ?disabled={busy}>Save</button>;
-      `,
-    );
-
-    process.stderr.write = () => true;
+    fs.writeFileSync(path.join(invalidConfigDir, "tsconfig.json"), "{ invalid json");
 
     try {
-      process.chdir(tempDir);
-      assert.equal(runLitsxTypecheck([]), 0);
+      process.chdir(missingConfigDir);
+      withMutedStderr(() => {
+        assert.equal(runLitsxTypecheck([]), 1);
+      });
+
+      process.chdir(invalidConfigDir);
+      withMutedStderr(() => {
+        assert.equal(runLitsxTypecheck([]), 1);
+      });
     } finally {
       process.chdir(originalCwd);
-      process.stderr.write = originalWrite;
-      fs.rmSync(tempDir, { recursive: true, force: true });
-    }
-  }, 20_000);
-
-  it("typechecks jsx projects that use static hoists", () => {
-    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-typecheck-hoists-"));
-    const tsconfigPath = path.join(tempDir, "tsconfig.json");
-    const filePath = path.join(tempDir, "index.jsx");
-    const globalsPath = path.join(tempDir, "global.d.ts");
-    const originalCwd = process.cwd();
-    const originalWrite = process.stderr.write;
-
-    fs.writeFileSync(
-      tsconfigPath,
-      JSON.stringify({
-        compilerOptions: {
-          jsx: "preserve",
-          allowJs: true,
-          checkJs: true,
-          noEmit: true,
-        },
-        include: ["index.jsx", "global.d.ts"],
-      }),
-    );
-    fs.writeFileSync(globalsPath, TEMP_JSX_GLOBALS_DTS);
-    fs.writeFileSync(
-      filePath,
-      `
-        export const Card = ({ title = "Smoke" }) => {
-          static styles = \`:host { display: block; }\`;
-          return <button>{title}</button>;
-        };
-      `,
-    );
-
-    process.stderr.write = () => true;
-
-    try {
-      process.chdir(tempDir);
-      assert.equal(runLitsxTypecheck([]), 0);
-    } finally {
-      process.chdir(originalCwd);
-      process.stderr.write = originalWrite;
-      fs.rmSync(tempDir, { recursive: true, force: true });
-    }
-  }, 20_000);
-
-  it("reports missing tsconfig files through the CLI entrypoint", () => {
-    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-typecheck-missing-config-"));
-    const originalCwd = process.cwd();
-    const originalWrite = process.stderr.write;
-
-    process.stderr.write = () => true;
-
-    try {
-      process.chdir(tempDir);
-      assert.equal(runLitsxTypecheck([]), 1);
-    } finally {
-      process.chdir(originalCwd);
-      process.stderr.write = originalWrite;
-      fs.rmSync(tempDir, { recursive: true, force: true });
-    }
-  });
-
-  it("reports invalid tsconfig JSON through the CLI entrypoint", () => {
-    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-typecheck-invalid-config-"));
-    const originalCwd = process.cwd();
-    const originalWrite = process.stderr.write;
-
-    fs.writeFileSync(path.join(tempDir, "tsconfig.json"), "{ invalid json");
-    process.stderr.write = () => true;
-
-    try {
-      process.chdir(tempDir);
-      assert.equal(runLitsxTypecheck([]), 1);
-    } finally {
-      process.chdir(originalCwd);
-      process.stderr.write = originalWrite;
-      fs.rmSync(tempDir, { recursive: true, force: true });
+      fs.rmSync(missingConfigDir, { recursive: true, force: true });
+      fs.rmSync(invalidConfigDir, { recursive: true, force: true });
     }
   });
 

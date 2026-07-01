@@ -6,19 +6,62 @@ import path from "path";
 import { describe, it } from "vitest";
 import { runLitsxTypecheck } from "../packages/typescript/src/typecheck.js";
 
-const fixtureDir = path.resolve("test/fixtures/typescript");
-const tsconfigPath = path.join(fixtureDir, "tsconfig.litsx-jsx.json");
+function createTempProject(prefix) {
+  return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+}
+
+function writeJson(filePath, value) {
+  fs.writeFileSync(filePath, JSON.stringify(value, null, 2), "utf8");
+}
 
 describe("litsx typescript cli", () => {
   it("type-checks the fixture through the virtualized litsx TypeScript entrypoint", () => {
-    execFileSync("node", ["packages/typescript/src/litsx-tsc.js", "-p", tsconfigPath, "--noEmit"], {
-      cwd: path.resolve("."),
-      stdio: "pipe",
-    });
+    const tempDir = createTempProject("litsx-tsc-entrypoint-");
+    const tsconfigPath = path.join(tempDir, "tsconfig.json");
+    const filePath = path.join(tempDir, "index.tsx");
+
+    try {
+      fs.symlinkSync(path.resolve("node_modules"), path.join(tempDir, "node_modules"), "dir");
+      writeJson(tsconfigPath, {
+        compilerOptions: {
+          target: "ES2022",
+          module: "ESNext",
+          moduleResolution: "Bundler",
+          strict: true,
+          noEmit: true,
+          jsx: "react-jsx",
+          jsxImportSource: "@litsx/core",
+          types: [],
+          skipLibCheck: true,
+        },
+        include: ["index.tsx"],
+      });
+      fs.writeFileSync(
+        filePath,
+        [
+          'import { useState } from "@litsx/core";',
+          "",
+          "export const Counter = ({ label = 'Count' }: { label?: string }) => {",
+          "  static styles = `:host { display: block; }`;",
+          "  const [count, setCount] = useState(0);",
+          "  return <button @click={() => setCount(count + 1)}>{label}:{count}</button>;",
+          "};",
+          "",
+        ].join("\n"),
+        "utf8",
+      );
+
+      execFileSync("node", ["packages/typescript/src/litsx-tsc.js", "-p", tsconfigPath, "--noEmit"], {
+        cwd: path.resolve("."),
+        stdio: "pipe",
+      });
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
   }, 30000);
 
   it("virtualizes imported .litsx modules discovered through module resolution", async () => {
-    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-tsc-imported-module-"));
+    const tempDir = createTempProject("litsx-tsc-imported-module-");
     const srcDir = path.join(tempDir, "src");
     const componentDir = path.join(srcDir, "components");
     const jsconfigPath = path.join(tempDir, "jsconfig.json");
@@ -26,27 +69,19 @@ describe("litsx typescript cli", () => {
     try {
       fs.mkdirSync(componentDir, { recursive: true });
       fs.symlinkSync(path.resolve("node_modules"), path.join(tempDir, "node_modules"), "dir");
-      fs.writeFileSync(
-        jsconfigPath,
-        JSON.stringify(
-          {
-            compilerOptions: {
-              jsx: "preserve",
-              jsxImportSource: "@litsx/core",
-              module: "ESNext",
-              moduleResolution: "Bundler",
-              target: "ESNext",
-              strict: true,
-              skipLibCheck: true,
-            },
-            files: ["src/index.tsx", "src/types.d.ts"],
-            exclude: ["src/components"],
-          },
-          null,
-          2,
-        ),
-        "utf8",
-      );
+      writeJson(jsconfigPath, {
+        compilerOptions: {
+          jsx: "preserve",
+          jsxImportSource: "@litsx/core",
+          module: "ESNext",
+          moduleResolution: "Bundler",
+          target: "ESNext",
+          strict: true,
+          skipLibCheck: true,
+        },
+        files: ["src/index.tsx", "src/types.d.ts"],
+        exclude: ["src/components"],
+      });
       fs.writeFileSync(
         path.join(srcDir, "types.d.ts"),
         'declare module "*.litsx";\n',
