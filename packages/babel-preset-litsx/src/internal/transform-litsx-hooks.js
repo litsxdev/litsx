@@ -43,6 +43,16 @@ const BUILT_IN_STRUCTURAL_RUNTIME_HOOKS = new Map([
     hasStaticPhase: false,
     hasInstancePhase: true,
   }],
+  ["useFormValidity", {
+    kind: "structural-hook",
+    hasStaticPhase: false,
+    hasInstancePhase: true,
+  }],
+  ["useElementInternals", {
+    kind: "structural-hook",
+    hasStaticPhase: false,
+    hasInstancePhase: true,
+  }],
 ]);
 
 function normalizeFilePath(value) {

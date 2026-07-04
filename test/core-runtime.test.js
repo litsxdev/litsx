@@ -22,6 +22,8 @@ import {
   useOnCommit,
   useEvent,
   useEmit,
+  useElementInternals,
+  useFormValidity,
   useFormValue,
   usePrevious,
   useStableCallback,
@@ -40,6 +42,31 @@ import {
 import { LITSX_COMPONENT, LITSX_HOST_TYPE_ID } from "../packages/core/src/elements/index.js";
 import { LITSX_HOOK } from "../packages/core/src/index.js";
 import { withSuspenseCapture } from "../packages/core/src/runtime-suspense.js";
+
+const DEFAULT_VALIDITY = Object.freeze({
+  badInput: false,
+  customError: false,
+  patternMismatch: false,
+  rangeOverflow: false,
+  rangeUnderflow: false,
+  stepMismatch: false,
+  tooLong: false,
+  tooShort: false,
+  typeMismatch: false,
+  valid: true,
+  valueMissing: false,
+});
+
+function createValiditySnapshot(flags = {}) {
+  const snapshot = {
+    ...DEFAULT_VALIDITY,
+    ...Object.fromEntries(
+      Object.entries(flags).map(([key, value]) => [key, value === true])
+    ),
+  };
+  snapshot.valid = !Object.entries(snapshot).some(([key, value]) => key !== "valid" && value === true);
+  return snapshot;
+}
 
 class TestHost extends EventTarget {
   constructor() {
@@ -66,6 +93,13 @@ class TestHost extends EventTarget {
       get: (tag) => this.registry.definitions.get(tag),
     };
     this.__internalsCalls = [];
+    this.__internalsValidityCalls = [];
+    this.__internalsCheckCalls = 0;
+    this.__internalsReportCalls = 0;
+    this.__attachInternalsCalls = 0;
+    this.__internalsDisabled = false;
+    this.__internalsValidationMessage = "";
+    this.__internalsValidity = createValiditySnapshot();
   }
 
   addController(controller) {
@@ -77,11 +111,39 @@ class TestHost extends EventTarget {
   }
 
   attachInternals() {
+    this.__attachInternalsCalls += 1;
     if (!this.__internals) {
       this.__internals = {
         setFormValue: (value, state) => {
           this.__internalsCalls.push([value, state]);
         },
+        setValidity: (flags = {}, message = "", anchor = null) => {
+          this.__internalsValidity = createValiditySnapshot(flags);
+          this.__internalsValidationMessage = this.__internalsValidity.valid ? "" : message;
+          this.__internalsValidityCalls.push([
+            this.__internalsValidity,
+            this.__internalsValidationMessage,
+            anchor,
+          ]);
+        },
+        checkValidity: () => {
+          this.__internalsCheckCalls += 1;
+          return this.__internalsValidity.valid;
+        },
+        reportValidity: () => {
+          this.__internalsReportCalls += 1;
+          return this.__internalsValidity.valid;
+        },
+        get validity() {
+          return this.__owner.__internalsValidity;
+        },
+        get validationMessage() {
+          return this.__owner.__internalsValidationMessage;
+        },
+        get willValidate() {
+          return !this.__owner.__internalsDisabled;
+        },
+        __owner: this,
       };
     }
     return this.__internals;
@@ -407,6 +469,97 @@ describe("litsx effects controller", () => {
     assert.strictEqual(control.restoreState, null);
     assert.strictEqual(control.restoreMode, null);
     assert.deepStrictEqual(host.__internalsCalls.at(-1), ["fallback", "fallback"]);
+  });
+
+  it("shares cached element internals across FACE hooks", () => {
+    const host = new TestHost();
+
+    prepareEffects(host);
+    const handle = resolveStructuralEntry(
+      host,
+      0,
+      "element-internals",
+      useElementInternals,
+      [],
+      { callsitePath: ["element-internals"] },
+    );
+    const control = resolveStructuralEntry(
+      host,
+      1,
+      "form-validity",
+      useFormValidity,
+      [],
+      { callsitePath: ["form-validity"] },
+    );
+
+    assert.strictEqual(handle.supported, true);
+    assert.strictEqual(handle.internals, host.__internals);
+    assert.strictEqual(control.supported, true);
+    assert.strictEqual(host.__attachInternalsCalls, 1);
+  });
+
+  it("manages FACE validity state through useFormValidity", () => {
+    const host = new TestHost();
+    const anchor = { tagName: "INPUT" };
+
+    prepareEffects(host);
+    let control = resolveStructuralEntry(
+      host,
+      0,
+      "form-validity",
+      useFormValidity,
+      [],
+      { callsitePath: ["form-validity"] },
+    );
+
+    assert.strictEqual(control.supported, true);
+    assert.strictEqual(control.willValidate, true);
+    assert.deepStrictEqual(control.validity, createValiditySnapshot());
+    assert.strictEqual(control.validationMessage, "");
+
+    control.setValidity({ valueMissing: true }, "Required", anchor);
+
+    assert.strictEqual(host.updates, 1);
+    assert.deepStrictEqual(host.__internalsValidityCalls.at(-1), [
+      createValiditySnapshot({ valueMissing: true }),
+      "Required",
+      anchor,
+    ]);
+
+    prepareEffects(host);
+    control = resolveStructuralEntry(
+      host,
+      0,
+      "form-validity",
+      useFormValidity,
+      [],
+      { callsitePath: ["form-validity"] },
+    );
+
+    assert.strictEqual(control.validity.valid, false);
+    assert.strictEqual(control.validity.valueMissing, true);
+    assert.strictEqual(control.validationMessage, "Required");
+    assert.strictEqual(control.checkValidity(), false);
+    assert.strictEqual(control.reportValidity(), false);
+    assert.strictEqual(host.__internalsCheckCalls, 1);
+    assert.strictEqual(host.__internalsReportCalls, 1);
+    assert.strictEqual(host.updates, 1);
+
+    host.__internalsDisabled = true;
+    host.__litsxHostMiddlewareRuntime.formDisabledCallback([true], () => undefined);
+
+    prepareEffects(host);
+    control = resolveStructuralEntry(
+      host,
+      0,
+      "form-validity",
+      useFormValidity,
+      [],
+      { callsitePath: ["form-validity"] },
+    );
+
+    assert.strictEqual(control.willValidate, false);
+    assert.strictEqual(host.updates, 2);
   });
 
   it("returns the previous render value", () => {

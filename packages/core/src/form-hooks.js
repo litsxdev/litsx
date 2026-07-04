@@ -1,29 +1,118 @@
 import { useEvent } from "./effect-hooks.js";
 import { defineHook } from "./host-middleware-runtime.js";
 
-const FORM_INTERNALS = Symbol.for("litsx.formValue.internals");
-const FORM_OWNER = Symbol.for("litsx.formValue.owner");
+const FACE_INTERNALS = Symbol.for("litsx.face.internals");
+const FACE_SHARED_STATE = Symbol.for("litsx.face.sharedState");
+const FORM_VALUE_OWNER = Symbol.for("litsx.formValue.owner");
+const VALIDITY_FIELDS = [
+  "badInput",
+  "customError",
+  "patternMismatch",
+  "rangeOverflow",
+  "rangeUnderflow",
+  "stepMismatch",
+  "tooLong",
+  "tooShort",
+  "typeMismatch",
+  "valid",
+  "valueMissing",
+];
+const DEFAULT_VALIDITY = Object.freeze({
+  badInput: false,
+  customError: false,
+  patternMismatch: false,
+  rangeOverflow: false,
+  rangeUnderflow: false,
+  stepMismatch: false,
+  tooLong: false,
+  tooShort: false,
+  typeMismatch: false,
+  valid: true,
+  valueMissing: false,
+});
+
+function isObject(value) {
+  return value !== null && typeof value === "object";
+}
 
 function ensureInternals(host) {
   if (!host || typeof host.attachInternals !== "function") {
     return null;
   }
 
-  if (Object.prototype.hasOwnProperty.call(host, FORM_INTERNALS)) {
-    return host[FORM_INTERNALS];
+  if (Object.prototype.hasOwnProperty.call(host, FACE_INTERNALS)) {
+    return host[FACE_INTERNALS];
   }
 
   try {
     const internals = host.attachInternals();
-    host[FORM_INTERNALS] = internals ?? null;
-    return host[FORM_INTERNALS];
+    host[FACE_INTERNALS] = internals ?? null;
+    return host[FACE_INTERNALS];
   } catch {
-    host[FORM_INTERNALS] = null;
+    host[FACE_INTERNALS] = null;
     return null;
   }
 }
 
-function syncInternals(internals, value, state = value) {
+function cloneValiditySnapshot(validity) {
+  const snapshot = { ...DEFAULT_VALIDITY };
+  if (!isObject(validity)) {
+    return snapshot;
+  }
+  for (const field of VALIDITY_FIELDS) {
+    if (field === "valid") {
+      snapshot.valid = validity.valid !== false;
+      continue;
+    }
+    snapshot[field] = validity[field] === true;
+  }
+  return snapshot;
+}
+
+function sameValiditySnapshot(left, right) {
+  return VALIDITY_FIELDS.every((field) => left?.[field] === right?.[field]);
+}
+
+function readValidationMessage(internals) {
+  return typeof internals?.validationMessage === "string"
+    ? internals.validationMessage
+    : "";
+}
+
+function readWillValidate(internals) {
+  return internals?.willValidate === true;
+}
+
+function createSharedFaceState(host) {
+  const internals = ensureInternals(host);
+  return {
+    supported: internals !== null,
+    internals,
+    form: null,
+    disabled: false,
+    validity: cloneValiditySnapshot(internals?.validity),
+    validationMessage: readValidationMessage(internals),
+    willValidate: readWillValidate(internals),
+  };
+}
+
+function getOrCreateFaceState(host) {
+  if (!isObject(host)) {
+    return createSharedFaceState(host);
+  }
+
+  if (!Object.prototype.hasOwnProperty.call(host, FACE_SHARED_STATE)) {
+    host[FACE_SHARED_STATE] = createSharedFaceState(host);
+  }
+
+  return host[FACE_SHARED_STATE];
+}
+
+function requestHostUpdate(host) {
+  host?.requestUpdate?.();
+}
+
+function syncInternalsValue(internals, value, state = value) {
   if (typeof internals?.setFormValue !== "function") {
     return;
   }
@@ -37,13 +126,54 @@ function syncInternals(internals, value, state = value) {
   }
 }
 
-function requestHostUpdate(host) {
-  host?.requestUpdate?.();
+function updateSharedValiditySnapshot(sharedState) {
+  const nextValidity = cloneValiditySnapshot(sharedState.internals?.validity);
+  const nextValidationMessage = readValidationMessage(sharedState.internals);
+  const nextWillValidate = readWillValidate(sharedState.internals);
+  const changed =
+    !sameValiditySnapshot(sharedState.validity, nextValidity) ||
+    sharedState.validationMessage !== nextValidationMessage ||
+    sharedState.willValidate !== nextWillValidate;
+
+  if (!changed) {
+    return false;
+  }
+
+  sharedState.validity = nextValidity;
+  sharedState.validationMessage = nextValidationMessage;
+  sharedState.willValidate = nextWillValidate;
+  return true;
 }
+
+function refreshSharedValidity(host, sharedState) {
+  const changed = updateSharedValiditySnapshot(sharedState);
+  if (!changed) {
+    return false;
+  }
+
+  requestHostUpdate(host);
+  return true;
+}
+
+export const useElementInternals = defineHook({
+  setup(host) {
+    return {
+      shared: getOrCreateFaceState(host),
+    };
+  },
+
+  use(_host, state) {
+    return {
+      supported: state.shared.supported,
+      internals: state.shared.internals,
+    };
+  },
+});
 
 export const useFormValue = defineHook({
   setup(host, args, _meta, entry) {
-    const existingOwner = host?.[FORM_OWNER];
+    const shared = getOrCreateFaceState(host);
+    const existingOwner = host?.[FORM_VALUE_OWNER];
     if (existingOwner && existingOwner !== entry?.callsiteId) {
       throw new Error(
         "useFormValue can only be called once per component host because form-associated controls expose a single form value interface."
@@ -51,29 +181,26 @@ export const useFormValue = defineHook({
     }
 
     if (host && typeof host === "object") {
-      host[FORM_OWNER] = entry?.callsiteId ?? true;
+      host[FORM_VALUE_OWNER] = entry?.callsiteId ?? true;
     }
 
     const initialValue = args[0];
-    const internals = ensureInternals(host);
-    syncInternals(internals, initialValue, initialValue);
+    syncInternalsValue(shared.internals, initialValue, initialValue);
 
     return {
-      form: null,
-      disabled: false,
+      shared,
       value: initialValue,
       defaultValue: initialValue,
       restoreState: null,
       restoreMode: null,
-      internals,
     };
   },
 
   middlewares: {
     formAssociatedCallback(host, state, next, args) {
       const [form] = args;
-      if (!Object.is(state.form, form)) {
-        state.form = form;
+      if (!Object.is(state.shared.form, form)) {
+        state.shared.form = form;
         requestHostUpdate(host);
       }
       return next();
@@ -81,8 +208,8 @@ export const useFormValue = defineHook({
 
     formDisabledCallback(host, state, next, args) {
       const [disabled] = args;
-      if (!Object.is(state.disabled, disabled)) {
-        state.disabled = disabled;
+      if (!Object.is(state.shared.disabled, disabled)) {
+        state.shared.disabled = disabled;
         requestHostUpdate(host);
       }
       return next();
@@ -95,7 +222,7 @@ export const useFormValue = defineHook({
       state.value = state.defaultValue;
       state.restoreState = null;
       state.restoreMode = null;
-      syncInternals(state.internals, state.defaultValue, state.defaultValue);
+      syncInternalsValue(state.shared.internals, state.defaultValue, state.defaultValue);
 
       if (valueChanged || restoreChanged) {
         requestHostUpdate(host);
@@ -113,7 +240,7 @@ export const useFormValue = defineHook({
       state.value = restoredState;
       state.restoreState = restoredState;
       state.restoreMode = mode;
-      syncInternals(state.internals, restoredState, restoredState);
+      syncInternalsValue(state.shared.internals, restoredState, restoredState);
 
       if (valueChanged || restoreChanged) {
         requestHostUpdate(host);
@@ -133,7 +260,7 @@ export const useFormValue = defineHook({
       }
 
       state.value = resolvedValue;
-      syncInternals(state.internals, resolvedValue, resolvedValue);
+      syncInternalsValue(state.shared.internals, resolvedValue, resolvedValue);
       requestHostUpdate(host);
       return resolvedValue;
     });
@@ -153,12 +280,12 @@ export const useFormValue = defineHook({
     });
 
     const setFormValue = useEvent(host, (value, restoreState = state.value) => {
-      syncInternals(state.internals, value, restoreState);
+      syncInternalsValue(state.shared.internals, value, restoreState);
     });
 
     return {
-      form: state.form,
-      disabled: state.disabled,
+      form: state.shared.form,
+      disabled: state.shared.disabled,
       value: state.value,
       defaultValue: state.defaultValue,
       restoreState: state.restoreState,
@@ -166,6 +293,92 @@ export const useFormValue = defineHook({
       setValue,
       setDefaultValue,
       setFormValue,
+    };
+  },
+});
+
+export const useFormValidity = defineHook({
+  setup(host) {
+    return {
+      shared: getOrCreateFaceState(host),
+    };
+  },
+
+  middlewares: {
+    formAssociatedCallback(host, state, next, args) {
+      const [form] = args;
+      const formChanged = !Object.is(state.shared.form, form);
+
+      if (formChanged) {
+        state.shared.form = form;
+      }
+
+      const validityChanged = updateSharedValiditySnapshot(state.shared);
+      if (formChanged || validityChanged) {
+        requestHostUpdate(host);
+      }
+      return next();
+    },
+
+    formDisabledCallback(host, state, next, args) {
+      const [disabled] = args;
+      const disabledChanged = !Object.is(state.shared.disabled, disabled);
+
+      if (disabledChanged) {
+        state.shared.disabled = disabled;
+      }
+
+      const validityChanged = updateSharedValiditySnapshot(state.shared);
+      if (disabledChanged || validityChanged) {
+        requestHostUpdate(host);
+      }
+      return next();
+    },
+  },
+
+  use(host, state) {
+    const setValidity = useEvent(host, (flags = {}, message = "", anchor) => {
+      if (typeof state.shared.internals?.setValidity !== "function") {
+        return;
+      }
+
+      if (anchor !== undefined) {
+        state.shared.internals.setValidity(flags ?? {}, message, anchor);
+      } else if (message !== undefined) {
+        state.shared.internals.setValidity(flags ?? {}, message);
+      } else {
+        state.shared.internals.setValidity(flags ?? {});
+      }
+
+      refreshSharedValidity(host, state.shared);
+    });
+
+    const checkValidity = useEvent(host, () => {
+      if (typeof state.shared.internals?.checkValidity !== "function") {
+        return true;
+      }
+      const result = state.shared.internals.checkValidity();
+      refreshSharedValidity(host, state.shared);
+      return result;
+    });
+
+    const reportValidity = useEvent(host, () => {
+      if (typeof state.shared.internals?.reportValidity !== "function") {
+        return true;
+      }
+      const result = state.shared.internals.reportValidity();
+      refreshSharedValidity(host, state.shared);
+      return result;
+    });
+
+    return {
+      supported: state.shared.supported,
+      willValidate: state.shared.willValidate,
+      validity: state.shared.validity,
+      validationMessage: state.shared.validationMessage,
+      setValidity,
+      checkValidity,
+      reportValidity,
     };
   },
 });

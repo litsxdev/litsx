@@ -302,11 +302,13 @@ describe("@litsx/babel-preset-litsx", () => {
 
   it("compiles structural hooks imported from @litsx/core", () => {
     const source = [
-      'import { useFormValue } from "@litsx/core";',
+      'import { useElementInternals, useFormValidity, useFormValue } from "@litsx/core";',
       "export function FormField() {",
       "  static formAssociated = true;",
+      "  const internals = useElementInternals();",
       "  const control = useFormValue('draft');",
-      "  return <div>{control.value}</div>;",
+      "  const validity = useFormValidity();",
+      "  return <div>{internals.supported ? control.value : validity.validationMessage}</div>;",
       "}",
     ].join("\n");
 
@@ -319,7 +321,9 @@ describe("@litsx/babel-preset-litsx", () => {
 
     assert.match(result.code, /class FormField extends HostMiddlewareMixin\((?:LitsxStaticHoistsMixin\(LitElement\)|LitElement)\)/);
     assert.match(result.code, /static structuralEntries = \[/);
-    assert.match(result.code, /resolveStructuralEntry\(this, 0, "litsx-structural-[^"]+", useFormValue, \['draft'\]|\["draft"\]/);
+    assert.match(result.code, /resolveStructuralEntry\(this, 0, "litsx-structural-[^"]+", useElementInternals, \[\]/);
+    assert.match(result.code, /resolveStructuralEntry\(this, 1, "litsx-structural-[^"]+", useFormValue, \['draft'\]|\["draft"\]/);
+    assert.match(result.code, /resolveStructuralEntry\(this, 2, "litsx-structural-[^"]+", useFormValidity, \[\]/);
   });
 
   it("compiles imported static-only structural hooks without host lifecycle wrapping", () => {

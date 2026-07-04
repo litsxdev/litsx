@@ -536,6 +536,11 @@ export declare function createHostMiddlewareRuntime(
 
 export type LitsxFormSubmitValue = string | File | FormData | null;
 
+export interface LitsxElementInternalsHandle {
+  supported: boolean;
+  internals: ElementInternals | null;
+}
+
 export interface LitsxFormValue<TValue = LitsxFormSubmitValue> {
   form: HTMLFormElement | null;
   disabled: boolean;
@@ -548,9 +553,39 @@ export interface LitsxFormValue<TValue = LitsxFormSubmitValue> {
   setFormValue(value: LitsxFormSubmitValue, restoreState?: TValue): void;
 }
 
+export interface LitsxValiditySnapshot {
+  badInput: boolean;
+  customError: boolean;
+  patternMismatch: boolean;
+  rangeOverflow: boolean;
+  rangeUnderflow: boolean;
+  stepMismatch: boolean;
+  tooLong: boolean;
+  tooShort: boolean;
+  typeMismatch: boolean;
+  valid: boolean;
+  valueMissing: boolean;
+}
+
+export interface LitsxFormValidity {
+  supported: boolean;
+  willValidate: boolean;
+  validity: LitsxValiditySnapshot;
+  validationMessage: string;
+  setValidity(
+    flags?: ValidityStateFlags | null,
+    message?: string,
+    anchor?: HTMLElement | null
+  ): void;
+  checkValidity(): boolean;
+  reportValidity(): boolean;
+}
+
+export declare const useElementInternals: () => LitsxElementInternalsHandle;
 export declare const useFormValue: <TValue = string | null>(
   defaultValue?: TValue
 ) => LitsxFormValue<TValue>;
+export declare const useFormValidity: () => LitsxFormValidity;
 
 /**
  * Run an effect after the component finishes updating.

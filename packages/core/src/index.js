@@ -35,7 +35,11 @@ export {
   resolveStructuralEntry,
   resolveStructuralStaticEntry,
 } from "./host-middleware-runtime.js";
-export { useFormValue } from "./form-hooks.js";
+export {
+  useElementInternals,
+  useFormValidity,
+  useFormValue,
+} from "./form-hooks.js";
 
 export {
   prepareEffects,
