@@ -1,6 +1,6 @@
 {
   "name": "@litsx/core",
-  "version": "0.11.0",
+  "version": "0.12.0",
   "description": "Native LitSX runtime primitives, JSX runtime entrypoints, and web component utilities",
   "author": "LitSX Team",
   "type": "module",

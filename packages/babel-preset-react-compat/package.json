@@ -1,6 +1,6 @@
 {
   "name": "@litsx/babel-preset-react-compat",
-  "version": "0.5.2",
+  "version": "0.5.3",
   "description": "Canonical React compatibility pipeline for migrating React-authored source onto LitSX",
   "author": "LitSX Team",
   "type": "module",
