@@ -155,11 +155,37 @@ function refreshSharedValidity(host, sharedState) {
   return true;
 }
 
+function createFaceHostAccessors(shared) {
+  return {
+    form: {
+      get: () => shared.internals?.form ?? shared.form,
+    },
+    validity: {
+      get: () => cloneValiditySnapshot(shared.internals?.validity ?? shared.validity),
+    },
+    validationMessage: {
+      get: () => readValidationMessage(shared.internals) || shared.validationMessage,
+    },
+    willValidate: {
+      get: () => {
+        if (shared.internals) {
+          return readWillValidate(shared.internals);
+        }
+        return shared.willValidate;
+      },
+    },
+  };
+}
+
 export const useElementInternals = defineHook({
   setup(host) {
     return {
       shared: getOrCreateFaceState(host),
     };
+  },
+
+  accessors(_host, state) {
+    return createFaceHostAccessors(state.shared);
   },
 
   use(_host, state) {
@@ -194,6 +220,10 @@ export const useFormValue = defineHook({
       restoreState: null,
       restoreMode: null,
     };
+  },
+
+  accessors(_host, state) {
+    return createFaceHostAccessors(state.shared);
   },
 
   middlewares: {
@@ -302,6 +332,10 @@ export const useFormValidity = defineHook({
     return {
       shared: getOrCreateFaceState(host),
     };
+  },
+
+  accessors(_host, state) {
+    return createFaceHostAccessors(state.shared);
   },
 
   middlewares: {

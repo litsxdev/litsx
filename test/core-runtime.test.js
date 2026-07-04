@@ -395,6 +395,7 @@ describe("litsx effects controller", () => {
     assert.strictEqual(control.value, "draft");
     assert.strictEqual(control.defaultValue, "draft");
     assert.strictEqual(control.form, null);
+    assert.strictEqual(host.form, null);
     assert.strictEqual(control.disabled, false);
     assert.deepStrictEqual(host.__internalsCalls, [["draft", "draft"]]);
 
@@ -433,6 +434,7 @@ describe("litsx effects controller", () => {
     );
 
     assert.strictEqual(control.form, form);
+    assert.strictEqual(host.form, form);
     assert.strictEqual(control.disabled, true);
 
     host.__litsxHostMiddlewareRuntime.formStateRestoreCallback(["restored", "restore"], () => undefined);
@@ -496,6 +498,10 @@ describe("litsx effects controller", () => {
     assert.strictEqual(handle.internals, host.__internals);
     assert.strictEqual(control.supported, true);
     assert.strictEqual(host.__attachInternalsCalls, 1);
+    assert.strictEqual(host.form, null);
+    assert.deepStrictEqual(host.validity, createValiditySnapshot());
+    assert.strictEqual(host.validationMessage, "");
+    assert.strictEqual(host.willValidate, true);
   });
 
   it("manages FACE validity state through useFormValidity", () => {
@@ -516,6 +522,9 @@ describe("litsx effects controller", () => {
     assert.strictEqual(control.willValidate, true);
     assert.deepStrictEqual(control.validity, createValiditySnapshot());
     assert.strictEqual(control.validationMessage, "");
+    assert.strictEqual(host.willValidate, true);
+    assert.deepStrictEqual(host.validity, createValiditySnapshot());
+    assert.strictEqual(host.validationMessage, "");
 
     control.setValidity({ valueMissing: true }, "Required", anchor);
 
@@ -539,6 +548,9 @@ describe("litsx effects controller", () => {
     assert.strictEqual(control.validity.valid, false);
     assert.strictEqual(control.validity.valueMissing, true);
     assert.strictEqual(control.validationMessage, "Required");
+    assert.strictEqual(host.validity.valid, false);
+    assert.strictEqual(host.validity.valueMissing, true);
+    assert.strictEqual(host.validationMessage, "Required");
     assert.strictEqual(control.checkValidity(), false);
     assert.strictEqual(control.reportValidity(), false);
     assert.strictEqual(host.__internalsCheckCalls, 1);
@@ -559,6 +571,7 @@ describe("litsx effects controller", () => {
     );
 
     assert.strictEqual(control.willValidate, false);
+    assert.strictEqual(host.willValidate, false);
     assert.strictEqual(host.updates, 2);
   });
 

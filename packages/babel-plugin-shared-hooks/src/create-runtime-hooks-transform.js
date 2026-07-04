@@ -166,7 +166,8 @@ function getStructuralHookPhaseInfo(callPath, calleePath, state) {
   const hasInstancePhase =
     hasObjectProperty(objectPath, "setup") ||
     hasObjectProperty(objectPath, "createState") ||
-    hasObjectProperty(objectPath, "middlewares");
+    hasObjectProperty(objectPath, "middlewares") ||
+    hasObjectProperty(objectPath, "accessors");
   return {
     hasStaticPhase,
     hasInstancePhase,

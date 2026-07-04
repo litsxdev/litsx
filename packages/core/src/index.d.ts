@@ -322,6 +322,15 @@ export type LitsxHostMiddlewareMap<TStaticState = undefined, TInstanceState = un
   Record<LitsxHostMiddlewareLifecycleMethod, LitsxHostMiddleware<unknown, TStaticState, TInstanceState>>
 >;
 
+export interface LitsxHostAccessorDescriptor<TValue = unknown> {
+  get?: () => TValue;
+  set?: {
+    bivarianceHack(value: TValue): void;
+  }["bivarianceHack"];
+}
+
+export type LitsxHostAccessorMap = Record<string, LitsxHostAccessorDescriptor<unknown>>;
+
 /**
  * Public structural-hook definition.
  *
@@ -349,6 +358,11 @@ export type LitsxHostMiddlewareMap<TStaticState = undefined, TInstanceState = un
  * middleware runtime intentionally does not deduplicate entries: every authored
  * callsite gets its own state and middleware entry. Resource dedupe belongs in
  * hook-specific runtimes.
+ *
+ * `accessors(host, state, meta, entry)` publishes host instance accessors such
+ * as readonly platform-facing getters or low-level form/control properties.
+ * These accessors are installed on the host instance itself as part of the
+ * structural runtime, not through the imperative `useExpose()` method surface.
  */
 export interface LitsxStructuralDefinition<
   TArgs extends unknown[] = unknown[],
@@ -388,6 +402,12 @@ export interface LitsxStructuralDefinition<
     ]
   ) => TInstanceState;
   middlewares?: LitsxHostMiddlewareMap<TStaticState, TInstanceState>;
+  accessors?: (
+    host: unknown,
+    state: LitsxStructuralState<TStaticState, TInstanceState>,
+    meta: LitsxStructuralMeta,
+    entry: LitsxStructuralEntry
+  ) => LitsxHostAccessorMap;
 }
 
 /**
@@ -492,9 +512,10 @@ export interface LitsxStructuralHostInstance {
 /**
  * Define a structural hook.
  *
- * The locked public authoring surface is `defineHook({ setup, middlewares,
- * use })`. The returned value remains callable like a normal hook, while the
- * compiler/runtime metadata bridge is carried internally on the function.
+ * The locked public authoring surface is `defineHook({ static, setup,
+ * middlewares, accessors, use })`. The returned value remains callable like a
+ * normal hook, while the compiler/runtime metadata bridge is carried
+ * internally on the function.
  */
 export declare function defineHook<
   TArgs extends unknown[] = unknown[],

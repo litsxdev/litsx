@@ -2,6 +2,7 @@ const EMPTY_ARGS = Object.freeze([]);
 const STRUCTURAL_HOOK_DEFINITION = Symbol.for("litsx.structuralHookDefinition");
 export const STRUCTURAL_HOOK_ENTRIES = Symbol.for("litsx.structuralHookEntries");
 const STRUCTURAL_STATIC_STATE = Symbol.for("litsx.structuralStaticState");
+const STRUCTURAL_HOST_ACCESSORS = Symbol.for("litsx.structuralHostAccessors");
 const LIFECYCLE_METHODS = [
   "connectedCallback",
   "disconnectedCallback",
@@ -103,6 +104,13 @@ function getDefinitionMiddlewares(definition) {
   const resolvedDefinition = resolveStructuralDefinition(definition);
   return isObject(resolvedDefinition) && isObject(resolvedDefinition.middlewares)
     ? resolvedDefinition.middlewares
+    : null;
+}
+
+function getDefinitionAccessors(definition) {
+  const resolvedDefinition = resolveStructuralDefinition(definition);
+  return isObject(resolvedDefinition) && typeof resolvedDefinition.accessors === "function"
+    ? resolvedDefinition.accessors
     : null;
 }
 
@@ -230,6 +238,183 @@ function createEntryState(host, definition, args, meta, entry) {
   return structuralState;
 }
 
+function normalizeAccessorDescriptor(name, descriptor) {
+  if (!isObject(descriptor)) {
+    throw new TypeError(
+      `Structural accessor "${name}" must be an object with get and/or set functions.`
+    );
+  }
+
+  const hasGet = typeof descriptor.get === "function";
+  const hasSet = typeof descriptor.set === "function";
+
+  if (!hasGet && !hasSet) {
+    throw new TypeError(
+      `Structural accessor "${name}" must define at least a get() or set() function.`
+    );
+  }
+
+  if (descriptor.get != null && !hasGet) {
+    throw new TypeError(`Structural accessor "${name}" received a non-function get descriptor.`);
+  }
+
+  if (descriptor.set != null && !hasSet) {
+    throw new TypeError(`Structural accessor "${name}" received a non-function set descriptor.`);
+  }
+
+  return {
+    get: hasGet ? descriptor.get : undefined,
+    set: hasSet ? descriptor.set : undefined,
+  };
+}
+
+function resolveEntryAccessors(host, entry) {
+  const accessorsFactory = getDefinitionAccessors(entry?.definition);
+  if (!accessorsFactory) {
+    return {};
+  }
+
+  const rawAccessors = accessorsFactory(host, entry.state, entry.meta, entry);
+  if (rawAccessors == null) {
+    return {};
+  }
+  if (!isObject(rawAccessors)) {
+    throw new TypeError("Structural hook accessors() must return an object of accessor descriptors.");
+  }
+
+  const accessors = {};
+  for (const name of Object.keys(rawAccessors)) {
+    accessors[name] = normalizeAccessorDescriptor(name, rawAccessors[name]);
+  }
+  return accessors;
+}
+
+function getHostAccessorRegistry(host) {
+  if (!isObject(host)) {
+    return null;
+  }
+
+  if (!Object.prototype.hasOwnProperty.call(host, STRUCTURAL_HOST_ACCESSORS)) {
+    Object.defineProperty(host, STRUCTURAL_HOST_ACCESSORS, {
+      value: new Map(),
+      configurable: true,
+    });
+  }
+
+  return host[STRUCTURAL_HOST_ACCESSORS];
+}
+
+function getLatestAccessorOwner(owners) {
+  let activeOwner = null;
+  let activeOrder = -1;
+
+  for (const owner of owners.values()) {
+    if (owner.order >= activeOrder) {
+      activeOrder = owner.order;
+      activeOwner = owner;
+    }
+  }
+
+  return activeOwner;
+}
+
+function syncInstalledHostAccessor(host, name, registryEntry) {
+  const activeOwner = getLatestAccessorOwner(registryEntry.owners);
+  if (!activeOwner) {
+    delete host[name];
+    return false;
+  }
+
+  if (typeof registryEntry.getWrapper !== "function") {
+    registryEntry.getWrapper = function structuralAccessorGetter() {
+      const currentOwner = getLatestAccessorOwner(registryEntry.owners);
+      const getter = currentOwner?.descriptor?.get;
+      return typeof getter === "function" ? getter() : undefined;
+    };
+  }
+
+  if (typeof registryEntry.setWrapper !== "function") {
+    registryEntry.setWrapper = function structuralAccessorSetter(value) {
+      const currentOwner = getLatestAccessorOwner(registryEntry.owners);
+      const setter = currentOwner?.descriptor?.set;
+      if (typeof setter === "function") {
+        setter(value);
+      }
+    };
+  }
+
+  Object.defineProperty(host, name, {
+    get: typeof activeOwner.descriptor.get === "function"
+      ? registryEntry.getWrapper
+      : undefined,
+    set: typeof activeOwner.descriptor.set === "function"
+      ? registryEntry.setWrapper
+      : undefined,
+    configurable: true,
+  });
+
+  return true;
+}
+
+function removeEntryAccessor(host, entry, name) {
+  const registry = getHostAccessorRegistry(host);
+  const registryEntry = registry?.get(name);
+  if (!registryEntry) {
+    return;
+  }
+
+  registryEntry.owners.delete(entry.callsiteId ?? entry.id);
+  const stillInstalled = syncInstalledHostAccessor(host, name, registryEntry);
+  if (!stillInstalled) {
+    registry.delete(name);
+  }
+}
+
+function syncEntryAccessors(host, entry) {
+  const registry = getHostAccessorRegistry(host);
+  if (!registry || !entry) {
+    return;
+  }
+
+  const nextAccessors = resolveEntryAccessors(host, entry);
+  const nextNames = Object.keys(nextAccessors);
+
+  for (const existingName of entry.accessorNames || []) {
+    if (!nextNames.includes(existingName)) {
+      removeEntryAccessor(host, entry, existingName);
+    }
+  }
+
+  for (const name of nextNames) {
+    let registryEntry = registry.get(name);
+
+    if (!registryEntry) {
+      const ownDescriptor = Object.getOwnPropertyDescriptor(host, name);
+      if (ownDescriptor) {
+        throw new TypeError(
+          `Structural hook cannot install accessor "${name}" because the host already defines that own property.`
+        );
+      }
+
+      registryEntry = {
+        owners: new Map(),
+        getWrapper: null,
+        setWrapper: null,
+      };
+      registry.set(name, registryEntry);
+    }
+
+    registryEntry.owners.set(entry.callsiteId ?? entry.id, {
+      order: entry.callsiteIndex,
+      descriptor: nextAccessors[name],
+    });
+    syncInstalledHostAccessor(host, name, registryEntry);
+  }
+
+  entry.accessors = nextAccessors;
+  entry.accessorNames = nextNames;
+}
+
 function normalizeStructuralEntry(host, entry, index) {
   const source = isObject(entry) ? entry : {};
   const callsiteIndex = Number.isInteger(source.callsiteIndex)
@@ -254,6 +439,8 @@ function normalizeStructuralEntry(host, entry, index) {
     middlewares: isObject(source.middlewares)
       ? source.middlewares
       : getDefinitionMiddlewares(definition),
+    accessors: {},
+    accessorNames: [],
   };
   normalized.state = createEntryState(host, definition, args, meta, source);
   return normalized;
@@ -292,6 +479,9 @@ export class HostMiddlewareRuntime {
     this.entries = resolveHostEntries(host, entries).map((entry, index) =>
       normalizeStructuralEntry(host, entry, index)
     );
+    for (const entry of this.entries) {
+      syncEntryAccessors(this.host, entry);
+    }
   }
 
   getEntry(index) {
@@ -305,14 +495,19 @@ export class HostMiddlewareRuntime {
   ensureEntry(index, entry) {
     const existing = this.entries[index];
     if (existing && existing.callsiteId === (entry?.callsiteId ?? entry?.id)) {
-      return refreshEntryArgsAndMeta(existing, entry?.args, entry?.meta);
+      refreshEntryArgsAndMeta(existing, entry?.args, entry?.meta);
+      syncEntryAccessors(this.host, existing);
+      return existing;
     }
 
     const callsiteId = entry?.callsiteId ?? entry?.id;
     if (typeof callsiteId === "string") {
       const existingIndex = this.findEntryIndexByCallsiteId(callsiteId);
       if (existingIndex >= 0) {
-        return refreshEntryArgsAndMeta(this.entries[existingIndex], entry?.args, entry?.meta);
+        const existingById = this.entries[existingIndex];
+        refreshEntryArgsAndMeta(existingById, entry?.args, entry?.meta);
+        syncEntryAccessors(this.host, existingById);
+        return existingById;
       }
     }
 
@@ -322,6 +517,7 @@ export class HostMiddlewareRuntime {
     } else {
       this.entries[index] = normalized;
     }
+    syncEntryAccessors(this.host, normalized);
     return normalized;
   }
 

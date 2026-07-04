@@ -454,6 +454,123 @@ describe("HostMiddlewareRuntime", () => {
     });
   });
 
+  it("installs structural host accessors on the host instance", () => {
+    const host = {};
+    const structuralHook = defineHook({
+      setup(initialValue) {
+        return { value: initialValue };
+      },
+      accessors(_host, state) {
+        return {
+          value: {
+            get: () => state.instance.value,
+            set: (next) => {
+              state.instance.value = String(next);
+            },
+          },
+        };
+      },
+      use(_initialValue, state) {
+        return state.instance.value;
+      },
+    });
+
+    const runtime = new HostMiddlewareRuntime(host, [
+      {
+        callsiteId: "field",
+        callsitePath: ["Field", "useValue"],
+        definition: structuralHook,
+        args: ["draft"],
+      },
+    ]);
+
+    assert.strictEqual(host.value, "draft");
+    host.value = "ready";
+    assert.strictEqual(host.value, "ready");
+    assert.strictEqual(runtime.read(0), "ready");
+  });
+
+  it("lets later structural entries override accessors and restores earlier accessors when needed", () => {
+    const host = {};
+    const firstHook = defineHook({
+      accessors() {
+        return {
+          current: {
+            get: () => "first",
+          },
+        };
+      },
+      use() {
+        return "first";
+      },
+    });
+    const secondHook = defineHook({
+      accessors(_host, _state, _meta, entry) {
+        return entry.args[0]
+          ? {
+            current: {
+              get: () => "second",
+            },
+          }
+          : {};
+      },
+      use() {
+        return "second";
+      },
+    });
+
+    const runtime = new HostMiddlewareRuntime(host, [
+      {
+        callsiteIndex: 0,
+        callsiteId: "first",
+        definition: firstHook,
+      },
+      {
+        callsiteIndex: 1,
+        callsiteId: "second",
+        definition: secondHook,
+        args: [true],
+      },
+    ]);
+
+    assert.strictEqual(host.current, "second");
+
+    runtime.ensureEntry(1, {
+      callsiteIndex: 1,
+      callsiteId: "second",
+      definition: secondHook,
+      args: [false],
+      meta: { callsitePath: ["second"] },
+    });
+
+    assert.strictEqual(host.current, "first");
+  });
+
+  it("rejects structural accessors that conflict with existing host own properties", () => {
+    const host = { value: "taken" };
+    const structuralHook = defineHook({
+      accessors() {
+        return {
+          value: {
+            get: () => "next",
+          },
+        };
+      },
+      use() {
+        return "next";
+      },
+    });
+
+    assert.throws(() => {
+      new HostMiddlewareRuntime(host, [
+        {
+          callsiteId: "field",
+          definition: structuralHook,
+        },
+      ]);
+    }, /cannot install accessor "value" because the host already defines that own property/);
+  });
+
   it("supports static-only hooks without host lifecycle middleware", () => {
     const calls = [];
     class StaticOwner {}

@@ -363,6 +363,43 @@ describe("@litsx/babel-preset-litsx", () => {
     assert.match(result.code, /resolveStructuralStaticEntry\(this\.constructor, 0, "litsx-structural-[^"]+", useStaticLocale, \['en'\]|\["en"\]/);
   });
 
+  it("treats structural hooks with accessors as instance-phase hooks", () => {
+    const source = [
+      'import { defineHook } from "@litsx/core";',
+      "const useControl = defineHook({",
+      "  static(label) {",
+      "    return { label: label.toUpperCase() };",
+      "  },",
+      "  accessors(_host, state) {",
+      "    return {",
+      "      value: {",
+      "        get: () => state.static.label,",
+      "      },",
+      "    };",
+      "  },",
+      "  use(label, state) {",
+      "    return `${state.static.label}:${label}`;",
+      "  },",
+      "});",
+      "export function Field() {",
+      "  const value = useControl('draft');",
+      "  return <div>{value}</div>;",
+      "}",
+    ].join("\n");
+
+    const result = transformFromAstSync(parser.parse(source, { sourceType: "module" }), source, {
+      configFile: false,
+      babelrc: false,
+      filename: "/virtual/structural-accessors.litsx",
+      presets: [[nativePreset, { jsxTemplate: false }]],
+    });
+
+    assert.match(result.code, /class Field extends HostMiddlewareMixin\((?:LitsxStaticHoistsMixin\(LitElement\)|LitElement)\)/);
+    assert.match(result.code, /static structuralEntries = \[/);
+    assert.match(result.code, /resolveStructuralEntry\(this, 0, "litsx-structural-[^"]+", useControl, \['draft'\]|\["draft"\]/);
+    assert.doesNotMatch(result.code, /resolveStructuralStaticEntry\(/);
+  });
+
   it("compiles namespace imported structural hooks discovered from authored modules", () => {
     const source = [
       'import * as hooks from "./hooks.litsx";',
