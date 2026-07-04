@@ -37,26 +37,22 @@ const DEFAULT_MODULE_RESOLUTION_OPTIONS = {
   esModuleInterop: true,
   allowSyntheticDefaultImports: true,
 };
-const BUILT_IN_STRUCTURAL_RUNTIME_HOOKS = new Map([
-  ["useFormValue", {
-    kind: "structural-hook",
-    hasStaticPhase: false,
-    hasInstancePhase: true,
-  }],
-  ["useFormValidity", {
-    kind: "structural-hook",
-    hasStaticPhase: false,
-    hasInstancePhase: true,
-  }],
-  ["useElementInternals", {
-    kind: "structural-hook",
-    hasStaticPhase: false,
-    hasInstancePhase: true,
-  }],
-]);
-
 function normalizeFilePath(value) {
   return normalizeStableIdentityPath(value);
+}
+
+function getDeclarationImplementationBase(filename) {
+  if (typeof filename !== "string") {
+    return null;
+  }
+  const normalized = normalizeFilePath(filename);
+  if (/\.d\.tsx?$/i.test(normalized)) {
+    return normalized.replace(/\.d\.tsx?$/i, "");
+  }
+  if (/\.d\.[cm]ts$/i.test(normalized)) {
+    return normalized.replace(/\.d\.[cm]ts$/i, "");
+  }
+  return null;
 }
 
 function isSymbolForMarker(node, markerKey) {
@@ -255,7 +251,11 @@ function createStructuralHookResolver(options = {}) {
         );
         const resolvedFileName = resolution?.resolvedModule?.resolvedFileName;
         if (resolvedFileName) {
-          resolved = resolveWithExtensions(resolvedFileName) || normalizeFilePath(resolvedFileName);
+          const implementationBase = getDeclarationImplementationBase(resolvedFileName);
+          resolved =
+            (implementationBase ? resolveWithExtensions(implementationBase) : null) ||
+            resolveWithExtensions(resolvedFileName) ||
+            normalizeFilePath(resolvedFileName);
         }
       } catch {
         resolved = null;
@@ -267,7 +267,7 @@ function createStructuralHookResolver(options = {}) {
   }
 
   function resolveModuleReference(analysis, reference) {
-    if (!analysis || !reference?.source || reference.source === RUNTIME_MODULE) {
+    if (!analysis || !reference?.source) {
       return reference?.resolvedSource || null;
     }
     if (Object.prototype.hasOwnProperty.call(reference, "resolvedSource")) {
@@ -915,12 +915,6 @@ function createStructuralHookResolver(options = {}) {
   }
 
   return function structuralHookResolver({ filename, source, importedName, runtimeCustomOnly = false }) {
-    if (source === RUNTIME_MODULE && BUILT_IN_STRUCTURAL_RUNTIME_HOOKS.has(importedName)) {
-      return runtimeCustomOnly
-        ? false
-        : BUILT_IN_STRUCTURAL_RUNTIME_HOOKS.get(importedName);
-    }
-
     const resolved = resolveImport(filename, source);
     if (!resolved) return runtimeCustomOnly ? "unresolved-custom-hook" : false;
     const analysis = analyzeModule(resolved);
