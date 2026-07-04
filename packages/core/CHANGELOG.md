@@ -1,5 +1,11 @@
 # litsx
 
+## 0.11.0
+
+### Minor Changes
+
+- 98f5d8f: Add low-level FACE primitives with `useFormValidity()` and `useElementInternals()`, while sharing `ElementInternals` state with `useFormValue()`. Also recognize the new `@litsx/core` structural hooks in the LitSX Babel preset.
+
 ## 0.10.0
 
 ### Minor Changes
