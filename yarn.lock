@@ -954,7 +954,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@litsx/babel-plugin-shared-hooks@npm:^0.6.0, @litsx/babel-plugin-shared-hooks@npm:^0.6.1, @litsx/babel-plugin-shared-hooks@workspace:packages/babel-plugin-shared-hooks":
+"@litsx/babel-plugin-shared-hooks@npm:^0.6.0, @litsx/babel-plugin-shared-hooks@npm:^0.6.1, @litsx/babel-plugin-shared-hooks@npm:^0.6.2, @litsx/babel-plugin-shared-hooks@workspace:packages/babel-plugin-shared-hooks":
   version: 0.0.0-use.local
   resolution: "@litsx/babel-plugin-shared-hooks@workspace:packages/babel-plugin-shared-hooks"
   dependencies:
@@ -1003,7 +1003,7 @@ __metadata:
     "@babel/plugin-syntax-jsx": "npm:^7.28.6"
     "@babel/traverse": "npm:^7.28.5"
     "@litsx/authoring": "npm:^0.5.0"
-    "@litsx/babel-plugin-shared-hooks": "npm:^0.6.1"
+    "@litsx/babel-plugin-shared-hooks": "npm:^0.6.2"
     "@litsx/babel-plugin-transform-jsx-html-template": "npm:^0.3.6"
     "@litsx/babel-plugin-transform-litsx-scoped-elements": "npm:^0.4.6"
     "@litsx/typescript-session": "npm:^0.2.3"
