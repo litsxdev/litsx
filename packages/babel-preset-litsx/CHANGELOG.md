@@ -1,5 +1,20 @@
 # @litsx/babel-preset-litsx
 
+## 0.13.0
+
+### Minor Changes
+
+- d02befd: Add `useFormValue()` as a form-associated structural hook in `@litsx/core`, including FACE lifecycle plumbing for `formAssociatedCallback`, `formDisabledCallback`, `formResetCallback`, and `formStateRestoreCallback`.
+
+  Expose the new hook through the LitSX transforms so authored components can import it from `@litsx/core` and compile correctly through the preset and compiler facade.
+
+  Also improve renderer-prop lowering for stored JSX expressions and avoid false external-component warnings when PascalCase LitSX components are re-exported through intermediary modules.
+
+### Patch Changes
+
+- Updated dependencies [d02befd]
+  - @litsx/babel-plugin-shared-hooks@0.6.1
+
 ## 0.12.0
 
 ### Minor Changes
