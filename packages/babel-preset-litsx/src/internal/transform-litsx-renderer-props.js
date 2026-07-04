@@ -86,6 +86,27 @@ function getFunctionNodeFromBinding(binding) {
   return null;
 }
 
+function getRenderableExpressionFromBinding(binding, seenBindings = new Set()) {
+  if (!binding?.path || seenBindings.has(binding) || !binding.constant) {
+    return null;
+  }
+
+  if (!binding.path.isVariableDeclarator()) {
+    return null;
+  }
+
+  const init = unwrapExpression(binding.path.node.init);
+  if (!init) {
+    return null;
+  }
+
+  const nextSeenBindings = new Set(seenBindings);
+  nextSeenBindings.add(binding);
+  return isRenderableRendererExpression(init, binding.path.scope, nextSeenBindings)
+    ? init
+    : null;
+}
+
 function mergeBooleanResults(results) {
   return results.some(Boolean);
 }
@@ -236,7 +257,67 @@ function expressionNeedsRendererContext(node, scope, seenBindings = new Set()) {
     return callExpressionNeedsRendererContext(expression, scope, seenBindings);
   }
 
+  if (t.isIdentifier(expression)) {
+    const binding = scope.getBinding(expression.name);
+    const renderableExpression = getRenderableExpressionFromBinding(binding, seenBindings);
+    if (!renderableExpression) {
+      return false;
+    }
+
+    const nextSeenBindings = new Set(seenBindings);
+    nextSeenBindings.add(binding);
+    return expressionNeedsRendererContext(renderableExpression, binding.path.scope, nextSeenBindings);
+  }
+
   return false;
+}
+
+function isRenderableRendererExpression(node, scope, seenBindings = new Set()) {
+  const expression = unwrapExpression(node);
+  if (!expression) {
+    return false;
+  }
+
+  if (t.isJSXElement(expression) || t.isJSXFragment(expression)) {
+    return true;
+  }
+
+  if (t.isConditionalExpression(expression)) {
+    return (
+      isRenderableRendererExpression(expression.consequent, scope, seenBindings) ||
+      isRenderableRendererExpression(expression.alternate, scope, seenBindings)
+    );
+  }
+
+  if (t.isLogicalExpression(expression)) {
+    return (
+      isRenderableRendererExpression(expression.left, scope, seenBindings) ||
+      isRenderableRendererExpression(expression.right, scope, seenBindings)
+    );
+  }
+
+  if (t.isSequenceExpression(expression)) {
+    return expression.expressions.some((part) =>
+      isRenderableRendererExpression(part, scope, seenBindings)
+    );
+  }
+
+  if (t.isArrayExpression(expression)) {
+    return expression.elements
+      .filter(Boolean)
+      .some((part) => isRenderableRendererExpression(part, scope, seenBindings));
+  }
+
+  if (t.isIdentifier(expression)) {
+    const binding = scope.getBinding(expression.name);
+    return Boolean(getRenderableExpressionFromBinding(binding, seenBindings));
+  }
+
+  return false;
+}
+
+function createRendererWrapperExpression(expression) {
+  return t.arrowFunctionExpression([], t.cloneNode(expression, true));
 }
 
 function isBindableFunctionReference(expressionPath, options = {}) {
@@ -265,22 +346,36 @@ function isBindableFunctionReference(expressionPath, options = {}) {
   return false;
 }
 
-function shouldBindRendererContext(attributePath, rawName, expressionPath, options = {}) {
+function getRendererBindingExpression(attributePath, rawName, expressionPath, options = {}) {
   if (typeof rawName !== "string" || rawName[0] !== ".") {
-    return false;
+    return null;
   }
 
   const openingElement = attributePath.parentPath;
   if (!openingElement?.isJSXOpeningElement()) {
-    return false;
+    return null;
   }
 
   const { isComponent } = getTag(openingElement.node);
   if (!isComponent) {
-    return false;
+    return null;
   }
 
-  return isBindableFunctionReference(expressionPath, options);
+  if (isBindableFunctionReference(expressionPath, options)) {
+    return {
+      expression: expressionPath.node,
+      needsContext: true,
+    };
+  }
+
+  if (isRenderableRendererExpression(expressionPath.node, expressionPath.scope)) {
+    return {
+      expression: createRendererWrapperExpression(expressionPath.node),
+      needsContext: expressionNeedsRendererContext(expressionPath.node, expressionPath.scope),
+    };
+  }
+
+  return null;
 }
 
 function ensureRendererBindingImport(programPath) {
@@ -348,23 +443,29 @@ export default function transformLitsxRendererProps(api) {
           return;
         }
 
-        if (!shouldBindRendererContext(path, rawName, expressionPath, {
+        const rendererBinding = getRendererBindingExpression(path, rawName, expressionPath, {
           filename: state.file?.opts?.filename || "",
-        })) {
+        });
+        if (!rendererBinding) {
           return;
         }
 
-        state.__litsxNeedsRendererBindingImport = true;
-        node.value.expression = t.callExpression(
-          t.identifier("bindRendererContext"),
-          [
-            createHostReferenceExpression(),
-            expressionPath.node,
-            t.objectExpression([
-              t.objectProperty(t.identifier("projected"), t.booleanLiteral(true)),
-            ]),
-          ]
-        );
+        if (rendererBinding.needsContext) {
+          state.__litsxNeedsRendererBindingImport = true;
+          node.value.expression = t.callExpression(
+            t.identifier("bindRendererContext"),
+            [
+              createHostReferenceExpression(),
+              rendererBinding.expression,
+              t.objectExpression([
+                t.objectProperty(t.identifier("projected"), t.booleanLiteral(true)),
+              ]),
+            ]
+          );
+          return;
+        }
+
+        node.value.expression = rendererBinding.expression;
       },
     },
   };

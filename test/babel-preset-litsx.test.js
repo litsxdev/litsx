@@ -300,6 +300,28 @@ describe("@litsx/babel-preset-litsx", () => {
     assert.match(result.code, /resolveStructuralEntry\(this, 0, "litsx-structural-[^"]+", useLocale, \['en'\]|\["en"\]/);
   });
 
+  it("compiles structural hooks imported from @litsx/core", () => {
+    const source = [
+      'import { useFormValue } from "@litsx/core";',
+      "export function FormField() {",
+      "  static formAssociated = true;",
+      "  const control = useFormValue('draft');",
+      "  return <div>{control.value}</div>;",
+      "}",
+    ].join("\n");
+
+    const result = transformFromAstSync(parser.parse(source, { sourceType: "module" }), source, {
+      configFile: false,
+      babelrc: false,
+      filename: path.join(process.cwd(), "test", "fixtures", "imported-core-structural.litsx"),
+      presets: [[nativePreset, { jsxTemplate: false }]],
+    });
+
+    assert.match(result.code, /class FormField extends HostMiddlewareMixin\((?:LitsxStaticHoistsMixin\(LitElement\)|LitElement)\)/);
+    assert.match(result.code, /static structuralEntries = \[/);
+    assert.match(result.code, /resolveStructuralEntry\(this, 0, "litsx-structural-[^"]+", useFormValue, \['draft'\]|\["draft"\]/);
+  });
+
   it("compiles imported static-only structural hooks without host lifecycle wrapping", () => {
     const source = [
       'import { useStaticLocale } from "./hooks.litsx";',

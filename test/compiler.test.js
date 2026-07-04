@@ -1419,6 +1419,66 @@ describe("@litsx/compiler", () => {
     assert.match(result.code, /"litsx-button": LitsxButton/);
   }, 20000);
 
+  it("wraps stored local JSX values passed to renderer props", () => {
+    const source = [
+      "export function Card({ header }) {",
+      "  return <section>{header()}</section>;",
+      "}",
+      "export function Demo() {",
+      "  const header = <button @click={save}>Stored</button>;",
+      "  return <Card .header={header} />;",
+      "}",
+    ].join("\n");
+
+    const result = transformLitsxSync(source, {
+      filename: "/virtual/Demo.litsx",
+    });
+
+    assert.match(result.code, /const header = html`<button @click=\$\{save\}>Stored<\/button>`;/);
+    assert.match(result.code, /\.header=\$\{\(\) => header\}/);
+    assert.match(result.code, /return html`<section>\$\{renderRendererCall\(this\.header\)\}<\/section>`;/);
+  }, 20000);
+
+  it("wraps stored branching JSX values passed to renderer props and preserves projected context", () => {
+    const source = [
+      "import { LitsxButton } from './litsx-button.litsx';",
+      "export function Card({ header }) {",
+      "  return <section>{header()}</section>;",
+      "}",
+      "export function Demo({ active }) {",
+      "  const header = active ? <LitsxButton type=\"secondary\" label=\"Stored\" /> : <span>Idle</span>;",
+      "  return <Card .header={header} />;",
+      "}",
+    ].join("\n");
+
+    const result = transformLitsxSync(source, {
+      filename: "/virtual/Demo.litsx",
+    });
+
+    assert.match(result.code, /const header = this\.active \? html`<litsx-button type="secondary" label="Stored"><\/litsx-button>` : html`<span>Idle<\/span>`;/);
+    assert.match(result.code, /\.header=\$\{bindRendererContext\(typeof this === "undefined" \? null : this,\s*\(\) => header,\s*\{\s*projected: true\s*\}\)\}/);
+    assert.match(result.code, /return html`<section>\$\{renderRendererCall\(this\.header\)\}<\/section>`;/);
+    assert.match(result.code, /"litsx-button": LitsxButton/);
+  }, 20000);
+
+  it("wraps direct JSX values passed to renderer props", () => {
+    const source = [
+      "export function Card({ header }) {",
+      "  return <section>{header()}</section>;",
+      "}",
+      "export function Demo() {",
+      "  return <Card .header={<button @click={save}>Inline</button>} />;",
+      "}",
+    ].join("\n");
+
+    const result = transformLitsxSync(source, {
+      filename: "/virtual/Demo.litsx",
+    });
+
+    assert.match(result.code, /\.header=\$\{\(\) => html`<button @click=\$\{save\}>Inline<\/button>`\}/);
+    assert.match(result.code, /return html`<section>\$\{renderRendererCall\(this\.header\)\}<\/section>`;/);
+  }, 20000);
+
   it("keeps renderer projection working in light DOM components", () => {
     const source = [
       "export function Card({ header }) {",
@@ -1701,6 +1761,52 @@ describe("@litsx/compiler", () => {
       );
       fs.writeFileSync(
         path.join(nodeModulesDir, "index.js"),
+        [
+          "export class FancyBox extends HTMLElement {",
+          '  static [Symbol.for("litsx.component")] = true;',
+          '  static [Symbol.for("litsx.hostTypeId")] = "litsx-host-type-fancy-box";',
+          "}",
+        ].join("\n")
+      );
+
+      const source = [
+        'import { FancyBox } from "fancy-litsx";',
+        "export function Demo() {",
+        "  return <FancyBox />;",
+        "}",
+      ].join("\n");
+
+      const result = transformLitsxSync(source, {
+        filename,
+        jsxTemplate: false,
+      });
+
+      assert.ok(Array.isArray(result.metadata.litsxWarnings));
+      assert.deepStrictEqual(result.metadata.litsxWarnings, []);
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  }, 20000);
+
+  it("does not warn for external PascalCase imports reexported from compiled LitSX modules", () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-external-pascal-reexported-"));
+    const nodeModulesDir = path.join(tempDir, "node_modules", "fancy-litsx");
+    const filename = path.join(tempDir, "consumer.litsx");
+
+    try {
+      fs.mkdirSync(nodeModulesDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(nodeModulesDir, "package.json"),
+        JSON.stringify({ name: "fancy-litsx", type: "module", exports: "./index.js" })
+      );
+      fs.writeFileSync(
+        path.join(nodeModulesDir, "index.js"),
+        [
+          'export { FancyBox } from "./box.js";',
+        ].join("\n")
+      );
+      fs.writeFileSync(
+        path.join(nodeModulesDir, "box.js"),
         [
           "export class FancyBox extends HTMLElement {",
           '  static [Symbol.for("litsx.component")] = true;',

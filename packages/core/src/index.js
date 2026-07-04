@@ -35,6 +35,7 @@ export {
   resolveStructuralEntry,
   resolveStructuralStaticEntry,
 } from "./host-middleware-runtime.js";
+export { useFormValue } from "./form-hooks.js";
 
 export {
   prepareEffects,

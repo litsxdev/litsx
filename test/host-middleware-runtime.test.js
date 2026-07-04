@@ -30,6 +30,10 @@ describe("HostMiddlewareRuntime", () => {
       "connectedCallback",
       "disconnectedCallback",
       "attributeChangedCallback",
+      "formAssociatedCallback",
+      "formDisabledCallback",
+      "formResetCallback",
+      "formStateRestoreCallback",
       "scheduleUpdate",
       "shouldUpdate",
       "willUpdate",
@@ -323,6 +327,54 @@ describe("HostMiddlewareRuntime", () => {
       ["a", "aria-label", "old", "new"],
       ["b", "aria-label", "old", "new"],
       ["base", "aria-label", "old", "new"],
+    ]);
+  });
+
+  it("passes FACE callback arguments through the chain", () => {
+    const calls = [];
+    const runtime = new HostMiddlewareRuntime({}, [
+      entry("a", {
+        formAssociatedCallback(_host, state, next, args) {
+          calls.push([state.id, "associated", ...args]);
+          return next();
+        },
+        formDisabledCallback(_host, state, next, args) {
+          calls.push([state.id, "disabled", ...args]);
+          return next();
+        },
+        formResetCallback(_host, state, next) {
+          calls.push([state.id, "reset"]);
+          return next();
+        },
+        formStateRestoreCallback(_host, state, next, args) {
+          calls.push([state.id, "restore", ...args]);
+          return next();
+        },
+      }),
+    ]);
+
+    runtime.formAssociatedCallback(["form"], () => {
+      calls.push(["base", "associated", "form"]);
+    });
+    runtime.formDisabledCallback([true], () => {
+      calls.push(["base", "disabled", true]);
+    });
+    runtime.formResetCallback(() => {
+      calls.push(["base", "reset"]);
+    });
+    runtime.formStateRestoreCallback(["state", "restore"], () => {
+      calls.push(["base", "restore", "state", "restore"]);
+    });
+
+    assert.deepStrictEqual(calls, [
+      ["a", "associated", "form"],
+      ["base", "associated", "form"],
+      ["a", "disabled", true],
+      ["base", "disabled", true],
+      ["a", "reset"],
+      ["base", "reset"],
+      ["a", "restore", "state", "restore"],
+      ["base", "restore", "state", "restore"],
     ]);
   });
 
@@ -744,6 +796,10 @@ describe("HostMiddlewareMixin", () => {
             calls.push(`${state.id}:connected`);
             return next();
           },
+          formResetCallback(_host, state, next) {
+            calls.push(`${state.id}:reset`);
+            return next();
+          },
           shouldUpdate(_host, _state, next) {
             return next() && false;
           },
@@ -756,6 +812,10 @@ describe("HostMiddlewareMixin", () => {
 
       connectedCallback() {
         calls.push("base:connected");
+      }
+
+      formResetCallback() {
+        calls.push("base:reset");
       }
 
       shouldUpdate() {
@@ -771,6 +831,7 @@ describe("HostMiddlewareMixin", () => {
     const host = new Host();
 
     host.connectedCallback();
+    host.formResetCallback();
     const shouldUpdate = host.shouldUpdate(new Map());
     const complete = await host.getUpdateComplete();
 
@@ -779,6 +840,8 @@ describe("HostMiddlewareMixin", () => {
     assert.deepStrictEqual(calls, [
       "a:connected",
       "base:connected",
+      "a:reset",
+      "base:reset",
       "a:complete",
     ]);
   });

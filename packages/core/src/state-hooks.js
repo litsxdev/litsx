@@ -321,7 +321,9 @@ export function useId(host) {
  * Return a stable identifier for the authored callsite.
  * LitSX tooling injects callsite metadata so the returned value is stable across
  * SSR and client hydration and does not depend on render order or instance
- * order. Use this for resource/cache/preload identity, not for unique DOM ids.
+ * order. Use this for callsite-scoped resource/preload identity, not for unique
+ * DOM ids. When cache identity should follow the component definition, prefer
+ * useHostTypeId().
  * @param {import('lit').ReactiveControllerHost} host
  * @param {string} [callsiteId]
  * @returns {string}

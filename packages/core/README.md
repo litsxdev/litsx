@@ -100,7 +100,9 @@ const resourceKey = useStableId();
 
 into a runtime call with hidden callsite metadata derived from the authored file and source position. The generated value is stable for that callsite across SSR and client hydration, does not depend on component instance order, and does not use runtime heuristics such as stack traces, function names, or `Function.toString()`.
 
-Use `useStableId()` for resource identity: cache keys, preload keys, serialized resource records, i18n message slots, or hydration metadata that must line up between server and client.
+Use `useStableId()` for authored callsite identity: preload keys, serialized resource records, per-callsite SSR metadata, or hydration metadata that must line up between server and client.
+
+When cache identity should follow the component definition rather than one specific hook callsite, use `useHostTypeId()` instead. That is the right primitive for component-scoped i18n catalog caches and similar resource dedupe keyed by component type.
 
 Do not use `useStableId()` when you need unique DOM ids for multiple instances of the same component. Every instance of the same authored callsite receives the same value by design. Use `useId()` for instance-local DOM ids and accessibility relationships. `useId()` follows hook order within a host instance; `useStableId()` follows the authored callsite.
 
@@ -250,6 +252,11 @@ runtime.attributeChangedCallback(
   () => super.attributeChangedCallback(name, oldValue, newValue),
 );
 
+runtime.formDisabledCallback(
+  [disabled],
+  () => super.formDisabledCallback(disabled),
+);
+
 runtime.shouldUpdate(
   [changedProperties],
   () => super.shouldUpdate(changedProperties),
@@ -274,6 +281,10 @@ The runtime currently supports middleware for:
 - `connectedCallback`
 - `disconnectedCallback`
 - `attributeChangedCallback`
+- `formAssociatedCallback`
+- `formDisabledCallback`
+- `formResetCallback`
+- `formStateRestoreCallback`
 - `scheduleUpdate`
 - `shouldUpdate`
 - `willUpdate`

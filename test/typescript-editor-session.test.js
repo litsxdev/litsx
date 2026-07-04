@@ -509,9 +509,10 @@ describe("@litsx/typescript editor-session", () => {
       COMPLETION_KINDS,
     );
 
-    const topTen = completions.slice(0, 10).map((entry) => entry.label);
-    assert.ok(topTen.includes("useHost"));
-    assert.ok(topTen.every((label) => label.startsWith("use")));
+    const topTwenty = completions.slice(0, 20).map((entry) => entry.label);
+    assert.ok(topTwenty.includes("useHost"));
+    assert.ok(topTwenty.includes("useFormValue"));
+    assert.ok(topTwenty.every((label) => label.startsWith("use")));
     assert.ok(completions.findIndex((entry) => entry.label === "useState") < completions.findIndex((entry) => entry.label === "UserActivation"));
   }, 15000);
 

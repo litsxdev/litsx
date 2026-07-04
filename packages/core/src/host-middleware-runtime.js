@@ -6,6 +6,10 @@ const LIFECYCLE_METHODS = [
   "connectedCallback",
   "disconnectedCallback",
   "attributeChangedCallback",
+  "formAssociatedCallback",
+  "formDisabledCallback",
+  "formResetCallback",
+  "formStateRestoreCallback",
   "scheduleUpdate",
   "shouldUpdate",
   "willUpdate",
@@ -517,6 +521,30 @@ export function HostMiddlewareMixin(Base) {
     attributeChangedCallback(...args) {
       return getOrCreateHostRuntime(this).attributeChangedCallback(args, () =>
         typeof super.attributeChangedCallback === "function" ? super.attributeChangedCallback(...args) : undefined
+      );
+    }
+
+    formAssociatedCallback(...args) {
+      return getOrCreateHostRuntime(this).formAssociatedCallback(args, () =>
+        typeof super.formAssociatedCallback === "function" ? super.formAssociatedCallback(...args) : undefined
+      );
+    }
+
+    formDisabledCallback(...args) {
+      return getOrCreateHostRuntime(this).formDisabledCallback(args, () =>
+        typeof super.formDisabledCallback === "function" ? super.formDisabledCallback(...args) : undefined
+      );
+    }
+
+    formResetCallback(...args) {
+      return getOrCreateHostRuntime(this).formResetCallback(args, () =>
+        typeof super.formResetCallback === "function" ? super.formResetCallback(...args) : undefined
+      );
+    }
+
+    formStateRestoreCallback(...args) {
+      return getOrCreateHostRuntime(this).formStateRestoreCallback(args, () =>
+        typeof super.formStateRestoreCallback === "function" ? super.formStateRestoreCallback(...args) : undefined
       );
     }
 

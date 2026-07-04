@@ -32,7 +32,6 @@ const DEFAULT_MODULE_RESOLUTION_OPTIONS = {
   esModuleInterop: true,
   allowSyntheticDefaultImports: true,
 };
-
 let t;
 
 export function setElementCandidatesBabelTypes(nextTypes) {
@@ -570,17 +569,53 @@ function buildModuleAnalysis(programPath, filename, context) {
   };
 }
 
-function isCompiledComponentExport(moduleAnalysis, importedName) {
+function isCompiledComponentExport(moduleAnalysis, importedName, context, seen = new Set()) {
   if (!moduleAnalysis || !importedName) {
     return false;
   }
+
+  const visitKey = `${moduleAnalysis.filename}:${importedName}`;
+  if (seen.has(visitKey)) {
+    return false;
+  }
+  const nextSeen = new Set(seen);
+  nextSeen.add(visitKey);
 
   const exportInfo = moduleAnalysis.exportBindings.get(importedName);
   if (!exportInfo) {
     return false;
   }
 
-  return moduleAnalysis.compiledComponentLocals.has(exportInfo.localName);
+  if (exportInfo.localName) {
+    if (moduleAnalysis.compiledComponentLocals.has(exportInfo.localName)) {
+      return true;
+    }
+
+    const importInfo = moduleAnalysis.importBindings.get(exportInfo.localName);
+    if (importInfo?.resolvedSource && importInfo.importedName && importInfo.importedName !== "*") {
+      const importedModule = getOrCreateModuleAnalysis(importInfo.resolvedSource, context);
+      return isCompiledComponentExport(
+        importedModule,
+        importInfo.importedName,
+        context,
+        nextSeen
+      );
+    }
+
+    return false;
+  }
+
+  if (exportInfo.reexportSource && exportInfo.importedName) {
+    const reexportedModule = getOrCreateModuleAnalysis(exportInfo.reexportSource, context);
+    return isCompiledComponentExport(
+      reexportedModule,
+      exportInfo.importedName,
+      context,
+      nextSeen
+    );
+  }
+
+  return false;
 }
 
 function isExternalCompilationImport(requirement) {
@@ -605,7 +640,7 @@ function warnExternalPascalComponentInference(candidateName, requirement, module
   }
 
   const importedModule = getOrCreateModuleAnalysis(requirement.sourceFile, context);
-  if (isCompiledComponentExport(importedModule, requirement.importedName)) {
+  if (isCompiledComponentExport(importedModule, requirement.importedName, context)) {
     return;
   }
 

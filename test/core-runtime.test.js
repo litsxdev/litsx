@@ -22,10 +22,12 @@ import {
   useOnCommit,
   useEvent,
   useEmit,
+  useFormValue,
   usePrevious,
   useStableCallback,
   useStyle,
   useReducedState,
+  resolveStructuralEntry,
   useState,
   useControlledState,
   useAsyncState,
@@ -63,6 +65,7 @@ class TestHost extends EventTarget {
       },
       get: (tag) => this.registry.definitions.get(tag),
     };
+    this.__internalsCalls = [];
   }
 
   addController(controller) {
@@ -71,6 +74,17 @@ class TestHost extends EventTarget {
 
   requestUpdate() {
     this.updates += 1;
+  }
+
+  attachInternals() {
+    if (!this.__internals) {
+      this.__internals = {
+        setFormValue: (value, state) => {
+          this.__internalsCalls.push([value, state]);
+        },
+      };
+    }
+    return this.__internals;
   }
 
   disconnect() {
@@ -300,6 +314,99 @@ describe("litsx effects controller", () => {
     update(host);
 
     assert.strictEqual(firstEmit, secondEmit);
+  });
+
+  it("manages form-associated value state through useFormValue", () => {
+    const host = new TestHost();
+    const form = { tagName: "FORM" };
+
+    prepareEffects(host);
+    let control = resolveStructuralEntry(
+      host,
+      0,
+      "form-value",
+      useFormValue,
+      ["draft"],
+      { callsitePath: ["form-value"] },
+    );
+
+    assert.strictEqual(control.value, "draft");
+    assert.strictEqual(control.defaultValue, "draft");
+    assert.strictEqual(control.form, null);
+    assert.strictEqual(control.disabled, false);
+    assert.deepStrictEqual(host.__internalsCalls, [["draft", "draft"]]);
+
+    control.setValue("ready");
+    control.setDefaultValue("fallback");
+    control.setFormValue("submit:ready", "restore:ready");
+
+    assert.strictEqual(host.updates, 2);
+    assert.deepStrictEqual(host.__internalsCalls.at(-2), ["ready", "ready"]);
+    assert.deepStrictEqual(host.__internalsCalls.at(-1), ["submit:ready", "restore:ready"]);
+
+    prepareEffects(host);
+    control = resolveStructuralEntry(
+      host,
+      0,
+      "form-value",
+      useFormValue,
+      ["draft"],
+      { callsitePath: ["form-value"] },
+    );
+
+    assert.strictEqual(control.value, "ready");
+    assert.strictEqual(control.defaultValue, "fallback");
+
+    host.__litsxHostMiddlewareRuntime.formAssociatedCallback([form], () => undefined);
+    host.__litsxHostMiddlewareRuntime.formDisabledCallback([true], () => undefined);
+
+    prepareEffects(host);
+    control = resolveStructuralEntry(
+      host,
+      0,
+      "form-value",
+      useFormValue,
+      ["draft"],
+      { callsitePath: ["form-value"] },
+    );
+
+    assert.strictEqual(control.form, form);
+    assert.strictEqual(control.disabled, true);
+
+    host.__litsxHostMiddlewareRuntime.formStateRestoreCallback(["restored", "restore"], () => undefined);
+
+    prepareEffects(host);
+    control = resolveStructuralEntry(
+      host,
+      0,
+      "form-value",
+      useFormValue,
+      ["draft"],
+      { callsitePath: ["form-value"] },
+    );
+
+    assert.strictEqual(control.value, "restored");
+    assert.strictEqual(control.restoreState, "restored");
+    assert.strictEqual(control.restoreMode, "restore");
+    assert.deepStrictEqual(host.__internalsCalls.at(-1), ["restored", "restored"]);
+
+    host.__litsxHostMiddlewareRuntime.formResetCallback(() => undefined);
+
+    prepareEffects(host);
+    control = resolveStructuralEntry(
+      host,
+      0,
+      "form-value",
+      useFormValue,
+      ["draft"],
+      { callsitePath: ["form-value"] },
+    );
+
+    assert.strictEqual(control.value, "fallback");
+    assert.strictEqual(control.defaultValue, "fallback");
+    assert.strictEqual(control.restoreState, null);
+    assert.strictEqual(control.restoreMode, null);
+    assert.deepStrictEqual(host.__internalsCalls.at(-1), ["fallback", "fallback"]);
   });
 
   it("returns the previous render value", () => {

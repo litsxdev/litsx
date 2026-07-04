@@ -1769,30 +1769,31 @@ export function createRuntimeHooksTransform({
           },
         },
         ImportDeclaration(path, state) {
-          if (!state.importSourceSet.has(path.node.source.value)) {
-            for (const specifier of path.node.specifiers) {
-              if (t.isImportSpecifier(specifier)) {
-                const importedName = t.isIdentifier(specifier.imported)
-                  ? specifier.imported.name
-                  : specifier.imported?.value ?? null;
-                if (
-                  importedName &&
-                  isImportedStructuralHook(state, path.node.source.value, importedName)
-                ) {
-                  state.structuralHookIdentifiers.add(specifier.local.name);
-                } else if (
-                  importedName &&
-                  isImportedStructuralCustomHook(state, path.node.source.value, importedName)
-                ) {
-                  state.structuralCustomHookIdentifiers.add(specifier.local.name);
-                }
-              } else if (t.isImportNamespaceSpecifier(specifier)) {
-                state.structuralNamespaceImports.set(
-                  specifier.local.name,
-                  path.node.source.value
-                );
+          for (const specifier of path.node.specifiers) {
+            if (t.isImportSpecifier(specifier)) {
+              const importedName = t.isIdentifier(specifier.imported)
+                ? specifier.imported.name
+                : specifier.imported?.value ?? null;
+              if (
+                importedName &&
+                isImportedStructuralHook(state, path.node.source.value, importedName)
+              ) {
+                state.structuralHookIdentifiers.add(specifier.local.name);
+              } else if (
+                importedName &&
+                isImportedStructuralCustomHook(state, path.node.source.value, importedName)
+              ) {
+                state.structuralCustomHookIdentifiers.add(specifier.local.name);
               }
+            } else if (t.isImportNamespaceSpecifier(specifier)) {
+              state.structuralNamespaceImports.set(
+                specifier.local.name,
+                path.node.source.value
+              );
             }
+          }
+
+          if (!state.importSourceSet.has(path.node.source.value)) {
             return;
           }
 

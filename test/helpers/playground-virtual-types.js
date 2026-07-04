@@ -131,6 +131,24 @@ export const PLAYGROUND_TYPE_FILES = {
         callback: T
       ): T;
 
+      export type LitsxFormSubmitValue = string | File | FormData | null;
+
+      export interface LitsxFormValue<TValue = LitsxFormSubmitValue> {
+        form: HTMLFormElement | null;
+        disabled: boolean;
+        value: TValue;
+        defaultValue: TValue;
+        restoreState: TValue | null;
+        restoreMode: string | null;
+        setValue(next: TValue | ((value: TValue) => TValue)): TValue;
+        setDefaultValue(next: TValue | ((value: TValue) => TValue)): TValue;
+        setFormValue(value: LitsxFormSubmitValue, restoreState?: TValue): void;
+      }
+
+      export const useFormValue: <TValue = string | null>(
+        defaultValue?: TValue
+      ) => LitsxFormValue<TValue>;
+
       export function usePrevious<T>(
         value: T,
         initialValue?: T

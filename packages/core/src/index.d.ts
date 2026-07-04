@@ -259,6 +259,10 @@ export type LitsxHostMiddlewareLifecycleMethod =
   | "connectedCallback"
   | "disconnectedCallback"
   | "attributeChangedCallback"
+  | "formAssociatedCallback"
+  | "formDisabledCallback"
+  | "formResetCallback"
+  | "formStateRestoreCallback"
   | "scheduleUpdate"
   | "shouldUpdate"
   | "willUpdate"
@@ -456,6 +460,11 @@ export declare class HostMiddlewareRuntime {
   disconnectedCallback(base: () => unknown): unknown;
   disconnectedCallback(args: unknown[], base: () => unknown): unknown;
   attributeChangedCallback(args: unknown[], base: () => unknown): unknown;
+  formAssociatedCallback(args: unknown[], base: () => unknown): unknown;
+  formDisabledCallback(args: unknown[], base: () => unknown): unknown;
+  formResetCallback(base: () => unknown): unknown;
+  formResetCallback(args: unknown[], base: () => unknown): unknown;
+  formStateRestoreCallback(args: unknown[], base: () => unknown): unknown;
   scheduleUpdate(base: () => unknown): unknown;
   scheduleUpdate(args: unknown[], base: () => unknown): unknown;
   shouldUpdate(args: unknown[], base: () => unknown): unknown;
@@ -524,6 +533,24 @@ export declare function createHostMiddlewareRuntime(
   host: unknown,
   entries?: LitsxStructuralEntryInput[] | ((host: unknown) => LitsxStructuralEntryInput[])
 ): HostMiddlewareRuntime;
+
+export type LitsxFormSubmitValue = string | File | FormData | null;
+
+export interface LitsxFormValue<TValue = LitsxFormSubmitValue> {
+  form: HTMLFormElement | null;
+  disabled: boolean;
+  value: TValue;
+  defaultValue: TValue;
+  restoreState: TValue | null;
+  restoreMode: string | null;
+  setValue(next: TValue | ((value: TValue) => TValue)): TValue;
+  setDefaultValue(next: TValue | ((value: TValue) => TValue)): TValue;
+  setFormValue(value: LitsxFormSubmitValue, restoreState?: TValue): void;
+}
+
+export declare const useFormValue: <TValue = string | null>(
+  defaultValue?: TValue
+) => LitsxFormValue<TValue>;
 
 /**
  * Run an effect after the component finishes updating.
@@ -710,7 +737,9 @@ export declare function useHostTypeId(): string;
  *
  * LitSX tooling injects callsite metadata so this value is stable across SSR
  * and client hydration and does not depend on render order or instance order.
- * Use it for resource/cache/preload identity, not for unique DOM ids.
+ * Use it for callsite-scoped resource/preload identity, not for unique DOM ids.
+ * When cache identity should follow the component definition, prefer
+ * `useHostTypeId()`.
  */
 export declare function useStableId(): string;
 /**

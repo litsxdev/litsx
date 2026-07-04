@@ -37,6 +37,13 @@ const DEFAULT_MODULE_RESOLUTION_OPTIONS = {
   esModuleInterop: true,
   allowSyntheticDefaultImports: true,
 };
+const BUILT_IN_STRUCTURAL_RUNTIME_HOOKS = new Map([
+  ["useFormValue", {
+    kind: "structural-hook",
+    hasStaticPhase: false,
+    hasInstancePhase: true,
+  }],
+]);
 
 function normalizeFilePath(value) {
   return normalizeStableIdentityPath(value);
@@ -55,6 +62,12 @@ function isSymbolForMarker(node, markerKey) {
     node.arguments[0]?.type === "StringLiteral" &&
     node.arguments[0].value === markerKey
   );
+}
+
+function isStructuralRuntimeHelperSource(sourceValue) {
+  return sourceValue === "./host-middleware-runtime.js" ||
+    sourceValue === "./host-middleware-runtime" ||
+    /(?:^|\/)host-middleware-runtime(?:\.js)?$/.test(String(sourceValue || ""));
 }
 
 function getTraverse() {
@@ -375,7 +388,13 @@ function createStructuralHookResolver(options = {}) {
                 importedName,
                 source: sourceValue,
               });
-              if (sourceValue === RUNTIME_MODULE && importedName === "defineHook") {
+              if (
+                importedName === "defineHook" &&
+                (
+                  sourceValue === RUNTIME_MODULE ||
+                  isStructuralRuntimeHelperSource(sourceValue)
+                )
+              ) {
                 analysis.defineHookLocals.add(localName);
               }
               if (sourceValue === RUNTIME_MODULE && importedName === "STRUCTURAL_HOOK_ENTRIES") {
@@ -882,6 +901,12 @@ function createStructuralHookResolver(options = {}) {
   }
 
   return function structuralHookResolver({ filename, source, importedName, runtimeCustomOnly = false }) {
+    if (source === RUNTIME_MODULE && BUILT_IN_STRUCTURAL_RUNTIME_HOOKS.has(importedName)) {
+      return runtimeCustomOnly
+        ? false
+        : BUILT_IN_STRUCTURAL_RUNTIME_HOOKS.get(importedName);
+    }
+
     const resolved = resolveImport(filename, source);
     if (!resolved) return runtimeCustomOnly ? "unresolved-custom-hook" : false;
     const analysis = analyzeModule(resolved);
