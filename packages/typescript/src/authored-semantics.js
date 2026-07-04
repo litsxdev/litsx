@@ -663,6 +663,170 @@ function collectReactMemoIssues(ast, virtualization) {
   );
 }
 
+function getStaticExposeTargetKey(node) {
+  if (!node || typeof node !== "object") {
+    return null;
+  }
+  if (node.type === "Identifier") {
+    return `id:${node.name}`;
+  }
+  if (node.type === "ThisExpression") {
+    return "this";
+  }
+  if (
+    node.type === "MemberExpression" &&
+    node.computed === false &&
+    node.property?.type === "Identifier"
+  ) {
+    const objectKey = getStaticExposeTargetKey(node.object);
+    if (!objectKey) {
+      return null;
+    }
+    return `${objectKey}.${node.property.name}`;
+  }
+  return null;
+}
+
+function getReturnedExposeObjectNode(node) {
+  if (!node || typeof node !== "object") {
+    return null;
+  }
+  if (node.type === "ArrowFunctionExpression" && node.body?.type === "ObjectExpression") {
+    return node.body;
+  }
+
+  const body = getFunctionLikeBody(node);
+  if (!body || body.type !== "BlockStatement") {
+    return null;
+  }
+
+  for (const statement of body.body ?? []) {
+    if (statement?.type === "ReturnStatement" && statement.argument?.type === "ObjectExpression") {
+      return statement.argument;
+    }
+  }
+
+  return null;
+}
+
+function collectStaticExposeMethods(createHandleNode) {
+  const objectNode = getReturnedExposeObjectNode(createHandleNode);
+  if (!objectNode || objectNode.type !== "ObjectExpression") {
+    return [];
+  }
+
+  const entries = [];
+  for (const property of objectNode.properties ?? []) {
+    if (!property || property.type === "SpreadElement") {
+      continue;
+    }
+    if (property.type === "ObjectMethod") {
+      if (property.key?.type === "Identifier") {
+        entries.push({ name: property.key.name, node: property.key });
+      } else if (property.key?.type === "StringLiteral") {
+        entries.push({ name: property.key.value, node: property.key });
+      }
+      continue;
+    }
+    if (
+      property.type !== "ObjectProperty" ||
+      property.computed === true ||
+      !(
+        property.value?.type === "FunctionExpression" ||
+        property.value?.type === "ArrowFunctionExpression"
+      )
+    ) {
+      continue;
+    }
+    if (property.key?.type === "Identifier") {
+      entries.push({ name: property.key.name, node: property.key });
+    } else if (property.key?.type === "StringLiteral") {
+      entries.push({ name: property.key.value, node: property.key });
+    }
+  }
+
+  return entries;
+}
+
+function collectUseExposeIssues(ast, virtualization) {
+  const issues = [];
+
+  for (const { node } of collectComponentLikeFunctions(ast)) {
+    const body = getFunctionLikeBody(node);
+    if (!body) {
+      continue;
+    }
+
+    const seenTargets = new Map();
+
+    walk(body, (child) => {
+      if (
+        child?.type !== "CallExpression" ||
+        child.callee?.type !== "Identifier" ||
+        child.callee.name !== "useExpose"
+      ) {
+        return;
+      }
+
+      const args = Array.isArray(child.arguments) ? child.arguments : [];
+      if (args.length === 0) {
+        return;
+      }
+
+      let targetKey = "__host__";
+      let createHandleNode = args[0];
+
+      if (
+        createHandleNode?.type !== "FunctionExpression" &&
+        createHandleNode?.type !== "ArrowFunctionExpression"
+      ) {
+        if (args.length < 2) {
+          return;
+        }
+        targetKey = getStaticExposeTargetKey(args[0]);
+        createHandleNode = args[1];
+      }
+
+      if (!targetKey) {
+        return;
+      }
+
+      const methodEntries = collectStaticExposeMethods(createHandleNode);
+      if (methodEntries.length === 0) {
+        return;
+      }
+
+      let targetMethods = seenTargets.get(targetKey);
+      if (!targetMethods) {
+        targetMethods = new Map();
+        seenTargets.set(targetKey, targetMethods);
+      }
+
+      for (const entry of methodEntries) {
+        if (!targetMethods.has(entry.name)) {
+          targetMethods.set(entry.name, entry.node);
+          continue;
+        }
+
+        issues.push(
+          createOriginalIssue(virtualization, {
+            kind: "duplicate-use-expose-method",
+            severity: "warning",
+            code: 91023,
+            start: entry.node.start ?? child.start ?? 0,
+            length: Math.max(0, (entry.node.end ?? child.end ?? entry.node.start ?? 0) - (entry.node.start ?? child.start ?? 0)),
+            message: targetKey === "__host__"
+              ? `Duplicate exposed method "${entry.name}" found. The last useExpose() publisher wins, so consider composing the method surface explicitly before exposing it.`
+              : `Duplicate exposed method "${entry.name}" found for the same ref-targeted useExpose() channel. The last publisher wins, so consider composing that handle explicitly first.`,
+          })
+        );
+      }
+    });
+  }
+
+  return issues;
+}
+
 function getFunctionLikeBody(node) {
   if (!node || typeof node !== "object") {
     return null;
@@ -1342,6 +1506,7 @@ export function collectLitsxAuthoredIssues(sourceText, options = {}) {
   const issues = [];
   const attributes = collectJsxAttributes(ast);
   issues.push(...collectStaticHoistIssues(ast, virtualization));
+  issues.push(...collectUseExposeIssues(ast, virtualization));
   issues.push(...collectReactMemoIssues(ast, virtualization));
   issues.push(...collectReactCompatSurfaceIssues(ast, virtualization));
   issues.push(...collectDestructuredPropsMetadataIssues(ast, virtualization));

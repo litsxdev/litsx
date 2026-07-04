@@ -786,9 +786,14 @@ export declare function useCallbackRef(
   deps?: unknown[]
 ): void;
 /**
- * Expose a small imperative API through a ref.
+ * Publish a small imperative method surface on the component instance or through a ref.
+ * When the same target receives the same method name more than once, the last publisher wins.
  */
-export declare function useExpose<T>(
+export declare function useExpose<T extends Record<string, (...args: any[]) => unknown>>(
+  createHandle: () => T,
+  deps?: unknown[]
+): void;
+export declare function useExpose<T extends Record<string, (...args: any[]) => unknown>>(
   ref: { current: T | null } | ((value: T | null) => void),
   createHandle: () => T,
   deps?: unknown[]

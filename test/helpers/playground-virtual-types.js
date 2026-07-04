@@ -247,7 +247,11 @@ export const PLAYGROUND_TYPE_FILES = {
     
       export function useRef<T>(initialValue?: T): { current: T | undefined };
     
-      export function useExpose<T>(
+      export function useExpose<T extends Record<string, (...args: any[]) => unknown>>(
+        createHandle: () => T,
+        deps?: unknown[]
+      ): void;
+      export function useExpose<T extends Record<string, (...args: any[]) => unknown>>(
         ref: { current: T | null } | ((value: T | null) => void),
         createHandle: () => T,
         deps?: unknown[]

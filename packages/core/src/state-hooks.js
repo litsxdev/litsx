@@ -344,19 +344,21 @@ export function useCallbackRef(host, getTarget, callback, deps) {
 }
 
 /**
- * Expose a small imperative API through a ref.
- * Think of useExpose as the way a component publishes a deliberately small imperative API to its parent.
- * @usage Use useExpose when a component should publish a small imperative API such as focus(), open(), or reset().
- * @usage Keep the handle narrow and stable so callers depend on explicit capabilities rather than on the whole element instance.
- * @usage Pair useExpose with useRef when the handle should forward a few imperative methods to owned DOM nodes.
- * @behavior Lit<sup>sx</sup> assigns the created handle to the provided ref during the host lifecycle.
- * @behavior Recompute the handle only when one of the listed dependencies changes.
- * @behavior Prefer exposing a small command surface instead of leaking the underlying element instance.
- * @mentalModel useExpose draws a boundary between what the component does internally and the few commands it chooses to make public.
- * @pitfall Do not expose the whole element instance unless that really is the public API you want to support.
- * @pitfall Keep the handle stable and intention-revealing. A small set of named commands is easier to maintain than a grab-bag of internals.
+ * Publish a small imperative method surface either on the host instance or through a forwarded ref.
+ * Think of useExpose as the place where a component declares the public commands it supports.
+ * @usage Use useExpose when a component should publish imperative methods such as focus(), open(), reset(), or reportValidity().
+ * @usage Keep the exposed surface method-only. Read/write properties such as value, name, disabled, or readonly state such as validity belong on the normal host API.
+ * @usage Call useExpose(createHandle, deps) to install those methods on the current component instance.
+ * @usage Call useExpose(ref, createHandle, deps) when a wrapper or forwarded-ref component should expose methods through an explicit ref channel instead of the local host instance.
+ * @behavior The host-targeted signature installs the returned methods on the host instance itself.
+ * @behavior The ref-targeted signature assigns the returned method surface to the provided ref during the host lifecycle and clears that ref on disconnect.
+ * @behavior Recompute the exposed method implementations only when one of the listed dependencies changes.
+ * @behavior When several useExpose calls publish the same method on the same target, the last publisher wins until it disappears.
+ * @mentalModel useExpose draws a boundary between the component's full internal implementation and the few imperative commands it chooses to make public.
+ * @pitfall useExpose only supports methods. Expose properties through the normal component surface instead of returning them here.
+ * @pitfall Keep the public command surface narrow and intention-revealing. A small set of named commands is easier to maintain than a grab-bag of internals.
  * @example
- * useExpose(ref, () => ({
+ * useExpose(() => ({
  *   focus() {
  *     inputRef.current?.focus();
  *   },
@@ -364,13 +366,21 @@ export function useCallbackRef(host, getTarget, callback, deps) {
  *     setValue("");
  *   },
  * }), [inputRef, setValue]);
+ *
+ * useExpose(forwardedRef, () => ({
+ *   focus() {
+ *     innerRef.current?.focus();
+ *   },
+ * }), [forwardedRef, innerRef]);
  * @param {import('lit').ReactiveControllerHost} host
- * @param {{ current: any } | ((value: any) => void)} ref Ref object or callback ref that should receive the exposed handle.
- * @param {() => any} createHandle Function that returns the imperative handle to expose.
- * @param {ReadonlyArray<unknown>} [deps] Reactive values that control when the handle should be recreated.
+ * @param {{ current: Record<string, Function> | null } | ((value: Record<string, Function> | null) => void) | (() => Record<string, Function>)} refOrCreateHandle
+ * Either the target ref that should receive the exposed methods, or the handle factory when targeting the host instance directly.
+ * @param {(() => Record<string, Function>) | ReadonlyArray<unknown>} [createHandleOrDeps]
+ * Handle factory for the ref-targeted signature, or dependency list for the host-targeted signature.
+ * @param {ReadonlyArray<unknown>} [deps] Reactive values that control when the exposed method implementations should be refreshed.
  */
-export function useExpose(host, ref, createHandle, deps) {
-  return useExposeImpl(host, ref, createHandle, deps);
+export function useExpose(host, refOrCreateHandle, createHandleOrDeps, deps) {
+  return useExposeImpl(host, refOrCreateHandle, createHandleOrDeps, deps);
 }
 
 /**

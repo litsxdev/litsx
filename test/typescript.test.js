@@ -6971,6 +6971,31 @@ describe("@litsx/typescript", () => {
     assert.ok(duplicateIssues.some((issue) => issue.code === 91022 && issue.severity === "error"));
   });
 
+  it("reports duplicate static useExpose methods as authored warnings", () => {
+    const issues = collectLitsxAuthoredIssues(`
+      export function Field() {
+        const expose = { current: null };
+        useExpose(() => ({
+          focus() {},
+        }));
+        useExpose(() => ({
+          focus() {},
+        }));
+        useExpose(expose, () => ({
+          reset() {},
+        }));
+        useExpose(expose, () => ({
+          reset() {},
+        }));
+        return <div />;
+      }
+    `);
+
+    assert.ok(issues.some((issue) => issue.code === 91023 && issue.severity === "warning"));
+    assert.ok(issues.some((issue) => issue.message.includes('Duplicate exposed method "focus"')));
+    assert.ok(issues.some((issue) => issue.message.includes('Duplicate exposed method "reset"')));
+  });
+
   it("surfaces authored warning diagnostics through syntactic diagnostics in tsx files", () => {
     const source = `
       const view = (

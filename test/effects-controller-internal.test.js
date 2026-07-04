@@ -87,6 +87,22 @@ describe("effects controller internals", () => {
     cleanup();
     assert.strictEqual(ref.current, null);
 
+    controller.registerExpose(() => ({ reportValidity() { return true; } }), ["api"]);
+    assert.deepStrictEqual(registered[1].deps, ["api"]);
+    assert.strictEqual(registered[1].layout, true);
+
+    registered[1].callback();
+    assert.strictEqual(typeof host.reportValidity, "function");
+    assert.strictEqual(host.reportValidity(), true);
+
+    controller.registerExposeRef(ref, () => ({ focus() { return "ref"; } }), ["ref-api"]);
+    assert.deepStrictEqual(registered[2].deps, ["ref-api"]);
+    assert.strictEqual(registered[2].layout, true);
+
+    registered[2].callback();
+    assert.strictEqual(typeof ref.current.focus, "function");
+    assert.strictEqual(ref.current.focus(), "ref");
+
     controller.transitionState = { pendingCount: 0, isPending: true };
     controller.resolvePendingTransitions();
     assert.strictEqual(controller.transitionState.isPending, false);

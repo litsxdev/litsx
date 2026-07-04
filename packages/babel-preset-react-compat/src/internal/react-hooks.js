@@ -209,10 +209,10 @@ function createReducerRuntimeCall(state, argNodes) {
   return t.callExpression(t.identifier("useReducedState"), args);
 }
 
-function createImperativeRuntimeCall(state, refNode, factoryNode, depNodes) {
+function createImperativeRuntimeCall(state, _refNode, factoryNode, depNodes) {
   const args = [
     cloneHostExpression(state),
-    t.cloneNode(refNode, true),
+    t.cloneNode(_refNode, true),
     t.cloneNode(factoryNode, true),
   ];
 

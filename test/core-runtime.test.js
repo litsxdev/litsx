@@ -1243,7 +1243,27 @@ describe("litsx effects controller", () => {
     update(host);
   });
 
-  it("exposes imperative handles and clears callback refs on disconnect", () => {
+  it("publishes imperative methods on the host instance", () => {
+    const host = new TestHost();
+
+    prepareEffects(host);
+    useExpose(host, () => ({
+      focus() {
+        return "ok";
+      },
+    }));
+    update(host);
+
+    assert.strictEqual(typeof host.focus, "function");
+    assert.strictEqual(host.focus(), "ok");
+
+    host.disconnect();
+
+    assert.strictEqual(typeof host.focus, "function");
+    assert.strictEqual(host.focus(), "ok");
+  });
+
+  it("publishes imperative methods through a ref handle when explicitly targeted", () => {
     const host = new TestHost();
     const values = [];
     const ref = (value) => {
@@ -1251,14 +1271,92 @@ describe("litsx effects controller", () => {
     };
 
     prepareEffects(host);
-    useExpose(host, ref, () => ({ focus: () => "ok" }));
+    useExpose(host, ref, () => ({
+      focus() {
+        return "ok";
+      },
+    }));
     update(host);
 
     assert.strictEqual(typeof values[0].focus, "function");
+    assert.strictEqual(values[0].focus(), "ok");
+    assert.strictEqual(host.focus, undefined);
 
     host.disconnect();
 
     assert.strictEqual(values.at(-1), null);
+    assert.strictEqual(host.focus, undefined);
+  });
+
+  it("rejects non-method members in useExpose", () => {
+    const host = new TestHost();
+
+    prepareEffects(host);
+    useExpose(host, () => ({
+      value: "nope",
+    }));
+
+    assert.throws(() => {
+      update(host);
+    }, /useExpose only supports imperative methods/);
+  });
+
+  it("lets multiple useExpose calls publish distinct methods", () => {
+    const host = new TestHost();
+
+    prepareEffects(host);
+    useExpose(host, () => ({
+      focus() {
+        return "focus";
+      },
+    }));
+    useExpose(host, () => ({
+      reset() {
+        return "reset";
+      },
+    }));
+    update(host);
+
+    assert.strictEqual(host.focus(), "focus");
+    assert.strictEqual(host.reset(), "reset");
+  });
+
+  it("lets later useExpose calls override the same host method and restores earlier publishers when needed", () => {
+    const host = new TestHost();
+    let includeOverride = true;
+
+    prepareEffects(host);
+    useExpose(host, () => ({
+      focus() {
+        return "first";
+      },
+    }));
+    useExpose(host, () => ({
+      focus() {
+        return "second";
+      },
+    }), includeOverride ? ["override"] : ["base"]);
+    update(host);
+
+    assert.strictEqual(host.focus(), "second");
+
+    includeOverride = false;
+    prepareEffects(host);
+    useExpose(host, () => ({
+      focus() {
+        return "first";
+      },
+    }));
+    if (includeOverride) {
+      useExpose(host, () => ({
+        focus() {
+          return "second";
+        },
+      }), ["override"]);
+    }
+    update(host);
+
+    assert.strictEqual(host.focus(), "first");
   });
 
   it("cleans up removed hooks and resets flags on disconnect", () => {
@@ -1488,25 +1586,75 @@ describe("litsx effects controller", () => {
     assert.strictEqual(current, node);
   });
 
-  it("lets imperative handles override forwarded DOM targets on the same ref channel", () => {
+  it("keeps callback refs bound to their DOM targets when useExpose is also used", () => {
     const host = new TestHost();
     const node = { tagName: "INPUT" };
     const ref = { current: null };
-    const handle = {
-      focus() {
-        return "focus";
-      },
-    };
 
     prepareEffects(host);
     useCallbackRef(host, () => node, (value) => {
       ref.current = value;
     }, [ref]);
-    useExpose(host, ref, () => handle, [ref]);
+    useExpose(host, () => ({
+      focus() {
+        return "focus";
+      },
+    }), []);
     update(host);
 
-    assert.strictEqual(ref.current, handle);
+    assert.strictEqual(ref.current, node);
+    assert.strictEqual(host.focus(), "focus");
+  });
+
+  it("lets ref-targeted useExpose override a forwarded DOM target on that ref channel", () => {
+    const host = new TestHost();
+    const node = { tagName: "INPUT" };
+    const ref = { current: null };
+
+    prepareEffects(host);
+    useCallbackRef(host, () => node, (value) => {
+      ref.current = value;
+    }, [ref]);
+    useExpose(host, ref, () => ({
+      focus() {
+        return "focus";
+      },
+    }), [ref]);
+    update(host);
+
+    assert.strictEqual(typeof ref.current.focus, "function");
     assert.strictEqual(ref.current.focus(), "focus");
+    assert.strictEqual(host.focus, undefined);
+  });
+
+  it("lets later ref-targeted useExpose calls override the same method on one ref channel", () => {
+    const host = new TestHost();
+    const ref = { current: null };
+
+    prepareEffects(host);
+    useExpose(host, ref, () => ({
+      focus() {
+        return "first";
+      },
+    }));
+    useExpose(host, ref, () => ({
+      focus() {
+        return "second";
+      },
+    }));
+    update(host);
+
+    assert.strictEqual(ref.current.focus(), "second");
+
+    prepareEffects(host);
+    useExpose(host, ref, () => ({
+      focus() {
+        return "first";
+      },
+    }));
+    update(host);
+
+    assert.strictEqual(ref.current.focus(), "first");
   });
 
   it("observes host content reactively", () => {

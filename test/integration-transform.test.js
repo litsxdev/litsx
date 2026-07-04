@@ -371,7 +371,7 @@ describe("integration: parser + all plugins", () => {
 
     assert.match(code, /useDeferredValue\(this, this\.query, \{\s*timeout: 200\s*\}\)/);
     assert.match(code, /useMemoValue\(this, \(\) => deferredQuery\.trim\(\), \[deferredQuery\]\)/);
-    assert.match(code, /useExpose\(this, this\.expose/);
+    assert.match(code, /useExpose\(this, this\.expose, \(\) => \(\{/);
     assert.match(code, /useTransition\(this\)/);
     assert.match(code, /data-ref="_apiRefElement"/);
     assert.match(code, /<input data-ref="_apiRefElement" \.value=\{summary\} data-pending=\{isPending\} \/>/);

@@ -1,5 +1,19 @@
 import { getController } from "./runtime-controller.js";
 
+function isExposeMethodSurface(handle) {
+  if (handle === null || typeof handle !== "object") {
+    throw new TypeError("useExpose expects createHandle() to return an object of imperative methods.");
+  }
+
+  for (const [name, value] of Object.entries(handle)) {
+    if (typeof value !== "function") {
+      throw new TypeError(`useExpose only supports imperative methods. Received non-function member "${name}".`);
+    }
+  }
+
+  return handle;
+}
+
 export function useRefImpl(host, initialValue) {
   return getController(host).resolveMutableRef(initialValue);
 }
@@ -33,8 +47,20 @@ export function useCallbackRefImpl(host, getTarget, callback, deps) {
   );
 }
 
-export function useExposeImpl(host, ref, createHandle, deps) {
-  getController(host).registerImperative(ref, createHandle, deps);
+export function useExposeImpl(host, refOrCreateHandle, maybeCreateHandle, maybeDeps) {
+  if (typeof maybeCreateHandle === "function") {
+    getController(host).registerExposeRef(
+      refOrCreateHandle,
+      () => isExposeMethodSurface(maybeCreateHandle()),
+      maybeDeps
+    );
+    return;
+  }
+
+  getController(host).registerExpose(
+    () => isExposeMethodSurface(refOrCreateHandle()),
+    maybeCreateHandle
+  );
 }
 
 export function useExternalStoreImpl(host, subscribe, getSnapshot, getServerSnapshot) {
