@@ -325,8 +325,10 @@ export type LitsxHostMiddleware<
   TStaticState = undefined,
   TInstanceState = undefined
 > = (
-  next: LitsxHostMiddlewareNext<TResult>,
+  host: unknown,
   state: LitsxStructuralState<TStaticState, TInstanceState>,
+  next: LitsxHostMiddlewareNext<TResult>,
+  args: unknown[],
   meta: LitsxStructuralMeta,
   entry: LitsxStructuralEntry
 ) => TResult;
@@ -356,12 +358,13 @@ export type LitsxHostAccessorMap = Record<string, LitsxHostAccessorDescriptor<un
  * The LitSX compiler rewrites that authored callsite to the host middleware
  * runtime. Component authors do not manually register structural entries.
  *
- * `setup` creates persistent mutable state for one structural callsite in one
- * host instance. The state is retained across updates and shared by `use` and
- * lifecycle middleware. Use it for cached resources, host-linked handles,
- * lifecycle coordination, or derived persistent data.
+ * `setup(host, args, staticState, meta, entry)` creates persistent mutable
+ * instance state for one structural callsite in one host instance. The state
+ * is retained across updates and is exposed as `state.instance` to `use`,
+ * accessors, and lifecycle middleware. Use it for cached resources,
+ * host-linked handles, lifecycle coordination, or derived persistent data.
  *
- * `use` is the render-time hook reader. It may call normal hooks and
+ * `use(host, state, args, meta, entry)` is the render-time hook reader. It may call normal hooks and
  * structural hooks transitively, subject to the same static hook-order rules as
  * ordinary hooks. Dynamic structural-hook lookup is not supported: aliases,
  * object/array containers, runtime selection, and computed namespace access are
@@ -391,28 +394,25 @@ export interface LitsxStructuralDefinition<
     ...argsAndMeta: [...TArgs, meta: LitsxStructuralMeta, entry: LitsxStructuralEntry]
   ) => TStaticState;
   use?: (
-    ...argsStateAndMeta: [
-      ...TArgs,
-      state: LitsxStructuralState<TStaticState, TInstanceState>,
-      meta: LitsxStructuralMeta,
-      entry: LitsxStructuralEntry
-    ]
+    host: unknown,
+    state: LitsxStructuralState<TStaticState, TInstanceState>,
+    args: TArgs,
+    meta: LitsxStructuralMeta,
+    entry: LitsxStructuralEntry
   ) => TResult;
   createState?: (
-    ...argsStaticAndMeta: [
-      ...TArgs,
-      staticState: TStaticState,
-      meta: LitsxStructuralMeta,
-      entry: LitsxStructuralEntry
-    ]
+    host: unknown,
+    args: TArgs,
+    staticState: TStaticState,
+    meta: LitsxStructuralMeta,
+    entry: LitsxStructuralEntry
   ) => TInstanceState;
   setup?: (
-    ...argsStaticAndMeta: [
-      ...TArgs,
-      staticState: TStaticState,
-      meta: LitsxStructuralMeta,
-      entry: LitsxStructuralEntry
-    ]
+    host: unknown,
+    args: TArgs,
+    staticState: TStaticState,
+    meta: LitsxStructuralMeta,
+    entry: LitsxStructuralEntry
   ) => TInstanceState;
   middlewares?: LitsxHostMiddlewareMap<TStaticState, TInstanceState>;
   accessors?: (

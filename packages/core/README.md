@@ -125,7 +125,8 @@ const useLocale = defineHook({
   static(locale, meta) {
     return { key: locale, path: meta.callsitePath };
   },
-  setup(locale, staticState, meta) {
+  setup(_host, args, staticState, meta) {
+    const [locale] = args;
     return { locale, connected: false, key: staticState.key };
   },
   accessors(host, state) {
@@ -135,11 +136,12 @@ const useLocale = defineHook({
       },
     };
   },
-  use(locale, state, meta) {
+  use(_host, state, args, meta) {
+    const [locale] = args;
     return `${state.static.key}:${state.instance.locale}`;
   },
   middlewares: {
-    connectedCallback(next, state, meta) {
+    connectedCallback(_host, state, next, _args, meta) {
       state.instance.connected = true;
       return next();
     },
@@ -150,10 +152,10 @@ const useLocale = defineHook({
 The phases are explicit:
 
 - `static(...args, meta)` runs in the class/type phase and never participates in host instance lifecycle.
-- `setup(...args, staticState, meta)` creates per-host-instance state.
-- `middlewares` wraps host lifecycle methods through `next()` and is instance-phase only.
+- `setup(host, args, staticState, meta, entry)` creates per-host-instance state.
+- `middlewares` wraps host lifecycle methods through `(host, state, next, args, meta, entry)` and is instance-phase only.
 - `accessors(host, state, meta, entry)` installs host instance accessors such as readonly platform-facing getters or low-level control properties.
-- `use(...args, state, meta)` is the render-time hook API consumed by authored code.
+- `use(host, state, args, meta, entry)` is the render-time hook API consumed by authored code.
 
 When the `args` tuple and reader return are typed, `defineHook()` preserves those types for authored calls:
 
@@ -162,10 +164,11 @@ const useLocale = defineHook<[locale: string], string, { key: string }, { connec
   static(locale) {
     return { key: locale.toUpperCase() };
   },
-  setup(_locale, _staticState) {
+  setup(_host, _args, _staticState) {
     return { connected: false };
   },
-  use(locale, state) {
+  use(_host, state, args) {
+    const [locale] = args;
     return `${state.static.key}:${state.instance.connected}:${locale}`;
   },
 });
@@ -212,7 +215,8 @@ Structural hooks can also be used transitively through local or imported custom 
 
 ```js
 const useCatalog = defineHook({
-  use(name, state) {
+  use(_host, _state, args) {
+    const [name] = args;
     return useLocaleResource(name);
   },
 });
@@ -275,9 +279,9 @@ Middleware can run work before and after `next()`:
 
 ```js
 connectedCallback(host, state, next) {
-  state.connected = true;
+  state.instance.connected = true;
   const result = next();
-  state.afterBase = true;
+  state.instance.afterBase = true;
   return result;
 }
 ```

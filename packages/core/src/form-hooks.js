@@ -185,19 +185,19 @@ export const useElementInternals = defineHook({
   },
 
   accessors(_host, state) {
-    return createFaceHostAccessors(state.shared);
+    return createFaceHostAccessors(state.instance.shared);
   },
 
   use(_host, state) {
     return {
-      supported: state.shared.supported,
-      internals: state.shared.internals,
+      supported: state.instance.shared.supported,
+      internals: state.instance.shared.internals,
     };
   },
 });
 
 export const useFormValue = defineHook({
-  setup(host, args, _meta, entry) {
+  setup(host, args, _staticState, _meta, entry) {
     const shared = getOrCreateFaceState(host);
     const existingOwner = host?.[FORM_VALUE_OWNER];
     if (existingOwner && existingOwner !== entry?.callsiteId) {
@@ -223,14 +223,14 @@ export const useFormValue = defineHook({
   },
 
   accessors(_host, state) {
-    return createFaceHostAccessors(state.shared);
+    return createFaceHostAccessors(state.instance.shared);
   },
 
   middlewares: {
     formAssociatedCallback(host, state, next, args) {
       const [form] = args;
-      if (!Object.is(state.shared.form, form)) {
-        state.shared.form = form;
+      if (!Object.is(state.instance.shared.form, form)) {
+        state.instance.shared.form = form;
         requestHostUpdate(host);
       }
       return next();
@@ -238,21 +238,25 @@ export const useFormValue = defineHook({
 
     formDisabledCallback(host, state, next, args) {
       const [disabled] = args;
-      if (!Object.is(state.shared.disabled, disabled)) {
-        state.shared.disabled = disabled;
+      if (!Object.is(state.instance.shared.disabled, disabled)) {
+        state.instance.shared.disabled = disabled;
         requestHostUpdate(host);
       }
       return next();
     },
 
     formResetCallback(host, state, next) {
-      const valueChanged = !Object.is(state.value, state.defaultValue);
-      const restoreChanged = state.restoreState !== null || state.restoreMode !== null;
+      const valueChanged = !Object.is(state.instance.value, state.instance.defaultValue);
+      const restoreChanged = state.instance.restoreState !== null || state.instance.restoreMode !== null;
 
-      state.value = state.defaultValue;
-      state.restoreState = null;
-      state.restoreMode = null;
-      syncInternalsValue(state.shared.internals, state.defaultValue, state.defaultValue);
+      state.instance.value = state.instance.defaultValue;
+      state.instance.restoreState = null;
+      state.instance.restoreMode = null;
+      syncInternalsValue(
+        state.instance.shared.internals,
+        state.instance.defaultValue,
+        state.instance.defaultValue
+      );
 
       if (valueChanged || restoreChanged) {
         requestHostUpdate(host);
@@ -262,15 +266,15 @@ export const useFormValue = defineHook({
 
     formStateRestoreCallback(host, state, next, args) {
       const [restoredState, mode] = args;
-      const valueChanged = !Object.is(state.value, restoredState);
+      const valueChanged = !Object.is(state.instance.value, restoredState);
       const restoreChanged =
-        !Object.is(state.restoreState, restoredState) ||
-        state.restoreMode !== mode;
+        !Object.is(state.instance.restoreState, restoredState) ||
+        state.instance.restoreMode !== mode;
 
-      state.value = restoredState;
-      state.restoreState = restoredState;
-      state.restoreMode = mode;
-      syncInternalsValue(state.shared.internals, restoredState, restoredState);
+      state.instance.value = restoredState;
+      state.instance.restoreState = restoredState;
+      state.instance.restoreMode = mode;
+      syncInternalsValue(state.instance.shared.internals, restoredState, restoredState);
 
       if (valueChanged || restoreChanged) {
         requestHostUpdate(host);
@@ -282,44 +286,44 @@ export const useFormValue = defineHook({
   use(host, state) {
     const setValue = useEvent(host, (next) => {
       const resolvedValue = typeof next === "function"
-        ? next(state.value)
+        ? next(state.instance.value)
         : next;
 
-      if (Object.is(state.value, resolvedValue)) {
+      if (Object.is(state.instance.value, resolvedValue)) {
         return resolvedValue;
       }
 
-      state.value = resolvedValue;
-      syncInternalsValue(state.shared.internals, resolvedValue, resolvedValue);
+      state.instance.value = resolvedValue;
+      syncInternalsValue(state.instance.shared.internals, resolvedValue, resolvedValue);
       requestHostUpdate(host);
       return resolvedValue;
     });
 
     const setDefaultValue = useEvent(host, (next) => {
       const resolvedValue = typeof next === "function"
-        ? next(state.defaultValue)
+        ? next(state.instance.defaultValue)
         : next;
 
-      if (Object.is(state.defaultValue, resolvedValue)) {
+      if (Object.is(state.instance.defaultValue, resolvedValue)) {
         return resolvedValue;
       }
 
-      state.defaultValue = resolvedValue;
+      state.instance.defaultValue = resolvedValue;
       requestHostUpdate(host);
       return resolvedValue;
     });
 
-    const setFormValue = useEvent(host, (value, restoreState = state.value) => {
-      syncInternalsValue(state.shared.internals, value, restoreState);
+    const setFormValue = useEvent(host, (value, restoreState = state.instance.value) => {
+      syncInternalsValue(state.instance.shared.internals, value, restoreState);
     });
 
     return {
-      form: state.shared.form,
-      disabled: state.shared.disabled,
-      value: state.value,
-      defaultValue: state.defaultValue,
-      restoreState: state.restoreState,
-      restoreMode: state.restoreMode,
+      form: state.instance.shared.form,
+      disabled: state.instance.shared.disabled,
+      value: state.instance.value,
+      defaultValue: state.instance.defaultValue,
+      restoreState: state.instance.restoreState,
+      restoreMode: state.instance.restoreMode,
       setValue,
       setDefaultValue,
       setFormValue,
@@ -335,19 +339,19 @@ export const useFormValidity = defineHook({
   },
 
   accessors(_host, state) {
-    return createFaceHostAccessors(state.shared);
+    return createFaceHostAccessors(state.instance.shared);
   },
 
   middlewares: {
     formAssociatedCallback(host, state, next, args) {
       const [form] = args;
-      const formChanged = !Object.is(state.shared.form, form);
+      const formChanged = !Object.is(state.instance.shared.form, form);
 
       if (formChanged) {
-        state.shared.form = form;
+        state.instance.shared.form = form;
       }
 
-      const validityChanged = updateSharedValiditySnapshot(state.shared);
+      const validityChanged = updateSharedValiditySnapshot(state.instance.shared);
       if (formChanged || validityChanged) {
         requestHostUpdate(host);
       }
@@ -356,13 +360,13 @@ export const useFormValidity = defineHook({
 
     formDisabledCallback(host, state, next, args) {
       const [disabled] = args;
-      const disabledChanged = !Object.is(state.shared.disabled, disabled);
+      const disabledChanged = !Object.is(state.instance.shared.disabled, disabled);
 
       if (disabledChanged) {
-        state.shared.disabled = disabled;
+        state.instance.shared.disabled = disabled;
       }
 
-      const validityChanged = updateSharedValiditySnapshot(state.shared);
+      const validityChanged = updateSharedValiditySnapshot(state.instance.shared);
       if (disabledChanged || validityChanged) {
         requestHostUpdate(host);
       }
@@ -372,44 +376,44 @@ export const useFormValidity = defineHook({
 
   use(host, state) {
     const setValidity = useEvent(host, (flags = {}, message = "", anchor) => {
-      if (typeof state.shared.internals?.setValidity !== "function") {
+      if (typeof state.instance.shared.internals?.setValidity !== "function") {
         return;
       }
 
       if (anchor !== undefined) {
-        state.shared.internals.setValidity(flags ?? {}, message, anchor);
+        state.instance.shared.internals.setValidity(flags ?? {}, message, anchor);
       } else if (message !== undefined) {
-        state.shared.internals.setValidity(flags ?? {}, message);
+        state.instance.shared.internals.setValidity(flags ?? {}, message);
       } else {
-        state.shared.internals.setValidity(flags ?? {});
+        state.instance.shared.internals.setValidity(flags ?? {});
       }
 
-      refreshSharedValidity(host, state.shared);
+      refreshSharedValidity(host, state.instance.shared);
     });
 
     const checkValidity = useEvent(host, () => {
-      if (typeof state.shared.internals?.checkValidity !== "function") {
+      if (typeof state.instance.shared.internals?.checkValidity !== "function") {
         return true;
       }
-      const result = state.shared.internals.checkValidity();
-      refreshSharedValidity(host, state.shared);
+      const result = state.instance.shared.internals.checkValidity();
+      refreshSharedValidity(host, state.instance.shared);
       return result;
     });
 
     const reportValidity = useEvent(host, () => {
-      if (typeof state.shared.internals?.reportValidity !== "function") {
+      if (typeof state.instance.shared.internals?.reportValidity !== "function") {
         return true;
       }
-      const result = state.shared.internals.reportValidity();
-      refreshSharedValidity(host, state.shared);
+      const result = state.instance.shared.internals.reportValidity();
+      refreshSharedValidity(host, state.instance.shared);
       return result;
     });
 
     return {
-      supported: state.shared.supported,
-      willValidate: state.shared.willValidate,
-      validity: state.shared.validity,
-      validationMessage: state.shared.validationMessage,
+      supported: state.instance.shared.supported,
+      willValidate: state.instance.shared.willValidate,
+      validity: state.instance.shared.validity,
+      validationMessage: state.instance.shared.validationMessage,
       setValidity,
       checkValidity,
       reportValidity,

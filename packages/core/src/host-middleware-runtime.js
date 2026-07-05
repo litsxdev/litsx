@@ -139,49 +139,6 @@ function getDefinitionCreateState(definition) {
   return null;
 }
 
-function getParameterNames(fn) {
-  const source = Function.prototype.toString.call(fn);
-  const argsMatch = source.match(/^[^(]*\(([^)]*)\)/);
-  if (argsMatch) {
-    return argsMatch[1]
-      .split(",")
-      .map((part) => part.trim().replace(/\s*=.*$/, ""))
-      .filter(Boolean);
-  }
-  const singleArgMatch = source.match(/^([^=\s(]+)\s*=>/);
-  return singleArgMatch?.[1] ? [singleArgMatch[1]] : [];
-}
-
-function getFirstParameterName(fn) {
-  return getParameterNames(fn)[0] ?? "";
-}
-
-function getSecondParameterName(fn) {
-  return getParameterNames(fn)[1] ?? "";
-}
-
-function callsLegacyHostFirst(fn) {
-  return /^_?host\b/.test(getFirstParameterName(fn));
-}
-
-function callsLegacySetup(createState) {
-  return typeof createState === "function" && callsLegacyHostFirst(createState);
-}
-
-function callsLegacyUse(use) {
-  return typeof use === "function" &&
-    callsLegacyHostFirst(use) &&
-    /^_?state\b/.test(getSecondParameterName(use));
-}
-
-function callsLegacyMiddleware(middleware) {
-  return typeof middleware === "function" && callsLegacyHostFirst(middleware);
-}
-
-function callsInjectedHostUse(use) {
-  return typeof use === "function" && callsLegacyHostFirst(use) && !callsLegacyUse(use);
-}
-
 function getStaticStateCache(owner) {
   if (!owner) {
     return null;
@@ -229,10 +186,7 @@ function createEntryState(host, definition, args, meta, entry) {
     instance: undefined,
   };
   if (createState) {
-    if (callsLegacySetup(createState)) {
-      return createState(host, args, meta, entry);
-    }
-    structuralState.instance = createState(...args, staticState, meta, entry);
+    structuralState.instance = createState(host, args, staticState, meta, entry);
   }
 
   return structuralState;
@@ -534,14 +488,7 @@ export class HostMiddlewareRuntime {
       throw new TypeError(`Host middleware entry "${entry.id}" does not define a render-time use() reader.`);
     }
 
-    if (callsLegacyUse(use)) {
-      return use(this.host, entry.state, entry.args, entry.meta, entry);
-    }
-    if (callsInjectedHostUse(use)) {
-      return use(this.host, ...entry.args, entry.state, entry.meta, entry);
-    }
-
-    return use(...entry.args, entry.state, entry.meta, entry);
+    return use(this.host, entry.state, entry.args, entry.meta, entry);
   }
 
   run(methodName, argsOrBase, maybeBase) {
@@ -566,11 +513,7 @@ export class HostMiddlewareRuntime {
         return dispatch(index + 1);
       };
 
-      if (callsLegacyMiddleware(middleware)) {
-        return middleware(this.host, entry.state, next, args, entry.meta, entry);
-      }
-
-      return middleware(next, entry.state, entry.meta, entry);
+      return middleware(this.host, entry.state, next, args, entry.meta, entry);
     };
 
     return dispatch(0);
@@ -679,13 +622,7 @@ export function resolveStructuralStaticEntry(owner, callsiteIndex, callsiteId, d
   if (!use) {
     return entry.staticState;
   }
-  if (callsLegacyUse(use)) {
-    return use(owner, state, entry.args, entry.meta, entry);
-  }
-  if (callsInjectedHostUse(use)) {
-    return use(owner, ...entry.args, state, entry.meta, entry);
-  }
-  return use(...entry.args, state, entry.meta, entry);
+  return use(owner, state, entry.args, entry.meta, entry);
 }
 
 export function HostMiddlewareMixin(Base) {

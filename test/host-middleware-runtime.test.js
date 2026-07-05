@@ -407,11 +407,11 @@ describe("HostMiddlewareRuntime", () => {
         args: ["arg"],
         meta: { key: "value" },
         definition: {
-          createState(_host, args, meta) {
+          createState(_host, args, _staticState, meta) {
             return { args, meta };
           },
           use(_host, state) {
-            return state;
+            return state.instance;
           },
         },
       },
@@ -425,7 +425,7 @@ describe("HostMiddlewareRuntime", () => {
 
   it("supports defineHook callables as structural entry definitions", () => {
     const structuralHook = defineHook({
-      setup(_host, args, meta, nextEntry) {
+      setup(_host, args, _staticState, meta, nextEntry) {
         return {
           value: args[0],
           path: meta.callsitePath,
@@ -433,7 +433,7 @@ describe("HostMiddlewareRuntime", () => {
         };
       },
       use(_host, state) {
-        return state;
+        return state.instance;
       },
     });
 
@@ -457,8 +457,8 @@ describe("HostMiddlewareRuntime", () => {
   it("installs structural host accessors on the host instance", () => {
     const host = {};
     const structuralHook = defineHook({
-      setup(initialValue) {
-        return { value: initialValue };
+      setup(_host, args) {
+        return { value: args[0] };
       },
       accessors(_host, state) {
         return {
@@ -470,7 +470,7 @@ describe("HostMiddlewareRuntime", () => {
           },
         };
       },
-      use(_initialValue, state) {
+      use(_host, state) {
         return state.instance.value;
       },
     });
@@ -579,7 +579,8 @@ describe("HostMiddlewareRuntime", () => {
         calls.push(["static", name, meta.callsitePath]);
         return { label: name.toUpperCase() };
       },
-      use(name, state, meta) {
+      use(_owner, state, args, meta) {
+        const [name] = args;
         return {
           name,
           label: state.static.label,
@@ -636,18 +637,20 @@ describe("HostMiddlewareRuntime", () => {
         calls.push(["static", name, meta.callsitePath]);
         return { staticLabel: `static:${name}` };
       },
-      setup(name, staticState, meta) {
+      setup(_host, args, staticState, meta) {
+        const [name] = args;
         calls.push(["setup", name, staticState.staticLabel, meta.callsitePath]);
         return { connected: false, instanceLabel: `instance:${name}` };
       },
       middlewares: {
-        connectedCallback(next, state, meta) {
+        connectedCallback(_host, state, next, _args, meta) {
           calls.push(["middleware", state.static.staticLabel, state.instance.instanceLabel, meta.callsitePath]);
           state.instance.connected = true;
           return next();
         },
       },
-      use(name, state, meta) {
+      use(_host, state, args, meta) {
+        const [name] = args;
         return {
           name,
           staticLabel: state.static.staticLabel,
@@ -696,7 +699,7 @@ describe("HostMiddlewareRuntime", () => {
   it("passes structural metadata to lifecycle middlewares", () => {
     const calls = [];
     const structuralHook = defineHook({
-      setup(_host, args, meta) {
+      setup(_host, args, _staticState, meta) {
         return {
           value: args[0],
           setupPath: meta.callsitePath,
@@ -706,8 +709,8 @@ describe("HostMiddlewareRuntime", () => {
         connectedCallback(_host, state, next, args, meta, nextEntry) {
           calls.push({
             args,
-            value: state.value,
-            setupPath: state.setupPath,
+            value: state.instance.value,
+            setupPath: state.instance.setupPath,
             middlewarePath: meta.callsitePath,
             id: nextEntry.callsiteId,
           });
@@ -715,7 +718,7 @@ describe("HostMiddlewareRuntime", () => {
         },
       },
       use(_host, state) {
-        return state.value;
+        return state.instance.value;
       },
     });
     const runtime = new HostMiddlewareRuntime({}, [
@@ -749,7 +752,7 @@ describe("HostMiddlewareRuntime", () => {
       },
       use(_host, state, args, meta, nextEntry) {
         return {
-          initial: state.initial,
+          initial: state.instance.initial,
           current: args[0],
           id: nextEntry.callsiteId,
           path: meta.callsitePath,
@@ -791,7 +794,7 @@ describe("HostMiddlewareRuntime", () => {
 
   it("creates deterministic structural state for matching SSR and client plans", () => {
     const structuralHook = defineHook({
-      setup(_host, args, meta, nextEntry) {
+      setup(_host, args, _staticState, meta, nextEntry) {
         return {
           initial: args[0],
           id: nextEntry.callsiteId,
@@ -800,7 +803,7 @@ describe("HostMiddlewareRuntime", () => {
       },
       use(_host, state, args, meta) {
         return {
-          initial: state.initial,
+          initial: state.instance.initial,
           current: args[0],
           path: meta.callsitePath,
         };
