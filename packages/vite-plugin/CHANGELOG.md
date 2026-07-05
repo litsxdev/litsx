@@ -1,5 +1,16 @@
 # @litsx/vite-plugin
 
+## 0.3.1
+
+### Patch Changes
+
+- 8b39fd6: Fix native ref forwarding so authored `ref` props are not overwritten by the host fallback when a component explicitly forwards the ref to a native element or child component. Named local callback refs on native elements are now lowered through the DOM ref lifecycle path, enabling composed local/public refs.
+
+  Align intrinsic label/output typing and diagnostics so LitSX-authored native elements can use the DOM-aligned `for` attribute while `htmlFor` remains compatibility syntax.
+
+- Updated dependencies [8b39fd6]
+  - @litsx/compiler@0.9.2
+
 ## 0.3.0
 
 ### Minor Changes

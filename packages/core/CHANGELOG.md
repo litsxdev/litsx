@@ -1,5 +1,19 @@
 # litsx
 
+## 0.14.0
+
+### Minor Changes
+
+- 72a47e6: Remove parameter-name based structural hook ABI detection from the host middleware runtime. Structural hooks now use one fixed, minifier-safe contract: `setup(host, args, staticState, meta, entry)`, `use(host, state, args, meta, entry)`, and lifecycle middleware `(host, state, next, args, meta, entry)`.
+
+  FACE structural hooks have been updated to read authored instance data through `state.instance`, and the structural hook docs/types/tests now reflect the single runtime contract.
+
+### Patch Changes
+
+- 8b39fd6: Fix native ref forwarding so authored `ref` props are not overwritten by the host fallback when a component explicitly forwards the ref to a native element or child component. Named local callback refs on native elements are now lowered through the DOM ref lifecycle path, enabling composed local/public refs.
+
+  Align intrinsic label/output typing and diagnostics so LitSX-authored native elements can use the DOM-aligned `for` attribute while `htmlFor` remains compatibility syntax.
+
 ## 0.13.0
 
 ### Minor Changes

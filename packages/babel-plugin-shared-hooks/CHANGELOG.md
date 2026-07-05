@@ -1,5 +1,13 @@
 # @litsx/babel-plugin-shared-hooks
 
+## 0.6.3
+
+### Patch Changes
+
+- 8b39fd6: Fix native ref forwarding so authored `ref` props are not overwritten by the host fallback when a component explicitly forwards the ref to a native element or child component. Named local callback refs on native elements are now lowered through the DOM ref lifecycle path, enabling composed local/public refs.
+
+  Align intrinsic label/output typing and diagnostics so LitSX-authored native elements can use the DOM-aligned `for` attribute while `htmlFor` remains compatibility syntax.
+
 ## 0.6.2
 
 ### Patch Changes
