@@ -60,7 +60,47 @@ describe("@litsx/babel-preset-litsx native lowering internals", () => {
     assert.match(code, /class SearchShell extends (?:ShadowDomMixin\(LitElement\)|LitElement)/);
     assert.match(code, /<input data-ref="_refElement" \/>/);
     assert.match(code, /useCallbackRef\(this, \(\) => this\.renderRoot\?\./);
-    assert.match(code, /<(?:search-field|SearchField) ref=\{this\.ref\} \/>/);
+    assert.doesNotMatch(code, /useCallbackRef\(this, \(\) => this,/);
+    assert.match(code, /<(?:search-field|SearchField) \.ref=\{this\.ref\} \/>/);
+  });
+
+  it("does not overwrite direct native ref forwarding with a host ref sync", () => {
+    const source = [
+      "const MyForm = ({ ref }) => {",
+      "  return <form ref={ref}></form>;",
+      "};",
+    ].join("\n");
+
+    const { code } = transformWithNativePreset(source);
+
+    assert.match(code, /<form data-ref="_refElement"><\/form>/);
+    assert.match(code, /useCallbackRef\(this, \(\) => this\.renderRoot\?\./);
+    assert.doesNotMatch(code, /useCallbackRef\(this, \(\) => this,/);
+  });
+
+  it("supports composed local callbacks that forward the public ref to a native node", () => {
+    const source = [
+      "import { useRef } from '@litsx/core';",
+      "const MyForm = ({ ref }) => {",
+      "  const internalRef = useRef();",
+      "  const setFormNode = (node) => {",
+      "    internalRef.current = node;",
+      "    if (typeof ref === 'function') {",
+      "      ref(node);",
+      "    } else if (ref) {",
+      "      ref.current = node;",
+      "    }",
+      "  };",
+      "  return <form ref={setFormNode}></form>;",
+      "};",
+    ].join("\n");
+
+    const { code } = transformWithNativePreset(source);
+
+    assert.match(code, /const internalRef = useRef\(this\);/);
+    assert.match(code, /<form data-ref="_ref\d*"><\/form>/);
+    assert.match(code, /useCallbackRef\(this, \(\) => this\._ref\d*, setFormNode\);/);
+    assert.doesNotMatch(code, /useCallbackRef\(this, \(\) => this,/);
   });
 
   it("detects native ref props through defaulted destructuring and string keys", () => {
@@ -97,10 +137,11 @@ describe("@litsx/babel-preset-litsx native lowering internals", () => {
       code,
       /static properties = \{[\s\S]*ref: \{[\s\S]*type: String[\s\S]*attribute: false/s
     );
-    assert.match(code, /<widget-box ref=\{this\.ref\} \/>/);
+    assert.match(code, /<widget-box \.ref=\{this\.ref\} \/>/);
     assert.match(code, /<input data-ref="_refElement" \/>/);
     const useCallbackRefMatches = code.match(/useCallbackRef\(this, \(\) => this\.renderRoot\?\./g) || [];
     assert.strictEqual(useCallbackRefMatches.length, 1);
+    assert.doesNotMatch(code, /useCallbackRef\(this, \(\) => this,/);
   });
 
 });

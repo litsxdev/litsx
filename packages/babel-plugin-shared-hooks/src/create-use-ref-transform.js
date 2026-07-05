@@ -134,6 +134,62 @@ function isComponentRefAttribute(attrPath) {
   return isComponentJsxName(openingElement.node.name);
 }
 
+function getFunctionRefBindingPath(binding) {
+  const bindingPath = binding?.path;
+  if (!bindingPath) {
+    return null;
+  }
+
+  if (bindingPath.isFunctionDeclaration()) {
+    return bindingPath;
+  }
+
+  if (bindingPath.isVariableDeclarator()) {
+    const initPath = bindingPath.get("init");
+    if (initPath.isFunctionExpression() || initPath.isArrowFunctionExpression()) {
+      return bindingPath;
+    }
+  }
+
+  return null;
+}
+
+function getFunctionRefCallbackNode(bindingPath) {
+  if (bindingPath?.isFunctionDeclaration()) {
+    const id = bindingPath.node.id;
+    return id ? t.identifier(id.name) : null;
+  }
+
+  if (bindingPath?.isVariableDeclarator()) {
+    const id = bindingPath.node.id;
+    return t.isIdentifier(id) ? t.identifier(id.name) : null;
+  }
+
+  return null;
+}
+
+function insertAfterFunctionRefBinding(bindingPath, statement, renderBody) {
+  if (bindingPath?.isFunctionDeclaration()) {
+    bindingPath.insertAfter(statement);
+    return true;
+  }
+
+  if (bindingPath?.isVariableDeclarator()) {
+    const declarationPath = bindingPath.parentPath;
+    if (declarationPath?.isVariableDeclaration()) {
+      declarationPath.insertAfter(statement);
+      return true;
+    }
+  }
+
+  if (renderBody?.isBlockStatement()) {
+    renderBody.unshiftContainer("body", statement);
+    return true;
+  }
+
+  return false;
+}
+
 function getComponentRefAttributeName(attrPath) {
   void attrPath;
   return ".ref";
@@ -746,7 +802,6 @@ export function createUseRefTransform({
               const value = attrPath.node.value;
               if (!t.isJSXExpressionContainer(value)) return;
               const expr = value.expression;
-              if (!t.isArrowFunctionExpression(expr) && !t.isFunctionExpression(expr)) return;
 
               if (!classPath) return;
 
@@ -758,6 +813,20 @@ export function createUseRefTransform({
               const renderBody = methodPath.get("body");
               if (!renderBody.isBlockStatement()) return;
 
+              let callbackExpression = null;
+              let insertionBindingPath = null;
+              if (t.isArrowFunctionExpression(expr) || t.isFunctionExpression(expr)) {
+                callbackExpression = t.cloneNode(expr, true);
+              } else if (t.isIdentifier(expr)) {
+                const bindingPath = getFunctionRefBindingPath(attrPath.scope.getBinding(expr.name));
+                const callbackNode = getFunctionRefCallbackNode(bindingPath);
+                if (!bindingPath || !callbackNode) return;
+                callbackExpression = callbackNode;
+                insertionBindingPath = bindingPath;
+              } else {
+                return;
+              }
+
               const refIdentifier = methodPath.scope.generateUidIdentifier("ref");
               const refName = refIdentifier.name;
 
@@ -767,16 +836,15 @@ export function createUseRefTransform({
 
               ensureGetter(classPath, refName);
 
-              renderBody.unshiftContainer("body",
-                t.expressionStatement(
-                  t.callExpression(t.identifier(state.callbackRuntimeLocalName), [
-                    t.thisExpression(),
-                    t.arrowFunctionExpression([], t.memberExpression(t.thisExpression(), t.identifier(refName))),
-                    t.cloneNode(expr, true),
-                  ])
-                )
+              const callbackStatement = t.expressionStatement(
+                t.callExpression(t.identifier(state.callbackRuntimeLocalName), [
+                  t.thisExpression(),
+                  t.arrowFunctionExpression([], t.memberExpression(t.thisExpression(), t.identifier(refName))),
+                  callbackExpression,
+                ])
               );
 
+              insertAfterFunctionRefBinding(insertionBindingPath, callbackStatement, renderBody);
               state.callbackRuntimeNeeded = true;
             },
             TaggedTemplateExpression(templatePath) {

@@ -2,6 +2,7 @@ import { collectImplicitChildrenProjectionIssues } from "@litsx/authoring";
 import {
   createComponentInstanceRefSyncStatement,
   hasRefProp,
+  hasExplicitRefForwarding,
   lowerForwardedElementRefs,
 } from "./transform-litsx-refs.js";
 import {
@@ -110,11 +111,15 @@ export function prepareComponentRender(functionPath, node, propertyNames, bindin
     forwardRefOptions?.propName ||
     (propertyNames.has("ref") || hasRefProp(functionPath) ? "ref" : null);
   let needsCallbackRef = false;
+  const hasExplicitForwarding = resolvedRefPropName
+    ? hasExplicitRefForwarding(functionPath, resolvedRefPropName)
+    : false;
+  const forwardedElementRefStatements = resolvedRefPropName
+    ? lowerForwardedElementRefs(functionPath, resolvedRefPropName)
+    : [];
 
-  if (resolvedRefPropName) {
-    prefixStatements.push(
-      ...lowerForwardedElementRefs(functionPath, resolvedRefPropName)
-    );
+  if (forwardedElementRefStatements.length > 0) {
+    prefixStatements.push(...forwardedElementRefStatements);
     needsCallbackRef =
       prefixStatements.some(
         (statement) =>
@@ -124,7 +129,7 @@ export function prepareComponentRender(functionPath, node, propertyNames, bindin
       ) || needsCallbackRef;
   }
 
-  if (resolvedRefPropName && !forwardRefOptions) {
+  if (resolvedRefPropName && !forwardRefOptions && !hasExplicitForwarding) {
     prefixStatements.push(createComponentInstanceRefSyncStatement());
     needsCallbackRef = true;
   }

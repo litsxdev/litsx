@@ -92,6 +92,128 @@ function isStandardElementJsxName(nameNode) {
   return Boolean(name) && name[0] === name[0].toLowerCase() && !name.includes("-");
 }
 
+function isComponentJsxName(nameNode) {
+  if (t.isJSXMemberExpression(nameNode)) {
+    return true;
+  }
+
+  if (!t.isJSXIdentifier(nameNode)) {
+    return false;
+  }
+
+  const name = nameNode.name || "";
+  return Boolean(name) && (
+    name[0] === name[0].toUpperCase() ||
+    name.includes("-")
+  );
+}
+
+function isRefAttributeOnStandardElement(attrPath) {
+  if (!attrPath?.isJSXAttribute?.()) {
+    return false;
+  }
+  if (!t.isJSXIdentifier(attrPath.node.name, { name: "ref" })) {
+    return false;
+  }
+  const openingElement = attrPath.parentPath;
+  return Boolean(
+    openingElement?.isJSXOpeningElement() &&
+    isStandardElementJsxName(openingElement.node.name)
+  );
+}
+
+function bindingFunctionReferencesThisProp(binding, propName) {
+  const bindingPath = binding?.path;
+  if (!bindingPath || !propName) {
+    return false;
+  }
+
+  let functionPath = null;
+  if (bindingPath.isFunctionDeclaration?.()) {
+    functionPath = bindingPath;
+  } else if (bindingPath.isVariableDeclarator?.()) {
+    const initPath = bindingPath.get("init");
+    if (initPath.isFunctionExpression() || initPath.isArrowFunctionExpression()) {
+      functionPath = initPath;
+    }
+  }
+
+  if (!functionPath?.traverse) {
+    return false;
+  }
+
+  let referencesProp = false;
+  functionPath.traverse({
+    Function(path) {
+      if (path !== functionPath) {
+        path.skip();
+      }
+    },
+    MemberExpression(path) {
+      if (
+        t.isThisExpression(path.node.object) &&
+        t.isIdentifier(path.node.property, { name: propName }) &&
+        !path.node.computed
+      ) {
+        referencesProp = true;
+        path.stop();
+      }
+    },
+  });
+
+  return referencesProp;
+}
+
+export function hasExplicitRefForwarding(functionPath, propName) {
+  if (!propName) {
+    return false;
+  }
+
+  let found = false;
+  functionPath.traverse({
+    JSXAttribute(attrPath) {
+      if (found || !attrPath?.isJSXAttribute?.()) return;
+      if (!t.isJSXIdentifier(attrPath.node.name, { name: "ref" })) return;
+
+      const value = attrPath.node.value;
+      if (!t.isJSXExpressionContainer(value)) return;
+
+      const expression = value.expression;
+      const openingElement = attrPath.parentPath;
+      const isStandardElement = Boolean(
+        openingElement?.isJSXOpeningElement() &&
+        isStandardElementJsxName(openingElement.node.name)
+      );
+      const isComponentElement = Boolean(
+        openingElement?.isJSXOpeningElement() &&
+        isComponentJsxName(openingElement.node.name)
+      );
+
+      if (
+        (isStandardElement || isComponentElement) &&
+        t.isMemberExpression(expression) &&
+        t.isThisExpression(expression.object) &&
+        t.isIdentifier(expression.property, { name: propName }) &&
+        !expression.computed
+      ) {
+        found = true;
+        attrPath.stop();
+        return;
+      }
+
+      if (!isStandardElement) return;
+      if (!t.isIdentifier(expression)) return;
+      const binding = attrPath.scope.getBinding(expression.name);
+      if (bindingFunctionReferencesThisProp(binding, propName)) {
+        found = true;
+        attrPath.stop();
+      }
+    },
+  });
+
+  return found;
+}
+
 export function createComponentInstanceRefSyncStatement() {
   return t.expressionStatement(
     t.callExpression(t.identifier("useCallbackRef"), [

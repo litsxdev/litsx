@@ -655,6 +655,20 @@ describe("@litsx/typescript", () => {
     assert.ok(issues.some((issue) => issue.code === 91013));
   });
 
+  it("limits htmlFor compatibility warnings to intrinsic elements with a native for attribute", () => {
+    const issues = collectLitsxAuthoredIssues(`
+      const view = (
+        <>
+          <div htmlFor="search" />
+          <label htmlFor="search" />
+          <output htmlFor="search results" />
+        </>
+      );
+    `, { channel: "all" });
+
+    assert.strictEqual(issues.filter((issue) => issue.code === 91010).length, 2);
+  });
+
   it("detects namespaced React.memo and assignment-style component hoists", () => {
     const issues = collectLitsxAuthoredIssues(`
       import * as React from "react";
@@ -1690,6 +1704,32 @@ describe("@litsx/typescript", () => {
       },
     );
     assert.deepStrictEqual(memberDiagnostics, []);
+  });
+
+  it("accepts the native for attribute on intrinsic label and output elements", () => {
+    const diagnostics = collectLitsxAuthoredDiagnostics(
+      `
+        const view = (
+          <>
+            <label for="email">
+              <input id="email" />
+            </label>
+            <output for="email result" />
+          </>
+        );
+      `,
+      {
+        DiagnosticCategory: {
+          Warning: 0,
+          Error: 1,
+        },
+      },
+      {
+        plugins: ["typescript"],
+      },
+    );
+
+    assert.deepStrictEqual(diagnostics, []);
   });
 
   it("warns about className on namespaced intrinsic tags", () => {

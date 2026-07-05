@@ -1599,6 +1599,45 @@ describe("litsx effects controller", () => {
     assert.strictEqual(current, node);
   });
 
+  it("cleans callback refs on disconnect", () => {
+    const host = new TestHost();
+    const node = { tagName: "FORM" };
+    const calls = [];
+
+    prepareEffects(host);
+    useCallbackRef(host, () => node, (value) => {
+      calls.push(value);
+    }, []);
+    update(host);
+
+    host.disconnect();
+
+    assert.strictEqual(calls[0], node);
+    assert.strictEqual(calls.at(-1), null);
+  });
+
+  it("cleans the previous callback ref when the callback changes", () => {
+    const host = new TestHost();
+    const node = { tagName: "FORM" };
+    const calls = [];
+    const first = (value) => calls.push(["first", value]);
+    const second = (value) => calls.push(["second", value]);
+
+    prepareEffects(host);
+    useCallbackRef(host, () => node, first, [first]);
+    update(host);
+
+    prepareEffects(host);
+    useCallbackRef(host, () => node, second, [second]);
+    update(host);
+
+    assert.deepStrictEqual(calls, [
+      ["first", node],
+      ["first", null],
+      ["second", node],
+    ]);
+  });
+
   it("keeps callback refs bound to their DOM targets when useExpose is also used", () => {
     const host = new TestHost();
     const node = { tagName: "INPUT" };

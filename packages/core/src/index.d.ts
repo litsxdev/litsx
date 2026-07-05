@@ -109,9 +109,22 @@ export type LitsxHostElementProps<TElement> = Omit<
   "children" | "style" | "part" | "slot" | "className"
 >;
 
+export type LitsxNativeAttributeAliases<TElement> =
+  TElement extends HTMLLabelElement | HTMLOutputElement
+    ? {
+        /**
+         * Native `for` attribute spelling for intrinsic `<label>` and `<output>` elements.
+         * LitSX prefers native DOM-aligned attribute names in authored JSX even when the
+         * corresponding DOM property is exposed as `htmlFor`.
+         */
+        for?: string;
+      }
+    : {};
+
 export type LitsxElementProps<TElement = HTMLElement> =
   & LitsxBaseAttributes
   & LitsxDomAttributes<TElement>
+  & LitsxNativeAttributeAliases<TElement>
   & LitsxHostElementProps<TElement>;
 
 export type LitsxErrorBoundaryElementProps =

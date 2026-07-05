@@ -4,6 +4,7 @@ import babelTraverse from "@babel/traverse";
 import parser from "./helpers/litsx-parser.js";
 import {
   createComponentInstanceRefSyncStatement,
+  hasExplicitRefForwarding,
   hasRefProp,
   lowerForwardedElementRefs,
   setRefsBabelTypes,
@@ -117,6 +118,47 @@ describe("native refs internals", () => {
       attributes[4].attrs.some((attr) => attr.name.name === "ref"),
       true
     );
+  });
+
+  it("detects direct, composed, and component ref forwarding to avoid host ref sync", () => {
+    const direct = getFunctionPath(`
+      function Card() {
+        return <form ref={this.ref} />;
+      }
+    `);
+    assert.strictEqual(hasExplicitRefForwarding(direct, "ref"), true);
+
+    const composed = getFunctionPath(`
+      function Card() {
+        const setFormNode = (node) => {
+          this.formNode = node;
+          if (typeof this.ref === "function") {
+            this.ref(node);
+          } else if (this.ref) {
+            this.ref.current = node;
+          }
+        };
+        return <form ref={setFormNode} />;
+      }
+    `);
+    assert.strictEqual(hasExplicitRefForwarding(composed, "ref"), true);
+
+    const childComponent = getFunctionPath(`
+      function Card() {
+        return <ChildField ref={this.ref} />;
+      }
+    `);
+    assert.strictEqual(hasExplicitRefForwarding(childComponent, "ref"), true);
+
+    const localOnly = getFunctionPath(`
+      function Card() {
+        const setFormNode = (node) => {
+          this.formNode = node;
+        };
+        return <form ref={setFormNode} />;
+      }
+    `);
+    assert.strictEqual(hasExplicitRefForwarding(localOnly, "ref"), false);
   });
 
   it("returns no statements without a ref prop name and builds component-instance sync callbacks", () => {

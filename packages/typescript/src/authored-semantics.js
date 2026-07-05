@@ -608,14 +608,14 @@ function collectReactCompatSurfaceIssues(ast, virtualization) {
       length: (attribute.name.end ?? attribute.end ?? 0) - (attribute.name.start ?? attribute.start ?? 0),
     };
 
-    if (attrName === "htmlFor") {
+    if (attrName === "htmlFor" && (tagName === "label" || tagName === "output")) {
       issues.push(createOriginalIssue(virtualization, {
         kind: "react-compat-surface",
         severity: "warning",
         code: 91010,
         start: virtualSpan.start,
         length: virtualSpan.length,
-        message: '`htmlFor` is React compatibility syntax. Prefer the native DOM attribute `for` in LitSX-authored intrinsic elements.',
+        message: '`htmlFor` is React compatibility syntax. Prefer the native DOM attribute `for` on LitSX-authored intrinsic `<label>` and `<output>` elements.',
       }));
     } else if (attrName === "dangerouslySetInnerHTML") {
       issues.push(createOriginalIssue(virtualization, {
