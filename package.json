@@ -25,11 +25,11 @@
     "packages/vite-plugin"
   ],
   "devDependencies": {
-    "@babel/core": "^7.29.0",
-    "@babel/eslint-parser": "^7.28.5",
-    "@babel/plugin-syntax-jsx": "^7.28.6",
-    "@babel/plugin-syntax-typescript": "^7.27.1",
-    "@babel/plugin-transform-typescript": "^7.28.6",
+    "@babel/core": "^7.29.7",
+    "@babel/eslint-parser": "^7.29.7",
+    "@babel/plugin-syntax-jsx": "^7.29.7",
+    "@babel/plugin-syntax-typescript": "^7.29.7",
+    "@babel/plugin-transform-typescript": "^7.29.7",
     "@changesets/cli": "^2.31.0",
     "@open-wc/scoped-elements": "^3.0.6",
     "@rollup/plugin-babel": "^7.0.0",
