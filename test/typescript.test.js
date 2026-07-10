@@ -219,6 +219,81 @@ describe("@litsx/typescript", () => {
     }
   });
 
+  it("types form-specific native listener bindings with the form as currentTarget", () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-form-event-types-"));
+    const filePath = path.join(tempDir, "index.tsx");
+    const globalsPath = path.join(tempDir, "global.d.ts");
+    const repoRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
+    const jsxRuntimePath = path.join(repoRoot, "packages/core/src/jsx-runtime.d.ts").replaceAll("\\", "/");
+
+    try {
+      fs.writeFileSync(
+        globalsPath,
+        [
+          `import type { JSX as LitsxJSX } from "${jsxRuntimePath}";`,
+          "declare global {",
+          "  namespace JSX {",
+          "    interface Element extends LitsxJSX.Element {}",
+          "    interface IntrinsicElements extends LitsxJSX.IntrinsicElements {}",
+          "  }",
+          "}",
+          "export {};",
+          "",
+        ].join("\n"),
+      );
+      fs.writeFileSync(
+        filePath,
+        `
+          const form = (
+            <form
+              __litsx_event_reset={(event) => {
+                const current: HTMLFormElement = event.currentTarget;
+                event.preventDefault();
+                current.reset();
+              }}
+              __litsx_event_formdata={(event) => {
+                const current: HTMLFormElement = event.currentTarget;
+                event.formData.append("source", current.method);
+              }}
+              __litsx_event_submit={(event) => {
+                const current: HTMLFormElement = event.currentTarget;
+                event.submitter?.getAttribute("name");
+                current.requestSubmit();
+              }}
+            />
+          );
+        `,
+      );
+
+      const program = ts.createProgram({
+        rootNames: [filePath, globalsPath],
+        options: {
+          jsx: ts.JsxEmit.Preserve,
+          module: ts.ModuleKind.ESNext,
+          moduleResolution: ts.ModuleResolutionKind.Bundler,
+          target: ts.ScriptTarget.ESNext,
+          lib: ["lib.esnext.d.ts", "lib.dom.d.ts"],
+          noEmit: true,
+          strict: true,
+          skipLibCheck: true,
+        },
+      });
+
+      const diagnostics = ts.getPreEmitDiagnostics(program).filter(
+        (diagnostic) => diagnostic.file?.fileName === filePath,
+      );
+
+      assert.deepStrictEqual(
+        diagnostics.map((diagnostic) =>
+          ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n")
+        ),
+        [],
+      );
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
   it("accepts LitSX virtualized authored bindings on PascalCase component JSX without allowing arbitrary props", () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-component-authored-bindings-"));
     const filePath = path.join(tempDir, "index.tsx");
@@ -1103,6 +1178,23 @@ describe("@litsx/typescript", () => {
     assert.strictEqual(diagnostics[0].category, 0);
     assert.strictEqual(diagnostics[0].code, 91006);
     assert.match(diagnostics[0].messageText, /known LitSX event set for <button>/);
+  });
+
+  it("accepts native form reset and formdata listener bindings", () => {
+    const diagnostics = collectLitsxAuthoredDiagnostics(
+      '<form @reset={handleReset} @formdata={handleFormData} @submit={handleSubmit} />',
+      {
+        DiagnosticCategory: {
+          Warning: 0,
+          Error: 1,
+        },
+      },
+      {
+        plugins: ["typescript"],
+      },
+    );
+
+    assert.deepStrictEqual(diagnostics, []);
   });
 
   it("does not treat nested state updater callbacks as component props access", () => {

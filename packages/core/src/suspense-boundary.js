@@ -44,6 +44,8 @@ function reportAsyncError(error) {
  * </SuspenseBoundary>
  */
 export class SuspenseBoundary extends LitElement {
+  static [Symbol.for("litsx.component")] = true;
+
   static properties = {
     pending: { type: Boolean, reflect: true },
     resolved: { type: Boolean, reflect: true },

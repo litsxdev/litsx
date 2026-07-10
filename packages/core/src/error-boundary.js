@@ -33,6 +33,8 @@ function isThenable(value) {
  * </ErrorBoundary>
  */
 export class ErrorBoundary extends LitElement {
+  static [Symbol.for("litsx.component")] = true;
+
   static properties = {
     failed: { type: Boolean, reflect: true },
     error: { attribute: false },

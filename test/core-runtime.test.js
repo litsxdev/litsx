@@ -5,9 +5,12 @@ import {
   collectSoftSuspenseThenables,
   EffectsController,
   ensureLazyElement,
+  ErrorBoundary,
   isLitsxComponentClass,
   isLitsxHook,
   prepareEffects,
+  SuspenseBoundary,
+  SuspenseList,
   useMemoValue,
   useAfterUpdate,
   useHost,
@@ -1886,6 +1889,12 @@ describe("litsx effects controller", () => {
 
     assert.strictEqual(isLitsxComponentClass(LitsxHost), true);
     assert.strictEqual(isLitsxComponentClass(PlainHost), false);
+  });
+
+  it("marks built-in boundary elements with LitSX component metadata", () => {
+    assert.strictEqual(isLitsxComponentClass(ErrorBoundary), true);
+    assert.strictEqual(isLitsxComponentClass(SuspenseBoundary), true);
+    assert.strictEqual(isLitsxComponentClass(SuspenseList), true);
   });
 
   it("registers direct custom element constructors in the scoped registry", () => {

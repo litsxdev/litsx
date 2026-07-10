@@ -32,7 +32,7 @@ const EVENT_COMPLETIONS_BY_TAG = {
   input: ["click", "input", "change", "focus", "blur", "keydown", "keyup"],
   textarea: ["click", "input", "change", "focus", "blur", "keydown", "keyup"],
   button: ["click", "focus", "blur", "keydown", "keyup"],
-  form: ["submit", "change", "input", "click"],
+  form: ["submit", "reset", "formdata", "change", "input", "click"],
   video: ["click", "play", "pause", "timeupdate", "loadedmetadata", "volumechange"],
   audio: ["click", "play", "pause", "timeupdate", "loadedmetadata", "volumechange"],
   "suspense-boundary": ["click", "transitionend", "animationend"],

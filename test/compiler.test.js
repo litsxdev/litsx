@@ -1788,6 +1788,57 @@ describe("@litsx/compiler", () => {
     }
   }, 20000);
 
+  it("does not warn for built-in boundary imports from compiled @litsx/core packages", () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-external-core-boundaries-"));
+    const nodeModulesDir = path.join(tempDir, "node_modules", "@litsx", "core");
+    const filename = path.join(tempDir, "consumer.litsx");
+
+    try {
+      fs.mkdirSync(nodeModulesDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(nodeModulesDir, "package.json"),
+        JSON.stringify({ name: "@litsx/core", type: "module", exports: "./index.js" })
+      );
+      fs.writeFileSync(
+        path.join(nodeModulesDir, "index.js"),
+        [
+          "export class SuspenseBoundary extends HTMLElement {",
+          '  static [Symbol.for("litsx.component")] = true;',
+          "}",
+          "export class SuspenseList extends HTMLElement {",
+          '  static [Symbol.for("litsx.component")] = true;',
+          "}",
+          "export class ErrorBoundary extends HTMLElement {",
+          '  static [Symbol.for("litsx.component")] = true;',
+          "}",
+        ].join("\n")
+      );
+
+      const source = [
+        'import { ErrorBoundary, SuspenseBoundary, SuspenseList } from "@litsx/core";',
+        "export function Demo() {",
+        "  return (",
+        "    <SuspenseList>",
+        "      <SuspenseBoundary fallback={null}>",
+        "        <ErrorBoundary fallback={null}>ready</ErrorBoundary>",
+        "      </SuspenseBoundary>",
+        "    </SuspenseList>",
+        "  );",
+        "}",
+      ].join("\n");
+
+      const result = transformLitsxSync(source, {
+        filename,
+        jsxTemplate: false,
+      });
+
+      assert.ok(Array.isArray(result.metadata.litsxWarnings));
+      assert.deepStrictEqual(result.metadata.litsxWarnings, []);
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  }, 20000);
+
   it("does not warn for external PascalCase imports reexported from compiled LitSX modules", () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-external-pascal-reexported-"));
     const nodeModulesDir = path.join(tempDir, "node_modules", "fancy-litsx");

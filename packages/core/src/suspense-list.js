@@ -66,6 +66,8 @@ function blocksReveal(boundary) {
  * </suspense-list>
  */
 export class SuspenseList extends ReactiveElement {
+  static [Symbol.for("litsx.component")] = true;
+
   static properties = {
     revealOrder: { type: String, attribute: "reveal-order" },
     tail: { type: String },

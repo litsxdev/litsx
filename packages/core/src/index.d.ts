@@ -67,6 +67,14 @@ export type LitsxKnownDomEventAttributes<Target = EventTarget> = {
   >;
 };
 
+export type LitsxFormEventAttributes<Target = EventTarget> =
+  Target extends HTMLFormElement
+    ? {
+        __litsx_event_reset?: LitsxEventHandler<Event & { currentTarget: Target }>;
+        __litsx_event_formdata?: LitsxEventHandler<FormDataEvent & { currentTarget: Target }>;
+      }
+    : {};
+
 export type LitsxCustomEventAttributes = {
   [attributeName: `__litsx_event_${string}-${string}`]: LitsxEventHandler<CustomEvent<any>> | undefined;
 };
@@ -83,6 +91,7 @@ export type LitsxAnyEventAttributes = {
 
 export type LitsxDomAttributes<Target = EventTarget> =
   & LitsxKnownDomEventAttributes<Target>
+  & LitsxFormEventAttributes<Target>
   & LitsxCustomEventAttributes
   & LitsxAnyEventAttributes
   & {
@@ -215,6 +224,7 @@ export interface SuspenseListProps {
  * Show fallback UI when a subtree throws during render.
  */
 export declare class ErrorBoundary extends LitElement {
+  static readonly [LITSX_COMPONENT]: true;
   failed: boolean;
   error: unknown;
   onError: ((error: unknown) => void) | null;
@@ -232,6 +242,7 @@ export declare class ErrorBoundary extends LitElement {
  * Show fallback UI while a suspense region is waiting to reveal.
  */
 export declare class SuspenseBoundary extends LitElement {
+  static readonly [LITSX_COMPONENT]: true;
   pending: boolean;
   resolved: boolean;
   showing: string;
@@ -250,6 +261,7 @@ export declare class SuspenseBoundary extends LitElement {
  * Coordinate reveal order across sibling suspense boundaries.
  */
 export declare class SuspenseList extends ReactiveElement {
+  static readonly [LITSX_COMPONENT]: true;
   revealOrder: "forwards" | "backwards" | "together";
   tail: "collapsed" | "hidden";
 }
