@@ -64,6 +64,28 @@ describe("@litsx/babel-preset-litsx native lowering internals", () => {
     assert.match(code, /<(?:search-field|SearchField) \.ref=\{this\.ref\} \/>/);
   });
 
+  it("keeps forwarded refs live when a child component relies on the default instance target", () => {
+    const source = [
+      "const Leaf = () => {",
+      "  return <div>leaf</div>;",
+      "};",
+      "",
+      "const Parent = ({ ref }) => {",
+      "  return <Leaf ref={ref} />;",
+      "};",
+    ].join("\n");
+
+    const { code } = transformWithNativePreset(source);
+
+    assert.match(code, /class Leaf extends LitElement/);
+    assert.match(code, /class Parent extends (?:ShadowDomMixin\(LitElement\)|LitElement)/);
+    assert.match(code, /<(?:leaf|Leaf) \.ref=\{this\.ref\} \/>/);
+    assert.match(
+      code,
+      /class Leaf extends LitElement \{[\s\S]*useCallbackRef\(this, \(\) => this,/
+    );
+  });
+
   it("does not overwrite direct native ref forwarding with a host ref sync", () => {
     const source = [
       "const MyForm = ({ ref }) => {",

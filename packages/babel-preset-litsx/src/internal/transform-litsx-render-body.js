@@ -109,7 +109,7 @@ export function prepareComponentRender(functionPath, node, propertyNames, bindin
   const forwardRefOptions = options.forwardRef || null;
   const resolvedRefPropName =
     forwardRefOptions?.propName ||
-    (propertyNames.has("ref") || hasRefProp(functionPath) ? "ref" : null);
+    "ref";
   let needsCallbackRef = false;
   const hasExplicitForwarding = resolvedRefPropName
     ? hasExplicitRefForwarding(functionPath, resolvedRefPropName)
