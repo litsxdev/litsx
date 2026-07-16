@@ -22,6 +22,8 @@ import {
 } from "../packages/core/src/context.js";
 import {
   ErrorBoundary,
+  createExecutionContextKey,
+  getCurrentExecutionContext,
   renderWithSoftSuspense,
   SuspenseBoundary,
   SuspenseList,
@@ -1092,5 +1094,166 @@ describe("@litsx/ssr", () => {
 
     assert.match(result.html, /<span data-theme="dark">/);
     assert.match(result.html, /data-theme="dark"[\s\S]*dark/);
+  });
+
+  it("supports request-scoped execution context reads and writes during SSR", async () => {
+    const USER_KEY = createExecutionContextKey("user");
+
+    function readUser() {
+      return getCurrentExecutionContext()?.get(USER_KEY) ?? null;
+    }
+
+    class UserCard extends LitElement {
+      render() {
+        const executionContext = getCurrentExecutionContext();
+        executionContext?.set(USER_KEY, { id: "123" });
+        const user = readUser();
+        return html`<span data-user-id=${user?.id ?? "missing"}>${user?.id ?? "missing"}</span>`;
+      }
+    }
+
+    const result = await renderToString(
+      __litsxScopedTemplate(
+        html`<user-card></user-card>`,
+        {
+          "user-card": UserCard,
+        },
+      ),
+    );
+
+    assert.match(result.html, /data-user-id="123"/);
+    assert.match(result.html, />123</);
+  });
+
+  it("reuses the same execution context across suspense retries", async () => {
+    const RETRY_KEY = createExecutionContextKey("retry-count");
+    const ready = createDeferred();
+    const started = createDeferred();
+    const seenContexts = [];
+    let suspended = false;
+
+    class RetryCard extends LitElement {
+      render() {
+        return renderWithSoftSuspense(this, () => {
+          const executionContext = getCurrentExecutionContext();
+          seenContexts.push(executionContext);
+          const nextCount = (executionContext?.get(RETRY_KEY) ?? 0) + 1;
+          executionContext?.set(RETRY_KEY, nextCount);
+
+          if (!suspended) {
+            suspended = true;
+            started.resolve();
+            throw ready.promise;
+          }
+
+          return html`<span data-retry-count=${nextCount}>${nextCount}</span>`;
+        });
+      }
+    }
+
+    const renderPromise = renderToString(
+      __litsxScopedTemplate(
+        html`<retry-card></retry-card>`,
+        {
+          "retry-card": RetryCard,
+        },
+      ),
+    );
+
+    await started.promise;
+    ready.resolve();
+    const result = await renderPromise;
+
+    assert.strictEqual(seenContexts.length, 2);
+    assert.ok(seenContexts[0]);
+    assert.strictEqual(seenContexts[0], seenContexts[1]);
+    assert.match(result.html, /data-retry-count="2"/);
+  });
+
+  it("isolates execution contexts across concurrent SSR requests", async () => {
+    const REQUEST_KEY = createExecutionContextKey("request");
+    const firstValue = createDeferred();
+    const secondValue = createDeferred();
+    const seenContexts = [];
+
+    function createRequestCard(label) {
+      return class RequestCard extends LitElement {
+        render() {
+          const executionContext = getCurrentExecutionContext();
+          executionContext?.set(REQUEST_KEY, label);
+          seenContexts.push(executionContext);
+          return html`<span data-request=${executionContext?.get(REQUEST_KEY)}>${executionContext?.get(REQUEST_KEY)}</span>`;
+        }
+      };
+    }
+
+    const FirstRequestCard = createRequestCard("alpha");
+    const SecondRequestCard = createRequestCard("beta");
+
+    const firstRender = renderToString(
+      firstValue.promise.then(() =>
+        __litsxScopedTemplate(
+          html`<first-request-card></first-request-card>`,
+          {
+            "first-request-card": FirstRequestCard,
+          },
+        ),
+      ),
+    );
+    const secondRender = renderToString(
+      secondValue.promise.then(() =>
+        __litsxScopedTemplate(
+          html`<second-request-card></second-request-card>`,
+          {
+            "second-request-card": SecondRequestCard,
+          },
+        ),
+      ),
+    );
+
+    secondValue.resolve();
+    firstValue.resolve();
+
+    const [firstResult, secondResult] = await Promise.all([firstRender, secondRender]);
+
+    assert.strictEqual(seenContexts.length, 2);
+    assert.ok(seenContexts[0]);
+    assert.ok(seenContexts[1]);
+    assert.notStrictEqual(seenContexts[0], seenContexts[1]);
+    assert.match(firstResult.html, /data-request="alpha"/);
+    assert.match(secondResult.html, /data-request="beta"/);
+  });
+
+  it("does not leak execution context state between SSR requests", async () => {
+    const REQUEST_COUNT_KEY = createExecutionContextKey("request-count");
+
+    class RequestCounter extends LitElement {
+      render() {
+        const executionContext = getCurrentExecutionContext();
+        const nextCount = (executionContext?.get(REQUEST_COUNT_KEY) ?? 0) + 1;
+        executionContext?.set(REQUEST_COUNT_KEY, nextCount);
+        return html`<span data-request-count=${nextCount}>${nextCount}</span>`;
+      }
+    }
+
+    const firstResult = await renderToString(
+      __litsxScopedTemplate(
+        html`<request-counter></request-counter>`,
+        {
+          "request-counter": RequestCounter,
+        },
+      ),
+    );
+    const secondResult = await renderToString(
+      __litsxScopedTemplate(
+        html`<request-counter></request-counter>`,
+        {
+          "request-counter": RequestCounter,
+        },
+      ),
+    );
+
+    assert.match(firstResult.html, /data-request-count="1"/);
+    assert.match(secondResult.html, /data-request-count="1"/);
   });
 });

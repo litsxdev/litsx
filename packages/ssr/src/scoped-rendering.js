@@ -144,6 +144,7 @@ export function createScopedSsrContext(options = {}) {
     idPrefix: options.idPrefix ?? "litsx",
     assetResolver:
       typeof options.assetResolver === "function" ? options.assetResolver : null,
+    executionContext: options.executionContext ?? null,
     clientImports: new Set(),
     hydrationData: {
       version: 1,
@@ -267,6 +268,7 @@ export class ScopedLitElementRenderer extends LitElementRenderer {
 
     this.element[LITSX_SSR_CONTEXT] = {
       context,
+      executionContext: context.executionContext ?? null,
       idPrefix: context.idPrefix,
       currentInstanceId: context.nextInstanceId(),
       rootId,

@@ -19,6 +19,14 @@ export type LitsxRenderable =
   | Iterable<unknown>;
 
 export type LitsxRef<T> = T | ((value: T | null) => void) | null;
+export interface ExecutionContextKey<T> {
+  readonly __brand?: T;
+}
+export interface LitsxExecutionContext {
+  get<T>(key: ExecutionContextKey<T>): T | undefined;
+  set<T>(key: ExecutionContextKey<T>, value: T): void;
+  has<T>(key: ExecutionContextKey<T>): boolean;
+}
 export declare const LITSX_HOOK: unique symbol;
 export declare const LITSX_COMPONENT: unique symbol;
 export declare const LITSX_HOST_TYPE_ID: unique symbol;
@@ -279,6 +287,14 @@ export declare function collectSoftSuspenseThenables<T>(
   collector: { add(thenable: Promise<unknown>): void },
   render: () => T
 ): T;
+
+export declare function createExecutionContextKey<T>(
+  description?: string
+): ExecutionContextKey<T>;
+
+export declare function getCurrentExecutionContext():
+  | LitsxExecutionContext
+  | null;
 
 export declare class SsrEffectsController {
   constructor(
