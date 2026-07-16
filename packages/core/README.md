@@ -31,6 +31,9 @@ SSR support used by [`@litsx/ssr`](../ssr/README.md) also lives here: scoped-tem
 - Async and error primitives:
   - `ErrorBoundary`, `SuspenseBoundary`, `SuspenseList`
   - `ensureLazyElement(...)` for host-registry-aware lazy custom element registration
+- SSR request execution context:
+  - `createExecutionContextKey(...)`
+  - `getCurrentExecutionContext()`
 - Structural host middleware infrastructure:
   - `HostMiddlewareRuntime`
   - `HostMiddlewareMixin`
@@ -91,6 +94,44 @@ Layout work runs immediately during `hostUpdated()`, while passive effects are d
 - You can mix manual registrations and transformed ones. Each Lit element instance gets its own `EffectsController` behind the scenes.
 
 The helpers are framework agnostic: they only assume that the host object exposes Lit’s controller lifecycle (`addController`, `hostUpdated`, `hostDisconnected`).
+
+## SSR Execution Context
+
+During LitSX SSR, `@litsx/ssr` creates one execution context for each public
+render request. That execution context:
+
+- stays stable across suspense retries for the same request
+- is shared by nested server-component calls in that request
+- is not modeled through DOM providers or context elements
+- returns `null` when no SSR request is active
+
+Create an opaque key once:
+
+```js
+import {
+  createExecutionContextKey,
+  getCurrentExecutionContext,
+} from "@litsx/core";
+
+const USER_KEY = createExecutionContextKey("user");
+```
+
+Write and read during SSR:
+
+```js
+export async function ProductPage() {
+  getCurrentExecutionContext()?.set(USER_KEY, { id: "123" });
+  return <AppRoot />;
+}
+
+function readUser() {
+  return getCurrentExecutionContext()?.get(USER_KEY) ?? null;
+}
+```
+
+`@litsx/ssr` creates this execution context internally. It is separate from the
+SSR metadata config passed as `options.context` to `renderToString(...)`,
+`renderDocument(...)`, or `renderToStream(...)`.
 
 ## Stable Callsite Identity
 

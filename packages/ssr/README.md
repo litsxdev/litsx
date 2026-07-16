@@ -214,6 +214,36 @@ metadata helpers as `renderToString(...)` once rendering has completed.
 when you want to stream authored LitSX SSR without first constructing the
 render value yourself.
 
+## Request Execution Context
+
+Each public SSR call (`renderToString(...)`, `renderDocument(...)`, and
+`renderToStream(...)`) creates one request-scoped execution context
+internally. That execution context is:
+
+- stable for the entire SSR request
+- reused across suspense retries in that request
+- shared by nested server-component calls in that request
+- isolated from concurrent requests
+
+Read it from runtime or hooks with `@litsx/core`:
+
+```js
+import {
+  createExecutionContextKey,
+  getCurrentExecutionContext,
+} from "@litsx/core";
+
+const USER_KEY = createExecutionContextKey("user");
+
+export async function ProductPage(props, ssrContext) {
+  getCurrentExecutionContext()?.set(USER_KEY, { id: "123" });
+  return <AppRoot />;
+}
+```
+
+`options.context` in `@litsx/ssr` remains SSR metadata config such as
+`idPrefix`. It is not the request execution context and does not inject one.
+
 ## Dev Helper
 
 `@litsx/ssr` also exposes `createSsrDevServer(...)` for authored LitSX SSR
