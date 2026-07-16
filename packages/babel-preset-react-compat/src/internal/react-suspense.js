@@ -122,13 +122,32 @@ export default declare((api) => {
     const bodyPath = renderMethod.get("body");
     if (!bodyPath.isBlockStatement()) return [];
 
+    let statementContainer = bodyPath;
+    const renderStatements = bodyPath.get("body");
+    const soleStatement = renderStatements.length === 1 ? renderStatements[0] : null;
+    if (
+      soleStatement?.isReturnStatement() &&
+      soleStatement.get("argument").isCallExpression()
+    ) {
+      const callPath = soleStatement.get("argument");
+      const callbackPath = callPath.get("arguments").find((argumentPath) =>
+        argumentPath.isArrowFunctionExpression() || argumentPath.isFunctionExpression()
+      );
+      if (callbackPath) {
+        const callbackBody = callbackPath.get("body");
+        if (callbackBody.isBlockStatement()) {
+          statementContainer = callbackBody;
+        }
+      }
+    }
+
     const renderedTags = collectRenderedTags(path);
     if (renderedTags.size === 0) return [];
 
     const taken = [];
     const remaining = [];
 
-    for (const statement of bodyPath.node.body) {
+    for (const statement of statementContainer.node.body) {
       if (!isEnsureLazyCall(statement)) {
         remaining.push(statement);
         continue;
@@ -143,7 +162,7 @@ export default declare((api) => {
       taken.push(t.cloneNode(statement, true));
     }
 
-    bodyPath.node.body = remaining;
+    statementContainer.node.body = remaining;
 
     return taken;
   }
