@@ -3,6 +3,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { collectSoftSuspenseThenables } from "@litsx/core";
 import { __litsxScopedTemplate } from "@litsx/core/elements";
+import { withCurrentSsrRuntimeState } from "./ssr-state.js";
 
 /**
  * Default JSON script id used by `renderClientImportsData()`.
@@ -536,7 +537,24 @@ async function createSsrContext(options) {
   return createScopedSsrContext({
     idPrefix: options.context?.idPrefix,
     assetResolver: options.assetResolver,
+    executionContext: options.executionContext,
   });
+}
+
+function createExecutionContext() {
+  const store = new Map();
+
+  return {
+    get(key) {
+      return store.get(key);
+    },
+    set(key, value) {
+      store.set(key, value);
+    },
+    has(key) {
+      return store.has(key);
+    },
+  };
 }
 
 async function renderResolvedValue(value, context) {
@@ -565,28 +583,34 @@ function normalizeMaxSuspensePasses(value) {
 
 async function renderResolvedValueWithSoftSuspense(value, options) {
   const maxPasses = normalizeMaxSuspensePasses(options.maxSuspensePasses);
+  const executionContext = createExecutionContext();
 
-  for (let pass = 0; pass < maxPasses; pass += 1) {
-    const context = await createSsrContext(options);
-    const pendingThenables = new Set();
-    const html = await collectSoftSuspenseThenables(pendingThenables, async () =>
-      renderResolvedValue(
-        normalizeSsrRenderable(await Promise.resolve(value), options.elements),
-        context,
-      )
-    );
+  return withCurrentSsrRuntimeState({ executionContext }, async () => {
+    for (let pass = 0; pass < maxPasses; pass += 1) {
+      const context = await createSsrContext({
+        ...options,
+        executionContext,
+      });
+      const pendingThenables = new Set();
+      const html = await collectSoftSuspenseThenables(pendingThenables, async () =>
+        renderResolvedValue(
+          normalizeSsrRenderable(await Promise.resolve(value), options.elements),
+          context,
+        )
+      );
 
-    if (pendingThenables.size === 0) {
-      return { html, context };
+      if (pendingThenables.size === 0) {
+        return { html, context };
+      }
+
+      await Promise.all([...pendingThenables]);
     }
 
-    await Promise.all([...pendingThenables]);
-  }
-
-  throw new Error(
-    `LitSX SSR exceeded ${maxPasses} suspense render passes. ` +
-      "A rootless async hook is still suspending after every retry."
-  );
+    throw new Error(
+      `LitSX SSR exceeded ${maxPasses} suspense render passes. ` +
+        "A rootless async hook is still suspending after every retry."
+    );
+  });
 }
 
 /**

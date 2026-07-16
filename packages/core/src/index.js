@@ -17,6 +17,10 @@ export {
   renderWithSoftSuspense,
 } from "./runtime-suspense.js";
 export {
+  createExecutionContextKey,
+  getCurrentExecutionContext,
+} from "./execution-context.js";
+export {
   LITSX_HOOK,
   isLitsxHook,
 } from "./hook-metadata.js";
