@@ -3,6 +3,15 @@ export interface LitsxSsrContext {
    * Prefix used when generating SSR root ids and hook instance ids.
    */
   idPrefix?: string;
+
+  /**
+   * Request-scoped SSR metadata only.
+   *
+   * This config does not expose or carry the LitSX execution context.
+   * A fresh execution context is created internally for each public SSR call
+   * and can be reached during that render through
+   * `getCurrentExecutionContext()` from `@litsx/core`.
+   */
 }
 
 /**
@@ -54,6 +63,13 @@ export interface LitsxSsrBootstrapScript {
  * LitSX SSR component model by default.
  */
 export interface LitsxSsrRenderOptions {
+  /**
+   * SSR metadata and id-generation configuration for this render.
+   *
+   * This is distinct from the request execution context exposed by
+   * `@litsx/core`. Callers do not inject an execution context through
+   * `@litsx/ssr`; LitSX creates one internally per SSR request/render.
+   */
   context?: LitsxSsrContext;
   assetResolver?: LitsxSsrAssetResolver;
   /**

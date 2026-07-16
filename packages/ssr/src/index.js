@@ -532,12 +532,12 @@ async function resolveAuthoredRenderInput(options = {}) {
   };
 }
 
-async function createSsrContext(options) {
+async function createSsrContext(options, executionContext) {
   const { createScopedSsrContext } = await loadSsrRuntime();
   return createScopedSsrContext({
     idPrefix: options.context?.idPrefix,
     assetResolver: options.assetResolver,
-    executionContext: options.executionContext,
+    executionContext,
   });
 }
 
@@ -587,10 +587,7 @@ async function renderResolvedValueWithSoftSuspense(value, options) {
 
   return withCurrentSsrRuntimeState({ executionContext }, async () => {
     for (let pass = 0; pass < maxPasses; pass += 1) {
-      const context = await createSsrContext({
-        ...options,
-        executionContext,
-      });
+      const context = await createSsrContext(options, executionContext);
       const pendingThenables = new Set();
       const html = await collectSoftSuspenseThenables(pendingThenables, async () =>
         renderResolvedValue(

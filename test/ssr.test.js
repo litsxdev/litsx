@@ -1125,6 +1125,76 @@ describe("@litsx/ssr", () => {
     assert.match(result.html, />123</);
   });
 
+  it("returns null for getCurrentExecutionContext when SSR is not active", async () => {
+    assert.strictEqual(getCurrentExecutionContext(), null);
+  });
+
+  it("exposes the same execution context to nested server-component calls", async () => {
+    const REQUEST_KEY = createExecutionContextKey("request");
+    const seenContexts = [];
+
+    async function ProductSection(_props, ssrContext) {
+      const executionContext = getCurrentExecutionContext();
+      seenContexts.push(executionContext);
+      assert.ok(ssrContext);
+      executionContext?.set(REQUEST_KEY, "nested");
+      return html`<span data-section-request=${executionContext?.get(REQUEST_KEY)}>section</span>`;
+    }
+
+    async function ProductPage(_props, ssrContext) {
+      const executionContext = getCurrentExecutionContext();
+      seenContexts.push(executionContext);
+      assert.ok(ssrContext);
+      executionContext?.set(REQUEST_KEY, "root");
+      return html`
+        <main data-page-request=${executionContext?.get(REQUEST_KEY)}>
+          ${__litsxServerComponentCall(ProductSection, {})}
+        </main>
+      `;
+    }
+
+    const result = await renderToString(__litsxServerComponentCall(ProductPage, {}));
+
+    assert.strictEqual(seenContexts.length, 2);
+    assert.ok(seenContexts[0]);
+    assert.strictEqual(seenContexts[0], seenContexts[1]);
+    assert.match(result.html, /data-page-request="root"/);
+    assert.match(result.html, /data-section-request="nested"/);
+  });
+
+  it("allows indirect execution-context reads from custom hooks and runtime helpers during SSR", async () => {
+    const USER_KEY = createExecutionContextKey("user");
+
+    function useCurrentUserId(host) {
+      return useMemoValue(
+        host,
+        () => getCurrentExecutionContext()?.get(USER_KEY)?.id ?? "missing",
+        [],
+      );
+    }
+
+    class UserSummary extends LitElement {
+      render() {
+        prepareEffects(this);
+        getCurrentExecutionContext()?.set(USER_KEY, { id: "hook-user" });
+        const userId = useCurrentUserId(this);
+        return html`<span data-hook-user=${userId}>${userId}</span>`;
+      }
+    }
+
+    const result = await renderToString(
+      __litsxScopedTemplate(
+        html`<user-summary></user-summary>`,
+        {
+          "user-summary": UserSummary,
+        },
+      ),
+    );
+
+    assert.match(result.html, /data-hook-user="hook-user"/);
+    assert.match(result.html, />hook-user</);
+  });
+
   it("reuses the same execution context across suspense retries", async () => {
     const RETRY_KEY = createExecutionContextKey("retry-count");
     const ready = createDeferred();
