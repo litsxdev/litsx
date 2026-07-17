@@ -544,6 +544,26 @@ function collectStaticHoistIssues(ast, virtualization) {
           seenSingletonHoists.set(macroName, node);
         }
       }
+
+      if (
+        macroName === "styles" &&
+        node.arguments?.length === 1 &&
+        node.arguments[0]?.type === "TaggedTemplateExpression"
+      ) {
+        issues.push(
+          createOriginalIssue(virtualization, {
+            kind: "unsupported-static-styles-tagged-template",
+            severity: "error",
+            code: 91025,
+            start: node.start ?? 0,
+            length: Math.max(0, (node.end ?? node.start ?? 0) - (node.start ?? 0)),
+            message:
+              "static styles = ... must use a direct template literal such as " +
+              "static styles = `...`. Tagged templates such as static styles = " +
+              "css`...` are not supported.",
+          })
+        );
+      }
     }
 
     for (const [key, value] of Object.entries(node)) {
@@ -889,6 +909,50 @@ function parseAuthoredAst(sourceText, options = {}) {
       error,
     };
   }
+}
+
+function collectTemplateInterpolationBindingIssues(sourceText) {
+  if (typeof sourceText !== "string" || sourceText.length === 0) {
+    return [];
+  }
+
+  const issues = [];
+  const bindingRe = /([@.?][A-Za-z$_][A-Za-z0-9$_-]*)\s*=\s*\$\{/g;
+
+  for (const match of sourceText.matchAll(bindingRe)) {
+    const attributeName = match[1];
+    const prefix = attributeName[0];
+    const start = match.index ?? 0;
+    let message;
+
+    if (prefix === "@") {
+      message =
+        `Lit listener binding "${attributeName}" must use JSX expression syntax, ` +
+        `for example ${attributeName}={handler}, not Lit template interpolation ` +
+        `syntax like ${attributeName}=\${handler}.`;
+    } else if (prefix === ".") {
+      message =
+        `Lit property binding "${attributeName}" must use JSX expression syntax, ` +
+        `for example ${attributeName}={value}, not Lit template interpolation ` +
+        `syntax like ${attributeName}=\${value}.`;
+    } else {
+      message =
+        `Lit boolean binding "${attributeName}" must use bare or JSX expression ` +
+        `syntax, for example ${attributeName} or ${attributeName}={condition}, not ` +
+        `Lit template interpolation syntax like ${attributeName}=\${condition}.`;
+    }
+
+    issues.push({
+      kind: "invalid-binding-template-interpolation",
+      severity: "error",
+      code: 91024,
+      start,
+      length: attributeName.length,
+      message,
+    });
+  }
+
+  return issues;
 }
 
 function inferEmitAliases(functionNode) {
@@ -1491,6 +1555,11 @@ export function collectLitsxAuthoredIssues(sourceText, options = {}) {
   const channel = options.channel === "eslint" ? "eslint" : options.channel === "all" ? "all" : "typescript";
   const { virtualization, ast, error } = parseAuthoredAst(sourceText, options);
   if (!ast) {
+    const interpolationIssues = collectTemplateInterpolationBindingIssues(sourceText);
+    if (interpolationIssues.length > 0) {
+      return interpolationIssues;
+    }
+
     return [
       createOriginalIssue(virtualization, {
         kind: "parse-error",

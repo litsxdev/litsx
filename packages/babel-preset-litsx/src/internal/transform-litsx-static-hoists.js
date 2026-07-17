@@ -352,6 +352,13 @@ function getStaticStylesExpression(statement, functionPath) {
     throw new Error("static styles = ... only accepts static values. Move dynamic values to useStyle(...) or CSS custom properties.");
   }
 
+  if (isHoistedStyles && t.isTaggedTemplateExpression(argument)) {
+    throw new Error(
+      "static styles = ... must use a direct template literal such as static styles = `...`. " +
+      "Tagged templates such as static styles = css`...` are not supported."
+    );
+  }
+
   const template = normalizeStylesTemplate(
     argument,
     functionPath

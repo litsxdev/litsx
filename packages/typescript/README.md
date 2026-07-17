@@ -64,6 +64,20 @@ For a workspace using the local package directly, the same shape works in `tscon
 
 VS Code picks this up through the bundled TypeScript server when the workspace is using the project `tsconfig.json`.
 
+For VS Code specifically, make sure the workspace is using the local TypeScript
+SDK and that the syntax server is disabled for this workspace:
+
+```json
+{
+  "js/ts.tsdk.path": "node_modules/typescript/lib",
+  "typescript.tsserver.useSyntaxServer": "never"
+}
+```
+
+If `@click={...}`, `.value={...}`, or `?disabled={...}` still show raw syntax
+errors in the editor, the LitSX TypeScript plugin usually is not being loaded
+for that file yet.
+
 ## Exports
 
 - `@litsx/typescript`

@@ -1958,6 +1958,32 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
     }, /static styles = \.\.\. only accepts static values/);
   });
 
+  it("rejects tagged template static styles hoists in authored components", () => {
+    const source = `
+      import { css } from "lit";
+
+      const Panel = () => {
+        static styles = css\`
+          :host {
+            display: block;
+          }
+        \`;
+
+        return <section>panel</section>;
+      };
+    `;
+
+    const inputAst = parser.parse(source, { sourceType: "module" });
+
+    assert.throws(() => {
+      transformFromAstSync(inputAst, source, {
+        configFile: false,
+        babelrc: false,
+        presets: [[nativePreset, { jsxTemplate: false }]],
+      });
+    }, /must use a direct template literal[\s\S]*css`/);
+  });
+
   it("rejects static styles interpolations that read props members directly", () => {
     const source = `
       export function Panel(props) {

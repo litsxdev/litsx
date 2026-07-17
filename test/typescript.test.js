@@ -524,6 +524,53 @@ describe("@litsx/typescript", () => {
     assert.match(diagnostics[2].messageText, /must be bare or use an expression/);
   });
 
+  it("reports a specific diagnostic when JSX bindings use Lit template interpolation syntax", () => {
+    const source = `
+      const view = (
+        <button
+          @click=\${handleClick}
+          .value=\${value}
+          ?disabled=\${busy}
+        />
+      );
+    `;
+    const diagnostics = collectLitsxAuthoredDiagnostics(source, {
+      DiagnosticCategory: {
+        Error: 1,
+      },
+    }, {
+      plugins: ["typescript"],
+    });
+
+    assert.strictEqual(diagnostics.length, 3);
+    assert.ok(diagnostics.every((diagnostic) => diagnostic.code === 91024));
+    assert.match(diagnostics[0].messageText, /must use JSX expression syntax/);
+    assert.match(diagnostics[0].messageText, /not Lit template interpolation syntax/);
+    assert.match(diagnostics[1].messageText, /\.value=\$\{value\}/);
+    assert.match(diagnostics[2].messageText, /\?disabled=\$\{condition\}/);
+  });
+
+  it("reports a specific diagnostic when static styles uses a tagged template", () => {
+    const source = `
+      export function Card() {
+        static styles = css\`:host { display: block; }\`;
+        return <div />;
+      }
+    `;
+    const diagnostics = collectLitsxAuthoredDiagnostics(source, {
+      DiagnosticCategory: {
+        Error: 1,
+      },
+    }, {
+      plugins: ["typescript"],
+    });
+
+    assert.strictEqual(diagnostics.length, 1);
+    assert.strictEqual(diagnostics[0].code, 91025);
+    assert.match(diagnostics[0].messageText, /must use a direct template literal/);
+    assert.match(diagnostics[0].messageText, /css`/);
+  });
+
   it("surfaces authored parse errors and filters eslint-only issues by channel", () => {
     const parseIssues = collectLitsxAuthoredIssues("<button @click={}></button>");
     assert.strictEqual(parseIssues.length, 1);
