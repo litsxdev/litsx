@@ -1,5 +1,17 @@
 # litsx
 
+## 0.15.0
+
+### Minor Changes
+
+- 1dfa4f1: Add structural hook `props` support so shared host properties can participate in component surface metadata alongside runtime `accessors`.
+
+### Patch Changes
+
+- 576eabd: Mark built-in boundary elements with LitSX component metadata so downstream compilers can verify `ErrorBoundary`, `SuspenseBoundary`, and `SuspenseList` imports from compiled `@litsx/core` packages without emitting external PascalCase inference warnings.
+- bae18f0: Resync FACE validity state from live `ElementInternals` data during render so hosts expose up-to-date `validity` and `validationMessage` values even after prior validation errors are cleared outside the hook entrypoints.
+- 576eabd: Accept native form-specific listener bindings on intrinsic `<form>` elements. `@reset` and `@formdata` are now part of the known authored event set, and the corresponding JSX event props are typed with `currentTarget: HTMLFormElement`.
+
 ## 0.14.0
 
 ### Minor Changes

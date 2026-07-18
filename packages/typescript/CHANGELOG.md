@@ -1,5 +1,11 @@
 # @litsx/typescript
 
+## 0.8.3
+
+### Patch Changes
+
+- 576eabd: Accept native form-specific listener bindings on intrinsic `<form>` elements. `@reset` and `@formdata` are now part of the known authored event set, and the corresponding JSX event props are typed with `currentTarget: HTMLFormElement`.
+
 ## 0.8.2
 
 ### Patch Changes

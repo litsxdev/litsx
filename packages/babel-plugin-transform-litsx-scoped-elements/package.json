@@ -1,6 +1,6 @@
 {
   "name": "@litsx/babel-plugin-transform-litsx-scoped-elements",
-  "version": "0.4.7",
+  "version": "0.4.8",
   "description": "Transforms LitElement classes to include scoped elements metadata",
   "author": "LitSX Team",
   "main": "./dist/index.cjs",
@@ -42,7 +42,7 @@
   },
   "dependencies": {
     "@babel/plugin-syntax-jsx": "^7.28.6",
-    "@litsx/babel-plugin-shared-hooks": "^0.6.3",
+    "@litsx/babel-plugin-shared-hooks": "^0.7.0",
     "@litsx/typescript-session": "^0.2.3"
   },
   "devDependencies": {

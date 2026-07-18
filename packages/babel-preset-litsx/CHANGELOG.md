@@ -1,5 +1,17 @@
 # @litsx/babel-preset-litsx
 
+## 0.14.0
+
+### Minor Changes
+
+- 1dfa4f1: Add structural hook `props` support so shared host properties can participate in component surface metadata alongside runtime `accessors`.
+
+### Patch Changes
+
+- Updated dependencies [1dfa4f1]
+  - @litsx/babel-plugin-shared-hooks@0.7.0
+  - @litsx/babel-plugin-transform-litsx-scoped-elements@0.4.8
+
 ## 0.13.3
 
 ### Patch Changes

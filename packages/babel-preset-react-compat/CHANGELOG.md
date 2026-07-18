@@ -1,5 +1,14 @@
 # @litsx/babel-preset-react-compat
 
+## 0.5.5
+
+### Patch Changes
+
+- Updated dependencies [1dfa4f1]
+  - @litsx/babel-preset-litsx@0.14.0
+  - @litsx/babel-plugin-shared-hooks@0.7.0
+  - @litsx/babel-plugin-transform-litsx-scoped-elements@0.4.8
+
 ## 0.5.4
 
 ### Patch Changes

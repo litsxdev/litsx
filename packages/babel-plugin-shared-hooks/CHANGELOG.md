@@ -1,5 +1,11 @@
 # @litsx/babel-plugin-shared-hooks
 
+## 0.7.0
+
+### Minor Changes
+
+- 1dfa4f1: Add structural hook `props` support so shared host properties can participate in component surface metadata alongside runtime `accessors`.
+
 ## 0.6.3
 
 ### Patch Changes

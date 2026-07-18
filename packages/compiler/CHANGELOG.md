@@ -1,5 +1,14 @@
 # @litsx/compiler
 
+## 0.9.3
+
+### Patch Changes
+
+- Updated dependencies [576eabd]
+- Updated dependencies [1dfa4f1]
+  - @litsx/typescript@0.8.3
+  - @litsx/babel-preset-litsx@0.14.0
+
 ## 0.9.2
 
 ### Patch Changes
