@@ -310,6 +310,21 @@ export function useRef(host, initialValue) {
  * Note: this currently guarantees client-side stability only. SSR/hydration
  * compatibility will require a deterministic prefixing strategy shared across
  * server and client renders.
+ * @usage Use useId when a component needs a unique per-instance id for authored DOM relationships such as `for`, `aria-labelledby`, or `aria-describedby`.
+ * @usage Prefer useStableId when identity should follow one authored hook callsite across SSR and hydration, and useHostTypeId when identity should follow the component type itself.
+ * @behavior Returns one stable id for the lifetime of the current host instance.
+ * @behavior Different instances of the same component receive different values.
+ * @mentalModel useId gives each mounted component instance its own local id namespace for DOM wiring.
+ * @pitfall Do not use this for cache keys, preload identity, or SSR-stable structural resources. Its contract is instance-scoped, not callsite-scoped.
+ * @example
+ * const inputId = useId();
+ *
+ * return (
+ *   <>
+ *     <label for={inputId}>Email</label>
+ *     <input id={inputId} type="email" />
+ *   </>
+ * );
  * @param {import('lit').ReactiveControllerHost} host
  * @returns {string}
  */
