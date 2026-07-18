@@ -36,26 +36,10 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Setup Node.js
-        if: matrix.language == 'javascript-typescript'
-        uses: actions/setup-node@v6
-        with:
-          node-version: 20
-
-      - name: Enable Corepack
-        if: matrix.language == 'javascript-typescript'
-        run: |
-          corepack enable
-          corepack prepare yarn@4.10.3 --activate
-
-      - name: Install dependencies
-        if: matrix.language == 'javascript-typescript'
-        run: corepack yarn install --immutable
-
       - name: Prepare LitSX CodeQL overlay
         id: litsx
         if: matrix.language == 'javascript-typescript'
-        uses: litsxdev/litsx-codeql-preprocess@v0.1.0
+        uses: litsxdev/litsx-codeql-preprocess@v0
 
       - name: Initialize CodeQL for workflow analysis
         if: matrix.language == 'actions'
