@@ -36,11 +36,40 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Initialize CodeQL
+      - name: Setup Node.js
+        if: matrix.language == 'javascript-typescript'
+        uses: actions/setup-node@v6
+        with:
+          node-version: 20
+
+      - name: Enable Corepack
+        if: matrix.language == 'javascript-typescript'
+        run: |
+          corepack enable
+          corepack prepare yarn@4.10.3 --activate
+
+      - name: Install dependencies
+        if: matrix.language == 'javascript-typescript'
+        run: corepack yarn install --immutable
+
+      - name: Build CodeQL overlay
+        if: matrix.language == 'javascript-typescript'
+        run: corepack yarn codeql:prepare
+
+      - name: Initialize CodeQL for workflow analysis
+        if: matrix.language == 'actions'
         uses: github/codeql-action/init@v4
         with:
           languages: ${{ matrix.language }}
           build-mode: ${{ matrix.build-mode }}
+
+      - name: Initialize CodeQL for JavaScript/TypeScript
+        if: matrix.language == 'javascript-typescript'
+        uses: github/codeql-action/init@v4
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+          config-file: .github/codeql/javascript-typescript.yml
 
       - name: Perform CodeQL analysis
         uses: github/codeql-action/analyze@v4

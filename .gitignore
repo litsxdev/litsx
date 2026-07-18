@@ -144,3 +144,6 @@ packages/dx-smoke-app/
 
 # Local release preflight snapshots
 .changeset/preflight-status.json
+
+# Local CodeQL overlay
+.codeql-overlay/
