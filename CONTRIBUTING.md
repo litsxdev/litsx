@@ -39,10 +39,11 @@ Packages outside npm publication do not need changesets:
 - `@litsx/vitepress`
 - `test/fixtures/dx-smoke-app`
 
-Recommended commit style:
+Commit style:
 
-- use conventional commit subjects where practical
+- use Conventional Commits subjects for every commit
 - prefer scopes that match the affected package or area
+- do not use unscoped free-form subjects when a conventional type applies
 
 Examples:
 
