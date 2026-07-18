@@ -1,4 +1,0 @@
-name: LitSX JavaScript/TypeScript overlay
-
-paths:
-  - .codeql-overlay

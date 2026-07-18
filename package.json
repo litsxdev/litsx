@@ -54,7 +54,6 @@
   "scripts": {
     "build": "yarn workspaces run build",
     "test": "vitest run",
-    "codeql:prepare": "node scripts/codeql/build-virtual-source.js",
     "test:browser:scoped-registry": "vitest run --config test/vitest.browser-repro.config.js",
     "test:transforms": "LITSX_VITEST_TRANSFORMS=1 vitest run",
     "bench:transform-litsx": "node scripts/bench/transform-litsx.js",
