@@ -31,6 +31,11 @@ const ATTRIBUTE_PASSTHROUGH_NAMES = new Set([
   "tabindex",
   "tabIndex",
 ]);
+const DANGEROUS_OBJECT_KEYS = new Set([
+  "__proto__",
+  "constructor",
+  "prototype",
+]);
 
 export function setTemplateTypes(types) {
   t = types;
@@ -172,6 +177,10 @@ function lowerEmbeddedJsx(node, opts) {
   }
 
   for (const key of visitorKeys) {
+    if (DANGEROUS_OBJECT_KEYS.has(key)) {
+      continue;
+    }
+
     const value = node[key];
     if (Array.isArray(value)) {
       node[key] = value.map((child) => lowerEmbeddedJsx(child, opts));

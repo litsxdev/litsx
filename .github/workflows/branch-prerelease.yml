@@ -45,15 +45,17 @@ jobs:
       - name: Compute branch snapshot tag
         id: tag
         if: steps.gate.outputs.ready == 'true'
-        shell: bash
-        run: |
-          branch="${{ github.event.workflow_run.head_branch }}"
-          sanitized="$(printf '%s' "$branch" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//; s/-+/-/g')"
-          sanitized="${sanitized:0:80}"
-          if [ -z "$sanitized" ]; then
-            sanitized="branch"
-          fi
-          echo "snapshot_tag=canary-${sanitized}" >> "$GITHUB_OUTPUT"
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const branch = context.payload.workflow_run?.head_branch || "";
+            const sanitized = branch
+              .toLowerCase()
+              .replace(/[^a-z0-9]+/g, "-")
+              .replace(/^-+|-+$/g, "")
+              .replace(/-+/g, "-")
+              .slice(0, 80) || "branch";
+            core.setOutput("snapshot_tag", `canary-${sanitized}`);
 
       - name: Checkout repository
         if: steps.gate.outputs.ready == 'true'
@@ -74,17 +76,6 @@ jobs:
         run: |
           corepack enable
           corepack prepare yarn@4.10.3 --activate
-
-      - name: Cache Yarn state
-        if: steps.gate.outputs.ready == 'true'
-        uses: actions/cache@v5
-        with:
-          path: |
-            .yarn/install-state.gz
-            .yarn-cache
-          key: ${{ runner.os }}-yarn4-${{ hashFiles('yarn.lock', '.yarnrc.yml', 'package.json') }}
-          restore-keys: |
-            ${{ runner.os }}-yarn4-
 
       - name: Install dependencies
         if: steps.gate.outputs.ready == 'true'
@@ -127,16 +118,6 @@ jobs:
         run: |
           corepack enable
           corepack prepare yarn@4.10.3 --activate
-
-      - name: Cache Yarn state
-        uses: actions/cache@v5
-        with:
-          path: |
-            .yarn/install-state.gz
-            .yarn-cache
-          key: ${{ runner.os }}-yarn4-${{ hashFiles('yarn.lock', '.yarnrc.yml', 'package.json') }}
-          restore-keys: |
-            ${{ runner.os }}-yarn4-
 
       - name: Install dependencies
         run: corepack yarn install --immutable

@@ -96,17 +96,6 @@ jobs:
           corepack enable
           corepack prepare yarn@4.10.3 --activate
 
-      - name: Cache Yarn state
-        if: steps.gate.outputs.ready == 'true' && (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success')
-        uses: actions/cache@v5
-        with:
-          path: |
-            .yarn/install-state.gz
-            .yarn-cache
-          key: ${{ runner.os }}-yarn4-${{ hashFiles('yarn.lock', '.yarnrc.yml', 'package.json') }}
-          restore-keys: |
-            ${{ runner.os }}-yarn4-
-
       - name: Install dependencies
         if: steps.gate.outputs.ready == 'true' && (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success')
         run: corepack yarn install --immutable
@@ -161,16 +150,6 @@ jobs:
         run: |
           corepack enable
           corepack prepare yarn@4.10.3 --activate
-
-      - name: Cache Yarn state
-        uses: actions/cache@v5
-        with:
-          path: |
-            .yarn/install-state.gz
-            .yarn-cache
-          key: ${{ runner.os }}-yarn4-${{ hashFiles('yarn.lock', '.yarnrc.yml', 'package.json') }}
-          restore-keys: |
-            ${{ runner.os }}-yarn4-
 
       - name: Install dependencies
         run: corepack yarn install --immutable

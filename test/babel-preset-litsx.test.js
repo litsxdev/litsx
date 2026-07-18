@@ -1059,6 +1059,31 @@ describe("@litsx/babel-preset-litsx", () => {
 
     assert.strictEqual(
       detectLitsxSourceFeatures(
+        [
+          'import {',
+          '  useDemo as useScopedDemo,',
+          '} from "./use-demo";',
+          "export function App() { return useScopedDemo(); }",
+        ].join("\n"),
+        {},
+      ).hooks,
+      true,
+    );
+
+    assert.strictEqual(
+      detectLitsxSourceFeatures(
+        [
+          'import * as sharedHooks',
+          '  from "./use-demo";',
+          "export function App() { return sharedHooks.useScopedDemo(); }",
+        ].join("\n"),
+        {},
+      ).hooks,
+      true,
+    );
+
+    assert.strictEqual(
+      detectLitsxSourceFeatures(
         'function useFormat(value) { return String(value); } export function App() { return useFormat("x"); }',
         {},
       ).hooks,

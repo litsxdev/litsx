@@ -180,6 +180,27 @@ function createStructuralHookResolver(options = {}) {
     return null;
   }
 
+  function resolvePathMappingSubstitution(substitution, wildcardValue) {
+    if (typeof substitution !== "string") {
+      return null;
+    }
+
+    const firstStarIndex = substitution.indexOf("*");
+    if (firstStarIndex === -1) {
+      return substitution;
+    }
+
+    if (substitution.indexOf("*", firstStarIndex + 1) !== -1) {
+      return null;
+    }
+
+    return (
+      substitution.slice(0, firstStarIndex) +
+      wildcardValue +
+      substitution.slice(firstStarIndex + 1)
+    );
+  }
+
   function resolvePathAlias(containingFile, source) {
     const compilerOptions = getCompilerOptions(containingFile) || {};
     const baseUrl = compilerOptions.baseUrl
@@ -211,8 +232,11 @@ function createStructuralHookResolver(options = {}) {
 
       for (const substitution of substitutions || []) {
         const substituted = isStarPattern
-          ? substitution.replace("*", wildcardValue)
+          ? resolvePathMappingSubstitution(substitution, wildcardValue)
           : substitution;
+        if (!substituted) {
+          continue;
+        }
         const candidateBase = path.isAbsolute(substituted)
           ? substituted
           : path.join(baseUrl, substituted);

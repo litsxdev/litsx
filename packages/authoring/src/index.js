@@ -607,8 +607,70 @@ export function remapVirtualText(text) {
 }
 
 export function looksLikeLitsxJsx(sourceText) {
+  if (typeof sourceText !== "string") {
+    return false;
+  }
+
+  let hasLitLikeAttributeTag = false;
+  let tagStart = -1;
+  let insideString = null;
+  let sawWhitespaceAfterTagName = false;
+
+  for (let index = 0; index < sourceText.length; index += 1) {
+    const char = sourceText[index];
+
+    if (insideString) {
+      if (char === "\\" && index + 1 < sourceText.length) {
+        index += 1;
+        continue;
+      }
+      if (char === insideString) {
+        insideString = null;
+      }
+      continue;
+    }
+
+    if (char === "\"" || char === "'" || char === "`") {
+      insideString = char;
+      continue;
+    }
+
+    if (tagStart === -1) {
+      if (
+        char === "<" &&
+        /[A-Za-z0-9_.-]/.test(sourceText[index + 1] || "")
+      ) {
+        tagStart = index;
+        sawWhitespaceAfterTagName = false;
+      }
+      continue;
+    }
+
+    if (char === ">") {
+      tagStart = -1;
+      sawWhitespaceAfterTagName = false;
+      continue;
+    }
+
+    if (/\s/.test(char)) {
+      sawWhitespaceAfterTagName = true;
+      continue;
+    }
+
+    if (
+      sawWhitespaceAfterTagName &&
+      (char === "@" || char === "." || char === "?") &&
+      /[A-Za-z0-9_:-]/.test(sourceText[index + 1] || "")
+    ) {
+      hasLitLikeAttributeTag = true;
+      break;
+    }
+
+    sawWhitespaceAfterTagName = false;
+  }
+
   return (
-    /<[\w.-]+[^>]*\s(?:[@.?][\w:-]+)/m.test(sourceText) ||
+    hasLitLikeAttributeTag ||
     /(?:^|[;{}]\s*)static\s+[A-Za-z$_][A-Za-z0-9$_]*\s*=/m.test(sourceText) ||
     /^\s*static\s+[A-Za-z$_][A-Za-z0-9$_]*\s*=/m.test(sourceText)
   );

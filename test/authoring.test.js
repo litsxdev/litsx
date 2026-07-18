@@ -754,6 +754,14 @@ describe("@litsx/authoring", () => {
   it("detects LitSX-authored JSX before virtualization", () => {
     assert.strictEqual(looksLikeLitsxJsx(`<button @click={handleClick}></button>`), true);
     assert.strictEqual(looksLikeLitsxJsx(`const view = <button class="cta"></button>;`), false);
+    assert.strictEqual(
+      looksLikeLitsxJsx(`<button\n  data-label="save"\n  ?disabled={busy}\n></button>`),
+      true,
+    );
+    assert.strictEqual(
+      looksLikeLitsxJsx(`const sample = "<button @click={fn}></button>";`),
+      false,
+    );
     assert.strictEqual(looksLikeLitsxJsx(`function Card(){\n  static styles = \`:host { display: block; }\`;\n}`), true);
     assert.strictEqual(looksLikeLitsxJsx(`function Card(){\n  static properties = {};\n  return null;\n}`), true);
   });

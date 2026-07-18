@@ -60,11 +60,33 @@ export function applyLocalWorkspaceOverrides(packageJson) {
 }
 
 function toPackageName(input) {
-  return input
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "") || "litsx-app";
+  const normalized = String(input || "").trim().toLowerCase();
+  let packageName = "";
+  let previousWasDash = false;
+
+  for (const char of normalized) {
+    const isAlphaNumeric = (
+      (char >= "a" && char <= "z") ||
+      (char >= "0" && char <= "9")
+    );
+
+    if (isAlphaNumeric) {
+      packageName += char;
+      previousWasDash = false;
+      continue;
+    }
+
+    if (!previousWasDash && packageName) {
+      packageName += "-";
+      previousWasDash = true;
+    }
+  }
+
+  if (packageName.endsWith("-")) {
+    packageName = packageName.slice(0, -1);
+  }
+
+  return packageName || "litsx-app";
 }
 
 function toClassName(input) {
