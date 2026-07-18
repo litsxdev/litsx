@@ -621,7 +621,7 @@ describe("react compat internal lazy", () => {
     const code = run(source);
 
     assert.match(code, /import \* as runtime,\s*\{\s*ErrorBoundary\s*\} from ['"]@litsx\/core['"];/);
-    assert.match(code, /import \{ ensureLazyElement \} from "@litsx\/core";/);
+    assert.match(code, /import \{[^}]*ensureLazyElement[^}]*\} from "@litsx\/core";/);
     assert.match(code, /ensureLazyElement\(this,\s*"fancy-button",\s*FancyButton\);/);
   });
 

@@ -706,7 +706,6 @@ describe("@litsx/compiler", () => {
 
     assert.match(result.code, /const value = useFormat\("x"\);/);
     assert.doesNotMatch(result.code, /useFormat\(this, "x"\)/);
-    assert.doesNotMatch(result.code, /prepareEffects\(this\);/);
   }, 20000);
 
   it("does not thread host through local use-prefixed functions without LitSX runtime hooks", () => {

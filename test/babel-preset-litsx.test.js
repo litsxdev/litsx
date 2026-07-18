@@ -16,6 +16,22 @@ let createLitsxPresetPlugins;
 let detectLitsxSourceFeatures;
 let isLitsxRuntimeHookName;
 
+function compileWithNativePreset(source, {
+  filename = "/virtual/test.litsx",
+  parserPlugins = [],
+  presetOptions = {},
+} = {}) {
+  return transformFromAstSync(parser.parse(source, {
+    sourceType: "module",
+    plugins: parserPlugins,
+  }), source, {
+    configFile: false,
+    babelrc: false,
+    filename,
+    presets: [[nativePreset, presetOptions]],
+  });
+}
+
 beforeAll(async () => {
   const [presetMod, runtimeHooksMod] = await Promise.all([
     import("../packages/babel-preset-litsx/src/index.js"),
@@ -304,6 +320,57 @@ describe("@litsx/babel-preset-litsx", () => {
     assert.match(result.code, /resolveStructuralEntry\(this, 0, "litsx-structural-[^"]+", useLocale, \['en'\]|\["en"\]/);
   });
 
+  it("merges imported structural hook props into generated static properties", () => {
+    const source = [
+      'import { useMessages } from "./i18n-hooks.litsx";',
+      "export function Greeting({ title }: { title: string }) {",
+      "  useMessages();",
+      "  return <div>{title}</div>;",
+      "}",
+    ].join("\n");
+    const hooksSource = [
+      'import { defineHook } from "@litsx/core";',
+      "export const useMessages = defineHook({",
+      "  props() {",
+      "    return {",
+      "      messages: { type: Object, attribute: false },",
+      "    };",
+      "  },",
+      "  setup() {",
+      "    return { messages: null };",
+      "  },",
+      "  accessors(_host, state) {",
+      "    return {",
+      "      messages: {",
+      "        get: () => state.instance.messages,",
+      "        set: (value) => { state.instance.messages = value; },",
+      "      },",
+      "    };",
+      "  },",
+      "  use() {",
+      "    return null;",
+      "  },",
+      "});",
+    ].join("\n");
+
+    const result = compileWithNativePreset(source, {
+      filename: "/virtual/imported-structural-props.litsx",
+      parserPlugins: ["typescript"],
+      presetOptions: {
+        jsxTemplate: false,
+        inMemoryFiles: {
+          "/virtual/i18n-hooks.litsx": hooksSource,
+        },
+      },
+    });
+
+    assert.match(result.code, /import \{[^}]*resolveStructuralProps[^}]*\} from "@litsx\/core";/);
+    assert.match(result.code, /static get properties\(\)/);
+    assert.match(result.code, /resolveStructuralProps\(this,\s*\{/);
+    assert.match(result.code, /import \{ useMessages \} from "\.\/i18n-hooks\.litsx";/);
+    assert.match(result.code, /static structuralEntries = \[[\s\S]*definition: useMessages/s);
+  });
+
   it("compiles structural hooks imported from @litsx/core", () => {
     const source = [
       'import { useElementInternals, useFormValidity, useFormValue } from "@litsx/core";',
@@ -328,6 +395,114 @@ describe("@litsx/babel-preset-litsx", () => {
     assert.match(result.code, /resolveStructuralEntry\(this, 0, "litsx-structural-[^"]+", useElementInternals, \[\]/);
     assert.match(result.code, /resolveStructuralEntry\(this, 1, "litsx-structural-[^"]+", useFormValue, \['draft'\]|\["draft"\]/);
     assert.match(result.code, /resolveStructuralEntry\(this, 2, "litsx-structural-[^"]+", useFormValidity, \[\]/);
+  });
+
+  it("merges structural hook props into generated static properties and authored static properties", () => {
+    const baseHook = [
+      'import { defineHook } from "@litsx/core";',
+      "const useMessages = defineHook({",
+      "  props() {",
+      "    return {",
+      "      messages: { type: Object, attribute: false },",
+      "    };",
+      "  },",
+      "  setup() {",
+      "    return { messages: null };",
+      "  },",
+      "  accessors(_host, state) {",
+      "    return {",
+      "      messages: {",
+      "        get: () => state.instance.messages,",
+      "        set: (value) => { state.instance.messages = value; },",
+      "      },",
+      "    };",
+      "  },",
+      "  use() {",
+      "    return null;",
+      "  },",
+      "});",
+    ];
+    const noStaticSource = [
+      ...baseHook,
+      "export function ProductCard({ title }: { title: string }) {",
+      "  useMessages();",
+      "  return <div>{title}</div>;",
+      "}",
+    ].join("\n");
+    const authoredStaticSource = [
+      ...baseHook,
+      "export function ProductCard(props: { title: string }) {",
+      "  static properties = {",
+      "    messages: { reflect: true },",
+      "    title: { reflect: true },",
+      "  };",
+      "  useMessages();",
+      "  return <div>{props.title}</div>;",
+      "}",
+    ].join("\n");
+
+    const baseResult = compileWithNativePreset(noStaticSource, {
+      filename: "/virtual/structural-props.litsx",
+      parserPlugins: ["typescript"],
+      presetOptions: { jsxTemplate: false },
+    });
+    const mergeResult = compileWithNativePreset(authoredStaticSource, {
+      filename: "/virtual/structural-props-merge.litsx",
+      parserPlugins: ["typescript"],
+      presetOptions: { jsxTemplate: false },
+    });
+
+    assert.match(baseResult.code, /import \{[^}]*resolveStructuralProps[^}]*\} from "@litsx\/core";/);
+    assert.match(baseResult.code, /static get properties\(\)/);
+    assert.match(baseResult.code, /resolveStructuralProps\(this,\s*\{/);
+    assert.match(baseResult.code, /static structuralEntries = \[[\s\S]*definition: useMessages/s);
+
+    assert.match(mergeResult.code, /static get properties\(\)/);
+    assert.match(mergeResult.code, /resolveStructuralProps\(this,\s*this\.__litsxStatic\(_litsx_static_properties,\s*\(\)\s*=>\s*this\.__litsxMergeProperties\(/);
+    assert.match(mergeResult.code, /messages:\s*\{\s*reflect:\s*true\s*\}/s);
+    assert.match(mergeResult.code, /title:\s*\{\s*type:\s*String\s*\}/s);
+    assert.match(mergeResult.code, /title:\s*\{\s*reflect:\s*true\s*\}/s);
+  });
+
+  it("lets later structural hooks override earlier props for the same key", () => {
+    const source = [
+      'import { defineHook } from "@litsx/core";',
+      "const useBaseMessages = defineHook({",
+      "  props() {",
+      "    return {",
+      "      messages: { type: Object, attribute: false },",
+      "    };",
+      "  },",
+      "  use() {",
+      "    return null;",
+      "  },",
+      "});",
+      "const usePriorityMessages = defineHook({",
+      "  props() {",
+      "    return {",
+      "      messages: { reflect: true },",
+      "    };",
+      "  },",
+      "  use() {",
+      "    return null;",
+      "  },",
+      "});",
+      "export function ProductCard() {",
+      "  useBaseMessages();",
+      "  usePriorityMessages();",
+      "  return <div />;",
+      "}",
+    ].join("\n");
+
+    const result = compileWithNativePreset(source, {
+      filename: "/virtual/structural-props-precedence.litsx",
+      presetOptions: { jsxTemplate: false },
+    });
+
+    assert.match(result.code, /static structuralStaticEntries = \[/);
+    assert.match(result.code, /callsiteIndex: 0[\s\S]*definition: useBaseMessages[\s\S]*callsiteIndex: 1[\s\S]*definition: usePriorityMessages/s);
+    assert.match(result.code, /resolveStructuralStaticEntry\(this\.constructor, 0, "litsx-structural-[^"]+", useBaseMessages, \[\]/);
+    assert.match(result.code, /resolveStructuralStaticEntry\(this\.constructor, 1, "litsx-structural-[^"]+", usePriorityMessages, \[\]/);
   });
 
   it("compiles structural hooks imported through @litsx/core namespace imports", () => {

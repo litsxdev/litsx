@@ -178,6 +178,12 @@ function createFaceHostAccessors(shared) {
 }
 
 export const useElementInternals = defineHook({
+  props: {
+    form: { attribute: false },
+    validity: { attribute: false },
+    validationMessage: { type: String, attribute: false },
+    willValidate: { type: Boolean, attribute: false },
+  },
   setup(host) {
     return {
       shared: getOrCreateFaceState(host),
@@ -197,6 +203,12 @@ export const useElementInternals = defineHook({
 });
 
 export const useFormValue = defineHook({
+  props: {
+    form: { attribute: false },
+    validity: { attribute: false },
+    validationMessage: { type: String, attribute: false },
+    willValidate: { type: Boolean, attribute: false },
+  },
   setup(host, args, _staticState, _meta, entry) {
     const shared = getOrCreateFaceState(host);
     const existingOwner = host?.[FORM_VALUE_OWNER];
@@ -332,6 +344,12 @@ export const useFormValue = defineHook({
 });
 
 export const useFormValidity = defineHook({
+  props: {
+    form: { attribute: false },
+    validity: { attribute: false },
+    validationMessage: { type: String, attribute: false },
+    willValidate: { type: Boolean, attribute: false },
+  },
   setup(host) {
     return {
       shared: getOrCreateFaceState(host),

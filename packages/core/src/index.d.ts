@@ -357,6 +357,7 @@ export interface LitsxHostAccessorDescriptor<TValue = unknown> {
 }
 
 export type LitsxHostAccessorMap = Record<string, LitsxHostAccessorDescriptor<unknown>>;
+export type LitsxStructuralPropMap = Record<string, unknown>;
 
 /**
  * Public structural-hook definition.
@@ -387,6 +388,9 @@ export type LitsxHostAccessorMap = Record<string, LitsxHostAccessorDescriptor<un
  * callsite gets its own state and middleware entry. Resource dedupe belongs in
  * hook-specific runtimes.
  *
+ * `props(args, meta, entry)` publishes structural host property metadata into
+ * the component's merged `static properties` surface.
+ *
  * `accessors(host, state, meta, entry)` publishes host instance accessors such
  * as readonly platform-facing getters or low-level form/control properties.
  * These accessors are installed on the host instance itself as part of the
@@ -405,6 +409,11 @@ export interface LitsxStructuralDefinition<
   static?: (
     ...argsAndMeta: [...TArgs, meta: LitsxStructuralMeta, entry: LitsxStructuralEntry]
   ) => TStaticState;
+  props?: LitsxStructuralPropMap | ((
+    args: TArgs,
+    meta: LitsxStructuralMeta,
+    entry: LitsxStructuralEntry
+  ) => LitsxStructuralPropMap | null | undefined);
   use?: (
     host: unknown,
     state: LitsxStructuralState<TStaticState, TInstanceState>,
@@ -552,6 +561,10 @@ export declare function defineHook<
 ): LitsxStructuralHook<TArgs, TResult>;
 
 export declare function isStructuralHook(value: unknown): value is LitsxStructuralHook;
+export declare function resolveStructuralProps(
+  owner: unknown,
+  base?: Record<PropertyKey, unknown> | null
+): Record<PropertyKey, unknown>;
 
 export declare function resolveStructuralEntry(
   host: unknown,

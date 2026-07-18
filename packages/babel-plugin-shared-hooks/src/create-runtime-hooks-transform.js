@@ -162,7 +162,9 @@ function getStructuralHookPhaseInfo(callPath, calleePath, state) {
       hasInstancePhase: true,
     };
   }
-  const hasStaticPhase = hasObjectProperty(objectPath, "static");
+  const hasStaticPhase =
+    hasObjectProperty(objectPath, "static") ||
+    hasObjectProperty(objectPath, "props");
   const hasInstancePhase =
     hasObjectProperty(objectPath, "setup") ||
     hasObjectProperty(objectPath, "createState") ||
@@ -1618,6 +1620,7 @@ function transformClass(classPath, state, t) {
   let hookUsedInRender = false;
   let structuralHookUsedInRender = false;
   let structuralStaticHookUsedInRender = false;
+  let structuralPropsUsedInRender = false;
   const structuralEntries = [];
   const structuralStaticEntries = [];
 
@@ -1632,9 +1635,11 @@ function transformClass(classPath, state, t) {
           hookUsedInRender = true;
           if (kind === "structural") {
             structuralHookUsedInRender = true;
+            structuralPropsUsedInRender = true;
           }
           if (kind === "structural-static") {
             structuralStaticHookUsedInRender = true;
+            structuralPropsUsedInRender = true;
           }
         },
       });
@@ -1669,6 +1674,79 @@ function transformClass(classPath, state, t) {
   }
   if (structuralStaticHookUsedInRender) {
     ensureStaticStructuralStaticEntries(classPath, structuralStaticEntries, t);
+  }
+  if (structuralPropsUsedInRender) {
+    ensureStructuralPropsGetter(classPath, state, t);
+    state.usedHelpers.add("resolveStructuralProps");
+  }
+}
+
+function createStructuralPropsResolverExpression(baseExpression, t) {
+  const args = [t.thisExpression()];
+  if (baseExpression) {
+    args.push(baseExpression);
+  }
+  return t.callExpression(t.identifier("resolveStructuralProps"), args);
+}
+
+function findStaticPropertiesMember(bodyItems, t) {
+  return bodyItems.find((memberPath) =>
+    memberPath.node.static === true &&
+    t.isIdentifier(memberPath.node.key, { name: "properties" })
+  );
+}
+
+function ensureStructuralPropsGetter(classPath, _state, t) {
+  const bodyItems = classPath.get("body.body");
+  const existing = findStaticPropertiesMember(bodyItems, t);
+
+  if (!existing) {
+    const getter = t.classMethod(
+      "get",
+      t.identifier("properties"),
+      [],
+      t.blockStatement([
+        t.returnStatement(createStructuralPropsResolverExpression(null, t)),
+      ]),
+    );
+    getter.static = true;
+
+    const insertionIndex = classPath.node.body.body.findIndex((member) => !member.static);
+    if (insertionIndex === -1) {
+      classPath.node.body.body.push(getter);
+    } else {
+      classPath.node.body.body.splice(insertionIndex, 0, getter);
+    }
+    return;
+  }
+
+  if (existing.isClassMethod({ kind: "get" })) {
+    const statementPaths = existing.get("body.body");
+    const returnStatement = statementPaths.find((statementPath) => statementPath.isReturnStatement());
+    if (!returnStatement?.node?.argument) {
+      return;
+    }
+    returnStatement.node.argument = createStructuralPropsResolverExpression(
+      t.cloneNode(returnStatement.node.argument, true),
+      t,
+    );
+    return;
+  }
+
+  if (existing.isClassProperty()) {
+    const baseValue = existing.node.value
+      ? t.cloneNode(existing.node.value, true)
+      : t.objectExpression([]);
+    const getter = t.classMethod(
+      "get",
+      t.identifier("properties"),
+      [],
+      t.blockStatement([
+        t.returnStatement(createStructuralPropsResolverExpression(baseValue, t)),
+      ]),
+    );
+    getter.static = true;
+    existing.replaceWith(getter);
   }
 }
 

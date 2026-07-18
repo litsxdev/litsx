@@ -329,7 +329,7 @@ describe("@litsx/babel-preset-react-compat suspense boundaries", () => {
     assert.match(code, /\.content=\{\(\)\s*=>\s*null\}/);
   });
 
-  it("moves only matching ensureLazyElement calls into suspense content renderers", () => {
+  it("does not move manual ensureLazyElement calls into suspense content renderers", () => {
     const source = [
       "import { ensureLazyElement } from '@litsx/core';",
       "import { Suspense } from 'react';",
@@ -354,9 +354,14 @@ describe("@litsx/babel-preset-react-compat suspense boundaries", () => {
 
     assert.match(
       code,
-      /\.content=\{bindRendererContext\([\s\S]*?\(\)\s*=>\s*\{[\s\S]*ensureLazyElement\(this,\s*'alpha-panel',\s*AlphaPanel\);[\s\S]*return <alpha-panel \/>;[\s\S]*\}\)\}/s
+      /\.content=\{bindRendererContext\([\s\S]*?\(\)\s*=>\s*<alpha-panel \/>/s
+    );
+    assert.doesNotMatch(
+      code,
+      /\.content=\{bindRendererContext\([\s\S]*ensureLazyElement\(this,\s*'alpha-panel',\s*AlphaPanel\);/s
     );
     assert.match(code, /ensureLazyElement\(this,\s*'beta-panel',\s*BetaPanel\);/);
+    assert.match(code, /ensureLazyElement\(this,\s*'alpha-panel',\s*AlphaPanel\);/);
   });
 
   it("does not introduce boundary-key or list-key attributes in the component model", () => {

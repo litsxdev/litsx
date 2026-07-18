@@ -335,7 +335,7 @@ function createStructuralHookResolver(options = {}) {
       );
     });
     return {
-      hasStaticPhase: hasProperty("static"),
+      hasStaticPhase: hasProperty("static") || hasProperty("props"),
       hasInstancePhase:
         hasProperty("setup") ||
         hasProperty("createState") ||

@@ -3,6 +3,7 @@ const STRUCTURAL_HOOK_DEFINITION = Symbol.for("litsx.structuralHookDefinition");
 export const STRUCTURAL_HOOK_ENTRIES = Symbol.for("litsx.structuralHookEntries");
 const STRUCTURAL_STATIC_STATE = Symbol.for("litsx.structuralStaticState");
 const STRUCTURAL_HOST_ACCESSORS = Symbol.for("litsx.structuralHostAccessors");
+const STRUCTURAL_HOST_PROPS = Symbol.for("litsx.structuralHostProps");
 const LIFECYCLE_METHODS = [
   "connectedCallback",
   "disconnectedCallback",
@@ -111,6 +112,21 @@ function getDefinitionAccessors(definition) {
   const resolvedDefinition = resolveStructuralDefinition(definition);
   return isObject(resolvedDefinition) && typeof resolvedDefinition.accessors === "function"
     ? resolvedDefinition.accessors
+    : null;
+}
+
+function getDefinitionProps(definition) {
+  const resolvedDefinition = resolveStructuralDefinition(definition);
+  if (!isObject(resolvedDefinition)) {
+    return null;
+  }
+
+  if (typeof resolvedDefinition.props === "function") {
+    return resolvedDefinition.props;
+  }
+
+  return isObject(resolvedDefinition.props)
+    ? () => resolvedDefinition.props
     : null;
 }
 
@@ -241,6 +257,51 @@ function resolveEntryAccessors(host, entry) {
     accessors[name] = normalizeAccessorDescriptor(name, rawAccessors[name]);
   }
   return accessors;
+}
+
+function isPlainObject(value) {
+  return value !== null &&
+    typeof value === "object" &&
+    Object.getPrototypeOf(value) === Object.prototype;
+}
+
+function mergeStructuralProps(base, override) {
+  if (!override) {
+    return base;
+  }
+
+  const next = { ...(base || {}) };
+  for (const key of Object.keys(override)) {
+    const baseEntry = next[key];
+    const overrideEntry = override[key];
+
+    if (isPlainObject(baseEntry) && isPlainObject(overrideEntry)) {
+      next[key] = {
+        ...baseEntry,
+        ...overrideEntry,
+      };
+    } else {
+      next[key] = overrideEntry;
+    }
+  }
+
+  return next;
+}
+
+function resolveEntryProps(entry) {
+  const propsFactory = getDefinitionProps(entry?.definition);
+  if (!propsFactory) {
+    return null;
+  }
+
+  const rawProps = propsFactory(entry.args ?? EMPTY_ARGS, entry.meta ?? {}, entry);
+  if (rawProps == null) {
+    return null;
+  }
+  if (!isObject(rawProps)) {
+    throw new TypeError("Structural hook props() must return an object of property descriptors.");
+  }
+  return rawProps;
 }
 
 function getHostAccessorRegistry(host) {
@@ -592,6 +653,52 @@ function getOrCreateStaticEntries(owner) {
     });
   }
   return owner.__litsxStructuralStaticEntries;
+}
+
+function getStructuralPropsCache(owner) {
+  if (!owner) {
+    return null;
+  }
+  if (!Object.prototype.hasOwnProperty.call(owner, STRUCTURAL_HOST_PROPS)) {
+    Object.defineProperty(owner, STRUCTURAL_HOST_PROPS, {
+      value: new Map(),
+      configurable: true,
+    });
+  }
+  return owner[STRUCTURAL_HOST_PROPS];
+}
+
+function getStructuralClassEntries(owner) {
+  return resolveHostEntries(
+    owner,
+    owner?.structuralEntries ?? owner?.__litsxStructuralEntries ?? [],
+  ).map((entry, index) => normalizeStaticEntry(owner, entry, index));
+}
+
+export function resolveStructuralProps(owner, base = null) {
+  if (!owner) {
+    return base ?? {};
+  }
+
+  const cache = getStructuralPropsCache(owner);
+  const cacheKey = base == null ? "__litsx:no-base" : base;
+  if (cache?.has(cacheKey)) {
+    return cache.get(cacheKey);
+  }
+
+  let mergedProps = base;
+  const entries = [
+    ...getStructuralClassEntries(owner),
+    ...getOrCreateStaticEntries(owner),
+  ].sort((left, right) => (left.callsiteIndex ?? 0) - (right.callsiteIndex ?? 0));
+
+  for (const entry of entries) {
+    mergedProps = mergeStructuralProps(mergedProps, resolveEntryProps(entry));
+  }
+
+  const result = mergedProps ?? {};
+  cache?.set(cacheKey, result);
+  return result;
 }
 
 export function resolveStructuralStaticEntry(owner, callsiteIndex, callsiteId, definition, args = [], meta = {}) {

@@ -7,6 +7,7 @@ import {
   HostMiddlewareRuntime,
   createHostMiddlewareRuntime,
   isStructuralHook,
+  resolveStructuralProps,
   resolveStructuralEntry,
   resolveStructuralStaticEntry,
 } from "../packages/core/src/index.js";
@@ -569,6 +570,127 @@ describe("HostMiddlewareRuntime", () => {
         },
       ]);
     }, /cannot install accessor "value" because the host already defines that own property/);
+  });
+
+  it("resolves structural props from structural entries", () => {
+    const useMessages = defineHook({
+      props() {
+        return {
+          messages: {
+            type: Object,
+            attribute: false,
+          },
+        };
+      },
+      use() {
+        return null;
+      },
+    });
+    const usePriority = defineHook({
+      props(args) {
+        return {
+          messages: {
+            reflect: Boolean(args[0]),
+          },
+          locale: {
+            type: String,
+          },
+        };
+      },
+      use() {
+        return null;
+      },
+    });
+
+    class PropsHost {}
+    PropsHost.structuralEntries = [
+      {
+        callsiteIndex: 0,
+        callsiteId: "messages",
+        definition: useMessages,
+        args: [],
+        meta: { callsitePath: ["messages"] },
+      },
+    ];
+    PropsHost.structuralStaticEntries = [
+      {
+        callsiteIndex: 1,
+        callsiteId: "priority",
+        definition: usePriority,
+        args: [true],
+        meta: { callsitePath: ["priority"] },
+      },
+    ];
+
+    assert.deepStrictEqual(
+      resolveStructuralProps(PropsHost, {
+        messages: { reflect: false },
+      }),
+      {
+        messages: {
+          reflect: true,
+          type: Object,
+          attribute: false,
+        },
+        locale: {
+          type: String,
+        },
+      },
+    );
+  });
+
+  it("lets later structural props override earlier ones for the same key", () => {
+    const useBase = defineHook({
+      props() {
+        return {
+          messages: {
+            type: Object,
+            attribute: false,
+          },
+        };
+      },
+      use() {
+        return null;
+      },
+    });
+    const useOverride = defineHook({
+      props() {
+        return {
+          messages: {
+            reflect: true,
+          },
+        };
+      },
+      use() {
+        return null;
+      },
+    });
+
+    class PropsHost {}
+    PropsHost.structuralEntries = [
+      {
+        callsiteIndex: 0,
+        callsiteId: "base",
+        definition: useBase,
+        args: [],
+        meta: { callsitePath: ["base"] },
+      },
+      {
+        callsiteIndex: 1,
+        callsiteId: "override",
+        definition: useOverride,
+        args: [],
+        meta: { callsitePath: ["override"] },
+      },
+    ];
+
+    assert.deepStrictEqual(resolveStructuralProps(PropsHost), {
+      messages: {
+        type: Object,
+        attribute: false,
+        reflect: true,
+      },
+    });
   });
 
   it("supports static-only hooks without host lifecycle middleware", () => {
