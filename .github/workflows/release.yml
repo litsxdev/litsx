@@ -3,7 +3,6 @@ name: Release
 on:
   workflow_run:
     workflows:
-      - Test
       - Release Validate
     types:
       - completed

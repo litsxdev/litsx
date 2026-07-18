@@ -6,6 +6,8 @@ on:
       - Release Validate
     types:
       - completed
+    branches-ignore:
+      - main
 
 permissions:
   actions: read
