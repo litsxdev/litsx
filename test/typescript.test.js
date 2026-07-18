@@ -452,12 +452,12 @@ describe("@litsx/typescript", () => {
           "    const [initial] = args;",
           "    return { value: initial };",
           "  },",
-          "  accessors(host, state, meta, entry) {",
+          "  accessors(host, state, next) {",
           "    const nextHost: unknown = host;",
           "    const nextValue: string = state.instance.value;",
-          "    const path: string[] = meta.callsitePath;",
-          "    const id: string = entry.callsiteId;",
+          "    const base: Record<string, unknown> | null | undefined = next();",
           "    return {",
+          "      ...base,",
           "      value: {",
           "        get: () => nextValue,",
           "        set: (next: string) => {",
@@ -474,11 +474,12 @@ describe("@litsx/typescript", () => {
           "const accessorValue: string = useAccessor('draft');",
           "",
           "const useProps = defineHook<[], null>({",
-          "  props(args, meta, entry) {",
-          "    const emptyArgs: [] = args;",
-          "    const path: string[] = meta.callsitePath;",
-          "    const id: string = entry.callsiteId;",
+          "  props(host, state, next) {",
+          "    const nextHost: unknown = host;",
+          "    const nextState: undefined = state.instance;",
+          "    const base = next();",
           "    return {",
+          "      ...base,",
           "      messages: {",
           "        type: Object,",
           "        attribute: false,",
@@ -941,6 +942,54 @@ describe("@litsx/typescript", () => {
     `, { channel: "all" });
 
     assert.ok(!issues.some((issue) => issue.code === 91020));
+  });
+
+  it("does not warn for destructured component props covered by structural props metadata", () => {
+    const fixture = createTypecheckProjectFixture({
+      prefix: "litsx-structural-props-metadata-",
+      files: {
+        "hooks.litsx": [
+          'import { defineHook } from "@litsx/core";',
+          "",
+          "export const useMessages = defineHook({",
+          "  props(_host, _state, next) {",
+          "    return {",
+          "      ...next(),",
+          "      messages: { attribute: false },",
+          "    };",
+          "  },",
+          "});",
+          "",
+        ].join("\n"),
+        "card.litsx": [
+          'import { useMessages } from "./hooks.litsx";',
+          "",
+          "export function Card({ messages, title = 'Hello' }) {",
+          "  useMessages();",
+          "  return <button>{title}{messages?.cta}</button>;",
+          "}",
+          "",
+        ].join("\n"),
+      },
+    });
+
+    try {
+      const cardPath = fixture.resolve("card.litsx");
+      const issues = collectLitsxAuthoredIssues(
+        fs.readFileSync(cardPath, "utf8"),
+        {
+          channel: "all",
+          filename: cardPath,
+          readFile(nextFileName) {
+            return fs.readFileSync(nextFileName, "utf8");
+          },
+        },
+      );
+
+      assert.ok(!issues.some((issue) => issue.code === 91020));
+    } finally {
+      fixture.cleanup();
+    }
   });
 
   it("treats PascalCase function declarations as components and ignores member assignments", () => {
@@ -1614,6 +1663,61 @@ describe("@litsx/typescript", () => {
       },
     );
     assert.deepStrictEqual(inferLitsxComponentPropNames("<button"), {});
+  });
+
+  it("infers structural component props across local and imported hooks", () => {
+    const fixture = createTypecheckProjectFixture({
+      prefix: "litsx-infer-structural-props-",
+      files: {
+        "messages.litsx": [
+          'import { defineHook } from "@litsx/core";',
+          "",
+          "export const useMessages = defineHook({",
+          "  props(_host, _state, next) {",
+          "    return {",
+          "      ...next(),",
+          "      messages: { attribute: false },",
+          "    };",
+          "  },",
+          "});",
+          "",
+        ].join("\n"),
+        "custom-hook.litsx": [
+          'import { useMessages } from "./messages.litsx";',
+          "",
+          "export function usePanelMessages() {",
+          "  useMessages();",
+          "}",
+          "",
+        ].join("\n"),
+        "card.litsx": [
+          'import { usePanelMessages } from "./custom-hook.litsx";',
+          "",
+          "export function Card() {",
+          "  usePanelMessages();",
+          "  return <button />;",
+          "}",
+          "",
+        ].join("\n"),
+      },
+    });
+
+    try {
+      const cardPath = fixture.resolve("card.litsx");
+      const cardSource = fs.readFileSync(cardPath, "utf8");
+      const propNames = inferLitsxComponentPropNames(cardSource, {
+        filename: cardPath,
+        readFile(nextFileName) {
+          return fs.readFileSync(nextFileName, "utf8");
+        },
+      });
+
+      assert.deepStrictEqual(propNames, {
+        Card: ["messages"],
+      });
+    } finally {
+      fixture.cleanup();
+    }
   });
 
   it("maps spans between authored and virtualized sources", () => {

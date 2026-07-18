@@ -358,6 +358,8 @@ export interface LitsxHostAccessorDescriptor<TValue = unknown> {
 
 export type LitsxHostAccessorMap = Record<string, LitsxHostAccessorDescriptor<unknown>>;
 export type LitsxStructuralPropMap = Record<string, unknown>;
+export type LitsxStructuralPropsNext = () => LitsxStructuralPropMap | null | undefined;
+export type LitsxStructuralAccessorsNext = () => LitsxHostAccessorMap | null | undefined;
 
 /**
  * Public structural-hook definition.
@@ -388,13 +390,15 @@ export type LitsxStructuralPropMap = Record<string, unknown>;
  * callsite gets its own state and middleware entry. Resource dedupe belongs in
  * hook-specific runtimes.
  *
- * `props(args, meta, entry)` publishes structural host property metadata into
- * the component's merged `static properties` surface.
+ * `props(host, state, next)` publishes structural host
+ * property metadata into the component's merged `static properties` surface as
+ * a composition middleware.
  *
- * `accessors(host, state, meta, entry)` publishes host instance accessors such
- * as readonly platform-facing getters or low-level form/control properties.
- * These accessors are installed on the host instance itself as part of the
- * structural runtime, not through the imperative `useExpose()` method surface.
+ * `accessors(host, state, next)` publishes host instance
+ * accessors such as readonly platform-facing getters or low-level
+ * form/control properties as a composition middleware. These accessors are
+ * installed on the host instance itself as part of the structural runtime,
+ * not through the imperative `useExpose()` method surface.
  */
 export interface LitsxStructuralDefinition<
   TArgs extends unknown[] = unknown[],
@@ -409,11 +413,13 @@ export interface LitsxStructuralDefinition<
   static?: (
     ...argsAndMeta: [...TArgs, meta: LitsxStructuralMeta, entry: LitsxStructuralEntry]
   ) => TStaticState;
-  props?: LitsxStructuralPropMap | ((
-    args: TArgs,
-    meta: LitsxStructuralMeta,
-    entry: LitsxStructuralEntry
-  ) => LitsxStructuralPropMap | null | undefined);
+  props?:
+    | LitsxStructuralPropMap
+    | ((
+      host: unknown,
+      state: LitsxStructuralState<TStaticState, TInstanceState>,
+      next: LitsxStructuralPropsNext
+    ) => LitsxStructuralPropMap | null | undefined);
   use?: (
     host: unknown,
     state: LitsxStructuralState<TStaticState, TInstanceState>,
@@ -439,8 +445,7 @@ export interface LitsxStructuralDefinition<
   accessors?: (
     host: unknown,
     state: LitsxStructuralState<TStaticState, TInstanceState>,
-    meta: LitsxStructuralMeta,
-    entry: LitsxStructuralEntry
+    next: LitsxStructuralAccessorsNext
   ) => LitsxHostAccessorMap;
 }
 

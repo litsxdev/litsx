@@ -346,8 +346,63 @@ function createStructuralHookResolver(options = {}) {
       return {
         hasStaticPhase: false,
         hasInstancePhase: true,
+        propKeys: null,
+        accessorKeys: null,
       };
     }
+    const getStaticObjectKeys = (objectExpression) => {
+      if (!objectExpression || objectExpression.type !== "ObjectExpression") {
+        return null;
+      }
+      const keys = [];
+      for (const property of objectExpression.properties) {
+        if (property.type === "SpreadElement") {
+          continue;
+        }
+        if (property.type !== "ObjectProperty" && property.type !== "ObjectMethod") {
+          return null;
+        }
+        if (property.computed === true) {
+          return null;
+        }
+        const key = property.key;
+        if (key.type === "Identifier") {
+          keys.push(key.name);
+          continue;
+        }
+        if (key.type === "StringLiteral") {
+          keys.push(key.value);
+          continue;
+        }
+        return null;
+      }
+      return keys;
+    };
+    const getReturnedObjectKeys = (fn) => {
+      if (!fn) {
+        return null;
+      }
+      if (fn.type === "ArrowFunctionExpression" && fn.body?.type === "ObjectExpression") {
+        return getStaticObjectKeys(fn.body);
+      }
+      if (fn.body?.type !== "BlockStatement") {
+        return null;
+      }
+      if (fn.body.body.length !== 1 || fn.body.body[0].type !== "ReturnStatement") {
+        return null;
+      }
+      return getStaticObjectKeys(fn.body.body[0].argument);
+    };
+    const getPropertyValue = (name) => definition.properties.find((property) => {
+      if (property.type !== "ObjectProperty" && property.type !== "ObjectMethod") {
+        return false;
+      }
+      const key = property.key;
+      return (
+        (key.type === "Identifier" && key.name === name) ||
+        (key.type === "StringLiteral" && key.value === name)
+      );
+    });
     const hasProperty = (name) => definition.properties.some((property) => {
       if (property.type !== "ObjectProperty" && property.type !== "ObjectMethod") {
         return false;
@@ -365,6 +420,29 @@ function createStructuralHookResolver(options = {}) {
         hasProperty("createState") ||
         hasProperty("middlewares") ||
         hasProperty("accessors"),
+      propKeys: (() => {
+        const property = getPropertyValue("props");
+        if (!property) {
+          return null;
+        }
+        if (property.type === "ObjectMethod") {
+          return getReturnedObjectKeys(property);
+        }
+        if (property.value?.type === "ObjectExpression") {
+          return getStaticObjectKeys(property.value);
+        }
+        return getReturnedObjectKeys(property.value);
+      })(),
+      accessorKeys: (() => {
+        const property = getPropertyValue("accessors");
+        if (!property) {
+          return null;
+        }
+        if (property.type === "ObjectMethod") {
+          return getReturnedObjectKeys(property);
+        }
+        return getReturnedObjectKeys(property.value);
+      })(),
     };
   }
 

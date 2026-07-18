@@ -129,8 +129,9 @@ const useLocale = defineHook({
     const [locale] = args;
     return { locale, connected: false, key: staticState.key };
   },
-  accessors(host, state) {
+  accessors(host, state, next) {
     return {
+      ...next(),
       value: {
         get: () => state.instance.locale,
       },
@@ -153,8 +154,9 @@ The phases are explicit:
 
 - `static(...args, meta)` runs in the class/type phase and never participates in host instance lifecycle.
 - `setup(host, args, staticState, meta, entry)` creates per-host-instance state.
+- `props(host, state, next)` computes structural Lit property metadata as composition middleware.
 - `middlewares` wraps host lifecycle methods through `(host, state, next, args, meta, entry)` and is instance-phase only.
-- `accessors(host, state, meta, entry)` installs host instance accessors such as readonly platform-facing getters or low-level control properties.
+- `accessors(host, state, next)` installs host instance accessors as composition middleware for readonly platform-facing getters or low-level control properties.
 - `use(host, state, args, meta, entry)` is the render-time hook API consumed by authored code.
 
 When the `args` tuple and reader return are typed, `defineHook()` preserves those types for authored calls:

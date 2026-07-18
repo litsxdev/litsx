@@ -359,6 +359,34 @@ describe("@litsx/typescript editor-session", () => {
           "const view = <StaticButton  />;",
           "",
         ].join("\n"),
+        "messages-hook.litsx": [
+          'import { defineHook } from "@litsx/core";',
+          "",
+          "export const useMessages = defineHook({",
+          "  props(_host, _state, next) {",
+          "    return {",
+          "      ...next(),",
+          "      messages: { attribute: false },",
+          "      locale: { reflect: true },",
+          "    };",
+          "  },",
+          "});",
+          "",
+        ].join("\n"),
+        "hook-button.litsx": [
+          'import { useMessages } from "./messages-hook.litsx";',
+          "",
+          "export const HookButton = () => {",
+          "  useMessages();",
+          "  return <button />;",
+          "};",
+          "",
+        ].join("\n"),
+        "hook-consumer.litsx": [
+          'import { HookButton } from "./hook-button.litsx";',
+          "const view = <HookButton  />;",
+          "",
+        ].join("\n"),
         "event-button.litsx": [
           'import { useEmit } from "@litsx/core";',
           "",
@@ -406,6 +434,19 @@ describe("@litsx/typescript editor-session", () => {
     assert.ok(staticCompletions.some((entry) => entry.label === "label"));
     assert.ok(staticCompletions.some((entry) => entry.label === "kind"));
     assert.ok(staticCompletions.some((entry) => entry.label === "disabled"));
+
+    const hookConsumerPath = fixture.resolve("hook-consumer.litsx");
+    const hookConsumerSource = fs.readFileSync(hookConsumerPath, "utf8");
+    const hookCompletions = fixture.session.getCompletions(
+      hookConsumerPath,
+      hookConsumerSource,
+      "litsx",
+      hookConsumerSource.indexOf("<HookButton ") + "<HookButton ".length,
+      COMPLETION_KINDS,
+    );
+
+    assert.ok(hookCompletions.some((entry) => entry.label === "messages"));
+    assert.ok(hookCompletions.some((entry) => entry.label === "locale"));
 
     const eventConsumerPath = fixture.resolve("event-consumer.litsx");
     const eventConsumerSource = fs.readFileSync(eventConsumerPath, "utf8");

@@ -461,8 +461,9 @@ describe("HostMiddlewareRuntime", () => {
       setup(_host, args) {
         return { value: args[0] };
       },
-      accessors(_host, state) {
+      accessors(_host, state, next) {
         return {
+          ...next(),
           value: {
             get: () => state.instance.value,
             set: (next) => {
@@ -494,8 +495,9 @@ describe("HostMiddlewareRuntime", () => {
   it("lets later structural entries override accessors and restores earlier accessors when needed", () => {
     const host = {};
     const firstHook = defineHook({
-      accessors() {
+      accessors(_host, _state, next) {
         return {
+          ...next(),
           current: {
             get: () => "first",
           },
@@ -506,14 +508,21 @@ describe("HostMiddlewareRuntime", () => {
       },
     });
     const secondHook = defineHook({
-      accessors(_host, _state, _meta, entry) {
-        return entry.args[0]
+      setup(_host, args) {
+        return {
+          enabled: Boolean(args[0]),
+        };
+      },
+      accessors(_host, state, next) {
+        const base = next();
+        return state.instance.enabled
           ? {
+            ...base,
             current: {
               get: () => "second",
             },
           }
-          : {};
+          : base;
       },
       use() {
         return "second";
@@ -536,6 +545,7 @@ describe("HostMiddlewareRuntime", () => {
 
     assert.strictEqual(host.current, "second");
 
+    runtime.entries[1].state.instance.enabled = false;
     runtime.ensureEntry(1, {
       callsiteIndex: 1,
       callsiteId: "second",
@@ -550,8 +560,9 @@ describe("HostMiddlewareRuntime", () => {
   it("rejects structural accessors that conflict with existing host own properties", () => {
     const host = { value: "taken" };
     const structuralHook = defineHook({
-      accessors() {
+      accessors(_host, _state, next) {
         return {
+          ...next(),
           value: {
             get: () => "next",
           },
@@ -573,9 +584,12 @@ describe("HostMiddlewareRuntime", () => {
   });
 
   it("resolves structural props from structural entries", () => {
+    const propsHosts = [];
     const useMessages = defineHook({
-      props() {
+      props(host, _state, next) {
+        propsHosts.push(host);
         return {
+          ...next(),
           messages: {
             type: Object,
             attribute: false,
@@ -587,10 +601,12 @@ describe("HostMiddlewareRuntime", () => {
       },
     });
     const usePriority = defineHook({
-      props(args) {
+      props(host, _state, next) {
+        propsHosts.push(host);
         return {
+          ...next(),
           messages: {
-            reflect: Boolean(args[0]),
+            reflect: true,
           },
           locale: {
             type: String,
@@ -637,12 +653,14 @@ describe("HostMiddlewareRuntime", () => {
         },
       },
     );
+    assert.deepStrictEqual(propsHosts, [PropsHost, PropsHost]);
   });
 
   it("lets later structural props override earlier ones for the same key", () => {
     const useBase = defineHook({
-      props() {
+      props(_host, _state, next) {
         return {
+          ...next(),
           messages: {
             type: Object,
             attribute: false,
@@ -654,8 +672,9 @@ describe("HostMiddlewareRuntime", () => {
       },
     });
     const useOverride = defineHook({
-      props() {
+      props(_host, _state, next) {
         return {
+          ...next(),
           messages: {
             reflect: true,
           },
@@ -691,6 +710,64 @@ describe("HostMiddlewareRuntime", () => {
         reflect: true,
       },
     });
+  });
+
+  it("rejects collisions between public structural props and runtime-only accessors", () => {
+    const usePublicMessages = defineHook({
+      props(_host, _state, next) {
+        return {
+          ...next(),
+          messages: {
+            type: Object,
+            attribute: false,
+          },
+        };
+      },
+      use() {
+        return null;
+      },
+    });
+    const useInternalMessagesAccessor = defineHook({
+      setup() {
+        return {
+          messages: "runtime-only",
+        };
+      },
+      accessors(_host, state, next) {
+        return {
+          ...next(),
+          messages: {
+            get: () => state.instance.messages,
+          },
+        };
+      },
+      use() {
+        return null;
+      },
+    });
+
+    class PropsCollisionHost {}
+    PropsCollisionHost.structuralEntries = [
+      {
+        callsiteIndex: 0,
+        callsiteId: "public-messages",
+        definition: usePublicMessages,
+        args: [],
+        meta: { callsitePath: ["public-messages"] },
+      },
+      {
+        callsiteIndex: 1,
+        callsiteId: "internal-messages",
+        definition: useInternalMessagesAccessor,
+        args: [],
+        meta: { callsitePath: ["internal-messages"] },
+      },
+    ];
+
+    assert.throws(
+      () => new HostMiddlewareRuntime(new PropsCollisionHost(), PropsCollisionHost.structuralEntries),
+      /collides with a public structural prop/
+    );
   });
 
   it("supports static-only hooks without host lifecycle middleware", () => {

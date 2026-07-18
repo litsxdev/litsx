@@ -140,6 +140,8 @@ function getStructuralHookPhaseInfo(callPath, calleePath, state) {
     return {
       hasStaticPhase: false,
       hasInstancePhase: true,
+      propKeys: null,
+      accessorKeys: null,
     };
   }
   const binding = callPath.scope.getBinding(calleePath.node.name);
@@ -152,6 +154,8 @@ function getStructuralHookPhaseInfo(callPath, calleePath, state) {
       return {
         hasStaticPhase: info.hasStaticPhase === true,
         hasInstancePhase: info.hasInstancePhase !== false,
+        propKeys: Array.isArray(info.propKeys) ? info.propKeys : null,
+        accessorKeys: Array.isArray(info.accessorKeys) ? info.accessorKeys : null,
       };
     }
   }
@@ -160,6 +164,8 @@ function getStructuralHookPhaseInfo(callPath, calleePath, state) {
     return {
       hasStaticPhase: false,
       hasInstancePhase: true,
+      propKeys: null,
+      accessorKeys: null,
     };
   }
   const hasStaticPhase =
@@ -173,6 +179,11 @@ function getStructuralHookPhaseInfo(callPath, calleePath, state) {
   return {
     hasStaticPhase,
     hasInstancePhase,
+    propKeys: getStaticStructuralSurfaceKeys(getObjectMemberPath(objectPath, "props"), "props"),
+    accessorKeys: getStaticStructuralSurfaceKeys(
+      getObjectMemberPath(objectPath, "accessors"),
+      "accessors"
+    ),
   };
 }
 
@@ -1182,6 +1193,7 @@ function collectStructuralHookDeclaration(path, state, t) {
   }
   const id = path.get("id");
   if (id.isIdentifier()) {
+    validateStructuralHookSurfaceCollisions(path);
     state.structuralHookIdentifiers.add(id.node.name);
     transformStructuralHookDefinitionUse(path, state, t, id.node.name);
   }
@@ -1212,6 +1224,131 @@ function getObjectFunctionPath(objectPath, propertyName) {
     }
   }
   return null;
+}
+
+function getObjectMemberPath(objectPath, propertyName) {
+  const properties = objectPath?.get("properties") || [];
+  for (const propertyPath of properties) {
+    if (!propertyPath.isObjectProperty() && !propertyPath.isObjectMethod()) {
+      continue;
+    }
+    const key = propertyPath.get("key");
+    if (!key.isIdentifier({ name: propertyName }) && !key.isStringLiteral({ value: propertyName })) {
+      continue;
+    }
+    return propertyPath;
+  }
+  return null;
+}
+
+function getStaticObjectKeys(objectPath) {
+  if (!objectPath?.isObjectExpression()) {
+    return null;
+  }
+
+  const keys = [];
+  for (const propertyPath of objectPath.get("properties")) {
+    if (propertyPath.isSpreadElement()) {
+      continue;
+    }
+    if (!propertyPath.isObjectProperty() && !propertyPath.isObjectMethod()) {
+      return null;
+    }
+    if (propertyPath.node.computed === true) {
+      return null;
+    }
+    const key = propertyPath.get("key");
+    if (key.isIdentifier()) {
+      keys.push(key.node.name);
+      continue;
+    }
+    if (key.isStringLiteral()) {
+      keys.push(key.node.value);
+      continue;
+    }
+    return null;
+  }
+  return keys;
+}
+
+function getReturnedObjectExpressionPath(functionPath) {
+  if (!functionPath?.node) {
+    return null;
+  }
+
+  if (functionPath.isArrowFunctionExpression() && functionPath.get("body").isObjectExpression()) {
+    return functionPath.get("body");
+  }
+
+  const bodyPath = functionPath.get("body");
+  if (!bodyPath?.isBlockStatement()) {
+    return null;
+  }
+
+  const statements = bodyPath.get("body");
+  if (statements.length !== 1 || !statements[0].isReturnStatement()) {
+    return null;
+  }
+
+  const argumentPath = statements[0].get("argument");
+  return argumentPath?.isObjectExpression() ? argumentPath : null;
+}
+
+function getStaticStructuralSurfaceKeys(memberPath, propertyName) {
+  if (!memberPath?.node) {
+    return null;
+  }
+
+  if (memberPath.isObjectMethod()) {
+    return getStaticObjectKeys(getReturnedObjectExpressionPath(memberPath));
+  }
+
+  if (!memberPath.isObjectProperty()) {
+    return null;
+  }
+
+  const valuePath = memberPath.get("value");
+  if (propertyName === "props" && valuePath.isObjectExpression()) {
+    return getStaticObjectKeys(valuePath);
+  }
+  if (valuePath.isFunctionExpression() || valuePath.isArrowFunctionExpression()) {
+    return getStaticObjectKeys(getReturnedObjectExpressionPath(valuePath));
+  }
+  return null;
+}
+
+function validateStructuralHookSurfaceCollisions(declaratorPath) {
+  const objectPath = getStructuralDefinitionObjectPath(declaratorPath);
+  if (!objectPath) {
+    return;
+  }
+
+  const propsPath = getObjectMemberPath(objectPath, "props");
+  const accessorsPath = getObjectMemberPath(objectPath, "accessors");
+  if (!propsPath?.node || !accessorsPath?.node) {
+    return;
+  }
+
+  const propKeys = getStaticStructuralSurfaceKeys(propsPath, "props");
+  const accessorKeys = getStaticStructuralSurfaceKeys(accessorsPath, "accessors");
+  if (!propKeys || !accessorKeys) {
+    return;
+  }
+
+  const collisions = propKeys.filter((name) => accessorKeys.includes(name));
+  if (collisions.length === 0) {
+    return;
+  }
+
+  const hookName = declaratorPath.get("id").isIdentifier()
+    ? declaratorPath.get("id").node.name
+    : "anonymous structural hook";
+  const label = collisions.map((name) => `"${name}"`).join(", ");
+  throw accessorsPath.buildCodeFrameError(
+    `Structural hook "${hookName}" declares ${label} in both props and accessors. ` +
+    "Overrides within props() or within accessors() are allowed, but the same key cannot be declared across both channels. " +
+    "Public component properties must be declared only through props(); accessors() is reserved for non-public runtime host capabilities."
+  );
 }
 
 function transformStructuralHookDefinitionUse(declaratorPath, state, t, hookName) {
@@ -1265,6 +1402,10 @@ function transformStructuralHookCall(callPath, state, t, hookInfo) {
     callsiteId,
     callsitePath: t.cloneNode(callsitePath, true),
     definition: t.cloneNode(hookInfo.definition, true),
+    hookLabel: hookInfo.label,
+    propKeys: Array.isArray(hookInfo.propKeys) ? [...hookInfo.propKeys] : null,
+    accessorKeys: Array.isArray(hookInfo.accessorKeys) ? [...hookInfo.accessorKeys] : null,
+    sourceLoc: callPath.node.loc?.start ?? null,
   };
 
   if (hookInfo.hasStaticPhase && !hookInfo.hasInstancePhase) {
@@ -1607,6 +1748,40 @@ function ensureHelperImports(programPath, state, t) {
   ensureRuntimeNamedImports(programPath, state.runtimeModule, missingHelpers, t);
 }
 
+function emitStructuralSurfaceOverwriteWarnings(state, entries, channel) {
+  if (!Array.isArray(entries) || entries.length === 0) {
+    return;
+  }
+
+  const seenByKey = new Map();
+  const warnings = state.structuralSurfaceWarnings || (state.structuralSurfaceWarnings = []);
+
+  for (const entry of entries) {
+    const keys = channel === "props" ? entry?.propKeys : entry?.accessorKeys;
+    if (!Array.isArray(keys) || keys.length === 0) {
+      continue;
+    }
+
+    for (const key of keys) {
+      const previous = seenByKey.get(key);
+      if (previous) {
+        const loc = entry?.sourceLoc || previous?.sourceLoc || {};
+        warnings.push({
+          code: 91024,
+          message:
+            `Structural hook "${entry?.hookLabel || "unknown"}" overrides ${channel} key "${key}" ` +
+            `previously declared by structural hook "${previous?.hookLabel || "unknown"}". ` +
+            `Overrides within ${channel}() are allowed, but tooling is surfacing the overwrite.`,
+          propName: key,
+          line: typeof loc.line === "number" ? loc.line : null,
+          column: typeof loc.column === "number" ? loc.column : null,
+        });
+      }
+      seenByKey.set(key, entry);
+    }
+  }
+}
+
 function transformClass(classPath, state, t) {
   const bodyItems = classPath.get("body.body");
   const renderMethodPath = bodyItems.find(
@@ -1675,6 +1850,14 @@ function transformClass(classPath, state, t) {
   if (structuralStaticHookUsedInRender) {
     ensureStaticStructuralStaticEntries(classPath, structuralStaticEntries, t);
   }
+  emitStructuralSurfaceOverwriteWarnings(
+    state,
+    [...structuralEntries, ...structuralStaticEntries].sort(
+      (left, right) => (left.callsiteIndex ?? 0) - (right.callsiteIndex ?? 0)
+    ),
+    "props"
+  );
+  emitStructuralSurfaceOverwriteWarnings(state, structuralEntries, "accessors");
   if (structuralPropsUsedInRender) {
     ensureStructuralPropsGetter(classPath, state, t);
     state.usedHelpers.add("resolveStructuralProps");
@@ -1836,6 +2019,7 @@ export function createRuntimeHooksTransform({
             state.customHookHostParams = new WeakMap();
             state.usedHelpers = new Set();
             state.compiledCustomHookNames = new Set();
+            state.structuralSurfaceWarnings = [];
           },
           exit(path, state) {
             processDeclaredCustomHooks(path, state, t);
@@ -1845,6 +2029,14 @@ export function createRuntimeHooksTransform({
             ensurePrepareImport(path, state, t);
             mergeRuntimeImports(path, state, t);
             ensureHelperImports(path, state, t);
+            state.file.metadata ||= {};
+            const existingWarnings = Array.isArray(state.file.metadata.litsxWarnings)
+              ? state.file.metadata.litsxWarnings
+              : [];
+            state.file.metadata.litsxWarnings = [
+              ...existingWarnings,
+              ...(state.structuralSurfaceWarnings || []),
+            ];
           },
         },
         ImportDeclaration(path, state) {

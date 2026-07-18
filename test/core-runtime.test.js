@@ -29,10 +29,10 @@ import {
   useFormValidity,
   useFormValue,
   usePrevious,
+  resolveStructuralProps,
   useStableCallback,
   useStyle,
   useReducedState,
-  resolveStructuralEntry,
   useState,
   useControlledState,
   useAsyncState,
@@ -41,6 +41,7 @@ import {
   useExpose,
   useExternalStore,
   renderWithSoftSuspense,
+  resolveStructuralEntry,
 } from "../packages/core/src/index.js";
 import { LITSX_COMPONENT, LITSX_HOST_TYPE_ID } from "../packages/core/src/elements/index.js";
 import { LITSX_HOOK } from "../packages/core/src/index.js";
@@ -505,6 +506,44 @@ describe("litsx effects controller", () => {
     assert.deepStrictEqual(host.validity, createValiditySnapshot());
     assert.strictEqual(host.validationMessage, "");
     assert.strictEqual(host.willValidate, true);
+  });
+
+  it("does not surface FACE readonly host accessors as reactive structural props", () => {
+    class FacePropsHost {}
+
+    FacePropsHost.structuralEntries = [
+      {
+        callsiteIndex: 0,
+        callsiteId: "element-internals",
+        definition: useElementInternals,
+        args: [],
+        meta: { callsitePath: ["element-internals"] },
+      },
+      {
+        callsiteIndex: 1,
+        callsiteId: "form-value",
+        definition: useFormValue,
+        args: ["draft"],
+        meta: { callsitePath: ["form-value"] },
+      },
+      {
+        callsiteIndex: 2,
+        callsiteId: "form-validity",
+        definition: useFormValidity,
+        args: [],
+        meta: { callsitePath: ["form-validity"] },
+      },
+    ];
+
+    assert.deepStrictEqual(resolveStructuralProps(FacePropsHost), {});
+    assert.deepStrictEqual(
+      resolveStructuralProps(FacePropsHost, {
+        value: { type: String },
+      }),
+      {
+        value: { type: String },
+      },
+    );
   });
 
   it("manages FACE validity state through useFormValidity", () => {

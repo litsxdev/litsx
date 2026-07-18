@@ -126,9 +126,11 @@ function getDefinitionProps(definition) {
   }
 
   return isObject(resolvedDefinition.props)
-    ? () => resolvedDefinition.props
+    ? (_host, _state, _args, _meta, _entry, next) =>
+      mergeStructuralProps(next(), resolvedDefinition.props)
     : null;
 }
+
 
 function getDefinitionUse(definition) {
   const resolvedDefinition = resolveStructuralDefinition(definition);
@@ -238,13 +240,7 @@ function normalizeAccessorDescriptor(name, descriptor) {
   };
 }
 
-function resolveEntryAccessors(host, entry) {
-  const accessorsFactory = getDefinitionAccessors(entry?.definition);
-  if (!accessorsFactory) {
-    return {};
-  }
-
-  const rawAccessors = accessorsFactory(host, entry.state, entry.meta, entry);
+function normalizeAccessorMap(rawAccessors) {
   if (rawAccessors == null) {
     return {};
   }
@@ -257,6 +253,32 @@ function resolveEntryAccessors(host, entry) {
     accessors[name] = normalizeAccessorDescriptor(name, rawAccessors[name]);
   }
   return accessors;
+}
+
+function cloneAccessorMap(accessors) {
+  return accessors ? { ...accessors } : {};
+}
+
+function createStructuralEntryStateView(entry) {
+  if (entry?.state) {
+    return entry.state;
+  }
+  return {
+    static: entry?.staticState,
+    instance: undefined,
+  };
+}
+
+function resolveEntryAccessors(host, entry, previousAccessors = {}) {
+  const accessorsFactory = getDefinitionAccessors(entry?.definition);
+  if (!accessorsFactory) {
+    return cloneAccessorMap(previousAccessors);
+  }
+
+  const next = () => cloneAccessorMap(previousAccessors);
+  const rawAccessors = accessorsFactory(host, createStructuralEntryStateView(entry), next);
+  const normalized = normalizeAccessorMap(rawAccessors);
+  return normalized;
 }
 
 function isPlainObject(value) {
@@ -288,20 +310,27 @@ function mergeStructuralProps(base, override) {
   return next;
 }
 
-function resolveEntryProps(entry) {
+function resolveEntryProps(owner, entry) {
   const propsFactory = getDefinitionProps(entry?.definition);
   if (!propsFactory) {
-    return null;
+    return entry?.__litsxPreviousProps ?? null;
   }
 
-  const rawProps = propsFactory(entry.args ?? EMPTY_ARGS, entry.meta ?? {}, entry);
+  const nextBase = entry?.__litsxPreviousProps;
+  const next = () => {
+    if (nextBase == null) {
+      return nextBase;
+    }
+    return isObject(nextBase) ? { ...nextBase } : nextBase;
+  };
+  const rawProps = propsFactory(owner, createStructuralEntryStateView(entry), next);
   if (rawProps == null) {
-    return null;
+    return nextBase ?? null;
   }
   if (!isObject(rawProps)) {
     throw new TypeError("Structural hook props() must return an object of property descriptors.");
   }
-  return rawProps;
+  return mergeStructuralProps(nextBase, rawProps);
 }
 
 function getHostAccessorRegistry(host) {
@@ -319,39 +348,17 @@ function getHostAccessorRegistry(host) {
   return host[STRUCTURAL_HOST_ACCESSORS];
 }
 
-function getLatestAccessorOwner(owners) {
-  let activeOwner = null;
-  let activeOrder = -1;
-
-  for (const owner of owners.values()) {
-    if (owner.order >= activeOrder) {
-      activeOrder = owner.order;
-      activeOwner = owner;
-    }
-  }
-
-  return activeOwner;
-}
-
 function syncInstalledHostAccessor(host, name, registryEntry) {
-  const activeOwner = getLatestAccessorOwner(registryEntry.owners);
-  if (!activeOwner) {
-    delete host[name];
-    return false;
-  }
-
   if (typeof registryEntry.getWrapper !== "function") {
     registryEntry.getWrapper = function structuralAccessorGetter() {
-      const currentOwner = getLatestAccessorOwner(registryEntry.owners);
-      const getter = currentOwner?.descriptor?.get;
+      const getter = registryEntry.descriptor?.get;
       return typeof getter === "function" ? getter() : undefined;
     };
   }
 
   if (typeof registryEntry.setWrapper !== "function") {
     registryEntry.setWrapper = function structuralAccessorSetter(value) {
-      const currentOwner = getLatestAccessorOwner(registryEntry.owners);
-      const setter = currentOwner?.descriptor?.set;
+      const setter = registryEntry.descriptor?.set;
       if (typeof setter === "function") {
         setter(value);
       }
@@ -359,10 +366,10 @@ function syncInstalledHostAccessor(host, name, registryEntry) {
   }
 
   Object.defineProperty(host, name, {
-    get: typeof activeOwner.descriptor.get === "function"
+    get: typeof registryEntry.descriptor?.get === "function"
       ? registryEntry.getWrapper
       : undefined,
-    set: typeof activeOwner.descriptor.set === "function"
+    set: typeof registryEntry.descriptor?.set === "function"
       ? registryEntry.setWrapper
       : undefined,
     configurable: true,
@@ -371,32 +378,48 @@ function syncInstalledHostAccessor(host, name, registryEntry) {
   return true;
 }
 
-function removeEntryAccessor(host, entry, name) {
+function removeInstalledHostAccessor(host, name) {
   const registry = getHostAccessorRegistry(host);
   const registryEntry = registry?.get(name);
   if (!registryEntry) {
     return;
   }
-
-  registryEntry.owners.delete(entry.callsiteId ?? entry.id);
-  const stillInstalled = syncInstalledHostAccessor(host, name, registryEntry);
-  if (!stillInstalled) {
-    registry.delete(name);
-  }
+  delete host[name];
+  registry.delete(name);
 }
 
-function syncEntryAccessors(host, entry) {
+function syncHostAccessors(host, entries) {
   const registry = getHostAccessorRegistry(host);
-  if (!registry || !entry) {
+  if (!registry || !Array.isArray(entries)) {
     return;
   }
 
-  const nextAccessors = resolveEntryAccessors(host, entry);
-  const nextNames = Object.keys(nextAccessors);
+  const orderedEntries = entries
+    .filter(Boolean)
+    .slice()
+    .sort((left, right) => (left.callsiteIndex ?? 0) - (right.callsiteIndex ?? 0));
 
-  for (const existingName of entry.accessorNames || []) {
-    if (!nextNames.includes(existingName)) {
-      removeEntryAccessor(host, entry, existingName);
+  let nextAccessors = {};
+  for (const entry of orderedEntries) {
+    nextAccessors = resolveEntryAccessors(host, entry, nextAccessors);
+  }
+
+  const owner = host?.constructor ?? host;
+  const publicProps = resolveStructuralProps(owner);
+  for (const name of Object.keys(nextAccessors)) {
+    if (Object.prototype.hasOwnProperty.call(publicProps, name)) {
+      throw new TypeError(
+        `Structural accessor "${name}" collides with a public structural prop declared through props(). ` +
+        "Overrides within props() or within accessors() are allowed, but the same key cannot be declared across both channels. " +
+        "Public component properties must be declared only through props(); accessors() is reserved for non-public runtime host capabilities."
+      );
+    }
+  }
+
+  const nextNames = new Set(Object.keys(nextAccessors));
+  for (const existingName of Array.from(registry.keys())) {
+    if (!nextNames.has(existingName)) {
+      removeInstalledHostAccessor(host, existingName);
     }
   }
 
@@ -412,22 +435,16 @@ function syncEntryAccessors(host, entry) {
       }
 
       registryEntry = {
-        owners: new Map(),
+        descriptor: null,
         getWrapper: null,
         setWrapper: null,
       };
       registry.set(name, registryEntry);
     }
 
-    registryEntry.owners.set(entry.callsiteId ?? entry.id, {
-      order: entry.callsiteIndex,
-      descriptor: nextAccessors[name],
-    });
+    registryEntry.descriptor = nextAccessors[name];
     syncInstalledHostAccessor(host, name, registryEntry);
   }
-
-  entry.accessors = nextAccessors;
-  entry.accessorNames = nextNames;
 }
 
 function normalizeStructuralEntry(host, entry, index) {
@@ -455,7 +472,6 @@ function normalizeStructuralEntry(host, entry, index) {
       ? source.middlewares
       : getDefinitionMiddlewares(definition),
     accessors: {},
-    accessorNames: [],
   };
   normalized.state = createEntryState(host, definition, args, meta, source);
   return normalized;
@@ -494,9 +510,7 @@ export class HostMiddlewareRuntime {
     this.entries = resolveHostEntries(host, entries).map((entry, index) =>
       normalizeStructuralEntry(host, entry, index)
     );
-    for (const entry of this.entries) {
-      syncEntryAccessors(this.host, entry);
-    }
+    syncHostAccessors(this.host, this.entries);
   }
 
   getEntry(index) {
@@ -511,7 +525,7 @@ export class HostMiddlewareRuntime {
     const existing = this.entries[index];
     if (existing && existing.callsiteId === (entry?.callsiteId ?? entry?.id)) {
       refreshEntryArgsAndMeta(existing, entry?.args, entry?.meta);
-      syncEntryAccessors(this.host, existing);
+      syncHostAccessors(this.host, this.entries);
       return existing;
     }
 
@@ -521,7 +535,7 @@ export class HostMiddlewareRuntime {
       if (existingIndex >= 0) {
         const existingById = this.entries[existingIndex];
         refreshEntryArgsAndMeta(existingById, entry?.args, entry?.meta);
-        syncEntryAccessors(this.host, existingById);
+        syncHostAccessors(this.host, this.entries);
         return existingById;
       }
     }
@@ -532,7 +546,7 @@ export class HostMiddlewareRuntime {
     } else {
       this.entries[index] = normalized;
     }
-    syncEntryAccessors(this.host, normalized);
+    syncHostAccessors(this.host, this.entries);
     return normalized;
   }
 
@@ -693,7 +707,8 @@ export function resolveStructuralProps(owner, base = null) {
   ].sort((left, right) => (left.callsiteIndex ?? 0) - (right.callsiteIndex ?? 0));
 
   for (const entry of entries) {
-    mergedProps = mergeStructuralProps(mergedProps, resolveEntryProps(entry));
+    entry.__litsxPreviousProps = mergedProps;
+    mergedProps = resolveEntryProps(owner, entry);
   }
 
   const result = mergedProps ?? {};

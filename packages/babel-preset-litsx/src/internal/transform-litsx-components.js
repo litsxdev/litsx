@@ -117,7 +117,13 @@ export function createTransformFunctionToClassPlugin(defaultPluginOptions = {}) 
       post() {
         if (!this.file) return;
         this.file.metadata ||= {};
-        this.file.metadata.litsxWarnings = this.__litsxWarnings || [];
+        const existingWarnings = Array.isArray(this.file.metadata.litsxWarnings)
+          ? this.file.metadata.litsxWarnings
+          : [];
+        this.file.metadata.litsxWarnings = [
+          ...existingWarnings,
+          ...(this.__litsxWarnings || []),
+        ];
       },
       visitor: {
         Program: {

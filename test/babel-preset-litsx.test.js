@@ -331,19 +331,21 @@ describe("@litsx/babel-preset-litsx", () => {
     const hooksSource = [
       'import { defineHook } from "@litsx/core";',
       "export const useMessages = defineHook({",
-      "  props() {",
+      "  props(_host, _state, next) {",
       "    return {",
+      "      ...next(),",
       "      messages: { type: Object, attribute: false },",
       "    };",
       "  },",
       "  setup() {",
-      "    return { messages: null };",
+      "    return { runtimeMessages: null };",
       "  },",
-      "  accessors(_host, state) {",
+      "  accessors(_host, state, next) {",
       "    return {",
-      "      messages: {",
-      "        get: () => state.instance.messages,",
-      "        set: (value) => { state.instance.messages = value; },",
+      "      ...next(),",
+      "      runtimeMessages: {",
+        "        get: () => state.instance.runtimeMessages,",
+        "        set: (value) => { state.instance.runtimeMessages = value; },",
       "      },",
       "    };",
       "  },",
@@ -401,19 +403,21 @@ describe("@litsx/babel-preset-litsx", () => {
     const baseHook = [
       'import { defineHook } from "@litsx/core";',
       "const useMessages = defineHook({",
-      "  props() {",
+      "  props(_host, _state, next) {",
       "    return {",
+      "      ...next(),",
       "      messages: { type: Object, attribute: false },",
       "    };",
       "  },",
       "  setup() {",
-      "    return { messages: null };",
+      "    return { runtimeMessages: null };",
       "  },",
-      "  accessors(_host, state) {",
+      "  accessors(_host, state, next) {",
       "    return {",
-      "      messages: {",
-      "        get: () => state.instance.messages,",
-      "        set: (value) => { state.instance.messages = value; },",
+      "      ...next(),",
+      "      runtimeMessages: {",
+        "        get: () => state.instance.runtimeMessages,",
+        "        set: (value) => { state.instance.runtimeMessages = value; },",
       "      },",
       "    };",
       "  },",
@@ -468,8 +472,9 @@ describe("@litsx/babel-preset-litsx", () => {
     const source = [
       'import { defineHook } from "@litsx/core";',
       "const useBaseMessages = defineHook({",
-      "  props() {",
+      "  props(_host, _state, next) {",
       "    return {",
+      "      ...next(),",
       "      messages: { type: Object, attribute: false },",
       "    };",
       "  },",
@@ -478,8 +483,9 @@ describe("@litsx/babel-preset-litsx", () => {
       "  },",
       "});",
       "const usePriorityMessages = defineHook({",
-      "  props() {",
+      "  props(_host, _state, next) {",
       "    return {",
+      "      ...next(),",
       "      messages: { reflect: true },",
       "    };",
       "  },",
@@ -503,6 +509,98 @@ describe("@litsx/babel-preset-litsx", () => {
     assert.match(result.code, /callsiteIndex: 0[\s\S]*definition: useBaseMessages[\s\S]*callsiteIndex: 1[\s\S]*definition: usePriorityMessages/s);
     assert.match(result.code, /resolveStructuralStaticEntry\(this\.constructor, 0, "litsx-structural-[^"]+", useBaseMessages, \[\]/);
     assert.match(result.code, /resolveStructuralStaticEntry\(this\.constructor, 1, "litsx-structural-[^"]+", usePriorityMessages, \[\]/);
+  });
+
+  it("emits tooling warnings when later structural hooks override earlier props keys", () => {
+    const source = [
+      'import { defineHook } from "@litsx/core";',
+      "const useBaseMessages = defineHook({",
+      "  props(_host, _state, next) {",
+      "    return {",
+      "      ...next(),",
+      "      messages: { type: Object, attribute: false },",
+      "    };",
+      "  },",
+      "  use() {",
+      "    return null;",
+      "  },",
+      "});",
+      "const usePriorityMessages = defineHook({",
+      "  props(_host, _state, next) {",
+      "    return {",
+      "      ...next(),",
+      "      messages: { reflect: true },",
+      "    };",
+      "  },",
+      "  use() {",
+      "    return null;",
+      "  },",
+      "});",
+      "export function ProductCard() {",
+      "  useBaseMessages();",
+      "  usePriorityMessages();",
+      "  return <div />;",
+      "}",
+    ].join("\n");
+
+    const result = compileWithNativePreset(source, {
+      filename: "/virtual/structural-props-overwrite-warning.litsx",
+      presetOptions: { jsxTemplate: false },
+    });
+
+    const warnings = result.metadata?.litsxWarnings || [];
+    assert.ok(warnings.some((warning) =>
+      warning.code === 91024 &&
+      /overrides props key "messages"/.test(warning.message)
+    ));
+  });
+
+  it("emits tooling warnings when later structural hooks override earlier accessors keys", () => {
+    const source = [
+      'import { defineHook } from "@litsx/core";',
+      "const useBaseAccessor = defineHook({",
+      "  accessors(_host, _state, next) {",
+      "    return {",
+      "      ...next(),",
+      "      current: {",
+      "        get: () => 'first',",
+      "      },",
+      "    };",
+      "  },",
+      "  use() {",
+      "    return null;",
+      "  },",
+      "});",
+      "const useOverrideAccessor = defineHook({",
+      "  accessors(_host, _state, next) {",
+      "    return {",
+      "      ...next(),",
+      "      current: {",
+      "        get: () => 'second',",
+      "      },",
+      "    };",
+      "  },",
+      "  use() {",
+      "    return null;",
+      "  },",
+      "});",
+      "export function ProductCard() {",
+      "  useBaseAccessor();",
+      "  useOverrideAccessor();",
+      "  return <div />;",
+      "}",
+    ].join("\n");
+
+    const result = compileWithNativePreset(source, {
+      filename: "/virtual/structural-accessors-overwrite-warning.litsx",
+      presetOptions: { jsxTemplate: false },
+    });
+
+    const warnings = result.metadata?.litsxWarnings || [];
+    assert.ok(warnings.some((warning) =>
+      warning.code === 91024 &&
+      /overrides accessors key "current"/.test(warning.message)
+    ));
   });
 
   it("compiles structural hooks imported through @litsx/core namespace imports", () => {
@@ -576,8 +674,9 @@ describe("@litsx/babel-preset-litsx", () => {
       "  static(label) {",
       "    return { label: label.toUpperCase() };",
       "  },",
-      "  accessors(_host, state) {",
+      "  accessors(_host, state, next) {",
       "    return {",
+      "      ...next(),",
       "      value: {",
       "        get: () => state.static.label,",
       "      },",
@@ -604,6 +703,48 @@ describe("@litsx/babel-preset-litsx", () => {
     assert.match(result.code, /static structuralEntries = \[/);
     assert.match(result.code, /resolveStructuralEntry\(this, 0, "litsx-structural-[^"]+", useControl, \['draft'\]|\["draft"\]/);
     assert.doesNotMatch(result.code, /resolveStructuralStaticEntry\(/);
+  });
+
+  it("rejects structural hooks that declare the same key in props and accessors", () => {
+    const source = [
+      'import { defineHook } from "@litsx/core";',
+      "const useMessages = defineHook({",
+      "  props(_host, _state, next) {",
+      "    return {",
+      "      ...next(),",
+      "      messages: { type: Object, attribute: false },",
+      "    };",
+      "  },",
+      "  setup() {",
+      "    return { messages: null };",
+      "  },",
+      "  accessors(_host, state, next) {",
+      "    return {",
+      "      ...next(),",
+      "      messages: {",
+      "        get: () => state.instance.messages,",
+      "      },",
+      "    };",
+      "  },",
+      "  use() {",
+      "    return null;",
+      "  },",
+      "});",
+      "export function Field() {",
+      "  useMessages();",
+      "  return <div />;",
+      "}",
+    ].join("\n");
+
+    assert.throws(
+      () => transformFromAstSync(parser.parse(source, { sourceType: "module" }), source, {
+        configFile: false,
+        babelrc: false,
+        filename: "/virtual/structural-props-accessors-collision.litsx",
+        presets: [[nativePreset, { jsxTemplate: false }]],
+      }),
+      /declares "messages" in both props and accessors/
+    );
   });
 
   it("compiles namespace imported structural hooks discovered from authored modules", () => {

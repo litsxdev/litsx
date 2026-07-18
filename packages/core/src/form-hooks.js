@@ -183,20 +183,17 @@ function createFaceHostAccessors(shared) {
 }
 
 export const useElementInternals = defineHook({
-  props: {
-    form: { attribute: false },
-    validity: { attribute: false },
-    validationMessage: { type: String, attribute: false },
-    willValidate: { type: Boolean, attribute: false },
-  },
   setup(host) {
     return {
       shared: getOrCreateFaceState(host),
     };
   },
 
-  accessors(_host, state) {
-    return createFaceHostAccessors(state.instance.shared);
+  accessors(_host, state, next) {
+    return {
+      ...next(),
+      ...createFaceHostAccessors(state.instance.shared),
+    };
   },
 
   use(_host, state) {
@@ -208,12 +205,6 @@ export const useElementInternals = defineHook({
 });
 
 export const useFormValue = defineHook({
-  props: {
-    form: { attribute: false },
-    validity: { attribute: false },
-    validationMessage: { type: String, attribute: false },
-    willValidate: { type: Boolean, attribute: false },
-  },
   setup(host, args, _staticState, _meta, entry) {
     const shared = getOrCreateFaceState(host);
     const existingOwner = host?.[FORM_VALUE_OWNER];
@@ -239,8 +230,11 @@ export const useFormValue = defineHook({
     };
   },
 
-  accessors(_host, state) {
-    return createFaceHostAccessors(state.instance.shared);
+  accessors(_host, state, next) {
+    return {
+      ...next(),
+      ...createFaceHostAccessors(state.instance.shared),
+    };
   },
 
   middlewares: {
@@ -349,20 +343,17 @@ export const useFormValue = defineHook({
 });
 
 export const useFormValidity = defineHook({
-  props: {
-    form: { attribute: false },
-    validity: { attribute: false },
-    validationMessage: { type: String, attribute: false },
-    willValidate: { type: Boolean, attribute: false },
-  },
   setup(host) {
     return {
       shared: getOrCreateFaceState(host),
     };
   },
 
-  accessors(_host, state) {
-    return createFaceHostAccessors(state.instance.shared);
+  accessors(_host, state, next) {
+    return {
+      ...next(),
+      ...createFaceHostAccessors(state.instance.shared),
+    };
   },
 
   middlewares: {

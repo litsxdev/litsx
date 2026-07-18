@@ -1,4 +1,6 @@
 import * as babelParser from "@babel/parser";
+import fs from "node:fs";
+import path from "node:path";
 import {
   collectComponentLikeFunctions,
   collectImplicitChildrenProjectionIssues,
@@ -119,6 +121,16 @@ const ATTRIBUTE_COMPLETIONS_BY_TAG = {
 };
 
 const SINGLETON_STATIC_HOISTS = NATIVE_STATIC_HOISTS;
+const AUTHORED_SOURCE_EXTENSIONS = [
+  "",
+  ".litsx",
+  ".tsx",
+  ".ts",
+  ".jsx",
+  ".js",
+  ".mjs",
+  ".cjs",
+];
 
 const STATIC_HOIST_DOCUMENTATION_BY_NAME = {
   "static styles": "LitSX static style hoist. Declare component-scoped styles before render-time statements.",
@@ -855,7 +867,8 @@ function getFunctionLikeBody(node) {
   if (
     node.type === "FunctionDeclaration" ||
     node.type === "FunctionExpression" ||
-    node.type === "ArrowFunctionExpression"
+    node.type === "ArrowFunctionExpression" ||
+    node.type === "ObjectMethod"
   ) {
     return node.body ?? null;
   }
@@ -909,6 +922,504 @@ function parseAuthoredAst(sourceText, options = {}) {
       error,
     };
   }
+}
+
+function getParserPluginsForModule(filename, sourceText, fallbackPlugins = []) {
+  const plugins = new Set(fallbackPlugins);
+
+  if (/\.(?:[cm]?ts|tsx|litsx)$/i.test(filename ?? "")) {
+    plugins.add("typescript");
+  } else if (/\b(?:as|satisfies)\s+[^;,)]+/.test(sourceText ?? "")) {
+    plugins.add("typescript");
+  }
+
+  return Array.from(plugins);
+}
+
+function isPathLikeModuleName(moduleName) {
+  return typeof moduleName === "string" && (
+    moduleName.startsWith("./") ||
+    moduleName.startsWith("../") ||
+    moduleName.startsWith("/")
+  );
+}
+
+function getTransparentResolutionCandidates(modulePath) {
+  const requestedExtension = AUTHORED_SOURCE_EXTENSIONS.find(
+    (extension) => modulePath.endsWith(extension),
+  ) ?? null;
+
+  if (requestedExtension) {
+    return [
+      modulePath,
+      path.join(modulePath, `index${requestedExtension}`),
+    ];
+  }
+
+  return [
+    ...AUTHORED_SOURCE_EXTENSIONS.map((extension) => `${modulePath}${extension}`),
+    ...AUTHORED_SOURCE_EXTENSIONS.map((extension) => path.join(modulePath, `index${extension}`)),
+  ];
+}
+
+function resolveAuthoredModule(containingFile, moduleName, options = {}) {
+  if (typeof options.resolveModule === "function") {
+    const resolved = options.resolveModule(moduleName, containingFile);
+    if (typeof resolved === "string") {
+      return resolved;
+    }
+    if (resolved?.resolvedFileName) {
+      return resolved.resolvedFileName;
+    }
+  }
+
+  if (!containingFile || !isPathLikeModuleName(moduleName)) {
+    return null;
+  }
+
+  const candidateBase = path.resolve(path.dirname(containingFile), moduleName);
+  for (const candidate of getTransparentResolutionCandidates(candidateBase)) {
+    try {
+      if (fs.existsSync(candidate)) {
+        return candidate;
+      }
+    } catch {
+      return null;
+    }
+  }
+
+  return null;
+}
+
+function readAuthoredModuleSource(filename, options = {}) {
+  if (!filename) {
+    return null;
+  }
+
+  if (typeof options.readFile === "function") {
+    const source = options.readFile(filename);
+    if (typeof source === "string") {
+      return source;
+    }
+  }
+
+  try {
+    return fs.readFileSync(filename, "utf8");
+  } catch {
+    return null;
+  }
+}
+
+function getStaticObjectKeys(objectExpression) {
+  if (!objectExpression || objectExpression.type !== "ObjectExpression") {
+    return null;
+  }
+
+  const keys = [];
+  for (const property of objectExpression.properties ?? []) {
+    if (property?.type === "SpreadElement") {
+      continue;
+    }
+    if (property?.type !== "ObjectProperty" && property?.type !== "ObjectMethod") {
+      return null;
+    }
+    if (property.computed === true) {
+      return null;
+    }
+    if (property.key?.type === "Identifier") {
+      keys.push(property.key.name);
+      continue;
+    }
+    if (property.key?.type === "StringLiteral") {
+      keys.push(property.key.value);
+      continue;
+    }
+    return null;
+  }
+
+  return keys;
+}
+
+function getReturnedObjectKeys(node) {
+  if (!node) {
+    return null;
+  }
+
+  if (node.type === "ArrowFunctionExpression" && node.body?.type === "ObjectExpression") {
+    return getStaticObjectKeys(node.body);
+  }
+
+  const body = getFunctionLikeBody(node);
+  if (!body || body.type !== "BlockStatement") {
+    return null;
+  }
+
+  if (body.body.length !== 1 || body.body[0]?.type !== "ReturnStatement") {
+    return null;
+  }
+
+  return getStaticObjectKeys(body.body[0].argument);
+}
+
+function getObjectMember(node, name) {
+  if (!node || node.type !== "ObjectExpression") {
+    return null;
+  }
+
+  for (const property of node.properties ?? []) {
+    if (property?.type !== "ObjectProperty" && property?.type !== "ObjectMethod") {
+      continue;
+    }
+    const key = property.key;
+    const matches = (
+      (key?.type === "Identifier" && key.name === name) ||
+      (key?.type === "StringLiteral" && key.value === name)
+    );
+    if (matches) {
+      return property;
+    }
+  }
+
+  return null;
+}
+
+function getDefineHookPropKeys(init) {
+  const definition = init?.arguments?.[0];
+  if (!definition || definition.type !== "ObjectExpression") {
+    return null;
+  }
+
+  const propsProperty = getObjectMember(definition, "props");
+  if (!propsProperty) {
+    return null;
+  }
+
+  if (propsProperty.type === "ObjectMethod") {
+    return getReturnedObjectKeys(propsProperty);
+  }
+
+  if (propsProperty.value?.type === "ObjectExpression") {
+    return getStaticObjectKeys(propsProperty.value);
+  }
+
+  return getReturnedObjectKeys(propsProperty.value);
+}
+
+function isDefineHookCallee(node, analysis) {
+  if (!node) {
+    return false;
+  }
+
+  if (node.type === "Identifier") {
+    return analysis.defineHookLocals.has(node.name);
+  }
+
+  if (
+    node.type === "MemberExpression" &&
+    node.computed === false &&
+    node.property?.type === "Identifier" &&
+    node.property.name === "defineHook" &&
+    node.object?.type === "Identifier"
+  ) {
+    return analysis.runtimeNamespaceLocals.has(node.object.name);
+  }
+
+  return false;
+}
+
+function analyzeComponentPropModule(sourceText, options = {}) {
+  const cacheKey = options.filename ?? `inline:${sourceText}`;
+  const sharedCache = options.__componentPropModuleCache ?? new Map();
+  if (sharedCache.has(cacheKey)) {
+    return sharedCache.get(cacheKey);
+  }
+
+  const parseOptions = {
+    ...options,
+    plugins: getParserPluginsForModule(options.filename, sourceText, options.plugins ?? []),
+  };
+  const { ast } = parseAuthoredAst(sourceText, parseOptions);
+  if (!ast) {
+    sharedCache.set(cacheKey, null);
+    return null;
+  }
+
+  const analysis = {
+    filename: options.filename ?? null,
+    sourceText,
+    ast,
+    defineHookLocals: new Set(),
+    runtimeNamespaceLocals: new Set(),
+    importBindings: new Map(),
+    namespaceImports: new Map(),
+    structuralPropKeysByLocal: new Map(),
+    localCustomHooks: new Map(),
+    exportBindings: new Map(),
+    customHookPropCache: new Map(),
+    exportPropCache: new Map(),
+    moduleCache: sharedCache,
+    options,
+  };
+  sharedCache.set(cacheKey, analysis);
+
+  const programBody = ast.program?.body ?? [];
+  for (const statement of programBody) {
+    if (statement?.type === "ImportDeclaration") {
+      const sourceValue = statement.source?.value;
+      for (const specifier of statement.specifiers ?? []) {
+        const localName = specifier.local?.name;
+        if (!localName) {
+          continue;
+        }
+
+        if (specifier.type === "ImportNamespaceSpecifier") {
+          analysis.namespaceImports.set(localName, sourceValue);
+          analysis.runtimeNamespaceLocals.add(localName);
+          continue;
+        }
+
+        const importedName = specifier.type === "ImportDefaultSpecifier"
+          ? "default"
+          : specifier.imported?.name ?? specifier.imported?.value ?? null;
+        analysis.importBindings.set(localName, {
+          importedName,
+          source: sourceValue,
+        });
+
+        if (importedName === "defineHook") {
+          analysis.defineHookLocals.add(localName);
+        }
+      }
+    }
+  }
+
+  function registerLocalFunction(localName, node) {
+    if (/^use[A-Z0-9]/.test(localName)) {
+      analysis.localCustomHooks.set(localName, node);
+    }
+  }
+
+  function registerExport(exportedName, binding) {
+    if (exportedName) {
+      analysis.exportBindings.set(exportedName, binding);
+    }
+  }
+
+  for (const statement of programBody) {
+    let declaration = statement;
+    let exportSpecifiers = null;
+    let exportSource = null;
+
+    if (statement?.type === "ExportNamedDeclaration") {
+      declaration = statement.declaration ?? null;
+      exportSpecifiers = statement.specifiers ?? [];
+      exportSource = statement.source?.value ?? null;
+    } else if (statement?.type === "ExportDefaultDeclaration") {
+      declaration = statement.declaration ?? null;
+      exportSpecifiers = [{ local: declaration?.id ?? null, exported: { name: "default" } }];
+    }
+
+    if (declaration?.type === "FunctionDeclaration" && declaration.id?.type === "Identifier") {
+      registerLocalFunction(declaration.id.name, declaration);
+      if (statement?.type === "ExportNamedDeclaration" || statement?.type === "ExportDefaultDeclaration") {
+        registerExport(
+          statement.type === "ExportDefaultDeclaration" ? "default" : declaration.id.name,
+          { kind: "custom", localName: declaration.id.name },
+        );
+      }
+      continue;
+    }
+
+    if (declaration?.type === "VariableDeclaration") {
+      for (const declarator of declaration.declarations ?? []) {
+        if (declarator.id?.type !== "Identifier") {
+          continue;
+        }
+
+        const localName = declarator.id.name;
+        const init = declarator.init;
+        if (init?.type === "CallExpression" && isDefineHookCallee(init.callee, analysis)) {
+          analysis.structuralPropKeysByLocal.set(localName, getDefineHookPropKeys(init) ?? []);
+          if (statement?.type === "ExportNamedDeclaration") {
+            registerExport(localName, { kind: "structural", localName });
+          }
+          continue;
+        }
+
+        if (init?.type === "FunctionExpression" || init?.type === "ArrowFunctionExpression") {
+          registerLocalFunction(localName, init);
+          if (statement?.type === "ExportNamedDeclaration") {
+            registerExport(localName, { kind: "custom", localName });
+          }
+        }
+      }
+    }
+
+    if (statement?.type === "ExportNamedDeclaration" && exportSpecifiers?.length > 0) {
+      for (const specifier of exportSpecifiers) {
+        const localName = specifier.local?.name ?? specifier.local?.value ?? null;
+        const exportedName = specifier.exported?.name ?? specifier.exported?.value ?? null;
+        if (!localName || !exportedName) {
+          continue;
+        }
+
+        if (exportSource) {
+          registerExport(exportedName, {
+            kind: "reexport",
+            source: exportSource,
+            exportName: localName,
+          });
+          continue;
+        }
+
+        if (analysis.structuralPropKeysByLocal.has(localName)) {
+          registerExport(exportedName, { kind: "structural", localName });
+        } else if (analysis.localCustomHooks.has(localName)) {
+          registerExport(exportedName, { kind: "custom", localName });
+        }
+      }
+    }
+  }
+
+  return analysis;
+}
+
+function collectStructuralPropNamesFromFunction(functionNode, analysis, seenHooks = new Set()) {
+  const propNames = new Set();
+  const body = getFunctionLikeBody(functionNode);
+  if (!body) {
+    return propNames;
+  }
+
+  function addImportedExportPropNames(source, exportName) {
+    const resolvedFileName = resolveAuthoredModule(analysis.filename, source, analysis.options);
+    if (!resolvedFileName) {
+      return;
+    }
+
+    const importedSourceText = readAuthoredModuleSource(resolvedFileName, analysis.options);
+    if (typeof importedSourceText !== "string") {
+      return;
+    }
+
+    const importedAnalysis = analyzeComponentPropModule(importedSourceText, {
+      ...analysis.options,
+      filename: resolvedFileName,
+      __componentPropModuleCache: analysis.moduleCache,
+    });
+    const importedPropNames = getExportStructuralPropNames(importedAnalysis, exportName, seenHooks);
+    for (const name of importedPropNames) {
+      propNames.add(name);
+    }
+  }
+
+  walk(body, (child) => {
+    if (child?.type !== "CallExpression") {
+      return;
+    }
+
+    const callee = child.callee;
+    if (callee?.type === "Identifier") {
+      const structuralPropKeys = analysis.structuralPropKeysByLocal.get(callee.name);
+      if (structuralPropKeys) {
+        for (const name of structuralPropKeys) {
+          propNames.add(name);
+        }
+      }
+
+      const localCustomHook = analysis.localCustomHooks.get(callee.name);
+      if (localCustomHook) {
+        const cacheKey = `${analysis.filename ?? "<inline>"}::${callee.name}`;
+        if (seenHooks.has(cacheKey)) {
+          return;
+        }
+        seenHooks.add(cacheKey);
+        const nestedPropNames = getCustomHookStructuralPropNames(callee.name, localCustomHook, analysis, seenHooks);
+        seenHooks.delete(cacheKey);
+        for (const name of nestedPropNames) {
+          propNames.add(name);
+        }
+        return;
+      }
+
+      const importedBinding = analysis.importBindings.get(callee.name);
+      if (importedBinding?.source && importedBinding.importedName) {
+        addImportedExportPropNames(importedBinding.source, importedBinding.importedName);
+      }
+      return;
+    }
+
+    if (
+      callee?.type === "MemberExpression" &&
+      callee.computed === false &&
+      callee.object?.type === "Identifier" &&
+      callee.property?.type === "Identifier"
+    ) {
+      const source = analysis.namespaceImports.get(callee.object.name);
+      if (source) {
+        addImportedExportPropNames(source, callee.property.name);
+      }
+    }
+  });
+
+  return propNames;
+}
+
+function getCustomHookStructuralPropNames(localName, functionNode, analysis, seenHooks = new Set()) {
+  const cacheKey = localName;
+  if (analysis.customHookPropCache.has(cacheKey)) {
+    return analysis.customHookPropCache.get(cacheKey);
+  }
+
+  const propNames = Array.from(
+    collectStructuralPropNamesFromFunction(functionNode, analysis, seenHooks),
+  ).sort();
+  analysis.customHookPropCache.set(cacheKey, propNames);
+  return propNames;
+}
+
+function getExportStructuralPropNames(analysis, exportName, seenHooks = new Set()) {
+  if (!analysis || !exportName) {
+    return [];
+  }
+
+  if (analysis.exportPropCache.has(exportName)) {
+    return analysis.exportPropCache.get(exportName);
+  }
+
+  const binding = analysis.exportBindings.get(exportName);
+  if (!binding) {
+    analysis.exportPropCache.set(exportName, []);
+    return [];
+  }
+
+  let propNames = [];
+  if (binding.kind === "structural") {
+    propNames = analysis.structuralPropKeysByLocal.get(binding.localName) ?? [];
+  } else if (binding.kind === "custom") {
+    const customHookNode = analysis.localCustomHooks.get(binding.localName);
+    propNames = customHookNode
+      ? getCustomHookStructuralPropNames(binding.localName, customHookNode, analysis, seenHooks)
+      : [];
+  } else if (binding.kind === "reexport" && binding.source) {
+    const resolvedFileName = resolveAuthoredModule(analysis.filename, binding.source, analysis.options);
+    const importedSourceText = resolvedFileName
+      ? readAuthoredModuleSource(resolvedFileName, analysis.options)
+      : null;
+    const importedAnalysis = (
+      resolvedFileName && typeof importedSourceText === "string"
+    )
+      ? analyzeComponentPropModule(importedSourceText, {
+        ...analysis.options,
+        filename: resolvedFileName,
+        __componentPropModuleCache: analysis.moduleCache,
+      })
+      : null;
+    propNames = getExportStructuralPropNames(importedAnalysis, binding.exportName, seenHooks);
+  }
+
+  analysis.exportPropCache.set(exportName, propNames);
+  return propNames;
 }
 
 function collectTemplateInterpolationBindingIssues(sourceText) {
@@ -1087,6 +1598,7 @@ export function inferLitsxComponentPropNames(sourceText, options = {}) {
     return {};
   }
 
+  const moduleAnalysis = analyzeComponentPropModule(sourceText, options);
   const componentPropNames = {};
 
   for (const { node, parent } of collectComponentLikeFunctions(ast)) {
@@ -1095,9 +1607,13 @@ export function inferLitsxComponentPropNames(sourceText, options = {}) {
       continue;
     }
 
-    const propNames = inferStaticPropertyNames(node);
-    if (propNames.length > 0) {
-      componentPropNames[componentName] = propNames;
+    const propNames = new Set(inferStaticPropertyNames(node));
+    const structuralPropNames = collectStructuralPropNamesFromFunction(node, moduleAnalysis);
+    for (const name of structuralPropNames) {
+      propNames.add(name);
+    }
+    if (propNames.size > 0) {
+      componentPropNames[componentName] = Array.from(propNames).sort();
     }
   }
 
@@ -1226,10 +1742,12 @@ function getObjectPatternImplicitMetadataNames(pattern) {
   return names;
 }
 
-function collectDestructuredPropsMetadataIssues(ast, virtualization) {
+function collectDestructuredPropsMetadataIssues(ast, virtualization, sourceText, options = {}) {
   const issues = [];
+  const componentPropNames = inferLitsxComponentPropNames(sourceText, options);
 
-  for (const { node } of collectComponentLikeFunctions(ast)) {
+  for (const { node, parent } of collectComponentLikeFunctions(ast)) {
+    const componentName = getComponentLikeFunctionName(node, parent);
     const firstParamPattern = getFirstParamObjectPattern(node);
     if (!firstParamPattern || firstParamPattern.hasTypeAnnotation) {
       continue;
@@ -1241,6 +1759,9 @@ function collectDestructuredPropsMetadataIssues(ast, virtualization) {
     }
 
     const staticPropNames = new Set(inferStaticPropertyNames(node));
+    for (const name of componentPropNames[componentName] ?? []) {
+      staticPropNames.add(name);
+    }
     const implicitMetadataPropNames = getObjectPatternImplicitMetadataNames(firstParamPattern.pattern);
     const uncoveredPropNames = destructuredPropNames.filter(
       (name) => !staticPropNames.has(name) && !implicitMetadataPropNames.has(name),
@@ -1578,7 +2099,7 @@ export function collectLitsxAuthoredIssues(sourceText, options = {}) {
   issues.push(...collectUseExposeIssues(ast, virtualization));
   issues.push(...collectReactMemoIssues(ast, virtualization));
   issues.push(...collectReactCompatSurfaceIssues(ast, virtualization));
-  issues.push(...collectDestructuredPropsMetadataIssues(ast, virtualization));
+  issues.push(...collectDestructuredPropsMetadataIssues(ast, virtualization, sourceText, options));
   issues.push(...collectPropsAccessIssues(ast, virtualization));
   issues.push(...collectHoistsFirstIssues(ast, virtualization));
   issues.push(...collectImplicitChildrenProjectionIssues(ast).map((issue) =>

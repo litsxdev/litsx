@@ -856,7 +856,23 @@ export default function init(modules) {
             "typescript-plugin",
             "authored-diagnostics",
             () => collectLitsxAuthoredDiagnostics(record.sourceText, ts, {
+              filename: fileName,
               plugins: record.parserPlugins,
+              readFile(nextFileName) {
+                const snapshot = host.getScriptSnapshot(nextFileName);
+                return snapshot ? readSnapshotText(snapshot) : null;
+              },
+              resolveModule(moduleName, containingFile) {
+                return resolveTransparentModuleName(ts, moduleName, containingFile, host.fileExists) ??
+                  host.resolveModuleNameLiterals?.([{ text: moduleName }], containingFile)?.[0]?.resolvedModule ??
+                  ts.resolveModuleName(
+                    moduleName,
+                    containingFile,
+                    compilerOptions,
+                    host,
+                  )?.resolvedModule ??
+                  null;
+              },
             }),
           );
           record.authoredDiagnosticsReady = true;

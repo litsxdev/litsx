@@ -662,7 +662,14 @@ function getComponentStaticPropCompletionEntries(service, ts, queryFileName, sou
   }
 
   const propNames = inferLitsxComponentPropNames(componentSourceText, {
+    filename: componentFileName,
     plugins: getSourceParserPlugins(componentFileName),
+    readFile(nextFileName) {
+      return service.readSourceText?.(nextFileName) ?? null;
+    },
+    resolveModule(moduleName, containingFile) {
+      return service.resolveModuleName?.(moduleName, containingFile) ?? null;
+    },
   })[reference.exportName] ?? [];
 
   return propNames
@@ -1179,7 +1186,14 @@ function createLitsxEditorSession(options = {}) {
       ));
 
     const authoredDiagnostics = collectLitsxAuthoredDiagnostics(sourceText, ts, {
+      filename: fileName,
       plugins: getParserPlugins(languageId),
+      readFile(nextFileName) {
+        return service.readSourceText?.(nextFileName) ?? null;
+      },
+      resolveModule(moduleName, containingFile) {
+        return service.resolveModuleName?.(moduleName, containingFile) ?? null;
+      },
     });
     const seen = new Set(
       remappedDiagnostics.map((diagnostic) => `${diagnostic.code}:${diagnostic.start}:${diagnostic.length}`),
