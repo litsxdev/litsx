@@ -164,7 +164,12 @@ function createFaceHostAccessors(shared) {
       get: () => cloneValiditySnapshot(shared.internals?.validity ?? shared.validity),
     },
     validationMessage: {
-      get: () => readValidationMessage(shared.internals) || shared.validationMessage,
+      get: () => {
+        if (shared.internals) {
+          return readValidationMessage(shared.internals);
+        }
+        return shared.validationMessage;
+      },
     },
     willValidate: {
       get: () => {
@@ -393,6 +398,8 @@ export const useFormValidity = defineHook({
   },
 
   use(host, state) {
+    updateSharedValiditySnapshot(state.instance.shared);
+
     const setValidity = useEvent(host, (flags = {}, message = "", anchor) => {
       if (typeof state.instance.shared.internals?.setValidity !== "function") {
         return;

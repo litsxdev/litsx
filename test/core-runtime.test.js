@@ -578,6 +578,42 @@ describe("litsx effects controller", () => {
     assert.strictEqual(host.updates, 2);
   });
 
+  it("resyncs FACE validity snapshots from live internals on render", () => {
+    const host = new TestHost();
+
+    prepareEffects(host);
+    let control = resolveStructuralEntry(
+      host,
+      0,
+      "form-validity",
+      useFormValidity,
+      [],
+      { callsitePath: ["form-validity"] },
+    );
+
+    control.setValidity({ valueMissing: true }, "Required");
+
+    host.__internalsValidity = createValiditySnapshot();
+    host.__internalsValidationMessage = "";
+
+    prepareEffects(host);
+    control = resolveStructuralEntry(
+      host,
+      0,
+      "form-validity",
+      useFormValidity,
+      [],
+      { callsitePath: ["form-validity"] },
+    );
+
+    assert.strictEqual(control.validity.valid, true);
+    assert.strictEqual(control.validity.valueMissing, false);
+    assert.strictEqual(control.validationMessage, "");
+    assert.strictEqual(host.validity.valid, true);
+    assert.strictEqual(host.validity.valueMissing, false);
+    assert.strictEqual(host.validationMessage, "");
+  });
+
   it("returns the previous render value", () => {
     const host = new TestHost();
 
