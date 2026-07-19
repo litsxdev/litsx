@@ -172,13 +172,15 @@ export default declare((api) => {
   }
 
   function buildEnsureStatement(tag, expression) {
-    return t.expressionStatement(
+    const statement = t.expressionStatement(
       t.callExpression(t.identifier("ensureLazyElement"), [
         t.thisExpression(),
         t.stringLiteral(tag),
         t.cloneNode(expression, true),
       ])
     );
+    statement.__litsxAutoEnsureLazyElement = true;
+    return statement;
   }
 
   function collectRenderedTagsFromNode(node, tags = new Set()) {
