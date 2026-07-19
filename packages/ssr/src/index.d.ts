@@ -161,7 +161,7 @@ export interface LitsxSsrMetadata {
 
   /**
    * Render discovered client imports as a JSON script tag that
-   * `@litsx/ssr/client` can consume.
+   * `@litsx/ssr/hydration` can consume.
    */
   renderClientImportsData(scriptId?: string): string;
 
@@ -273,7 +273,7 @@ export interface LitsxSsrDocumentOptions extends LitsxSsrRenderOptions {
    * Client entry module for the standard LitSX SSR hydration flow.
    *
    * When provided, `renderDocument(...)` emits a small bootstrap wrapper that
-   * imports `hydratePage(...)` from `@litsx/ssr/client`, then imports this
+   * imports `hydratePage(...)` from `@litsx/ssr/hydration`, then imports this
    * client entry through `register()`.
    */
   clientEntry?: string | null | undefined;

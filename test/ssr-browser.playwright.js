@@ -270,7 +270,7 @@ test("hydrates a real browser page rendered by @litsx/ssr", async ({ page }) => 
   await fs.writeFile(
     clientEntryPath,
     `
-import { hydratePage, LITSX_HYDRATION_PAYLOAD_PROPERTY } from "${viteFsSpecifier(path.join(repoRoot, "packages/ssr/src/client.js"))}";
+import { hydratePage, LITSX_HYDRATION_PAYLOAD_PROPERTY } from "${viteFsSpecifier(path.join(repoRoot, "packages/ssr/src/hydration.js"))}";
 
 try {
   await hydratePage({
@@ -396,7 +396,7 @@ test("reveals suspense-list guide cards after SSR hydration", async ({ page }) =
   await fs.writeFile(
     clientEntryPath,
     `
-import { hydratePage } from "${viteFsSpecifier(path.join(repoRoot, "packages/ssr/src/client.js"))}";
+import { hydratePage } from "${viteFsSpecifier(path.join(repoRoot, "packages/ssr/src/hydration.js"))}";
 
 try {
   await hydratePage({

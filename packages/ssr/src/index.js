@@ -129,7 +129,7 @@ function renderClientEntryBootstrapScript(clientEntry) {
   }
 
   const source = `
-import { hydratePage } from "@litsx/ssr/client";
+import { hydratePage } from "@litsx/ssr/hydration";
 
 await hydratePage({
   register: () => import(${JSON.stringify(clientEntry)}),
