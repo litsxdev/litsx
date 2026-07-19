@@ -1,4 +1,7 @@
 import assert from "assert";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { describe, it } from "vitest";
 import { LitElement, html } from "lit";
 import { renderLight } from "@lit-labs/ssr-client/directives/render-light.js";
@@ -7,7 +10,15 @@ import {
   LITSX_MODULE_ID,
   __litsxScopedTemplate,
 } from "../packages/core/src/elements/index.js";
-import { renderDocument, renderToStream, renderToString } from "../packages/ssr/src/index.js";
+import {
+  createDocumentContext,
+  createEntry,
+  LitsxSsrMaxSuspensePassesError,
+  renderDocument,
+  renderBootstrap,
+  renderToStream,
+  renderToString,
+} from "../packages/ssr/src/index.js";
 import { css } from "lit";
 import { prepareEffects, useMemoValue } from "../packages/core/src/effect-hooks.js";
 import { useId, useRef, useState, useExternalStore } from "../packages/core/src/state-hooks.js";
@@ -294,7 +305,20 @@ describe("@litsx/ssr", () => {
 
     const firstChunk = await readPromise;
     assert.strictEqual(firstChunk.done, false);
-    assert.match(firstChunk.value, /stream-ready/);
+    assert.ok(typeof firstChunk.value === "string");
+    assert.doesNotMatch(firstChunk.value, /Loading\.\.\./);
+    assert.doesNotMatch(firstChunk.value, /stream-ready-early/);
+    let htmlOutput = firstChunk.value;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+      htmlOutput += value;
+    }
+
+    assert.match(htmlOutput, /stream-ready/);
     const metadata = await streamed.allReady;
     assert.deepStrictEqual(metadata.clientImports, []);
     assert.deepStrictEqual(metadata.hydrationData.roots, [
@@ -326,7 +350,13 @@ describe("@litsx/ssr", () => {
             maxSuspensePasses: 2,
           },
         ),
-      /LitSX SSR exceeded 2 suspense render passes/,
+      (error) => {
+        assert.ok(error instanceof LitsxSsrMaxSuspensePassesError);
+        assert.strictEqual(error.code, "LITSX_SSR_MAX_SUSPENSE_PASSES_EXCEEDED");
+        assert.strictEqual(error.maxPasses, 2);
+        assert.match(error.message, /LitSX SSR exceeded 2 suspense render passes/);
+        return true;
+      },
     );
   });
 
@@ -367,6 +397,14 @@ describe("@litsx/ssr", () => {
     assert.match(result.document, /<product-card\b[^>]*data-litsx-root="litsx-root-0"/);
     assert.strictEqual(result.html.includes("Doc Shoe"), true);
     assert.strictEqual(result.document.includes(result.html), true);
+    assert.strictEqual(result.lang, "en");
+    assert.strictEqual(result.title, "SSR Document");
+    assert.strictEqual(result.head, '<meta name="description" content="doc-test">');
+    assert.deepStrictEqual(result.htmlAttributes, { lang: "en" });
+    assert.deepStrictEqual(result.bodyAttributes, { class: "ssr-page" });
+    assert.strictEqual(result.modulePreloads, result.renderModulePreloads());
+    assert.strictEqual(result.hydrationScript, result.renderHydrationData());
+    assert.strictEqual(result.defaultDocument, result.document);
   });
 
   it("renders authored document config through renderToString", async () => {
@@ -379,18 +417,54 @@ describe("@litsx/ssr", () => {
       }
     }
 
-    const result = await renderToString({
+    const result = await renderToString(createEntry({
       elements: {
         "product-card": ProductCard,
       },
       render({ html }) {
         return html`<product-card .product=${{ name: "Authored String" }}></product-card>`;
       },
-    });
+    }));
 
     assert.match(result.html, /<product-card\b[^>]*data-litsx-root="litsx-root-0"/);
     assert.match(result.html, /Authored String/);
     assert.deepStrictEqual(result.clientImports, ["/src/ProductCard.litsx"]);
+  });
+
+  it("renders explicit authored-entry configs through createEntry", async () => {
+    class ProductCard extends LitElement {
+      static [LITSX_MODULE_ID] = "/src/ProductCard.litsx";
+
+      render() {
+        prepareEffects(this);
+        return html`<article>${this.product.name}</article>`;
+      }
+    }
+
+    const result = await renderToString(createEntry({
+      elements: {
+        "product-card": ProductCard,
+      },
+      render({ html }) {
+        return html`<product-card .product=${{ name: "Explicit Authored" }}></product-card>`;
+      },
+    }));
+
+    assert.match(result.html, /<product-card\b[^>]*data-litsx-root="litsx-root-0"/);
+    assert.match(result.html, /Explicit Authored/);
+    assert.deepStrictEqual(result.clientImports, ["/src/ProductCard.litsx"]);
+  });
+
+  it("requires createEntry for authored SSR configs", async () => {
+    await assert.rejects(
+      () =>
+        renderToString({
+          render({ html }) {
+            return html`<main>missing marker</main>`;
+          },
+        }),
+      /renderToString\(\.\.\.\) authored entry objects must be wrapped in createEntry\(\.\.\.\)/,
+    );
   });
 
   it("renders authored document config through renderToStream", async () => {
@@ -403,14 +477,14 @@ describe("@litsx/ssr", () => {
       }
     }
 
-    const streamed = await renderToStream({
+    const streamed = await renderToStream(createEntry({
       elements: {
         "product-card": ProductCard,
       },
       render({ html }) {
         return html`<product-card .product=${{ name: "Authored Stream" }}></product-card>`;
       },
-    });
+    }));
     const reader = streamed.stream.getReader();
     let htmlOutput = "";
 
@@ -436,6 +510,23 @@ describe("@litsx/ssr", () => {
 
     assert.match(result.document, /<script type="module" src="\/src\/raw-bootstrap\.js"><\/script>/);
     assert.doesNotMatch(result.document, /hydratePage/);
+    assert.doesNotMatch(result.document, /import\("\/src\/main\.js"\)/);
+  });
+
+  it("resolves clientEntry through assetResolver before emitting the hydration bootstrap", async () => {
+    const result = await renderDocument(html`<main>ready</main>`, {
+      clientEntry: "/src/main.js",
+      assetResolver(moduleId) {
+        if (moduleId === "/src/main.js") {
+          return "/assets/main.abc123.js";
+        }
+
+        return moduleId;
+      },
+    });
+
+    assert.match(result.document, /import \{ hydratePage \} from "@litsx\/ssr\/client";/);
+    assert.match(result.document, /register: \(\) =\\u003E import\("\/assets\/main\.abc123\.js"\)/);
     assert.doesNotMatch(result.document, /import\("\/src\/main\.js"\)/);
   });
 
@@ -489,6 +580,94 @@ describe("@litsx/ssr", () => {
     assert.match(result.document, /import \{ hydratePage \} from "@litsx\/ssr\/client";/);
     assert.match(result.document, /register: \(\) =\\u003E import\("\/src\/main\.js"\)/);
     assert.doesNotMatch(result.document, /<meta charset="utf-8">/);
+    assert.match(result.defaultDocument, /<meta charset="utf-8">/);
+    assert.strictEqual(result.htmlAttributesString, ' lang="en"');
+    assert.strictEqual(result.bodyAttributesString, "");
+  });
+
+  it("lets framework consumers assemble a custom document shell from fragment primitives", async () => {
+    class ProductCard extends LitElement {
+      static [LITSX_MODULE_ID] = "/src/ProductCard.litsx";
+
+      render() {
+        return html`<article>${this.product.name}</article>`;
+      }
+    }
+
+    const fragment = await renderToString(
+      html`<product-card .product=${{ name: "Framework Shoe" }}></product-card>`,
+      {
+        elements: {
+          "product-card": ProductCard,
+        },
+        assetResolver(moduleId) {
+          return `/assets/${moduleId.split("/").at(-1)}.js`;
+        },
+      },
+    );
+    const bootstrap = renderBootstrap({
+      clientEntry: "/src/main.js",
+      assetResolver(moduleId) {
+        return moduleId === "/src/main.js" ? "/assets/main.hash.js" : moduleId;
+      },
+    });
+    const document = `<!doctype html>
+<html lang="es">
+  <head>
+    <title>Framework Shell</title>
+    <meta name="framework" content="nextsx-like">
+    ${fragment.renderModulePreloads()}
+    ${fragment.renderHydrationData()}
+  </head>
+  <body data-runtime="custom">
+    <div id="app">${fragment.html}</div>
+    ${bootstrap}
+  </body>
+</html>`;
+
+    assert.match(document, /<title>Framework Shell<\/title>/);
+    assert.match(document, /<meta name="framework" content="nextsx-like">/);
+    assert.match(document, /<link rel="modulepreload" href="\/assets\/ProductCard\.litsx\.js">/);
+    assert.match(document, /<script type="application\/json" id="__LITSX_HYDRATION__">/);
+    assert.match(document, /<product-card\b[^>]*data-litsx-root="litsx-root-0"/);
+    assert.match(bootstrap, /import \{ hydratePage \} from "@litsx\/ssr\/client";/);
+    assert.match(bootstrap, /register: \(\) =\\u003E import\("\/assets\/main\.hash\.js"\)/);
+  });
+
+  it("builds reusable document context from a fragment result", async () => {
+    class ProductCard extends LitElement {
+      static [LITSX_MODULE_ID] = "/src/ProductCard.litsx";
+
+      render() {
+        return html`<article>${this.product.name}</article>`;
+      }
+    }
+
+    const fragment = await renderToString(
+      html`<product-card .product=${{ name: "Context Shoe" }}></product-card>`,
+      {
+        elements: {
+          "product-card": ProductCard,
+        },
+      },
+    );
+    const context = createDocumentContext(fragment, {
+      title: "Context Shell",
+      head: '<meta name="ctx" content="1">',
+      bodyAttributes: {
+        class: "shell",
+      },
+      clientEntry: "/src/main.js",
+    });
+
+    assert.strictEqual(context.title, "Context Shell");
+    assert.strictEqual(context.lang, "en");
+    assert.strictEqual(context.head, '<meta name="ctx" content="1">');
+    assert.deepStrictEqual(context.bodyAttributes, { class: "shell" });
+    assert.strictEqual(context.modulePreloads, fragment.renderModulePreloads());
+    assert.strictEqual(context.hydrationScript, fragment.renderHydrationData());
+    assert.match(context.bootstrap, /register: \(\) =\\u003E import\("\/src\/main\.js"\)/);
+    assert.match(context.defaultDocument, /<title>Context Shell<\/title>/);
   });
 
   it("renders light-dom boundaries without declarative shadow DOM", async () => {
@@ -1127,6 +1306,74 @@ describe("@litsx/ssr", () => {
 
   it("returns null for getCurrentExecutionContext when SSR is not active", async () => {
     assert.strictEqual(getCurrentExecutionContext(), null);
+  });
+
+  it("avoids temporary SSR module collisions for authored loaders with the same basename", async () => {
+    const root = await fs.mkdtemp(path.join(process.cwd(), ".tmp-ssr-collision-"));
+
+    try {
+      await fs.mkdir(path.join(root, "alpha"), { recursive: true });
+      await fs.mkdir(path.join(root, "beta"), { recursive: true });
+
+      await fs.writeFile(
+        path.join(root, "alpha", "index.js"),
+        `import { LitElement, html } from "lit";
+import { LITSX_MODULE_ID } from "@litsx/core/elements";
+
+export class AlphaCard extends LitElement {
+  static [LITSX_MODULE_ID] = "/src/alpha/index.litsx";
+
+  render() {
+    return html\`<article>alpha</article>\`;
+  }
+}
+`,
+        "utf8",
+      );
+
+      await fs.writeFile(
+        path.join(root, "beta", "index.js"),
+        `import { LitElement, html } from "lit";
+import { LITSX_MODULE_ID } from "@litsx/core/elements";
+
+export class BetaCard extends LitElement {
+  static [LITSX_MODULE_ID] = "/src/beta/index.litsx";
+
+  render() {
+    return html\`<article>beta</article>\`;
+  }
+}
+`,
+        "utf8",
+      );
+
+      const result = await renderToString(createEntry({
+        root,
+        elements(loader) {
+          return {
+            "alpha-card": async () => (await loader("./alpha/index.js")).AlphaCard,
+            "beta-card": async () => (await loader("./beta/index.js")).BetaCard,
+          };
+        },
+        render({ html }) {
+          return html`<alpha-card></alpha-card><beta-card></beta-card>`;
+        },
+      }));
+
+      assert.match(result.html, /alpha/);
+      assert.match(result.html, /beta/);
+
+      const compiledEntries = (await fs.readdir(path.join(root, ".ssr")))
+        .filter((entry) => entry.endsWith(".server.mjs"))
+        .sort();
+
+      assert.strictEqual(compiledEntries.length, 2);
+      assert.notStrictEqual(compiledEntries[0], compiledEntries[1]);
+      assert.match(compiledEntries[0], /^index\.[0-9a-f]{10}\.server\.mjs$/);
+      assert.match(compiledEntries[1], /^index\.[0-9a-f]{10}\.server\.mjs$/);
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
   });
 
   it("exposes the same execution context to nested server-component calls", async () => {

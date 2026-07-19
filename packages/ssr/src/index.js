@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import crypto from "node:crypto";
 import { pathToFileURL } from "node:url";
 import { collectSoftSuspenseThenables } from "@litsx/core";
 import { __litsxScopedTemplate } from "@litsx/core/elements";
@@ -14,6 +15,9 @@ export const LITSX_CLIENT_IMPORTS_SCRIPT_ID = "__LITSX_CLIENT_IMPORTS__";
  * Default JSON script id used by `renderHydrationData()`.
  */
 export const LITSX_HYDRATION_DATA_SCRIPT_ID = "__LITSX_HYDRATION__";
+export const LITSX_AUTHORED_SSR_ENTRY = Symbol.for("@litsx/ssr/authored-entry");
+export const LITSX_SSR_MAX_SUSPENSE_PASSES_ERROR =
+  "LITSX_SSR_MAX_SUSPENSE_PASSES_EXCEEDED";
 
 const DEV_TEMPLATE_TITLE_MARKER = "<!--app-title-->";
 const DEV_TEMPLATE_HEAD_MARKER = "<!--app-head-->";
@@ -29,6 +33,7 @@ async function loadSsrRuntime() {
     import("./values.js"),
   ]).then(([scopedRendering, values]) => ({
     createScopedSsrContext: scopedRendering.createScopedSsrContext,
+    renderScopedTemplateToChunks: scopedRendering.renderScopedTemplateToChunks,
     renderScopedTemplateWithLitSsr: scopedRendering.renderScopedTemplateWithLitSsr,
     resolveTopLevelSsrValue: values.resolveTopLevelSsrValue,
   }));
@@ -218,6 +223,45 @@ function createDocumentResult(result, document, bootstrapHtml) {
   };
 }
 
+function createDocumentTemplateContext(result, options = {}) {
+  const lang = options.lang ?? "en";
+  const htmlAttributes = {
+    lang,
+    ...(options.htmlAttributes || {}),
+  };
+  const bodyAttributes = options.bodyAttributes || {};
+  const title = options.title == null ? "" : String(options.title);
+  const head = normalizeTagContents(options.head);
+  const bootstrap = renderResolvedBootstrap(options);
+  const modulePreloads = result.renderModulePreloads();
+  const hydrationScript = result.renderHydrationData(options.hydrationScriptId);
+  const defaultDocument = createDefaultDocument({
+    htmlAttributes,
+    bodyAttributes,
+    title,
+    head,
+    modulePreloads,
+    hydrationScript,
+    html: result.html,
+    bootstrap,
+  });
+
+  return {
+    ...result,
+    title,
+    lang,
+    head,
+    htmlAttributes: { ...htmlAttributes },
+    bodyAttributes: { ...bodyAttributes },
+    bootstrap,
+    modulePreloads,
+    hydrationScript,
+    htmlAttributesString: renderHtmlAttributes(htmlAttributes),
+    bodyAttributesString: renderHtmlAttributes(bodyAttributes),
+    defaultDocument,
+  };
+}
+
 function createDefaultDocument({
   htmlAttributes,
   bodyAttributes,
@@ -306,8 +350,10 @@ function toPublicPath(root, filePath) {
 }
 
 function createServerOutputPath(root, entryPath) {
+  const relativePath = path.relative(root, entryPath).split(path.sep).join("/");
   const basename = path.basename(entryPath).replace(/\.[^.]+$/, "");
-  return path.join(root, ".ssr", `${basename}.server.mjs`);
+  const digest = crypto.createHash("sha1").update(relativePath).digest("hex").slice(0, 10);
+  return path.join(root, ".ssr", `${basename}.${digest}.server.mjs`);
 }
 
 async function compileServerEntry(entryPath, outputPath) {
@@ -350,8 +396,74 @@ function createDefaultAssetResolver(root, customResolver = null) {
       return null;
     }
 
+     if (typeof moduleId === "string" && moduleId.startsWith("/") && !path.isAbsolute(moduleId.slice(1))) {
+      return moduleId;
+    }
+
     return toPublicPath(root, moduleId);
   };
+}
+
+function resolveClientEntrySpecifier(clientEntry, assetResolver) {
+  if (!clientEntry) {
+    return null;
+  }
+
+  if (typeof assetResolver === "function") {
+    return assetResolver(clientEntry) ?? clientEntry;
+  }
+
+  return clientEntry;
+}
+
+function renderResolvedBootstrap(options = {}) {
+  return options.bootstrap === undefined
+    ? renderClientEntryBootstrapScript(
+      resolveClientEntrySpecifier(options.clientEntry, options.assetResolver),
+    )
+    : renderBootstrapScript(options.bootstrap);
+}
+
+function isAuthoredSsrEntry(value) {
+  return Boolean(value && typeof value === "object" && value[LITSX_AUTHORED_SSR_ENTRY] === true);
+}
+
+function isLegacyAuthoredSsrEntry(value) {
+  return Boolean(
+    value &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    typeof value.render === "function",
+  );
+}
+
+function assertExplicitAuthoredSsrEntry(value, methodName) {
+  if (!isLegacyAuthoredSsrEntry(value) || isAuthoredSsrEntry(value)) {
+    return;
+  }
+
+  throw new TypeError(
+    `${methodName}(...) authored entry objects must be wrapped in createEntry(...).`,
+  );
+}
+
+export function createEntry(options = {}) {
+  return {
+    ...options,
+    [LITSX_AUTHORED_SSR_ENTRY]: true,
+  };
+}
+
+export class LitsxSsrMaxSuspensePassesError extends Error {
+  constructor(maxPasses) {
+    super(
+      `LitSX SSR exceeded ${maxPasses} suspense render passes. ` +
+        "A rootless async hook is still suspending after every retry.",
+    );
+    this.name = "LitsxSsrMaxSuspensePassesError";
+    this.code = LITSX_SSR_MAX_SUSPENSE_PASSES_ERROR;
+    this.maxPasses = maxPasses;
+  }
 }
 
 function normalizeSsrRenderable(value, elements) {
@@ -376,12 +488,16 @@ async function renderAuthoredDocument(options = {}) {
   const templateSource = typeof options.template === "string"
     ? await fs.readFile(resolveFsPath(root, options.template), "utf8")
     : null;
+  const assetResolver = createDefaultAssetResolver(root, options.assetResolver);
   const clientEntry = options.clientEntry
-    ? toPublicPath(root, resolveFsPath(root, options.clientEntry)) ?? options.clientEntry
+    ? resolveClientEntrySpecifier(
+      resolveFsPath(root, options.clientEntry),
+      assetResolver,
+    ) ?? toPublicPath(root, resolveFsPath(root, options.clientEntry)) ?? options.clientEntry
     : null;
 
   if (typeof options.render !== "function") {
-    throw new TypeError("createSsrDevServer(...) requires a render(...) callback.");
+    throw new TypeError("LitSX authored document rendering requires a render(...) callback.");
   }
 
   await import("@lit-labs/ssr/lib/install-global-dom-shim.js");
@@ -435,7 +551,6 @@ async function renderAuthoredDocument(options = {}) {
   const elements = {
     ...(resolvedElements || {}),
   };
-  const assetResolver = createDefaultAssetResolver(root, options.assetResolver);
 
   return renderDocument(renderValue, {
     elements: Object.keys(elements).length > 0 ? elements : undefined,
@@ -506,8 +621,12 @@ async function resolveAuthoredRenderInput(options = {}) {
     })(),
   ]);
 
+  const assetResolver = createDefaultAssetResolver(root, options.assetResolver);
   const clientEntry = options.clientEntry
-    ? toPublicPath(root, resolveFsPath(root, options.clientEntry)) ?? options.clientEntry
+    ? resolveClientEntrySpecifier(
+      resolveFsPath(root, options.clientEntry),
+      assetResolver,
+    ) ?? toPublicPath(root, resolveFsPath(root, options.clientEntry)) ?? options.clientEntry
     : null;
   const renderValue = await options.render({
     html,
@@ -527,6 +646,7 @@ async function resolveAuthoredRenderInput(options = {}) {
       ...options,
       root,
       clientEntry,
+      assetResolver,
       elements,
     },
   };
@@ -568,6 +688,17 @@ async function renderResolvedValue(value, context) {
   });
 }
 
+async function renderResolvedValueToChunks(value, context) {
+  const {
+    resolveTopLevelSsrValue,
+    renderScopedTemplateToChunks,
+  } = await loadSsrRuntime();
+  const resolvedValue = await resolveTopLevelSsrValue(value, context);
+  return renderScopedTemplateToChunks(resolvedValue, {
+    litsxSsrContext: context,
+  });
+}
+
 function normalizeMaxSuspensePasses(value) {
   if (value == null) {
     return DEFAULT_MAX_SUSPENSE_PASSES;
@@ -603,11 +734,37 @@ async function renderResolvedValueWithSoftSuspense(value, options) {
       await Promise.all([...pendingThenables]);
     }
 
-    throw new Error(
-      `LitSX SSR exceeded ${maxPasses} suspense render passes. ` +
-        "A rootless async hook is still suspending after every retry."
-    );
+    throw new LitsxSsrMaxSuspensePassesError(maxPasses);
   });
+}
+
+async function stabilizeSsrRenderPasses(value, options) {
+  const maxPasses = normalizeMaxSuspensePasses(options.maxSuspensePasses);
+  const executionContext = createExecutionContext();
+
+  await withCurrentSsrRuntimeState({ executionContext }, async () => {
+    for (let pass = 0; pass < maxPasses; pass += 1) {
+      const context = await createSsrContext(options, executionContext);
+      const pendingThenables = new Set();
+
+      await collectSoftSuspenseThenables(pendingThenables, async () =>
+        renderResolvedValue(
+          normalizeSsrRenderable(await Promise.resolve(value), options.elements),
+          context,
+        )
+      );
+
+      if (pendingThenables.size === 0) {
+        return;
+      }
+
+      await Promise.all([...pendingThenables]);
+    }
+
+    throw new LitsxSsrMaxSuspensePassesError(maxPasses);
+  });
+
+  return executionContext;
 }
 
 /**
@@ -618,13 +775,9 @@ async function renderResolvedValueWithSoftSuspense(value, options) {
  * template internally.
  */
 export async function renderToString(value, options = {}) {
-  if (
-    arguments.length === 1 &&
-    value &&
-    typeof value === "object" &&
-    !Array.isArray(value) &&
-    typeof value.render === "function"
-  ) {
+  assertExplicitAuthoredSsrEntry(value, "renderToString");
+
+  if (arguments.length === 1 && isAuthoredSsrEntry(value)) {
     const authored = await resolveAuthoredRenderInput(value);
     return renderToString(authored.value, authored.options);
   }
@@ -646,71 +799,45 @@ export async function renderToString(value, options = {}) {
  * Use this as the recommended document-oriented entrypoint for full-page SSR.
  */
 export async function renderDocument(value, options = {}) {
-  if (
-    arguments.length === 1 &&
-    value &&
-    typeof value === "object" &&
-    !Array.isArray(value) &&
-    typeof value.render === "function"
-  ) {
+  assertExplicitAuthoredSsrEntry(value, "renderDocument");
+
+  if (arguments.length === 1 && isAuthoredSsrEntry(value)) {
     return renderAuthoredDocument(value);
   }
 
   const result = await renderToString(value, options);
-  const lang = options.lang ?? "en";
-  const htmlAttributes = {
-    lang,
-    ...(options.htmlAttributes || {}),
-  };
-  const bodyAttributes = options.bodyAttributes || {};
-  const title = options.title == null ? "" : String(options.title);
-  const head = normalizeTagContents(options.head);
-  const bootstrapHtml = options.bootstrap === undefined
-    ? renderClientEntryBootstrapScript(options.clientEntry)
-    : renderBootstrapScript(options.bootstrap);
-  const modulePreloads = result.renderModulePreloads();
-  const hydrationScript = result.renderHydrationData(options.hydrationScriptId);
-  const defaultDocument = createDefaultDocument({
-    htmlAttributes,
-    bodyAttributes,
-    title,
-    head,
-    modulePreloads,
-    hydrationScript,
-    html: result.html,
-    bootstrap: bootstrapHtml,
-  });
+  const documentContext = createDocumentTemplateContext(result, options);
   const document = typeof options.template === "function"
-    ? String(options.template({
-      ...result,
-      title,
-      lang,
-      head,
-      htmlAttributes: { ...htmlAttributes },
-      bodyAttributes: { ...bodyAttributes },
-      bootstrap: bootstrapHtml,
-      modulePreloads,
-      hydrationScript,
-      htmlAttributesString: renderHtmlAttributes(htmlAttributes),
-      bodyAttributesString: renderHtmlAttributes(bodyAttributes),
-      defaultDocument,
-    }))
-    : defaultDocument;
+    ? String(options.template(documentContext))
+    : documentContext.defaultDocument;
 
-  return createDocumentResult(result, document, bootstrapHtml);
+  return {
+    ...createDocumentResult(result, document, documentContext.bootstrap),
+    ...documentContext,
+  };
+}
+
+/**
+ * Render the standard LitSX SSR bootstrap markup without building a document.
+ */
+export function renderBootstrap(options = {}) {
+  return renderResolvedBootstrap(options);
+}
+
+/**
+ * Materialize the document-shell context that `renderDocument(...)` uses.
+ */
+export function createDocumentContext(result, options = {}) {
+  return createDocumentTemplateContext(result, options);
 }
 
 /**
  * Render a Lit or LitSX value to a Web Stream using the scoped LitSX SSR runtime.
  */
 export async function renderToStream(value, options = {}) {
-  if (
-    arguments.length === 1 &&
-    value &&
-    typeof value === "object" &&
-    !Array.isArray(value) &&
-    typeof value.render === "function"
-  ) {
+  assertExplicitAuthoredSsrEntry(value, "renderToStream");
+
+  if (arguments.length === 1 && isAuthoredSsrEntry(value)) {
     const authored = await resolveAuthoredRenderInput(value);
     return renderToStream(authored.value, authored.options);
   }
@@ -725,8 +852,19 @@ export async function renderToStream(value, options = {}) {
   const stream = new ReadableStream({
     async start(controller) {
       try {
-        const { html, context } = await renderResolvedValueWithSoftSuspense(value, options);
-        controller.enqueue(html);
+        const executionContext = await stabilizeSsrRenderPasses(value, options);
+        const context = await createSsrContext(options, executionContext);
+        const chunks = await renderResolvedValueToChunks(
+          normalizeSsrRenderable(await Promise.resolve(value), options.elements),
+          context,
+        );
+
+        let html = "";
+        for await (const chunk of chunks) {
+          const stringChunk = typeof chunk === "string" ? chunk : String(chunk);
+          html += stringChunk;
+          controller.enqueue(stringChunk);
+        }
         controller.close();
         const result = createSsrResult(html, context);
         resolveAllReady({
