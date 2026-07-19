@@ -1020,7 +1020,9 @@ __metadata:
   resolution: "@litsx/babel-plugin-transform-litsx-scoped-elements@workspace:packages/babel-plugin-transform-litsx-scoped-elements"
   dependencies:
     "@babel/core": "npm:^7.29.6"
+    "@babel/parser": "npm:^7.29.3"
     "@babel/plugin-syntax-jsx": "npm:^7.28.6"
+    "@litsx/authoring": "npm:^0.5.0"
     "@litsx/babel-plugin-shared-hooks": "npm:^0.8.0"
     "@litsx/typescript-session": "npm:^0.2.3"
   peerDependencies:
