@@ -81,6 +81,99 @@ export async function collectRenderResult(result) {
   return output;
 }
 
+function getRenderIterator(result) {
+  if (result && typeof result[Symbol.asyncIterator] === "function") {
+    return result[Symbol.asyncIterator]();
+  }
+
+  if (result && typeof result[Symbol.iterator] === "function") {
+    return result[Symbol.iterator]();
+  }
+
+  throw new TypeError("Lit SSR render result is not iterable.");
+}
+
+function createScopedRenderIterable(value, renderInfo = {}) {
+  const isScopedTemplate = __isLitsxScopedTemplate(value);
+  const ssrContext = renderInfo.litsxSsrContext ?? createScopedSsrContext();
+  const elementRenderers = [
+    ScopedContextProviderRenderer,
+    ScopedLitElementRenderer,
+    ...(renderInfo.elementRenderers ?? []),
+  ].filter((renderer, index, list) => list.indexOf(renderer) === index);
+  const customElementInstanceStack = renderInfo.customElementInstanceStack ?? [];
+
+  return (async function* streamScopedChunks() {
+    const nativeGet = customElements.get.bind(customElements);
+    const descriptor = Object.getOwnPropertyDescriptor(customElements, "get");
+
+    Object.defineProperty(customElements, "get", {
+      configurable: true,
+      writable: true,
+      value(tagName) {
+        return resolveScopedConstructor(nativeGet, tagName);
+      },
+    });
+
+    scopedSsrContextStack.push(ssrContext);
+    if (isScopedTemplate) {
+      scopedRegistryStack.push(value.elements);
+    }
+
+    let iterator;
+
+    try {
+      const renderResult = render(isScopedTemplate ? value.template : value, {
+        ...renderInfo,
+        customElementInstanceStack,
+        elementRenderers,
+      });
+      iterator = getRenderIterator(renderResult);
+
+      while (true) {
+        const step = await withCurrentSsrCustomElementInstanceStack(
+          customElementInstanceStack,
+          () => iterator.next(),
+        );
+
+        if (step?.done) {
+          break;
+        }
+
+        yield step.value;
+      }
+    } finally {
+      try {
+        if (iterator && typeof iterator.return === "function") {
+          await withCurrentSsrCustomElementInstanceStack(
+            customElementInstanceStack,
+            () => iterator.return(),
+          );
+        }
+      } finally {
+        if (isScopedTemplate) {
+          scopedRegistryStack.pop();
+        }
+        scopedSsrContextStack.pop();
+
+        if (descriptor) {
+          Object.defineProperty(customElements, "get", descriptor);
+        } else {
+          Object.defineProperty(customElements, "get", {
+            configurable: true,
+            writable: true,
+            value: nativeGet,
+          });
+        }
+      }
+    }
+  })();
+}
+
+export async function renderScopedTemplateToChunks(value, renderInfo = {}) {
+  return createScopedRenderIterable(value, renderInfo);
+}
+
 function createHydrationPayload() {
   return {
     roots: {},
@@ -380,39 +473,7 @@ class ScopedContextProviderRenderer extends ElementRenderer {
 }
 
 export async function renderScopedTemplateWithLitSsr(value, renderInfo = {}) {
-  return withScopedCustomElementLookup(async () => {
-    const isScopedTemplate = __isLitsxScopedTemplate(value);
-    const ssrContext = renderInfo.litsxSsrContext ?? createScopedSsrContext();
-    const elementRenderers = [
-      ScopedContextProviderRenderer,
-      ScopedLitElementRenderer,
-      ...(renderInfo.elementRenderers ?? []),
-    ].filter((renderer, index, list) => list.indexOf(renderer) === index);
-    const customElementInstanceStack = renderInfo.customElementInstanceStack ?? [];
-
-    try {
-      scopedSsrContextStack.push(ssrContext);
-
-      if (isScopedTemplate) {
-        scopedRegistryStack.push(value.elements);
-      }
-
-      return await withCurrentSsrCustomElementInstanceStack(
-        customElementInstanceStack,
-        () =>
-          collectRenderResult(
-            render(isScopedTemplate ? value.template : value, {
-              ...renderInfo,
-              customElementInstanceStack,
-              elementRenderers,
-            }),
-          ),
-      );
-    } finally {
-      if (isScopedTemplate) {
-        scopedRegistryStack.pop();
-      }
-      scopedSsrContextStack.pop();
-    }
-  });
+  return collectRenderResult(
+    await renderScopedTemplateToChunks(value, renderInfo),
+  );
 }
