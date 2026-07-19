@@ -15,7 +15,6 @@ concurrency:
 jobs:
   test:
     name: Test Suite
-    if: github.event_name != 'push' || github.event.head_commit.message != 'chore(release): version packages [skip ci]'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository

@@ -51,14 +51,7 @@ jobs:
             const branch = context.payload.workflow_run.head_branch;
             const headSha = context.payload.workflow_run.head_sha;
             const eventName = context.payload.workflow_run.event;
-            const headCommitMessage = context.payload.workflow_run.head_commit?.message || "";
-
             if (!branch || eventName !== "push") {
-              core.setOutput("ready", "false");
-              return;
-            }
-
-            if (headCommitMessage === "chore(release): version packages [skip ci]") {
               core.setOutput("ready", "false");
               return;
             }
