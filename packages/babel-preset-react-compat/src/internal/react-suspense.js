@@ -104,6 +104,7 @@ export default declare((api) => {
 
   function isEnsureLazyCall(statement) {
     return (
+      statement?.__litsxAutoEnsureLazyElement === true &&
       t.isExpressionStatement(statement) &&
       t.isCallExpression(statement.expression) &&
       t.isIdentifier(statement.expression.callee, {
