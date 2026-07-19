@@ -1,7 +1,7 @@
 import assert from "assert";
 import { beforeEach, describe, it, vi } from "vitest";
 
-describe("@litsx/ssr/client", () => {
+describe("@litsx/ssr/hydration", () => {
   beforeEach(() => {
     vi.resetModules();
   });
@@ -63,7 +63,7 @@ describe("@litsx/ssr/client", () => {
   }
 
   it("installs hydration support only once", async () => {
-    const { installHydrationSupport } = await import("../packages/ssr/src/client.js");
+    const { installHydrationSupport } = await import("../packages/ssr/src/hydration.js");
     const calls = [];
     const loader = vi.fn(async () => {
       calls.push("support");
@@ -77,7 +77,7 @@ describe("@litsx/ssr/client", () => {
   });
 
   it("hydrates by installing support, bootstrapping roots, and loading deduped client imports", async () => {
-    const { hydrate } = await import("../packages/ssr/src/client.js");
+    const { hydrate } = await import("../packages/ssr/src/hydration.js");
     const calls = [];
     const root = { kind: "document" };
 
@@ -109,7 +109,7 @@ describe("@litsx/ssr/client", () => {
       LITSX_HYDRATION_DATA_SCRIPT_ID,
       readClientImports,
       readHydrationData,
-    } = await import("../packages/ssr/src/client.js");
+    } = await import("../packages/ssr/src/hydration.js");
     const documentRef = {
       getElementById(id) {
         if (id === LITSX_CLIENT_IMPORTS_SCRIPT_ID) {
@@ -135,7 +135,7 @@ describe("@litsx/ssr/client", () => {
     const {
       LITSX_HYDRATION_DATA_SCRIPT_ID,
       readHydrationData,
-    } = await import("../packages/ssr/src/client.js");
+    } = await import("../packages/ssr/src/hydration.js");
     const payload = {
       version: 1,
       roots: [
@@ -159,7 +159,7 @@ describe("@litsx/ssr/client", () => {
   });
 
   it("reads client imports from hydration data when no standalone imports script exists", async () => {
-    const { readClientImports } = await import("../packages/ssr/src/client.js");
+    const { readClientImports } = await import("../packages/ssr/src/hydration.js");
 
     assert.deepStrictEqual(
       readClientImports(
@@ -184,7 +184,7 @@ describe("@litsx/ssr/client", () => {
     const {
       LITSX_HYDRATION_PAYLOAD_PROPERTY,
       applyHydrationPayload,
-    } = await import("../packages/ssr/src/client.js");
+    } = await import("../packages/ssr/src/hydration.js");
     const element = {};
     const roots = [
       {
@@ -222,7 +222,7 @@ describe("@litsx/ssr/client", () => {
   });
 
   it("rejects invalid hydration payload shapes", async () => {
-    const { readHydrationPayload } = await import("../packages/ssr/src/client.js");
+    const { readHydrationPayload } = await import("../packages/ssr/src/hydration.js");
 
     assert.throws(
       () =>
@@ -246,7 +246,7 @@ describe("@litsx/ssr/client", () => {
       hydratePage,
       LITSX_CLIENT_IMPORTS_SCRIPT_ID,
       LITSX_HYDRATION_DATA_SCRIPT_ID,
-    } = await import("../packages/ssr/src/client.js");
+    } = await import("../packages/ssr/src/hydration.js");
     const calls = [];
     const { documentRef, rootElement } = createRootAttributeDocument();
     documentRef.getElementById = (id) => {
@@ -324,7 +324,7 @@ describe("@litsx/ssr/client", () => {
     const {
       resolveHydrationRoot,
       resolveHydrationRoots,
-    } = await import("../packages/ssr/src/client.js");
+    } = await import("../packages/ssr/src/hydration.js");
     const { documentRef, rootElement } = createRootAttributeDocument();
 
     const roots = resolveHydrationRoots(
@@ -379,7 +379,7 @@ describe("@litsx/ssr/client", () => {
   });
 
   it("resolves hydrateRoot ids from LitSX root attributes", async () => {
-    const { hydrateRoot } = await import("../packages/ssr/src/client.js");
+    const { hydrateRoot } = await import("../packages/ssr/src/hydration.js");
     const { rootElement } = createRootAttributeDocument();
     const calls = [];
 
@@ -398,7 +398,7 @@ describe("@litsx/ssr/client", () => {
   });
 
   it("resolves hydrateRoot ids from the preceding LitSX root marker fallback", async () => {
-    const { hydrateRoot } = await import("../packages/ssr/src/client.js");
+    const { hydrateRoot } = await import("../packages/ssr/src/hydration.js");
     const { rootElement } = createRootMarkerDocument();
     const calls = [];
 
@@ -417,7 +417,7 @@ describe("@litsx/ssr/client", () => {
   });
 
   it("requires hydrateRoot targets to have a LitSX root attribute, marker, or explicit root id", async () => {
-    const { hydrateRoot } = await import("../packages/ssr/src/client.js");
+    const { hydrateRoot } = await import("../packages/ssr/src/hydration.js");
 
     await assert.rejects(
       () =>

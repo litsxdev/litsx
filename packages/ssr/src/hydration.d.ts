@@ -149,7 +149,7 @@ export declare function installHydrationSupport(
  * then load the provided client module imports.
  *
  * This is the lowest-level document or element hydration helper exposed by
- * `@litsx/ssr/client`.
+ * `@litsx/ssr/hydration`.
  *
  * @usage Use this when you need explicit control over the root node being
  * hydrated or over how client imports are discovered and loaded.
@@ -196,7 +196,7 @@ export declare function hydrateDocument(
  * Recommended whole-page hydration entrypoint for documents rendered by
  * `renderDocument(...)` in `@litsx/ssr`.
  *
- * @usage Use this as the standard client entrypoint for HTML documents emitted
+ * @usage Use this as the standard hydration entrypoint for HTML documents emitted
  * by `renderDocument(...)`.
  * @param options Document, payload, bootstrap, and client-module loading options.
  * @returns The resolved hydration roots when metadata exists, otherwise the
