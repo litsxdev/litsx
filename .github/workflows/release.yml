@@ -20,12 +20,14 @@ jobs:
   plan:
     name: Detect Ready Release
     if: |
-      (github.event_name == 'workflow_run' && github.event.workflow_run.head_branch == 'main') ||
+      github.event_name == 'workflow_run' ||
       (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     outputs:
       ready: ${{ steps.gate.outputs.ready }}
       has_changesets: ${{ steps.pending.outputs.has_changesets }}
+      release_kind: ${{ steps.gate.outputs.release_kind }}
+      snapshot_tag: ${{ steps.snapshot_tag.outputs.snapshot_tag }}
     steps:
       - name: Wait for required workflows
         id: gate
@@ -35,6 +37,7 @@ jobs:
             if (context.eventName === "workflow_dispatch") {
               if (context.ref === "refs/heads/main") {
                 core.setOutput("ready", "true");
+                core.setOutput("release_kind", "stable");
                 return;
               }
 
@@ -48,7 +51,7 @@ jobs:
             const headSha = context.payload.workflow_run.head_sha;
             const eventName = context.payload.workflow_run.event;
 
-            if (branch !== "main" || eventName !== "push") {
+            if (!branch || eventName !== "push") {
               core.setOutput("ready", "false");
               return;
             }
@@ -74,6 +77,22 @@ jobs:
             }
 
             core.setOutput("ready", "true");
+            core.setOutput("release_kind", branch === "main" ? "stable" : "snapshot");
+
+      - name: Compute branch snapshot tag
+        id: snapshot_tag
+        if: steps.gate.outputs.ready == 'true' && steps.gate.outputs.release_kind == 'snapshot'
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const branch = context.payload.workflow_run?.head_branch || "";
+            const sanitized = branch
+              .toLowerCase()
+              .replace(/[^a-z0-9]+/g, "-")
+              .replace(/^-+|-+$/g, "")
+              .replace(/-+/g, "-")
+              .slice(0, 80) || "branch";
+            core.setOutput("snapshot_tag", `canary-${sanitized}`);
 
       - name: Checkout repository
         if: steps.gate.outputs.ready == 'true' && (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success')
@@ -122,6 +141,7 @@ jobs:
       id-token: write
     steps:
       - name: Create release app token
+        if: needs.plan.outputs.release_kind == 'stable'
         id: app-token
         uses: actions/create-github-app-token@v3
         with:
@@ -135,8 +155,6 @@ jobs:
         with:
           ref: ${{ github.event_name == 'workflow_dispatch' && github.sha || github.event.workflow_run.head_sha }}
           fetch-depth: 0
-          token: ${{ steps.app-token.outputs.token }}
-          persist-credentials: false
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -154,8 +172,14 @@ jobs:
         run: corepack yarn install --immutable
 
       - name: Materialize release versions
-        if: needs.plan.outputs.has_changesets == 'true'
+        if: needs.plan.outputs.has_changesets == 'true' && needs.plan.outputs.release_kind == 'stable'
         run: corepack yarn changeset:version
+
+      - name: Materialize snapshot versions
+        if: needs.plan.outputs.has_changesets == 'true' && needs.plan.outputs.release_kind == 'snapshot'
+        env:
+          LITSX_SNAPSHOT_TAG: ${{ needs.plan.outputs.snapshot_tag }}
+        run: corepack yarn changeset:version:snapshot
 
       - name: Refresh lockfile after versioning
         if: needs.plan.outputs.has_changesets == 'true'
@@ -163,12 +187,26 @@ jobs:
           YARN_ENABLE_IMMUTABLE_INSTALLS: false
         run: corepack yarn install
 
-      - name: Publish packages
+      - name: Publish stable packages
+        if: needs.plan.outputs.release_kind == 'stable'
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: corepack yarn release:publish
 
+      - name: Validate snapshot packages
+        if: needs.plan.outputs.release_kind == 'snapshot'
+        run: |
+          corepack yarn release:check
+          corepack yarn release:smoke:scaffolds
+
+      - name: Publish snapshot packages
+        if: needs.plan.outputs.release_kind == 'snapshot'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: corepack yarn changeset publish --tag ${{ needs.plan.outputs.snapshot_tag }}
+
       - name: Resolve release app bot user
+        if: needs.plan.outputs.release_kind == 'stable'
         id: app-bot-user
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
@@ -176,6 +214,7 @@ jobs:
           echo "user_id=$(gh api "/users/${{ steps.app-token.outputs.app-slug }}[bot]" --jq .id)" >> "$GITHUB_OUTPUT"
 
       - name: Commit release version updates
+        if: needs.plan.outputs.release_kind == 'stable'
         id: version_commit
         env:
           RELEASE_PUSH_TOKEN: ${{ steps.app-token.outputs.token }}
@@ -193,21 +232,25 @@ jobs:
           echo "created_commit=true" >> "$GITHUB_OUTPUT"
 
       - name: Push release version commit
-        if: steps.version_commit.outputs.created_commit == 'true'
+        if: needs.plan.outputs.release_kind == 'stable' && steps.version_commit.outputs.created_commit == 'true'
         run: git push origin HEAD:main
 
       - name: Create package tags
+        if: needs.plan.outputs.release_kind == 'stable'
         run: node scripts/release/create-release-tags.js
 
       - name: Push release tags
+        if: needs.plan.outputs.release_kind == 'stable'
         run: git push origin --tags
 
       - name: Build GitHub release payload
+        if: needs.plan.outputs.release_kind == 'stable'
         run: |
           mkdir -p .release-artifacts
           node scripts/release/build-github-release.js > .release-artifacts/github-release.json
 
       - name: Create GitHub release
+        if: needs.plan.outputs.release_kind == 'stable'
         uses: actions/github-script@v8
         with:
           github-token: ${{ steps.app-token.outputs.token }}
