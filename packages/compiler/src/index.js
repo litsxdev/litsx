@@ -412,7 +412,7 @@ export function createLitsxTransformConfig(source, options = {}) {
     profile,
   );
   const authoredInputCacheKey = featureCacheKey;
-  const { filename, virtualization, inputAst, authoredWarnings } = profilePhase(
+  const { filename, virtualization, inputAst, authoredWarnings, moduleAnalysis } = profilePhase(
     "authored-input",
     () => {
       if (compilationSession?.authoredInputCache?.has(authoredInputCacheKey)) {
@@ -466,6 +466,7 @@ export function createLitsxTransformConfig(source, options = {}) {
     filename,
     inputAst,
     authoredWarnings,
+    moduleAnalysis,
     profile,
     shouldRunFinalTemplatePass,
     finalTemplatePlugins,
@@ -491,18 +492,30 @@ export function createLitsxTransformConfig(source, options = {}) {
   };
 }
 
-function finalizeTransformResult(result, options, authoredWarnings = [], profile = []) {
+function finalizeTransformResult(
+  result,
+  options,
+  authoredWarnings = [],
+  moduleAnalysis = null,
+  profile = [],
+) {
   if (!result) {
     return {
       code: "",
       map: null,
-      metadata: profile?.length > 0 ? { litsxProfile: profile } : {},
+      metadata: {
+        ...(moduleAnalysis ? { litsxModuleAnalysis: moduleAnalysis } : {}),
+        ...(profile?.length > 0 ? { litsxProfile: profile } : {}),
+      },
     };
   }
 
   const metadata = {
     ...(result.metadata || {}),
   };
+  if (moduleAnalysis) {
+    metadata.litsxModuleAnalysis = moduleAnalysis;
+  }
   const mergedWarnings = mergeLitsxWarnings(
     metadata.litsxWarnings || [],
     authoredWarnings,
@@ -556,6 +569,7 @@ export async function transformLitsx(source, options = {}) {
       finalTemplatePlugins,
       authoredTemplateAttributeMappings,
       authoredWarnings,
+      moduleAnalysis,
       profile,
     } = createLitsxTransformConfig(source, nextOptions);
     const firstPassResult = await profilePhase(
@@ -603,7 +617,7 @@ export async function transformLitsx(source, options = {}) {
           profile,
         )
       : firstPassResult;
-    return finalizeTransformResult(result, nextOptions, authoredWarnings, profile);
+    return finalizeTransformResult(result, nextOptions, authoredWarnings, moduleAnalysis, profile);
   }
 
   const {
@@ -613,6 +627,7 @@ export async function transformLitsx(source, options = {}) {
     finalTemplatePlugins,
     authoredTemplateAttributeMappings,
     authoredWarnings,
+    moduleAnalysis,
     profile,
   } = createLitsxTransformConfig(source, options);
   const firstPassResult = await profilePhase(
@@ -660,7 +675,7 @@ export async function transformLitsx(source, options = {}) {
         profile,
       )
     : firstPassResult;
-  return finalizeTransformResult(result, options, authoredWarnings, profile);
+  return finalizeTransformResult(result, options, authoredWarnings, moduleAnalysis, profile);
 }
 
 export function transformLitsxSync(source, options = {}) {
@@ -680,6 +695,7 @@ export function transformLitsxSync(source, options = {}) {
       finalTemplatePlugins,
       authoredTemplateAttributeMappings,
       authoredWarnings,
+      moduleAnalysis,
       profile,
     } = createLitsxTransformConfig(source, nextOptions);
     const firstPassResult = profilePhase(
@@ -726,7 +742,7 @@ export function transformLitsxSync(source, options = {}) {
           profile,
         )
       : firstPassResult;
-    return finalizeTransformResult(result, nextOptions, authoredWarnings, profile);
+    return finalizeTransformResult(result, nextOptions, authoredWarnings, moduleAnalysis, profile);
   }
 
   const {
@@ -736,6 +752,7 @@ export function transformLitsxSync(source, options = {}) {
     finalTemplatePlugins,
     authoredTemplateAttributeMappings,
     authoredWarnings,
+    moduleAnalysis,
     profile,
   } = createLitsxTransformConfig(source, options);
   const firstPassResult = profilePhase(
@@ -782,7 +799,7 @@ export function transformLitsxSync(source, options = {}) {
         profile,
       )
     : firstPassResult;
-  return finalizeTransformResult(result, options, authoredWarnings, profile);
+  return finalizeTransformResult(result, options, authoredWarnings, moduleAnalysis, profile);
 }
 
 export default transformLitsx;

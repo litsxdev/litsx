@@ -68,6 +68,42 @@ describe("@litsx/compiler", () => {
     assert.strictEqual(result.map, null);
     assert.ok(result.metadata);
     assert.ok(Array.isArray(result.metadata.litsxTemplateAttributeMappings));
+    assert.ok(result.metadata.litsxModuleAnalysis);
+  }, 20000);
+
+  it("publishes generic module analysis metadata alongside compiled output", () => {
+    const source = [
+      'import { VdsButton } from "./vds-button.litsx";',
+      "const meta = { title: 'Components/Button' };",
+      "const StoryHost = ({ label = 'Save' }) => <VdsButton label={label} />;",
+      "export default meta;",
+      "export const Playground = {",
+      "  render: (args) => <StoryHost label={args.label} />,",
+      "};",
+    ].join("\n");
+
+    const result = transformLitsxSync(source, {
+      filename: "/virtual/vds-button.stories.litsx",
+    });
+
+    assert.deepStrictEqual(result.metadata.litsxModuleAnalysis.exports, [
+      { exportName: "default", localName: "meta", kind: "default-object" },
+      { exportName: "Playground", localName: "Playground", kind: "named-object" },
+    ]);
+    assert.deepStrictEqual(result.metadata.litsxModuleAnalysis.jsxReferences, [
+      {
+        localName: "VdsButton",
+        tagName: "vds-button",
+        source: "imported-authored-module",
+        importSource: "./vds-button.litsx",
+      },
+      {
+        localName: "StoryHost",
+        tagName: "story-host",
+        source: "local-declaration",
+        importSource: null,
+      },
+    ]);
   }, 20000);
 
   it("compiles .litsx source with TypeScript syntax by default", () => {
