@@ -14,6 +14,9 @@ export interface LitsxSsrContext {
    */
 }
 
+export declare const LITSX_AUTHORED_SSR_ENTRY: unique symbol;
+export declare const LITSX_SSR_MAX_SUSPENSE_PASSES_ERROR: "LITSX_SSR_MAX_SUSPENSE_PASSES_EXCEEDED";
+
 /**
  * Rewrite a discovered LitSX module id to a public client import URL.
  */
@@ -313,6 +316,62 @@ export interface LitsxSsrDocumentResult extends LitsxSsrResult {
    * Final bootstrap `<script>` markup emitted into the generated document.
    */
   bootstrap: string;
+
+  /**
+   * Resolved `lang` value for the document shell.
+   */
+  lang: string;
+
+  /**
+   * Resolved document title text.
+   */
+  title: string;
+
+  /**
+   * Normalized extra `<head>` markup from `options.head`.
+   */
+  head: string;
+
+  /**
+   * Resolved attributes for the `<html>` element.
+   */
+  htmlAttributes: Record<string, string | number | boolean | null | undefined>;
+
+  /**
+   * Resolved attributes for the `<body>` element.
+   */
+  bodyAttributes: Record<string, string | number | boolean | null | undefined>;
+
+  /**
+   * Final `<link rel="modulepreload">` markup for discovered client imports.
+   */
+  modulePreloads: string;
+
+  /**
+   * Final LitSX hydration payload script markup.
+   */
+  hydrationScript: string;
+
+  /**
+   * Serialized `<html>` attributes, ready to insert into a template.
+   */
+  htmlAttributesString: string;
+
+  /**
+   * Serialized `<body>` attributes, ready to insert into a template.
+   */
+  bodyAttributesString: string;
+
+  /**
+   * Standard document shell produced by the built-in opinionated template.
+   */
+  defaultDocument: string;
+}
+
+export interface LitsxSsrMaxSuspensePassesError extends Error {
+  name: "LitsxSsrMaxSuspensePassesError";
+  code: typeof LITSX_SSR_MAX_SUSPENSE_PASSES_ERROR;
+  maxPasses: number;
 }
 
 /**
@@ -386,6 +445,10 @@ export interface LitsxSsrAuthoredDocumentOptions extends Omit<LitsxSsrDocumentOp
   render(context: LitsxSsrDevRenderContext): unknown | Promise<unknown>;
 }
 
+export interface LitsxAuthoredSsrEntry<T> {
+  readonly [LITSX_AUTHORED_SSR_ENTRY]: true;
+}
+
 export interface LitsxSsrAuthoredRenderOptions extends Omit<LitsxSsrRenderOptions, "elements"> {
   /**
    * Filesystem root used to resolve authored entries.
@@ -417,6 +480,35 @@ export interface LitsxSsrAuthoredRenderOptions extends Omit<LitsxSsrRenderOption
    * elements resolved through `elements(...)`.
    */
   render(context: LitsxSsrDevRenderContext): unknown | Promise<unknown>;
+}
+
+export declare function createEntry<T extends object>(options: T): T & LitsxAuthoredSsrEntry<T>;
+
+/**
+ * Render the standard LitSX SSR bootstrap markup without building a document.
+ *
+ * @usage Use this when a framework wants to call `renderToString(...)` and
+ * assemble its own shell while still reusing the standard LitSX hydration
+ * bootstrap contract.
+ */
+export declare function renderBootstrap(
+  options?: Pick<LitsxSsrDocumentOptions, "clientEntry" | "bootstrap" | "assetResolver">,
+): string;
+
+/**
+ * Build the same document-shell metadata that `renderDocument(...)` uses from
+ * an existing fragment render result.
+ */
+export declare function createDocumentContext(
+  result: LitsxSsrResult,
+  options?: LitsxSsrDocumentOptions,
+): LitsxSsrDocumentTemplateContext;
+
+export declare class LitsxSsrMaxSuspensePassesError extends Error {
+  constructor(maxPasses: number);
+  name: "LitsxSsrMaxSuspensePassesError";
+  code: typeof LITSX_SSR_MAX_SUSPENSE_PASSES_ERROR;
+  maxPasses: number;
 }
 
 export interface LitsxSsrDevServerOptions extends LitsxSsrAuthoredDocumentOptions {
@@ -478,7 +570,8 @@ interface LitsxSsrInternalAuthoredDocumentOptions extends LitsxSsrAuthoredDocume
 
 export interface LitsxSsrStreamResult {
   /**
-   * Web stream that yields serialized HTML chunks.
+   * Web stream that yields serialized HTML chunks after the SSR pass has
+   * stabilized across suspense retries.
    */
   stream: ReadableStream<string>;
 
@@ -522,9 +615,10 @@ export declare function renderToString(
  *
  * @usage Use this when you want the same authored-entry model as
  * `renderDocument(...)`, but only need the rendered fragment and SSR metadata.
+ * Wrap authored entries in `createEntry(...)`.
  */
 export declare function renderToString(
-  options: LitsxSsrAuthoredRenderOptions,
+  options: LitsxSsrAuthoredRenderOptions & LitsxAuthoredSsrEntry<LitsxSsrAuthoredRenderOptions>,
 ): Promise<LitsxSsrResult>;
 
 /**
@@ -584,11 +678,11 @@ export declare function renderDocument(
  *
  * @usage Use this for document SSR when you want `renderDocument(...)` to
  * resolve authored LitSX modules through `elements(loader)` instead of passing
- * an already-imported render value.
+ * an already-imported render value. Wrap authored entries in `createEntry(...)`.
  * @param options Authored entry, document-template, and render callback configuration.
  * @returns A complete HTML document plus SSR fragment metadata.
  * @example
- * const result = await renderDocument({
+ * const result = await renderDocument(createEntry({
  *   root: process.cwd(),
  *   template: "./index.html",
  *   clientEntry: "./src/main.js",
@@ -601,10 +695,10 @@ export declare function renderDocument(
  *   render({ html }) {
  *     return html`<app-root></app-root>`;
  *   },
- * });
+ * }));
  */
 export declare function renderDocument(
-  options: LitsxSsrAuthoredDocumentOptions,
+  options: LitsxSsrAuthoredDocumentOptions & LitsxAuthoredSsrEntry<LitsxSsrAuthoredDocumentOptions>,
 ): Promise<LitsxSsrDocumentResult>;
 
 /**
@@ -655,8 +749,8 @@ export declare function renderToStream(
  * Render an authored LitSX SSR configuration to a stream.
  *
  * @usage Use this when you want authored-entry SSR with the streaming surface
- * instead of a full document.
+ * instead of a full document. Wrap authored entries in `createEntry(...)`.
  */
 export declare function renderToStream(
-  options: LitsxSsrAuthoredRenderOptions,
+  options: LitsxSsrAuthoredRenderOptions & LitsxAuthoredSsrEntry<LitsxSsrAuthoredRenderOptions>,
 ): Promise<LitsxSsrStreamResult>;

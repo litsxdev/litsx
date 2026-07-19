@@ -93,11 +93,27 @@ const result = await renderDocument(<ProductCard .product={product} />, {
 result.document;
 result.html;
 result.hydrationData;
+result.modulePreloads;
+result.bootstrap;
 ```
 
 `renderDocument(...)` wraps the rendered fragment in a complete HTML document,
 emits module preloads and hydration data, and can emit the standard LitSX SSR
 hydration bootstrap automatically when `clientEntry` is provided.
+
+The returned object also exposes the resolved shell metadata that frameworks
+usually need to reuse or inspect:
+
+- `document`: final HTML document string
+- `html`: rendered application fragment
+- `bootstrap`: final bootstrap script markup
+- `head`: normalized extra head markup
+- `modulePreloads`: rendered preload markup
+- `hydrationScript`: rendered hydration JSON script
+- `lang`, `title`, `htmlAttributes`, `bodyAttributes`
+- `htmlAttributesString`, `bodyAttributesString`
+- `defaultDocument`: the built-in shell output before any custom
+  `template(...)` override
 
 If the built-in shell is not enough, pass `template(...)` to assemble the final
 document yourself:
@@ -128,9 +144,9 @@ already-imported component constructor, `renderDocument(...)` also accepts an
 authored-entry configuration object:
 
 ```js
-import { renderDocument } from "@litsx/ssr";
+import { createEntry, renderDocument } from "@litsx/ssr";
 
-const result = await renderDocument({
+const result = await renderDocument(createEntry({
   root: process.cwd(),
   template: "./index.html",
   clientEntry: "./src/main.js",
@@ -143,7 +159,7 @@ const result = await renderDocument({
   render({ html }) {
     return html`<app-root></app-root>`;
   },
-});
+}));
 ```
 
 If you need finer control over the HTML shell, `renderToString(...)` remains
@@ -184,7 +200,7 @@ It can also accept the same authored-entry configuration object used by
 model without building a full document:
 
 ```js
-const result = await renderToString({
+const result = await renderToString(createEntry({
   root: process.cwd(),
   elements(loader) {
     return {
@@ -195,8 +211,53 @@ const result = await renderToString({
   render({ html }) {
     return html`<product-card .product=${product}></product-card>`;
   },
-});
+}));
 ```
+
+Frameworks that want to assemble the final shell themselves can pair
+`renderToString(...)` with `createDocumentContext(...)` and
+`renderBootstrap(...)`:
+
+```tsx
+import {
+  createDocumentContext,
+  renderBootstrap,
+  renderToString,
+} from "@litsx/ssr";
+
+const fragment = await renderToString(<ProductCard .product={product} />, {
+  assetResolver(moduleId) {
+    return manifest[moduleId] ?? moduleId;
+  },
+});
+const shell = createDocumentContext(fragment, {
+  title: "Product Page",
+});
+
+const bootstrap = renderBootstrap({
+  clientEntry: "/src/main.js",
+  assetResolver(moduleId) {
+    return manifest[moduleId] ?? moduleId;
+  },
+});
+
+const document = `<!doctype html>
+<html lang="en">
+  <head>
+    <title>${shell.title}</title>
+    ${shell.modulePreloads}
+    ${shell.hydrationScript}
+  </head>
+  <body>
+    <main>${fragment.html}</main>
+    ${bootstrap}
+  </body>
+</html>`;
+```
+
+Use `createDocumentContext(...)` when the framework wants the same normalized
+shell metadata as `renderDocument(...)` without delegating the final document
+assembly to the SSR package.
 
 For streaming responses, use `renderToStream(...)`:
 
@@ -207,8 +268,10 @@ const { stream, allReady } = await renderToStream(<ProductCard .product={product
 const metadata = await allReady;
 ```
 
-`stream` is a Web `ReadableStream<string>`. `allReady` resolves with the same
-metadata helpers as `renderToString(...)` once rendering has completed.
+`stream` is a Web `ReadableStream<string>`. The current implementation starts
+emitting chunks after the SSR pass has stabilized across suspense retries.
+`allReady` resolves with the same metadata helpers as `renderToString(...)`
+once rendering has completed.
 
 `renderToStream(...)` also accepts the same authored-entry configuration object
 when you want to stream authored LitSX SSR without first constructing the
@@ -224,6 +287,21 @@ internally. That execution context is:
 - reused across suspense retries in that request
 - shared by nested server-component calls in that request
 - isolated from concurrent requests
+
+## Suspense Retries And Errors
+
+Rootless soft suspense retries are bounded by `maxSuspensePasses`, which
+defaults to `25`.
+
+If SSR does not converge within that limit, LitSX throws
+`LitsxSsrMaxSuspensePassesError` with:
+
+- `name: "LitsxSsrMaxSuspensePassesError"`
+- `code: "LITSX_SSR_MAX_SUSPENSE_PASSES_EXCEEDED"`
+- `maxPasses`
+
+Frameworks can catch that error type directly to attach diagnostics, timeouts,
+or framework-specific failure handling without relying on message matching.
 
 Read it from runtime or hooks with `@litsx/core`:
 
