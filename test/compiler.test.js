@@ -187,6 +187,24 @@ describe("@litsx/compiler", () => {
     assert.ok(ids.every((id) => id.startsWith("litsx-host-type-")));
   }, 20000);
 
+  it("emits hydratable tag metadata for generated component classes", () => {
+    const source = [
+      "export function FeatureCard() {",
+      "  return <div>feature</div>;",
+      "}",
+    ].join("\n");
+
+    const result = transformLitsxSync(source, {
+      filename: "/virtual/components/feature-card.litsx",
+      sourceMaps: false,
+    });
+
+    assert.match(
+      result.code,
+      /static \[Symbol\.for\("litsx\.hydratableTag"\)\] = "feature-card";/,
+    );
+  }, 20000);
+
   it("threads host through useHostTypeId inside imported custom hooks", () => {
     const hookSource = [
       'import { useHostTypeId, useMemoValue } from "@litsx/core";',

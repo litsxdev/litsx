@@ -30,12 +30,16 @@ export interface LitsxExecutionContext {
 export declare const LITSX_HOOK: unique symbol;
 export declare const LITSX_COMPONENT: unique symbol;
 export declare const LITSX_HOST_TYPE_ID: unique symbol;
+export declare const LITSX_HYDRATABLE_TAG: unique symbol;
 export declare const STRUCTURAL_HOOK_ENTRIES: unique symbol;
 export interface LitsxHook {
   readonly [LITSX_HOOK]: true;
 }
 export interface LitsxComponentStatic {
   readonly [LITSX_COMPONENT]: true;
+}
+export interface LitsxHydratableComponentStatic extends LitsxComponentStatic {
+  readonly [LITSX_HYDRATABLE_TAG]: string;
 }
 export interface LitsxHostTypeIdStatic extends LitsxComponentStatic {
   readonly [LITSX_HOST_TYPE_ID]: string;

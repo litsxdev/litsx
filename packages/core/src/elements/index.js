@@ -11,6 +11,7 @@ const LIGHT_DOM_STYLE_ELEMENT = Symbol("litsx.lightDomStyleElement");
 const SHADOW_DOM_REGISTRY = Symbol("litsx.shadowDomRegistry");
 export const LITSX_COMPONENT = Symbol.for("litsx.component");
 export const LITSX_HOST_TYPE_ID = Symbol.for("litsx.hostTypeId");
+export const LITSX_HYDRATABLE_TAG = Symbol.for("litsx.hydratableTag");
 export const LITSX_SCOPED_TEMPLATE = Symbol.for("litsx.scopedTemplate");
 export const LITSX_MODULE_ID = Symbol.for("litsx.moduleId");
 export const LITSX_SSR_CONTEXT = Symbol.for("litsx.ssrContext");

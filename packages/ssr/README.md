@@ -558,6 +558,57 @@ In the standard `clientEntry` flow, the emitted bootstrap script then:
 Framework integrations can rely on that order when wiring their own hydration
 entry around `@litsx/ssr/hydration`.
 
+### Module Registration
+
+`@litsx/ssr/hydration` also exposes a small registration primitive for
+frameworks that want LitSX to own hydratable custom-element registration while
+keeping DOM hydration separate:
+
+```ts
+import {
+  registerHydrationModule,
+  registerHydrationModules,
+  hydratePage,
+} from "@litsx/ssr/hydration";
+
+await registerHydrationModules([
+  () => import("/_nextsx/client/app/components/feature-card.mjs"),
+  () => import("/_nextsx/client/app/components/hero-banner.mjs"),
+]);
+
+await hydratePage();
+```
+
+`registerHydrationModule(module)` and `registerHydrationModules(modules)`:
+
+- inspect module namespace exports only
+- register every exported LitSX component class that carries public hydratable
+  tag metadata
+- are idempotent for the same tag and constructor
+- throw when the same tag is already associated with a different constructor
+- do not read `document`
+- do not read `hydrationData`
+- do not apply hydration payloads
+- do not call `hydratePage(...)`
+
+### Design Note
+
+The registration API uses compiler-emitted static metadata on LitSX component
+classes to identify hydratable exports. That signal is explicit, survives
+renames and default exports, and lets the runtime inspect already-imported
+module namespaces without guessing from export names or framework manifests.
+
+This API belongs in `@litsx/ssr/hydration` because module registration is part
+of the public client-side SSR hydration runtime contract: the same package
+already owns hydration support installation and payload application, so it is
+the right place to own LitSX-specific root registration semantics as well.
+
+Registration and hydration stay separate on purpose. Frameworks need control
+over which client URLs to load and when to load them, while LitSX should own
+how hydratable custom elements are discovered and registered. Keeping those
+steps split preserves that boundary and avoids coupling module loading to DOM
+reads or payload application.
+
 ## Supported Input
 
 The current API accepts:

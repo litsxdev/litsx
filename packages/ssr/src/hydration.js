@@ -1,3 +1,8 @@
+import {
+  LITSX_COMPONENT,
+  LITSX_HYDRATABLE_TAG,
+} from "@litsx/core";
+
 function normalizeClientImports(value) {
   const values = Array.isArray(value) ? value : value == null ? [] : [value];
   return [...new Set(values.filter((entry) => typeof entry === "string" && entry.length > 0))];
@@ -37,6 +42,60 @@ async function importClientModule(specifier) {
 }
 
 let hydrationSupportPromise;
+
+function getCustomElementRegistry() {
+  return globalThis.customElements ?? null;
+}
+
+function isRegistrableHydrationExport(value) {
+  return (
+    typeof value === "function" &&
+    value[LITSX_COMPONENT] === true &&
+    typeof value[LITSX_HYDRATABLE_TAG] === "string" &&
+    value[LITSX_HYDRATABLE_TAG].length > 0
+  );
+}
+
+function registerHydratableElement(ctor) {
+  const tagName = ctor[LITSX_HYDRATABLE_TAG];
+  const registry = getCustomElementRegistry();
+
+  if (!registry) {
+    throw new Error(
+      `Cannot register LitSX hydration element "${tagName}" because globalThis.customElements is not available.`
+    );
+  }
+
+  const existing = registry.get?.(tagName) ?? null;
+  if (existing === ctor) {
+    return;
+  }
+
+  if (existing && existing !== ctor) {
+    throw new Error(
+      `Cannot register LitSX hydration element "${tagName}" with a different constructor.`
+    );
+  }
+
+  registry.define(tagName, ctor);
+}
+
+function collectHydratableModuleExports(moduleNamespace) {
+  if (!moduleNamespace || typeof moduleNamespace !== "object") {
+    return [];
+  }
+
+  const seen = new Set();
+  const matches = [];
+  for (const value of Object.values(moduleNamespace)) {
+    if (!isRegistrableHydrationExport(value) || seen.has(value)) {
+      continue;
+    }
+    seen.add(value);
+    matches.push(value);
+  }
+  return matches;
+}
 
 function resolveDocument(rootOrDocument) {
   if (!rootOrDocument) {
@@ -376,6 +435,30 @@ export function resolveHydrationRoot(
 export function installHydrationSupport(loader = importLitHydrationSupport) {
   hydrationSupportPromise ??= Promise.resolve().then(() => loader());
   return hydrationSupportPromise;
+}
+
+/**
+ * Register every hydratable LitSX custom element exported by a module namespace.
+ *
+ * This only inspects module exports and the global custom element registry.
+ * It does not touch the DOM, read hydration payloads, or trigger hydration.
+ */
+export function registerHydrationModule(moduleNamespace) {
+  for (const ctor of collectHydratableModuleExports(moduleNamespace)) {
+    registerHydratableElement(ctor);
+  }
+}
+
+/**
+ * Resolve module namespaces or async module loaders, then register every
+ * hydratable LitSX custom element they export.
+ */
+export async function registerHydrationModules(modules) {
+  const entries = Array.isArray(modules) ? modules : [];
+  for (const entry of entries) {
+    const moduleNamespace = typeof entry === "function" ? await entry() : entry;
+    registerHydrationModule(moduleNamespace);
+  }
 }
 
 /**

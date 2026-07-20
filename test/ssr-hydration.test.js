@@ -1,10 +1,34 @@
 import assert from "assert";
 import { beforeEach, describe, it, vi } from "vitest";
+import {
+  LITSX_COMPONENT,
+  LITSX_HYDRATABLE_TAG,
+} from "../packages/core/src/elements/index.js";
 
 describe("@litsx/ssr/hydration", () => {
   beforeEach(() => {
     vi.resetModules();
+    delete globalThis.document;
+    delete globalThis.customElements;
   });
+
+  function createCustomElementsRegistry() {
+    const definitions = new Map();
+    return {
+      define: vi.fn((tagName, ctor) => {
+        definitions.set(tagName, ctor);
+      }),
+      get: vi.fn((tagName) => definitions.get(tagName) ?? null),
+      definitions,
+    };
+  }
+
+  function createHydratableComponent(tagName) {
+    class HydratableComponent {}
+    HydratableComponent[LITSX_COMPONENT] = true;
+    HydratableComponent[LITSX_HYDRATABLE_TAG] = tagName;
+    return HydratableComponent;
+  }
 
   function createRootMarkerDocument({
     rootId = "litsx-root-0",
@@ -74,6 +98,125 @@ describe("@litsx/ssr/hydration", () => {
 
     assert.deepStrictEqual(calls, ["support"]);
     assert.strictEqual(loader.mock.calls.length, 1);
+  });
+
+  it("registers a module with one hydratable LitSX export", async () => {
+    const { registerHydrationModule } = await import("../packages/ssr/src/hydration.js");
+    const registry = createCustomElementsRegistry();
+    globalThis.customElements = registry;
+    const ProductCard = createHydratableComponent("product-card");
+
+    registerHydrationModule({
+      ProductCard,
+      helper: () => {},
+      value: 123,
+    });
+
+    assert.strictEqual(registry.get("product-card"), ProductCard);
+    assert.strictEqual(registry.define.mock.calls.length, 1);
+  });
+
+  it("registers multiple hydratable exports from one module", async () => {
+    const { registerHydrationModule } = await import("../packages/ssr/src/hydration.js");
+    const registry = createCustomElementsRegistry();
+    globalThis.customElements = registry;
+    const ProductCard = createHydratableComponent("product-card");
+    const ProductImage = createHydratableComponent("product-image");
+
+    registerHydrationModule({
+      ProductCard,
+      ProductImage,
+    });
+
+    assert.strictEqual(registry.get("product-card"), ProductCard);
+    assert.strictEqual(registry.get("product-image"), ProductImage);
+    assert.strictEqual(registry.define.mock.calls.length, 2);
+  });
+
+  it("does not redefine a tag already registered with the same constructor", async () => {
+    const { registerHydrationModule } = await import("../packages/ssr/src/hydration.js");
+    const registry = createCustomElementsRegistry();
+    globalThis.customElements = registry;
+    const ProductCard = createHydratableComponent("product-card");
+
+    registerHydrationModule({ ProductCard });
+    registerHydrationModule({ ProductCard });
+
+    assert.strictEqual(registry.define.mock.calls.length, 1);
+  });
+
+  it("fails clearly when the same tag is already registered with a different constructor", async () => {
+    const { registerHydrationModule } = await import("../packages/ssr/src/hydration.js");
+    const registry = createCustomElementsRegistry();
+    globalThis.customElements = registry;
+    const ProductCardA = createHydratableComponent("product-card");
+    const ProductCardB = createHydratableComponent("product-card");
+
+    registerHydrationModule({ ProductCardA });
+
+    assert.throws(
+      () => registerHydrationModule({ ProductCardB }),
+      /Cannot register LitSX hydration element "product-card" with a different constructor/,
+    );
+  });
+
+  it("ignores modules without hydratable exports", async () => {
+    const { registerHydrationModule } = await import("../packages/ssr/src/hydration.js");
+    const registry = createCustomElementsRegistry();
+    globalThis.customElements = registry;
+
+    assert.doesNotThrow(() =>
+      registerHydrationModule({
+        default: {},
+        helper() {},
+        value: "noop",
+      })
+    );
+    assert.strictEqual(registry.define.mock.calls.length, 0);
+  });
+
+  it("accepts async loaders in registerHydrationModules", async () => {
+    const { registerHydrationModules } = await import("../packages/ssr/src/hydration.js");
+    const registry = createCustomElementsRegistry();
+    globalThis.customElements = registry;
+    const ProductCard = createHydratableComponent("product-card");
+    const ProductImage = createHydratableComponent("product-image");
+
+    await registerHydrationModules([
+      async () => ({ ProductCard }),
+      { ProductImage },
+    ]);
+
+    assert.strictEqual(registry.get("product-card"), ProductCard);
+    assert.strictEqual(registry.get("product-image"), ProductImage);
+  });
+
+  it("registers modules without depending on document and stays separate from hydration", async () => {
+    const {
+      registerHydrationModule,
+      hydratePage,
+    } = await import("../packages/ssr/src/hydration.js");
+    const registry = createCustomElementsRegistry();
+    globalThis.customElements = registry;
+    const ProductCard = createHydratableComponent("product-card");
+    const hydrationSupportLoader = vi.fn(async () => {});
+    const register = vi.fn(async () => {});
+
+    registerHydrationModule({ ProductCard });
+
+    assert.strictEqual(registry.get("product-card"), ProductCard);
+    assert.strictEqual(register.mock.calls.length, 0);
+    assert.strictEqual(hydrationSupportLoader.mock.calls.length, 0);
+
+    await hydratePage({
+      document: { getElementById() { return null; } },
+      hydrationData: { version: 1, roots: [], payload: { roots: {}, instances: {} } },
+      hydrationSupportLoader,
+      register,
+    });
+
+    assert.strictEqual(register.mock.calls.length, 1);
+    assert.strictEqual(hydrationSupportLoader.mock.calls.length, 1);
   });
 
   it("hydrates by installing support, bootstrapping roots, and loading deduped client imports", async () => {
