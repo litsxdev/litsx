@@ -26,6 +26,7 @@ export {
 } from "./hook-metadata.js";
 export {
   LITSX_COMPONENT,
+  LITSX_HYDRATABLE_TAG,
   LITSX_HOST_TYPE_ID,
   isLitsxComponentClass,
 } from "./elements/index.js";
