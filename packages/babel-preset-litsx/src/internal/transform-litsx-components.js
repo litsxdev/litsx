@@ -519,6 +519,7 @@ function transformFunction(functionPath, programPath, className, options = {}) {
 
   const classNode = createComponentClass({
     className,
+    tagName: resolvedName.replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase(),
     classMembers,
     hoistMembers,
     hoistSymbolDeclarations,

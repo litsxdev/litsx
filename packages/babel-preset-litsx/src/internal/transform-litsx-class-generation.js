@@ -26,6 +26,13 @@ function createStaticRuntimeMetadataProperty(symbolKey, valueNode) {
   return property;
 }
 
+function toKebabCase(value) {
+  return String(value ?? "")
+    .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
+    .replace(/([A-Z])([A-Z][a-z])/g, "$1-$2")
+    .toLowerCase();
+}
+
 export function buildClassMembers({
   classMembers = [],
   defaults,
@@ -82,6 +89,7 @@ export function buildClassMembers({
 
 export function createComponentClass({
   className,
+  tagName = null,
   classMembers,
   hoistMembers,
   hoistSymbolDeclarations,
@@ -106,11 +114,16 @@ export function createComponentClass({
       "litsx.component",
       t.booleanLiteral(true)
     );
+    const hydratableTagProperty = createStaticRuntimeMetadataProperty(
+      "litsx.hydratableTag",
+      t.stringLiteral(tagName ?? toKebabCase(className))
+    );
     const hostTypeIdProperty = createStaticRuntimeMetadataProperty(
       "litsx.hostTypeId",
       t.stringLiteral(hostTypeId)
     );
     classNode.body.body.unshift(componentMarkerProperty);
+    classNode.body.body.unshift(hydratableTagProperty);
     classNode.body.body.unshift(hostTypeIdProperty);
   }
 
