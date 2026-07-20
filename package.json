@@ -40,7 +40,7 @@
     "@vitest/coverage-v8": "^4.1.10",
     "diff": "^9.0.0",
     "eslint": "^9.39.5",
-    "happy-dom": "^20.10.6",
+    "happy-dom": "^20.11.0",
     "jsdom": "^29.1.1",
     "magic-string": "^0.30.21",
     "playwright": "^1.54.1",
