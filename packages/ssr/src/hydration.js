@@ -1,7 +1,5 @@
-import {
-  LITSX_COMPONENT,
-  LITSX_HYDRATABLE_TAG,
-} from "@litsx/core";
+import "@lit-labs/ssr-client/lit-element-hydrate-support.js";
+import { LITSX_COMPONENT, LITSX_HYDRATABLE_TAG } from "@litsx/core";
 
 function normalizeClientImports(value) {
   const values = Array.isArray(value) ? value : value == null ? [] : [value];

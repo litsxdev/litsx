@@ -1,4 +1,6 @@
 import assert from "assert";
+import fs from "node:fs";
+import path from "node:path";
 import { beforeEach, describe, it, vi } from "vitest";
 import {
   LITSX_COMPONENT,
@@ -98,6 +100,22 @@ describe("@litsx/ssr/hydration", () => {
 
     assert.deepStrictEqual(calls, ["support"]);
     assert.strictEqual(loader.mock.calls.length, 1);
+  });
+
+  it("installs Lit hydration support before importing @litsx/core", () => {
+    const hydrationSource = fs.readFileSync(
+      path.resolve("packages/ssr/src/hydration.js"),
+      "utf8",
+    );
+    const litHydrationImport = 'import "@lit-labs/ssr-client/lit-element-hydrate-support.js";';
+    const coreImport = 'import { LITSX_COMPONENT, LITSX_HYDRATABLE_TAG } from "@litsx/core";';
+
+    assert.match(hydrationSource, /@lit-labs\/ssr-client\/lit-element-hydrate-support\.js/);
+    assert.match(hydrationSource, /from "@litsx\/core"/);
+    assert.ok(
+      hydrationSource.indexOf(litHydrationImport) < hydrationSource.indexOf(coreImport),
+      "expected Lit hydration support import to come before @litsx/core",
+    );
   });
 
   it("registers a module with one hydratable LitSX export", async () => {

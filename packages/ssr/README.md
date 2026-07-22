@@ -558,6 +558,11 @@ In the standard `clientEntry` flow, the emitted bootstrap script then:
 Framework integrations can rely on that order when wiring their own hydration
 entry around `@litsx/ssr/hydration`.
 
+Importing `@litsx/ssr/hydration` is also the supported client bootstrap entry:
+it installs `@lit-labs/ssr-client/lit-element-hydrate-support.js` as its first
+top-level side effect, before pulling `@litsx/core`, so framework consumers do
+not need to import Lit's hydration patch manually.
+
 ### Module Registration
 
 `@litsx/ssr/hydration` also exposes a small registration primitive for

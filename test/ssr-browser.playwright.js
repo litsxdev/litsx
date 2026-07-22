@@ -383,6 +383,105 @@ window.__litsxSsrBrowserResult = {
   }
 });
 
+test("hydrates without DOM duplication when using only the public hydration module-registration API", async ({ page }) => {
+  const tempRoot = path.join(repoRoot, "test-results");
+  await fs.mkdir(tempRoot, { recursive: true });
+  const tempDir = await fs.mkdtemp(path.join(tempRoot, "litsx-ssr-browser-register-"));
+  const srcDir = path.join(tempDir, "src");
+  await fs.mkdir(srcDir, { recursive: true });
+
+  const clientComponentsPath = path.join(srcDir, "components.client.litsx");
+  const clientEntryPath = path.join(srcDir, "main.js");
+  const hydrationEntryPath = path.join(repoRoot, "packages/ssr/src/hydration.js");
+  await fs.writeFile(clientComponentsPath, createComponentsSource());
+  await fs.writeFile(
+    clientEntryPath,
+    `
+import {
+  hydratePage,
+  registerHydrationModules,
+} from "${viteFsSpecifier(hydrationEntryPath)}";
+
+try {
+  await hydratePage({
+    clientImports: [],
+    register: () => registerHydrationModules([
+      () => import("./components.client.litsx"),
+    ]),
+  });
+} catch (error) {
+  window.__litsxSsrRegisterBrowserError = error instanceof Error ? error.message : String(error);
+}
+
+function collectButtons() {
+  const buttons = [];
+  const visit = (root) => {
+    for (const element of root.querySelectorAll("*")) {
+      if (element.id === "leaf-button") {
+        buttons.push(element);
+      }
+      if (element.shadowRoot) {
+        visit(element.shadowRoot);
+      }
+    }
+  };
+  visit(document);
+  return buttons;
+}
+
+const root = document.querySelector("ssr-app-root");
+window.__litsxSsrRegisterBrowserResult = {
+  error: window.__litsxSsrRegisterBrowserError ?? null,
+  hasDeclarativeShadowDom: Boolean(root?.shadowRoot),
+  appRootCount: root?.renderRoot?.querySelectorAll("#app-root").length ?? 0,
+  buttonCount: collectButtons().length,
+  buttonText: collectButtons()[0]?.textContent ?? "",
+};
+`,
+  );
+
+  const server = await createSsrDevServer({
+    root: tempDir,
+    clientEntry: "./src/main.js",
+    logLevel: "silent",
+    host: "127.0.0.1",
+    strictPort: false,
+    elements(loader) {
+      return {
+        "ssr-app-root": async () =>
+          (await loader("./src/components.client.litsx")).SsrAppRoot,
+      };
+    },
+    render({ html }) {
+      return html`<ssr-app-root .name=${"Register API"}></ssr-app-root>`;
+    },
+  });
+  await server.listen();
+
+  try {
+    const url = server.resolvedUrls.local[0];
+    const consoleErrors = [];
+    page.on("console", (message) => {
+      if (message.type() === "error") {
+        consoleErrors.push(message.text());
+      }
+    });
+    await page.goto(url);
+    await page.waitForFunction(() => Boolean(window.__litsxSsrRegisterBrowserResult));
+
+    const browserResult = await page.evaluate(() => window.__litsxSsrRegisterBrowserResult);
+    expect(consoleErrors).toEqual([]);
+    expect(browserResult.error).toBe(null);
+    expect(browserResult.hasDeclarativeShadowDom).toBe(true);
+    expect(browserResult.appRootCount).toBe(1);
+    expect(browserResult.buttonCount).toBe(1);
+    expect(browserResult.buttonText).toBe("leaf:Register API:3");
+    await page.waitForFunction(() => window.__litsxClientConnectCalls === 1);
+  } finally {
+    await server.close();
+  }
+});
+
 test("reveals suspense-list guide cards after SSR hydration", async ({ page }) => {
   const tempRoot = path.join(repoRoot, "test-results");
   await fs.mkdir(tempRoot, { recursive: true });
