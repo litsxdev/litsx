@@ -40,11 +40,6 @@ export interface HydrateOptions {
   moduleLoader?: ((specifier: string) => unknown | Promise<unknown>) | null | undefined;
 
   /**
-   * Override how Lit's hydration support side effect is installed.
-   */
-  hydrationSupportLoader?: (() => unknown | Promise<unknown>) | null | undefined;
-
-  /**
    * Explicit root id used by `hydrateRoot(...)`.
    */
   rootId?: string | null | undefined;
@@ -155,19 +150,8 @@ export declare function resolveHydrationRoot(
 ): ResolvedHydrationRoot;
 
 /**
- * Install Lit's hydration support before importing LitSX client modules.
- *
- * @usage Call this only when you need manual control over when Lit hydration
- * support is installed. Most apps should use `hydratePage(...)`,
- * `hydrateDocument(...)`, or `hydrate(...)`.
- */
-export declare function installHydrationSupport(
-  loader?: (() => unknown | Promise<unknown>) | null,
-): Promise<unknown>;
-
-/**
- * Install hydration support, run optional root-registration bootstrap code, and
- * then load the provided client module imports.
+ * Run optional root-registration bootstrap code and then load the provided
+ * client module imports.
  *
  * This is the lowest-level document or element hydration helper exposed by
  * `@litsx/ssr/hydration`.
