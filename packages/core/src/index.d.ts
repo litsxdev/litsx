@@ -54,7 +54,12 @@ export interface LitsxBaseAttributes {
   slot?: string;
   class?: string;
   part?: string;
-  style?: string | Partial<CSSStyleDeclaration>;
+  /**
+   * Inline style attribute text.
+   * LitSX does not support React-style object bindings such as `style={{ color: "red" }}` in `.litsx`.
+   * Use a serialized string value here, or `useStyle(...)` for dynamic host style properties.
+   */
+  style?: string;
   /**
    * Authored child content passed between component tags.
    * LitSX treats this as projected content for the default slot.

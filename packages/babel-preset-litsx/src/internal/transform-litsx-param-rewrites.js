@@ -350,6 +350,11 @@ export function replaceParamReferences(functionPath, bindings, propertyMap = new
       }
 
       if (localName === "props") {
+        if (isObjectDestructuringInitializer(refPath)) {
+          refPath.replaceWith(t.thisExpression());
+          return;
+        }
+
         const propsObject = createPropsObjectExpression(bindingInfo, propertyMap);
         if (propsObject) {
           refPath.replaceWith(propsObject);

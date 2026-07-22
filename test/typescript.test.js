@@ -337,7 +337,7 @@ describe("@litsx/typescript", () => {
               slot="content"
               ref={ref}
               class="card"
-              style={{ color: "red" }}
+              style="color: red"
               part="surface"
               data-kind="product"
               aria-label="Product"
@@ -387,6 +387,52 @@ describe("@litsx/typescript", () => {
         ts.flattenDiagnosticMessageText(diagnostics[0].messageText, "\n"),
         /Property 'foo' does not exist/,
       );
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects object-valued style bindings in the public JSX types", () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-style-object-types-"));
+    const filePath = path.join(tempDir, "index.tsx");
+
+    try {
+      fs.symlinkSync(path.resolve("node_modules"), path.join(tempDir, "node_modules"), "dir");
+      fs.writeFileSync(
+        filePath,
+        `
+          const styles = { color: "red" };
+
+          const inline = <div style={{ color: "red" }} />;
+          const aliased = <div style={styles} />;
+        `,
+      );
+
+      const program = ts.createProgram({
+        rootNames: [filePath],
+        options: {
+          jsx: ts.JsxEmit.ReactJSX,
+          jsxImportSource: "@litsx/core",
+          module: ts.ModuleKind.ESNext,
+          moduleResolution: ts.ModuleResolutionKind.Bundler,
+          target: ts.ScriptTarget.ESNext,
+          noEmit: true,
+          strict: true,
+          skipLibCheck: true,
+        },
+      });
+
+      const diagnostics = ts.getPreEmitDiagnostics(program).filter(
+        (diagnostic) => diagnostic.file?.fileName === filePath,
+      );
+
+      assert.strictEqual(diagnostics.length, 2);
+      for (const diagnostic of diagnostics) {
+        assert.match(
+          ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n"),
+          /Type '\{ color: string; \}' is not assignable to type 'string'/,
+        );
+      }
     } finally {
       fs.rmSync(tempDir, { recursive: true, force: true });
     }
@@ -2885,7 +2931,7 @@ describe("@litsx/typescript", () => {
             slot="content"
             ref={cardRef}
             class="card"
-            style={{ color: "red" }}
+            style="color: red"
             part="surface"
             data-kind="product"
             aria-label="Product"
