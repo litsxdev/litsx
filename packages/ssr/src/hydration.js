@@ -31,15 +31,9 @@ export const LITSX_ROOT_MARKER_PREFIX = "litsx-root";
  */
 export const LITSX_HYDRATION_PAYLOAD_PROPERTY = "__litsxHydrationPayload";
 
-async function importLitHydrationSupport() {
-  return import("@lit-labs/ssr-client/lit-element-hydrate-support.js");
-}
-
 async function importClientModule(specifier) {
   return import(/* @vite-ignore */ specifier);
 }
-
-let hydrationSupportPromise;
 
 function getCustomElementRegistry() {
   return globalThis.customElements ?? null;
@@ -424,18 +418,6 @@ export function resolveHydrationRoot(
 }
 
 /**
- * Install Lit's hydration support before loading any LitSX client modules.
- *
- * Lit's SSR hydration support patches LitElement globally through a side-effect
- * module. It must be loaded before importing the modules that define the
- * custom elements you want to hydrate.
- */
-export function installHydrationSupport(loader = importLitHydrationSupport) {
-  hydrationSupportPromise ??= Promise.resolve().then(() => loader());
-  return hydrationSupportPromise;
-}
-
-/**
  * Register every hydratable LitSX custom element exported by a module namespace.
  *
  * This only inspects module exports and the global custom element registry.
@@ -460,12 +442,13 @@ export async function registerHydrationModules(modules) {
 }
 
 /**
- * Install hydration support and then load the client-side modules needed to
- * upgrade SSR-rendered LitSX roots.
+ * Read SSR hydration metadata, run optional root-registration bootstrap code,
+ * and then load the client-side modules needed to upgrade SSR-rendered LitSX
+ * roots.
  *
  * This helper intentionally stays minimal:
  * - it does not walk the DOM or generate hydration payloads
- * - it relies on Lit's native SSR hydration support
+ * - it relies on the top-level hydration support installed by this module
  * - it leaves root custom-element registration to the caller's bootstrap code
  *
  * Typical usage:
@@ -479,10 +462,7 @@ export async function hydrate(
   const {
     register,
     moduleLoader = importClientModule,
-    hydrationSupportLoader = importLitHydrationSupport,
   } = options;
-
-  await installHydrationSupport(hydrationSupportLoader);
 
   const hydrationData = readHydrationData(root, options);
   const hydrationRoots = resolveHydrationRoots(root, options);
@@ -505,7 +485,6 @@ export async function hydrateRoot(
   const {
     register,
     moduleLoader = importClientModule,
-    hydrationSupportLoader = importLitHydrationSupport,
   } = options;
   const element = root?.host ?? root;
   const rootId = options.rootId ?? findHydrationRootIdForElement(element);
@@ -515,8 +494,6 @@ export async function hydrateRoot(
       "hydrateRoot(...) requires a root id or an element marked as a LitSX SSR root."
     );
   }
-
-  await installHydrationSupport(hydrationSupportLoader);
 
   const documentRef = resolveDocument(root) ?? root;
   const hydrationData = readHydrationData(documentRef, options);

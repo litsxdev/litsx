@@ -550,7 +550,7 @@ The public hydration protocol between `@litsx/ssr` and `@litsx/ssr/hydration` is
 
 In the standard `clientEntry` flow, the emitted bootstrap script then:
 
-1. installs Lit hydration support
+1. imports the LitSX hydration runtime, which installs Lit hydration support
 2. runs your client bootstrap/register entry
 3. reads and applies the LitSX hydration payload
 4. imports the emitted client modules
