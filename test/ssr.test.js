@@ -181,6 +181,75 @@ describe("@litsx/ssr", () => {
     );
   });
 
+  it("preserves host string attributes as render props inside hydratable shadow DOM", async () => {
+    class NavLink extends LitElement {
+      static [LITSX_MODULE_ID] = "/src/NavLink.litsx";
+      static properties = {
+        href: { type: String },
+        label: { type: String },
+      };
+
+      render() {
+        const { href, label } = this;
+        return html`<a href=${href}>${label}</a>`;
+      }
+    }
+
+    class RouteCard extends LitElement {
+      static [LITSX_MODULE_ID] = "/src/RouteCard.litsx";
+      static properties = {
+        title: { type: String },
+        body: { type: String },
+        href: { type: String },
+        cache: { type: String },
+      };
+
+      render() {
+        const { title, body, href, cache } = this;
+        return html`
+          <article class="card">
+            <div class="header">
+              <h2 class="title">${title}</h2>
+              <span class="cache">${cache}</span>
+            </div>
+            <p class="body">${body}</p>
+            <a href=${href} class="link">Open route</a>
+          </article>
+        `;
+      }
+    }
+
+    const result = await renderToString(
+      __litsxScopedTemplate(
+        html`
+          <nav-link
+            slot="nav"
+            href="/blog/hello-world"
+            label="Dynamic Blog"
+          ></nav-link>
+          <route-card
+            title="Dynamic Route"
+            body="/blog/[slug] renders params directly from the request pathname."
+            href="/blog/hello-world"
+            cache="dynamic"
+          ></route-card>
+        `,
+        {
+          "nav-link": NavLink,
+          "route-card": RouteCard,
+        },
+      ),
+    );
+
+    assert.match(result.html, /<nav-link[^>]*href="\/blog\/hello-world"[^>]*label="Dynamic Blog"[^>]*>/);
+    assert.match(result.html, /<nav-link[\s\S]*<template shadowroot="open" shadowrootmode="open">[\s\S]*<a href="\/blog\/hello-world">[\s\S]*Dynamic Blog[\s\S]*<\/a>[\s\S]*<\/template>/);
+    assert.match(result.html, /<route-card[^>]*title="Dynamic Route"[^>]*body="\/blog\/\[slug\] renders params directly from the request pathname\."[^>]*href="\/blog\/hello-world"[^>]*cache="dynamic"[^>]*>/);
+    assert.match(result.html, /<h2 class="title">[\s\S]*Dynamic Route[\s\S]*<\/h2>/);
+    assert.match(result.html, /<span class="cache">[\s\S]*dynamic[\s\S]*<\/span>/);
+    assert.match(result.html, /<p class="body">[\s\S]*\/blog\/\[slug\] renders params directly from the request pathname\.[\s\S]*<\/p>/);
+    assert.match(result.html, /<a href="\/blog\/hello-world" class="link">Open route<\/a>/);
+  });
+
   it("streams the same HTML and metadata as renderToString", async () => {
     class ProductCard extends LitElement {
       static [LITSX_MODULE_ID] = "/src/ProductCard.litsx";
