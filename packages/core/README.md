@@ -41,6 +41,15 @@ SSR support used by [`@litsx/ssr`](../ssr/README.md) also lives here: scoped-tem
 
 All helpers accept the Lit element instance as the first argument. The Babel transforms insert it automatically, but you can also call the runtime manually.
 
+## Styling
+
+In `.litsx`, the JSX `style` attribute is string-based. LitSX does not support
+React-style object bindings such as `style={{ color: "red" }}`.
+
+- Use `style="color: red"` or `style={styleText}` when you need an inline style attribute.
+- Use `useStyle(...)` when the value belongs on the component host as a dynamic
+  host style property or CSS custom property.
+
 ## Usage
 
 ```js

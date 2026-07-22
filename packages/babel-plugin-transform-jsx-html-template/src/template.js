@@ -115,22 +115,31 @@ function copySourceLocation(target, startNode, endNode = startNode) {
   return target;
 }
 
+function escapeTemplateLiteralRawSegment(value) {
+  return value
+    .replace(/\\/g, "\\\\")
+    .replace(/`/g, "\\`")
+    .replace(/\$\{/g, "\\${");
+}
+
 function addString(strings, keys, string, startNode = null, endNode = startNode) {
   const trimmedString = trimString(string);
   if (!trimmedString) {
     return;
   }
 
+  const escapedRawString = escapeTemplateLiteralRawSegment(trimmedString);
+
   if (strings.length <= keys.length) {
     const templateElement = t.templateElement(
-      { raw: trimmedString, cooked: trimmedString },
+      { raw: escapedRawString, cooked: trimmedString },
       false
     );
     copySourceLocation(templateElement, startNode, endNode);
     strings.push(templateElement);
   } else {
     const last = strings[strings.length - 1];
-    last.value.raw += trimmedString;
+    last.value.raw += escapedRawString;
     last.value.cooked = (last.value.cooked ?? "") + trimmedString;
     if (startNode?.loc && !last.loc) {
       copySourceLocation(last, startNode, endNode);

@@ -1,5 +1,6 @@
 import assert from "assert";
 import babelCore from "@babel/core";
+import * as babelParser from "@babel/parser";
 import fs from "fs";
 import { TraceMap, originalPositionFor } from "@jridgewell/trace-mapping";
 import os from "os";
@@ -131,6 +132,28 @@ describe("@litsx/compiler", () => {
     assert.doesNotMatch(result.code, /this\.props/);
   }, 20000);
 
+  it("materializes body destructuring from untyped props aliases against the host instance", () => {
+    const source = [
+      "export function NavLink(props) {",
+      "  const { href, label } = props;",
+      "  return <a href={href}>{label}</a>;",
+      "}",
+    ].join("\n");
+
+    const result = transformLitsxSync(source, {
+      filename: "/virtual/NavLink.litsx",
+      jsxTemplate: false,
+    });
+
+    assert.match(
+      result.code,
+      /static properties = \{\s*href: \{\s*type: String\s*\},\s*label: \{\s*type: String\s*\}\s*\};/s,
+    );
+    assert.match(result.code, /const \{\s*href,\s*label\s*\} = this;/);
+    assert.doesNotMatch(result.code, /const \{\s*href,\s*label\s*\} = \{\s*\};/);
+    assert.match(result.code, /return <a href=\{this\.href\}>\{this\.label\}<\/a>;/);
+  }, 20000);
+
   it("injects stable callsite metadata for useStableId", () => {
     const source = [
       'import { useStableId } from "@litsx/core";',
@@ -203,6 +226,65 @@ describe("@litsx/compiler", () => {
       result.code,
       /static \[Symbol\.for\("litsx\.hydratableTag"\)\] = "feature-card";/,
     );
+  }, 20000);
+
+  it("rejects object-valued style bindings in .litsx JSX", () => {
+    const source = [
+      "export function ProductCard() {",
+      "  return <div style={{ color: 'red' }}>card</div>;",
+      "}",
+    ].join("\n");
+
+    assert.throws(
+      () =>
+        transformLitsxSync(source, {
+          filename: "/virtual/ProductCard.litsx",
+        }),
+      /LitSX does not support object-valued `style` bindings in `.litsx`/,
+    );
+  }, 20000);
+
+  it("rejects aliased object-valued style bindings in .litsx JSX", () => {
+    const source = [
+      "export function ProductCard() {",
+      "  const styles = { color: 'red' };",
+      "  return <div style={styles}>card</div>;",
+      "}",
+    ].join("\n");
+
+    assert.throws(
+      () =>
+        transformLitsxSync(source, {
+          filename: "/virtual/ProductCard.litsx",
+        }),
+      /Use a serialized string style value, or use `useStyle\(\.\.\.\)` for dynamic host style properties/,
+    );
+  }, 20000);
+
+  it("escapes backticks and literal interpolation markers in SSR template output", () => {
+    const source = [
+      "export default async function DemoPage() {",
+      "  return (",
+      "    <section>",
+      "      <p>Route copy with `backticks` in SSR text</p>",
+      "      <card-box body=\"Uses `revalidate: 60` and ${literalValue}\" />",
+      "    </section>",
+      "  );",
+      "}",
+    ].join("\n");
+
+    const result = transformLitsxSync(source, {
+      filename: "/virtual/DemoPage.litsx",
+      sourceMaps: false,
+    });
+
+    assert.doesNotThrow(() => {
+      babelParser.parse(result.code, {
+        sourceType: "module",
+      });
+    });
+    assert.match(result.code, /\\`backticks\\`/);
+    assert.match(result.code, /Uses \\`revalidate: 60\\` and \\\$\{literalValue\}/);
   }, 20000);
 
   it("threads host through useHostTypeId inside imported custom hooks", () => {

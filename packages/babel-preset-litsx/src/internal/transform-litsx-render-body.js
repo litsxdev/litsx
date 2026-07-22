@@ -5,6 +5,7 @@ import {
   hasExplicitRefForwarding,
   lowerForwardedElementRefs,
 } from "./transform-litsx-refs.js";
+import { assertNoObjectStyleAttributes } from "./transform-litsx-handlers.js";
 import {
   replaceParamReferences,
   transformJSXExpressions,
@@ -87,6 +88,7 @@ function collectReturnStatement(functionPath, bindings, state) {
 
 export function prepareComponentRender(functionPath, node, propertyNames, bindings, nestedInitializers, options = {}) {
   throwFirstImplicitChildrenProjectionIssue(functionPath);
+  assertNoObjectStyleAttributes(functionPath);
 
   const returnStatement = collectReturnStatement(
     functionPath,
