@@ -70,9 +70,36 @@ export function patchLitAttributeSourcemap(code, map, mappings = []) {
     sourceRoot: map.sourceRoot ?? "",
   });
   const searchCursor = new Map();
+  const patchedMappings = [];
+
+  for (const mapping of mappings) {
+    if (!mapping?.generatedNeedle || !mapping.source) {
+      continue;
+    }
+
+    const fromIndex = searchCursor.get(mapping.generatedNeedle) ?? 0;
+    const foundAt = code.indexOf(mapping.generatedNeedle, fromIndex);
+    if (foundAt === -1) {
+      continue;
+    }
+
+    searchCursor.set(mapping.generatedNeedle, foundAt + mapping.generatedNeedle.length);
+    patchedMappings.push({
+      mapping,
+      generated: indexToPosition(code, foundAt + (mapping.generatedOffset ?? 0)),
+    });
+  }
+
+  const patchedPositions = new Set(
+    patchedMappings.map(({ generated }) => `${generated.line}:${generated.column}`),
+  );
 
   consumer.eachMapping((mapping) => {
     if (mapping.source == null) {
+      return;
+    }
+
+    if (patchedPositions.has(`${mapping.generatedLine}:${mapping.generatedColumn}`)) {
       return;
     }
 
@@ -90,26 +117,14 @@ export function patchLitAttributeSourcemap(code, map, mappings = []) {
     });
   });
 
-  for (const mapping of mappings) {
-    if (!mapping?.generatedNeedle || !mapping.source) {
-      continue;
-    }
-
-    const fromIndex = searchCursor.get(mapping.generatedNeedle) ?? 0;
-    const foundAt = code.indexOf(mapping.generatedNeedle, fromIndex);
-    if (foundAt === -1) {
-      continue;
-    }
-
-    searchCursor.set(mapping.generatedNeedle, foundAt + mapping.generatedNeedle.length);
-
+  for (const { mapping, generated } of patchedMappings) {
     generator.addMapping({
       source: mapping.source,
       original: {
         line: mapping.line,
         column: mapping.column,
       },
-      generated: indexToPosition(code, foundAt + (mapping.generatedOffset ?? 0)),
+      generated,
     });
   }
 

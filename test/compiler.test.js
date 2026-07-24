@@ -1749,6 +1749,74 @@ describe("@litsx/compiler", () => {
     }
   }, 30_000);
 
+  it("maps generated render templates back to authored .litsx JSX", async () => {
+    const source = [
+      'import Shell from "./components/shell.litsx";',
+      "",
+      "export default function Layout(props) {",
+      "  return (",
+      "    <Shell title={props.title}>{props.children}</Shell>",
+      "  );",
+      "}",
+    ].join("\n");
+
+    const result = await transformLitsx(source, {
+      filename: "/fixture/app/layout.litsx",
+      sourceMaps: true,
+      ssr: false,
+    });
+
+    assert.ok(result.map, "expected compiler to emit a sourcemap");
+    assert.deepStrictEqual(result.map.sources, ["/fixture/app/layout.litsx"]);
+    assert.deepStrictEqual(result.map.sourcesContent, [source]);
+
+    const traceMap = new TraceMap(result.map);
+    const checks = [
+      ["class Layout", "function Layout"],
+      ["render()", "return ("],
+      ["return html`", "return ("],
+      ["<shell", "    <Shell", 5],
+      ["title=", "title="],
+      ["<slot", "props.children"],
+    ];
+
+    for (const [generatedNeedle, originalNeedle, originalOffset = 0] of checks) {
+      const generated = findPosition(result.code, generatedNeedle);
+      const expected = findPosition(source, originalNeedle);
+      const actual = originalPositionFor(traceMap, generated);
+
+      assert.strictEqual(actual.source, "/fixture/app/layout.litsx");
+      assert.strictEqual(actual.line, expected.line, generatedNeedle);
+      assert.strictEqual(actual.column, expected.column + originalOffset, generatedNeedle);
+    }
+  }, 30_000);
+
+  it("preserves render template mappings through hooks, static styles, and SSR lowering", async () => {
+    const source = [
+      'import { useState } from "@litsx/core";',
+      "export function Counter() {",
+      "  static styles = `:host { display: block; }`;",
+      "  const [count] = useState(0);",
+      "  return <button>{count}</button>;",
+      "}",
+    ].join("\n");
+
+    const result = await transformLitsx(source, {
+      filename: "/fixture/app/counter.litsx",
+      sourceMaps: true,
+      ssr: true,
+    });
+
+    assert.ok(result.map, "expected compiler to emit a sourcemap");
+    const generated = findPosition(result.code, "return html`");
+    const expected = findPosition(source, "return <button>");
+    const actual = originalPositionFor(new TraceMap(result.map), generated);
+
+    assert.strictEqual(actual.source, "/fixture/app/counter.litsx");
+    assert.strictEqual(actual.line, expected.line);
+    assert.strictEqual(actual.column, expected.column);
+  }, 30_000);
+
   it("emits original .litsx sourcesContent and preserves it through sourcemap chaining", async () => {
     const source = [
       "export function HomeHero(props) {",
@@ -2642,7 +2710,7 @@ describe("@litsx/compiler", () => {
     }
   }, 20_000);
 
-  it("skips template sourcemap patching when no template attribute mappings are emitted", () => {
+  it("patches template sourcemaps for render boundaries without attributes", () => {
     const source = [
       "export const Counter = () => {",
       "  return <button>Save</button>;",
@@ -2657,7 +2725,7 @@ describe("@litsx/compiler", () => {
       });
 
       assert.ok(result.map);
-      assert.strictEqual(patchSpy.mock.calls.length, 0);
+      assert.strictEqual(patchSpy.mock.calls.length, 1);
     } finally {
       patchSpy.mockRestore();
     }
