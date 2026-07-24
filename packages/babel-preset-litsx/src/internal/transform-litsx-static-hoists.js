@@ -6,6 +6,14 @@ import {
 
 let t;
 
+function copySourceLocation(target, source) {
+  if (!source?.loc) return target;
+  target.start = source.start;
+  target.end = source.end;
+  target.loc = source.loc;
+  return target;
+}
+
 export function setStaticHoistsBabelTypes(types) {
   t = types;
 }
@@ -367,7 +375,10 @@ function getStaticStylesExpression(statement, functionPath) {
     throw new Error("static styles = ... only accepts static values. Move dynamic values to useStyle(...) or CSS custom properties.");
   }
 
-  const expression = t.taggedTemplateExpression(t.identifier("css"), template);
+  const expression = copySourceLocation(
+    t.taggedTemplateExpression(t.identifier("css"), template),
+    argument,
+  );
   return isHoistedStyles
     ? { __litsxHoistedStyles: true, expression }
     : expression;
@@ -746,13 +757,13 @@ export function processStaticHoists({
 
   const hasHoistedStyles = staticHoists.some((entry) => entry.name === "styles");
   if (staticStyles.length > 0 && !hasHoistedStyles) {
-    const stylesProperty = t.classProperty(
+    const stylesProperty = copySourceLocation(t.classProperty(
       t.identifier("styles"),
       staticStyles.length === 1 ? staticStyles[0] : t.arrayExpression(staticStyles),
       null,
       [],
       false
-    );
+    ), staticStyles[0]);
     stylesProperty.static = true;
     classMembers.push(stylesProperty);
   }
