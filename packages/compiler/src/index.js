@@ -162,6 +162,140 @@ function collectAuthoredTemplateAttributeMappings(
   return mappings;
 }
 
+function jsxTagName(name) {
+  if (name?.type !== "JSXIdentifier") {
+    return null;
+  }
+
+  return name.name.replace(/([a-z])([A-Z])/g, "$1-$2").toLowerCase();
+}
+
+function isChildrenExpression(node) {
+  return node?.type === "MemberExpression" &&
+    node.computed !== true &&
+    node.property?.type === "Identifier" &&
+    node.property.name === "children";
+}
+
+function componentNameFromFunctionNode(node) {
+  if (
+    node?.type === "FunctionDeclaration" &&
+    node.id?.type === "Identifier" &&
+    /^[A-Z]/.test(node.id.name)
+  ) {
+    return node.id.name;
+  }
+
+  return null;
+}
+
+function componentNameFromVariableNode(node) {
+  if (
+    node?.type === "VariableDeclarator" &&
+    node.id?.type === "Identifier" &&
+    (node.init?.type === "ArrowFunctionExpression" || node.init?.type === "FunctionExpression") &&
+    /^[A-Z]/.test(node.id.name)
+  ) {
+    return node.id.name;
+  }
+
+  return null;
+}
+
+// The component lowering pass creates a class around the authored function.
+// Preserve direct anchors for the user-authored render boundary and template
+// nodes, because generated class members intentionally have no source location.
+function collectAuthoredRenderSourcemapMappings(
+  node,
+  mappings = [],
+  options = {},
+  context = { componentRender: false },
+) {
+  if (!node || typeof node !== "object") {
+    return mappings;
+  }
+
+  if (node.type === "ReturnStatement" && node.argument?.type === "JSXElement") {
+    const returnLocation = node.loc;
+    mappings.push({
+      generatedNeedle: "return html`",
+      source: returnLocation?.filename ?? options.sourceFileName ?? null,
+      line: returnLocation?.start?.line ?? null,
+      column: returnLocation?.start?.column ?? null,
+    });
+    if (context.componentRender) {
+      mappings.push({
+        generatedNeedle: "render()",
+        source: returnLocation?.filename ?? options.sourceFileName ?? null,
+        line: returnLocation?.start?.line ?? null,
+        column: returnLocation?.start?.column ?? null,
+      });
+    }
+  }
+
+  const componentName =
+    componentNameFromFunctionNode(node) ?? componentNameFromVariableNode(node);
+  if (componentName) {
+    const componentLocation = node.loc;
+    mappings.push({
+      generatedNeedle: `class ${componentName}`,
+      source: componentLocation?.filename ?? options.sourceFileName ?? null,
+      line: componentLocation?.start?.line ?? null,
+      column: componentLocation?.start?.column ?? null,
+    });
+  }
+
+  if (node.type === "JSXElement") {
+    const tagName = jsxTagName(node.openingElement?.name);
+    const tagLocation = node.openingElement?.name?.loc ?? node.openingElement?.loc;
+    if (tagName) {
+      mappings.push({
+        generatedNeedle: `<${tagName}`,
+        source: tagLocation?.filename ?? options.sourceFileName ?? null,
+        line: tagLocation?.start?.line ?? null,
+        column: tagLocation?.start?.column ?? null,
+      });
+    }
+  }
+
+  if (node.type === "JSXExpressionContainer" && isChildrenExpression(node.expression)) {
+    const expressionLocation = node.expression.loc ?? node.loc;
+    mappings.push({
+      generatedNeedle: "<slot",
+      source: expressionLocation?.filename ?? options.sourceFileName ?? null,
+      line: expressionLocation?.start?.line ?? null,
+      column: expressionLocation?.start?.column ?? null,
+    });
+  }
+
+  const visitorKeys = babelTypes.VISITOR_KEYS?.[node.type];
+  if (!visitorKeys) {
+    return mappings;
+  }
+
+  const nextContext = babelTypes.isFunction(node)
+    ? { componentRender: context.componentFunctionRoot === true || componentName !== null }
+    : context;
+
+  for (const key of visitorKeys) {
+    const value = node[key];
+    const childContext =
+      componentNameFromVariableNode(node) !== null && key === "init"
+        ? { componentRender: true, componentFunctionRoot: true }
+        : nextContext;
+    if (Array.isArray(value)) {
+      for (const child of value) {
+        collectAuthoredRenderSourcemapMappings(child, mappings, options, childContext);
+      }
+      continue;
+    }
+
+    collectAuthoredRenderSourcemapMappings(value, mappings, options, childContext);
+  }
+
+  return mappings;
+}
+
 function remapTemplateAttributeMappings(mappings = [], inputSourceMap = null) {
   if (!Array.isArray(mappings) || mappings.length === 0 || !inputSourceMap) {
     return mappings;
@@ -517,9 +651,14 @@ export function createLitsxTransformConfig(source, options = {}) {
     : [];
   const authoredTemplateAttributeMappings =
     shouldRunFinalTemplatePass && options.sourceMaps === true
-      ? collectAuthoredTemplateAttributeMappings(inputAst.program, [], {
-          sourceFileName: filename,
-        })
+      ? [
+          ...collectAuthoredTemplateAttributeMappings(inputAst.program, [], {
+            sourceFileName: filename,
+          }),
+          ...collectAuthoredRenderSourcemapMappings(inputAst.program, [], {
+            sourceFileName: filename,
+          }),
+        ]
       : [];
 
   return {
