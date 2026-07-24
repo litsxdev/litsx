@@ -65,6 +65,7 @@ export function collectLitAttributeSourcemapMetadata(node, mappings = [], option
           ? ` ${generatedName}=`
           : ` ${generatedName}`,
         generatedOffset: 1,
+        generatedScope: "html-template",
         source: sourceLocation?.filename ?? options.sourceFileName ?? null,
         line: sourceLocation?.start?.line ?? null,
         column: sourceLocation?.start?.column ?? null,

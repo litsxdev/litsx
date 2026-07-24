@@ -135,6 +135,7 @@ function collectAuthoredTemplateAttributeMappings(
           ? ` ${generatedName}=`
           : ` ${generatedName}`,
         generatedOffset: 1,
+        generatedScope: "html-template",
         source: sourceLocation?.filename ?? options.sourceFileName ?? null,
         line: sourceLocation?.start?.line ?? null,
         column: sourceLocation?.start?.column ?? null,
@@ -219,6 +220,7 @@ function collectAuthoredRenderSourcemapMappings(
     const returnLocation = node.loc;
     mappings.push({
       generatedNeedle: "return html`",
+      generatedScope: "render-return",
       source: returnLocation?.filename ?? options.sourceFileName ?? null,
       line: returnLocation?.start?.line ?? null,
       column: returnLocation?.start?.column ?? null,
@@ -226,6 +228,7 @@ function collectAuthoredRenderSourcemapMappings(
     if (context.componentRender) {
       mappings.push({
         generatedNeedle: "render()",
+        generatedScope: "render",
         source: returnLocation?.filename ?? options.sourceFileName ?? null,
         line: returnLocation?.start?.line ?? null,
         column: returnLocation?.start?.column ?? null,
@@ -239,6 +242,8 @@ function collectAuthoredRenderSourcemapMappings(
     const componentLocation = node.loc;
     mappings.push({
       generatedNeedle: `class ${componentName}`,
+      generatedScope: "class",
+      componentName,
       source: componentLocation?.filename ?? options.sourceFileName ?? null,
       line: componentLocation?.start?.line ?? null,
       column: componentLocation?.start?.column ?? null,
@@ -251,6 +256,7 @@ function collectAuthoredRenderSourcemapMappings(
     if (tagName) {
       mappings.push({
         generatedNeedle: `<${tagName}`,
+        generatedScope: "html-template",
         source: tagLocation?.filename ?? options.sourceFileName ?? null,
         line: tagLocation?.start?.line ?? null,
         column: tagLocation?.start?.column ?? null,
@@ -262,6 +268,7 @@ function collectAuthoredRenderSourcemapMappings(
     const expressionLocation = node.expression.loc ?? node.loc;
     mappings.push({
       generatedNeedle: "<slot",
+      generatedScope: "html-template",
       source: expressionLocation?.filename ?? options.sourceFileName ?? null,
       line: expressionLocation?.start?.line ?? null,
       column: expressionLocation?.start?.column ?? null,

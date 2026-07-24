@@ -1815,6 +1815,38 @@ describe("@litsx/compiler", () => {
     assert.strictEqual(actual.source, "/fixture/app/counter.litsx");
     assert.strictEqual(actual.line, expected.line);
     assert.strictEqual(actual.column, expected.column);
+
+    const generatedStyles = findPosition(result.code, "css`");
+    const authoredStyles = findPosition(source, "static styles");
+    const stylesPosition = originalPositionFor(new TraceMap(result.map), generatedStyles);
+    assert.strictEqual(stylesPosition.source, "/fixture/app/counter.litsx");
+    assert.strictEqual(stylesPosition.line, authoredStyles.line);
+  }, 30_000);
+
+  it("does not let ordinary string literals steal template sourcemap anchors", async () => {
+    const source = [
+      "const marker = '<div';",
+      "export function View() {",
+      "  return <div>View</div>;",
+      "}",
+    ].join("\n");
+
+    const result = await transformLitsx(source, {
+      filename: "/fixture/app/collision.litsx",
+      sourceMaps: true,
+    });
+    const traceMap = new TraceMap(result.map);
+    const marker = findPosition(result.code, "'<div'");
+    const templateIndex = result.code.lastIndexOf("<div");
+    const template = positionFromIndex(result.code, templateIndex);
+    const markerPosition = originalPositionFor(traceMap, marker);
+    const templatePosition = originalPositionFor(traceMap, template);
+
+    assert.strictEqual(markerPosition.source, "/fixture/app/collision.litsx");
+    assert.strictEqual(markerPosition.line, 1);
+    assert.strictEqual(templatePosition.source, "/fixture/app/collision.litsx");
+    assert.strictEqual(templatePosition.line, 3);
+    assert.strictEqual(templatePosition.column, 10);
   }, 30_000);
 
   it("emits original .litsx sourcesContent and preserves it through sourcemap chaining", async () => {

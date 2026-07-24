@@ -43,6 +43,7 @@
   "dependencies": {
     "@babel/generator": "^7.29.1",
     "@babel/helper-plugin-utils": "^7.28.6",
+    "@babel/parser": "^7.29.3",
     "@babel/plugin-syntax-jsx": "^7.28.6",
     "@babel/types": "^7.29.0",
     "@litsx/authoring": "^0.5.0",

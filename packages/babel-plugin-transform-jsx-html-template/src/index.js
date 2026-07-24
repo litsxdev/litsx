@@ -1,4 +1,6 @@
 import jsxSyntaxPlugin from "@babel/plugin-syntax-jsx";
+import { parse } from "@babel/parser";
+import * as babelTypes from "@babel/types";
 import { SourceMapConsumer, SourceMapGenerator } from "source-map-js";
 import {
   createTaggedTemplate,
@@ -59,6 +61,103 @@ function indexToPosition(text, index) {
   return { line, column };
 }
 
+function isTaggedTemplate(node, tagName) {
+  return node?.type === "TaggedTemplateExpression" &&
+    node.tag?.type === "Identifier" &&
+    node.tag.name === tagName;
+}
+
+function collectGeneratedAnchorRanges(code) {
+  const anchors = {
+    classes: new Map(),
+    renders: [],
+    renderReturns: [],
+    htmlTemplates: [],
+  };
+  const ast = parse(code, { sourceType: "module" });
+
+  function visit(node) {
+    if (!node || typeof node !== "object") return;
+
+    if (node.type === "ClassDeclaration" && node.id?.name) {
+      anchors.classes.set(node.id.name, node.start);
+    }
+    if (node.type === "ClassMethod" && node.kind === "method" && node.key?.name === "render") {
+      anchors.renders.push(node.key.start);
+    }
+    if (node.type === "ReturnStatement" && isTaggedTemplate(node.argument, "html")) {
+      anchors.renderReturns.push(node.start);
+    }
+    if (isTaggedTemplate(node, "html")) {
+      anchors.htmlTemplates.push(
+        ...node.quasi.quasis.map((quasi) => ({ start: quasi.start, end: quasi.end })),
+      );
+    }
+
+    const visitorKeys = babelTypes.VISITOR_KEYS[node.type] || [];
+    for (const key of visitorKeys) {
+      const value = node[key];
+      if (Array.isArray(value)) {
+        value.forEach(visit);
+      } else {
+        visit(value);
+      }
+    }
+  }
+
+  visit(ast.program);
+  return anchors;
+}
+
+function findInRanges(code, needle, ranges, cursor) {
+  let fromIndex = cursor ?? 0;
+  for (const range of ranges) {
+    const start = Math.max(range.start, fromIndex);
+    const foundAt = code.indexOf(needle, start);
+    if (foundAt !== -1 && foundAt < range.end) {
+      return foundAt;
+    }
+  }
+  return -1;
+}
+
+function resolvePatchedIndex(code, mapping, anchors, cursors) {
+  const scope = mapping.generatedScope;
+  if (scope === "class") {
+    return anchors.classes.get(mapping.componentName) ?? -1;
+  }
+  if (scope === "render") {
+    const index = cursors.get(scope) ?? 0;
+    cursors.set(scope, index + 1);
+    return anchors.renders[index] ?? -1;
+  }
+  if (scope === "render-return") {
+    const index = cursors.get(scope) ?? 0;
+    cursors.set(scope, index + 1);
+    return anchors.renderReturns[index] ?? -1;
+  }
+  if (scope === "html-template") {
+    const cursorKey = `${scope}:${mapping.generatedNeedle}`;
+    const foundAt = findInRanges(
+      code,
+      mapping.generatedNeedle,
+      anchors.htmlTemplates,
+      cursors.get(cursorKey) ?? 0,
+    );
+    if (foundAt !== -1) {
+      cursors.set(cursorKey, foundAt + mapping.generatedNeedle.length);
+    }
+    return foundAt;
+  }
+
+  const cursorKey = mapping.generatedNeedle;
+  const foundAt = code.indexOf(mapping.generatedNeedle, cursors.get(cursorKey) ?? 0);
+  if (foundAt !== -1) {
+    cursors.set(cursorKey, foundAt + mapping.generatedNeedle.length);
+  }
+  return foundAt;
+}
+
 export function patchLitAttributeSourcemap(code, map, mappings = []) {
   if (!map || !Array.isArray(mappings) || mappings.length === 0) {
     return map ?? null;
@@ -69,6 +168,13 @@ export function patchLitAttributeSourcemap(code, map, mappings = []) {
     file: map.file ?? null,
     sourceRoot: map.sourceRoot ?? "",
   });
+  let anchors = null;
+  try {
+    anchors = collectGeneratedAnchorRanges(code);
+  } catch {
+    // Preserve sourcemap output for syntax emitted by downstream output plugins.
+    anchors = { classes: new Map(), renders: [], renderReturns: [], htmlTemplates: [] };
+  }
   const searchCursor = new Map();
   const patchedMappings = [];
 
@@ -77,8 +183,7 @@ export function patchLitAttributeSourcemap(code, map, mappings = []) {
       continue;
     }
 
-    const fromIndex = searchCursor.get(mapping.generatedNeedle) ?? 0;
-    const foundAt = code.indexOf(mapping.generatedNeedle, fromIndex);
+    const foundAt = resolvePatchedIndex(code, mapping, anchors, searchCursor);
     if (foundAt === -1) {
       continue;
     }
