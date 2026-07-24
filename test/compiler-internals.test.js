@@ -202,6 +202,31 @@ describe("compiler internals", () => {
     delete process.env.LITSX_PROFILE;
   });
 
+  it("normalizes final sourcemap sourcesContent back to the authored source", async () => {
+    transformFromAstSync.mockReturnValue({
+      code: "compiled-output",
+      map: {
+        version: 3,
+        sources: ["/virtual/Example.litsx"],
+        sourcesContent: ["const compiled = true;"],
+        names: [],
+        mappings: "",
+      },
+      metadata: {},
+    });
+
+    const mod = await import("../packages/compiler/src/index.js");
+    const source = "export const Example = () => <div />;";
+    const result = mod.transformLitsxSync(source, {
+      filename: "/virtual/Example.litsx",
+      jsxTemplate: false,
+      sourceMaps: true,
+    });
+
+    assert.deepStrictEqual(result.map.sources, ["/virtual/Example.litsx"]);
+    assert.deepStrictEqual(result.map.sourcesContent, [source]);
+  });
+
   it("uses session-level typecheck sessions when a compilation session is project-backed", async () => {
     const projectSession = {
       invalidate: vi.fn(),

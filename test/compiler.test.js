@@ -1713,6 +1713,45 @@ describe("@litsx/compiler", () => {
     }
   }, 30_000);
 
+  it("emits original .litsx sourcesContent and preserves it through sourcemap chaining", async () => {
+    const source = [
+      "export function HomeHero(props) {",
+      "  const { title, href } = props;",
+      "  return <section><a href={href}>{title}</a></section>;",
+      "}",
+    ].join("\n");
+
+    const result = await transformLitsx(source, {
+      filename: "/app/components/home-hero.litsx",
+      sourceMaps: true,
+    });
+
+    assert.ok(result.map, "expected compiler to emit a sourcemap");
+    assert.deepStrictEqual(result.map.sources, ["/app/components/home-hero.litsx"]);
+    assert.deepStrictEqual(result.map.sourcesContent, [source]);
+
+    const rebundled = await babelCore.transformAsync(result.code, {
+      filename: "/app/components/home-hero.mjs",
+      sourceMaps: true,
+      inputSourceMap: result.map,
+      configFile: false,
+      babelrc: false,
+      plugins: [],
+    });
+
+    assert.ok(rebundled?.map, "expected chained transform to emit a sourcemap");
+    assert.deepStrictEqual(rebundled.map.sources, ["/app/components/home-hero.litsx"]);
+    assert.deepStrictEqual(rebundled.map.sourcesContent, [source]);
+
+    const generated = findPosition(rebundled.code, "this.title");
+    const actual = originalPositionFor(new TraceMap(rebundled.map), generated);
+    const expected = findPosition(source, "{title}");
+
+    assert.strictEqual(actual.source, "/app/components/home-hero.litsx");
+    assert.strictEqual(actual.line, expected.line);
+    assert.ok(actual.column >= expected.column);
+  }, 30_000);
+
   it("can consume a shared TypeScript project session from typecheck for native typed compilation", () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-shared-ts-session-"));
     const tsconfigPath = path.join(tempDir, "tsconfig.json");

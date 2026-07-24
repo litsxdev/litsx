@@ -107,6 +107,9 @@ Additional Babel parser plugins. If omitted, `.tsx` filenames automatically enab
 ### `sourceMaps?: boolean`
 
 When `true`, emits a final sourcemap aligned to the original authored source.
+The emitted map keeps the original authored filename in `sources` and the
+original authored `.litsx` text in `sourcesContent`, so downstream bundlers can
+chain the map without replacing DevTools source views with transformed JS.
 
 When `false` or omitted:
 

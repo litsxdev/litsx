@@ -302,6 +302,66 @@ function createCompilerCaches() {
   };
 }
 
+function normalizeFinalSourceMap(map, source, options = {}) {
+  if (!map || typeof map !== "object") {
+    return map ?? null;
+  }
+
+  const filename = typeof options.filename === "string" && options.filename.length > 0
+    ? options.filename
+    : null;
+
+  if (!filename || typeof source !== "string") {
+    return map;
+  }
+
+  const sources = Array.isArray(map.sources) ? [...map.sources] : [];
+  if (sources.length === 0) {
+    return map;
+  }
+
+  const sourcesContent = Array.isArray(map.sourcesContent)
+    ? [...map.sourcesContent]
+    : new Array(sources.length).fill(null);
+
+  let changed = false;
+  let matched = false;
+
+  for (let index = 0; index < sources.length; index += 1) {
+    if (sources[index] !== filename) {
+      continue;
+    }
+
+    matched = true;
+    if (sourcesContent[index] !== source) {
+      sourcesContent[index] = source;
+      changed = true;
+    }
+  }
+
+  if (!matched && sources.length === 1) {
+    matched = true;
+    if (sources[0] !== filename) {
+      sources[0] = filename;
+      changed = true;
+    }
+    if (sourcesContent[0] !== source) {
+      sourcesContent[0] = source;
+      changed = true;
+    }
+  }
+
+  if (!changed) {
+    return map;
+  }
+
+  return {
+    ...map,
+    sources,
+    sourcesContent,
+  };
+}
+
 function createStandaloneCompilerTsSession(options = {}) {
   const typescriptModule = options.typescriptModule || ensureTypescriptModule();
   return createStandaloneTsSession({
@@ -491,7 +551,7 @@ export function createLitsxTransformConfig(source, options = {}) {
   };
 }
 
-function finalizeTransformResult(result, options, authoredWarnings = [], profile = []) {
+function finalizeTransformResult(result, source, options, authoredWarnings = [], profile = []) {
   if (!result) {
     return {
       code: "",
@@ -518,9 +578,9 @@ function finalizeTransformResult(result, options, authoredWarnings = [], profile
   const map =
     options.sourceMaps === true
       ? options.jsxTemplate === false
-        ? result.map ?? null
+        ? normalizeFinalSourceMap(result.map ?? null, source, options)
         : templateAttributeMappings.length === 0
-          ? result.map ?? null
+          ? normalizeFinalSourceMap(result.map ?? null, source, options)
           : profilePhase(
             "sourcemap-patching",
             () => patchLitAttributeSourcemap(
@@ -531,10 +591,14 @@ function finalizeTransformResult(result, options, authoredWarnings = [], profile
             profile,
           )
       : null;
+  const normalizedMap =
+    options.sourceMaps === true
+      ? normalizeFinalSourceMap(map, source, options)
+      : null;
 
   return {
     code: result.code || "",
-    map,
+    map: normalizedMap,
     metadata,
   };
 }
@@ -603,7 +667,7 @@ export async function transformLitsx(source, options = {}) {
           profile,
         )
       : firstPassResult;
-    return finalizeTransformResult(result, nextOptions, authoredWarnings, profile);
+    return finalizeTransformResult(result, source, nextOptions, authoredWarnings, profile);
   }
 
   const {
@@ -660,7 +724,7 @@ export async function transformLitsx(source, options = {}) {
         profile,
       )
     : firstPassResult;
-  return finalizeTransformResult(result, options, authoredWarnings, profile);
+  return finalizeTransformResult(result, source, options, authoredWarnings, profile);
 }
 
 export function transformLitsxSync(source, options = {}) {
@@ -726,7 +790,7 @@ export function transformLitsxSync(source, options = {}) {
           profile,
         )
       : firstPassResult;
-    return finalizeTransformResult(result, nextOptions, authoredWarnings, profile);
+    return finalizeTransformResult(result, source, nextOptions, authoredWarnings, profile);
   }
 
   const {
@@ -782,7 +846,7 @@ export function transformLitsxSync(source, options = {}) {
         profile,
       )
     : firstPassResult;
-  return finalizeTransformResult(result, options, authoredWarnings, profile);
+  return finalizeTransformResult(result, source, options, authoredWarnings, profile);
 }
 
 export default transformLitsx;
