@@ -1006,6 +1006,7 @@ __metadata:
     "@babel/core": "npm:^7.29.6"
     "@babel/generator": "npm:^7.29.1"
     "@babel/helper-plugin-utils": "npm:^7.28.6"
+    "@babel/parser": "npm:^7.29.3"
     "@babel/plugin-syntax-jsx": "npm:^7.28.6"
     "@babel/types": "npm:^7.29.0"
     "@litsx/authoring": "npm:^0.5.0"
