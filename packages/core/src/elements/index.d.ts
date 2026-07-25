@@ -19,6 +19,11 @@ export interface LitsxHydratableComponentStatic extends LitsxComponentStatic {
   readonly [LITSX_HYDRATABLE_TAG]: string;
 }
 
+export interface LitsxHydratableCustomElementStatic {
+  readonly [LITSX_HYDRATABLE_TAG]: string;
+  readonly [LITSX_MODULE_ID]?: string;
+}
+
 export interface LitsxHostTypeIdStatic extends LitsxComponentStatic {
   readonly [LITSX_HOST_TYPE_ID]: string;
 }
@@ -26,6 +31,21 @@ export interface LitsxHostTypeIdStatic extends LitsxComponentStatic {
 export declare function isLitsxComponentClass(
   value: unknown
 ): value is LitsxComponentStatic;
+export declare function isCustomElementClass(
+  value: unknown
+): value is CustomElementConstructor;
+export declare function isHydratableCustomElementClass(
+  value: unknown
+): value is LitsxHydratableCustomElementStatic & CustomElementConstructor;
+export declare function annotateHydratableCustomElement<
+  T extends CustomElementConstructor,
+>(
+  ctor: T,
+  metadata?: {
+    tagName?: string | null | undefined;
+    moduleId?: string | null | undefined;
+  },
+): T & LitsxHydratableCustomElementStatic;
 
 export interface LitsxScopedTemplate<
   TTemplate = unknown,

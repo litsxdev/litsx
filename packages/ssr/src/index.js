@@ -400,6 +400,15 @@ function createDefaultAssetResolver(root, customResolver = null) {
       return moduleId;
     }
 
+    if (
+      typeof moduleId === "string" &&
+      !moduleId.startsWith(".") &&
+      !moduleId.startsWith("/") &&
+      !path.isAbsolute(moduleId)
+    ) {
+      return moduleId;
+    }
+
     return toPublicPath(root, moduleId);
   };
 }

@@ -6,6 +6,7 @@ import { describe, it } from "vitest";
 import { LitElement, html } from "lit";
 import { renderLight } from "@lit-labs/ssr-client/directives/render-light.js";
 import {
+  annotateHydratableCustomElement,
   __litsxServerComponentCall,
   LITSX_MODULE_ID,
   __litsxScopedTemplate,
@@ -847,6 +848,47 @@ describe("@litsx/ssr", () => {
     assert.strictEqual(result.renderClientImportsData(), "");
     assert.strictEqual(result.renderModulePreloads(), "");
     assert.strictEqual(result.renderHydrationData(), "");
+  });
+
+  it("hydrates generic custom element roots in host-only SSR mode", async () => {
+    class ExternalCard extends HTMLElement {}
+    annotateHydratableCustomElement(ExternalCard, {
+      tagName: "external-card",
+      moduleId: "external-card-lib",
+    });
+
+    const result = await renderToString(
+      __litsxScopedTemplate(
+        html`<external-card .product=${{ name: "Promo" }}></external-card>`,
+        {
+          "external-card": ExternalCard,
+        },
+      ),
+    );
+
+    assert.match(result.html, /<external-card\b[^>]*data-litsx-root="litsx-root-0"/);
+    assert.doesNotMatch(result.html, /<template shadowroot="open"/);
+    assert.deepStrictEqual(result.clientImports, ["external-card-lib"]);
+    assert.deepStrictEqual(result.hydrationData, {
+      version: 1,
+      roots: [
+        {
+          id: "litsx-root-0",
+          tagName: "external-card",
+          moduleId: "external-card-lib",
+        },
+      ],
+    });
+    assert.deepStrictEqual(result.hydrationData.payload, {
+      roots: {
+        "litsx-root-0": {
+          props: {
+            product: { name: "Promo" },
+          },
+        },
+      },
+      instances: {},
+    });
   });
 
   it("accepts promised renderable values", async () => {

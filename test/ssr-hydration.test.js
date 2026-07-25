@@ -3,7 +3,6 @@ import fs from "node:fs";
 import path from "node:path";
 import { beforeEach, describe, it, vi } from "vitest";
 import {
-  LITSX_COMPONENT,
   LITSX_HYDRATABLE_TAG,
 } from "../packages/core/src/elements/index.js";
 
@@ -27,7 +26,6 @@ describe("@litsx/ssr/hydration", () => {
 
   function createHydratableComponent(tagName) {
     class HydratableComponent {}
-    HydratableComponent[LITSX_COMPONENT] = true;
     HydratableComponent[LITSX_HYDRATABLE_TAG] = tagName;
     return HydratableComponent;
   }
@@ -88,19 +86,19 @@ describe("@litsx/ssr/hydration", () => {
     };
   }
 
-  it("installs Lit hydration support before importing @litsx/core", () => {
+  it("installs Lit hydration support before importing @litsx/core/elements", () => {
     const hydrationSource = fs.readFileSync(
       path.resolve("packages/ssr/src/hydration.js"),
       "utf8",
     );
     const litHydrationImport = 'import "@lit-labs/ssr-client/lit-element-hydrate-support.js";';
-    const coreImport = 'import { LITSX_COMPONENT, LITSX_HYDRATABLE_TAG } from "@litsx/core";';
+    const coreImport = 'from "@litsx/core/elements";';
 
     assert.match(hydrationSource, /@lit-labs\/ssr-client\/lit-element-hydrate-support\.js/);
-    assert.match(hydrationSource, /from "@litsx\/core"/);
+    assert.match(hydrationSource, /from "@litsx\/core\/elements"/);
     assert.ok(
       hydrationSource.indexOf(litHydrationImport) < hydrationSource.indexOf(coreImport),
-      "expected Lit hydration support import to come before @litsx/core",
+      "expected Lit hydration support import to come before @litsx/core/elements",
     );
   });
 
@@ -223,6 +221,7 @@ describe("@litsx/ssr/hydration", () => {
     const { hydrate } = await import("../packages/ssr/src/hydration.js");
     const calls = [];
     const root = { kind: "document" };
+    const ProductCard = createHydratableComponent("product-card");
 
     const result = await hydrate(root, {
       clientImports: ["/assets/a.js", "", "/assets/b.js", "/assets/a.js", null],
@@ -231,6 +230,7 @@ describe("@litsx/ssr/hydration", () => {
       },
       moduleLoader: async (specifier) => {
         calls.push(`import:${specifier}`);
+        return specifier === "/assets/a.js" ? { ProductCard } : {};
       },
     });
 

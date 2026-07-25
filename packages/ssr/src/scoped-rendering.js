@@ -4,6 +4,7 @@ import { LitElementRenderer } from "@lit-labs/ssr/lib/lit-element-renderer.js";
 import { ElementRenderer } from "@lit-labs/ssr/lib/element-renderer.js";
 import {
   __isLitsxScopedTemplate,
+  isHydratableCustomElementClass,
   LITSX_LIGHT_DOM,
   LITSX_MODULE_ID,
   LITSX_SSR_CONTEXT,
@@ -99,6 +100,7 @@ function createScopedRenderIterable(value, renderInfo = {}) {
   const elementRenderers = [
     ScopedContextProviderRenderer,
     ScopedLitElementRenderer,
+    ScopedHydratableElementRenderer,
     ...(renderInfo.elementRenderers ?? []),
   ].filter((renderer, index, list) => list.indexOf(renderer) === index);
   const customElementInstanceStack = renderInfo.customElementInstanceStack ?? [];
@@ -453,6 +455,73 @@ export class ScopedLitElementRenderer extends LitElementRenderer {
         scopedRegistryStack.pop();
       },
     ];
+  }
+}
+
+class ScopedHydratableElementRenderer extends ElementRenderer {
+  static matchesClass(ctor) {
+    return (
+      isHydratableCustomElementClass(ctor) &&
+      !ScopedLitElementRenderer.matchesClass(ctor) &&
+      ctor !== LitsxContextProviderElement
+    );
+  }
+
+  constructor(tagName) {
+    super(tagName);
+    const ctor = customElements.get(tagName);
+    this.element = ctor ? new ctor() : this.element;
+    ensureSsrElementShape(this.element);
+    const context = scopedSsrContextStack.at(-1) ?? createScopedSsrContext();
+    const isHydrationRoot = scopedRegistryStack.length === 1;
+    const rootId = isHydrationRoot ? context.nextRootId() : null;
+    const moduleId = this.element.constructor?.[LITSX_MODULE_ID] ?? null;
+
+    this.element[LITSX_SSR_CONTEXT] = {
+      context,
+      executionContext: context.executionContext ?? null,
+      idPrefix: context.idPrefix,
+      currentInstanceId: context.nextInstanceId(),
+      rootId,
+    };
+    context.collectClientImport(this.element.constructor);
+
+    if (rootId) {
+      this.element.setAttribute("data-litsx-root", rootId);
+      context.collectHydrationRoot({
+        id: rootId,
+        tagName,
+        ...(moduleId ? { moduleId } : {}),
+      });
+    }
+  }
+
+  setProperty(name, value) {
+    super.setProperty(name, value);
+    const rootId = this.element?.[LITSX_SSR_CONTEXT]?.rootId;
+    if (rootId) {
+      const serialized = trySerialize(value, `roots.${rootId}.props.${name}`);
+      if (!serialized.ok) {
+        return;
+      }
+      const existing = this.element[LITSX_SSR_CONTEXT].rootPayload ?? {};
+      existing.props = {
+        ...(existing.props ?? {}),
+        [name]: serialized.value,
+      };
+      this.element[LITSX_SSR_CONTEXT].rootPayload = existing;
+    }
+  }
+
+  connectedCallback() {
+    super.connectedCallback();
+    const ssrContext = this.element?.[LITSX_SSR_CONTEXT];
+    if (ssrContext?.rootId && ssrContext.rootPayload) {
+      ssrContext.context.collectHydrationRootPayload(
+        ssrContext.rootId,
+        ssrContext.rootPayload,
+      );
+    }
   }
 }
 
