@@ -240,7 +240,14 @@ export function createScopedSsrContext(options = {}) {
     assetResolver:
       typeof options.assetResolver === "function" ? options.assetResolver : null,
     executionContext: options.executionContext ?? null,
+    renderCustomElementSsr:
+      typeof options.renderCustomElementSsr === "function"
+        ? options.renderCustomElementSsr
+        : null,
     clientImports: new Set(),
+    modulePreloads: new Set(),
+    headTags: new Set(),
+    adapterArtifacts: [],
     hydrationData: {
       version: 1,
       roots: [],
@@ -267,6 +274,36 @@ export function createScopedSsrContext(options = {}) {
       const resolved = this.assetResolver ? this.assetResolver(moduleId) : moduleId;
       if (resolved) {
         this.clientImports.add(resolved);
+      }
+    },
+    collectClientImportSpecifier(specifier) {
+      if (!specifier || typeof specifier !== "string") {
+        return;
+      }
+
+      const resolved = this.assetResolver ? this.assetResolver(specifier) ?? specifier : specifier;
+      if (resolved) {
+        this.clientImports.add(resolved);
+      }
+    },
+    collectModulePreload(specifier) {
+      if (!specifier || typeof specifier !== "string") {
+        return;
+      }
+
+      const resolved = this.assetResolver ? this.assetResolver(specifier) ?? specifier : specifier;
+      if (resolved) {
+        this.modulePreloads.add(resolved);
+      }
+    },
+    collectHeadTag(markup) {
+      if (typeof markup === "string" && markup.length > 0) {
+        this.headTags.add(markup);
+      }
+    },
+    collectAdapterArtifact(artifact) {
+      if (artifact && typeof artifact === "object") {
+        this.adapterArtifacts.push(artifact);
       }
     },
     collectHydrationRoot(root) {
@@ -494,10 +531,20 @@ class ScopedHydratableElementRenderer extends ElementRenderer {
         ...(moduleId ? { moduleId } : {}),
       });
     }
+
+    this._litsxContext = context;
+    this._litsxTagName = tagName;
+    this._litsxModuleId = moduleId;
+    this._litsxRootId = rootId;
+    this._litsxRootPayloadCollected = false;
+    this._litsxProps = {};
+    this._litsxHandledContent = null;
+    this._litsxAdapterResultPromise = null;
   }
 
   setProperty(name, value) {
     super.setProperty(name, value);
+    this._litsxProps[name] = value;
     const rootId = this.element?.[LITSX_SSR_CONTEXT]?.rootId;
     if (rootId) {
       const serialized = trySerialize(value, `roots.${rootId}.props.${name}`);
@@ -515,13 +562,139 @@ class ScopedHydratableElementRenderer extends ElementRenderer {
 
   connectedCallback() {
     super.connectedCallback();
-    const ssrContext = this.element?.[LITSX_SSR_CONTEXT];
-    if (ssrContext?.rootId && ssrContext.rootPayload) {
-      ssrContext.context.collectHydrationRootPayload(
-        ssrContext.rootId,
-        ssrContext.rootPayload,
+  }
+
+  renderAttributes() {
+    return [
+      async () => {
+        await this.#applyAdapterResult();
+        this.#flushRootPayload();
+        return super.renderAttributes().join("");
+      },
+    ];
+  }
+
+  renderShadow(_renderInfo) {
+    const handledContent = this._litsxHandledContent;
+    if (
+      handledContent &&
+      handledContent.kind === "shadow-dom" &&
+      typeof handledContent.html === "string"
+    ) {
+      return [handledContent.html];
+    }
+
+    return undefined;
+  }
+
+  async #applyAdapterResult() {
+    const result = await this.#resolveAdapterResult();
+    if (!result || result.mode !== "handled") {
+      return;
+    }
+
+    const host = result.host ?? null;
+    if (host?.attributes && typeof host.attributes === "object") {
+      for (const [name, value] of Object.entries(host.attributes)) {
+        if (value == null || value === false) {
+          continue;
+        }
+        this.element.setAttribute(name, value === true ? "" : String(value));
+      }
+    }
+
+    const rootPayload = this.element?.[LITSX_SSR_CONTEXT]?.rootPayload ?? {};
+    if (host?.props && typeof host.props === "object") {
+      rootPayload.props = {
+        ...(rootPayload.props ?? {}),
+        ...host.props,
+      };
+    }
+
+    const hydration = result.hydration ?? null;
+    if (hydration?.payload !== undefined) {
+      rootPayload.adapter = hydration.payload;
+    }
+    if (Object.keys(rootPayload).length > 0) {
+      this.element[LITSX_SSR_CONTEXT].rootPayload = rootPayload;
+    }
+
+    const assets = result.assets ?? null;
+    if (Array.isArray(assets?.clientImports)) {
+      assets.clientImports.forEach((entry) => this._litsxContext.collectClientImportSpecifier(entry));
+    }
+    if (Array.isArray(assets?.modulePreloads)) {
+      assets.modulePreloads.forEach((entry) => this._litsxContext.collectModulePreload(entry));
+    }
+    if (Array.isArray(assets?.head)) {
+      assets.head.forEach((entry) => this._litsxContext.collectHeadTag(entry));
+    }
+
+    if (result.artifacts && typeof result.artifacts === "object") {
+      this._litsxContext.collectAdapterArtifact({
+        tagName: this._litsxTagName,
+        moduleId: this._litsxModuleId,
+        rootId: this._litsxRootId,
+        artifacts: result.artifacts,
+      });
+    }
+
+    if (result.content?.kind === "light-dom") {
+      throw new Error(
+        `renderCustomElementSsr(...) returned light-dom content for <${this._litsxTagName}>, but generic custom-element SSR adapters currently only support shadow-dom content.`,
       );
     }
+
+    this._litsxHandledContent = result.content ?? null;
+  }
+
+  async #resolveAdapterResult() {
+    if (this._litsxAdapterResultPromise) {
+      return this._litsxAdapterResultPromise;
+    }
+
+    const callback = this._litsxContext?.renderCustomElementSsr ?? null;
+    if (typeof callback !== "function") {
+      this._litsxAdapterResultPromise = Promise.resolve(null);
+      return this._litsxAdapterResultPromise;
+    }
+
+    this._litsxAdapterResultPromise = Promise.resolve(callback({
+      tagName: this._litsxTagName,
+      ctor: this.element.constructor,
+      moduleId: this._litsxModuleId,
+      isRoot: Boolean(this._litsxRootId),
+      rootId: this._litsxRootId,
+      props: { ...this._litsxProps },
+      children: null,
+      assetResolver: this._litsxContext.assetResolver,
+      executionContext: this._litsxContext.executionContext,
+      renderChildren: async () => "",
+      renderValue: async (value) =>
+        collectRenderResult(
+          createScopedRenderIterable(value, {
+            litsxSsrContext: this._litsxContext,
+          }),
+        ),
+    }));
+    return this._litsxAdapterResultPromise;
+  }
+
+  #flushRootPayload() {
+    const ssrContext = this.element?.[LITSX_SSR_CONTEXT];
+    if (
+      this._litsxRootPayloadCollected ||
+      !ssrContext?.rootId ||
+      !ssrContext.rootPayload
+    ) {
+      return;
+    }
+
+    ssrContext.context.collectHydrationRootPayload(
+      ssrContext.rootId,
+      ssrContext.rootPayload,
+    );
+    this._litsxRootPayloadCollected = true;
   }
 }
 
