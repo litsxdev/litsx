@@ -1,6 +1,17 @@
 import { decodeVirtualAttributeName } from "@litsx/authoring";
+import fs from "node:fs";
+import path from "node:path";
+import { normalizeFilePath } from "@litsx/typescript-session";
 
 let t;
+const IMPORT_RESOLUTION_EXTENSIONS = [
+  ".litsx",
+  ".litsx.jsx",
+  ".jsx",
+  ".js",
+  ".tsx",
+  ".ts",
+];
 
 export function setSsrSharedBabelTypes(nextTypes) {
   t = nextTypes;
@@ -10,15 +21,18 @@ export function toKebab(name) {
   return name.replace(/([a-z])([A-Z])/g, "$1-$2").toLowerCase();
 }
 
-export function buildAvailableMap(programPath) {
+export function buildAvailableMap(programPath, options = {}) {
   const availableMap = new Map();
+  const filename = normalizeFilePath(options.filename || programPath.hub.file?.opts?.filename || "");
 
   programPath.get("body").forEach((nodePath) => {
     if (nodePath.isImportDeclaration()) {
       nodePath.node.specifiers.forEach((specifier) => {
         if (t.isImportSpecifier(specifier) || t.isImportDefaultSpecifier(specifier)) {
+          const sourceSpecifier = nodePath.node.source.value;
           availableMap.set(specifier.local.name, {
             originalName: specifier.local.name,
+            moduleId: resolveImportModuleId(filename, sourceSpecifier),
           });
         }
       });
@@ -38,6 +52,46 @@ export function buildAvailableMap(programPath) {
   });
 
   return availableMap;
+}
+
+function resolveImportModuleId(fromFilename, sourceSpecifier) {
+  if (typeof sourceSpecifier !== "string" || sourceSpecifier.length === 0) {
+    return null;
+  }
+
+  if (
+    !sourceSpecifier.startsWith("./") &&
+    !sourceSpecifier.startsWith("../") &&
+    !sourceSpecifier.startsWith("/")
+  ) {
+    return sourceSpecifier;
+  }
+
+  if (!fromFilename) {
+    return sourceSpecifier;
+  }
+
+  const basePath = sourceSpecifier.startsWith("/")
+    ? sourceSpecifier
+    : path.resolve(path.dirname(fromFilename), sourceSpecifier);
+  const candidates = IMPORT_RESOLUTION_EXTENSIONS.some((extension) => basePath.endsWith(extension))
+    ? [basePath]
+    : [
+        ...IMPORT_RESOLUTION_EXTENSIONS.map((extension) => `${basePath}${extension}`),
+        ...IMPORT_RESOLUTION_EXTENSIONS.map((extension) => path.join(basePath, `index${extension}`)),
+      ];
+
+  for (const candidate of candidates) {
+    try {
+      if (fs.statSync(candidate).isFile()) {
+        return normalizeFilePath(candidate);
+      }
+    } catch {
+      // Ignore resolution misses and continue.
+    }
+  }
+
+  return sourceSpecifier;
 }
 
 function resolveTopLevelDeclarationPath(nodePath) {
@@ -88,6 +142,7 @@ export function collectScopedEntries(rootPath, availableMap) {
       const tagName = toKebab(originalName);
       nameNode.node.name = tagName;
       used.set(originalName, {
+        ...availableMap.get(originalName),
         originalName,
         tagName,
       });

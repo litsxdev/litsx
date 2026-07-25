@@ -10,6 +10,7 @@ import { buildAvailableMap, setTypes, toKebab } from "./shared.js";
 let t;
 const SHADOW_MIXIN = "ShadowDomMixin";
 const LIGHT_MIXIN = "LightDomMixin";
+const ANNOTATE_HYDRATABLE_CUSTOM_ELEMENT = "annotateHydratableCustomElement";
 const RENDER_LIGHT_MODULE = "@lit-labs/ssr-client/directives/render-light.js";
 const RENDER_LIGHT_IMPORT = "renderLight";
 const IMPORT_RESOLUTION_EXTENSIONS = [
@@ -32,7 +33,9 @@ export default function transformFunctionToClassPlugin(api, options = {}) {
     visitor: {
       Program: {
         exit(programPath) {
-          const availableMap = buildAvailableMap(programPath);
+          const availableMap = buildAvailableMap(programPath, {
+            filename: programPath.hub.file?.opts?.filename || "",
+          });
           annotateImportedLightDomEntries(programPath, availableMap);
           programPath.get("body").forEach((nodePath) => {
             const classPath = resolveTopLevelClassPath(nodePath);
@@ -112,7 +115,7 @@ function transformClass(classPath, programPath, options = {}, availableMap = bui
   // scoped element resolution at all.
   const elementsStatic = hasExistingElementsStatic || lightDomRequested
     ? null
-    : createClassProperty("elements", detectedElements);
+    : createClassProperty("elements", detectedElements, programPath, options);
   const needsElementsMixin =
     Boolean(elementsStatic) ||
     needsElementsRegistry ||
@@ -208,13 +211,13 @@ function hasMixinInSuperChain(node, mixinName) {
   return false;
 }
 
-function createClassProperty(name, elements) {
+function createClassProperty(name, elements, programPath, options = {}) {
   if (!elements || elements.length === 0) return null;
 
   const properties = elements.map((entry) =>
     t.objectProperty(
       t.stringLiteral(entry.tagName),
-      t.identifier(entry.originalName)
+      createElementRegistryValue(entry, programPath, options)
     )
   );
 
@@ -227,6 +230,39 @@ function createClassProperty(name, elements) {
   );
   property.static = true;
   return property;
+}
+
+function createElementRegistryValue(entry, programPath, options = {}) {
+  const baseValue = t.identifier(entry.originalName);
+  if (options?.ssr !== true) {
+    return baseValue;
+  }
+
+  ensureRuntimeInfrastructureImport(
+    programPath,
+    ANNOTATE_HYDRATABLE_CUSTOM_ELEMENT,
+  );
+
+  return t.callExpression(
+    t.identifier(ANNOTATE_HYDRATABLE_CUSTOM_ELEMENT),
+    [
+      baseValue,
+      t.objectExpression(
+        [
+          t.objectProperty(
+            t.identifier("tagName"),
+            t.stringLiteral(entry.tagName),
+          ),
+          entry.moduleId
+            ? t.objectProperty(
+              t.identifier("moduleId"),
+              t.stringLiteral(entry.moduleId),
+            )
+            : null,
+        ].filter(Boolean),
+      ),
+    ],
+  );
 }
 
 function insertClassProperty(node, property) {
@@ -329,6 +365,7 @@ function ensureImportedElementCandidates(programPath, fromFilename, importedCand
           localName: matchingSpecifier.local.name,
           originalName: candidate.originalName,
           lightDom: Boolean(candidate.lightDom),
+          moduleId: candidate.sourceSpecifier || candidate.sourceFile || null,
         });
         return;
       }
@@ -355,6 +392,7 @@ function ensureImportedElementCandidates(programPath, fromFilename, importedCand
       localName,
       originalName: candidate.originalName,
       lightDom: Boolean(candidate.lightDom),
+      moduleId: candidate.sourceSpecifier || candidate.sourceFile || null,
     });
   });
 

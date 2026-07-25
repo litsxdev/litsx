@@ -1,5 +1,9 @@
 import "@lit-labs/ssr-client/lit-element-hydrate-support.js";
-import { LITSX_COMPONENT, LITSX_HYDRATABLE_TAG } from "@litsx/core";
+import {
+  isCustomElementClass,
+  isHydratableCustomElementClass,
+  LITSX_HYDRATABLE_TAG,
+} from "@litsx/core/elements";
 
 function normalizeClientImports(value) {
   const values = Array.isArray(value) ? value : value == null ? [] : [value];
@@ -40,15 +44,14 @@ function getCustomElementRegistry() {
 }
 
 function isRegistrableHydrationExport(value) {
-  return (
-    typeof value === "function" &&
-    value[LITSX_COMPONENT] === true &&
-    typeof value[LITSX_HYDRATABLE_TAG] === "string" &&
-    value[LITSX_HYDRATABLE_TAG].length > 0
-  );
+  return isHydratableCustomElementClass(value);
 }
 
 function registerHydratableElement(ctor) {
+  if (!isCustomElementClass(ctor)) {
+    throw new TypeError("Hydration registration requires a custom element constructor.");
+  }
+
   const tagName = ctor[LITSX_HYDRATABLE_TAG];
   const registry = getCustomElementRegistry();
 
@@ -473,7 +476,12 @@ export async function hydrate(
   }
 
   const specifiers = readClientImports(root, options);
-  await Promise.all(specifiers.map((specifier) => moduleLoader(specifier)));
+  const modules = await Promise.all(specifiers.map((specifier) => moduleLoader(specifier)));
+  modules.forEach((moduleNamespace) => {
+    if (getCustomElementRegistry() && moduleNamespace && typeof moduleNamespace === "object") {
+      registerHydrationModule(moduleNamespace);
+    }
+  });
 
   return hydrationRoots.length > 0 ? hydrationRoots : root;
 }
@@ -526,7 +534,12 @@ export async function hydrateRoot(
   }
 
   const specifiers = readClientImports(root, options);
-  await Promise.all(specifiers.map((specifier) => moduleLoader(specifier)));
+  const modules = await Promise.all(specifiers.map((specifier) => moduleLoader(specifier)));
+  modules.forEach((moduleNamespace) => {
+    if (getCustomElementRegistry() && moduleNamespace && typeof moduleNamespace === "object") {
+      registerHydrationModule(moduleNamespace);
+    }
+  });
 
   return match.element ?? element;
 }

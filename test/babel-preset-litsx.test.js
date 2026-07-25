@@ -1405,7 +1405,7 @@ describe("@litsx/babel-preset-litsx", () => {
       result.code,
       /static properties = \{[\s\S]*label: \{[\s\S]*type: String[\s\S]*count: \{[\s\S]*type: Number/s
     );
-    assert.match(result.code, /static elements = \{\s*"fancy-button": FancyButton/s);
+    assert.match(result.code, /static elements = \{[\s\S]*"fancy-button": annotateHydratableCustomElement\(FancyButton,\s*\{\s*tagName: "fancy-button",\s*moduleId: "\.\/FancyButton\.js"\s*\}\)/s);
     assert.match(result.code, /html`/);
     assert.match(result.code, /static \[LITSX_MODULE_ID\] = "\/virtual\/TypedForm\.tsx";/);
   }, 20000);
@@ -1429,8 +1429,8 @@ describe("@litsx/babel-preset-litsx", () => {
       },
     );
 
-    assert.match(result.code, /import \{ __litsxScopedTemplate \} from "@litsx\/core\/elements";/);
-    assert.match(result.code, /renderToString\(__litsxScopedTemplate\(html`<product-card \.product=\$\{product\}><\/product-card>`\, \{\s*"product-card": ProductCard\s*\}\)\)/);
+    assert.match(result.code, /import \{ __litsxScopedTemplate, annotateHydratableCustomElement \} from "@litsx\/core\/elements"|import \{ annotateHydratableCustomElement, __litsxScopedTemplate \} from "@litsx\/core\/elements";/);
+    assert.match(result.code, /renderToString\(__litsxScopedTemplate\(html`<product-card \.product=\$\{product\}><\/product-card>`\, \{\s*"product-card": annotateHydratableCustomElement\(ProductCard,\s*\{\s*tagName: "product-card",\s*moduleId: "\.\/ProductCard\.js"\s*\}\)\s*\}\)\)/);
   });
 
   it("rewrites renderToStream roots into scoped templates", () => {
@@ -1452,8 +1452,8 @@ describe("@litsx/babel-preset-litsx", () => {
       },
     );
 
-    assert.match(result.code, /import \{ __litsxScopedTemplate \} from "@litsx\/core\/elements";/);
-    assert.match(result.code, /renderToStream\(__litsxScopedTemplate\(html`<product-card \.product=\$\{product\}><\/product-card>`\, \{\s*"product-card": ProductCard\s*\}\)\)/);
+    assert.match(result.code, /import \{ __litsxScopedTemplate, annotateHydratableCustomElement \} from "@litsx\/core\/elements"|import \{ annotateHydratableCustomElement, __litsxScopedTemplate \} from "@litsx\/core\/elements";/);
+    assert.match(result.code, /renderToStream\(__litsxScopedTemplate\(html`<product-card \.product=\$\{product\}><\/product-card>`\, \{\s*"product-card": annotateHydratableCustomElement\(ProductCard,\s*\{\s*tagName: "product-card",\s*moduleId: "\.\/ProductCard\.js"\s*\}\)\s*\}\)\)/);
   });
 
   it("keeps default async PascalCase exports out of the LitElement lowering path", () => {
@@ -1784,7 +1784,7 @@ describe("@litsx/babel-preset-litsx", () => {
       },
     );
 
-    const matches = result.code.match(/"product-card": ProductCard/g) || [];
+    const matches = result.code.match(/"product-card": annotateHydratableCustomElement\(ProductCard,/g) || [];
     assert.strictEqual(matches.length, 1);
     assert.match(result.code, /renderToString\(__litsxScopedTemplate\(html`/);
   });

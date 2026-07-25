@@ -27,6 +27,49 @@ export function isLitsxComponentClass(value) {
   return typeof value === "function" && value[LITSX_COMPONENT] === true;
 }
 
+export function isCustomElementClass(value) {
+  if (typeof value !== "function") {
+    return false;
+  }
+
+  const HTMLElementCtor = globalThis.HTMLElement;
+  if (typeof HTMLElementCtor === "function") {
+    return value === HTMLElementCtor || value.prototype instanceof HTMLElementCtor;
+  }
+
+  return /^class\s/.test(Function.prototype.toString.call(value));
+}
+
+export function isHydratableCustomElementClass(value) {
+  return (
+    isCustomElementClass(value) &&
+    typeof value[LITSX_HYDRATABLE_TAG] === "string" &&
+    value[LITSX_HYDRATABLE_TAG].length > 0
+  );
+}
+
+export function annotateHydratableCustomElement(ctor, metadata = {}) {
+  if (!isCustomElementClass(ctor)) {
+    throw new TypeError("Expected a custom element constructor.");
+  }
+
+  const tagName = typeof metadata.tagName === "string"
+    ? metadata.tagName.trim()
+    : "";
+  if (tagName && !ctor[LITSX_HYDRATABLE_TAG]) {
+    ctor[LITSX_HYDRATABLE_TAG] = tagName;
+  }
+
+  const moduleId = typeof metadata.moduleId === "string"
+    ? metadata.moduleId.trim()
+    : "";
+  if (moduleId && !ctor[LITSX_MODULE_ID]) {
+    ctor[LITSX_MODULE_ID] = moduleId;
+  }
+
+  return ctor;
+}
+
 function getElementAttachShadowRef() {
   return typeof Element !== "undefined" ? Element.prototype.attachShadow : undefined;
 }

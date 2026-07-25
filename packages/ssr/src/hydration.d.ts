@@ -1,5 +1,3 @@
-import type { LitsxHydratableComponentStatic } from "@litsx/core";
-
 /**
  * Shared hydration options used by the document, root, and low-level helpers.
  *
@@ -60,10 +58,10 @@ export declare const LITSX_HYDRATION_PAYLOAD_PROPERTY: "__litsxHydrationPayload"
 
 export type HydrationModuleNamespace = Record<string, unknown>;
 export type HydrationModuleLoader = () => Promise<HydrationModuleNamespace>;
-export type HydrationModuleExport = LitsxHydratableComponentStatic & CustomElementConstructor;
+export type HydrationModuleExport = CustomElementConstructor;
 
 /**
- * Register every hydratable LitSX custom element exported by one module namespace.
+ * Register every hydratable custom element exported by one module namespace.
  */
 export declare function registerHydrationModule(
   moduleNamespace: HydrationModuleNamespace,
@@ -71,7 +69,7 @@ export declare function registerHydrationModule(
 
 /**
  * Resolve module namespaces or async loaders, then register their hydratable
- * LitSX custom elements.
+ * custom elements.
  */
 export declare function registerHydrationModules(
   modules: Array<HydrationModuleNamespace | HydrationModuleLoader>,
