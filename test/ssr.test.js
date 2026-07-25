@@ -891,6 +891,140 @@ describe("@litsx/ssr", () => {
     });
   });
 
+  it("lets consumers handle generic custom-element SSR through renderCustomElementSsr", async () => {
+    class ExternalCard extends HTMLElement {}
+    annotateHydratableCustomElement(ExternalCard, {
+      tagName: "external-card",
+      moduleId: "external-card-lib",
+    });
+
+    const calls = [];
+    const result = await renderToString(
+      __litsxScopedTemplate(
+        html`<external-card .product=${{ name: "Promo" }}></external-card>`,
+        {
+          "external-card": ExternalCard,
+        },
+      ),
+      {
+        renderCustomElementSsr(request) {
+          calls.push({
+            tagName: request.tagName,
+            moduleId: request.moduleId,
+            isRoot: request.isRoot,
+            rootId: request.rootId,
+            props: request.props,
+          });
+
+          return {
+            mode: "handled",
+            host: {
+              attributes: {
+                "data-adapter": "external",
+              },
+              props: {
+                adapterReady: true,
+              },
+            },
+            content: {
+              kind: "shadow-dom",
+              html: "<section><h2>Promo</h2></section>",
+            },
+            assets: {
+              clientImports: ["external-card-client"],
+              modulePreloads: ["external-card-preload"],
+              head: ['<meta name="external-card" content="1">'],
+            },
+            hydration: {
+              payload: {
+                source: "adapter",
+              },
+            },
+            artifacts: {
+              framework: "external",
+            },
+          };
+        },
+      },
+    );
+
+    assert.deepStrictEqual(calls, [{
+      tagName: "external-card",
+      moduleId: "external-card-lib",
+      isRoot: true,
+      rootId: "litsx-root-0",
+      props: {
+        product: { name: "Promo" },
+      },
+    }]);
+    assert.match(result.html, /<external-card\b(?=[^>]*data-adapter="external")(?=[^>]*data-litsx-root="litsx-root-0")[^>]*>/);
+    assert.match(result.html, /<template shadowroot="open" shadowrootmode="open"><section><h2>Promo<\/h2><\/section><\/template>/);
+    assert.deepStrictEqual(result.clientImports, [
+      "external-card-lib",
+      "external-card-client",
+    ]);
+    assert.strictEqual(result.renderModulePreloads(), [
+      '<link rel="modulepreload" href="external-card-lib">',
+      '<link rel="modulepreload" href="external-card-client">',
+      '<link rel="modulepreload" href="external-card-preload">',
+    ].join(""));
+    assert.strictEqual(result.renderHeadTags(), '<meta name="external-card" content="1">');
+    assert.deepStrictEqual(result.adapterArtifacts, [{
+      tagName: "external-card",
+      moduleId: "external-card-lib",
+      rootId: "litsx-root-0",
+      artifacts: {
+        framework: "external",
+      },
+    }]);
+    assert.deepStrictEqual(result.hydrationData.payload, {
+      roots: {
+        "litsx-root-0": {
+          props: {
+            product: { name: "Promo" },
+            adapterReady: true,
+          },
+          adapter: {
+            source: "adapter",
+          },
+        },
+      },
+      instances: {},
+    });
+  });
+
+  it("merges adapter head tags into renderDocument output", async () => {
+    class ExternalCard extends HTMLElement {}
+    annotateHydratableCustomElement(ExternalCard, {
+      tagName: "external-card",
+      moduleId: "external-card-lib",
+    });
+
+    const result = await renderDocument(
+      __litsxScopedTemplate(html`<external-card></external-card>`, {
+        "external-card": ExternalCard,
+      }),
+      {
+        title: "Adapter Page",
+        renderCustomElementSsr() {
+          return {
+            mode: "handled",
+            content: {
+              kind: "shadow-dom",
+              html: "<div>Adapter</div>",
+            },
+            assets: {
+              head: ['<meta name="adapter-page" content="yes">'],
+            },
+          };
+        },
+      },
+    );
+
+    assert.strictEqual(result.headTags.join(""), '<meta name="adapter-page" content="yes">');
+    assert.match(result.document, /<meta name="adapter-page" content="yes">/);
+  });
+
   it("accepts promised renderable values", async () => {
     const result = await renderToString(Promise.resolve(html`<main>ready</main>`));
     assert.match(result.html, /<main>ready<\/main>/);

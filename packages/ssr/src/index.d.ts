@@ -85,7 +85,74 @@ export interface LitsxSsrRenderOptions {
    * inside the provided render value.
    */
   elements?: LitsxSsrElements;
+
+  /**
+   * Optional hook that can take over SSR for hydratable non-Lit custom
+   * elements. When it returns `null` or `undefined`, LitSX falls back to its
+   * generic host-only SSR behavior for that element.
+   */
+  renderCustomElementSsr?: LitsxCustomElementSsrRenderer;
 }
+
+export interface LitsxCustomElementSsrRequest {
+  tagName: string;
+  ctor: CustomElementConstructor;
+  moduleId?: string | null;
+  isRoot: boolean;
+  rootId?: string | null;
+  props: Record<string, unknown>;
+  children?: unknown;
+  assetResolver?: LitsxSsrAssetResolver | null;
+  executionContext?: unknown;
+  renderChildren(): Promise<string>;
+  renderValue(value: unknown): Promise<string>;
+}
+
+export interface LitsxCustomElementSsrHostResult {
+  attributes?: Record<string, string | boolean | null | undefined>;
+  props?: Record<string, unknown>;
+}
+
+export interface LitsxCustomElementSsrContentResult {
+  kind: "light-dom" | "shadow-dom";
+  html: string;
+  shadowRootMode?: "open";
+}
+
+export interface LitsxCustomElementSsrAssetsResult {
+  clientImports?: string[];
+  modulePreloads?: string[];
+  head?: string[];
+}
+
+export interface LitsxCustomElementSsrHydrationResult {
+  strategy?: "litsx" | "external" | "none";
+  payload?: unknown;
+}
+
+export interface LitsxCustomElementSsrHandledResult {
+  mode: "handled";
+  host?: LitsxCustomElementSsrHostResult;
+  content?: LitsxCustomElementSsrContentResult | null;
+  assets?: LitsxCustomElementSsrAssetsResult;
+  hydration?: LitsxCustomElementSsrHydrationResult;
+  artifacts?: Record<string, unknown>;
+}
+
+export interface LitsxCustomElementSsrHostOnlyResult {
+  mode: "host-only";
+  artifacts?: Record<string, unknown>;
+}
+
+export type LitsxCustomElementSsrResult =
+  | null
+  | undefined
+  | LitsxCustomElementSsrHandledResult
+  | LitsxCustomElementSsrHostOnlyResult;
+
+export type LitsxCustomElementSsrRenderer = (
+  request: LitsxCustomElementSsrRequest,
+) => LitsxCustomElementSsrResult | Promise<LitsxCustomElementSsrResult>;
 
 export interface LitsxHydrationRoot {
   /**
@@ -171,9 +238,31 @@ export interface LitsxSsrMetadata {
   renderModulePreloads(): string;
 
   /**
+   * Render extra `<head>` tags contributed by custom-element SSR adapters.
+   */
+  renderHeadTags(): string;
+
+  /**
    * Render LitSX hydration metadata as a JSON script tag.
    */
   renderHydrationData(scriptId?: string): string;
+
+  /**
+   * Opaque per-root adapter artifacts returned by `renderCustomElementSsr(...)`.
+   */
+  adapterArtifacts: LitsxCustomElementSsrArtifactEntry[];
+
+  /**
+   * Extra `<head>` tags contributed by custom-element SSR adapters.
+   */
+  headTags: string[];
+}
+
+export interface LitsxCustomElementSsrArtifactEntry {
+  tagName: string;
+  moduleId?: string | null;
+  rootId?: string | null;
+  artifacts: Record<string, unknown>;
 }
 
 export interface LitsxSsrResult extends LitsxSsrMetadata {

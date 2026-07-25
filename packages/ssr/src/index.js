@@ -178,12 +178,20 @@ function createHydrationData(context) {
 
 function createSsrResult(html, context) {
   const clientImports = [...context.clientImports];
+  const modulePreloads = new Set(clientImports);
+  for (const entry of context.modulePreloads || []) {
+    modulePreloads.add(entry);
+  }
   const hydrationData = createHydrationData(context);
+  const adapterArtifacts = [...(context.adapterArtifacts || [])];
+  const headTags = [...(context.headTags || [])];
 
   return {
     html,
     clientImports,
     hydrationData,
+    adapterArtifacts,
+    headTags,
     renderClientImports() {
       return clientImports
         .map((src) => `<script type="module" src="${escapeHtmlAttribute(src)}"></script>`)
@@ -199,9 +207,12 @@ function createSsrResult(html, context) {
       return `<script type="application/json" id="${escapeHtmlAttribute(scriptId)}">${escapeJsonScript(clientImports)}</script>`;
     },
     renderModulePreloads() {
-      return clientImports
+      return [...modulePreloads]
         .map((href) => `<link rel="modulepreload" href="${escapeHtmlAttribute(href)}">`)
         .join("");
+    },
+    renderHeadTags() {
+      return headTags.join("");
     },
     renderHydrationData(
       scriptId = LITSX_HYDRATION_DATA_SCRIPT_ID,
@@ -231,7 +242,10 @@ function createDocumentTemplateContext(result, options = {}) {
   };
   const bodyAttributes = options.bodyAttributes || {};
   const title = options.title == null ? "" : String(options.title);
-  const head = normalizeTagContents(options.head);
+  const head = normalizeTagContents([
+    options.head,
+    result.renderHeadTags(),
+  ]);
   const bootstrap = renderResolvedBootstrap(options);
   const modulePreloads = result.renderModulePreloads();
   const hydrationScript = result.renderHydrationData(options.hydrationScriptId);
@@ -667,6 +681,7 @@ async function createSsrContext(options, executionContext) {
     idPrefix: options.context?.idPrefix,
     assetResolver: options.assetResolver,
     executionContext,
+    renderCustomElementSsr: options.renderCustomElementSsr,
   });
 }
 
