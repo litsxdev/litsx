@@ -277,6 +277,12 @@ once rendering has completed.
 when you want to stream authored LitSX SSR without first constructing the
 render value yourself.
 
+Today `renderToStream(...)` is still a stabilized-response API, not a
+progressive Suspense streaming contract. LitSX waits for the SSR pass to
+stabilize across soft-suspense retries before chunks are emitted, so framework
+integrations should currently treat streaming as a transport shape over the
+same blocking SSR result rather than as incremental HTML reveal.
+
 ## Request Execution Context
 
 Each public SSR call (`renderToString(...)`, `renderDocument(...)`, and
@@ -454,6 +460,50 @@ That means:
 - `static styles` are emitted into Declarative Shadow DOM
 - browser lifecycle/effect hooks do not run during SSR
 
+## `Component.elements` Contract
+
+Async server components may attach a static `Component.elements` map when they
+return plain Lit `html\`\`` templates instead of authored JSX:
+
+```js
+import ProductCard from "./ProductCard.js";
+
+export default async function ProductPage({ product }) {
+  return html`<product-card .product=${product}></product-card>`;
+}
+
+ProductPage.elements = {
+  "product-card": ProductCard,
+};
+```
+
+That contract currently means:
+
+- LitSX uses `Component.elements` during SSR compilation to build the scoped
+  SSR registry for the returned template
+- direct imports, `const` aliases, and static object-member lookups that
+  collapse to one stable constructor are resolved automatically
+- resolvable entries are decorated with `tagName` and `moduleId` hydration
+  metadata in the compiled SSR artifact
+- ambiguous or dynamic entries fail at compile time unless the consumer
+  supplies explicit metadata, for example through
+  `annotateHydratableCustomElement(...)`, or handles them through an adapter
+
+`Component.elements` does not, by itself, guarantee automatic browser-side
+registration for arbitrary third-party Lit modules. The emitted metadata lives
+in the SSR artifact, not in the imported browser module namespace. That means:
+
+- modules that already call `customElements.define(...)` remain the simplest
+  interoperable case; importing them during hydration is sufficient
+- LitSX-authored hydratable modules can be discovered by
+  `registerHydrationModule(...)` and `registerHydrationModules(...)`
+- plain Lit or third-party custom-element modules that do not self-register
+  still need explicit client registration or an adapter-controlled bootstrap
+
+In short: `Component.elements` is the SSR registry contract. Client-side
+registration is automatic only when the imported browser module already carries
+the required hydratable metadata or self-registers.
+
 ## Asset Resolution
 
 `clientImports` are collected from the generated LitSX module ids. You can
@@ -527,6 +577,24 @@ root payload:
 }
 ```
 
+`hydrationData.version` is the versioned public wire-format discriminator for
+that payload. Version `1` currently guarantees:
+
+- `roots`: ordered root descriptors with `id`, `tagName`, and `moduleId`
+- `payload`: JSON-serializable root props plus hook-instance state
+- `clientImports`: the client module URLs associated with the rendered result
+
+Compatibility rules for the current protocol are:
+
+- consumers must reject unknown top-level versions rather than guessing
+- additive fields may appear within a known version and should be ignored when
+  not understood
+- changing the meaning, shape, or required presence of `roots`, `payload`, or
+  `clientImports` requires a new `version`
+- `moduleId` is part of the hydration contract for roots that LitSX expects to
+  auto-load; if a root cannot produce a stable module id, the integration must
+  supply registration by some other explicit means
+
 The rendered host element carries a LitSX SSR root attribute so the client can
 correlate DOM boundaries with that payload without inserting extra comments
 into Lit's hydration marker sequence:
@@ -557,6 +625,20 @@ In the standard `clientEntry` flow, the emitted bootstrap script then:
 
 Framework integrations can rely on that order when wiring their own hydration
 entry around `@litsx/ssr/hydration`.
+
+The SSR/hydration invariants for that contract are:
+
+- scoped registry lookup prefers the most local matching registry for any tag
+- hydration must preserve the SSR host DOM boundary; integrations must not
+  duplicate or replace already-rendered root DOM before Lit hydration runs
+- Lit comment markers and Declarative Shadow DOM emitted by SSR are part of the
+  hydrated DOM contract and must not be stripped or reordered
+- root props and hook payload state must stay JSON-serializable
+- root registration must happen before LitSX applies the hydration payload to
+  the DOM
+- light DOM and slot projection follow the DOM produced by SSR; client
+  bootstraps must not reshuffle projected children between registration and
+  hydration
 
 Importing `@litsx/ssr/hydration` is also the supported client bootstrap entry:
 it installs `@lit-labs/ssr-client/lit-element-hydrate-support.js` as its first
@@ -634,5 +716,27 @@ The scoped SSR lifecycle described here is guaranteed for LitSX-authored
 components. Third-party Lit components can still appear inside rendered
 templates, but they are not yet promoted into the full LitSX SSR component
 model by default.
+
+The intended integration models today are:
+
+- LitSX-authored hydratable components:
+  compiler-emitted metadata, automatic SSR registry wiring, automatic client
+  import discovery, and hydration through `@litsx/ssr/hydration`
+- Standard Lit or third-party custom elements:
+  SSR can render them when the integration provides a resolvable registry
+  constructor or adapter, but client registration remains explicit unless the
+  imported module self-registers or otherwise exposes hydratable metadata
+
+Public validation currently lives across:
+
+- transform tests for compiler output and registry metadata emission
+- SSR result tests for HTML, client imports, and hydration payload shape
+- browser hydration tests for end-to-end DOM claiming and event continuity
+- authored-entry and asset-resolution tests for framework-facing integration
+  paths
+
+Source-map and authored-compilation behavior are also covered in the broader
+compiler and integration suites, but they are not a separate SSR-specific
+browser contract.
 
 For the browser hydration entrypoint, see `@litsx/ssr/hydration`.
