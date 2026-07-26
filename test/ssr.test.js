@@ -1092,6 +1092,47 @@ describe("@litsx/ssr", () => {
     });
   });
 
+  it("hydrates html template custom elements declared through Component.elements", async () => {
+    class ProductCard extends LitElement {
+      static [LITSX_MODULE_ID] = "/src/ProductCard.litsx";
+
+      render() {
+        return html`<article>${this.product.name}</article>`;
+      }
+    }
+
+    async function ProductPage({ product }) {
+      return __litsxScopedTemplate(
+        html`<main><product-card .product=${product}></product-card></main>`,
+        ProductPage.elements,
+      );
+    }
+
+    ProductPage.elements = {
+      "product-card": ProductCard,
+    };
+
+    const result = await renderToString(
+      __litsxServerComponentCall(ProductPage, {
+        product: { name: "Trail Shoe" },
+      }),
+    );
+
+    assert.match(result.html, /<product-card\b[^>]*data-litsx-root="litsx-root-0"/);
+    assert.match(result.html, /Trail Shoe/);
+    assert.deepStrictEqual(result.clientImports, ["/src/ProductCard.litsx"]);
+    assert.deepStrictEqual(result.hydrationData, {
+      version: 1,
+      roots: [
+        {
+          id: "litsx-root-0",
+          tagName: "product-card",
+          moduleId: "/src/ProductCard.litsx",
+        },
+      ],
+    });
+  });
+
   it("renders local async PascalCase composition inside a default-export-style server flow", async () => {
     class ProductCard extends LitElement {
       static [LITSX_MODULE_ID] = "/src/ProductCard.litsx";

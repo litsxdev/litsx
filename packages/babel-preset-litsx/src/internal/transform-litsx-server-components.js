@@ -392,8 +392,89 @@ function findServerComponentFunctionPath(programPath, componentName) {
   return null;
 }
 
+function getStaticServerComponentElements(programPath, componentName) {
+  const cacheKey = `__litsxServerComponentElements:${componentName}`;
+  const cached = programPath.getData(cacheKey);
+  if (cached !== undefined) {
+    return cached;
+  }
+
+  const entries = [];
+
+  for (const nodePath of programPath.get("body")) {
+    if (!nodePath.isExpressionStatement()) {
+      continue;
+    }
+
+    const expression = nodePath.get("expression");
+    if (!expression.isAssignmentExpression({ operator: "=" })) {
+      continue;
+    }
+
+    const left = expression.get("left");
+    const right = expression.get("right");
+    if (
+      !left.isMemberExpression() ||
+      left.node.computed ||
+      !left.get("object").isIdentifier({ name: componentName }) ||
+      !left.get("property").isIdentifier({ name: "elements" }) ||
+      !right.isObjectExpression()
+    ) {
+      continue;
+    }
+
+    for (const propertyPath of right.get("properties")) {
+      if (!propertyPath.isObjectProperty() || propertyPath.node.computed) {
+        continue;
+      }
+
+      const keyPath = propertyPath.get("key");
+      const valuePath = propertyPath.get("value");
+      const tagName = keyPath.isStringLiteral()
+        ? keyPath.node.value
+        : keyPath.isIdentifier()
+          ? keyPath.node.name
+          : null;
+
+      if (!tagName || !valuePath.isExpression()) {
+        continue;
+      }
+
+      entries.push({
+        tagName,
+        expression: t.cloneNode(valuePath.node, true),
+      });
+    }
+  }
+
+  programPath.setData(cacheKey, entries);
+  return entries;
+}
+
+function mergeScopedEntries(inferredEntries, explicitEntries) {
+  const merged = new Map();
+
+  for (const entry of explicitEntries) {
+    merged.set(entry.tagName, entry);
+  }
+
+  for (const entry of inferredEntries) {
+    if (!merged.has(entry.tagName)) {
+      merged.set(entry.tagName, entry);
+    }
+  }
+
+  return [...merged.values()];
+}
+
 function wrapRenderableReturns(functionPath, programPath) {
   const availableMap = buildAvailableMap(programPath);
+  const explicitElements = getStaticServerComponentElements(
+    programPath,
+    functionPath.parentPath.isVariableDeclarator()
+      ? functionPath.parentPath.node.id?.name
+      : functionPath.node.id?.name,
+  );
   let transformed = false;
   const sharedOptions = {
     filename: programPath.hub.file?.opts?.filename || "",
@@ -506,7 +587,10 @@ function wrapRenderableReturns(functionPath, programPath) {
         },
       });
 
-      const scopeEntries = collectScopedEntries(argumentPath, availableMap);
+      const scopeEntries = mergeScopedEntries(
+        collectScopedEntries(argumentPath, availableMap),
+        explicitElements,
+      );
       ensureNamedImport(programPath, RUNTIME_INFRASTRUCTURE_MODULE, SCOPED_TEMPLATE_HELPER);
 
       argumentPath.replaceWith(
@@ -516,7 +600,9 @@ function wrapRenderableReturns(functionPath, programPath) {
             scopeEntries.map((entry) =>
               t.objectProperty(
                 t.stringLiteral(entry.tagName),
-                t.identifier(entry.originalName),
+                entry.expression
+                  ? t.cloneNode(entry.expression, true)
+                  : t.identifier(entry.originalName),
               ),
             ),
           ),
