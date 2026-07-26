@@ -1633,6 +1633,36 @@ describe("@litsx/babel-preset-litsx", () => {
     assert.match(result.code, /ProductPage\[LITSX_SERVER_COMPONENT\] = true;/);
   });
 
+  it("uses Component.elements for html template returns in default async server components", () => {
+    const source = [
+      "import ProductCard from './ProductCard.js';",
+      "export default async function ProductPage({ product }) {",
+      "  return html`<main><product-card .product=${product}></product-card></main>`;",
+      "}",
+      "ProductPage.elements = {",
+      "  'product-card': ProductCard,",
+      "};",
+    ].join("\n");
+
+    const result = transformFromAstSync(
+      parser.parse(source, { sourceType: "module" }),
+      source,
+      {
+        configFile: false,
+        babelrc: false,
+        presets: [[nativePreset, {}]],
+      },
+    );
+
+    assert.doesNotMatch(result.code, /class ProductPage extends LitElement/);
+    assert.match(
+      result.code,
+      /return __litsxScopedTemplate\(html`<main><product-card \.product=\$\{product\}><\/product-card><\/main>`\, \{\s*"product-card": ProductCard\s*\}\);/,
+    );
+    assert.match(result.code, /ProductPage\.elements = \{\s*'product-card': ProductCard\s*\};/);
+    assert.match(result.code, /ProductPage\[LITSX_SERVER_COMPONENT\] = true;/);
+  });
+
   it("rewrites renderToString server-component roots into awaited function calls", () => {
     const source = [
       "import { renderToString } from '@litsx/ssr';",
