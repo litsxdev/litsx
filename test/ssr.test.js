@@ -478,6 +478,40 @@ describe("@litsx/ssr", () => {
     assert.strictEqual(result.defaultDocument, result.document);
   });
 
+  it("renders non-hydratable documents with escaped metadata and inline bootstrap options", async () => {
+    const result = await renderDocument(html`<main>plain</main>`, {
+      lang: "es",
+      title: "A < B & C",
+      head: ["<meta name=\"first\" content=\"1\">", null, "<meta name=\"last\" content=\"2\">"] ,
+      htmlAttributes: {
+        "data-app": "plain&safe",
+        hidden: true,
+        ignored: false,
+      },
+      bodyAttributes: {
+        "data-ready": true,
+        "data-value": "<value>",
+      },
+      bootstrap: {
+        type: "application/module",
+        attributes: {
+          nonce: "abc123",
+          defer: true,
+          ignored: null,
+        },
+        content: "window.__plain = true;",
+      },
+    });
+
+    assert.match(result.document, /<html lang="es" data-app="plain&amp;safe" hidden>/);
+    assert.match(result.document, /<title>A &lt; B &amp; C<\/title>/);
+    assert.match(result.document, /<meta name="first" content="1">[\s\S]*<meta name="last" content="2">/);
+    assert.match(result.document, /<body data-ready data-value="&lt;value&gt;">/);
+    assert.match(result.document, /<script type="application\/module" nonce="abc123" defer>window\.__plain = true;<\/script>/);
+    assert.strictEqual(result.hydrationScript, "");
+    assert.strictEqual(result.bootstrap, '<script type="application/module" nonce="abc123" defer>window.__plain = true;</script>');
+  });
+
   it("renders authored document config through renderToString", async () => {
     class ProductCard extends LitElement {
       static [LITSX_MODULE_ID] = "/src/ProductCard.litsx";

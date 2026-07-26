@@ -40,6 +40,9 @@ describe("@litsx/typescript-session", () => {
   it("normalizes file paths and dirname fallbacks", () => {
     assert.strictEqual(normalizeFilePath("C:\\demo\\file.ts"), "C:/demo/file.ts");
     assert.strictEqual(normalizeFilePath(""), "");
+    assert.strictEqual(normalizeFilePath("/virtual/./components/../page.litsx"), "/virtual/page.litsx");
+    assert.strictEqual(normalizeFilePath("/../page.litsx"), "/page.litsx");
+    assert.strictEqual(normalizeFilePath("../shared/../../page.litsx"), "../../page.litsx");
     assert.strictEqual(dirname("file.ts"), "/");
     assert.strictEqual(dirname("/root/demo/file.ts"), "/root/demo");
   });
@@ -82,6 +85,98 @@ describe("@litsx/typescript-session", () => {
 
     const missingResolver = session.getTypeResolver("/virtual/missing.ts", "export const nope = true;");
     assert.strictEqual(missingResolver, null);
+  });
+
+  it("keeps in-memory session caches coherent across no-op overlays and relative imports", () => {
+    const config = createInMemoryConfig();
+    config.files[config.sourceFilename] = 'import { answer } from "./answer"; export const value = answer;';
+    config.files["/virtual/answer.litsx"] = "export const answer = 42;";
+    const session = createInMemoryTsSession(config);
+
+    session.setOverlayFile("/virtual/answer.litsx", config.files["/virtual/answer.litsx"]);
+    session.setOverlayFile("/virtual/answer.litsx", config.files["/virtual/answer.litsx"]);
+    session.clearOverlayFile("/virtual/missing.litsx");
+
+    const program = session.getProgram(config.files[config.sourceFilename]);
+    assert.deepStrictEqual(
+      ts.getPreEmitDiagnostics(program)
+        .filter((diagnostic) => diagnostic.code === 2307),
+      [],
+    );
+
+    const firstCache = session.getSemanticCache("symbols");
+    const secondCache = session.getSemanticCache("symbols");
+    assert.strictEqual(firstCache, secondCache);
+    assert(session.getChecker(config.files[config.sourceFilename]));
+
+    session.clearOverlayFiles();
+    session.clearOverlayFiles();
+    assert.strictEqual(session.overlayFiles.size, 0);
+  });
+
+  it("resolves transparent in-memory module fallbacks when TypeScript has no result", () => {
+    const fakeTypescript = {
+      ScriptKind: { TSX: 1, JSX: 2, TS: 3, JS: 4 },
+      Extension: { Tsx: ".tsx", Ts: ".ts", Jsx: ".jsx", Js: ".js" },
+      resolveModuleName() {
+        return { resolvedModule: undefined };
+      },
+      createSourceFile(fileName, text) {
+        return { fileName, text };
+      },
+      createProgram(rootNames, _options, host) {
+        return {
+          getSourceFile(fileName) {
+            return rootNames.includes(fileName) ? host.getSourceFile(fileName, 0) : undefined;
+          },
+          getTypeChecker() {
+            return {};
+          },
+        };
+      },
+    };
+    const sourceFilename = "/virtual/components/view.ts";
+    const session = createInMemoryTsSession({
+      typescript: fakeTypescript,
+      sourceFilename,
+      defaultLibFileName: "/virtual/lib.d.ts",
+      rootNames: [sourceFilename],
+      compilerOptions: {},
+      files: {
+        [sourceFilename]: "export {};",
+        "/virtual/components/card.litsx": "export const Card = 1;",
+        "/virtual/components/legacy.js": "export const legacy = 1;",
+        "/virtual/components/feature/index.litsx.jsx": "export const Feature = 1;",
+        "/virtual/absolute.ts": "export const absolute = 1;",
+      },
+    });
+
+    session.getProgram("export {};");
+    const resolved = session.host.resolveModuleNames(
+      ["./card", "./feature", "./card.litsx", "./legacy.js", "/virtual/absolute", "lit-html"],
+      sourceFilename,
+    );
+    const literals = session.host.resolveModuleNameLiterals(
+      [{ text: "./card" }],
+      sourceFilename,
+    );
+
+    assert.deepStrictEqual(
+      resolved.map((entry) => entry?.resolvedFileName ?? null),
+      [
+        "/virtual/components/card.litsx",
+        "/virtual/components/feature/index.litsx.jsx",
+        "/virtual/components/card.litsx",
+        "/virtual/components/legacy.js",
+        "/virtual/absolute.ts",
+        null,
+      ],
+    );
+    assert.strictEqual(resolved[0].extension, ".tsx");
+    assert.strictEqual(resolved[1].extension, ".jsx");
+    assert.strictEqual(resolved[3].extension, ".js");
+    assert.strictEqual(resolved[4].extension, ".ts");
+    assert.strictEqual(literals[0].resolvedModule.resolvedFileName, "/virtual/components/card.litsx");
   });
 
   it("creates standalone sessions that honor overlays and cached instances", () => {
@@ -224,5 +319,20 @@ describe("@litsx/typescript-session", () => {
     } finally {
       fs.rmSync(tempDir, { recursive: true, force: true });
     }
+  });
+
+  it("evicts the least recently used standalone session after the cache limit", () => {
+    const config = {
+      typescript: ts,
+      compilerOptions: {},
+    };
+    const first = getOrCreateStandaloneTsSession("coverage-cache-0", config);
+
+    for (let index = 1; index <= 50; index += 1) {
+      getOrCreateStandaloneTsSession(`coverage-cache-${index}`, config);
+    }
+
+    const replacement = getOrCreateStandaloneTsSession("coverage-cache-0", config);
+    assert.notStrictEqual(replacement, first);
   });
 });
