@@ -60,7 +60,27 @@ function trimCacheToLimit(cache, limit) {
 
 function normalizeFilePath(value) {
   if (!value) return "";
-  return String(value).replace(/\\/g, "/").replace(/\/+/g, "/");
+  const normalized = String(value).replace(/\\/g, "/").replace(/\/+/g, "/");
+  const isAbsolute = normalized.startsWith("/");
+  const segments = [];
+
+  for (const segment of normalized.split("/")) {
+    if (!segment || segment === ".") {
+      continue;
+    }
+    if (segment === "..") {
+      if (segments.length > 0 && segments.at(-1) !== "..") {
+        segments.pop();
+      } else if (!isAbsolute) {
+        segments.push(segment);
+      }
+      continue;
+    }
+    segments.push(segment);
+  }
+
+  const result = segments.join("/");
+  return isAbsolute ? `/${result}` : result;
 }
 
 function dirname(filePath) {
