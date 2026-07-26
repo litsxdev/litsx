@@ -63,10 +63,9 @@ function escapeJsonScript(value) {
 }
 
 function escapeInlineScriptText(value) {
-  return String(value)
-    .replaceAll("<", "\\u003C")
-    .replaceAll(">", "\\u003E")
-    .replaceAll("&", "\\u0026");
+  // Only '<' can terminate an inline script element. Escaping operators such
+  // as '=>' would corrupt executable module code.
+  return String(value).replaceAll("<", "\\u003C");
 }
 
 function normalizeTagContents(value) {
@@ -928,7 +927,7 @@ export async function renderToStream(value, options = {}) {
  */
 export async function createSsrDevServer(options = {}) {
   const { createServer } = await import("vite");
-  const { litsx } = await import("@litsx/vite-plugin");
+  const { createLitsxViteAssetResolver, litsx } = await import("@litsx/vite-plugin");
   const root = resolveFsPath(process.cwd(), options.root ?? process.cwd());
   const viteServer = await createServer({
     root,
@@ -962,14 +961,20 @@ export async function createSsrDevServer(options = {}) {
     }
 
     try {
+      const assetResolver = options.assetResolver ?? createLitsxViteAssetResolver({
+        root,
+        base: viteServer.config.base,
+      });
       const result = await renderAuthoredDocument({
         ...options,
         root,
         viteServer,
+        assetResolver,
       });
+      const document = await viteServer.transformIndexHtml(requestUrl.pathname, result.document);
       res.statusCode = 200;
       res.setHeader("Content-Type", "text/html; charset=utf-8");
-      res.end(result.document);
+      res.end(document);
     } catch (error) {
       viteServer.ssrFixStacktrace(error);
       next(error);

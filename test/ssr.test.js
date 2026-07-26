@@ -461,7 +461,8 @@ describe("@litsx/ssr", () => {
     assert.match(result.document, /<meta name="description" content="doc-test">/);
     assert.match(result.document, /<body class="ssr-page">/);
     assert.match(result.document, /import \{ hydratePage \} from "@litsx\/ssr\/hydration";/);
-    assert.match(result.document, /register: \(\) =\\u003E import\("\/src\/main\.js"\)/);
+    assert.match(result.document, /register: \(\) => import\("\/src\/main\.js"\)/);
+    assert.doesNotMatch(result.document, /\\u003E/);
     assert.match(result.document, /<script type="application\/json" id="__LITSX_HYDRATION__">/);
     assert.match(result.document, /<link rel="modulepreload" href="\/src\/ProductCard\.litsx">/);
     assert.match(result.document, /<product-card\b[^>]*data-litsx-root="litsx-root-0"/);
@@ -596,7 +597,7 @@ describe("@litsx/ssr", () => {
     });
 
     assert.match(result.document, /import \{ hydratePage \} from "@litsx\/ssr\/hydration";/);
-    assert.match(result.document, /register: \(\) =\\u003E import\("\/assets\/main\.abc123\.js"\)/);
+    assert.match(result.document, /register: \(\) => import\("\/assets\/main\.abc123\.js"\)/);
     assert.doesNotMatch(result.document, /import\("\/src\/main\.js"\)/);
   });
 
@@ -648,7 +649,7 @@ describe("@litsx/ssr", () => {
     assert.match(result.document, /<main data-slot="app">[\s\S]*Template Shoe[\s\S]*<\/main>/);
     assert.match(result.document, /<script type="application\/json" id="__LITSX_HYDRATION__">/);
     assert.match(result.document, /import \{ hydratePage \} from "@litsx\/ssr\/hydration";/);
-    assert.match(result.document, /register: \(\) =\\u003E import\("\/src\/main\.js"\)/);
+    assert.match(result.document, /register: \(\) => import\("\/src\/main\.js"\)/);
     assert.doesNotMatch(result.document, /<meta charset="utf-8">/);
     assert.match(result.defaultDocument, /<meta charset="utf-8">/);
     assert.strictEqual(result.htmlAttributesString, ' lang="en"');
@@ -701,7 +702,7 @@ describe("@litsx/ssr", () => {
     assert.match(document, /<script type="application\/json" id="__LITSX_HYDRATION__">/);
     assert.match(document, /<product-card\b[^>]*data-litsx-root="litsx-root-0"/);
     assert.match(bootstrap, /import \{ hydratePage \} from "@litsx\/ssr\/hydration";/);
-    assert.match(bootstrap, /register: \(\) =\\u003E import\("\/assets\/main\.hash\.js"\)/);
+    assert.match(bootstrap, /register: \(\) => import\("\/assets\/main\.hash\.js"\)/);
   });
 
   it("builds reusable document context from a fragment result", async () => {
@@ -736,7 +737,7 @@ describe("@litsx/ssr", () => {
     assert.deepStrictEqual(context.bodyAttributes, { class: "shell" });
     assert.strictEqual(context.modulePreloads, fragment.renderModulePreloads());
     assert.strictEqual(context.hydrationScript, fragment.renderHydrationData());
-    assert.match(context.bootstrap, /register: \(\) =\\u003E import\("\/src\/main\.js"\)/);
+    assert.match(context.bootstrap, /register: \(\) => import\("\/src\/main\.js"\)/);
     assert.match(context.defaultDocument, /<title>Context Shell<\/title>/);
   });
 

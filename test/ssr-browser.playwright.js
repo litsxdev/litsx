@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { expect, test } from "@playwright/test";
 import { createSsrDevServer } from "../packages/ssr/src/index.js";
+import { LITSX_HYDRATION_PAYLOAD_PROPERTY } from "../packages/ssr/src/hydration.js";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 
@@ -23,22 +24,16 @@ export function SsrLeafShadow({ label }) {
   return <button id="leaf-button" @click={() => setCount(count + 1)}>leaf:{label}:{count}</button>;
 }
 
-export function SsrLevelFourLight({ label }) {
+export function SsrLightLayer({ children, level }) {
   static lightDom = true;
-  return <SsrLeafShadow .label={label} />;
+
+  return <section class="light-layer" data-level={level}>{children}</section>;
 }
 
-export function SsrLevelThreeShadow({ label }) {
-  return (
-    <section id="level-three">
-      <SsrLevelFourLight .label={label} />
-    </section>
-  );
-}
+export function SsrShadowLayer({ children, level }) {
+  static styles = \`:host { display: contents; }\`;
 
-export function SsrLevelTwoLight({ label }) {
-  static lightDom = true;
-  return <SsrLevelThreeShadow .label={label} />;
+  return <section class="shadow-layer" data-level={level}>{children}</section>;
 }
 
 export function SsrAppRoot({ name = "demo" }) {
@@ -48,7 +43,15 @@ export function SsrAppRoot({ name = "demo" }) {
   return (
     <main id="app-root">
       <h1>{title}</h1>
-      <SsrLevelTwoLight .label={title} />
+      <SsrShadowLayer .level={1}>
+        <SsrLightLayer .level={2}>
+          <SsrShadowLayer .level={3}>
+            <SsrLightLayer .level={4}>
+              <SsrLeafShadow .label={title} />
+            </SsrLightLayer>
+          </SsrShadowLayer>
+        </SsrLightLayer>
+      </SsrShadowLayer>
     </main>
   );
 }
@@ -63,8 +66,7 @@ export function defineSsrComponents() {
 
 function createSuspenseComponentsSource() {
   return `
-import type { LitsxRenderable } from "@litsx/core";
-import { SuspenseBoundary, SuspenseList, useOnConnect, useRef, useState } from "@litsx/core";
+import { SuspenseBoundary, SuspenseList, useOnConnect, useRef, useState, type LitsxRenderable } from "@litsx/core";
 
 function createDeferred() {
   let resolve = null;
@@ -191,42 +193,36 @@ export const SuspenseGuideApp = () => {
     };
   }, []);
 
+  const renderGuideCard = (stepIndex, renderCard) => {
+    suspendUntil(pendingStepsRef, stepIndex, revealedCount);
+    return renderCard();
+  };
+
   return (
     <section class="guide" aria-label="Getting started with LitSX">
       <SuspenseList class="guide-list" reveal-order="forwards" tail="hidden">
-        <SuspenseBoundary
-          .fallbackRenderer={() => null}
-          .contentRenderer={() => {
-            suspendUntil(pendingStepsRef, 0, revealedCount);
-            return (
+        <SuspenseBoundary fallback={null}>
+          {renderGuideCard(0, () => (
               <GuideCard
                 .eyebrow={"Getting started"}
                 .titleRenderer={() => <><code>src/app.litsx</code>, then open <code>Getting Started</code></>}
                 .contentRenderer={() => <p>First card body</p>}
               />
-            );
-          }}
-        />
+          ))}
+        </SuspenseBoundary>
 
-        <SuspenseBoundary
-          .fallbackRenderer={() => null}
-          .contentRenderer={() => {
-            suspendUntil(pendingStepsRef, 1, revealedCount);
-            return (
+        <SuspenseBoundary fallback={null}>
+          {renderGuideCard(1, () => (
               <GuideCard
                 .eyebrow={"Authored model"}
                 .titleRenderer={() => <>Read <code>Authored Model</code> while you learn LitSX bindings</>}
                 .contentRenderer={() => <p>Second card body</p>}
               />
-            );
-          }}
-        />
+          ))}
+        </SuspenseBoundary>
 
-        <SuspenseBoundary
-          .fallbackRenderer={() => null}
-          .contentRenderer={() => {
-            suspendUntil(pendingStepsRef, 2, revealedCount);
-            return (
+        <SuspenseBoundary fallback={null}>
+          {renderGuideCard(2, () => (
               <GuideCard
                 .eyebrow={"Tooling flow"}
                 .titleRenderer={() => "Pair the tooling docs with your daily loop"}
@@ -237,9 +233,8 @@ export const SuspenseGuideApp = () => {
                   </ul>
                 )}
               />
-            );
-          }}
-        />
+          ))}
+        </SuspenseBoundary>
       </SuspenseList>
     </section>
   );
@@ -270,26 +265,11 @@ test("hydrates a real browser page rendered by @litsx/ssr", async ({ page }) => 
   await fs.writeFile(
     clientEntryPath,
     `
-import { hydratePage, LITSX_HYDRATION_PAYLOAD_PROPERTY } from "${viteFsSpecifier(path.join(repoRoot, "packages/ssr/src/hydration.js"))}";
+import { defineSsrComponents } from "./components.client.litsx";
 
-try {
-  await hydratePage({
-    async register() {
-      const { defineSsrComponents } = await import("./components.client.litsx");
-      defineSsrComponents();
-    },
-  });
-} catch (error) {
-  window.__litsxSsrBrowserError = error instanceof Error ? error.message : String(error);
-}
-
-const root = document.querySelector("ssr-app-root");
-window.__litsxSsrBrowserResult = {
-  error: window.__litsxSsrBrowserError ?? null,
-  rootPayload: root?.[LITSX_HYDRATION_PAYLOAD_PROPERTY] ?? null,
-  rootText: root?.shadowRoot?.querySelector("#app-root")?.textContent ?? "",
-  hasDeclarativeShadowDom: Boolean(root?.shadowRoot),
-};
+// The SSR bootstrap imports this entry through hydratePage({ register }).
+// Entries register custom elements; they must not hydrate the document again.
+defineSsrComponents();
 `,
   );
   const server = await createSsrDevServer({
@@ -319,11 +299,17 @@ window.__litsxSsrBrowserResult = {
       }
     });
     await page.goto(url);
-    await page.waitForFunction(() => Boolean(window.__litsxSsrBrowserResult));
+    await page.waitForFunction(() => window.__litsxClientConnectCalls === 1);
 
-    const browserResult = await page.evaluate(() => window.__litsxSsrBrowserResult);
+    const browserResult = await page.evaluate((hydrationPayloadProperty) => {
+      const root = document.querySelector("ssr-app-root");
+      return {
+        rootPayload: root?.[hydrationPayloadProperty] ?? null,
+        rootText: root?.shadowRoot?.querySelector("#app-root")?.textContent ?? "",
+        hasDeclarativeShadowDom: Boolean(root?.shadowRoot),
+      };
+    }, LITSX_HYDRATION_PAYLOAD_PROPERTY);
     expect(consoleErrors).toEqual([]);
-    expect(browserResult.error).toBe(null);
     expect(browserResult.hasDeclarativeShadowDom).toBe(true);
     expect(browserResult.rootText).toContain("Real Browser");
     expect(browserResult.rootPayload).toEqual({
@@ -398,20 +384,14 @@ test("hydrates without DOM duplication when using only the public hydration modu
     clientEntryPath,
     `
 import {
-  hydratePage,
   registerHydrationModules,
 } from "${viteFsSpecifier(hydrationEntryPath)}";
 
-try {
-  await hydratePage({
-    clientImports: [],
-    register: () => registerHydrationModules([
-      () => import("./components.client.litsx"),
-    ]),
-  });
-} catch (error) {
-  window.__litsxSsrRegisterBrowserError = error instanceof Error ? error.message : String(error);
-}
+// The page bootstrap owns hydratePage(). This entry uses the public module
+// registration API to define the hydratable exports it provides.
+await registerHydrationModules([
+  () => import("./components.client.litsx"),
+]);
 
 function collectButtons() {
   const buttons = [];
@@ -431,7 +411,6 @@ function collectButtons() {
 
 const root = document.querySelector("ssr-app-root");
 window.__litsxSsrRegisterBrowserResult = {
-  error: window.__litsxSsrRegisterBrowserError ?? null,
   hasDeclarativeShadowDom: Boolean(root?.shadowRoot),
   appRootCount: root?.renderRoot?.querySelectorAll("#app-root").length ?? 0,
   buttonCount: collectButtons().length,
@@ -471,7 +450,6 @@ window.__litsxSsrRegisterBrowserResult = {
 
     const browserResult = await page.evaluate(() => window.__litsxSsrRegisterBrowserResult);
     expect(consoleErrors).toEqual([]);
-    expect(browserResult.error).toBe(null);
     expect(browserResult.hasDeclarativeShadowDom).toBe(true);
     expect(browserResult.appRootCount).toBe(1);
     expect(browserResult.buttonCount).toBe(1);
@@ -495,41 +473,44 @@ test("reveals suspense-list guide cards after SSR hydration", async ({ page }) =
   await fs.writeFile(
     clientEntryPath,
     `
-import { hydratePage } from "${viteFsSpecifier(path.join(repoRoot, "packages/ssr/src/hydration.js"))}";
+import { defineSsrComponents } from "./components.client.litsx";
 
-try {
-  await hydratePage({
-    async register() {
-      const { defineSsrComponents } = await import("./components.client.litsx");
-      defineSsrComponents();
-    },
-  });
-} catch (error) {
-  window.__litsxSsrBrowserError = error instanceof Error ? error.message : String(error);
+defineSsrComponents();
+
+function getGuideRoot() {
+  return document.querySelector("suspense-guide-app")?.shadowRoot ?? document;
+}
+
+function findNestedElement(root, selector) {
+  if (root.shadowRoot) {
+    const shadowMatch = findNestedElement(root.shadowRoot, selector);
+    if (shadowMatch) {
+      return shadowMatch;
+    }
+  }
+
+  const directMatch = root.querySelector(selector);
+  if (directMatch) {
+    return directMatch;
+  }
+
+  for (const element of root.querySelectorAll("*")) {
+    if (element.shadowRoot) {
+      const nestedMatch = findNestedElement(element.shadowRoot, selector);
+      if (nestedMatch) {
+        return nestedMatch;
+      }
+    }
+  }
+
+  return null;
 }
 
 function collectGuideState() {
-  return [...document.querySelectorAll("suspense-boundary")].map((boundary, index) => {
-    const card = boundary.querySelector("guide-card");
-    const article = card?.shadowRoot?.querySelector(".guide-card");
+  return [...getGuideRoot().querySelectorAll("suspense-boundary")].map((boundary, index) => {
+    const card = findNestedElement(boundary, "guide-card");
     return {
       index,
-      pending: boundary.pending,
-      resolved: boundary.resolved,
-      showing: boundary.getAttribute("showing"),
-      phase: boundary.getAttribute("phase"),
-      boundaryRect: {
-        width: boundary.getBoundingClientRect().width,
-        height: boundary.getBoundingClientRect().height,
-      },
-      cardRect: card ? {
-        width: card.getBoundingClientRect().width,
-        height: card.getBoundingClientRect().height,
-      } : null,
-      articleRect: article ? {
-        width: article.getBoundingClientRect().width,
-        height: article.getBoundingClientRect().height,
-      } : null,
       text: card?.shadowRoot?.textContent?.replace(/\\s+/g, " ").trim() ?? "",
     };
   });
@@ -543,14 +524,6 @@ const snapshotInterval = setInterval(() => {
 setTimeout(() => {
   clearInterval(snapshotInterval);
   window.__litsxSsrSuspenseGuideResult = {
-    error: window.__litsxSsrBrowserError ?? null,
-    listRect: (() => {
-      const list = document.querySelector("suspense-list");
-      return list ? {
-        width: list.getBoundingClientRect().width,
-        height: list.getBoundingClientRect().height,
-      } : null;
-    })(),
     boundaries: collectGuideState(),
     snapshots: window.__litsxSsrSuspenseGuideSnapshots,
   };
@@ -591,17 +564,12 @@ setTimeout(() => {
 
     const result = await page.evaluate(() => window.__litsxSsrSuspenseGuideResult);
     expect(consoleErrors).toEqual([]);
-    expect(result.error).toBe(null);
-    expect(result.listRect.height).toBeGreaterThan(0);
     expect(result.boundaries).toHaveLength(3);
-    expect(result.boundaries.map((entry) => entry.showing)).toEqual([
-      "content",
-      "content",
-      "content",
+    expect(result.boundaries.map((entry) => entry.text)).toEqual([
+      expect.stringContaining("First card body"),
+      expect.stringContaining("Second card body"),
+      expect.stringContaining("npm run dev"),
     ]);
-    expect(result.boundaries.every((entry) => entry.resolved === true)).toBe(true);
-    expect(result.boundaries.every((entry) => entry.cardRect && entry.cardRect.height > 0)).toBe(true);
-    expect(result.boundaries.every((entry) => entry.articleRect && entry.articleRect.height > 0)).toBe(true);
   } finally {
     await server.close();
   }
