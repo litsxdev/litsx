@@ -8,7 +8,23 @@ import {
   setStaticHoistsBabelTypes,
 } from "../packages/babel-preset-litsx/src/internal/transform-litsx-static-hoists.js";
 import {
+  buildClassMembers,
+  createComponentClass,
+  setClassGenerationBabelTypes,
+} from "../packages/babel-preset-litsx/src/internal/transform-litsx-class-generation.js";
+import {
+  buildStableIdentitySeed,
+  createStableIdentity,
+  hashStableIdentity,
+  normalizeStableIdentityPath,
+} from "../packages/babel-preset-litsx/src/internal/stable-identity.js";
+import {
+  attachStaticIr,
   collectStaticIr,
+  consumeStaticIr,
+  ensureStaticIr,
+  getStaticIr,
+  normalizeStaticIr,
   setStaticIrInferredProperties,
   setStaticIrBabelTypes,
 } from "../packages/babel-preset-litsx/src/internal/transform-litsx-static-ir.js";
@@ -64,8 +80,142 @@ function getStaticPropertiesGetterObjectProperties(member) {
 setStaticHoistsBabelTypes(t);
 setStaticIrBabelTypes(t);
 setPropertyBabelTypes(t);
+setClassGenerationBabelTypes(t);
 
 describe("native static hoists internals", () => {
+  it("creates stable identities from source locations and filename fallbacks", () => {
+    const pathLike = { node: { start: 12, loc: { start: { line: 3, column: 4 } } } };
+    const state = {
+      file: {
+        opts: {
+          sourceFileName: "src\\card.litsx",
+          filename: "ignored.litsx",
+        },
+      },
+      filename: "also-ignored.litsx",
+    };
+
+    assert.strictEqual(normalizeStableIdentityPath("src\\card.litsx"), "src/card.litsx");
+    assert.strictEqual(buildStableIdentitySeed(pathLike, state), "src/card.litsx:3:4:12");
+    assert.strictEqual(buildStableIdentitySeed({ node: {} }, {}), ":0:0:0");
+    assert.strictEqual(hashStableIdentity("card"), hashStableIdentity("card"));
+    assert.notStrictEqual(hashStableIdentity("card"), hashStableIdentity("badge"));
+    assert.match(createStableIdentity("litsx-", pathLike, state), /^litsx-[a-z0-9]+$/);
+  });
+
+  it("builds generated component classes with defaults, mixins, and hydration metadata", () => {
+    const classMembers = [t.classProperty(t.identifier("staticValue"), t.numericLiteral(1))];
+    classMembers[0].static = true;
+    const members = buildClassMembers({
+      classMembers,
+      defaults: new Map([["title", t.stringLiteral("Untitled")]]),
+      renderStatements: [t.returnStatement(t.stringLiteral("ready"))],
+      handlerInfos: [{ name: "onSave" }],
+      createHandlerClassMember: (handler) => t.classMethod(
+        "method",
+        t.identifier(handler.name),
+        [],
+        t.blockStatement([]),
+      ),
+    });
+    assert.strictEqual(members.findIndex((member) => member.kind === "constructor"), 1);
+    assert.strictEqual(members.at(-1).key.name, "render");
+
+    const classNode = createComponentClass({
+      className: "FeatureCard",
+      classMembers: members,
+      hoistMembers: [t.classProperty(t.identifier("styles"), t.stringLiteral(""))],
+      hoistSymbolDeclarations: [t.variableDeclaration("const", [])],
+      hostTypeId: "feature-card:1",
+      needsStaticHoistsMixin: true,
+      lightDomRequested: true,
+      needsCss: true,
+      needsUnsafeCss: true,
+      needsCallbackRef: true,
+      needsModuleIdMetadata: true,
+      moduleId: "module:feature-card",
+    });
+
+    assert.strictEqual(classNode.superClass.callee.name, "LightDomMixin");
+    assert.strictEqual(classNode.superClass.arguments[0].callee.name, "LitsxStaticHoistsMixin");
+    assert.strictEqual(classNode._needsCss, true);
+    assert.strictEqual(classNode._needsUnsafeCss, true);
+    assert.strictEqual(classNode._needsCallbackRef, true);
+    assert.strictEqual(classNode._needsModuleIdMetadata, true);
+    assert.strictEqual(classNode._litsxStaticSymbolDeclarations.length, 1);
+  });
+
+  it("builds minimal generated component classes without optional metadata", () => {
+    const classNode = createComponentClass({
+      className: "PlainCard",
+      classMembers: [],
+      hoistMembers: [],
+      hoistSymbolDeclarations: [],
+      hostTypeId: null,
+      needsStaticHoistsMixin: false,
+      lightDomRequested: false,
+      needsCss: false,
+      needsUnsafeCss: false,
+    });
+
+    assert.strictEqual(classNode.superClass.name, "LitElement");
+    assert.strictEqual(classNode.body.body.length, 0);
+    assert.strictEqual(classNode._needsCss, false);
+    assert.strictEqual(classNode._needsModuleIdMetadata, false);
+  });
+
+  it("normalizes and consumes partial static IR without sharing mutable metadata", () => {
+    const expression = t.identifier("title");
+    const partial = {
+      properties: {
+        inferred: [{ index: 0, expression }],
+        authored: [{ index: 1 }],
+      },
+      elements: {
+        localCandidates: ["LocalCard"],
+        importedCandidates: [null, { tagName: "remote-card" }],
+      },
+      lightDom: 1,
+    };
+    const normalized = normalizeStaticIr(partial);
+
+    assert.notStrictEqual(normalized.properties.inferred[0].expression, expression);
+    assert.strictEqual(normalized.properties.authored[0].expression, null);
+    assert.deepStrictEqual(normalized.properties.legacy, []);
+    assert.deepStrictEqual(normalized.elements.importedCandidates, [null, { tagName: "remote-card" }]);
+    assert.notStrictEqual(normalized.elements.importedCandidates[1], partial.elements.importedCandidates[1]);
+    assert.strictEqual(normalized.lightDom, true);
+    assert.deepStrictEqual(normalizeStaticIr().properties.inferred, []);
+
+    const node = {};
+    const attached = attachStaticIr(node, partial);
+    const read = getStaticIr(node);
+    const consumed = consumeStaticIr(node);
+    assert(attached);
+    assert(read);
+    assert(consumed);
+    assert.strictEqual(getStaticIr(node), null);
+    assert.strictEqual(attachStaticIr(null, partial), null);
+    assert.strictEqual(consumeStaticIr(null), null);
+  });
+
+  it("creates IR for incomplete transform inputs", () => {
+    const empty = ensureStaticIr(null);
+    const node = {};
+    const ensured = ensureStaticIr(node);
+    const fromArrayCandidates = collectStaticIr({
+      functionPath: {},
+      elementCandidates: ["Card", "Badge"],
+      importedElementCandidates: [],
+    });
+
+    assert.deepStrictEqual(empty.elements.localCandidates, []);
+    assert.strictEqual(ensured, node._litsxStaticIr);
+    assert.deepStrictEqual(fromArrayCandidates.elements.localCandidates, ["Card", "Badge"]);
+    assert.deepStrictEqual(fromArrayCandidates.properties.authored, []);
+    assert.strictEqual(setStaticIrInferredProperties(null, []), null);
+  });
+
   it("collects early static IR for properties, elements, and light DOM", () => {
     const source = `
       function Card() {

@@ -508,6 +508,66 @@ describe("litsx effects controller", () => {
     assert.strictEqual(host.willValidate, true);
   });
 
+  it("keeps form hook state usable when ElementInternals is unavailable", () => {
+    const host = new TestHost();
+    host.attachInternals = undefined;
+
+    prepareEffects(host);
+    let valueControl = resolveStructuralEntry(
+      host,
+      0,
+      "form-value-without-internals",
+      useFormValue,
+      ["draft"],
+      { callsitePath: ["form-value-without-internals"] },
+    );
+    let validityControl = resolveStructuralEntry(
+      host,
+      1,
+      "form-validity-without-internals",
+      useFormValidity,
+      [],
+      { callsitePath: ["form-validity-without-internals"] },
+    );
+
+    assert.strictEqual(valueControl.value, "draft");
+    assert.strictEqual(validityControl.supported, false);
+    assert.strictEqual(validityControl.checkValidity(), true);
+    assert.strictEqual(validityControl.reportValidity(), true);
+
+    valueControl.setValue((value) => `${value}:ready`);
+    valueControl.setDefaultValue("fallback");
+    valueControl.setFormValue("submit-only");
+    validityControl.setValidity({ valueMissing: true }, "Ignored");
+
+    host.__litsxHostMiddlewareRuntime.formAssociatedCallback([null], () => undefined);
+    host.__litsxHostMiddlewareRuntime.formDisabledCallback([false], () => undefined);
+    host.__litsxHostMiddlewareRuntime.formResetCallback(() => undefined);
+
+    prepareEffects(host);
+    valueControl = resolveStructuralEntry(
+      host,
+      0,
+      "form-value-without-internals",
+      useFormValue,
+      ["draft"],
+      { callsitePath: ["form-value-without-internals"] },
+    );
+    validityControl = resolveStructuralEntry(
+      host,
+      1,
+      "form-validity-without-internals",
+      useFormValidity,
+      [],
+      { callsitePath: ["form-validity-without-internals"] },
+    );
+
+    assert.strictEqual(valueControl.value, "fallback");
+    assert.strictEqual(valueControl.defaultValue, "fallback");
+    assert.strictEqual(valueControl.disabled, false);
+    assert.strictEqual(validityControl.validationMessage, "");
+  });
+
   it("does not surface FACE readonly host accessors as reactive structural props", () => {
     class FacePropsHost {}
 

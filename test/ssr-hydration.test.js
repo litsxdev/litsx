@@ -379,6 +379,145 @@ describe("@litsx/ssr/hydration", () => {
     );
   });
 
+  it("rejects malformed hydration JSON and incompatible root metadata", async () => {
+    const {
+      readHydrationData,
+      resolveHydrationRoot,
+      resolveHydrationRoots,
+    } = await import("../packages/ssr/src/hydration.js");
+    const { documentRef } = createRootAttributeDocument();
+
+    assert.throws(
+      () => readHydrationData({ getElementById: () => ({ textContent: "{" }) }),
+      /Failed to parse LitSX SSR JSON script/,
+    );
+    assert.throws(
+      () => resolveHydrationRoots(documentRef, {
+        hydrationData: { roots: [{ id: "missing-root", tagName: "product-card" }] },
+      }),
+      /Failed to find a LitSX hydration root element/,
+    );
+    assert.throws(
+      () => resolveHydrationRoots(documentRef, {
+        hydrationData: { roots: [{ id: "litsx-root-0", tagName: "other-card" }] },
+      }),
+      /expected <other-card> but found <product-card>/,
+    );
+    assert.throws(
+      () => resolveHydrationRoot(documentRef, "missing-root", {
+        hydrationData: { roots: [] },
+      }),
+      /Hydration metadata did not include root "missing-root"/,
+    );
+    assert.throws(
+      () => resolveHydrationRoot(documentRef, "", { hydrationData: { roots: [] } }),
+      /requires a non-empty root id/,
+    );
+  });
+
+  it("rejects conflicting payloads and hydrateRoot tag mismatches", async () => {
+    const {
+      applyHydrationPayload,
+      hydrateRoot,
+      LITSX_HYDRATION_PAYLOAD_PROPERTY,
+    } = await import("../packages/ssr/src/hydration.js");
+    const { rootElement } = createRootAttributeDocument();
+    const roots = [{ id: "litsx-root-0", element: rootElement }];
+    const firstPayload = { roots: { "litsx-root-0": { props: { title: "first" } }, }, instances: {} };
+    const secondPayload = { roots: { "litsx-root-0": { props: { title: "second" } }, }, instances: {} };
+
+    applyHydrationPayload(roots, { payload: firstPayload });
+    assert.strictEqual(rootElement[LITSX_HYDRATION_PAYLOAD_PROPERTY], firstPayload.roots["litsx-root-0"]);
+    assert.throws(
+      () => applyHydrationPayload(roots, { payload: secondPayload }),
+      /has already been applied/,
+    );
+    await assert.rejects(
+      () => hydrateRoot(rootElement, {
+        hydrationData: { roots: [{ id: "litsx-root-0", tagName: "other-card" }] },
+      }),
+      /expected <other-card> but found <product-card>/,
+    );
+  });
+
+  it("normalizes explicit imports and ignores payloads without root state", async () => {
+    const {
+      applyHydrationPayload,
+      readClientImports,
+      readHydrationPayload,
+    } = await import("../packages/ssr/src/hydration.js");
+    const element = { title: "unchanged" };
+    const roots = [{ id: "litsx-root-0", element }];
+
+    assert.deepStrictEqual(readClientImports(null, { imports: "/assets/app.js" }), ["/assets/app.js"]);
+    assert.deepStrictEqual(readClientImports(null, { clientImports: ["", 1, "/assets/app.js", "/assets/app.js"] }), ["/assets/app.js"]);
+    assert.deepStrictEqual(readHydrationPayload(null, { hydrationData: null }), { roots: {}, instances: {} });
+    assert.strictEqual(
+      applyHydrationPayload(roots, {
+        payload: { roots: {}, instances: {} },
+      }),
+      roots,
+    );
+    assert.strictEqual(element.title, "unchanged");
+  });
+
+  it("hydrates explicit root ids through ShadowRoot-like hosts and comment markers", async () => {
+    const { hydrateRoot, resolveHydrationRoots } = await import("../packages/ssr/src/hydration.js");
+    const { rootElement, documentRef } = createRootMarkerDocument({ rootId: "litsx-root-comment" });
+    const shadowRoot = { host: rootElement, ownerDocument: documentRef };
+    const hydrationData = {
+      roots: [{ id: "litsx-root-comment", tagName: "product-card" }],
+      payload: { roots: {}, instances: {} },
+    };
+
+    assert.deepStrictEqual(
+      resolveHydrationRoots(documentRef, { hydrationData }).map((root) => root.id),
+      ["litsx-root-comment"],
+    );
+    assert.strictEqual(
+      await hydrateRoot(shadowRoot, { rootId: "litsx-root-comment", hydrationData }),
+      rootElement,
+    );
+  });
+
+  it("upgrades hydrated roots by registering loaded client module exports", async () => {
+    const {
+      hydrate,
+      registerHydrationModule,
+      registerHydrationModules,
+    } = await import("../packages/ssr/src/hydration.js");
+    const registry = createCustomElementsRegistry();
+    const ProductCard = createHydratableComponent("product-card");
+    const { documentRef, rootElement } = createRootAttributeDocument();
+    const calls = [];
+    globalThis.customElements = registry;
+
+    await registerHydrationModules(null);
+    registerHydrationModule(null);
+    const result = await hydrate(documentRef, {
+      hydrationData: {
+        roots: [{ id: "litsx-root-0", tagName: "product-card" }],
+        payload: {
+          roots: { "litsx-root-0": { props: { title: "Hydrated" } } },
+          instances: {},
+        },
+      },
+      clientImports: ["/assets/product-card.js"],
+      register() {
+        calls.push("register");
+      },
+      async moduleLoader(specifier) {
+        calls.push(specifier);
+        return { ProductCard };
+      },
+    });
+
+    assert.strictEqual(result[0].element, rootElement);
+    assert.strictEqual(rootElement.title, "Hydrated");
+    assert.strictEqual(registry.get("product-card"), ProductCard);
+    assert.deepStrictEqual(calls, ["register", "/assets/product-card.js"]);
+  });
+
   it("hydrates a document by reading client imports from the default script tag", async () => {
     const {
       hydrateDocument,
