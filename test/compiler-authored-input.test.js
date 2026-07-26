@@ -21,6 +21,10 @@ describe("compiler authored input helpers", () => {
       ["typescript"]
     );
     assert.deepStrictEqual(
+      ensureLitsxParserPlugins("/virtual/File.ts"),
+      ["typescript"]
+    );
+    assert.deepStrictEqual(
       ensureLitsxParserPlugins("/virtual/File.jsx", [], { requireJsx: true }),
       ["jsx"]
     );
@@ -216,6 +220,23 @@ describe("compiler authored input helpers", () => {
 
     assert.match(result.code, /export const Example = \(\) => <button>Save<\/button>;/);
     assert.strictEqual(result.map, null);
+  });
+
+  it("parses TypeScript-only imports in authored .ts modules", async () => {
+    const result = await transformLitsx(
+      [
+        'import type { ItemId } from "./item-id.js";',
+        'import { getItem, type Item } from "./items.js";',
+        "export const item: Item = getItem({} as ItemId);",
+      ].join("\n"),
+      {
+        filename: "/virtual/src/models/items.ts",
+        jsxTemplate: false,
+      }
+    );
+
+    assert.match(result.code, /import \{ getItem \} from "\.\/items\.js";/);
+    assert.match(result.code, /export const item = getItem\(\{\}\);/);
   });
 
   it("creates project-backed compilation sessions and defaults getTypecheckSession to the project path", () => {

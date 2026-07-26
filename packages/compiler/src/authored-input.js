@@ -16,6 +16,7 @@ function normalizeParserPlugins(filename, parserPlugins = []) {
   }
 
   if (typeof filename === "string" && (
+    filename.endsWith(".ts") ||
     filename.endsWith(".tsx") ||
     filename.endsWith(".litsx")
   )) {
