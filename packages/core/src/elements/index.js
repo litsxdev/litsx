@@ -274,6 +274,10 @@ function createScopedRegistryForHost(host, options = {}) {
     host.registry = null;
   }
 
+  if (!registry && options.forceLightDomRegistry) {
+    registry = createLightDomRegistry(host, {});
+  }
+
   if (!registry) {
     if (!isLightDomRegistryRuntimeActive()) {
       attachKey = getShadowDomRegistryAttachKey();
@@ -525,8 +529,11 @@ export const ShadowDomMixin = dedupeMixin((Base) =>
       const existingRoot = this.shadowRoot;
       if (existingRoot) {
         prepareLitHydration(this, existingRoot);
-        const shouldForceHydrationRegistry =
-          hasHydratableLitMarkers(existingRoot) && hasScopedElements(this);
+        // A scoped native registry can only be supplied while creating a
+        // shadow root. Declarative Shadow DOM already exists by hydration
+        // time, so nested static elements need the shim regardless of where
+        // Lit's hydration markers occur in the serialized tree.
+        const shouldForceHydrationRegistry = hasScopedElements(this);
         const rootRegistry =
           existingRoot.registry ??
           existingRoot.customElements ??
