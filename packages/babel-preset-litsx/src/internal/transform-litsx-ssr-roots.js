@@ -7,6 +7,7 @@ import {
   buildAvailableMap,
   buildServerComponentPropsObject,
   collectScopedEntries,
+  createSsrElementRegistryValue,
   ensureNamedImport,
   setSsrSharedBabelTypes,
 } from "./transform-litsx-ssr-shared.js";
@@ -16,7 +17,6 @@ const SSR_MODULE = "@litsx/ssr";
 const RUNTIME_INFRASTRUCTURE_MODULE = "@litsx/core/elements";
 const SCOPED_TEMPLATE_HELPER = "__litsxScopedTemplate";
 const SERVER_COMPONENT_CALL_HELPER = "__litsxServerComponentCall";
-const ANNOTATE_HYDRATABLE_CUSTOM_ELEMENT_HELPER = "annotateHydratableCustomElement";
 
 export default function transformLitsxSsrRoots(api) {
   api.assertVersion(7);
@@ -103,11 +103,6 @@ export default function transformLitsxSsrRoots(api) {
               RUNTIME_INFRASTRUCTURE_MODULE,
               SCOPED_TEMPLATE_HELPER,
             );
-            ensureNamedImport(
-              programPath,
-              RUNTIME_INFRASTRUCTURE_MODULE,
-              ANNOTATE_HYDRATABLE_CUSTOM_ELEMENT_HELPER,
-            );
 
             firstArgument.replaceWith(
               t.callExpression(t.identifier(SCOPED_TEMPLATE_HELPER), [
@@ -116,26 +111,7 @@ export default function transformLitsxSsrRoots(api) {
                   scopeEntries.map((entry) =>
                     t.objectProperty(
                       t.stringLiteral(entry.tagName),
-                      t.callExpression(
-                        t.identifier(ANNOTATE_HYDRATABLE_CUSTOM_ELEMENT_HELPER),
-                        [
-                          t.identifier(entry.originalName),
-                          t.objectExpression(
-                            [
-                              t.objectProperty(
-                                t.identifier("tagName"),
-                                t.stringLiteral(entry.tagName),
-                              ),
-                              entry.moduleId
-                                ? t.objectProperty(
-                                  t.identifier("moduleId"),
-                                  t.stringLiteral(entry.moduleId),
-                                )
-                                : null,
-                            ].filter(Boolean),
-                          ),
-                        ],
-                      ),
+                      createSsrElementRegistryValue(programPath, entry),
                     ),
                   ),
                 ),
