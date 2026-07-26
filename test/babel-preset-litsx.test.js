@@ -1628,8 +1628,8 @@ describe("@litsx/babel-preset-litsx", () => {
     );
 
     assert.doesNotMatch(result.code, /class ProductPage extends LitElement/);
-    assert.match(result.code, /import \{ __litsxScopedTemplate, LITSX_SERVER_COMPONENT \} from "@litsx\/core\/elements";|import \{ LITSX_SERVER_COMPONENT, __litsxScopedTemplate \} from "@litsx\/core\/elements";/);
-    assert.match(result.code, /return __litsxScopedTemplate\(html`<main><product-card \.product=\$\{product\}><\/product-card><\/main>`\, \{\s*"product-card": ProductCard\s*\}\);/);
+    assert.match(result.code, /import \{[\s\S]*__litsxScopedTemplate[\s\S]*annotateHydratableCustomElement[\s\S]*LITSX_SERVER_COMPONENT[\s\S]*\} from "@litsx\/core\/elements";/);
+    assert.match(result.code, /return __litsxScopedTemplate\(html`<main><product-card \.product=\$\{product\}><\/product-card><\/main>`\, \{\s*"product-card": annotateHydratableCustomElement\(ProductCard,\s*\{\s*tagName: "product-card",\s*moduleId: "\.\/ProductCard\.js"\s*\}\)\s*\}\);/);
     assert.match(result.code, /ProductPage\[LITSX_SERVER_COMPONENT\] = true;/);
   });
 
@@ -1657,10 +1657,120 @@ describe("@litsx/babel-preset-litsx", () => {
     assert.doesNotMatch(result.code, /class ProductPage extends LitElement/);
     assert.match(
       result.code,
-      /return __litsxScopedTemplate\(html`<main><product-card \.product=\$\{product\}><\/product-card><\/main>`\, \{\s*"product-card": ProductCard\s*\}\);/,
+      /return __litsxScopedTemplate\(html`<main><product-card \.product=\$\{product\}><\/product-card><\/main>`\, \{\s*"product-card": annotateHydratableCustomElement\(ProductCard,\s*\{\s*tagName: "product-card",\s*moduleId: "\.\/ProductCard\.js"\s*\}\)\s*\}\);/,
     );
     assert.match(result.code, /ProductPage\.elements = \{\s*'product-card': ProductCard\s*\};/);
     assert.match(result.code, /ProductPage\[LITSX_SERVER_COMPONENT\] = true;/);
+  });
+
+  it("resolves stable const aliases inside Component.elements", () => {
+    const source = [
+      "import ProductCard from './ProductCard.js';",
+      "const Card = ProductCard;",
+      "export default async function ProductPage({ product }) {",
+      "  return html`<main><product-card .product=${product}></product-card></main>`;",
+      "}",
+      "ProductPage.elements = {",
+      "  'product-card': Card,",
+      "};",
+    ].join("\n");
+
+    const result = transformFromAstSync(
+      parser.parse(source, { sourceType: "module" }),
+      source,
+      {
+        configFile: false,
+        babelrc: false,
+        presets: [[nativePreset, {}]],
+      },
+    );
+
+    assert.match(
+      result.code,
+      /"product-card": annotateHydratableCustomElement\(ProductCard,\s*\{\s*tagName: "product-card",\s*moduleId: "\.\/ProductCard\.js"\s*\}\)/,
+    );
+  });
+
+  it("resolves stable object member entries inside Component.elements", () => {
+    const source = [
+      "import ProductCard from './ProductCard.js';",
+      "const controls = { ProductCard };",
+      "export default async function ProductPage({ product }) {",
+      "  return html`<main><product-card .product=${product}></product-card></main>`;",
+      "}",
+      "ProductPage.elements = {",
+      "  'product-card': controls.ProductCard,",
+      "};",
+    ].join("\n");
+
+    const result = transformFromAstSync(
+      parser.parse(source, { sourceType: "module" }),
+      source,
+      {
+        configFile: false,
+        babelrc: false,
+        presets: [[nativePreset, {}]],
+      },
+    );
+
+    assert.match(
+      result.code,
+      /"product-card": annotateHydratableCustomElement\(ProductCard,\s*\{\s*tagName: "product-card",\s*moduleId: "\.\/ProductCard\.js"\s*\}\)/,
+    );
+  });
+
+  it("rejects Component.elements entries that do not resolve to a single stable constructor", () => {
+    const source = [
+      "import ProductCard from './ProductCard.js';",
+      "import FallbackCard from './FallbackCard.js';",
+      "export default async function ProductPage({ product }) {",
+      "  return html`<main><product-card .product=${product}></product-card></main>`;",
+      "}",
+      "ProductPage.elements = {",
+      "  'product-card': flag ? ProductCard : FallbackCard,",
+      "};",
+    ].join("\n");
+
+    assert.throws(
+      () =>
+        transformFromAstSync(
+          parser.parse(source, { sourceType: "module" }),
+          source,
+          {
+            configFile: false,
+            babelrc: false,
+            presets: [[nativePreset, {}]],
+          },
+        ),
+      /could not resolve Component\.elements\["product-card"\] to a single stable custom element constructor/,
+    );
+  });
+
+  it("rejects dynamic Component.elements entries without explicit metadata", () => {
+    const source = [
+      "import ProductCard from './ProductCard.js';",
+      "const resolveCard = () => ProductCard;",
+      "export default async function ProductPage({ product }) {",
+      "  return html`<main><product-card .product=${product}></product-card></main>`;",
+      "}",
+      "ProductPage.elements = {",
+      "  'product-card': resolveCard(),",
+      "};",
+    ].join("\n");
+
+    assert.throws(
+      () =>
+        transformFromAstSync(
+          parser.parse(source, { sourceType: "module" }),
+          source,
+          {
+            configFile: false,
+            babelrc: false,
+            presets: [[nativePreset, {}]],
+          },
+        ),
+      /could not resolve Component\.elements\["product-card"\] to a single stable custom element constructor/,
+    );
   });
 
   it("rewrites renderToString server-component roots into awaited function calls", () => {
@@ -1946,7 +2056,7 @@ describe("@litsx/babel-preset-litsx", () => {
 
     assert.match(
       result.code,
-      /return __litsxScopedTemplate\(html`<product-card \.product=\$\{product\}>\$\{__litsxServerComponentCall\(ProductActions, \{\s*product: product\s*\}\)\}<\/product-card>`\, \{\s*"product-card": ProductCard\s*\}\);/,
+      /return __litsxScopedTemplate\(html`<product-card \.product=\$\{product\}>\$\{__litsxServerComponentCall\(ProductActions, \{\s*product: product\s*\}\)\}<\/product-card>`\, \{\s*"product-card": annotateHydratableCustomElement\(ProductCard,\s*\{\s*tagName: "product-card",\s*moduleId: "\.\/ProductCard\.js"\s*\}\)\s*\}\);/,
     );
     assert.doesNotMatch(result.code, /"product-actions": ProductActions/);
   });

@@ -4,6 +4,8 @@ import path from "node:path";
 import { normalizeFilePath } from "@litsx/typescript-session";
 
 let t;
+const RUNTIME_INFRASTRUCTURE_MODULE = "@litsx/core/elements";
+const ANNOTATE_HYDRATABLE_CUSTOM_ELEMENT_HELPER = "annotateHydratableCustomElement";
 const IMPORT_RESOLUTION_EXTENSIONS = [
   ".litsx",
   ".litsx.jsx",
@@ -194,6 +196,39 @@ export function ensureNamedImport(programPath, moduleName, importName) {
       [t.importSpecifier(t.identifier(importName), t.identifier(importName))],
       t.stringLiteral(moduleName),
     ),
+  );
+}
+
+export function createSsrElementRegistryValue(programPath, entry) {
+  const expression = entry?.expression
+    ? t.cloneNode(entry.expression, true)
+    : t.identifier(entry.originalName);
+
+  if (!entry?.tagName || !entry?.moduleId) {
+    return expression;
+  }
+
+  ensureNamedImport(
+    programPath,
+    RUNTIME_INFRASTRUCTURE_MODULE,
+    ANNOTATE_HYDRATABLE_CUSTOM_ELEMENT_HELPER,
+  );
+
+  return t.callExpression(
+    t.identifier(ANNOTATE_HYDRATABLE_CUSTOM_ELEMENT_HELPER),
+    [
+      expression,
+      t.objectExpression([
+        t.objectProperty(
+          t.identifier("tagName"),
+          t.stringLiteral(entry.tagName),
+        ),
+        t.objectProperty(
+          t.identifier("moduleId"),
+          t.stringLiteral(entry.moduleId),
+        ),
+      ]),
+    ],
   );
 }
 

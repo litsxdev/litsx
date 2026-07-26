@@ -3,6 +3,7 @@ import {
   buildAvailableMap,
   buildServerComponentPropsObject,
   collectScopedEntries,
+  createSsrElementRegistryValue,
   ensureNamedImport,
   setSsrSharedBabelTypes,
 } from "./transform-litsx-ssr-shared.js";
@@ -392,7 +393,220 @@ function findServerComponentFunctionPath(programPath, componentName) {
   return null;
 }
 
-function getStaticServerComponentElements(programPath, componentName) {
+function getCurrentModuleId(programPath) {
+  const filename = programPath.hub.file?.opts?.filename || "";
+  return filename || null;
+}
+
+function isAnnotateHydratableCustomElementCall(node) {
+  return (
+    t.isCallExpression(node) &&
+    t.isIdentifier(node.callee, { name: "annotateHydratableCustomElement" })
+  );
+}
+
+function getStaticPropertyValue(objectNode, propertyName) {
+  if (!t.isObjectExpression(objectNode)) {
+    return null;
+  }
+
+  for (const property of objectNode.properties) {
+    if (!t.isObjectProperty(property) || property.computed) {
+      continue;
+    }
+
+    const keyName = t.isIdentifier(property.key)
+      ? property.key.name
+      : t.isStringLiteral(property.key)
+        ? property.key.value
+        : null;
+
+    if (keyName === propertyName) {
+      return property.value;
+    }
+  }
+
+  return null;
+}
+
+function resolutionsMatch(left, right) {
+  if (!left || !right) {
+    return false;
+  }
+
+  return (
+    left.moduleId === right.moduleId &&
+    left.exportName === right.exportName &&
+    left.localName === right.localName
+  );
+}
+
+function resolveStableElementConstructor(node, scope, availableMap, programPath, seenBindings = new Set()) {
+  const expression = unwrapExpression(node);
+  if (!expression) {
+    return null;
+  }
+
+  if (isAnnotateHydratableCustomElementCall(expression)) {
+    return {
+      expression: t.cloneNode(expression, true),
+      explicitMetadata: true,
+      moduleId: null,
+      exportName: null,
+      localName: null,
+    };
+  }
+
+  if (t.isIdentifier(expression)) {
+    const binding = scope.getBinding(expression.name);
+    if (!binding) {
+      return null;
+    }
+
+    if (seenBindings.has(binding)) {
+      return null;
+    }
+
+    if (
+      binding.path.isImportSpecifier?.() ||
+      binding.path.isImportDefaultSpecifier?.() ||
+      binding.path.isImportNamespaceSpecifier?.()
+    ) {
+      const availableEntry = availableMap.get(expression.name);
+      return {
+        expression: t.identifier(expression.name),
+        moduleId: availableEntry?.moduleId ?? null,
+        exportName: availableEntry?.originalName ?? expression.name,
+        localName: expression.name,
+      };
+    }
+
+    if (binding.path.isClassDeclaration?.() || binding.path.isFunctionDeclaration?.()) {
+      return {
+        expression: t.identifier(expression.name),
+        moduleId: getCurrentModuleId(programPath),
+        exportName: expression.name,
+        localName: expression.name,
+      };
+    }
+
+    if (binding.path.isVariableDeclarator?.()) {
+      if (binding.kind !== "const" || !binding.path.node.init) {
+        return null;
+      }
+
+      const nextSeenBindings = new Set(seenBindings);
+      nextSeenBindings.add(binding);
+      return resolveStableElementConstructor(
+        binding.path.node.init,
+        binding.path.scope,
+        availableMap,
+        programPath,
+        nextSeenBindings,
+      );
+    }
+
+    return null;
+  }
+
+  if (t.isMemberExpression(expression)) {
+    let propertyName = null;
+    if (!expression.computed && t.isIdentifier(expression.property)) {
+      propertyName = expression.property.name;
+    } else if (expression.computed && t.isStringLiteral(expression.property)) {
+      propertyName = expression.property.value;
+    }
+
+    if (!propertyName) {
+      return null;
+    }
+
+    const objectResolution = resolveStableElementConstructor(
+      expression.object,
+      scope,
+      availableMap,
+      programPath,
+      seenBindings,
+    );
+
+    if (!objectResolution?.expression || !t.isObjectExpression(objectResolution.expression)) {
+      return null;
+    }
+
+    const propertyValue = getStaticPropertyValue(objectResolution.expression, propertyName);
+    if (!propertyValue) {
+      return null;
+    }
+
+    return resolveStableElementConstructor(
+      propertyValue,
+      scope,
+      availableMap,
+      programPath,
+      seenBindings,
+    );
+  }
+
+  if (t.isObjectExpression(expression)) {
+    return {
+      expression: t.cloneNode(expression, true),
+      moduleId: null,
+      exportName: null,
+      localName: null,
+      objectLiteral: true,
+    };
+  }
+
+  if (t.isConditionalExpression(expression)) {
+    const consequent = resolveStableElementConstructor(
+      expression.consequent,
+      scope,
+      availableMap,
+      programPath,
+      seenBindings,
+    );
+    const alternate = resolveStableElementConstructor(
+      expression.alternate,
+      scope,
+      availableMap,
+      programPath,
+      seenBindings,
+    );
+    return resolutionsMatch(consequent, alternate) ? consequent : null;
+  }
+
+  if (t.isLogicalExpression(expression)) {
+    const left = resolveStableElementConstructor(
+      expression.left,
+      scope,
+      availableMap,
+      programPath,
+      seenBindings,
+    );
+    const right = resolveStableElementConstructor(
+      expression.right,
+      scope,
+      availableMap,
+      programPath,
+      seenBindings,
+    );
+    return resolutionsMatch(left, right) ? left : null;
+  }
+
+  if (t.isSequenceExpression(expression) && expression.expressions.length > 0) {
+    return resolveStableElementConstructor(
+      expression.expressions[expression.expressions.length - 1],
+      scope,
+      availableMap,
+      programPath,
+      seenBindings,
+    );
+  }
+
+  return null;
+}
+
+function getStaticServerComponentElements(programPath, componentName, availableMap) {
   const cacheKey = `__litsxServerComponentElements:${componentName}`;
   const cached = programPath.getData(cacheKey);
   if (cached !== undefined) {
@@ -440,9 +654,24 @@ function getStaticServerComponentElements(programPath, componentName) {
         continue;
       }
 
+      const resolvedValue = resolveStableElementConstructor(
+        valuePath.node,
+        valuePath.scope,
+        availableMap,
+        programPath,
+      );
+
+      if (!resolvedValue) {
+        throw valuePath.buildCodeFrameError(
+          `LitSX could not resolve Component.elements["${tagName}"] to a single stable custom element constructor. Use a stable binding, wrap the constructor with annotateHydratableCustomElement(...), or delegate SSR/hydration through an adapter.`
+        );
+      }
+
       entries.push({
         tagName,
-        expression: t.cloneNode(valuePath.node, true),
+        expression: resolvedValue.expression,
+        originalName: resolvedValue.localName,
+        moduleId: resolvedValue.moduleId,
       });
     }
   }
@@ -474,6 +703,7 @@ function wrapRenderableReturns(functionPath, programPath) {
     functionPath.parentPath.isVariableDeclarator()
       ? functionPath.parentPath.node.id?.name
       : functionPath.node.id?.name,
+    availableMap,
   );
   let transformed = false;
   const sharedOptions = {
@@ -600,9 +830,7 @@ function wrapRenderableReturns(functionPath, programPath) {
             scopeEntries.map((entry) =>
               t.objectProperty(
                 t.stringLiteral(entry.tagName),
-                entry.expression
-                  ? t.cloneNode(entry.expression, true)
-                  : t.identifier(entry.originalName),
+                createSsrElementRegistryValue(programPath, entry),
               ),
             ),
           ),
