@@ -2,9 +2,13 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import crypto from "node:crypto";
 import { pathToFileURL } from "node:url";
+import { formatWithOptions } from "node:util";
 import { collectSoftSuspenseThenables } from "@litsx/core";
 import { __litsxScopedTemplate } from "@litsx/core/elements";
-import { withCurrentSsrRuntimeState } from "./ssr-state.js";
+import {
+  captureCurrentSsrConsole,
+  withCurrentSsrRuntimeState,
+} from "./ssr-state.js";
 
 /**
  * Default JSON script id used by `renderClientImportsData()`.
@@ -66,6 +70,61 @@ function escapeInlineScriptText(value) {
   // Only '<' can terminate an inline script element. Escaping operators such
   // as '=>' would corrupt executable module code.
   return String(value).replaceAll("<", "\\u003C");
+}
+
+function formatSsrConsoleArguments(args) {
+  return formatWithOptions(
+    { colors: false, depth: 6, maxArrayLength: 100, maxStringLength: 10_000 },
+    ...args,
+  );
+}
+
+function renderSsrDevConsoleDiagnostics(messages) {
+  if (messages.length === 0) {
+    return "";
+  }
+
+  const diagnostics = messages.map(({ method, args }) => ({
+    method,
+    message: formatSsrConsoleArguments(args),
+  }));
+  const source = `
+for (const { method, message } of ${JSON.stringify(diagnostics)}) {
+  const output = console[method] || console.log;
+  output.call(console, "[LitSX SSR]", message);
+}
+`;
+  return `<script>${escapeInlineScriptText(source)}</script>`;
+}
+
+function appendToDocumentBody(document, content) {
+  if (!content) {
+    return document;
+  }
+
+  const bodyEnd = document.lastIndexOf("</body>");
+  return bodyEnd === -1
+    ? `${document}${content}`
+    : `${document.slice(0, bodyEnd)}${content}${document.slice(bodyEnd)}`;
+}
+
+function createSsrDevErrorDocument(error) {
+  const message = error instanceof Error ? error.message : String(error);
+  const stack = error instanceof Error && error.stack ? error.stack : message;
+  const source = `console.error("[LitSX SSR]", ${JSON.stringify(stack)});`;
+
+  return `<!doctype html>
+<html lang="en">
+  <head><meta charset="utf-8"><title>LitSX SSR error</title></head>
+  <body>
+    <main style="font-family: ui-monospace, SFMono-Regular, Menlo, monospace; margin: 2rem; white-space: pre-wrap">
+      <h1 style="font-family: system-ui, sans-serif">LitSX SSR error</h1>
+      <p>${escapeHtmlText(message)}</p>
+      <pre>${escapeHtmlText(stack)}</pre>
+    </main>
+    <script>${escapeInlineScriptText(source)}</script>
+  </body>
+</html>`;
 }
 
 function normalizeTagContents(value) {
@@ -950,7 +1009,7 @@ export async function createSsrDevServer(options = {}) {
     ...(options.vite || {}),
   });
 
-  viteServer.middlewares.use(async (req, res, next) => {
+  viteServer.middlewares.use(async (req, res) => {
     const requestUrl = new URL(req.url ?? "/", "http://127.0.0.1");
     if (
       (req.method !== "GET" && req.method !== "HEAD") ||
@@ -960,24 +1019,43 @@ export async function createSsrDevServer(options = {}) {
       return;
     }
 
+    const messages = [];
     try {
       const assetResolver = options.assetResolver ?? createLitsxViteAssetResolver({
         root,
         base: viteServer.config.base,
       });
-      const result = await renderAuthoredDocument({
-        ...options,
-        root,
-        viteServer,
-        assetResolver,
-      });
-      const document = await viteServer.transformIndexHtml(requestUrl.pathname, result.document);
+      const { result } = await captureCurrentSsrConsole(
+        () => renderAuthoredDocument({
+          ...options,
+          root,
+          viteServer,
+          assetResolver,
+        }),
+        messages,
+      );
+      const document = await viteServer.transformIndexHtml(
+        requestUrl.pathname,
+        appendToDocumentBody(result.document, renderSsrDevConsoleDiagnostics(messages)),
+      );
       res.statusCode = 200;
       res.setHeader("Content-Type", "text/html; charset=utf-8");
       res.end(document);
     } catch (error) {
       viteServer.ssrFixStacktrace(error);
-      next(error);
+      viteServer.config.logger.error(
+        error instanceof Error && error.stack ? error.stack : String(error),
+      );
+      const document = await viteServer.transformIndexHtml(
+        requestUrl.pathname,
+        appendToDocumentBody(
+          createSsrDevErrorDocument(error),
+          renderSsrDevConsoleDiagnostics(messages),
+        ),
+      );
+      res.statusCode = 500;
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      res.end(document);
     }
   });
 

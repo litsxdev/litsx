@@ -4,7 +4,12 @@ import assert from "assert";
 import { LitElement, html } from "lit";
 import { describe, it } from "vitest";
 import { connectLightDomRegistry } from "../packages/scoped-registry-shim/src/index.js";
-import { prepareEffects, useOnConnect, useState } from "../packages/core/src/index.js";
+import {
+  HostMiddlewareMixin,
+  prepareEffects,
+  useOnConnect,
+  useState,
+} from "../packages/core/src/index.js";
 import {
   __isLitsxScopedTemplate,
   __isLitsxServerComponentCall,
@@ -957,6 +962,74 @@ describe("litsx elements runtime", () => {
       assert.notStrictEqual(shadowHost.registry.constructor, PolyfilledRegistry);
       assert.strictEqual(root.registry, shadowHost.registry);
       assert.strictEqual(shadowHost.registry.get("polyfilled-shadow-child"), ShadowChild);
+    } finally {
+      globalThis.CustomElementRegistry = originalCustomElementRegistry;
+      Element.prototype.attachShadow = originalAttachShadow;
+    }
+  });
+
+  it("replaces a polyfilled registry already assigned to a host before scoped registration", () => {
+    const shadowHostTag = nextTag("litsx-runtime-polyfilled-existing-registry-host");
+    const childTag = nextTag("litsx-runtime-polyfilled-existing-registry-child");
+    const originalCustomElementRegistry = globalThis.CustomElementRegistry;
+    const originalAttachShadow = Element.prototype.attachShadow;
+
+    class PolyfilledRegistry {
+      constructor() {
+        this.definitions = new Map();
+      }
+
+      define() {
+        throw new Error("LitSX must not register generated children through the polyfill");
+      }
+
+      get() {
+        return null;
+      }
+
+      _getDefinition() {
+        return undefined;
+      }
+    }
+
+    globalThis.CustomElementRegistry = PolyfilledRegistry;
+    Element.prototype.attachShadow = function attachShadow(init) {
+      const shadowRoot = document.createElement("div");
+      shadowRoot.registry = init.registry ?? null;
+      shadowRoot.customElements = shadowRoot.registry;
+      shadowRoot.customElementRegistry = shadowRoot.registry;
+      Object.defineProperty(this, "shadowRoot", {
+        configurable: true,
+        value: shadowRoot,
+      });
+      return shadowRoot;
+    };
+
+    try {
+      class ScopedChild extends HostMiddlewareMixin(LitElement) {}
+
+      class ShadowBase extends HTMLElement {
+        constructor() {
+          super();
+          this.registry = new PolyfilledRegistry();
+        }
+
+        static elements = {
+          [childTag]: ScopedChild,
+        };
+      }
+
+      const ShadowHost = ShadowDomMixin(ShadowBase);
+      if (!customElements.get(shadowHostTag)) {
+        customElements.define(shadowHostTag, ShadowHost);
+      }
+      const shadowHost = document.createElement(shadowHostTag);
+      const root = shadowHost.createRenderRoot();
+
+      assert.notStrictEqual(shadowHost.registry.constructor, PolyfilledRegistry);
+      assert.strictEqual(shadowHost.registry.get(childTag), ScopedChild);
+      assert.strictEqual(root.registry, shadowHost.registry);
+      assert.strictEqual(customElements.get(childTag), undefined);
     } finally {
       globalThis.CustomElementRegistry = originalCustomElementRegistry;
       Element.prototype.attachShadow = originalAttachShadow;
