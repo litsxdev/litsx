@@ -100,7 +100,23 @@ export function __isLitsxServerComponentCall(value) {
 }
 
 function isPolyfilledScopedRegistry(registry) {
-  return Boolean(registry && "h" in registry && "m" in registry);
+  if (!registry) {
+    return false;
+  }
+
+  // The published build of @webcomponents/scoped-custom-element-registry
+  // minifies these maps as `h` and `m`.
+  if ("h" in registry && "m" in registry) {
+    return true;
+  }
+
+  // Keep the source/unminified build on the same path. LitSX's own shim also
+  // has `_getDefinition`, but is never an instance of the polyfill's global
+  // CustomElementRegistry constructor.
+  return Boolean(
+    registry.constructor === globalThis.CustomElementRegistry &&
+    typeof registry._getDefinition === "function",
+  );
 }
 
 function supportsScopedRegistryElementCreation(shadowRoot, registry) {
@@ -268,6 +284,15 @@ function createScopedRegistryForHost(host, options = {}) {
   const elements = ctor.scopedElements ?? ctor.elements ?? {};
   let registry = host.registry ?? null;
   let attachKey = null;
+
+  // The webcomponents polyfill can leave a registry instance on a host before
+  // LitSX creates its render root. Its stand-in upgrade path cannot construct
+  // every valid LitSX class shape (notably classes composed with runtime
+  // mixins). Keep the registry scoped, but use the LitSX shim for that path.
+  if (isPolyfilledScopedRegistry(registry)) {
+    registry = null;
+    host.registry = null;
+  }
 
   if (options.forceLightDomRegistry && !isPolyfilledScopedRegistry(registry)) {
     registry = null;

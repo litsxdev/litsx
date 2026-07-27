@@ -363,6 +363,12 @@ server.printUrls();
 Use this helper for local development and examples. Use `renderDocument(...)`
 or `renderToString(...)` directly in production integrations.
 
+During development, console calls evaluated while rendering on the server keep
+their normal terminal output and are also replayed in the browser console with
+the `[LitSX SSR]` prefix. If rendering fails, the response is a readable error
+page with the fixed SSR stack trace instead of an empty or generic Vite
+response.
+
 When you provide a template file, `createSsrDevServer(...)` expects
 `<!--app-html-->` and will also fill `<!--app-head-->`,
 `<!--app-bootstrap-->`, and `<!--app-title-->` when present.

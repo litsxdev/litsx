@@ -39,6 +39,24 @@ let rendererRegistryNativeSupport;
 const RENDERER_SSR_VALUE_ERROR =
   "SSR renderer props must return a renderable TemplateResult, not a server component call or scoped template.";
 
+function isPolyfilledScopedRegistry(registry) {
+  if (!registry) {
+    return false;
+  }
+
+  // @webcomponents/scoped-custom-element-registry minifies its definition
+  // maps as `h` and `m`. Those registries rely on global stand-in classes for
+  // upgrade, which is not compatible with all LitSX-generated class shapes.
+  if ("h" in registry && "m" in registry) {
+    return true;
+  }
+
+  return Boolean(
+    registry.constructor === globalThis.CustomElementRegistry &&
+    typeof registry._getDefinition === "function",
+  );
+}
+
 function getElementAttachShadowRef() {
   return typeof Element !== "undefined" ? Element.prototype.attachShadow : undefined;
 }
@@ -165,6 +183,14 @@ function getRendererRegistryAttachKey() {
   try {
     registry = new CustomElementRegistry();
   } catch {
+    rendererRegistryAttachKey = null;
+    rendererRegistryAttachShadowRef = getElementAttachShadowRef();
+    rendererRegistryCtorRef = globalThis.CustomElementRegistry;
+    rendererRegistryNativeSupport = false;
+    return null;
+  }
+
+  if (isPolyfilledScopedRegistry(registry)) {
     rendererRegistryAttachKey = null;
     rendererRegistryAttachShadowRef = getElementAttachShadowRef();
     rendererRegistryCtorRef = globalThis.CustomElementRegistry;
