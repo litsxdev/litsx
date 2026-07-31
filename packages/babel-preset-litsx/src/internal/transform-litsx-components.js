@@ -426,10 +426,19 @@ function transformFunction(functionPath, programPath, className, options = {}) {
   const { node } = functionPath;
   const elementCandidates = getAnnotatedElementCandidates(functionPath, programPath, options);
   const importedElementCandidates = getAnnotatedImportedElementCandidates(functionPath, programPath, options);
+  // JSX nested under <noscript> is compiled into an SSR-only fallback. Its
+  // constructors are supplied to that fallback's ephemeral registry and must
+  // never leak into the host's static elements (or create a declaration-order
+  // dependency on a sibling component).
+  const noscriptOnlyCandidates = collectNoscriptOnlyElementCandidates(functionPath);
+  noscriptOnlyCandidates.forEach((candidate) => elementCandidates.delete(candidate));
+  const hostImportedElementCandidates = importedElementCandidates.filter((candidate) => (
+    !noscriptOnlyCandidates.has(candidate.localName)
+  ));
   const staticIr = collectStaticIr({
     functionPath,
     elementCandidates,
-    importedElementCandidates,
+    importedElementCandidates: hostImportedElementCandidates,
   });
   let resolvedName = className;
   if (!resolvedName && node && node.id && t.isIdentifier(node.id)) {
@@ -542,6 +551,28 @@ function transformFunction(functionPath, programPath, className, options = {}) {
   });
 
   return classNode;
+}
+
+function collectNoscriptOnlyElementCandidates(functionPath) {
+  const nested = new Set();
+  const regular = new Set();
+
+  functionPath.traverse({
+    JSXOpeningElement(path) {
+      const name = path.node.name;
+      if (!t.isJSXIdentifier(name) || !isCapitalizedComponentName(name.name)) {
+        return;
+      }
+
+      const isNestedInNoscript = Boolean(path.findParent((parent) => (
+        parent.isJSXElement?.() &&
+        t.isJSXIdentifier(parent.node.openingElement.name, { name: "noscript" })
+      )));
+      (isNestedInNoscript ? nested : regular).add(name.name);
+    },
+  });
+
+  return new Set([...nested].filter((candidate) => !regular.has(candidate)));
 }
 
 function ensureClassIdentifier(classNode, fallbackName) {

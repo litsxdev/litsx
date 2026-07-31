@@ -282,6 +282,7 @@ export default function transformJsxHtmlTemplatePlugin(api) {
           state.__litsxTemplateAttributeMappings = [];
           state.__litsxNeedsSpreadHelper = false;
           state.opts = state.opts || {};
+          state.opts.__litsxNeedsNoscriptRuntime = false;
         },
         exit(programPath, state) {
           const importName = state.__litsxTaggedImportName;
@@ -290,6 +291,9 @@ export default function transformJsxHtmlTemplatePlugin(api) {
           }
           if (state.__litsxNeedsSpreadHelper) {
             ensureNamedImport(programPath, "@litsx/core", "jsxSpreadElement");
+          }
+          if (state.opts.__litsxNeedsNoscriptRuntime) {
+            ensureNamedImport(programPath, "@litsx/core", "__litsxNoscript");
           }
 
           if (state.__litsxTemplateAttributeMappings.length > 0) {
@@ -308,33 +312,6 @@ export default function transformJsxHtmlTemplatePlugin(api) {
       },
     },
   };
-}
-
-function ensureNamedImport(programPath, moduleName, importName) {
-  const bodyPaths = programPath.get("body");
-  const existing = bodyPaths.find(
-    (path) => path.isImportDeclaration() && path.node.source.value === moduleName
-  );
-  if (existing) {
-    const present = existing.node.specifiers.some(
-      (specifier) =>
-        t.isImportSpecifier(specifier) &&
-        t.isIdentifier(specifier.imported, { name: importName })
-    );
-    if (!present) {
-      existing.node.specifiers.push(
-        t.importSpecifier(t.identifier(importName), t.identifier(importName))
-      );
-    }
-    return;
-  }
-  programPath.unshiftContainer(
-    "body",
-    t.importDeclaration(
-      [t.importSpecifier(t.identifier(importName), t.identifier(importName))],
-      t.stringLiteral(moduleName)
-    )
-  );
 }
 
 function ensureTaggedImport(programPath, importName) {
@@ -383,4 +360,31 @@ function ensureTaggedImport(programPath, importName) {
   } else {
     programPath.unshiftContainer("body", taggedImport);
   }
+}
+
+function ensureNamedImport(programPath, source, importName) {
+  const bodyPaths = programPath.get("body");
+  const existing = bodyPaths.find(
+    (path) => path.isImportDeclaration() && path.node.source.value === source,
+  );
+  if (existing) {
+    if (existing.node.specifiers.some(
+      (specifier) => t.isImportSpecifier(specifier) && t.isIdentifier(specifier.imported, { name: importName }),
+    )) {
+      return;
+    }
+    if (existing.node.specifiers.some((specifier) => t.isImportNamespaceSpecifier(specifier))) {
+      existing.insertAfter(t.importDeclaration(
+        [t.importSpecifier(t.identifier(importName), t.identifier(importName))],
+        t.stringLiteral(source),
+      ));
+      return;
+    }
+    existing.node.specifiers.push(t.importSpecifier(t.identifier(importName), t.identifier(importName)));
+    return;
+  }
+  programPath.unshiftContainer("body", t.importDeclaration(
+    [t.importSpecifier(t.identifier(importName), t.identifier(importName))],
+    t.stringLiteral(source),
+  ));
 }

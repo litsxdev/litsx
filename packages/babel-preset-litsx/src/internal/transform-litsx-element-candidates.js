@@ -34,6 +34,15 @@ const DEFAULT_MODULE_RESOLUTION_OPTIONS = {
 };
 let t;
 
+const NOSCRIPT_COMPONENT_ATTRIBUTE = "data-litsx-noscript-component";
+
+function isInsideNoscriptFallback(path) {
+  return Boolean(path.findParent((parent) =>
+    parent.isJSXElement?.() &&
+    t.isJSXIdentifier(parent.node.openingElement.name, { name: "noscript" }),
+  ));
+}
+
 export function setElementCandidatesBabelTypes(nextTypes) {
   t = nextTypes;
   setStaticIrBabelTypes(nextTypes);
@@ -1178,6 +1187,13 @@ function collectCandidateResult(functionPath, programPath, options = {}) {
       JSXOpeningElement(jsxPath) {
         const candidate = validateComponentName(jsxPath.node.name, jsxPath, scanContext);
         if (candidate) {
+          if (isInsideNoscriptFallback(jsxPath)) {
+            jsxPath.node.attributes.push(t.jsxAttribute(
+              t.jsxIdentifier(NOSCRIPT_COMPONENT_ATTRIBUTE),
+              t.jsxExpressionContainer(t.identifier(candidate)),
+            ));
+            return;
+          }
           if (moduleAnalysis.filename === context.rootFilename) {
             const directImportRequirement = resolveDirectImportRequirement(
               candidate,

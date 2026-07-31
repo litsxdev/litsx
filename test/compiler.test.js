@@ -43,6 +43,60 @@ function findPosition(text, needle) {
 }
 
 describe("@litsx/compiler", () => {
+  it("lowers dynamic noscript content through the LitSX SSR primitive", () => {
+    const result = transformLitsxSync(
+      `export const view = (title) => <main><noscript><h2>{title}</h2></noscript></main>;`,
+      { filename: "/virtual/Noscript.litsx", ssr: true, sourceMaps: false },
+    );
+
+    assert.match(result.code, /import \{ __litsxNoscript \} from "@litsx\/core"/);
+    assert.match(result.code, /<noscript data-litsx-noscript="\$\{__litsxNoscript\(\(\) => html`<h2>\$\{title\}<\/h2>`\)\}"><\/noscript>/);
+  });
+
+  it("captures authored components inside noscript fallback content without static elements", () => {
+    const result = transformLitsxSync(
+      `
+        export function Host() { return <noscript><ProductCard /></noscript>; }
+        export function ProductCard() { return <article />; }
+      `,
+      { filename: "/virtual/Noscript.litsx", ssr: true, sourceMaps: false },
+    );
+
+    assert.match(result.code, /__litsxNoscript\(\(\) => html`<product-card><\/product-card>`\, \{\s*"product-card": ProductCard\s*\}\)/);
+    assert.doesNotMatch(result.code, /static elements\s*=\s*\{[\s\S]*"product-card"/);
+  });
+
+  it("keeps noscript-only constructors out of client fallback output", () => {
+    const source = `
+      import { ProductCard } from "./ProductCard.litsx";
+      export const view = () => <noscript><ProductCard /></noscript>;
+    `;
+    const client = transformLitsxSync(source, {
+      filename: "/virtual/Noscript.litsx",
+      sourceMaps: false,
+    });
+    const server = transformLitsxSync(source, {
+      filename: "/virtual/Noscript.litsx",
+      ssr: true,
+      sourceMaps: false,
+    });
+
+    assert.match(client.code, /ProductCard\.litsx/);
+    assert.doesNotMatch(client.code, /"product-card": ProductCard/);
+    assert.match(server.code, /ProductCard\.litsx/);
+    assert.match(server.code, /"product-card": ProductCard/);
+  });
+
+  it("rejects member-expression components inside noscript fallback content", () => {
+    assert.throws(
+      () => transformLitsxSync(
+        `export const view = () => <noscript><Components.ProductCard /></noscript>;`,
+        { filename: "/virtual/Noscript.litsx", ssr: true, sourceMaps: false },
+      ),
+      /<noscript> fallback content does not support member-expression components/,
+    );
+  });
+
   it("publishes compiler runtime and declarations from dist", () => {
     assert.strictEqual(packageJson.module, "./src/index.js");
     assert.strictEqual(packageJson.types, "./src/index.d.ts");

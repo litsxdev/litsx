@@ -13,6 +13,7 @@ const LIGHT_MIXIN = "LightDomMixin";
 const ANNOTATE_HYDRATABLE_CUSTOM_ELEMENT = "annotateHydratableCustomElement";
 const RENDER_LIGHT_MODULE = "@lit-labs/ssr-client/directives/render-light.js";
 const RENDER_LIGHT_IMPORT = "renderLight";
+const NOSCRIPT_PRIMITIVE = "__litsxNoscript";
 const IMPORT_RESOLUTION_EXTENSIONS = [
   ".litsx",
   ".litsx.jsx",
@@ -572,6 +573,7 @@ function detectElementsFromClass(classPath, programPath, availableMap, precomput
 
   classPath.traverse({
     JSXOpeningElement(path) {
+      if (isInsideNoscriptFallback(path)) return;
       hasRenderableTemplate = true;
       const nameNode = path.get("name");
       if (!nameNode.isJSXIdentifier()) return;
@@ -592,6 +594,7 @@ function detectElementsFromClass(classPath, programPath, availableMap, precomput
       });
     },
     JSXClosingElement(path) {
+      if (isInsideNoscriptFallback(path)) return;
       hasRenderableTemplate = true;
       const nameNode = path.get("name");
       if (!nameNode.isJSXIdentifier()) return;
@@ -601,6 +604,7 @@ function detectElementsFromClass(classPath, programPath, availableMap, precomput
       nameNode.node.name = tagName;
     },
     TaggedTemplateExpression(path) {
+      if (isInsideNoscriptFallback(path)) return;
       if (!t.isIdentifier(path.node.tag, { name: "html" })) return;
       hasRenderableTemplate = true;
 
@@ -632,6 +636,27 @@ function detectElementsFromClass(classPath, programPath, availableMap, precomput
     elements: Array.from(used.values()),
     hasRenderableTemplate,
   };
+}
+
+// A noscript fallback is rendered by @litsx/ssr in an ephemeral scoped
+// registry. It must not become part of the host's browser registry or its
+// hydration metadata, even though its template is represented with html``.
+function isInsideNoscriptFallback(path) {
+  for (let current = path; current; current = current.parentPath) {
+    if (
+      current.isJSXElement?.() &&
+      t.isJSXIdentifier(current.node.openingElement.name, { name: "noscript" })
+    ) {
+      return true;
+    }
+    if (
+      current.isCallExpression?.() &&
+      t.isIdentifier(current.node.callee, { name: NOSCRIPT_PRIMITIVE })
+    ) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function maybeInsertSsrRenderLight(openingPath, programPath, entry, options) {

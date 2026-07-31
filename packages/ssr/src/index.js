@@ -40,6 +40,7 @@ async function loadSsrRuntime() {
     renderScopedTemplateToChunks: scopedRendering.renderScopedTemplateToChunks,
     renderScopedTemplateWithLitSsr: scopedRendering.renderScopedTemplateWithLitSsr,
     resolveTopLevelSsrValue: values.resolveTopLevelSsrValue,
+    renderNoscriptFallbacks: values.renderNoscriptFallbacks,
   }));
   return ssrRuntimePromise;
 }
@@ -763,19 +764,32 @@ async function renderResolvedValue(value, context) {
   const {
     resolveTopLevelSsrValue,
     renderScopedTemplateWithLitSsr,
+    renderNoscriptFallbacks,
   } = await loadSsrRuntime();
   const resolvedValue = await resolveTopLevelSsrValue(value, context);
-  return renderScopedTemplateWithLitSsr(resolvedValue, {
+  const rendered = await renderScopedTemplateWithLitSsr(resolvedValue, {
     litsxSsrContext: context,
   });
+  return renderNoscriptFallbacks(rendered, context);
 }
 
 async function renderResolvedValueToChunks(value, context) {
   const {
     resolveTopLevelSsrValue,
     renderScopedTemplateToChunks,
+    renderScopedTemplateWithLitSsr,
+    renderNoscriptFallbacks,
   } = await loadSsrRuntime();
   const resolvedValue = await resolveTopLevelSsrValue(value, context);
+  if ((context.noscriptFallbacks?.length ?? 0) > 0) {
+    const rendered = await renderScopedTemplateWithLitSsr(resolvedValue, {
+      litsxSsrContext: context,
+    });
+    const resolvedDocument = await renderNoscriptFallbacks(rendered, context);
+    return (async function* renderNoscriptDocument() {
+      yield resolvedDocument;
+    })();
+  }
   return renderScopedTemplateToChunks(resolvedValue, {
     litsxSsrContext: context,
   });

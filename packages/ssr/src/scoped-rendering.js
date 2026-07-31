@@ -1,5 +1,6 @@
 import { render } from "@lit-labs/ssr/lib/render-with-global-dom-shim.js";
 import { renderValue } from "@lit-labs/ssr/lib/render-value.js";
+import { isTemplateResult } from "lit/directive-helpers.js";
 import { LitElementRenderer } from "@lit-labs/ssr/lib/lit-element-renderer.js";
 import { ElementRenderer } from "@lit-labs/ssr/lib/element-renderer.js";
 import {
@@ -15,6 +16,25 @@ import { withCurrentSsrCustomElementInstanceStack } from "./ssr-state.js";
 
 const scopedRegistryStack = [];
 const scopedSsrContextStack = [];
+const noscriptFallbackRenderStack = [];
+
+function isRenderingNoscriptFallback() {
+  return noscriptFallbackRenderStack.at(-1) === true;
+}
+
+function makeRendererValueServerOnly(value) {
+  if (isTemplateResult(value)) {
+    return {
+      ...value,
+      _$litServerRenderMode: 1,
+      values: value.values.map((entry) => makeRendererValueServerOnly(entry)),
+    };
+  }
+  if (Array.isArray(value)) {
+    return value.map((entry) => makeRendererValueServerOnly(entry));
+  }
+  return value;
+}
 
 function getScopedElements(ctor) {
   return ctor?.elements ?? ctor?.scopedElements ?? null;
@@ -118,6 +138,7 @@ function createScopedRenderIterable(value, renderInfo = {}) {
     });
 
     scopedSsrContextStack.push(ssrContext);
+    noscriptFallbackRenderStack.push(renderInfo.litsxNoscriptFallback === true);
     if (isScopedTemplate) {
       scopedRegistryStack.push(value.elements);
     }
@@ -156,6 +177,7 @@ function createScopedRenderIterable(value, renderInfo = {}) {
         if (isScopedTemplate) {
           scopedRegistryStack.pop();
         }
+        noscriptFallbackRenderStack.pop();
         scopedSsrContextStack.pop();
 
         if (descriptor) {
@@ -235,6 +257,7 @@ function trySerialize(value, path) {
 }
 
 export function createScopedSsrContext(options = {}) {
+  const noscriptFallbacks = [];
   return {
     idPrefix: options.idPrefix ?? "litsx",
     assetResolver:
@@ -248,6 +271,12 @@ export function createScopedSsrContext(options = {}) {
     modulePreloads: new Set(),
     headTags: new Set(),
     adapterArtifacts: [],
+    noscriptFallbacks,
+    registerNoscriptFallback({ factory, elements = null }) {
+      const id = `litsx-noscript-${noscriptFallbacks.length}`;
+      noscriptFallbacks.push({ id, factory, elements });
+      return id;
+    },
     hydrationData: {
       version: 1,
       roots: [],
@@ -391,10 +420,15 @@ export class ScopedLitElementRenderer extends LitElementRenderer {
 
   constructor(tagName) {
     super(tagName);
+    this._litsxNoscriptFallback = isRenderingNoscriptFallback();
     ensureSsrElementShape(this.element);
     this.element.constructor.finalize?.();
+    if (this._litsxNoscriptFallback) {
+      const render = this.element.render.bind(this.element);
+      this.element.render = () => makeRendererValueServerOnly(render());
+    }
     const context = scopedSsrContextStack.at(-1) ?? createScopedSsrContext();
-    const isHydrationRoot = scopedRegistryStack.length === 1;
+    const isHydrationRoot = !isRenderingNoscriptFallback() && scopedRegistryStack.length === 1;
     const rootId = isHydrationRoot ? context.nextRootId() : null;
     const moduleId = this.element.constructor?.[LITSX_MODULE_ID] ?? null;
 
@@ -405,7 +439,9 @@ export class ScopedLitElementRenderer extends LitElementRenderer {
       currentInstanceId: context.nextInstanceId(),
       rootId,
     };
-    context.collectClientImport(this.element.constructor);
+    if (!isRenderingNoscriptFallback()) {
+      context.collectClientImport(this.element.constructor);
+    }
 
     if (rootId) {
       this.element.setAttribute("data-litsx-root", rootId);
@@ -450,6 +486,23 @@ export class ScopedLitElementRenderer extends LitElementRenderer {
       return undefined;
     }
 
+    if (this._litsxNoscriptFallback) {
+      const result = [];
+      const styles = this.element.constructor.elementStyles;
+      if (Array.isArray(styles) && styles.length > 0) {
+        result.push("<style>");
+        for (const style of styles) {
+          result.push(style.cssText);
+        }
+        result.push("</style>");
+      }
+      result.push(() => renderValue(
+        makeRendererValueServerOnly(this.element.render()),
+        renderInfo,
+      ));
+      return result;
+    }
+
     const elements = getScopedElements(this.element?.constructor);
 
     if (!elements || Object.keys(elements).length === 0) {
@@ -476,7 +529,12 @@ export class ScopedLitElementRenderer extends LitElementRenderer {
     const render = () =>
       withRendererSsrSuspenseCapture(
         this.element?._contentSuspenseCapture ?? null,
-        () => renderValue(this.element.render(), renderInfo)
+        () => renderValue(
+          this._litsxNoscriptFallback
+            ? makeRendererValueServerOnly(this.element.render())
+            : this.element.render(),
+          renderInfo,
+        )
       );
 
     if (!elements || Object.keys(elements).length === 0) {
@@ -506,11 +564,12 @@ class ScopedHydratableElementRenderer extends ElementRenderer {
 
   constructor(tagName) {
     super(tagName);
+    this._litsxNoscriptFallback = isRenderingNoscriptFallback();
     const ctor = customElements.get(tagName);
     this.element = ctor ? new ctor() : this.element;
     ensureSsrElementShape(this.element);
     const context = scopedSsrContextStack.at(-1) ?? createScopedSsrContext();
-    const isHydrationRoot = scopedRegistryStack.length === 1;
+    const isHydrationRoot = !isRenderingNoscriptFallback() && scopedRegistryStack.length === 1;
     const rootId = isHydrationRoot ? context.nextRootId() : null;
     const moduleId = this.element.constructor?.[LITSX_MODULE_ID] ?? null;
 
@@ -521,7 +580,9 @@ class ScopedHydratableElementRenderer extends ElementRenderer {
       currentInstanceId: context.nextInstanceId(),
       rootId,
     };
-    context.collectClientImport(this.element.constructor);
+    if (!isRenderingNoscriptFallback()) {
+      context.collectClientImport(this.element.constructor);
+    }
 
     if (rootId) {
       this.element.setAttribute("data-litsx-root", rootId);

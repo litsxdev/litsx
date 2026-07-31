@@ -179,6 +179,42 @@ result.renderClientImports();
 result.renderModulePreloads();
 ```
 
+## Dynamic `<noscript>` fallback content
+
+LitSX supports dynamic JSX inside the native `<noscript>` intrinsic during SSR:
+
+```tsx
+<noscript>
+  <section>
+    <h2>{title}</h2>
+    {items.map((item) => <a href={item.href}>{item.label}</a>)}
+  </section>
+</noscript>
+```
+
+The compiler lowers this intrinsic to an internal, lazy fallback primitive.
+`@litsx/ssr` renders that fallback with normal Lit escaping but as a
+server-only subtree: it has no hydration markers, client metadata, or updates.
+With JavaScript enabled the browser keeps native `<noscript>` behavior; with
+JavaScript disabled it parses and displays the SSR fallback HTML.
+
+Fallback trees support native HTML, text, attributes, arrays, conditionals, and
+direct LitSX components. A component used directly in the fallback is resolved
+through an ephemeral SSR-only scoped registry: it does not need to appear in
+the parent host's `static elements`, is never globally registered, and does
+not enter hydration metadata. Its declarative shadow DOM can therefore be
+available to browsers that parse DSD with JavaScript disabled. Member-expression
+components are rejected because the compiler cannot assign them a stable
+fallback tag/constructor pair.
+
+On the client the fallback does not retain a constructor reference. LitSX does
+not remove the source import automatically, because doing so could change ESM
+side-effect semantics. A bundler may still tree-shake it when it can prove the
+module is side-effect free.
+
+This is intentionally not implemented by changing parse5's global scripting
+mode, and it does not use `unsafeHTML` or unescaped user content.
+
 `renderToString(...)` returns:
 
 - `html`: prerendered HTML, including Declarative Shadow DOM for LitSX elements
