@@ -5,6 +5,7 @@ export type LitsxConstructor<TInstance = object> = abstract new (
 export declare const LITSX_COMPONENT: unique symbol;
 export declare const LITSX_HOST_TYPE_ID: unique symbol;
 export declare const LITSX_HYDRATABLE_TAG: unique symbol;
+export declare const LITSX_HOT_ELEMENT_REGISTRY: unique symbol;
 export declare const LITSX_SCOPED_TEMPLATE: unique symbol;
 export declare const LITSX_MODULE_ID: unique symbol;
 export declare const LITSX_SSR_CONTEXT: unique symbol;
