@@ -59,16 +59,12 @@ export declare const LITSX_HYDRATION_PAYLOAD_PROPERTY: "__litsxHydrationPayload"
 export type HydrationModuleNamespace = Record<string, unknown>;
 export type HydrationModuleLoader = () => Promise<HydrationModuleNamespace>;
 export type HydrationModuleExport = CustomElementConstructor;
-export interface HydrationRegistrationOptions {
-  hot?: boolean | undefined;
-}
 
 /**
  * Register every hydratable custom element exported by one module namespace.
  */
 export declare function registerHydrationModule(
   moduleNamespace: HydrationModuleNamespace,
-  options?: HydrationRegistrationOptions,
 ): void;
 
 /**
@@ -77,7 +73,6 @@ export declare function registerHydrationModule(
  */
 export declare function registerHydrationModules(
   modules: Array<HydrationModuleNamespace | HydrationModuleLoader>,
-  options?: HydrationRegistrationOptions,
 ): Promise<void>;
 
 /**
