@@ -554,6 +554,17 @@ function transformFunction(functionPath, programPath, className, options = {}) {
 }
 
 function collectNoscriptOnlyElementCandidates(functionPath) {
+  const source = functionPath.hub?.file?.code;
+  const { start, end } = functionPath.node || {};
+  if (
+    typeof source === "string" &&
+    Number.isInteger(start) &&
+    Number.isInteger(end) &&
+    !/<\s*noscript\b/.test(source.slice(start, end))
+  ) {
+    return new Set();
+  }
+
   const nested = new Set();
   const regular = new Set();
 
