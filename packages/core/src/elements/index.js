@@ -18,6 +18,7 @@ export const LITSX_SSR_CONTEXT = Symbol.for("litsx.ssrContext");
 export const LITSX_SERVER_COMPONENT = Symbol.for("litsx.serverComponent");
 export const LITSX_SERVER_COMPONENT_CALL = Symbol.for("litsx.serverComponentCall");
 export const LITSX_LIGHT_DOM = Symbol.for("litsx.lightDom");
+export const LITSX_HOT_ELEMENT_REGISTRY = Symbol.for("litsx.hotElementRegistry");
 let shadowDomRegistryAttachKey;
 let shadowDomRegistryAttachShadowRef;
 let shadowDomRegistryCtorRef;
@@ -262,18 +263,20 @@ function defineScopedElements(registry, elements = {}) {
       continue;
     }
 
+    const hotElementClass = globalThis[LITSX_HOT_ELEMENT_REGISTRY]?.get?.(tagName)?.proxy
+      ?? elementClass;
     const existing = registry.get?.(tagName);
-    if (existing === elementClass) {
+    if (existing === hotElementClass) {
       continue;
     }
 
-    if (existing && existing !== elementClass) {
+    if (existing && existing !== hotElementClass) {
       throw new Error(
         `ShadowDomMixin cannot redefine scoped element "${tagName}" with a different constructor.`
       );
     }
 
-    registry.define(tagName, elementClass);
+    registry.define(tagName, hotElementClass);
   }
 
   return registry;

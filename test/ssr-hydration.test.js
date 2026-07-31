@@ -11,6 +11,7 @@ describe("@litsx/ssr/hydration", () => {
     vi.resetModules();
     delete globalThis.document;
     delete globalThis.customElements;
+    delete globalThis[Symbol.for("litsx.hotElementRegistry")];
   });
 
   function createCustomElementsRegistry() {
@@ -160,6 +161,30 @@ describe("@litsx/ssr/hydration", () => {
       () => registerHydrationModule({ ProductCardB }),
       /Cannot register LitSX hydration element "product-card" with a different constructor/,
     );
+  });
+
+  it("keeps one registered proxy while replacing a hydratable implementation", async () => {
+    const { registerHydrationModule } = await import("../packages/ssr/src/hydration.js");
+    const registry = createCustomElementsRegistry();
+    globalThis.customElements = registry;
+    class ProductCardA {
+      render() { return "first"; }
+    }
+    ProductCardA[LITSX_HYDRATABLE_TAG] = "product-card";
+    class ProductCardB {
+      render() { return "second"; }
+    }
+    ProductCardB[LITSX_HYDRATABLE_TAG] = "product-card";
+
+    registerHydrationModule({ ProductCardA }, { hot: true });
+    const proxy = registry.get("product-card");
+    const instance = new proxy();
+    registerHydrationModule({ ProductCardB }, { hot: true });
+
+    assert.strictEqual(registry.get("product-card"), proxy);
+    assert.strictEqual(registry.define.mock.calls.length, 1);
+    assert.strictEqual(instance.render(), "second");
+    assert.strictEqual(new proxy().render(), "second");
   });
 
   it("ignores modules without hydratable exports", async () => {
