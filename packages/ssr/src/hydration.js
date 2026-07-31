@@ -3,7 +3,6 @@ import {
   isCustomElementClass,
   isHydratableCustomElementClass,
   LITSX_HYDRATABLE_TAG,
-  LITSX_HOT_ELEMENT_REGISTRY,
 } from "@litsx/core/elements";
 
 function normalizeClientImports(value) {
@@ -48,46 +47,7 @@ function isRegistrableHydrationExport(value) {
   return isHydratableCustomElementClass(value);
 }
 
-function getHotElementRegistry() {
-  return globalThis[LITSX_HOT_ELEMENT_REGISTRY] ??= new Map();
-}
-
-function refreshHotElementInstances(tagName, proxy) {
-  const roots = [globalThis.document].filter(Boolean);
-  const seen = new Set();
-  while (roots.length > 0) {
-    const root = roots.shift();
-    if (!root || seen.has(root)) continue;
-    seen.add(root);
-    for (const element of root.querySelectorAll?.(tagName) ?? []) {
-      if (element instanceof proxy) element.requestUpdate?.();
-    }
-    for (const element of root.querySelectorAll?.("*") ?? []) {
-      if (element.shadowRoot) roots.push(element.shadowRoot);
-    }
-  }
-}
-
-function updateHotElement(record, ctor) {
-  record.implementation = ctor;
-  Object.setPrototypeOf(record.proxy.prototype, ctor.prototype);
-  Object.setPrototypeOf(record.proxy, ctor);
-  // Lit caches finalized properties and styles on the registered constructor.
-  // Re-finalize the stable proxy against the replacement implementation.
-  record.proxy.finalized = false;
-  record.proxy.finalize?.();
-  refreshHotElementInstances(record.tagName, record.proxy);
-  return record.proxy;
-}
-
-function createHotElementProxy(tagName, ctor) {
-  class LitsxHotElementProxy extends ctor {}
-  const record = { tagName, proxy: LitsxHotElementProxy, implementation: ctor };
-  getHotElementRegistry().set(tagName, record);
-  return record;
-}
-
-function registerHydratableElement(ctor, options = {}) {
+function registerHydratableElement(ctor) {
   if (!isCustomElementClass(ctor)) {
     throw new TypeError("Hydration registration requires a custom element constructor.");
   }
@@ -102,23 +62,6 @@ function registerHydratableElement(ctor, options = {}) {
   }
 
   const existing = registry.get?.(tagName) ?? null;
-  if (options.hot === true) {
-    const hotElements = getHotElementRegistry();
-    const record = hotElements.get(tagName);
-    if (record) {
-      updateHotElement(record, ctor);
-      return record.proxy;
-    }
-    if (existing && existing !== ctor) {
-      const adopted = { tagName, proxy: existing, implementation: existing };
-      hotElements.set(tagName, adopted);
-      updateHotElement(adopted, ctor);
-      return existing;
-    }
-    const created = createHotElementProxy(tagName, ctor);
-    registry.define(tagName, created.proxy);
-    return created.proxy;
-  }
   if (existing === ctor) {
     return;
   }
@@ -483,9 +426,9 @@ export function resolveHydrationRoot(
  * This only inspects module exports and the global custom element registry.
  * It does not touch the DOM, read hydration payloads, or trigger hydration.
  */
-export function registerHydrationModule(moduleNamespace, options = {}) {
+export function registerHydrationModule(moduleNamespace) {
   for (const ctor of collectHydratableModuleExports(moduleNamespace)) {
-    registerHydratableElement(ctor, options);
+    registerHydratableElement(ctor);
   }
 }
 
@@ -493,11 +436,11 @@ export function registerHydrationModule(moduleNamespace, options = {}) {
  * Resolve module namespaces or async module loaders, then register every
  * hydratable LitSX custom element they export.
  */
-export async function registerHydrationModules(modules, options = {}) {
+export async function registerHydrationModules(modules) {
   const entries = Array.isArray(modules) ? modules : [];
   for (const entry of entries) {
     const moduleNamespace = typeof entry === "function" ? await entry() : entry;
-    registerHydrationModule(moduleNamespace, options);
+    registerHydrationModule(moduleNamespace);
   }
 }
 
