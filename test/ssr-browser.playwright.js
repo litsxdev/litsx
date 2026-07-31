@@ -3,12 +3,115 @@ import path from "node:path";
 import { expect, test } from "@playwright/test";
 import { createSsrDevServer } from "../packages/ssr/src/index.js";
 import { LITSX_HYDRATION_PAYLOAD_PROPERTY } from "../packages/ssr/src/hydration.js";
+import { __litsxNoscript } from "../packages/core/src/index.js";
+import { html } from "lit";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 
 function viteFsSpecifier(filePath) {
   return `/@fs/${filePath}`;
 }
+
+test("keeps dynamic noscript fallback markup inert with JavaScript and usable without it", async ({ browser, page }) => {
+  const server = await createSsrDevServer({
+    root: repoRoot,
+    logLevel: "silent",
+    host: "127.0.0.1",
+    strictPort: false,
+    render({ html: serverHtml }) {
+      const title = "No JavaScript fallback";
+      return serverHtml`<main><noscript data-litsx-noscript=${__litsxNoscript(() => html`
+        <section id="noscript-fallback"><h2>${title}</h2><a href="/browse">Browse</a></section>
+      `)}></noscript></main>`;
+    },
+  });
+  await server.listen();
+
+  try {
+    const url = server.resolvedUrls.local[0];
+    const consoleErrors = [];
+    page.on("console", (message) => {
+      if (message.type() === "error") consoleErrors.push(message.text());
+    });
+    await page.goto(url);
+    await expect(page.locator("#noscript-fallback")).toHaveCount(0);
+    expect(consoleErrors).toEqual([]);
+
+    const noScriptContext = await browser.newContext({ javaScriptEnabled: false });
+    const noScriptPage = await noScriptContext.newPage();
+    await noScriptPage.goto(url);
+    await expect(noScriptPage.locator("#noscript-fallback")).toHaveText("No JavaScript fallbackBrowse");
+    await expect(noScriptPage.locator("#noscript-fallback a")).toHaveAttribute("href", "/browse");
+    await noScriptContext.close();
+  } finally {
+    await server.close();
+  }
+});
+
+test("hydrates a compiled LitSX host containing a dynamic noscript fallback without errors", async ({ page }) => {
+  const tempRoot = path.join(repoRoot, "test-results");
+  await fs.mkdir(tempRoot, { recursive: true });
+  const tempDir = await fs.mkdtemp(path.join(tempRoot, "litsx-ssr-noscript-hydration-"));
+  const srcDir = path.join(tempDir, "src");
+  await fs.mkdir(srcDir, { recursive: true });
+  await fs.writeFile(path.join(srcDir, "noscript-host.litsx"), `
+export function NoscriptHost() {
+  const title = "Hydrated fallback";
+  return <main><noscript><NoscriptCard .title={title} /></noscript><p id="live-content">Live content</p></main>;
+}
+
+export function NoscriptCard({ title }) {
+  return <section id="noscript-fallback"><h2>{title}</h2></section>;
+}
+
+export function defineNoscriptHost() {
+  if (!customElements.get("noscript-host")) {
+    customElements.define("noscript-host", NoscriptHost);
+  }
+}
+`);
+  await fs.writeFile(path.join(srcDir, "main.js"), `
+import { defineNoscriptHost } from "./noscript-host.litsx";
+defineNoscriptHost();
+`);
+  const server = await createSsrDevServer({
+    root: tempDir,
+    clientEntry: "./src/main.js",
+    logLevel: "silent",
+    host: "127.0.0.1",
+    strictPort: false,
+    elements(loader) {
+      return {
+        "noscript-host": async () => (await loader("./src/noscript-host.litsx")).NoscriptHost,
+      };
+    },
+    render({ html: serverHtml }) {
+      return serverHtml`<noscript-host></noscript-host>`;
+    },
+  });
+  await server.listen();
+
+  try {
+    const consoleErrors = [];
+    page.on("console", (message) => {
+      if (message.type() === "error") consoleErrors.push(message.text());
+    });
+    await page.goto(server.resolvedUrls.local[0]);
+    await page.waitForFunction(() => customElements.get("noscript-host") !== undefined);
+    const result = await page.evaluate(() => {
+      const root = document.querySelector("noscript-host")?.shadowRoot;
+      return {
+        fallbackElementCount: root?.querySelectorAll("#noscript-fallback").length ?? 0,
+        liveText: root?.querySelector("#live-content")?.textContent ?? "",
+      };
+    });
+    expect(consoleErrors).toEqual([]);
+    expect(result.fallbackElementCount).toBe(0);
+    expect(result.liveText).toBe("Live content");
+  } finally {
+    await server.close();
+  }
+});
 
 function createComponentsSource() {
   return `

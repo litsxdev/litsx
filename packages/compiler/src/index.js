@@ -647,9 +647,13 @@ export function createLitsxTransformConfig(source, options = {}) {
 
   const finalTemplatePlugins = shouldRunFinalTemplatePass
     ? [
-        ...(options.jsxTemplateOptions && Object.keys(options.jsxTemplateOptions).length > 0
-          ? [[transformJsxHtmlTemplate, options.jsxTemplateOptions]]
-          : [transformJsxHtmlTemplate]),
+        [
+          transformJsxHtmlTemplate,
+          {
+            ssr: options.ssr === true,
+            ...(options.jsxTemplateOptions || {}),
+          },
+        ],
         ...outputPlugins,
         ...(shouldStripTypescriptSyntax(filename)
           ? [[transformTypescript, { isTSX: true, allowDeclareFields: true }]]

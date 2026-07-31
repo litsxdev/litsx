@@ -159,6 +159,46 @@ describe("@litsx/typescript", () => {
     );
   }, 30000);
 
+  it("accepts Lit template results and directives as JSX children", () => {
+    const fixture = createTypecheckProjectFixture({
+      prefix: "litsx-typecheck-lit-renderables-",
+      linksNodeModules: true,
+      compilerOptions: {
+        jsx: "react-jsx",
+        jsxImportSource: "@litsx/core",
+        module: "ESNext",
+        moduleResolution: "Bundler",
+        target: "ESNext",
+        noEmit: true,
+        strict: true,
+        skipLibCheck: false,
+      },
+      include: ["index.tsx"],
+      files: {
+        "index.tsx": `
+          import { html } from "lit";
+          import { unsafeHTML } from "lit/directives/unsafe-html.js";
+          import { when } from "lit/directives/when.js";
+          import type { LitsxRenderable } from "@litsx/core";
+
+          const template: LitsxRenderable = html\`<p>template</p>\`;
+          const rawHtml: LitsxRenderable = unsafeHTML("<p>sanitized</p>");
+          const conditional: LitsxRenderable = when(true, () => html\`<span>conditional</span>\`);
+
+          export function Content() {
+            return <div>{template}{rawHtml}{conditional}</div>;
+          }
+        `,
+      },
+    });
+
+    try {
+      assert.equal(runTypecheckFixture(fixture), 0);
+    } finally {
+      fixture.cleanup();
+    }
+  }, 30000);
+
   it("allows arbitrary attributes only on custom element intrinsic tags", () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-intrinsic-custom-attrs-"));
     const filePath = path.join(tempDir, "index.tsx");

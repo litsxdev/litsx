@@ -36,6 +36,7 @@ const DANGEROUS_OBJECT_KEYS = new Set([
   "constructor",
   "prototype",
 ]);
+const NOSCRIPT_COMPONENT_ATTRIBUTE = "data-litsx-noscript-component";
 
 export function setTemplateTypes(types) {
   t = types;
@@ -265,6 +266,71 @@ function isVoidHtmlTagName(name) {
   return VOID_HTML_TAGS.has(String(name).toLowerCase());
 }
 
+function isNoscriptElement(node) {
+  return t.isJSXIdentifier(node?.openingElement?.name, { name: "noscript" });
+}
+
+function collectNoscriptScopedElements(node) {
+  const elements = new Map();
+
+  function visit(current) {
+    if (!current || typeof current !== "object") {
+      return;
+    }
+
+    if (t.isJSXElement(current)) {
+      const { name, isComponent, isAuthoredComponentTag } = getTag(current.openingElement);
+      if (isComponent) {
+        throw new Error(
+          "LitSX <noscript> fallback content does not support member-expression components.",
+        );
+      }
+      if (isAuthoredComponentTag) {
+        elements.set(name, createComponentCallee(current.openingElement.name));
+      }
+      const metadata = current.openingElement.attributes.find((attribute) =>
+        attribute.type === "JSXAttribute" && attribute.name.name === NOSCRIPT_COMPONENT_ATTRIBUTE,
+      );
+      if (metadata?.value?.type === "JSXExpressionContainer") {
+        elements.set(name, metadata.value.expression);
+      }
+    }
+
+    const visitorKeys = t.VISITOR_KEYS?.[current.type] ?? [];
+    for (const key of visitorKeys) {
+      const value = current[key];
+      if (Array.isArray(value)) {
+        value.forEach(visit);
+      } else {
+        visit(value);
+      }
+    }
+  }
+
+  node.children.forEach(visit);
+  return elements;
+}
+
+function createNoscriptFallback(node, opts) {
+  const elements = collectNoscriptScopedElements(node);
+  opts.__litsxNeedsNoscriptRuntime = true;
+  const children = t.jsxFragment(
+    t.jsxOpeningFragment(),
+    t.jsxClosingFragment(),
+    node.children,
+  );
+  const fallbackTemplate = createTaggedTemplate(children, opts, "html");
+  const args = [t.arrowFunctionExpression([], fallbackTemplate)];
+  if (opts.ssr === true && elements.size > 0) {
+    args.push(t.objectExpression(
+      [...elements].map(([tagName, ctor]) =>
+        t.objectProperty(t.stringLiteral(tagName), ctor),
+      ),
+    ));
+  }
+  return t.callExpression(t.identifier("__litsxNoscript"), args);
+}
+
 function createComponent(node, opts = {}) {
   const attributes = t.objectExpression(
     node.openingElement.attributes.map((attr) => {
@@ -359,11 +425,16 @@ const transforms = {
       return;
     }
 
+    const isNoscript = isNoscriptElement(node);
     addString(strings, keys, `<${name}`, node.openingElement, node.openingElement.name);
 
     node.openingElement.attributes.forEach((attr) => {
       if (attr.type === "JSXSpreadAttribute") {
         throw new Error("JSXSpreadAttribute is not supported");
+      }
+
+        if (attr.name.name === NOSCRIPT_COMPONENT_ATTRIBUTE) {
+        return;
       }
 
       const rawName = decodeVirtualAttributeName(attr.name.name) ?? attr.name.name;
@@ -413,6 +484,12 @@ const transforms = {
       }
     });
 
+    if (isNoscript) {
+      addString(strings, keys, ' data-litsx-noscript="', node.openingElement);
+      addKey(strings, keys, createNoscriptFallback(node, opts));
+      addString(strings, keys, '"', node.openingElement);
+    }
+
     addString(strings, keys, ">", node.openingElement);
 
     if (node.openingElement.selfClosing) {
@@ -424,7 +501,13 @@ const transforms = {
       return;
     }
 
-    node.children.forEach((child) => transforms[child.type]({ node: child, strings, keys }, opts));
+    if (isNoscript) {
+      // parse5 intentionally treats <noscript> contents as raw text while
+      // compiling hydratable Lit templates. Keep dynamic fallback content out
+      // of that template and hand it to the SSR-only primitive instead.
+    } else {
+      node.children.forEach((child) => transforms[child.type]({ node: child, strings, keys }, opts));
+    }
 
     if (!node.closingElement) return;
     addString(strings, keys, `</${stringifyJsxName(node.closingElement.name)}>`, node.closingElement);

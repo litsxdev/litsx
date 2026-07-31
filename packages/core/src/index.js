@@ -17,6 +17,10 @@ export {
   renderWithSoftSuspense,
 } from "./runtime-suspense.js";
 export {
+  __getLitsxNoscriptFactory,
+  __litsxNoscript,
+} from "./noscript.js";
+export {
   createExecutionContextKey,
   getCurrentExecutionContext,
 } from "./execution-context.js";

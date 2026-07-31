@@ -1,4 +1,5 @@
-import type { LitElement, ReactiveElement } from "lit";
+import type { LitElement, ReactiveElement, TemplateResult } from "lit";
+import type { DirectiveResult } from "lit/directive.js";
 
 export interface LitsxJsxNode {
   $$typeof: symbol;
@@ -11,6 +12,8 @@ export interface LitsxJsxNode {
 
 export type LitsxRenderable =
   | LitsxJsxNode
+  | TemplateResult
+  | DirectiveResult
   | string
   | number
   | boolean
@@ -48,6 +51,17 @@ export declare function isLitsxHook(value: unknown): value is LitsxHook;
 export declare function isLitsxComponentClass(
   value: unknown
 ): value is LitsxComponentStatic;
+
+/** @internal Compiler/runtime bridge for dynamic <noscript> fallback markup. */
+export declare function __litsxNoscript(
+  factory: () => unknown,
+  elements?: Record<string, unknown> | null,
+): unknown;
+/** @internal SSR-only accessor for __litsxNoscript records. */
+export declare function __getLitsxNoscriptFactory(value: unknown): {
+  factory: () => unknown;
+  elements: Record<string, unknown> | null;
+} | null;
 
 export interface LitsxBaseAttributes {
   key?: string | number;

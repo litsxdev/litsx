@@ -40,6 +40,7 @@ import {
   renderWithSoftSuspense,
   SuspenseBoundary,
   SuspenseList,
+  __litsxNoscript,
 } from "../packages/core/src/index.js";
 
 function createDeferred() {
@@ -53,6 +54,69 @@ function createDeferred() {
 }
 
 describe("@litsx/ssr", () => {
+  it("renders dynamic LitSX noscript fallbacks without hydration markers", async () => {
+    const title = `<fallback & title>`;
+    const url = `/?q=<unsafe>&x="quoted"`;
+    const items = [
+      { href: url, label: "First & <one>" },
+      { href: "/second", label: "Second" },
+    ];
+    const result = await renderToString(html`
+      <main>
+        <noscript data-litsx-noscript=${__litsxNoscript(() => html`
+          <section data-title=${title}>
+            <h2>${title}</h2>
+            ${items.map((item) => html`<a href=${item.href}>${item.label}</a>`)}
+            ${items.length > 1 ? html`<p>More than one</p>` : null}
+          </section>
+        `)}></noscript>
+      </main>
+    `);
+
+    assert.match(result.html, /<noscript>\s*<section data-title="&lt;fallback &amp; title&gt;">/);
+    assert.match(result.html, /<h2>&lt;fallback &amp; title&gt;<\/h2>/);
+    assert.match(result.html, /href="\/\?q=&lt;unsafe&gt;&amp;x=&quot;quoted&quot;"/);
+    assert.match(result.html, /First &amp; &lt;one&gt;/);
+    assert.match(result.html, /<p>More than one<\/p>/);
+    assert.doesNotMatch(result.html, /data-litsx-noscript/);
+    const noscriptContents = result.html.match(/<noscript>([\s\S]*?)<\/noscript>/)?.[1] ?? "";
+    assert.doesNotMatch(noscriptContents, /lit-part|lit-node|data-litsx-root/);
+  });
+
+  it("renders dynamic noscript fallbacks through the streaming SSR API", async () => {
+    const streamed = await renderToStream(html`<noscript data-litsx-noscript=${__litsxNoscript(() => html`<p>${"streamed"}</p>`)}></noscript>`);
+    const reader = streamed.stream.getReader();
+    let htmlOutput = "";
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      htmlOutput += value;
+    }
+
+    assert.match(htmlOutput, /<noscript><p>streamed<\/p><\/noscript>/);
+    const noscriptContents = htmlOutput.match(/<noscript>([\s\S]*?)<\/noscript>/)?.[1] ?? "";
+    assert.doesNotMatch(noscriptContents, /lit-part/);
+  });
+
+  it("renders LitSX elements in noscript fallback content through an SSR-only scoped registry", async () => {
+    class NoscriptCard extends LitElement {
+      static [LITSX_MODULE_ID] = "/src/NoscriptCard.litsx";
+
+      render() {
+        return html`<section id="noscript-card">SSR card</section>`;
+      }
+    }
+
+    const result = await renderToString(html`<noscript data-litsx-noscript=${__litsxNoscript(
+      () => html`<noscript-card></noscript-card>`,
+      { "noscript-card": NoscriptCard },
+    )}></noscript>`);
+
+    assert.match(result.html, /<noscript><noscript-card><template shadowroot="open" shadowrootmode="open"><section id="noscript-card">SSR card<\/section><\/template><\/noscript-card><\/noscript>/);
+    assert.doesNotMatch(result.html, /data-litsx-root|\/src\/NoscriptCard\.litsx/);
+    assert.deepStrictEqual(result.clientImports, []);
+  });
+
   it("surfaces SSR console output and render errors in the dev-server response", async () => {
     let shouldFail = false;
     const server = await createSsrDevServer({

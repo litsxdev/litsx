@@ -308,11 +308,13 @@ export function createLitsxPresetPlugins(options = {}, sourceFeatures = null) {
   ]);
 
   if (options.jsxTemplate !== false) {
-    if (options.jsxTemplateOptions && Object.keys(options.jsxTemplateOptions).length > 0) {
-      plugins.push([transformJsxHtmlTemplate, options.jsxTemplateOptions]);
-    } else {
-      plugins.push(transformJsxHtmlTemplate);
-    }
+    plugins.push([
+      transformJsxHtmlTemplate,
+      {
+        ...normalizedTransformOptions,
+        ...(options.jsxTemplateOptions || {}),
+      },
+    ]);
   }
 
   return plugins;
