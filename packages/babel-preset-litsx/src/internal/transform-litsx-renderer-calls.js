@@ -67,6 +67,15 @@ export function transformJSXRendererCalls(jsxPath, bindings, state = null) {
 
   jsxPath.traverse({
     JSXExpressionContainer(expressionPath) {
+      // RendererCallDirective is a child-part directive. Calls used to
+      // compute an attribute/property/event binding must remain ordinary
+      // JavaScript values; lowering them here places the directive itself in
+      // a Lit AttributePart and makes SSR reject it before the child element
+      // can receive the property.
+      if (expressionPath.parentPath?.isJSXAttribute?.()) {
+        return;
+      }
+
       if (!t.isCallExpression(expressionPath.node.expression)) {
         return;
       }

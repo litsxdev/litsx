@@ -1539,6 +1539,73 @@ describe("@litsx/ssr", () => {
     });
   });
 
+  it("renders nested scoped elements with arrays, objects, and callback property bindings", async () => {
+    class PropertyLeaf extends LitElement {
+      static [LITSX_MODULE_ID] = "/src/PropertyLeaf.litsx";
+      static properties = {
+        items: { attribute: false },
+        config: { attribute: false },
+        onNavigate: { attribute: false },
+      };
+
+      render() {
+        return html`<button data-page-size=${this.config.pageSize}>${this.items
+          .map((item) => item.label)
+          .join(",")}:${typeof this.onNavigate}</button>`;
+      }
+    }
+
+    class PropertyParent extends LitElement {
+      static [LITSX_MODULE_ID] = "/src/PropertyParent.litsx";
+      static elements = { "property-leaf": PropertyLeaf };
+      static properties = {
+        items: { attribute: false },
+        config: { attribute: false },
+      };
+
+      render() {
+        const onNavigate = () => {};
+        return html`
+          <property-leaf
+            .items=${this.items}
+            .config=${this.config}
+            .onNavigate=${onNavigate}
+          ></property-leaf>
+        `;
+      }
+    }
+
+    async function PropertyPage() {
+      return __litsxScopedTemplate(
+        html`
+          <property-parent
+            .items=${[{ id: "one", label: "First" }]}
+            .config=${{ pageSize: 24 }}
+          ></property-parent>
+        `,
+        { "property-parent": PropertyParent },
+      );
+    }
+
+    const result = await renderToString(__litsxServerComponentCall(PropertyPage, {}));
+
+    assert.match(result.html, /<property-parent\b[^>]*data-litsx-root="litsx-root-0"/);
+    assert.match(result.html, /<property-leaf\b/);
+    assert.match(result.html, /data-page-size="24"/);
+    assert.match(result.html, /First[\s\S]*function/);
+    assert.deepStrictEqual(result.clientImports, [
+      "/src/PropertyParent.litsx",
+      "/src/PropertyLeaf.litsx",
+    ]);
+    assert.deepStrictEqual(
+      result.hydrationData.payload.roots["litsx-root-0"].props,
+      {
+        items: [{ id: "one", label: "First" }],
+        config: { pageSize: 24 },
+      },
+    );
+  });
+
   it("rejects server components projected through Lit renderer props during SSR", async () => {
     class ActionChip extends LitElement {
       static [LITSX_MODULE_ID] = "/src/ActionChip.litsx";
