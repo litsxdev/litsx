@@ -705,6 +705,12 @@ remain valid because `payload.resources` is optional. This API is intended for
 library runtimes; applications should not add adapters or manual bootstrap
 registration for it.
 
+Frameworks applying incremental SSR fragments can call the public
+`prepareHydrationResources(hydrationData)` helper before inserting the fragment
+or registering its modules. It installs the same opaque resource payload used
+internally by `hydrate()`, `hydratePage()`, and `hydrateRoot()`; framework code
+must not inspect the individual resource values or recreate the bridge.
+
 ### Module Registration
 
 `@litsx/ssr/hydration` also exposes a small registration primitive for

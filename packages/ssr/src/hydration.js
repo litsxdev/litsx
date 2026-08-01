@@ -34,7 +34,11 @@ function createResourceSnapshotBridge() {
   };
 }
 
-function prepareHydrationResources(hydrationData) {
+/**
+ * Make opaque SSR resource snapshots available to library hooks before a
+ * delta fragment or its hydratable modules are applied.
+ */
+export function prepareHydrationResources(hydrationData) {
   const resources = normalizeHydrationPayload(hydrationData).resources ?? null;
   let bridge = globalThis[SSR_RESOURCE_SNAPSHOT_BRIDGE];
   if (
