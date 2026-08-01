@@ -411,6 +411,30 @@ describe("@litsx/compiler", () => {
     assert.match(consumerResult.code, /const hostTypeId = useDemoType\(this\);/);
   }, 20000);
 
+  it("threads host through useSsrResourceSnapshot while preserving its authored API", () => {
+    const source = [
+      'import { useSsrResourceSnapshot } from "@litsx/core";',
+      "export function ResourceCard() {",
+      "  useSsrResourceSnapshot({",
+      '    key: "library:i18n",',
+      "    capture: () => ({ title: \"SSR title\" }),",
+      "    restore: (snapshot) => void snapshot,",
+      "  });",
+      '  return <div>Resource</div>;',
+      "}",
+    ].join("\n");
+
+    const result = transformLitsxSync(source, {
+      filename: "/virtual/resource-card.litsx",
+      jsxTemplate: false,
+    });
+
+    assert.match(
+      result.code,
+      /useSsrResourceSnapshot\(this, \{\s*key: "library:i18n",/,
+    );
+  }, 20000);
+
   it("threads host through imported custom hooks that call LitSX runtime hooks", () => {
     const hookSource = [
       'import { useExternalStore, useMemoValue, useStableId } from "@litsx/core";',

@@ -321,6 +321,41 @@ describe("@litsx/ssr/hydration", () => {
     assert.deepStrictEqual(restored, [{ locale: "es" }]);
   });
 
+  it("accepts both the authored and compiler-injected resource snapshot ABI", async () => {
+    const { prepareHydrationResources } = await import("../packages/ssr/src/hydration.js");
+    const restored = [];
+
+    prepareHydrationResources({
+      version: 1,
+      roots: [],
+      payload: {
+        roots: {},
+        instances: {},
+        resources: {
+          "library:direct": { value: "direct" },
+          "library:compiled": { value: "compiled" },
+        },
+      },
+    });
+
+    useSsrResourceSnapshot({
+      key: "library:direct",
+      capture: () => null,
+      restore(snapshot) {
+        restored.push(snapshot.value);
+      },
+    });
+    useSsrResourceSnapshot({ kind: "host" }, {
+      key: "library:compiled",
+      capture: () => null,
+      restore(snapshot) {
+        restored.push(snapshot.value);
+      },
+    });
+
+    assert.deepStrictEqual(restored, ["direct", "compiled"]);
+  });
+
   it("makes resources available to hydrateRoot and remains compatible without them", async () => {
     const { hydrate, hydrateRoot } = await import("../packages/ssr/src/hydration.js");
     const { rootElement, documentRef } = createRootAttributeDocument();

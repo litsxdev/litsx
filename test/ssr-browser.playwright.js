@@ -18,13 +18,11 @@ test("restores an SSR resource snapshot before the first hydrated render", async
   const tempDir = await fs.mkdtemp(path.join(tempRoot, "litsx-resource-snapshot-"));
   const srcDir = path.join(tempDir, "src");
   await fs.mkdir(srcDir, { recursive: true });
-  await fs.writeFile(path.join(srcDir, "resource-card.js"), `
-import { LitElement, html } from "lit";
-import { renderWithSoftSuspense, useSsrResourceSnapshot } from "@litsx/core";
-import { annotateHydratableCustomElement } from "@litsx/core/elements";
+  await fs.writeFile(path.join(srcDir, "resource-card.litsx"), `
+import { useSsrResourceSnapshot } from "@litsx/core";
 
 const messages = new Map();
-let loadPromise;
+if (typeof window === "undefined") messages.set("title", "SSR resource");
 
 function useMessage() {
   useSsrResourceSnapshot({
@@ -41,29 +39,21 @@ function useMessage() {
     if (typeof window !== "undefined") {
       window.__resourceClientLoadCount = (window.__resourceClientLoadCount ?? 0) + 1;
     }
-    loadPromise ??= Promise.resolve().then(() => messages.set("title", "Loaded too late"));
-    throw loadPromise;
+    throw new Error("resource was not restored before the first client render");
   }
   return messages.get("title");
 }
 
-export class ResourceCard extends LitElement {
-  render() {
-    return renderWithSoftSuspense(this, () => html\`<h1 id="title">\${useMessage()}</h1>\`);
-  }
+export function ResourceCard() {
+  return <h1 id="title">{useMessage()}</h1>;
 }
-
-annotateHydratableCustomElement(ResourceCard, {
-  tagName: "resource-card",
-  moduleId: "/src/resource-card.js",
-});
 
 export function defineResourceCard() {
   if (!customElements.get("resource-card")) customElements.define("resource-card", ResourceCard);
 }
 `);
   await fs.writeFile(path.join(srcDir, "main.js"), `
-import { defineResourceCard } from "./resource-card.js";
+import { defineResourceCard } from "./resource-card.litsx";
 defineResourceCard();
 `);
 
@@ -76,8 +66,7 @@ defineResourceCard();
     elements(loader) {
       return {
         "resource-card": async () => {
-          const module = await loader("./src/resource-card.js");
-          await Promise.resolve();
+          const module = await loader("./src/resource-card.litsx");
           return module.ResourceCard;
         },
       };
@@ -95,7 +84,7 @@ defineResourceCard();
     });
     const url = server.resolvedUrls.local[0];
     const documentSource = await (await fetch(url)).text();
-    expect(documentSource).toContain('"resources":{"library:i18n":{"title":"Loaded too late"}}');
+    expect(documentSource).toContain('"resources":{"library:i18n":{"title":"SSR resource"}}');
     await page.goto(url);
     // Vite may perform one development reload after materializing the first
     // client asset graph. Assert against the settled hydration document.
@@ -110,7 +99,7 @@ defineResourceCard();
     }));
     expect(consoleErrors).toEqual([]);
     expect(result).toEqual({
-      title: "Loaded too late",
+      title: "SSR resource",
       titleCount: 1,
       restores: 1,
       clientLoads: 0,
