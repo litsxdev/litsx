@@ -24,6 +24,7 @@ export {
   createExecutionContextKey,
   getCurrentExecutionContext,
 } from "./execution-context.js";
+export { useSsrResourceSnapshot } from "./ssr-resource-snapshot.js";
 export {
   LITSX_HOOK,
   isLitsxHook,

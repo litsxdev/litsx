@@ -185,6 +185,11 @@ export interface LitsxHydrationPayload {
     instanceId: string;
     state: unknown[];
   }>;
+
+  /**
+   * Optional library-owned global resource snapshots captured after SSR.
+   */
+  resources?: Record<string, import("@litsx/core").JsonSerializable>;
 }
 
 export interface LitsxHydrationData {

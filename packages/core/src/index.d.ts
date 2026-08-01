@@ -30,6 +30,33 @@ export interface LitsxExecutionContext {
   set<T>(key: ExecutionContextKey<T>, value: T): void;
   has<T>(key: ExecutionContextKey<T>): boolean;
 }
+export type JsonSerializable =
+  | null
+  | boolean
+  | number
+  | string
+  | JsonSerializable[]
+  | { [key: string]: JsonSerializable };
+
+export interface SsrResourceSnapshotOptions {
+  /** Stable library-owned identity for the global resource cache. */
+  key: string;
+  /** Read the completed cache after the final SSR render pass. */
+  capture: () => JsonSerializable;
+  /** Restore the cache synchronously before hydration modules render. */
+  restore: (snapshot: JsonSerializable) => void;
+}
+
+/**
+ * Register or restore a library-owned global SSR resource cache.
+ *
+ * This hook is inert outside an active LitSX SSR render or hydration payload.
+ * Library runtimes should expose higher-level hooks rather than asking
+ * applications to call this API or install hydration bootstrap code.
+ */
+export declare function useSsrResourceSnapshot(
+  options: SsrResourceSnapshotOptions,
+): void;
 export declare const LITSX_HOOK: unique symbol;
 export declare const LITSX_COMPONENT: unique symbol;
 export declare const LITSX_HOST_TYPE_ID: unique symbol;

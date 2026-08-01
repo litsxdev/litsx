@@ -205,6 +205,47 @@ function createHydrationPayload() {
   };
 }
 
+function assertJsonSerializable(value, path, ancestors = new Set()) {
+  if (value === null || typeof value === "string" || typeof value === "boolean") {
+    return value;
+  }
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) {
+      throw new TypeError(
+        `LitSX SSR resource snapshot value at "${path}" is not JSON-serializable.`,
+      );
+    }
+    return value;
+  }
+  if (typeof value !== "object") {
+    throw new TypeError(
+      `LitSX SSR resource snapshot value at "${path}" is not JSON-serializable.`,
+    );
+  }
+  if (ancestors.has(value) || !isPlainSerializableObject(value)) {
+    throw new TypeError(
+      `LitSX SSR resource snapshot value at "${path}" is not JSON-serializable.`,
+    );
+  }
+
+  ancestors.add(value);
+  try {
+    if (Array.isArray(value)) {
+      return value.map((entry, index) =>
+        assertJsonSerializable(entry, `${path}[${index}]`, ancestors)
+      );
+    }
+    return Object.fromEntries(
+      Object.entries(value).map(([key, entry]) => [
+        key,
+        assertJsonSerializable(entry, `${path}.${key}`, ancestors),
+      ]),
+    );
+  } finally {
+    ancestors.delete(value);
+  }
+}
+
 function isPlainSerializableObject(value) {
   if (!value || typeof value !== "object") {
     return false;
@@ -258,6 +299,7 @@ function trySerialize(value, path) {
 
 export function createScopedSsrContext(options = {}) {
   const noscriptFallbacks = [];
+  const resourceSnapshotCaptures = new Map();
   return {
     idPrefix: options.idPrefix ?? "litsx",
     assetResolver:
@@ -272,6 +314,25 @@ export function createScopedSsrContext(options = {}) {
     headTags: new Set(),
     adapterArtifacts: [],
     noscriptFallbacks,
+    resourceSnapshotRegistry: {
+      register(key, capture) {
+        if (!resourceSnapshotCaptures.has(key)) {
+          resourceSnapshotCaptures.set(key, capture);
+        }
+      },
+    },
+    captureResourceSnapshots() {
+      if (resourceSnapshotCaptures.size === 0) {
+        return;
+      }
+
+      this.hydrationData.payload.resources = Object.fromEntries(
+        [...resourceSnapshotCaptures].map(([key, capture]) => [
+          key,
+          assertJsonSerializable(capture(), `resources.${key}`),
+        ]),
+      );
+    },
     registerNoscriptFallback({ factory, elements = null }) {
       const id = `litsx-noscript-${noscriptFallbacks.length}`;
       noscriptFallbacks.push({ id, factory, elements });
