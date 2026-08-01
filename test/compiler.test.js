@@ -1752,6 +1752,42 @@ describe("@litsx/compiler", () => {
     assert.match(result.code, /return <section>\{\[1, 2, 3\]\.map\(this\.onResolve\)\}<\/section>;/);
   }, 20000);
 
+  it("keeps prop-backed calls as ordinary values inside Lit property bindings", () => {
+    const source = [
+      "export async function DirectPage({ resolveItems }) {",
+      "  return <child-element .items={resolveItems()} />;",
+      "}",
+      "export function Forward({ items, config, onNavigate }) {",
+      "  return <child-element .items={items} .config={config} .onNavigate={onNavigate} />;",
+      "}",
+      "export function Results({ resolveItems, resolveConfig, createNavigateHandler }) {",
+      "  return (",
+      "    <child-element",
+      "      .items={resolveItems()}",
+      "      .config={resolveConfig()}",
+      "      .onNavigate={createNavigateHandler()}",
+      "    >",
+      "      {resolveItems()}",
+      "    </child-element>",
+      "  );",
+      "}",
+    ].join("\n");
+
+    const result = transformLitsxSync(source, {
+      filename: "/virtual/Results.litsx",
+    });
+
+    assert.match(result.code, /export async function DirectPage[\s\S]*\.items=\$\{resolveItems\(\)\}/);
+    assert.match(result.code, /class Forward[\s\S]*\.items=\$\{this\.items\} \.config=\$\{this\.config\} \.onNavigate=\$\{this\.onNavigate\}/);
+    assert.match(result.code, /\.items=\$\{this\.resolveItems\(\)\}/);
+    assert.match(result.code, /\.config=\$\{this\.resolveConfig\(\)\}/);
+    assert.match(result.code, /\.onNavigate=\$\{this\.createNavigateHandler\(\)\}/);
+    assert.match(result.code, />\$\{renderRendererCall\(this\.resolveItems\)\}<\/child-element>/);
+    assert.doesNotMatch(result.code, /\.items=\$\{renderRendererCall/);
+    assert.doesNotMatch(result.code, /\.config=\$\{renderRendererCall/);
+    assert.doesNotMatch(result.code, /\.onNavigate=\$\{renderRendererCall/);
+  }, 20000);
+
   it("lowers renderer props that return mixed fragments with components", () => {
     const source = [
       "import { LitsxButton } from './litsx-button.litsx';",

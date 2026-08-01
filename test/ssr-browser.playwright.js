@@ -113,6 +113,186 @@ defineNoscriptHost();
   }
 });
 
+test("hydrates nested LitSX property bindings for arrays, objects, and callbacks", async ({ browser, page }) => {
+  const tempRoot = path.join(repoRoot, "test-results");
+  await fs.mkdir(tempRoot, { recursive: true });
+  const tempDir = await fs.mkdtemp(path.join(tempRoot, "litsx-nested-properties-"));
+  const srcDir = path.join(tempDir, "src");
+  await fs.mkdir(srcDir, { recursive: true });
+  await fs.writeFile(path.join(srcDir, "nested-properties.litsx"), `
+import { useOnConnect, useState } from "@litsx/core";
+
+export function NestedPropertyGrandchild({
+  items = [],
+  config = {},
+  value = 0,
+  enabled = false,
+  onNavigate = () => {},
+}) {
+  useOnConnect(() => {
+    window.__nestedPropertyState = {
+      itemIds: items.map((item) => item.id),
+      pageSize: config.pageSize,
+      value,
+      enabled,
+      callbackType: typeof onNavigate,
+    };
+  }, [items, config, enabled, onNavigate]);
+  return <button id="navigate" @click={() => onNavigate(items[0])}>{items[0]?.label}:{config.pageSize}:{value}:{String(enabled)}</button>;
+}
+
+export function NestedPropertyChild({
+  items = [],
+  config = {},
+  value = 0,
+  enabled = false,
+  onNavigate = () => {},
+}) {
+  return (
+    <NestedPropertyGrandchild
+      .items={items}
+      .config={config}
+      .value={value}
+      ?enabled={enabled}
+      .onNavigate={onNavigate}
+    />
+  );
+}
+
+export function NestedPropertyParent({
+  items = [],
+  config = {},
+  resolveItems = (value) => value,
+  resolveConfig = (value) => value,
+  createNavigateHandler = () => (item) => {
+    window.__nestedNavigation = item.id;
+  },
+}) {
+  const [revision, setRevision] = useState(0);
+  return (
+    <section>
+      <button id="refresh" @click={() => setRevision(revision + 1)}>Refresh</button>
+      <NestedPropertyChild
+        .items={resolveItems(items)}
+        .config={resolveConfig(config)}
+        .value={revision}
+        ?enabled={true}
+        .onNavigate={createNavigateHandler()}
+      />
+    </section>
+  );
+}
+
+export function defineNestedProperties() {
+  if (!customElements.get("nested-property-parent")) {
+    customElements.define("nested-property-parent", NestedPropertyParent);
+  }
+}
+`);
+  await fs.writeFile(path.join(srcDir, "main.js"), `
+import { defineNestedProperties } from "./nested-properties.litsx";
+defineNestedProperties();
+`);
+
+  const server = await createSsrDevServer({
+    root: tempDir,
+    clientEntry: "./src/main.js",
+    logLevel: "silent",
+    host: "127.0.0.1",
+    strictPort: false,
+    elements(loader) {
+      return {
+        "nested-property-parent": async () =>
+          (await loader("./src/nested-properties.litsx")).NestedPropertyParent,
+      };
+    },
+    render({ html: serverHtml }) {
+      return serverHtml`
+        <nested-property-parent
+          .items=${[{ id: "first", label: "First item" }]}
+          .config=${{ pageSize: 24 }}
+        ></nested-property-parent>
+      `;
+    },
+  });
+  await server.listen();
+
+  try {
+    const pageErrors = [];
+    page.on("pageerror", (error) => pageErrors.push(error.message));
+    const url = server.resolvedUrls.local[0];
+    const ssrHtml = await (await fetch(url)).text();
+    expect(ssrHtml.match(/<nested-property-child\b/g) ?? []).toHaveLength(1);
+    expect(ssrHtml.match(/<nested-property-grandchild\b/g) ?? []).toHaveLength(1);
+
+    const ssrContext = await browser.newContext({ javaScriptEnabled: false });
+    const ssrPage = await ssrContext.newPage();
+    await ssrPage.goto(url);
+    expect(await ssrPage.evaluate(() => {
+      const parent = document.querySelector("nested-property-parent");
+      const children = parent?.shadowRoot?.querySelectorAll("nested-property-child") ?? [];
+      const child = children[0];
+      return {
+        childCount: children.length,
+        grandchildCount:
+          child?.shadowRoot?.querySelectorAll("nested-property-grandchild").length ?? 0,
+      };
+    })).toEqual({ childCount: 1, grandchildCount: 1 });
+    await ssrContext.close();
+
+    await page.goto(url, { waitUntil: "networkidle" });
+    await page.waitForFunction(() => Boolean(window.__nestedPropertyState));
+
+    expect(await page.evaluate(() => window.__nestedPropertyState)).toEqual({
+      itemIds: ["first"],
+      pageSize: 24,
+      value: 0,
+      enabled: true,
+      callbackType: "function",
+    });
+    await page.locator("nested-property-parent").evaluate((parent) =>
+      parent.shadowRoot.querySelector("#refresh").click()
+    );
+    await page.waitForFunction(() => {
+      const parent = document.querySelector("nested-property-parent");
+      const child = parent?.shadowRoot?.querySelector("nested-property-child");
+      const grandchild = child?.shadowRoot?.querySelector("nested-property-grandchild");
+      return grandchild?.value === 1;
+    });
+    expect(await page.evaluate(() => {
+      const parent = document.querySelector("nested-property-parent");
+      const children = parent?.shadowRoot?.querySelectorAll("nested-property-child") ?? [];
+      const child = children[0];
+      const grandchildren = child?.shadowRoot?.querySelectorAll("nested-property-grandchild") ?? [];
+      const grandchild = grandchildren[0];
+      return {
+        childCount: children.length,
+        grandchildCount: grandchildren.length,
+        childMatchesParentScope:
+          child?.constructor === parent?.constructor?.elements?.["nested-property-child"],
+        grandchildMatchesChildScope:
+          grandchild?.constructor === child?.constructor?.elements?.["nested-property-grandchild"],
+      };
+    })).toEqual({
+      childCount: 1,
+      grandchildCount: 1,
+      childMatchesParentScope: true,
+      grandchildMatchesChildScope: true,
+    });
+    const button = await page.locator("nested-property-parent").evaluateHandle((parent) =>
+      parent.shadowRoot.querySelector("nested-property-child")
+        .shadowRoot.querySelector("nested-property-grandchild")
+        .shadowRoot.querySelector("#navigate")
+    );
+    await button.asElement()?.click();
+    expect(await page.evaluate(() => window.__nestedNavigation)).toBe("first");
+    expect(pageErrors).toEqual([]);
+  } finally {
+    await server.close();
+    await fs.rm(tempDir, { recursive: true, force: true });
+  }
+});
+
 function createComponentsSource() {
   return `
 import { useOnConnect, useState } from "@litsx/core";
