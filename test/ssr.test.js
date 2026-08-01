@@ -41,6 +41,7 @@ import {
   SuspenseBoundary,
   SuspenseList,
   __litsxNoscript,
+  useSsrResourceSnapshot,
 } from "../packages/core/src/index.js";
 
 function createDeferred() {
@@ -1977,6 +1978,180 @@ export class BetaCard extends LitElement {
     assert.ok(seenContexts[0]);
     assert.strictEqual(seenContexts[0], seenContexts[1]);
     assert.match(result.html, /data-retry-count="2"/);
+  });
+
+  it("captures a completed global resource cache after suspense settles", async () => {
+    const ready = createDeferred();
+    const started = createDeferred();
+    const cache = new Map();
+    let captureCount = 0;
+
+    class ResourceCard extends LitElement {
+      render() {
+        return renderWithSoftSuspense(this, () => {
+          useSsrResourceSnapshot({
+            key: "library:i18n",
+            capture() {
+              captureCount += 1;
+              return Object.fromEntries(cache);
+            },
+            restore() {},
+          });
+
+          if (!cache.has("product.title")) {
+            started.resolve();
+            throw ready.promise.then(() => {
+              cache.set("product.title", "Trail shoe");
+            });
+          }
+          return html`<h1>${cache.get("product.title")}</h1>`;
+        });
+      }
+    }
+
+    const renderPromise = renderToString(
+      __litsxScopedTemplate(html`<resource-card></resource-card>`, {
+        "resource-card": ResourceCard,
+      }),
+    );
+    await started.promise;
+    assert.strictEqual(captureCount, 0);
+    ready.resolve();
+    const result = await renderPromise;
+
+    assert.match(result.html, /Trail shoe/);
+    assert.strictEqual(captureCount, 1);
+    assert.deepStrictEqual(result.hydrationData.payload.resources, {
+      "library:i18n": { "product.title": "Trail shoe" },
+    });
+    assert.match(
+      result.renderHydrationData(),
+      /"resources":\{"library:i18n":\{"product.title":"Trail shoe"\}\}/,
+    );
+  });
+
+  it("emits resource-only hydration data without a custom-element root", async () => {
+    function ResourcePage() {
+      useSsrResourceSnapshot({
+        key: "library:flags",
+        capture: () => ({ checkout: true }),
+        restore() {},
+      });
+      return html`<main>Resource-only page</main>`;
+    }
+
+    const result = await renderToString(
+      __litsxServerComponentCall(ResourcePage, {}),
+    );
+
+    assert.deepStrictEqual(result.hydrationData.roots, []);
+    assert.deepStrictEqual(result.hydrationData.payload, {
+      roots: {},
+      instances: {},
+      resources: { "library:flags": { checkout: true } },
+    });
+    assert.notStrictEqual(result.renderHydrationData(), "");
+  });
+
+  it("captures resource snapshots for streaming SSR after all chunks complete", async () => {
+    class StreamResource extends LitElement {
+      render() {
+        useSsrResourceSnapshot({
+          key: "library:stream",
+          capture: () => ({ complete: true }),
+          restore() {},
+        });
+        return html`<span>stream resource</span>`;
+      }
+    }
+
+    const result = await renderToStream(
+      __litsxScopedTemplate(html`<stream-resource></stream-resource>`, {
+        "stream-resource": StreamResource,
+      }),
+    );
+    const reader = result.stream.getReader();
+    while (!(await reader.read()).done) {}
+    const metadata = await result.allReady;
+
+    assert.deepStrictEqual(metadata.hydrationData.payload.resources, {
+      "library:stream": { complete: true },
+    });
+  });
+
+  it("isolates global resource snapshots across concurrent SSR requests", async () => {
+    const firstGate = createDeferred();
+    const secondGate = createDeferred();
+
+    function renderRequest(label, gate) {
+      const cache = new Map([["request", label]]);
+      const tagName = `${label}-request-resource`;
+      class RequestResource extends LitElement {
+        render() {
+          useSsrResourceSnapshot({
+            key: "library:request",
+            capture: () => Object.fromEntries(cache),
+            restore() {},
+          });
+          return html`<span>${label}</span>`;
+        }
+      }
+      return renderToString(gate.promise.then(() =>
+        __litsxScopedTemplate(
+          label === "alpha"
+            ? html`<alpha-request-resource></alpha-request-resource>`
+            : html`<beta-request-resource></beta-request-resource>`, {
+          [tagName]: RequestResource,
+        })
+      ));
+    }
+
+    const firstRender = renderRequest("alpha", firstGate);
+    const secondRender = renderRequest("beta", secondGate);
+    secondGate.resolve();
+    firstGate.resolve();
+    const [first, second] = await Promise.all([firstRender, secondRender]);
+
+    assert.deepStrictEqual(first.hydrationData.payload.resources, {
+      "library:request": { request: "alpha" },
+    });
+    assert.deepStrictEqual(second.hydrationData.payload.resources, {
+      "library:request": { request: "beta" },
+    });
+  });
+
+  it("rejects non-JSON global resource snapshots with their resource path", async () => {
+    class InvalidResource extends LitElement {
+      render() {
+        useSsrResourceSnapshot({
+          key: "library:invalid",
+          capture: () => ({ value: undefined }),
+          restore() {},
+        });
+        return html`<span>invalid</span>`;
+      }
+    }
+
+    await assert.rejects(
+      () => renderToString(
+        __litsxScopedTemplate(html`<invalid-resource></invalid-resource>`, {
+          "invalid-resource": InvalidResource,
+        }),
+      ),
+      /resource snapshot value at "resources\.library:invalid\.value" is not JSON-serializable/,
+    );
+  });
+
+  it("keeps useSsrResourceSnapshot inert outside SSR", () => {
+    assert.doesNotThrow(() => useSsrResourceSnapshot({
+      key: "library:inactive",
+      capture() {
+        throw new Error("capture must not run");
+      },
+      restore() {
+        throw new Error("restore must not run");
+      },
+    }));
   });
 
   it("isolates execution contexts across concurrent SSR requests", async () => {

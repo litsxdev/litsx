@@ -199,7 +199,11 @@ await hydratePage({
 }
 
 function createHydrationData(context) {
-  if (context.hydrationData.roots.length === 0) {
+  const resources = context.hydrationData.payload.resources;
+  if (
+    context.hydrationData.roots.length === 0 &&
+    (!resources || Object.keys(resources).length === 0)
+  ) {
     return null;
   }
 
@@ -236,6 +240,7 @@ function createHydrationData(context) {
 }
 
 function createSsrResult(html, context) {
+  context.captureResourceSnapshots?.();
   const clientImports = [...context.clientImports];
   const modulePreloads = new Set(clientImports);
   for (const entry of context.modulePreloads || []) {
@@ -766,11 +771,15 @@ async function renderResolvedValue(value, context) {
     renderScopedTemplateWithLitSsr,
     renderNoscriptFallbacks,
   } = await loadSsrRuntime();
-  const resolvedValue = await resolveTopLevelSsrValue(value, context);
-  const rendered = await renderScopedTemplateWithLitSsr(resolvedValue, {
-    litsxSsrContext: context,
+  return withCurrentSsrRuntimeState({
+    resourceSnapshotRegistry: context.resourceSnapshotRegistry,
+  }, async () => {
+    const resolvedValue = await resolveTopLevelSsrValue(value, context);
+    const rendered = await renderScopedTemplateWithLitSsr(resolvedValue, {
+      litsxSsrContext: context,
+    });
+    return renderNoscriptFallbacks(rendered, context);
   });
-  return renderNoscriptFallbacks(rendered, context);
 }
 
 async function renderResolvedValueToChunks(value, context) {
@@ -950,17 +959,22 @@ export async function renderToStream(value, options = {}) {
       try {
         const executionContext = await stabilizeSsrRenderPasses(value, options);
         const context = await createSsrContext(options, executionContext);
-        const chunks = await renderResolvedValueToChunks(
-          normalizeSsrRenderable(await Promise.resolve(value), options.elements),
-          context,
-        );
-
         let html = "";
-        for await (const chunk of chunks) {
-          const stringChunk = typeof chunk === "string" ? chunk : String(chunk);
-          html += stringChunk;
-          controller.enqueue(stringChunk);
-        }
+        await withCurrentSsrRuntimeState({
+          executionContext,
+          resourceSnapshotRegistry: context.resourceSnapshotRegistry,
+        }, async () => {
+          const chunks = await renderResolvedValueToChunks(
+            normalizeSsrRenderable(await Promise.resolve(value), options.elements),
+            context,
+          );
+
+          for await (const chunk of chunks) {
+            const stringChunk = typeof chunk === "string" ? chunk : String(chunk);
+            html += stringChunk;
+            controller.enqueue(stringChunk);
+          }
+        });
         controller.close();
         const result = createSsrResult(html, context);
         resolveAllReady({

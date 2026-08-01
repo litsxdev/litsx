@@ -11,6 +11,17 @@ The package also exposes `@litsx/core/jsx-runtime` and `@litsx/core/jsx-dev-runt
 
 SSR support used by [`@litsx/ssr`](../ssr/README.md) also lives here: scoped-template metadata, scoped custom-element lookup for nested `static elements`, and the SSR-safe effects controller selected when a host is rendered with SSR context. Most applications should use `@litsx/ssr` rather than importing those internals directly.
 
+Library runtimes that own a global resolved-resource cache can use
+`useSsrResourceSnapshot({ key, capture, restore })`. During SSR, `capture()` is
+deferred until the final render pass has completed; during hydration,
+`restore(snapshot)` runs synchronously and once before registration and client
+module loading can trigger the first render. The hook is inert without an
+active SSR request or hydration resource payload, and `@litsx/core` never
+imports `@litsx/ssr`.
+
+This is infrastructure for libraries such as i18n or data runtimes. Application
+code should not add manual snapshot adapters or hydration bootstrap calls.
+
 ## What it provides
 
 - `EffectsController`: a Lit `ReactiveController` implementation that tracks hook registrations, dependency arrays, effect queues, transitions, refs, and external-store subscriptions per host instance.

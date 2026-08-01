@@ -5,12 +5,18 @@ import { beforeEach, describe, it, vi } from "vitest";
 import {
   LITSX_HYDRATABLE_TAG,
 } from "../packages/core/src/elements/index.js";
+import { useSsrResourceSnapshot } from "../packages/core/src/index.js";
+
+const SSR_RESOURCE_SNAPSHOT_BRIDGE = Symbol.for(
+  "litsx.ssr.resourceSnapshotBridge",
+);
 
 describe("@litsx/ssr/hydration", () => {
   beforeEach(() => {
     vi.resetModules();
     delete globalThis.document;
     delete globalThis.customElements;
+    delete globalThis[SSR_RESOURCE_SNAPSHOT_BRIDGE];
   });
 
   function createCustomElementsRegistry() {
@@ -240,6 +246,94 @@ describe("@litsx/ssr/hydration", () => {
       "import:/assets/a.js",
       "import:/assets/b.js",
     ]);
+  });
+
+  it("restores SSR resources synchronously before registration and module imports", async () => {
+    const { hydrate } = await import("../packages/ssr/src/hydration.js");
+    const calls = [];
+    const cache = new Map();
+    const useResource = () => {
+      useSsrResourceSnapshot({
+        key: "library:i18n",
+        capture: () => ({}),
+        restore(snapshot) {
+          calls.push("restore");
+          for (const [key, value] of Object.entries(snapshot)) {
+            cache.set(key, value);
+          }
+        },
+      });
+      if (!cache.has("home.title")) {
+        throw new Error("client resource suspended before restore");
+      }
+      return cache.get("home.title");
+    };
+
+    await hydrate({ kind: "document" }, {
+      hydrationData: {
+        version: 1,
+        roots: [],
+        payload: {
+          roots: {},
+          instances: {},
+          resources: { "library:i18n": { "home.title": "Home" } },
+        },
+      },
+      clientImports: ["/feature.js"],
+      register() {
+        calls.push(`register:${useResource()}`);
+        useResource();
+      },
+      async moduleLoader() {
+        calls.push(`import:${useResource()}`);
+        return {};
+      },
+    });
+
+    assert.deepStrictEqual(calls, [
+      "restore",
+      "register:Home",
+      "import:Home",
+    ]);
+  });
+
+  it("makes resources available to hydrateRoot and remains compatible without them", async () => {
+    const { hydrate, hydrateRoot } = await import("../packages/ssr/src/hydration.js");
+    const { rootElement, documentRef } = createRootAttributeDocument();
+    let restored = 0;
+    const useResource = () => useSsrResourceSnapshot({
+      key: "library:data",
+      capture: () => null,
+      restore(snapshot) {
+        restored += snapshot.value;
+      },
+    });
+
+    await hydrateRoot(rootElement, {
+      rootId: "litsx-root-0",
+      hydrationData: {
+        version: 1,
+        roots: [{ id: "litsx-root-0", tagName: "product-card" }],
+        payload: {
+          roots: {},
+          instances: {},
+          resources: { "library:data": { value: 2 } },
+        },
+      },
+      register: useResource,
+    });
+    useResource();
+    assert.strictEqual(restored, 2);
+
+    await hydrate(documentRef, {
+      hydrationData: {
+        version: 1,
+        roots: [],
+        payload: { roots: {}, instances: {} },
+      },
+      register: useResource,
+    });
+    assert.strictEqual(restored, 2);
   });
 
   it("reads client imports and hydration data from JSON script tags", async () => {

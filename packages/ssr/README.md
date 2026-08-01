@@ -220,16 +220,16 @@ mode, and it does not use `unsafeHTML` or unescaped user content.
 - `html`: prerendered HTML, including Declarative Shadow DOM for LitSX elements
 - `clientImports`: deduplicated client module imports collected from rendered
   LitSX elements
-- `hydrationData`: LitSX root-boundary metadata plus root payload, state
-  payload, and client imports when scoped LitSX roots are rendered, otherwise
-  `null`
+- `hydrationData`: LitSX root-boundary metadata plus root payload, state,
+  optional library resource snapshots, and client imports when hydration data
+  was collected, otherwise `null`
 - `renderClientImports()`: `<script type="module">` tags for `clientImports`
 - `renderClientImportsData()`: a JSON script tag readable by
   `@litsx/ssr/hydration`
 - `renderModulePreloads()`: `<link rel="modulepreload">` tags for
   `clientImports`
 - `renderHydrationData()`: a JSON hydration-payload script tag for scoped LitSX
-  roots; empty for non-LitSX roots
+  roots or library resource snapshots; empty when neither was collected
 
 It can also accept the same authored-entry configuration object used by
 `renderDocument(...)` when you want the `elements(loader)` + `render(...)`
@@ -656,13 +656,14 @@ The public hydration protocol between `@litsx/ssr` and `@litsx/ssr/hydration` is
 - `renderHydrationData()` emits `__LITSX_HYDRATION__`
 - each LitSX SSR root host carries `data-litsx-root="<root-id>"`
 - `hydrationData.roots` maps those root ids to tag names and module ids
-- `hydrationData.payload` carries serialized root props and hook state
+- `hydrationData.payload` carries serialized root props, hook state, and an
+  optional `resources` object keyed by library-owned resource identity
 
 In the standard `clientEntry` flow, the emitted bootstrap script then:
 
 1. imports the LitSX hydration runtime, which installs Lit hydration support
-2. runs your client bootstrap/register entry
-3. reads and applies the LitSX hydration payload
+2. reads the payload and makes global resource snapshots available
+3. applies root payloads and runs your client bootstrap/register entry
 4. imports the emitted client modules
 
 Framework integrations can rely on that order when wiring their own hydration
@@ -676,6 +677,8 @@ The SSR/hydration invariants for that contract are:
 - Lit comment markers and Declarative Shadow DOM emitted by SSR are part of the
   hydrated DOM contract and must not be stripped or reordered
 - root props and hook payload state must stay JSON-serializable
+- resource snapshots are captured after the final SSR pass and must stay
+  JSON-serializable
 - root registration must happen before LitSX applies the hydration payload to
   the DOM
 - light DOM and slot projection follow the DOM produced by SSR; client
@@ -686,6 +689,21 @@ Importing `@litsx/ssr/hydration` is also the supported client bootstrap entry:
 it installs `@lit-labs/ssr-client/lit-element-hydrate-support.js` as its first
 top-level side effect, before pulling `@litsx/core`, so framework consumers do
 not need to import Lit's hydration patch manually.
+
+### Library resource snapshots
+
+Libraries with a global resolved-resource cache can call
+`useSsrResourceSnapshot({ key, capture, restore })` from their own LitSX hook.
+`capture()` runs only after the final SSR render pass so it observes everything
+resolved during suspense retries. On the client, `restore(snapshot)` runs
+synchronously and once for that snapshot before registration or module loading
+can cause the first component render.
+
+Registrations are held in the current SSR request's async context, so concurrent
+renders cannot see one another's captures. Payloads created before this feature
+remain valid because `payload.resources` is optional. This API is intended for
+library runtimes; applications should not add adapters or manual bootstrap
+registration for it.
 
 ### Module Registration
 

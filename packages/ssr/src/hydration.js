@@ -5,6 +5,49 @@ import {
   LITSX_HYDRATABLE_TAG,
 } from "@litsx/core/elements";
 
+const SSR_RESOURCE_SNAPSHOT_BRIDGE = Symbol.for(
+  "litsx.ssr.resourceSnapshotBridge",
+);
+
+function createResourceSnapshotBridge() {
+  let resources = null;
+  const restored = new Map();
+
+  return {
+    prepare(nextResources) {
+      resources = nextResources;
+    },
+    restore(key, restore) {
+      if (!resources || !Object.hasOwn(resources, key)) {
+        return;
+      }
+
+      const snapshot = resources[key];
+      const identity = JSON.stringify(snapshot);
+      if (restored.get(key) === identity) {
+        return;
+      }
+
+      restore(snapshot);
+      restored.set(key, identity);
+    },
+  };
+}
+
+function prepareHydrationResources(hydrationData) {
+  const resources = normalizeHydrationPayload(hydrationData).resources ?? null;
+  let bridge = globalThis[SSR_RESOURCE_SNAPSHOT_BRIDGE];
+  if (
+    !bridge ||
+    typeof bridge.prepare !== "function" ||
+    typeof bridge.restore !== "function"
+  ) {
+    bridge = createResourceSnapshotBridge();
+    globalThis[SSR_RESOURCE_SNAPSHOT_BRIDGE] = bridge;
+  }
+  bridge.prepare(resources);
+}
+
 function normalizeClientImports(value) {
   const values = Array.isArray(value) ? value : value == null ? [] : [value];
   return [...new Set(values.filter((entry) => typeof entry === "string" && entry.length > 0))];
@@ -161,6 +204,13 @@ function normalizeHydrationPayload(value) {
     Array.isArray(payload.instances)
   ) {
     throw new Error("Invalid LitSX SSR hydration payload.");
+  }
+
+  if (
+    payload.resources != null &&
+    (typeof payload.resources !== "object" || Array.isArray(payload.resources))
+  ) {
+    throw new Error("Invalid LitSX SSR hydration payload resources.");
   }
 
   return payload;
@@ -468,6 +518,7 @@ export async function hydrate(
   } = options;
 
   const hydrationData = readHydrationData(root, options);
+  prepareHydrationResources(hydrationData);
   const hydrationRoots = resolveHydrationRoots(root, options);
   applyHydrationPayload(hydrationRoots, hydrationData);
 
@@ -505,6 +556,7 @@ export async function hydrateRoot(
 
   const documentRef = resolveDocument(root) ?? root;
   const hydrationData = readHydrationData(documentRef, options);
+  prepareHydrationResources(hydrationData);
   const rootMetadata = normalizeHydrationRoots(hydrationData).find((entry) => entry.id === rootId);
   if (!rootMetadata) {
     throw new Error(`Hydration metadata did not include root "${rootId}".`);
