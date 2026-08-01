@@ -26,7 +26,8 @@ function assertOptions(options) {
  * Library runtimes call this from their own hooks. Applications do not need to
  * install an adapter or add bootstrap code.
  */
-export function useSsrResourceSnapshot(options) {
+export function useSsrResourceSnapshot(hostOrOptions, compiledOptions) {
+  const options = arguments.length === 1 ? hostOrOptions : compiledOptions;
   assertOptions(options);
 
   const ssrRegistry = getCurrentSsrRuntimeState()?.resourceSnapshotRegistry;
@@ -40,4 +41,3 @@ export function useSsrResourceSnapshot(options) {
     clientBridge.restore(options.key, options.restore);
   }
 }
-
