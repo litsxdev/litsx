@@ -61,6 +61,16 @@ export type HydrationModuleLoader = () => Promise<HydrationModuleNamespace>;
 export type HydrationModuleExport = CustomElementConstructor;
 
 /**
+ * Prepare opaque global resource snapshots from LitSX hydration data.
+ *
+ * Framework runtimes call this before inserting an SSR delta or importing its
+ * hydratable modules. Applications normally rely on `hydratePage(...)`.
+ */
+export declare function prepareHydrationResources(
+  hydrationData: unknown,
+): void;
+
+/**
  * Register every hydratable custom element exported by one module namespace.
  */
 export declare function registerHydrationModule(

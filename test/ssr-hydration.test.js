@@ -297,6 +297,30 @@ describe("@litsx/ssr/hydration", () => {
     ]);
   });
 
+  it("publicly prepares resource snapshots for incremental framework hydration", async () => {
+    const { prepareHydrationResources } = await import("../packages/ssr/src/hydration.js");
+    const restored = [];
+
+    prepareHydrationResources({
+      version: 1,
+      roots: [],
+      payload: {
+        roots: {},
+        instances: {},
+        resources: { "library:delta": { locale: "es" } },
+      },
+    });
+    useSsrResourceSnapshot({
+      key: "library:delta",
+      capture: () => null,
+      restore(snapshot) {
+        restored.push(snapshot);
+      },
+    });
+
+    assert.deepStrictEqual(restored, [{ locale: "es" }]);
+  });
+
   it("makes resources available to hydrateRoot and remains compatible without them", async () => {
     const { hydrate, hydrateRoot } = await import("../packages/ssr/src/hydration.js");
     const { rootElement, documentRef } = createRootAttributeDocument();
