@@ -17,6 +17,10 @@ export const LITSX_MODULE_ID = Symbol.for("litsx.moduleId");
 export const LITSX_SSR_CONTEXT = Symbol.for("litsx.ssrContext");
 export const LITSX_SERVER_COMPONENT = Symbol.for("litsx.serverComponent");
 export const LITSX_SERVER_COMPONENT_CALL = Symbol.for("litsx.serverComponentCall");
+// Opaque, serializable-by-identity marker used while SSR frameworks compose
+// server-only route segments. It is deliberately not a DOM ref: the client
+// hydration runtime recreates the normal `{ current }` ref from its markers.
+export const LITSX_FORWARDED_REF = Symbol.for("litsx.forwardedRef");
 export const LITSX_LIGHT_DOM = Symbol.for("litsx.lightDom");
 let shadowDomRegistryAttachKey;
 let shadowDomRegistryAttachShadowRef;
@@ -97,6 +101,28 @@ export function __litsxServerComponentCall(component, props) {
 
 export function __isLitsxServerComponentCall(value) {
   return Boolean(value?.[LITSX_SERVER_COMPONENT_CALL]);
+}
+
+export function __litsxForwardedRef(id) {
+  const normalizedId = typeof id === "string" ? id.trim() : "";
+  if (!normalizedId) {
+    throw new TypeError("A forwarded LitSX ref requires a non-empty id.");
+  }
+
+  return {
+    [LITSX_FORWARDED_REF]: normalizedId,
+    // Server Components may forward the ref, but cannot observe a browser
+    // element during SSR.
+    current: null,
+  };
+}
+
+export function __isLitsxForwardedRef(value) {
+  return typeof value?.[LITSX_FORWARDED_REF] === "string";
+}
+
+export function __getLitsxForwardedRefId(value) {
+  return __isLitsxForwardedRef(value) ? value[LITSX_FORWARDED_REF] : null;
 }
 
 function isPolyfilledScopedRegistry(registry) {

@@ -71,6 +71,14 @@ export declare function prepareHydrationResources(
 ): void;
 
 /**
+ * Recreate ordinary client refs from SSR forwarding markers before custom
+ * elements are upgraded. Framework routers call this for detached deltas.
+ */
+export declare function prepareForwardedRefs(
+  rootOrDocument?: Document | Element | DocumentFragment | null,
+): void;
+
+/**
  * Register every hydratable custom element exported by one module namespace.
  */
 export declare function registerHydrationModule(

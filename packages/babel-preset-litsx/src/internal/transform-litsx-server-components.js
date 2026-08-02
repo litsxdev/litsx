@@ -1,4 +1,5 @@
 import jsxSyntaxPlugin from "@babel/plugin-syntax-jsx";
+import { encodeVirtualAttributeName } from "@litsx/authoring";
 import {
   buildAvailableMap,
   buildServerComponentPropsObject,
@@ -696,6 +697,28 @@ function mergeScopedEntries(inferredEntries, explicitEntries) {
   return [...merged.values()];
 }
 
+function getForwardedRefParameterName(functionPath) {
+  const parameter = functionPath.node.params?.[1];
+  return t.isIdentifier(parameter) ? parameter.name : null;
+}
+
+// Async Server Components cannot receive a live DOM ref on the server. Keep
+// authored `ref={ref}` syntax, but lower the ref parameter to a Lit property
+// binding so @litsx/ssr can emit an opaque hydration marker for it.
+function lowerForwardedServerComponentRefs(returnPath, refName) {
+  if (!refName) return;
+
+  returnPath.traverse({
+    JSXAttribute(attributePath) {
+      if (!attributePath.get("name").isJSXIdentifier({ name: "ref" })) return;
+      const valuePath = attributePath.get("value");
+      if (!valuePath.isJSXExpressionContainer()) return;
+      if (!valuePath.get("expression").isIdentifier({ name: refName })) return;
+      attributePath.node.name = t.jsxIdentifier(encodeVirtualAttributeName(".ref"));
+    },
+  });
+}
+
 function wrapRenderableReturns(functionPath, programPath) {
   const availableMap = buildAvailableMap(programPath);
   const explicitElements = getStaticServerComponentElements(
@@ -709,6 +732,7 @@ function wrapRenderableReturns(functionPath, programPath) {
   const sharedOptions = {
     filename: programPath.hub.file?.opts?.filename || "",
   };
+  const forwardedRefName = getForwardedRefParameterName(functionPath);
 
   functionPath.traverse({
     ReturnStatement(returnPath) {
@@ -716,6 +740,8 @@ function wrapRenderableReturns(functionPath, programPath) {
       if (!argumentPath.node || !expressionIsRenderableTemplate(argumentPath.node)) {
         return;
       }
+
+      lowerForwardedServerComponentRefs(argumentPath, forwardedRefName);
 
       if (
         argumentPath.isJSXElement() &&

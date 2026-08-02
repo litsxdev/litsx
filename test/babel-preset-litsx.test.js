@@ -2061,6 +2061,39 @@ describe("@litsx/babel-preset-litsx", () => {
     assert.doesNotMatch(result.code, /"product-actions": ProductActions/);
   });
 
+  it("lowers an async server component's forwarded ref parameter to a Lit property binding", () => {
+    const source = [
+      "import ContextBar from './ContextBar.js';",
+      "export default async function Page({ params }, ref) {",
+      "  return <ContextBar ref={ref} .params={params} />;",
+      "}",
+    ].join("\n");
+
+    const result = compileWithNativePreset(source, {
+      filename: "/virtual/Page.litsx",
+    });
+
+    assert.match(result.code, /<context-bar \.ref=\$\{ref\} \.params=\$\{params\}><\/context-bar>/);
+    assert.doesNotMatch(result.code, /<context-bar ref=/);
+  });
+
+  it("keeps a layout's children.ref as an SSR composition binding", () => {
+    const source = [
+      "export default async function Layout({ children }) {",
+      "  return <vds-navbar-top .contextRef={children.ref}>{children}</vds-navbar-top>;",
+      "}",
+    ].join("\n");
+
+    const result = compileWithNativePreset(source, {
+      filename: "/virtual/layout.litsx",
+    });
+
+    assert.match(
+      result.code,
+      /<vds-navbar-top \.contextRef=\$\{children\.ref\}>\$\{children\}<\/vds-navbar-top>/,
+    );
+  });
+
   it("injects SSR light DOM rendering for authored light DOM components", () => {
     const source = [
       "export function LightChild() {",

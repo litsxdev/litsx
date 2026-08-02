@@ -223,6 +223,52 @@ describe("@litsx/ssr/hydration", () => {
     assert.strictEqual(register.mock.calls.length, 1);
   });
 
+  it("recreates a forwarded client ref before custom elements upgrade", async () => {
+    const { hydrate, prepareForwardedRefs } = await import("../packages/ssr/src/hydration.js");
+    const createElement = (attributes = {}) => ({
+      nodeType: 1,
+      attributes,
+      children: [],
+      childNodes: [],
+      getAttribute(name) {
+        return this.attributes[name] ?? null;
+      },
+    });
+    const target = createElement({ "data-litsx-forwarded-ref-target": "page-context" });
+    const consumer = createElement({
+      "data-litsx-forwarded-ref-props": JSON.stringify({ contextRef: "page-context" }),
+    });
+    const root = createElement();
+    root.children.push(target, consumer);
+    root.childNodes.push(target, consumer);
+    const documentRef = {
+      nodeType: 9,
+      documentElement: root,
+      getElementById() { return null; },
+    };
+    root.ownerDocument = documentRef;
+    target.ownerDocument = documentRef;
+    consumer.ownerDocument = documentRef;
+
+    prepareForwardedRefs(documentRef);
+
+    assert.ok(consumer.contextRef);
+    assert.strictEqual(consumer.contextRef.current, target);
+
+    consumer.contextRef = null;
+    await hydrate(documentRef, {
+      hydrationData: { version: 1, roots: [], payload: { roots: {}, instances: {} } },
+      register() {
+        assert.strictEqual(consumer.contextRef.current, target);
+      },
+    });
+
+    root.children.length = 0;
+    root.childNodes.length = 0;
+    prepareForwardedRefs(documentRef);
+    assert.strictEqual(consumer.contextRef.current, null);
+  });
+
   it("hydrates by bootstrapping roots and loading deduped client imports", async () => {
     const { hydrate } = await import("../packages/ssr/src/hydration.js");
     const calls = [];

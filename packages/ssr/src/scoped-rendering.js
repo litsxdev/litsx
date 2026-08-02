@@ -5,6 +5,7 @@ import { LitElementRenderer } from "@lit-labs/ssr/lib/lit-element-renderer.js";
 import { ElementRenderer } from "@lit-labs/ssr/lib/element-renderer.js";
 import {
   __isLitsxScopedTemplate,
+  __getLitsxForwardedRefId,
   isHydratableCustomElementClass,
   LITSX_LIGHT_DOM,
   LITSX_MODULE_ID,
@@ -90,6 +91,33 @@ function ensureSsrElementShape(element) {
   if (typeof element.removeEventListener !== "function") {
     element.removeEventListener = function removeEventListener() {};
   }
+}
+
+function captureForwardedRefBinding(element, name, value) {
+  const forwardedRefId = __getLitsxForwardedRefId(value);
+  if (!forwardedRefId) return false;
+
+  if (name === "ref") {
+    element.setAttribute("data-litsx-forwarded-ref-target", forwardedRefId);
+    return true;
+  }
+
+  const attributeName = "data-litsx-forwarded-ref-props";
+  let bindings = {};
+  const existing = element.getAttribute(attributeName);
+  if (existing) {
+    try {
+      const parsed = JSON.parse(existing);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        bindings = parsed;
+      }
+    } catch {
+      // The attribute is internal SSR markup; replace malformed state.
+    }
+  }
+  bindings[name] = forwardedRefId;
+  element.setAttribute(attributeName, JSON.stringify(bindings));
+  return true;
 }
 
 export async function collectRenderResult(result) {
@@ -516,6 +544,13 @@ export class ScopedLitElementRenderer extends LitElementRenderer {
 
   setProperty(name, value) {
     super.setProperty(name, value);
+    if (captureForwardedRefBinding(this.element, name, value)) {
+      // A forwarded ref is an opaque server marker, never part of the JSON
+      // hydration props snapshot. The browser recreates it from the DOM
+      // markers before the host is upgraded.
+      return;
+    }
+
     const rootId = this.element?.[LITSX_SSR_CONTEXT]?.rootId;
     if (rootId) {
       const serialized = trySerialize(value, `roots.${rootId}.props.${name}`);
@@ -666,6 +701,9 @@ class ScopedHydratableElementRenderer extends ElementRenderer {
 
   setProperty(name, value) {
     super.setProperty(name, value);
+    if (captureForwardedRefBinding(this.element, name, value)) {
+      return;
+    }
     this._litsxProps[name] = value;
     const rootId = this.element?.[LITSX_SSR_CONTEXT]?.rootId;
     if (rootId) {
