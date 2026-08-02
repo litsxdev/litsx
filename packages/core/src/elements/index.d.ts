@@ -89,6 +89,21 @@ export declare function __isLitsxServerComponentCall(
   value: unknown
 ): value is LitsxServerComponentCall;
 
+/**
+ * Internal SSR transport marker for a client ref forwarded through a
+ * server-component composition boundary.
+ */
+export declare const LITSX_FORWARDED_REF: unique symbol;
+
+export interface LitsxForwardedRef {
+  readonly [LITSX_FORWARDED_REF]: string;
+  current: null;
+}
+
+export declare function __litsxForwardedRef(id: string): LitsxForwardedRef;
+export declare function __isLitsxForwardedRef(value: unknown): value is LitsxForwardedRef;
+export declare function __getLitsxForwardedRefId(value: unknown): string | null;
+
 export interface LitsxStaticHoistsStatics {
   __litsxStatic<T>(cacheKey: PropertyKey, compute: () => T): T;
   __litsxResolveStaticValue<T>(value: T): T;

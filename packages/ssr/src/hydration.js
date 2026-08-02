@@ -82,6 +82,97 @@ export const LITSX_ROOT_MARKER_PREFIX = "litsx-root";
  */
 export const LITSX_HYDRATION_PAYLOAD_PROPERTY = "__litsxHydrationPayload";
 
+const FORWARDED_REF_TARGET_ATTRIBUTE = "data-litsx-forwarded-ref-target";
+const FORWARDED_REF_PROPS_ATTRIBUTE = "data-litsx-forwarded-ref-props";
+const forwardedRefsByDocument = new WeakMap();
+
+function getForwardedRefs(documentRef) {
+  let refs = forwardedRefsByDocument.get(documentRef);
+  if (!refs) {
+    refs = new Map();
+    forwardedRefsByDocument.set(documentRef, refs);
+  }
+  return refs;
+}
+
+function getForwardedRef(documentRef, id) {
+  const refs = getForwardedRefs(documentRef);
+  let ref = refs.get(id);
+  if (!ref) {
+    ref = { current: null };
+    refs.set(id, ref);
+  }
+  return ref;
+}
+
+function collectElementsIncludingShadowRoots(root) {
+  const elements = [];
+  const seen = new Set();
+  const visit = (node) => {
+    if (!node || seen.has(node)) return;
+    seen.add(node);
+    if (node.nodeType === 1) elements.push(node);
+    for (const child of node.children ?? []) visit(child);
+    if (node.shadowRoot) visit(node.shadowRoot);
+    for (const child of node.childNodes ?? []) {
+      if (child.nodeType === 1) visit(child);
+    }
+  };
+
+  if (root?.nodeType === 9) {
+    visit(root.documentElement);
+  } else {
+    visit(root);
+  }
+  return elements;
+}
+
+/**
+ * Recreate client refs forwarded through SSR-only composition boundaries.
+ *
+ * The server emits only stable ids; refs themselves remain ordinary client
+ * `{ current }` objects and are assigned before custom elements upgrade.
+ */
+export function prepareForwardedRefs(rootOrDocument = typeof document === "undefined" ? null : document) {
+  const documentRef = resolveDocument(rootOrDocument);
+  if (!documentRef || !rootOrDocument) return;
+
+  const elements = collectElementsIncludingShadowRoots(rootOrDocument);
+  const targetIds = new Set();
+  for (const element of elements) {
+    const targetId = element.getAttribute?.(FORWARDED_REF_TARGET_ATTRIBUTE);
+    if (targetId) {
+      targetIds.add(targetId);
+      getForwardedRef(documentRef, targetId).current = element;
+    }
+  }
+
+  // A whole-document pass happens after a route delta is committed. Clear
+  // handles whose target was removed rather than leaving a stale detached
+  // element exposed to a persistent layout.
+  if (rootOrDocument?.nodeType === 9) {
+    for (const [id, ref] of getForwardedRefs(documentRef)) {
+      if (!targetIds.has(id)) ref.current = null;
+    }
+  }
+
+  for (const element of elements) {
+    const serialized = element.getAttribute?.(FORWARDED_REF_PROPS_ATTRIBUTE);
+    if (!serialized) continue;
+    let bindings;
+    try {
+      bindings = JSON.parse(serialized);
+    } catch {
+      continue;
+    }
+    if (!bindings || typeof bindings !== "object" || Array.isArray(bindings)) continue;
+    for (const [property, id] of Object.entries(bindings)) {
+      if (typeof property !== "string" || !property || typeof id !== "string" || !id) continue;
+      element[property] = getForwardedRef(documentRef, id);
+    }
+  }
+}
+
 async function importClientModule(specifier) {
   return import(/* @vite-ignore */ specifier);
 }
@@ -523,6 +614,7 @@ export async function hydrate(
 
   const hydrationData = readHydrationData(root, options);
   prepareHydrationResources(hydrationData);
+  prepareForwardedRefs(root);
   const hydrationRoots = resolveHydrationRoots(root, options);
   applyHydrationPayload(hydrationRoots, hydrationData);
 
@@ -561,6 +653,7 @@ export async function hydrateRoot(
   const documentRef = resolveDocument(root) ?? root;
   const hydrationData = readHydrationData(documentRef, options);
   prepareHydrationResources(hydrationData);
+  prepareForwardedRefs(root);
   const rootMetadata = normalizeHydrationRoots(hydrationData).find((entry) => entry.id === rootId);
   if (!rootMetadata) {
     throw new Error(`Hydration metadata did not include root "${rootId}".`);

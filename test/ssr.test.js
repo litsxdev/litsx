@@ -8,6 +8,7 @@ import { renderLight } from "@lit-labs/ssr-client/directives/render-light.js";
 import {
   annotateHydratableCustomElement,
   __litsxServerComponentCall,
+  __litsxForwardedRef,
   LITSX_MODULE_ID,
   __litsxScopedTemplate,
 } from "../packages/core/src/elements/index.js";
@@ -2239,5 +2240,28 @@ export class BetaCard extends LitElement {
 
     assert.match(firstResult.html, /data-request-count="1"/);
     assert.match(secondResult.html, /data-request-count="1"/);
+  });
+
+  it("emits opaque hydration markers for a ref forwarded through server composition", async () => {
+    class PageContext extends LitElement {}
+    class Navbar extends LitElement {}
+    const ref = __litsxForwardedRef("route-page-context");
+
+    const result = await renderToString(
+      __litsxScopedTemplate(
+        html`<page-context .ref=${ref}></page-context><route-navbar .contextRef=${ref}></route-navbar>`,
+        {
+          "page-context": PageContext,
+          "route-navbar": Navbar,
+        },
+      ),
+    );
+
+    assert.match(result.html, /data-litsx-forwarded-ref-target="route-page-context"/);
+    assert.match(
+      result.html,
+      /data-litsx-forwarded-ref-props="\{&quot;contextRef&quot;:&quot;route-page-context&quot;\}"/,
+    );
+    assert.doesNotMatch(result.html, /\[object Object\]/);
   });
 });
