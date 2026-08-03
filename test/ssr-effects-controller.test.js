@@ -4,8 +4,9 @@ import {
   LITSX_SSR_CONTEXT,
 } from "../packages/core/src/elements/index.js";
 import { prepareEffects } from "../packages/core/src/effect-hooks.js";
-import { useState, useRef, useId, useExternalStore } from "../packages/core/src/state-hooks.js";
+import { useState, useRef, useId, useExternalStore, useExpose } from "../packages/core/src/state-hooks.js";
 import { useMemoValue, useOnConnect } from "../packages/core/src/effect-hooks.js";
+import { getController } from "../packages/core/src/runtime-controller.js";
 
 function createSsrHost(instanceId = "0") {
   return {
@@ -66,5 +67,37 @@ describe("SsrEffectsController", () => {
 
     assert.strictEqual(snapshot, "server");
     assert.strictEqual(connectedCalls, 0);
+  });
+
+  it("keeps both useExpose signatures inert and ordered across SSR passes", () => {
+    const host = createSsrHost("9");
+    const forwardedRef = { current: "consumer-value" };
+    let factoryCalls = 0;
+
+    const renderPass = () => {
+      prepareEffects(host);
+      useExpose(host, () => {
+        factoryCalls += 1;
+        return { focus() {} };
+      }, []);
+      useExpose(host, forwardedRef, () => {
+        factoryCalls += 1;
+        return { focus() {} };
+      }, []);
+    };
+
+    renderPass();
+    const controller = getController(host);
+    assert.strictEqual(controller.exposeCursor, 1);
+    assert.strictEqual(controller.exposeRefCursor, 1);
+    assert.strictEqual(factoryCalls, 0);
+    assert.strictEqual(forwardedRef.current, "consumer-value");
+    assert.strictEqual(Object.prototype.hasOwnProperty.call(host, "focus"), false);
+
+    renderPass();
+    assert.strictEqual(controller.exposeCursor, 1);
+    assert.strictEqual(controller.exposeRefCursor, 1);
+    assert.strictEqual(factoryCalls, 0);
+    assert.strictEqual(forwardedRef.current, "consumer-value");
   });
 });
