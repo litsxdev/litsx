@@ -26,6 +26,8 @@ export class SsrEffectsController {
     this.mutableRefCursor = 0;
     this.ids = [];
     this.idCursor = 0;
+    this.exposeCursor = 0;
+    this.exposeRefCursor = 0;
   }
 
   prepare() {
@@ -36,6 +38,8 @@ export class SsrEffectsController {
     this.reducerCursor = 0;
     this.mutableRefCursor = 0;
     this.idCursor = 0;
+    this.exposeCursor = 0;
+    this.exposeRefCursor = 0;
   }
 
   register() {}
@@ -43,6 +47,14 @@ export class SsrEffectsController {
   registerConnected() {}
 
   registerImperative() {}
+
+  registerExpose(_createHandle, _deps) {
+    this.exposeCursor += 1;
+  }
+
+  registerExposeRef(_ref, _createHandle, _deps) {
+    this.exposeRefCursor += 1;
+  }
 
   resolveMemo(factory, deps) {
     return resolveMemo(this, factory, deps);

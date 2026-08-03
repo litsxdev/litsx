@@ -109,6 +109,106 @@ defineResourceCard();
   }
 });
 
+test("hydrates both useExpose signatures without executing imperative handles during SSR", async ({ page }) => {
+  const tempRoot = path.join(repoRoot, "test-results");
+  await fs.mkdir(tempRoot, { recursive: true });
+  const tempDir = await fs.mkdtemp(path.join(tempRoot, "litsx-ssr-expose-"));
+  const srcDir = path.join(tempDir, "src");
+  await fs.mkdir(srcDir, { recursive: true });
+  await fs.writeFile(path.join(srcDir, "expose-card.litsx"), `
+import { useExpose, useOnConnect, useRef } from "@litsx/core";
+
+export function ExposeCard() {
+  const forwardedRef = useRef(null);
+
+  useExpose(() => {
+    if (typeof window === "undefined") throw new Error("host expose factory ran during SSR");
+    return {
+      focus() {
+        window.__hostExposeCalls = (window.__hostExposeCalls ?? 0) + 1;
+      },
+    };
+  }, []);
+
+  useExpose(forwardedRef, () => {
+    if (typeof window === "undefined") throw new Error("ref expose factory ran during SSR");
+    return {
+      focus() {
+        window.__refExposeCalls = (window.__refExposeCalls ?? 0) + 1;
+      },
+    };
+  }, []);
+
+  useOnConnect(() => {
+    window.__forwardedExposeHandle = forwardedRef.current;
+  }, []);
+
+  return <p id="status">Expose ready</p>;
+}
+
+export function defineExposeCard() {
+  if (!customElements.get("expose-card")) customElements.define("expose-card", ExposeCard);
+}
+`);
+  await fs.writeFile(path.join(srcDir, "main.js"), `
+import { defineExposeCard } from "./expose-card.litsx";
+defineExposeCard();
+`);
+
+  const server = await createSsrDevServer({
+    root: tempDir,
+    clientEntry: "./src/main.js",
+    logLevel: "silent",
+    host: "127.0.0.1",
+    strictPort: false,
+    elements(loader) {
+      return {
+        "expose-card": async () => (await loader("./src/expose-card.litsx")).ExposeCard,
+      };
+    },
+    render({ html: serverHtml }) {
+      return serverHtml`<expose-card></expose-card>`;
+    },
+  });
+  await server.listen();
+
+  try {
+    const consoleErrors = [];
+    page.on("console", (message) => {
+      if (message.type() === "error") consoleErrors.push(message.text());
+    });
+    const url = server.resolvedUrls.local[0];
+    const documentSource = await (await fetch(url)).text();
+    expect(documentSource).toContain("Expose ready");
+
+    await page.goto(url);
+    await page.waitForFunction(() => {
+      const element = document.querySelector("expose-card");
+      return typeof element?.focus === "function" &&
+        typeof window.__forwardedExposeHandle?.focus === "function";
+    });
+    const result = await page.evaluate(() => {
+      const element = document.querySelector("expose-card");
+      element.focus();
+      window.__forwardedExposeHandle.focus();
+      return {
+        text: element.shadowRoot?.querySelector("#status")?.textContent,
+        hostCalls: window.__hostExposeCalls ?? 0,
+        refCalls: window.__refExposeCalls ?? 0,
+      };
+    });
+
+    expect(consoleErrors).toEqual([]);
+    expect(result).toEqual({
+      text: "Expose ready",
+      hostCalls: 1,
+      refCalls: 1,
+    });
+  } finally {
+    await server.close();
+  }
+});
+
 test("keeps dynamic noscript fallback markup inert with JavaScript and usable without it", async ({ browser, page }) => {
   const server = await createSsrDevServer({
     root: repoRoot,
