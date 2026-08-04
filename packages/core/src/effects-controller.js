@@ -1,4 +1,4 @@
-import { normalizeDeps } from "./runtime-deps.js";
+import { haveDepsChanged, normalizeDeps } from "./runtime-deps.js";
 import { assignRef, cleanupRef } from "./runtime-refs.js";
 import { PriorityScheduler } from "./runtime-priority-scheduler.js";
 import { addAdoptedController } from "./runtime-adopted-controllers.js";
@@ -37,6 +37,18 @@ const EXPOSED_METHODS = Symbol.for("litsx.exposedMethods");
 
 function isObject(value) {
   return value !== null && typeof value === "object";
+}
+
+function cleanupImperativeSlot(slot) {
+  if (!slot?.assigned && Object.prototype.hasOwnProperty.call(slot ?? {}, "assigned")) {
+    return;
+  }
+
+  cleanupRef(slot?.ref);
+  if (slot) {
+    slot.assigned = false;
+    slot.target = null;
+  }
 }
 
 function getExposedMethodRegistry(host) {
@@ -296,6 +308,7 @@ export class EffectsController {
 
     this.imperatives = [];
     this.imperativeCursor = 0;
+    this.prevImperativeCount = 0;
     this.exposeSlots = [];
     this.exposeCursor = 0;
     this.prevExposeCount = 0;
@@ -332,6 +345,7 @@ export class EffectsController {
     this.reducerCursor = 0;
     this.mutableRefCursor = 0;
     this.idCursor = 0;
+    this.prevImperativeCount = this.imperatives.length;
     this.imperativeCursor = 0;
     this.prevExposeCount = this.exposeCursor;
     this.exposeCursor = 0;
@@ -393,6 +407,7 @@ export class EffectsController {
     this.buildQueues();
     this.finalizeConnectedEffects();
     this.runLayoutNow();
+    this.cleanupUnusedImperatives();
     this.schedulePassive();
     if (this.hostIsConnected) {
       this.runConnectedEffects();
@@ -423,7 +438,7 @@ export class EffectsController {
     this.pendingSuspenseSlots.clear();
     for (const imperative of this.imperatives) {
       if (!imperative) continue;
-      cleanupRef(imperative.ref);
+      cleanupImperativeSlot(imperative);
     }
 
     for (let index = 0; index < this.exposeRefSlots.length; index += 1) {
@@ -508,18 +523,59 @@ export class EffectsController {
   registerImperative(ref, createHandle, deps) {
     const index = this.imperativeCursor;
     const normalized = normalizeDeps(deps);
-
-    const callback = () => {
-      const handle = typeof createHandle === "function" ? createHandle() : createHandle;
-      assignRef(ref, handle);
-      return () => {
-        cleanupRef(ref);
-      };
+    const slot = this.imperatives[index] ||= {
+      ref: null,
+      target: null,
+      deps: undefined,
+      assigned: false,
+      committed: false,
     };
 
-    this.register(callback, normalized, true);
-    this.imperatives[index] = { ref };
+    const callback = () => {
+      const target = typeof createHandle === "function" ? createHandle() : createHandle;
+      const depsChanged =
+        !slot.committed ||
+        normalized === undefined ||
+        haveDepsChanged(slot.deps, normalized);
+      const targetChanged = !Object.is(slot.target, target);
+
+      if (slot.assigned && (depsChanged || targetChanged)) {
+        cleanupRef(slot.ref);
+        slot.assigned = false;
+      }
+
+      slot.ref = ref;
+      slot.target = target ?? null;
+      slot.deps = normalized;
+      slot.committed = true;
+
+      if (target != null && (!slot.assigned || depsChanged || targetChanged)) {
+        assignRef(ref, target);
+        slot.assigned = true;
+      }
+    };
+
+    // The DOM target is resolved after every commit because it can change even
+    // when the authored dependency list is stable (for example after a
+    // suspended render commits `nothing` and later reveals its content).
+    // The imperative slot suppresses duplicate ref notifications when neither
+    // the target nor the ref channel changed.
+    this.register(callback, null, true);
     this.imperativeCursor = index + 1;
+  }
+
+  cleanupUnusedImperatives() {
+    if (this.prevImperativeCount <= this.imperativeCursor) {
+      this.prevImperativeCount = this.imperativeCursor;
+      return;
+    }
+
+    for (let index = this.imperativeCursor; index < this.prevImperativeCount; index += 1) {
+      cleanupImperativeSlot(this.imperatives[index]);
+    }
+
+    this.imperatives.length = this.imperativeCursor;
+    this.prevImperativeCount = this.imperativeCursor;
   }
 
   registerExpose(createHandle, deps) {

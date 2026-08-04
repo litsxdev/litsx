@@ -190,6 +190,93 @@ function insertAfterFunctionRefBinding(bindingPath, statement, renderBody) {
   return false;
 }
 
+function createRefAssignmentCallback(refExpression) {
+  const refIdentifier = t.identifier("refValue");
+  const nodeIdentifier = t.identifier("node");
+
+  return t.arrowFunctionExpression(
+    [nodeIdentifier],
+    t.blockStatement([
+      t.variableDeclaration("const", [
+        t.variableDeclarator(refIdentifier, t.cloneNode(refExpression, true)),
+      ]),
+      t.ifStatement(
+        t.binaryExpression(
+          "===",
+          t.unaryExpression("typeof", refIdentifier),
+          t.stringLiteral("function")
+        ),
+        t.blockStatement([
+          t.expressionStatement(
+            t.callExpression(refIdentifier, [t.cloneNode(nodeIdentifier)])
+          ),
+        ]),
+        t.ifStatement(
+          t.logicalExpression(
+            "&&",
+            t.cloneNode(refIdentifier),
+            t.binaryExpression(
+              "===",
+              t.unaryExpression("typeof", t.cloneNode(refIdentifier)),
+              t.stringLiteral("object")
+            )
+          ),
+          t.blockStatement([
+            t.expressionStatement(
+              t.assignmentExpression(
+                "=",
+                t.memberExpression(t.cloneNode(refIdentifier), t.identifier("current")),
+                t.cloneNode(nodeIdentifier)
+              )
+            ),
+          ])
+        )
+      ),
+    ])
+  );
+}
+
+function isSoftSuspenseRenderScope(functionPath) {
+  const parentPath = functionPath?.parentPath;
+  return Boolean(
+    functionPath?.isArrowFunctionExpression?.() &&
+    parentPath?.isCallExpression?.() &&
+    t.isIdentifier(parentPath.node.callee, { name: "renderWithSoftSuspense" })
+  );
+}
+
+function insertBeforeRefRender(attrPath, methodPath, statements) {
+  const functionPath = attrPath.getFunctionParent();
+  const renderScope = functionPath === methodPath || isSoftSuspenseRenderScope(functionPath)
+    ? functionPath
+    : null;
+  if (!renderScope) {
+    return false;
+  }
+
+  const returnPath = attrPath.findParent(
+    (path) => path.isReturnStatement() && path.getFunctionParent() === renderScope
+  );
+  if (returnPath?.inList) {
+    returnPath.insertBefore(statements);
+    return true;
+  }
+
+  const statementPath = attrPath.getStatementParent();
+  if (statementPath?.inList && statementPath.getFunctionParent() === renderScope) {
+    statementPath.insertBefore(statements);
+    return true;
+  }
+
+  const bodyPath = renderScope.get("body");
+  if (bodyPath.isBlockStatement()) {
+    bodyPath.unshiftContainer("body", statements);
+    return true;
+  }
+
+  return false;
+}
+
 function getComponentRefAttributeName(attrPath) {
   void attrPath;
   return ".ref";
@@ -815,14 +902,57 @@ export function createUseRefTransform({
 
               let callbackExpression = null;
               let insertionBindingPath = null;
+              let capturedRefDeclaration = null;
+              let callbackDeps = null;
               if (t.isArrowFunctionExpression(expr) || t.isFunctionExpression(expr)) {
                 callbackExpression = t.cloneNode(expr, true);
               } else if (t.isIdentifier(expr)) {
-                const bindingPath = getFunctionRefBindingPath(attrPath.scope.getBinding(expr.name));
+                const binding = attrPath.scope.getBinding(expr.name);
+                if (!binding) {
+                  return;
+                }
+                const bindingPath = getFunctionRefBindingPath(binding);
                 const callbackNode = getFunctionRefCallbackNode(bindingPath);
-                if (!bindingPath || !callbackNode) return;
-                callbackExpression = callbackNode;
-                insertionBindingPath = bindingPath;
+                if (bindingPath && callbackNode) {
+                  callbackExpression = callbackNode;
+                  insertionBindingPath = bindingPath;
+                } else {
+                  const initPath = binding?.path?.isVariableDeclarator?.()
+                    ? binding.path.get("init")
+                    : null;
+                  if (
+                    initPath?.isCallExpression?.() &&
+                    (
+                      initPath.node.__litsxMutableRefLowered === true ||
+                      (
+                        t.isIdentifier(initPath.node.callee) &&
+                        supportedHookNames.includes(initPath.node.callee.name)
+                      ) ||
+                      getSupportedHookImportLocal(
+                        initPath.get("callee"),
+                        initPath.scope,
+                        Array.from(new Set([...importSources, RUNTIME_MODULE])),
+                        supportedHookNames,
+                        t
+                      )
+                    )
+                  ) {
+                    return;
+                  }
+                  const capturedRef = methodPath.scope.generateUidIdentifier("refValue");
+                  capturedRefDeclaration = t.variableDeclaration("const", [
+                    t.variableDeclarator(capturedRef, t.cloneNode(expr, true)),
+                  ]);
+                  callbackExpression = createRefAssignmentCallback(capturedRef);
+                  callbackDeps = t.arrayExpression([t.cloneNode(capturedRef)]);
+                }
+              } else if (t.isMemberExpression(expr) || t.isOptionalMemberExpression(expr)) {
+                const capturedRef = methodPath.scope.generateUidIdentifier("refValue");
+                capturedRefDeclaration = t.variableDeclaration("const", [
+                  t.variableDeclarator(capturedRef, t.cloneNode(expr, true)),
+                ]);
+                callbackExpression = createRefAssignmentCallback(capturedRef);
+                callbackDeps = t.arrayExpression([t.cloneNode(capturedRef)]);
               } else {
                 return;
               }
@@ -836,15 +966,29 @@ export function createUseRefTransform({
 
               ensureGetter(classPath, refName);
 
-              const callbackStatement = t.expressionStatement(
-                t.callExpression(t.identifier(state.callbackRuntimeLocalName), [
+              const callbackArguments = [
                   t.thisExpression(),
                   t.arrowFunctionExpression([], t.memberExpression(t.thisExpression(), t.identifier(refName))),
                   callbackExpression,
-                ])
+              ];
+              if (callbackDeps) {
+                callbackArguments.push(callbackDeps);
+              }
+              const callbackStatement = t.expressionStatement(
+                t.callExpression(t.identifier(state.callbackRuntimeLocalName), callbackArguments)
               );
 
-              insertAfterFunctionRefBinding(insertionBindingPath, callbackStatement, renderBody);
+              if (capturedRefDeclaration) {
+                if (!insertBeforeRefRender(
+                  attrPath,
+                  methodPath,
+                  [capturedRefDeclaration, callbackStatement]
+                )) {
+                  return;
+                }
+              } else {
+                insertAfterFunctionRefBinding(insertionBindingPath, callbackStatement, renderBody);
+              }
               state.callbackRuntimeNeeded = true;
             },
             TaggedTemplateExpression(templatePath) {

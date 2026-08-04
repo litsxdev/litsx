@@ -1737,6 +1737,121 @@ describe("litsx effects controller", () => {
     assert.strictEqual(current, node);
   });
 
+  it("publishes a callback ref when its target appears after a suspended commit", async () => {
+    const host = new TestHost();
+    const pending = deferred();
+    const node = { tagName: "FORM" };
+    const calls = [];
+    const ref = (value) => calls.push(value);
+    let target = null;
+    let ready = false;
+
+    const render = () => renderWithSoftSuspense(host, () => {
+      prepareEffects(host);
+      useCallbackRef(host, () => target, ref, [ref]);
+      if (!ready) throw pending.promise;
+      return "ready";
+    });
+
+    assert.strictEqual(render(), nothing);
+    update(host);
+    assert.deepStrictEqual(calls, []);
+
+    ready = true;
+    pending.resolve();
+    await pending.promise;
+    await Promise.resolve();
+    target = node;
+
+    assert.strictEqual(render(), "ready");
+    update(host);
+    assert.deepStrictEqual(calls, [node]);
+  });
+
+  it("restores object refs after repeated suspended commits without duplicate assignments", () => {
+    const host = new TestHost();
+    const firstNode = { tagName: "FORM", version: 1 };
+    const secondNode = { tagName: "FORM", version: 2 };
+    const assignments = [];
+    let current = null;
+    const ref = {
+      get current() {
+        return current;
+      },
+      set current(value) {
+        current = value;
+        assignments.push(value);
+      },
+    };
+    let target = firstNode;
+
+    const commit = () => {
+      prepareEffects(host);
+      useCallbackRef(host, () => target, (value) => {
+        ref.current = value;
+      }, [ref]);
+      update(host);
+    };
+
+    commit();
+    assert.strictEqual(ref.current, firstNode);
+
+    target = null;
+    commit();
+    assert.strictEqual(ref.current, null);
+
+    target = secondNode;
+    commit();
+    assert.strictEqual(ref.current, secondNode);
+
+    commit();
+    assert.strictEqual(ref.current, secondNode);
+    assert.deepStrictEqual(assignments, [firstNode, null, secondNode]);
+  });
+
+  it("cleans and republishes refs when either the target or ref channel changes", () => {
+    const host = new TestHost();
+    const firstNode = { tagName: "FORM", version: 1 };
+    const secondNode = { tagName: "FORM", version: 2 };
+    const firstCalls = [];
+    const secondCalls = [];
+    const firstRef = (value) => firstCalls.push(value);
+    const secondRef = (value) => secondCalls.push(value);
+    let target = firstNode;
+    let ref = firstRef;
+
+    const commit = () => {
+      prepareEffects(host);
+      useCallbackRef(host, () => target, ref, [ref]);
+      update(host);
+    };
+
+    commit();
+    target = secondNode;
+    commit();
+    ref = secondRef;
+    commit();
+
+    assert.deepStrictEqual(firstCalls, [firstNode, null, secondNode, null]);
+    assert.deepStrictEqual(secondCalls, [secondNode]);
+  });
+
+  it("cleans an imperative ref when its hook is absent from the committed render", () => {
+    const host = new TestHost();
+    const node = { tagName: "FORM" };
+    const calls = [];
+    const ref = (value) => calls.push(value);
+
+    prepareEffects(host);
+    useCallbackRef(host, () => node, ref, [ref]);
+    update(host);
+
+    prepareEffects(host);
+    update(host);
+
+    assert.deepStrictEqual(calls, [node, null]);
+  });
+
   it("cleans callback refs on disconnect", () => {
     const host = new TestHost();
     const node = { tagName: "FORM" };

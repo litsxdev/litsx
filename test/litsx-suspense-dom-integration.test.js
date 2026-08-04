@@ -8,6 +8,7 @@ import {
   SuspenseList,
   prepareEffects,
   renderWithSoftSuspense,
+  useCallbackRef,
   useOnConnect,
   useRef,
   useState,
@@ -76,11 +77,149 @@ afterEach(() => {
 });
 
 describe("litsx suspense DOM integration", () => {
-  it("captures soft suspension from descendant custom element updates inside a boundary", async () => {
-    const boundaryTag = "litsx-suspense-descendant-boundary-integration";
+  it("restores callback and object refs after a cold soft suspension", async () => {
+    const callbackTag = nextTag("litsx-suspended-callback-ref");
+    const objectTag = nextTag("litsx-suspended-object-ref");
+
+    async function verifyRefLifecycle(
+      tagName,
+      createRefChannel,
+      readRef,
+      createCallback = (channel) => channel,
+    ) {
+      const pending = createDeferred();
+      let ready = false;
+
+      class SuspendedForm extends LitElement {
+        constructor() {
+          super();
+          this.refChannel = createRefChannel();
+          this.refCallback = createCallback(this.refChannel);
+        }
+
+        render() {
+          return renderWithSoftSuspense(this, () => {
+            prepareEffects(this);
+            useCallbackRef(
+              this,
+              () => this.renderRoot?.querySelector('[data-ref="form"]') ?? null,
+              this.refCallback,
+              [this.refChannel],
+            );
+            if (!ready) throw pending.promise;
+            return html`<form data-ref="form"></form>`;
+          });
+        }
+      }
+
+      const host = defineTestElement(tagName, SuspendedForm);
+      document.body.appendChild(host);
+      await host.updateComplete;
+      assert.strictEqual(readRef(host.refChannel), null);
+
+      ready = true;
+      pending.resolve();
+      await pending.promise;
+      await Promise.resolve();
+      await host.updateComplete;
+
+      const form = host.shadowRoot.querySelector("form");
+      assert.ok(form);
+      assert.strictEqual(readRef(host.refChannel), form);
+    }
+
+    await verifyRefLifecycle(
+      callbackTag,
+      () => {
+        const channel = (value) => {
+          channel.current = value;
+        };
+        channel.current = null;
+        return channel;
+      },
+      (channel) => channel.current,
+    );
+    await verifyRefLifecycle(
+      objectTag,
+      () => ({ current: null }),
+      (channel) => channel.current,
+      (channel) => (value) => {
+        channel.current = value;
+      },
+    );
+  });
+
+  it("reconciles refs across repeated suspension, conditional targets, and disconnect", async () => {
+    const tagName = nextTag("litsx-repeated-suspended-ref");
+    const calls = [];
+    const ref = (value) => calls.push(value);
+
+    class SuspendedForm extends LitElement {
+      constructor() {
+        super();
+        this.pending = null;
+        this.visible = true;
+      }
+
+      render() {
+        return renderWithSoftSuspense(this, () => {
+          prepareEffects(this);
+          useCallbackRef(
+            this,
+            () => this.renderRoot?.querySelector('[data-ref="form"]') ?? null,
+            ref,
+            [ref],
+          );
+          if (this.pending) throw this.pending.promise;
+          return this.visible ? html`<form data-ref="form"></form>` : null;
+        });
+      }
+    }
+
+    const host = defineTestElement(tagName, SuspendedForm);
+    document.body.appendChild(host);
+    await host.updateComplete;
+    const firstForm = host.shadowRoot.querySelector("form");
+    assert.strictEqual(calls.at(-1), firstForm);
+
+    for (let pass = 0; pass < 2; pass += 1) {
+      const pending = createDeferred();
+      host.pending = pending;
+      host.requestUpdate();
+      await host.updateComplete;
+      assert.strictEqual(calls.at(-1), null);
+
+      host.pending = null;
+      pending.resolve();
+      await pending.promise;
+      await Promise.resolve();
+      await host.updateComplete;
+      assert.strictEqual(calls.at(-1), host.shadowRoot.querySelector("form"));
+    }
+
+    host.visible = false;
+    host.requestUpdate();
+    await host.updateComplete;
+    assert.strictEqual(calls.at(-1), null);
+
+    host.visible = true;
+    host.requestUpdate();
+    await host.updateComplete;
+    assert.strictEqual(calls.at(-1), host.shadowRoot.querySelector("form"));
+
+    const callCountBeforeDisconnect = calls.length;
+    host.remove();
+    assert.strictEqual(calls.length, callCountBeforeDisconnect + 1);
+    assert.strictEqual(calls.at(-1), null);
+  });
+
+  it("restores descendant refs through nested explicit suspense boundaries", async () => {
+    const outerBoundaryTag = "litsx-suspense-descendant-outer-boundary-integration";
+    const innerBoundaryTag = "litsx-suspense-descendant-inner-boundary-integration";
     const hostTag = "litsx-suspense-descendant-host-integration";
     const childTag = "litsx-suspense-descendant-child-integration";
     const pending = createDeferred();
+    const refCalls = [];
     let resolved = false;
 
     class TestBoundary extends SuspenseBoundary {}
@@ -88,6 +227,13 @@ describe("litsx suspense DOM integration", () => {
     class AsyncChild extends LitElement {
       render() {
         return renderWithSoftSuspense(this, () => {
+          prepareEffects(this);
+          useCallbackRef(
+            this,
+            () => this.renderRoot?.querySelector("[data-ready]") ?? null,
+            (value) => refCalls.push(value),
+            [],
+          );
           if (!resolved) {
             throw pending.promise;
           }
@@ -99,42 +245,58 @@ describe("litsx suspense DOM integration", () => {
     class TestHost extends LitElement {
       render() {
         return html`
-          <litsx-suspense-descendant-boundary-integration
-            .fallback=${() => html`<span data-fallback>loading</span>`}
+          <litsx-suspense-descendant-outer-boundary-integration
+            .fallback=${() => html`<span data-outer-fallback>outer loading</span>`}
             .content=${() => html`
-              <litsx-suspense-descendant-child-integration>
-              </litsx-suspense-descendant-child-integration>
+              <litsx-suspense-descendant-inner-boundary-integration
+                .fallback=${() => html`<span data-fallback>loading</span>`}
+                .content=${() => html`
+                  <litsx-suspense-descendant-child-integration>
+                  </litsx-suspense-descendant-child-integration>
+                `}
+              ></litsx-suspense-descendant-inner-boundary-integration>
             `}
-          ></litsx-suspense-descendant-boundary-integration>
+          ></litsx-suspense-descendant-outer-boundary-integration>
         `;
       }
     }
 
-    defineTestElement(boundaryTag, TestBoundary);
+    defineTestElement(outerBoundaryTag, TestBoundary);
+    defineTestElement(innerBoundaryTag, class extends TestBoundary {});
     defineTestElement(childTag, AsyncChild);
     defineTestElement(hostTag, TestHost);
 
     const host = document.createElement(hostTag);
     document.body.appendChild(host);
     await host.updateComplete;
-    const boundary = host.shadowRoot.querySelector(boundaryTag);
-    await boundary.updateComplete;
+    const outerBoundary = host.shadowRoot.querySelector(outerBoundaryTag);
+    await outerBoundary.updateComplete;
     await Promise.resolve();
-    await boundary.updateComplete;
+    await outerBoundary.updateComplete;
+    const innerBoundary = getRegionRoot(outerBoundary, "content")
+      ?.querySelector?.(innerBoundaryTag) ?? null;
+    assert.ok(innerBoundary);
+    await innerBoundary.updateComplete;
+    await Promise.resolve();
+    await innerBoundary.updateComplete;
 
-    assert.strictEqual(boundary.pending, true);
-    assert.match(getRegionRoot(boundary, "fallback")?.innerHTML ?? "", /data-fallback/);
+    assert.strictEqual(outerBoundary.pending, false);
+    assert.strictEqual(innerBoundary.pending, true);
+    assert.match(getRegionRoot(innerBoundary, "fallback")?.innerHTML ?? "", /data-fallback/);
+    assert.deepStrictEqual(refCalls, []);
 
     resolved = true;
     pending.resolve();
     await pending.promise;
-    await boundary.updateComplete;
-    const child = getRegionRoot(boundary, "content")?.querySelector?.(childTag) ?? null;
+    await innerBoundary.updateComplete;
+    const child = getRegionRoot(innerBoundary, "content")?.querySelector?.(childTag) ?? null;
     await child.updateComplete;
-    await boundary.updateComplete;
+    await innerBoundary.updateComplete;
 
-    assert.strictEqual(boundary.pending, false);
-    assert.match(child.shadowRoot.innerHTML, /data-ready/);
+    const readyNode = child.shadowRoot.querySelector("[data-ready]");
+    assert.strictEqual(innerBoundary.pending, false);
+    assert.ok(readyNode);
+    assert.strictEqual(refCalls.at(-1), readyNode);
   });
 
   it("replays suspense content when a new host instance mounts after the previous one disconnected", async () => {

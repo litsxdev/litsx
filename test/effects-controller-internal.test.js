@@ -79,13 +79,13 @@ describe("effects controller internals", () => {
     controller.registerImperative(ref, { focus: true }, ["dep"]);
     assert.strictEqual(controller.imperatives.length, 1);
     assert.strictEqual(controller.imperativeCursor, 1);
-    assert.deepStrictEqual(registered[0].deps, ["dep"]);
+    assert.strictEqual(registered[0].deps, null);
     assert.strictEqual(registered[0].layout, true);
 
-    const cleanup = registered[0].callback();
+    registered[0].callback();
     assert.deepStrictEqual(ref.current, { focus: true });
-    cleanup();
-    assert.strictEqual(ref.current, null);
+    registered[0].callback();
+    assert.deepStrictEqual(ref.current, { focus: true });
 
     controller.registerExpose(() => ({ reportValidity() { return true; } }), ["api"]);
     assert.deepStrictEqual(registered[1].deps, ["api"]);

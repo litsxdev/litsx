@@ -131,6 +131,56 @@ describe("@litsx/babel-plugin-shared-hooks createUseRefTransform", () => {
     assert.match(code, /html`<button data-ref="_ref">Click<\/button>`/);
   });
 
+  it("lowers props, state, and object member refs without serializing their values", () => {
+    const source = `
+      import { LitElement } from 'lit';
+
+      class AddressForm extends LitElement {
+        render() {
+          const props = this.props;
+          const state = this.state;
+          const object = this.channels;
+          return (
+            <section>
+              <form ref={props.ref}></form>
+              <input ref={state.ref} />
+              <button ref={object.callback}></button>
+            </section>
+          );
+        }
+      }
+    `;
+
+    const code = run(source);
+
+    assert.strictEqual((code.match(/useCallbackRef\(this,/g) || []).length, 3);
+    assert.match(code, /const _refValue = props\.ref;/);
+    assert.match(code, /const _refValue2 = state\.ref;/);
+    assert.match(code, /const _refValue3 = object\.callback;/);
+    assert.doesNotMatch(code, /<(?:form|input|button) ref=/);
+  });
+
+  it("lowers aliased native refs with callback-or-object assignment semantics", () => {
+    const source = `
+      import { LitElement } from 'lit';
+
+      class AddressForm extends LitElement {
+        render() {
+          const formRef = this.formState.ref;
+          return <form ref={formRef}></form>;
+        }
+      }
+    `;
+
+    const code = run(source);
+
+    assert.match(code, /data-ref="_ref"/);
+    assert.match(code, /const _refValue = formRef;/);
+    assert.match(code, /typeof refValue === "function"/);
+    assert.match(code, /refValue\.current = node/);
+    assert.doesNotMatch(code, /<form ref=/);
+  });
+
   it("aliases the runtime callback helper when useCallbackRef is already bound in module scope", () => {
     const source = `
       import { LitElement } from 'lit';
