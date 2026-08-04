@@ -209,6 +209,100 @@ defineExposeCard();
   }
 });
 
+test("restores a native object ref after the first client render suspends", async ({ page }) => {
+  const tempRoot = path.join(repoRoot, "test-results");
+  await fs.mkdir(tempRoot, { recursive: true });
+  const tempDir = await fs.mkdtemp(path.join(tempRoot, "litsx-ssr-suspended-ref-"));
+  const srcDir = path.join(tempDir, "src");
+  await fs.mkdir(srcDir, { recursive: true });
+  await fs.writeFile(path.join(srcDir, "suspended-form.litsx"), `
+import { useOnCommit, useRef } from "@litsx/core";
+
+let clientReady = typeof window === "undefined";
+let clientPending = null;
+
+function useColdClientResource() {
+  if (clientReady) return;
+  clientPending ??= new Promise((resolve) => {
+    setTimeout(() => {
+      clientReady = true;
+      resolve();
+    }, 20);
+  });
+  throw clientPending;
+}
+
+export function SuspendedForm() {
+  const formRef = useRef(null);
+  useColdClientResource();
+  useOnCommit(() => {
+    window.__suspendedFormRef = formRef.current;
+    window.__suspendedFormCommitCount = (window.__suspendedFormCommitCount ?? 0) + 1;
+  }, []);
+  return <form ref={formRef} id="suspended-form"><input name="query" value="ready" /></form>;
+}
+
+export function defineSuspendedForm() {
+  if (!customElements.get("suspended-form")) customElements.define("suspended-form", SuspendedForm);
+}
+`);
+  await fs.writeFile(path.join(srcDir, "main.js"), `
+import { defineSuspendedForm } from "./suspended-form.litsx";
+defineSuspendedForm();
+`);
+
+  const server = await createSsrDevServer({
+    root: tempDir,
+    clientEntry: "./src/main.js",
+    logLevel: "silent",
+    host: "127.0.0.1",
+    strictPort: false,
+    elements(loader) {
+      return {
+        "suspended-form": async () =>
+          (await loader("./src/suspended-form.litsx")).SuspendedForm,
+      };
+    },
+    render({ html: serverHtml }) {
+      return serverHtml`<suspended-form></suspended-form>`;
+    },
+  });
+  await server.listen();
+
+  try {
+    const pageErrors = [];
+    page.on("pageerror", (error) => pageErrors.push(error.message));
+    const url = server.resolvedUrls.local[0];
+    const ssrHtml = await (await fetch(url)).text();
+    expect(ssrHtml.match(/<form\b/g) ?? []).toHaveLength(1);
+
+    await page.goto(url, { waitUntil: "networkidle" });
+    await page.waitForFunction(() => {
+      const host = document.querySelector("suspended-form");
+      const form = host?.shadowRoot?.querySelector("#suspended-form") ?? null;
+      return Boolean(form && window.__suspendedFormRef === form);
+    });
+
+    expect(await page.evaluate(() => {
+      const host = document.querySelector("suspended-form");
+      const forms = host?.shadowRoot?.querySelectorAll("#suspended-form") ?? [];
+      return {
+        formCount: forms.length,
+        refMatches: forms.length === 1 && window.__suspendedFormRef === forms[0],
+        commits: window.__suspendedFormCommitCount ?? 0,
+      };
+    })).toEqual({
+      formCount: 1,
+      refMatches: true,
+      commits: 1,
+    });
+    expect(pageErrors).toEqual([]);
+  } finally {
+    await server.close();
+    await fs.rm(tempDir, { recursive: true, force: true });
+  }
+});
+
 test("keeps dynamic noscript fallback markup inert with JavaScript and usable without it", async ({ browser, page }) => {
   const server = await createSsrDevServer({
     root: repoRoot,

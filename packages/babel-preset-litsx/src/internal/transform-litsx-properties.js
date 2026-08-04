@@ -1289,6 +1289,11 @@ export function extractProperties(functionPath, programPath, options = {}) {
     }
 
     if (t.isAssignmentPattern(param)) {
+      if (t.isObjectPattern(param.left)) {
+        handleObjectPattern(param.left);
+        return;
+      }
+
       if (t.isIdentifier(param.left) && tryRegisterTypedAliasBinding(param.left)) {
         if (param.left.name === "props") {
           inferOpaquePropsMemberAccess(param.left.name);

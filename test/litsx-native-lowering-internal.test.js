@@ -125,6 +125,31 @@ describe("@litsx/babel-preset-litsx native lowering internals", () => {
     assert.doesNotMatch(code, /useCallbackRef\(this, \(\) => this,/);
   });
 
+  it("lowers native member and aliased refs through the LitSX preset", () => {
+    const source = [
+      "const AddressForm = ({ formState }) => {",
+      "  const localRef = formState.ref;",
+      "  return (",
+      "    <section>",
+      "      <form ref={formState.ref}></form>",
+      "      <input ref={localRef} />",
+      "    </section>",
+      "  );",
+      "};",
+    ].join("\n");
+
+    const { code } = transformWithNativePreset(source);
+
+    // Two native targets plus the component-instance ref channel that every
+    // authored component exposes by default.
+    assert.strictEqual((code.match(/useCallbackRef\(this,/g) || []).length, 3);
+    assert.match(code, /const _refValue = this\.formState\.ref;/);
+    assert.match(code, /const _refValue2 = localRef;/);
+    assert.doesNotMatch(code, /<form ref=/);
+    assert.doesNotMatch(code, /<input ref=/);
+    assert.doesNotMatch(code, /ref="\$\{/);
+  });
+
   it("detects native ref props through defaulted destructuring and string keys", () => {
     const source = [
       "const SearchPanel = ({ title, 'ref': forwardedRef } = {}) => {",
@@ -135,9 +160,12 @@ describe("@litsx/babel-preset-litsx native lowering internals", () => {
     const { code } = transformWithNativePreset(source);
 
     assert.match(code, /class SearchPanel extends LitElement/);
+    assert.match(code, /static properties = \{[\s\S]*title: \{[\s\S]*ref: \{[\s\S]*attribute: false/s);
     assert.match(code, /prepareEffects\(this\);/);
-    assert.match(code, /useCallbackRef\(this, \(\) => this,/);
-    assert.match(code, /return <input ref=\{forwardedRef\} aria-label=\{title\} \/>;/);
+    assert.match(code, /useCallbackRef\(this, \(\) => this\.renderRoot\?\./);
+    assert.match(code, /\[this\.ref\]/);
+    assert.match(code, /return <input data-ref="_refElement" aria-label=\{this\.title\} \/>;/);
+    assert.doesNotMatch(code, /forwardedRef/);
   });
 
   it("detects native ref props through identifier props access and skips non-standard tags", () => {
