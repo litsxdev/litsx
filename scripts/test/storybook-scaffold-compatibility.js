@@ -32,12 +32,12 @@ function runNpm(fixtureDir, args, cacheDir) {
   });
 }
 
-function installFixtureChromium(fixtureDir, cacheDir) {
+function installRuntimeChromium(cacheDir) {
   execFileSync(
-    path.join(fixtureDir, "node_modules", ".bin", "playwright"),
+    path.join(repoRoot, "node_modules", ".bin", "playwright"),
     ["install", "chromium"],
     {
-      cwd: fixtureDir,
+      cwd: repoRoot,
       env: {
         ...process.env,
         npm_config_cache: cacheDir,
@@ -46,6 +46,13 @@ function installFixtureChromium(fixtureDir, cacheDir) {
       stdio: "inherit",
     },
   );
+
+  const executablePath = chromium.executablePath();
+  if (!fs.existsSync(executablePath)) {
+    throw new Error(
+      `Playwright runtime browser was not installed at ${executablePath}.`,
+    );
+  }
 }
 
 const contentTypes = new Map([
@@ -162,8 +169,8 @@ for (const version of versions) {
 
     console.log(`\n[storybook ${version}] install generated fixture`);
     runNpm(fixtureDir, ["install", "--loglevel=error"], cacheDir);
-    console.log(`\n[storybook ${version}] install Playwright Chromium`);
-    installFixtureChromium(fixtureDir, cacheDir);
+    console.log(`\n[storybook ${version}] install runtime Playwright Chromium`);
+    installRuntimeChromium(cacheDir);
     for (const script of ["build", "typecheck", "test", "build-storybook"]) {
       console.log(`\n[storybook ${version}] npm run ${script}`);
       runNpm(fixtureDir, ["run", script], cacheDir);
