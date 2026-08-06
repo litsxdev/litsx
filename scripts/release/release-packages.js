@@ -1,6 +1,7 @@
 export const npmReleasePackages = [
   "packages/core",
   "packages/compiler",
+  "packages/storybook",
   "packages/vite-plugin",
   "packages/typescript",
   "packages/eslint-plugin-litsx",

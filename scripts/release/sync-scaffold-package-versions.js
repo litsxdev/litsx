@@ -10,6 +10,7 @@ const versionMap = createCaretVersionMap([
   "@litsx/compiler",
   "@litsx/core",
   "@litsx/eslint-plugin",
+  "@litsx/storybook",
   "@litsx/typescript",
   "@litsx/vite-plugin",
   "prettier-plugin-litsx",
