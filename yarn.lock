@@ -1337,17 +1337,6 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@litsx/storybook@workspace:packages/storybook":
-  version: 0.0.0-use.local
-  resolution: "@litsx/storybook@workspace:packages/storybook"
-  dependencies:
-    "@litsx/compiler": "npm:^0.10.0"
-    "@litsx/vite-plugin": "npm:^0.3.2"
-  peerDependencies:
-    "@storybook/web-components-vite": ^10.4.0
-    storybook: ^10.4.0
-    vite: ^7.3.2 || ^8.0.0
-
 "@litsx/ssr@workspace:packages/ssr":
   version: 0.0.0-use.local
   resolution: "@litsx/ssr@workspace:packages/ssr"
@@ -1364,6 +1353,19 @@ __metadata:
   peerDependenciesMeta:
     vite:
       optional: true
+  languageName: unknown
+  linkType: soft
+
+"@litsx/storybook@workspace:packages/storybook":
+  version: 0.0.0-use.local
+  resolution: "@litsx/storybook@workspace:packages/storybook"
+  dependencies:
+    "@litsx/compiler": "npm:^0.10.0"
+    "@litsx/vite-plugin": "npm:^0.3.2"
+  peerDependencies:
+    "@storybook/web-components-vite": ^10.4.0
+    storybook: ^10.4.0
+    vite: ^7.3.2 || ^8.0.0
   languageName: unknown
   linkType: soft
 
