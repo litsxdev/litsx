@@ -22,7 +22,7 @@ export declare const litsxStoriesIndexer: {
   test: RegExp;
   createIndex(
     fileName: string,
-    context: { makeTitle: (...args: unknown[]) => unknown }
+    context?: { makeTitle?: (...args: unknown[]) => unknown }
   ): Promise<unknown>;
 };
 

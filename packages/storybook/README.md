@@ -15,3 +15,10 @@ import { createLitsxStorybookConfig } from "@litsx/storybook";
 
 export default createLitsxStorybookConfig();
 ```
+
+## Storybook compatibility
+
+`@litsx/storybook` supports Storybook 10.4 and 10.5. The integration keeps
+Storybook's contextual `makeTitle` callback when indexing stories and provides
+a safe identity fallback when the Vite registration transform validates CSF
+without an indexer context.

@@ -6,6 +6,7 @@ const LOCAL_WORKSPACE_PACKAGE_NAMES = [
   "@litsx/compiler",
   "@litsx/core",
   "@litsx/eslint-plugin",
+  "@litsx/storybook",
   "prettier-plugin-litsx",
   "@litsx/typescript",
   "@litsx/vite-plugin",
@@ -219,6 +220,9 @@ function createBaseFiles(packageName, className, includeStorybook) {
     "checkJs": true,
     "jsx": "react-jsx",
     "jsxImportSource": "@litsx/core",
+    "paths": {
+      "@webcomponents/scoped-custom-element-registry": ["./src/vendor.d.ts"]
+    },
     "plugins": [
       {
         "name": "@litsx/typescript"
@@ -251,16 +255,23 @@ export default defineConfig({
   },
 });
 `);
-  files.set("vitest.config.js", `import { defineConfig } from "vitest/config";
+  files.set("vitest.config.js", `import { playwright } from "@vitest/browser-playwright";
+import { defineConfig } from "vitest/config";
 import { litsx } from "@litsx/vite-plugin";
 
 export default defineConfig({
   plugins: [litsx({ sourceMaps: true })],
+  resolve: {
+    dedupe: ["lit", "lit-html", "lit-element", "@lit/reactive-element"],
+  },
+  optimizeDeps: {
+    include: ["@litsx/core", "@litsx/core/elements", "@litsx/core/rendering", "lit"],
+  },
   test: {
     include: ["src/**/*.test.js"],
     browser: {
       enabled: true,
-      provider: "playwright",
+      provider: playwright(),
       headless: true,
       instances: [
         {
@@ -401,13 +412,22 @@ export default [
 </svg>
 `);
   files.set("public/flame_512.png", fs.readFileSync(new URL("./assets/flame_512.png", import.meta.url)));
+  files.set("src/vendor.d.ts", `export {};
+`);
+  files.set("src/styles.d.ts", `declare module "*.css";
+`);
   files.set("src/main.js", `import "@webcomponents/scoped-custom-element-registry";
 import { ${className} } from "./${packageName}.litsx";
 import "./styles/tokens.css";
 
-customElements.define("app-root", ${className});
+customElements.define(
+  "app-root",
+  /** @type {CustomElementConstructor} */ (/** @type {unknown} */ (${className})),
+);
 
-document.querySelector("#app").innerHTML = "<app-root></app-root>";
+const app = document.querySelector("#app");
+if (!app) throw new Error("Missing #app mount point");
+app.innerHTML = "<app-root></app-root>";
 `);
   files.set(`src/${packageName}.test.js`, `import { afterEach, describe, expect, it } from "vitest";
 import { ${className} } from "./${packageName}.litsx";
@@ -415,10 +435,14 @@ import { ${className} } from "./${packageName}.litsx";
 const tagName = "test-${packageName}";
 
 if (!customElements.get(tagName)) {
-  customElements.define(tagName, ${className});
+  customElements.define(
+    tagName,
+    /** @type {CustomElementConstructor} */ (/** @type {unknown} */ (${className})),
+  );
 }
 
 describe("${className}", () => {
+  /** @type {(HTMLElement & { updateComplete: Promise<unknown> }) | null} */
   let host = null;
 
   afterEach(() => {
@@ -427,15 +451,19 @@ describe("${className}", () => {
   });
 
   it("renders the starter shell in a real browser DOM", async () => {
-    host = document.createElement(tagName);
-    document.body.append(host);
+    const element = /** @type {HTMLElement & { updateComplete: Promise<unknown> }} */ (
+      document.createElement(tagName)
+    );
+    host = element;
+    document.body.append(element);
 
-    await host.updateComplete;
+    await element.updateComplete;
 
-    const root = host.shadowRoot;
+    const root = element.shadowRoot;
 
     expect(root?.querySelector("main.shell")).toBeTruthy();
-    expect(root?.textContent ?? "").toContain("Getting Started");
+    expect(root?.querySelector("litsx-hero")).toBeTruthy();
+    expect(root?.querySelector("starter-guide")).toBeTruthy();
   });
 });
 `);
@@ -946,13 +974,13 @@ function createDeferred() {
   return { promise, resolve } satisfies DeferredStep;
 }
 
-function resolvePendingSteps(pendingStepsRef: { current: Map<number, DeferredStep> | null }) {
+function resolvePendingSteps(pendingStepsRef: { current: Map<number, DeferredStep> | null | undefined }) {
   pendingStepsRef.current ??= new Map<number, DeferredStep>();
   return pendingStepsRef.current;
 }
 
 function suspendUntil(
-  pendingStepsRef: { current: Map<number, DeferredStep> | null },
+  pendingStepsRef: { current: Map<number, DeferredStep> | null | undefined },
   stepIndex: number,
   revealedCount: number,
 ) {
@@ -993,7 +1021,7 @@ export const StarterGuide = () => {
     setRevealedCount(0);
 
     const [firstDelay = 0, ...remainingDelays] = delays;
-    let intervalId: ReturnType<typeof setInterval> | null = null;
+    let intervalId: ReturnType<typeof setInterval> | undefined;
 
     const firstTimeoutId = setTimeout(() => {
       setRevealedCount((count) => count + 1);
@@ -1009,14 +1037,14 @@ export const StarterGuide = () => {
         intervalIndex += 1;
         if (intervalIndex >= remainingDelays.length) {
           clearInterval(intervalId);
-          intervalId = null;
+          intervalId = undefined;
         }
       }, intervalDelay);
     }, firstDelay);
 
     return () => {
       clearTimeout(firstTimeoutId);
-      if (intervalId != null) {
+      if (intervalId !== undefined) {
         clearInterval(intervalId);
       }
       for (const deferred of resolvePendingSteps(pendingStepsRef).values()) {
@@ -1186,22 +1214,21 @@ export default createLitsxStorybookConfig();
 import "../src/styles/tokens.css";
 
 export const parameters = {
-  controls: { expanded: true },
   layout: "centered",
-  docs: { toc: true },
 };
 `);
   files.set("src/stories/litsx-button.stories.litsx", `import { LitsxButton } from "../components/litsx-button.litsx";
 
-const LitsxButtonStory = ({ label = "View on GitHub", type = "secondary" } = {}) => {
-  return <LitsxButton label={label} type={type} />;
+type LitsxButtonStoryArgs = {
+  label?: string;
+  type?: "primary" | "secondary";
 };
 
 const meta = {
   title: "Components/LitsxButton",
-  component: "litsx-button-story",
-  render: ({ label = "View on GitHub", type = "secondary" } = {}) => (
-    <LitsxButtonStory label={label} type={type} />
+  component: "litsx-button",
+  render: ({ label = "View on GitHub", type = "secondary" }: LitsxButtonStoryArgs = {}) => (
+    <LitsxButton label={label} type={type} />
   ),
 };
 
@@ -1227,7 +1254,7 @@ const meta = {
     secondaryLabel = "View on GitHub",
   } = {}) => (
     <div style="max-width: 960px; margin: 0 auto;">
-      <litsx-hero
+      <LitsxHero
         .eyebrow={eyebrow}
         .tagline={tagline}
         .primaryLabel={primaryLabel}
@@ -1245,7 +1272,7 @@ export const Default = {};
 const meta = {
   title: "Getting Started/StarterGuide",
   component: "starter-guide",
-  render: () => <starter-guide />,
+  render: () => <StarterGuide />,
 };
 
 export default meta;
@@ -1304,10 +1331,10 @@ function createPackageJson(packageName, template, options = {}) {
     packageJson.scripts["build-storybook"] = "storybook build";
     Object.assign(packageJson.devDependencies, {
       "@litsx/storybook": publishedPackageVersions["@litsx/storybook"],
-      "@storybook/addon-a11y": "^10.4.0",
-      "@storybook/addon-docs": "^10.4.0",
-      "@storybook/web-components-vite": "^10.4.0",
-      "storybook": "^10.4.0",
+      "@storybook/addon-a11y": "^10.5.6",
+      "@storybook/addon-docs": "^10.5.6",
+      "@storybook/web-components-vite": "^10.5.6",
+      "storybook": "^10.5.6",
     });
   }
 

@@ -139,6 +139,13 @@ function createStorybookCsfError(filename, error) {
   return wrapped;
 }
 
+function createStorybookCsfLoadOptions(filename, makeTitle) {
+  return {
+    fileName: filename,
+    makeTitle: typeof makeTitle === "function" ? makeTitle : (title) => title,
+  };
+}
+
 function getTopLevelLocalBindings(program) {
   const bindings = new Map();
 
@@ -330,7 +337,7 @@ async function validateStorybookCsf(code, filename, makeTitle = null) {
   }
 
   try {
-    return loadCsf(code, { fileName: filename, makeTitle }).parse();
+    return loadCsf(code, createStorybookCsfLoadOptions(filename, makeTitle)).parse();
   } catch (error) {
     throw createStorybookCsfError(filename, error);
   }
@@ -339,7 +346,7 @@ async function validateStorybookCsf(code, filename, makeTitle = null) {
 async function validateStorybookCsfWithLoader(code, filename, makeTitle = null, storybookCsfLoader = null) {
   if (typeof storybookCsfLoader === "function") {
     try {
-      return storybookCsfLoader(code, { fileName: filename, makeTitle }).parse();
+      return storybookCsfLoader(code, createStorybookCsfLoadOptions(filename, makeTitle)).parse();
     } catch (error) {
       throw createStorybookCsfError(filename, error);
     }
@@ -354,7 +361,7 @@ async function validateStorybookCsfWithLoader(code, filename, makeTitle = null, 
 
 export const litsxStoriesIndexer = {
   test: /\.stories\.litsx$/,
-  async createIndex(fileName, { makeTitle }) {
+  async createIndex(fileName, { makeTitle } = {}) {
     const source = await fs.readFile(fileName, "utf8");
     validateLitsxStoryModule(source, fileName);
     const transformed = transformLitsxSync(source, {
