@@ -1,9 +1,11 @@
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
+import { createServer } from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { chromium } from "playwright";
 import { createProject } from "../../packages/create-litsx-app/src/index.js";
 
 const supportedVersions = ["10.4.6", "10.5.6"];
@@ -44,6 +46,84 @@ function installFixtureChromium(fixtureDir, cacheDir) {
       stdio: "inherit",
     },
   );
+}
+
+const contentTypes = new Map([
+  [".css", "text/css; charset=utf-8"],
+  [".html", "text/html; charset=utf-8"],
+  [".js", "text/javascript; charset=utf-8"],
+  [".json", "application/json; charset=utf-8"],
+  [".mjs", "text/javascript; charset=utf-8"],
+  [".png", "image/png"],
+  [".svg", "image/svg+xml"],
+]);
+
+async function assertBuiltStoryRuntime(fixtureDir) {
+  const staticRoot = path.join(fixtureDir, "storybook-static");
+  const server = createServer(async (request, response) => {
+    try {
+      const pathname = decodeURIComponent(
+        new URL(request.url, "http://localhost").pathname,
+      );
+      const relativePath = pathname === "/" ? "index.html" : pathname.slice(1);
+      const filePath = path.resolve(staticRoot, relativePath);
+      if (!filePath.startsWith(`${staticRoot}${path.sep}`)) {
+        response.writeHead(403).end("Forbidden");
+        return;
+      }
+
+      const body = await fs.promises.readFile(filePath);
+      response.writeHead(200, {
+        "content-type":
+          contentTypes.get(path.extname(filePath)) ??
+          "application/octet-stream",
+      });
+      response.end(body);
+    } catch (error) {
+      response.writeHead(error?.code === "ENOENT" ? 404 : 500).end("Not found");
+    }
+  });
+
+  await new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", resolve);
+  });
+
+  const address = server.address();
+  let browser = null;
+  try {
+    browser = await chromium.launch({ headless: true });
+    const page = await browser.newPage();
+    const runtimeErrors = [];
+    page.on("pageerror", (error) => runtimeErrors.push(error.message));
+    page.on("console", (message) => {
+      if (message.type() === "error") runtimeErrors.push(message.text());
+    });
+
+    await page.goto(
+      `http://127.0.0.1:${address.port}/iframe.html?id=components-litsxbutton--primary&viewMode=story`,
+      { waitUntil: "networkidle" },
+    );
+    await page.waitForFunction(() => {
+      const element = document.querySelector("litsx-button");
+      return Boolean(
+        customElements.get("litsx-button") &&
+        element?.shadowRoot?.querySelector("button")?.textContent?.trim() ===
+          "Getting Started",
+      );
+    });
+
+    if (runtimeErrors.length > 0) {
+      throw new Error(
+        `Storybook runtime emitted errors:\n${runtimeErrors.join("\n")}`,
+      );
+    }
+  } finally {
+    await browser?.close();
+    await new Promise((resolve, reject) =>
+      server.close((error) => (error ? reject(error) : resolve())),
+    );
+  }
 }
 
 for (const version of versions) {
@@ -88,6 +168,8 @@ for (const version of versions) {
       console.log(`\n[storybook ${version}] npm run ${script}`);
       runNpm(fixtureDir, ["run", script], cacheDir);
     }
+    console.log(`\n[storybook ${version}] validate registered story runtime`);
+    await assertBuiltStoryRuntime(fixtureDir);
   } finally {
     fs.rmSync(tempRoot, { recursive: true, force: true });
   }

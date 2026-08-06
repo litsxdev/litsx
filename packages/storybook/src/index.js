@@ -6,9 +6,7 @@ import { litsx } from "@litsx/vite-plugin";
 const STORY_FILE_PATTERN = /\.stories\.litsx(?:\?.*)?$/;
 
 function normalizeTagName(tagName) {
-  return typeof tagName === "string" && tagName.includes("-")
-    ? tagName
-    : null;
+  return typeof tagName === "string" && tagName.includes("-") ? tagName : null;
 }
 
 function toKebabCase(value) {
@@ -18,7 +16,11 @@ function toKebabCase(value) {
     .toLowerCase();
 }
 
-function resolveImportedAuthoredTagName(moduleAnalysis, localName, fallbackTagName) {
+function resolveImportedAuthoredTagName(
+  moduleAnalysis,
+  localName,
+  fallbackTagName,
+) {
   for (const entry of moduleAnalysis?.imports ?? []) {
     for (const specifier of entry.specifiers ?? []) {
       if (
@@ -52,9 +54,14 @@ function collectStoryRegistrations(moduleAnalysis = null) {
       continue;
     }
 
-    const rawTagName = entry?.source === "imported-authored-module"
-      ? resolveImportedAuthoredTagName(moduleAnalysis, entry.localName, entry.tagName)
-      : entry.tagName;
+    const rawTagName =
+      entry?.source === "imported-authored-module"
+        ? resolveImportedAuthoredTagName(
+            moduleAnalysis,
+            entry.localName,
+            entry.tagName,
+          )
+        : entry.tagName;
     const tagName = normalizeTagName(rawTagName);
     const constructorName = entry?.localName;
     if (!tagName || typeof constructorName !== "string" || seen.has(tagName)) {
@@ -105,7 +112,9 @@ function getNodeStartLoc(node) {
 }
 
 function createStorybookValidationError(filename, message, loc = null) {
-  const error = new Error(`Invalid LitSX story module in ${filename}: ${message}`);
+  const error = new Error(
+    `Invalid LitSX story module in ${filename}: ${message}`,
+  );
   error.code = "LITSX_STORYBOOK_INVALID_STORY_MODULE";
   if (loc) {
     error.loc = { file: filename, line: loc.line, column: loc.column };
@@ -120,16 +129,18 @@ function createStorybookCsfError(filename, error) {
     `Invalid Storybook CSF generated from ${filename}: ${error?.message || "Unknown Storybook parsing error."}`,
   );
   wrapped.code = "LITSX_STORYBOOK_INVALID_CSF";
-  const line = typeof error?.loc?.line === "number"
-    ? error.loc.line
-    : typeof error?.line === "number"
-      ? error.line
-      : null;
-  const column = typeof error?.loc?.column === "number"
-    ? error.loc.column
-    : typeof error?.column === "number"
-      ? error.column
-      : null;
+  const line =
+    typeof error?.loc?.line === "number"
+      ? error.loc.line
+      : typeof error?.line === "number"
+        ? error.line
+        : null;
+  const column =
+    typeof error?.loc?.column === "number"
+      ? error.loc.column
+      : typeof error?.column === "number"
+        ? error.column
+        : null;
   if (line != null && column != null) {
     wrapped.loc = { file: filename, line, column };
     wrapped.line = line;
@@ -150,11 +161,12 @@ function getTopLevelLocalBindings(program) {
   const bindings = new Map();
 
   for (const statement of program.body || []) {
-    const node = statement.type === "ExportNamedDeclaration"
-      ? statement.declaration
-      : statement.type === "ExportDefaultDeclaration"
+    const node =
+      statement.type === "ExportNamedDeclaration"
         ? statement.declaration
-        : statement;
+        : statement.type === "ExportDefaultDeclaration"
+          ? statement.declaration
+          : statement;
     if (!node) {
       continue;
     }
@@ -299,7 +311,8 @@ function validateLitsxStoryModule(source, filename, compilerOptions = {}) {
     }
 
     for (const specifier of statement.specifiers || []) {
-      const exportName = specifier.exported?.name ?? specifier.local?.name ?? "<unknown>";
+      const exportName =
+        specifier.exported?.name ?? specifier.local?.name ?? "<unknown>";
       const value = resolveExportValue(specifier.local, bindings);
       if (!value || value.type !== "ObjectExpression") {
         throw createStorybookValidationError(
@@ -337,16 +350,27 @@ async function validateStorybookCsf(code, filename, makeTitle = null) {
   }
 
   try {
-    return loadCsf(code, createStorybookCsfLoadOptions(filename, makeTitle)).parse();
+    return loadCsf(
+      code,
+      createStorybookCsfLoadOptions(filename, makeTitle),
+    ).parse();
   } catch (error) {
     throw createStorybookCsfError(filename, error);
   }
 }
 
-async function validateStorybookCsfWithLoader(code, filename, makeTitle = null, storybookCsfLoader = null) {
+async function validateStorybookCsfWithLoader(
+  code,
+  filename,
+  makeTitle = null,
+  storybookCsfLoader = null,
+) {
   if (typeof storybookCsfLoader === "function") {
     try {
-      return storybookCsfLoader(code, createStorybookCsfLoadOptions(filename, makeTitle)).parse();
+      return storybookCsfLoader(
+        code,
+        createStorybookCsfLoadOptions(filename, makeTitle),
+      ).parse();
     } catch (error) {
       throw createStorybookCsfError(filename, error);
     }
@@ -368,7 +392,11 @@ export const litsxStoriesIndexer = {
       filename: fileName,
       sourceMaps: false,
     });
-    const parsed = await validateStorybookCsfWithLoader(transformed.code, fileName, makeTitle);
+    const parsed = await validateStorybookCsfWithLoader(
+      transformed.code,
+      fileName,
+      makeTitle,
+    );
 
     return parsed?.indexInputs ?? [];
   },
@@ -390,10 +418,14 @@ export function litsxStoryRegistrationPlugin(options = {}) {
       const result = transformLitsxSync(source, {
         ...compilerOptions,
         filename: id,
-        jsxTemplate: false,
         sourceMaps: false,
       });
-      await validateStorybookCsfWithLoader(result.code, id, null, storybookCsfLoader);
+      await validateStorybookCsfWithLoader(
+        result.code,
+        id,
+        null,
+        storybookCsfLoader,
+      );
       const registrationSource = createRegistrationSource(
         result.metadata?.litsxModuleAnalysis,
       );
@@ -417,8 +449,8 @@ export function withLitsxStorybookViteConfig(config = {}, options = {}) {
     ...config,
     optimizeDeps: withoutRollupOptimizeDepsOptions(config.optimizeDeps),
     plugins: [
-      ...(config.plugins ?? []),
       litsxStoryRegistrationPlugin(compilerOptions),
+      ...(config.plugins ?? []),
       litsx({ sourceMaps: true, ...compilerOptions }),
     ],
   };
@@ -426,7 +458,10 @@ export function withLitsxStorybookViteConfig(config = {}, options = {}) {
 
 export function createLitsxStorybookConfig(options = {}) {
   const {
-    stories = ["../src/**/*.stories.@(js|jsx|ts|tsx|litsx|mdx)", "../src/**/*.docs.mdx"],
+    stories = [
+      "../src/**/*.stories.@(js|jsx|ts|tsx|litsx|mdx)",
+      "../src/**/*.docs.mdx",
+    ],
     addons = ["@storybook/addon-docs", "@storybook/addon-a11y"],
     storybook = {},
     compiler = {},
@@ -438,15 +473,17 @@ export function createLitsxStorybookConfig(options = {}) {
     addons,
     ...storybook,
     async experimental_indexers(existingIndexers) {
-      const baseIndexers = typeof storybook.experimental_indexers === "function"
-        ? await storybook.experimental_indexers(existingIndexers)
-        : existingIndexers;
+      const baseIndexers =
+        typeof storybook.experimental_indexers === "function"
+          ? await storybook.experimental_indexers(existingIndexers)
+          : existingIndexers;
       return [...baseIndexers, litsxStoriesIndexer];
     },
     async viteFinal(config) {
-      const baseConfig = typeof storybook.viteFinal === "function"
-        ? await storybook.viteFinal(config)
-        : config;
+      const baseConfig =
+        typeof storybook.viteFinal === "function"
+          ? await storybook.viteFinal(config)
+          : config;
       return withLitsxStorybookViteConfig(baseConfig, compiler);
     },
   };
