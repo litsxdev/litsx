@@ -1,3 +1,11 @@
+export type {
+  LitsxDeclarationAnalysis,
+  LitsxExportAnalysis,
+  LitsxImportAnalysis,
+  LitsxJsxReferenceAnalysis,
+  LitsxModuleAnalysis,
+} from "./authored-input.js";
+
 export type TransformLitsxOptions = {
   filename?: string;
   parserPlugins?: string[];
@@ -31,6 +39,7 @@ export type PreparedLitsxAuthoredInput = {
   } | null;
   inputAst: object;
   authoredWarnings: unknown[];
+  moduleAnalysis: import("./authored-input.js").LitsxModuleAnalysis;
 };
 
 export function ensureLitsxParserPlugins(

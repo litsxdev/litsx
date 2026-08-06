@@ -62,6 +62,61 @@ describe("compiler authored input helpers", () => {
     ].sort((left, right) => String(left).localeCompare(String(right))));
   });
 
+  it("collects generic module analysis facts from authored input", () => {
+    const source = [
+      'import type { StoryObj } from "storybook";',
+      'import { VdsButton } from "./vds-button.litsx";',
+      "const localMeta = { title: 'Components/Button' };",
+      "const LocalStory = () => <VdsButton label={'Save'} />;",
+      "export default localMeta;",
+      "export const Playground = {",
+      "  render: (args) => <LocalStory {...args} />,",
+      "};",
+      "export { VdsButton as ButtonHost };",
+    ].join("\n");
+
+    const result = prepareLitsxAuthoredInput(source, {
+      filename: "/virtual/vds-button.stories.litsx",
+    });
+
+    assert.deepStrictEqual(result.moduleAnalysis.imports, [
+      {
+        source: "storybook",
+        kind: "type",
+        specifiers: [{ importedName: "StoryObj", localName: "StoryObj", kind: "type" }],
+      },
+      {
+        source: "./vds-button.litsx",
+        kind: "value",
+        specifiers: [{ importedName: "VdsButton", localName: "VdsButton", kind: "value" }],
+      },
+    ]);
+    assert.deepStrictEqual(result.moduleAnalysis.exports, [
+      { exportName: "default", localName: "localMeta", kind: "default-object" },
+      { exportName: "Playground", localName: "Playground", kind: "named-object" },
+      { exportName: "ButtonHost", localName: "VdsButton", kind: "unknown" },
+    ]);
+    assert.deepStrictEqual(result.moduleAnalysis.declarations, [
+      { localName: "localMeta", kind: "const-object" },
+      { localName: "LocalStory", kind: "const-arrow-function" },
+      { localName: "Playground", kind: "const-object" },
+    ]);
+    assert.deepStrictEqual(result.moduleAnalysis.jsxReferences, [
+      {
+        localName: "VdsButton",
+        tagName: "vds-button",
+        source: "imported-authored-module",
+        importSource: "./vds-button.litsx",
+      },
+      {
+        localName: "LocalStory",
+        tagName: "local-story",
+        source: "local-declaration",
+        importSource: null,
+      },
+    ]);
+  });
+
   it("applies authoring plugins through the provided runtime transform", () => {
     const source = "export const Example = () => <x-box />;";
     let transformCalls = 0;
@@ -142,8 +197,9 @@ describe("compiler authored input helpers", () => {
         __litsxCompilationSession: session,
       });
 
-      assert.strictEqual(first.inputAst, second.inputAst);
-      assert.strictEqual(first.filename, second.filename);
+    assert.strictEqual(first.inputAst, second.inputAst);
+    assert.strictEqual(first.filename, second.filename);
+      assert.strictEqual(first.moduleAnalysis, second.moduleAnalysis);
     } finally {
       session.dispose();
     }

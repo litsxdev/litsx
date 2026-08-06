@@ -87,6 +87,7 @@ describe("compiler internals", () => {
       virtualization: { map: { version: 3 } },
       inputAst: { type: "File" },
       authoredWarnings: [{ code: "WARN" }],
+      moduleAnalysis: { imports: [], exports: [], declarations: [], jsxReferences: [] },
     });
 
     createLitsxPresetPlugins.mockReturnValue(["preset-plugin"]);
@@ -107,7 +108,9 @@ describe("compiler internals", () => {
 
     assert.strictEqual(result.code, "");
     assert.strictEqual(result.map, null);
-    assert.deepStrictEqual(result.metadata, {});
+    assert.deepStrictEqual(result.metadata, {
+      litsxModuleAnalysis: { imports: [], exports: [], declarations: [], jsxReferences: [] },
+    });
   });
 
   it("async transform patches sourcemaps when template mappings are emitted", async () => {
@@ -142,6 +145,12 @@ describe("compiler internals", () => {
       result.metadata.litsxWarnings,
       [{ code: "SECOND" }, { code: "WARN" }]
     );
+    assert.deepStrictEqual(result.metadata.litsxModuleAnalysis, {
+      imports: [],
+      exports: [],
+      declarations: [],
+      jsxReferences: [],
+    });
   });
 
   it("async transform reuses provided compilation sessions and skips the final template pass when disabled", async () => {

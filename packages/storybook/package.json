@@ -1,0 +1,57 @@
+{
+  "name": "@litsx/storybook",
+  "version": "0.1.0",
+  "description": "Official Storybook integration helpers for LitSX-authored stories",
+  "author": "LitSX Team",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./src/index.js",
+  "types": "./src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "import": "./src/index.js",
+      "require": "./dist/index.cjs",
+      "default": "./src/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md"
+  ],
+  "keywords": [
+    "litsx",
+    "storybook",
+    "lit",
+    "vite",
+    "jsx"
+  ],
+  "license": "Apache-2.0",
+  "homepage": "https://litsx.dev/",
+  "bugs": {
+    "url": "https://github.com/litsxdev/litsx/issues"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/litsxdev/litsx.git",
+    "directory": "packages/storybook"
+  },
+  "peerDependencies": {
+    "@storybook/web-components-vite": "^10.4.0",
+    "storybook": "^10.4.0",
+    "vite": "^7.3.2 || ^8.0.0"
+  },
+  "dependencies": {
+    "@litsx/compiler": "^0.9.4",
+    "@litsx/vite-plugin": "^0.3.1"
+  },
+  "scripts": {
+    "build": "../../node_modules/.bin/rollup --config rollup.config.js",
+    "prepack": "yarn build"
+  }
+}

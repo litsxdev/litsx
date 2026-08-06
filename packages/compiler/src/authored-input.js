@@ -7,6 +7,7 @@ import {
   getLitsxVirtualizationMetadata,
   parseWithLitsxVirtualization,
 } from "@litsx/authoring/parser";
+import { analyzeLitsxModule } from "./module-analysis.js";
 import { mergeLitsxWarnings } from "./warnings.js";
 
 function normalizeParserPlugins(filename, parserPlugins = []) {
@@ -103,5 +104,6 @@ export function prepareLitsxAuthoredInput(
     virtualization,
     inputAst,
     authoredWarnings,
+    moduleAnalysis: analyzeLitsxModule(inputAst),
   };
 }

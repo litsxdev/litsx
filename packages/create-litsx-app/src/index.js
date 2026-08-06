@@ -1178,138 +1178,9 @@ Generated with \`create-litsx-app --template component\`.
 function createDesignSystemProfileFiles(packageName, className) {
   const files = createComponentProfileFiles(packageName, className);
 
-  files.set(".storybook/litsx-story-indexer.js", `import fs from "fs/promises";
-import { transformLitsxSync } from "@litsx/compiler";
-import { loadCsf } from "storybook/internal/csf-tools";
+  files.set(".storybook/main.js", `import { createLitsxStorybookConfig } from "@litsx/storybook";
 
-export const litsxStoriesIndexer = {
-  test: /\\.stories\\.litsx$/,
-  async createIndex(fileName, { makeTitle }) {
-    const source = await fs.readFile(fileName, "utf8");
-    const transformed = transformLitsxSync(source, {
-      filename: fileName,
-      sourceMaps: false,
-    });
-
-    return loadCsf(transformed.code, { fileName, makeTitle }).parse().indexInputs;
-  },
-};
-`);
-  files.set(".storybook/litsx-story-registration-plugin.js", `const STORY_FILE_PATTERN = /\\.stories\\.litsx(?:\\?.*)?$/;
-
-function toKebabCase(name) {
-  return name
-    .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
-    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1-$2")
-    .toLowerCase();
-}
-
-function splitNamedImports(specifiers) {
-  const names = [];
-
-  for (const specifier of specifiers.split(",")) {
-    const trimmed = specifier.trim();
-    if (!trimmed || trimmed.startsWith("type ")) continue;
-
-    const [importedName, localName = importedName] = trimmed
-      .replace(/^type\\s+/, "")
-      .split(/\\s+as\\s+/);
-    if (/^[A-Z][A-Za-z0-9_$]*$/.test(importedName) && /^[A-Z][A-Za-z0-9_$]*$/.test(localName)) {
-      names.push({ tagName: toKebabCase(importedName), constructorName: localName });
-    }
-  }
-
-  return names;
-}
-
-function collectImportedStoryElements(source) {
-  const elements = [];
-  const importPattern = /import\\s+(?:type\\s+)?\\{([\\s\\S]*?)\\}\\s+from\\s+["']([^"']+\\.litsx)["'];?/g;
-
-  for (const match of source.matchAll(importPattern)) {
-    if (/^import\\s+type\\b/.test(match[0])) continue;
-    elements.push(...splitNamedImports(match[1]));
-  }
-
-  return elements;
-}
-
-function collectLocalStoryHosts(source) {
-  const elements = [];
-  const declarationPattern = /(?:^|\\n)\\s*(?:export\\s+)?(?:const|let|var|function)\\s+([A-Z][A-Za-z0-9_$]*Story)\\b/g;
-
-  for (const match of source.matchAll(declarationPattern)) {
-    elements.push({ tagName: toKebabCase(match[1]), constructorName: match[1] });
-  }
-
-  return elements;
-}
-
-function createRegistrationSource(elements) {
-  const seen = new Set();
-  const registrations = [];
-
-  for (const { tagName, constructorName } of elements) {
-    if (!tagName.includes("-") || seen.has(tagName)) continue;
-    seen.add(tagName);
-    registrations.push(
-      \`if (!customElements.get("\${tagName}")) customElements.define("\${tagName}", \${constructorName});\`,
-    );
-  }
-
-  return registrations.length > 0
-    ? \`\\n\\n\${registrations.join("\\n")}\\n\`
-    : "";
-}
-
-export function litsxStoryRegistrationPlugin() {
-  return {
-    name: "litsx-story-registration",
-    enforce: "pre",
-    transform(source, id) {
-      if (!STORY_FILE_PATTERN.test(id)) {
-        return null;
-      }
-
-      const registrationSource = createRegistrationSource([
-        ...collectImportedStoryElements(source),
-        ...collectLocalStoryHosts(source),
-      ]);
-
-      if (!registrationSource) {
-        return null;
-      }
-
-      return {
-        code: \`\${source}\${registrationSource}\`,
-        map: null,
-      };
-    },
-  };
-}
-`);
-  files.set(".storybook/main.js", `import { litsx } from "@litsx/vite-plugin";
-import { litsxStoriesIndexer } from "./litsx-story-indexer.js";
-import { litsxStoryRegistrationPlugin } from "./litsx-story-registration-plugin.js";
-
-export default {
-  framework: "@storybook/web-components-vite",
-  stories: ["../src/**/*.stories.@(js|jsx|ts|tsx|litsx|mdx)", "../src/**/*.docs.mdx"],
-  addons: ["@storybook/addon-docs", "@storybook/addon-a11y"],
-  async experimental_indexers(existingIndexers) {
-    return [...existingIndexers, litsxStoriesIndexer];
-  },
-  async viteFinal(config) {
-    const optimizeDeps = { ...(config.optimizeDeps ?? {}) };
-    delete optimizeDeps.rollupOptions;
-
-    return {
-      ...config,
-      optimizeDeps,
-      plugins: [...(config.plugins ?? []), litsxStoryRegistrationPlugin(), litsx({ sourceMaps: true })],
-    };
-  },
-};
+export default createLitsxStorybookConfig();
 `);
   files.set(".storybook/preview.js", `import "@webcomponents/scoped-custom-element-registry";
 import "../src/styles/tokens.css";
@@ -1432,7 +1303,7 @@ function createPackageJson(packageName, template, options = {}) {
     packageJson.scripts.storybook = "storybook dev -p 6006";
     packageJson.scripts["build-storybook"] = "storybook build";
     Object.assign(packageJson.devDependencies, {
-      "@litsx/compiler": publishedPackageVersions["@litsx/compiler"],
+      "@litsx/storybook": publishedPackageVersions["@litsx/storybook"],
       "@storybook/addon-a11y": "^10.4.0",
       "@storybook/addon-docs": "^10.4.0",
       "@storybook/web-components-vite": "^10.4.0",
