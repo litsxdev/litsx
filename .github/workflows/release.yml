@@ -155,6 +155,8 @@ jobs:
         with:
           ref: ${{ github.event_name == 'workflow_dispatch' && github.sha || github.event.workflow_run.head_sha }}
           fetch-depth: 0
+          token: ${{ needs.plan.outputs.release_kind == 'stable' && steps.app-token.outputs.token || github.token }}
+          persist-credentials: false
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
