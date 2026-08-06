@@ -30,6 +30,22 @@ function runNpm(fixtureDir, args, cacheDir) {
   });
 }
 
+function installFixtureChromium(fixtureDir, cacheDir) {
+  execFileSync(
+    path.join(fixtureDir, "node_modules", ".bin", "playwright"),
+    ["install", "chromium"],
+    {
+      cwd: fixtureDir,
+      env: {
+        ...process.env,
+        npm_config_cache: cacheDir,
+        PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT: "120000",
+      },
+      stdio: "inherit",
+    },
+  );
+}
+
 for (const version of versions) {
   if (!supportedVersions.includes(version)) {
     throw new Error(
@@ -66,6 +82,8 @@ for (const version of versions) {
 
     console.log(`\n[storybook ${version}] install generated fixture`);
     runNpm(fixtureDir, ["install", "--loglevel=error"], cacheDir);
+    console.log(`\n[storybook ${version}] install Playwright Chromium`);
+    installFixtureChromium(fixtureDir, cacheDir);
     for (const script of ["build", "typecheck", "test", "build-storybook"]) {
       console.log(`\n[storybook ${version}] npm run ${script}`);
       runNpm(fixtureDir, ["run", script], cacheDir);
