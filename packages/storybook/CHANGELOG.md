@@ -1,5 +1,18 @@
 # @litsx/storybook
 
+## 0.1.2
+
+### Patch Changes
+
+- 1d8601a: Run authored-story registration before existing LitSX Vite transforms so
+  generated Storybook previews register and render their custom elements. Validate
+  property-bound stories with compiled CSF and cover the rendered browser runtime
+  in the Storybook compatibility matrix.
+- 3ebfab2: Keep LitSX story registration compatible with Storybook 10.4 and 10.5 by
+  normalizing CSF loader options with a safe `makeTitle` fallback. Generate
+  idiomatic authored-component stories and align new design-system projects with
+  the verified Storybook release line.
+
 ## 0.1.1
 
 ### Patch Changes

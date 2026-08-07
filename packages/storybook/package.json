@@ -1,6 +1,6 @@
 {
   "name": "@litsx/storybook",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Official Storybook integration helpers for LitSX-authored stories",
   "author": "LitSX Team",
   "type": "module",
