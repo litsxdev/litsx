@@ -13,14 +13,30 @@ import {
 } from "@litsx/core/elements";
 import { LitsxContextProviderElement } from "@litsx/core/context";
 import { withRendererSsrSuspenseCapture } from "@litsx/core/rendering";
-import { withCurrentSsrCustomElementInstanceStack } from "./ssr-state.js";
+import {
+  getCurrentSsrRuntimeState,
+  withCurrentSsrCustomElementInstanceStack,
+  withCurrentSsrRuntimeState,
+} from "./ssr-state.js";
 
-const scopedRegistryStack = [];
-const scopedSsrContextStack = [];
-const noscriptFallbackRenderStack = [];
+const SCOPED_CUSTOM_ELEMENT_LOOKUP = Symbol.for(
+  "litsx.ssr.scopedCustomElementLookup",
+);
+
+function getScopedRegistryStack() {
+  return getCurrentSsrRuntimeState()?.scopedRegistryStack ?? [];
+}
+
+function getScopedSsrContextStack() {
+  return getCurrentSsrRuntimeState()?.scopedSsrContextStack ?? [];
+}
+
+function getNoscriptFallbackRenderStack() {
+  return getCurrentSsrRuntimeState()?.noscriptFallbackRenderStack ?? [];
+}
 
 function isRenderingNoscriptFallback() {
-  return noscriptFallbackRenderStack.at(-1) === true;
+  return getNoscriptFallbackRenderStack().at(-1) === true;
 }
 
 function makeRendererValueServerOnly(value) {
@@ -152,18 +168,24 @@ function createScopedRenderIterable(value, renderInfo = {}) {
     ...(renderInfo.elementRenderers ?? []),
   ].filter((renderer, index, list) => list.indexOf(renderer) === index);
   const customElementInstanceStack = renderInfo.customElementInstanceStack ?? [];
+  const parentState = getCurrentSsrRuntimeState();
+  const scopedRegistryStack = [...(parentState?.scopedRegistryStack ?? [])];
+  const scopedSsrContextStack = [...(parentState?.scopedSsrContextStack ?? [])];
+  const noscriptFallbackRenderStack = [
+    ...(parentState?.noscriptFallbackRenderStack ?? []),
+  ];
+  const runWithRenderState = (run) =>
+    withCurrentSsrRuntimeState(
+      {
+        scopedRegistryStack,
+        scopedSsrContextStack,
+        noscriptFallbackRenderStack,
+      },
+      run,
+    );
 
   return (async function* streamScopedChunks() {
-    const nativeGet = customElements.get.bind(customElements);
-    const descriptor = Object.getOwnPropertyDescriptor(customElements, "get");
-
-    Object.defineProperty(customElements, "get", {
-      configurable: true,
-      writable: true,
-      value(tagName) {
-        return resolveScopedConstructor(nativeGet, tagName);
-      },
-    });
+    const releaseScopedCustomElementLookup = acquireScopedCustomElementLookup();
 
     scopedSsrContextStack.push(ssrContext);
     noscriptFallbackRenderStack.push(renderInfo.litsxNoscriptFallback === true);
@@ -174,17 +196,21 @@ function createScopedRenderIterable(value, renderInfo = {}) {
     let iterator;
 
     try {
-      const renderResult = render(isScopedTemplate ? value.template : value, {
-        ...renderInfo,
-        customElementInstanceStack,
-        elementRenderers,
-      });
+      const renderResult = runWithRenderState(() =>
+        render(isScopedTemplate ? value.template : value, {
+          ...renderInfo,
+          customElementInstanceStack,
+          elementRenderers,
+        })
+      );
       iterator = getRenderIterator(renderResult);
 
       while (true) {
-        const step = await withCurrentSsrCustomElementInstanceStack(
-          customElementInstanceStack,
-          () => iterator.next(),
+        const step = await runWithRenderState(() =>
+          withCurrentSsrCustomElementInstanceStack(
+            customElementInstanceStack,
+            () => iterator.next(),
+          )
         );
 
         if (step?.done) {
@@ -196,9 +222,11 @@ function createScopedRenderIterable(value, renderInfo = {}) {
     } finally {
       try {
         if (iterator && typeof iterator.return === "function") {
-          await withCurrentSsrCustomElementInstanceStack(
-            customElementInstanceStack,
-            () => iterator.return(),
+          await runWithRenderState(() =>
+            withCurrentSsrCustomElementInstanceStack(
+              customElementInstanceStack,
+              () => iterator.return(),
+            )
           );
         }
       } finally {
@@ -208,15 +236,7 @@ function createScopedRenderIterable(value, renderInfo = {}) {
         noscriptFallbackRenderStack.pop();
         scopedSsrContextStack.pop();
 
-        if (descriptor) {
-          Object.defineProperty(customElements, "get", descriptor);
-        } else {
-          Object.defineProperty(customElements, "get", {
-            configurable: true,
-            writable: true,
-            value: nativeGet,
-          });
-        }
+        releaseScopedCustomElementLookup();
       }
     }
   })();
@@ -457,6 +477,7 @@ export function createScopedSsrContext(options = {}) {
 }
 
 export function resolveScopedConstructor(nativeGet, tagName) {
+  const scopedRegistryStack = getScopedRegistryStack();
   for (let i = scopedRegistryStack.length - 1; i >= 0; i -= 1) {
     const ctor = scopedRegistryStack[i]?.[tagName];
     if (ctor) {
@@ -464,12 +485,20 @@ export function resolveScopedConstructor(nativeGet, tagName) {
     }
   }
 
-  return nativeGet(tagName);
+  return nativeGet?.(tagName);
 }
 
-export async function withScopedCustomElementLookup(run) {
+function acquireScopedCustomElementLookup() {
+  const activeLookup = globalThis[SCOPED_CUSTOM_ELEMENT_LOOKUP];
+  if (activeLookup) {
+    activeLookup.activeCount += 1;
+    return () => releaseScopedCustomElementLookup(activeLookup);
+  }
+
   const nativeGet = customElements.get.bind(customElements);
   const descriptor = Object.getOwnPropertyDescriptor(customElements, "get");
+  const lookup = { activeCount: 1, descriptor, nativeGet };
+  globalThis[SCOPED_CUSTOM_ELEMENT_LOOKUP] = lookup;
 
   Object.defineProperty(customElements, "get", {
     configurable: true,
@@ -479,18 +508,32 @@ export async function withScopedCustomElementLookup(run) {
     },
   });
 
+  return () => releaseScopedCustomElementLookup(lookup);
+}
+
+function releaseScopedCustomElementLookup(lookup) {
+  lookup.activeCount -= 1;
+  if (lookup.activeCount > 0) return;
+
+  if (lookup.descriptor) {
+    Object.defineProperty(customElements, "get", lookup.descriptor);
+  } else {
+    Object.defineProperty(customElements, "get", {
+      configurable: true,
+      writable: true,
+      value: lookup.nativeGet,
+    });
+  }
+  delete globalThis[SCOPED_CUSTOM_ELEMENT_LOOKUP];
+}
+
+export async function withScopedCustomElementLookup(run) {
+  const release = acquireScopedCustomElementLookup();
+
   try {
     return await run();
   } finally {
-    if (descriptor) {
-      Object.defineProperty(customElements, "get", descriptor);
-    } else {
-      Object.defineProperty(customElements, "get", {
-        configurable: true,
-        writable: true,
-        value: nativeGet,
-      });
-    }
+    release();
   }
 }
 
@@ -516,8 +559,9 @@ export class ScopedLitElementRenderer extends LitElementRenderer {
       const render = this.element.render.bind(this.element);
       this.element.render = () => makeRendererValueServerOnly(render());
     }
-    const context = scopedSsrContextStack.at(-1) ?? createScopedSsrContext();
-    const isHydrationRoot = !isRenderingNoscriptFallback() && scopedRegistryStack.length === 1;
+    const context = getScopedSsrContextStack().at(-1) ?? createScopedSsrContext();
+    const isHydrationRoot =
+      !isRenderingNoscriptFallback() && getScopedRegistryStack().length === 1;
     const rootId = isHydrationRoot ? context.nextRootId() : null;
     const moduleId = this.element.constructor?.[LITSX_MODULE_ID] ?? null;
 
@@ -607,11 +651,11 @@ export class ScopedLitElementRenderer extends LitElementRenderer {
 
     return [
       () => {
-        scopedRegistryStack.push(elements);
+        getScopedRegistryStack().push(elements);
         return super.renderShadow(renderInfo);
       },
       () => {
-        scopedRegistryStack.pop();
+        getScopedRegistryStack().pop();
       },
     ];
   }
@@ -639,11 +683,11 @@ export class ScopedLitElementRenderer extends LitElementRenderer {
 
     return [
       () => {
-        scopedRegistryStack.push(elements);
+        getScopedRegistryStack().push(elements);
         return render();
       },
       () => {
-        scopedRegistryStack.pop();
+        getScopedRegistryStack().pop();
       },
     ];
   }
@@ -664,8 +708,9 @@ class ScopedHydratableElementRenderer extends ElementRenderer {
     const ctor = customElements.get(tagName);
     this.element = ctor ? new ctor() : this.element;
     ensureSsrElementShape(this.element);
-    const context = scopedSsrContextStack.at(-1) ?? createScopedSsrContext();
-    const isHydrationRoot = !isRenderingNoscriptFallback() && scopedRegistryStack.length === 1;
+    const context = getScopedSsrContextStack().at(-1) ?? createScopedSsrContext();
+    const isHydrationRoot =
+      !isRenderingNoscriptFallback() && getScopedRegistryStack().length === 1;
     const rootId = isHydrationRoot ? context.nextRootId() : null;
     const moduleId = this.element.constructor?.[LITSX_MODULE_ID] ?? null;
 

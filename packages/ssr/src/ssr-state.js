@@ -46,11 +46,11 @@ function installSsrConsoleCapture() {
   }
 }
 
-function getCurrentSsrRuntimeState() {
+export function getCurrentSsrRuntimeState() {
   return getRuntimeStateAccess().getStore() ?? null;
 }
 
-export async function withCurrentSsrRuntimeState(patch, run) {
+export function withCurrentSsrRuntimeState(patch, run) {
   const currentState = getCurrentSsrRuntimeState();
   return getRuntimeStateAccess().run(
     {
@@ -75,7 +75,7 @@ export async function captureCurrentSsrConsole(run, messages = []) {
   return { result, messages };
 }
 
-export async function withCurrentSsrCustomElementInstanceStack(stack, run) {
+export function withCurrentSsrCustomElementInstanceStack(stack, run) {
   return withCurrentSsrRuntimeState(
     { customElementInstanceStack: stack ?? null },
     run,

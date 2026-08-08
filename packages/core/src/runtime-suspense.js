@@ -1,4 +1,5 @@
 import { nothing } from "lit";
+import { getCurrentSsrRuntimeState } from "./runtime-ssr-state.js";
 
 const SOFT_SUSPENSE = Symbol("litsx.softSuspense");
 const SUSPENSE_CAPTURE = Symbol("litsx.suspenseCapture");
@@ -33,17 +34,28 @@ function getSoftSuspenseState(host) {
 }
 
 export function withSuspenseCapture(capture, render) {
-  const previousCapture = currentSuspenseCapture;
-  currentSuspenseCapture = capture ?? null;
+  const runtimeState = getCurrentSsrRuntimeState();
+  const previousCapture = runtimeState
+    ? runtimeState.suspenseCapture ?? null
+    : currentSuspenseCapture;
+  if (runtimeState) {
+    runtimeState.suspenseCapture = capture ?? null;
+  } else {
+    currentSuspenseCapture = capture ?? null;
+  }
   try {
     return render();
   } finally {
-    currentSuspenseCapture = previousCapture;
+    if (runtimeState) {
+      runtimeState.suspenseCapture = previousCapture;
+    } else {
+      currentSuspenseCapture = previousCapture;
+    }
   }
 }
 
 export function getCurrentSuspenseCapture() {
-  return currentSuspenseCapture;
+  return getCurrentSsrRuntimeState()?.suspenseCapture ?? currentSuspenseCapture;
 }
 
 export function setHostSuspenseCapture(host, capture) {
@@ -73,33 +85,48 @@ function getHostSuspenseCapture(host) {
 export function collectSoftSuspenseThenables(collector, render) {
   // SSR renderers wrap each render pass with this collector so rootless
   // suspensions are awaitable instead of being serialized as empty output.
-  const previousCollector = currentSoftSuspenseCollector;
-  currentSoftSuspenseCollector = collector;
+  const runtimeState = getCurrentSsrRuntimeState();
+  const previousCollector = runtimeState
+    ? runtimeState.softSuspenseCollector ?? null
+    : currentSoftSuspenseCollector;
+  if (runtimeState) {
+    runtimeState.softSuspenseCollector = collector;
+  } else {
+    currentSoftSuspenseCollector = collector;
+  }
+  const restoreCollector = () => {
+    if (runtimeState) {
+      runtimeState.softSuspenseCollector = previousCollector;
+    } else {
+      currentSoftSuspenseCollector = previousCollector;
+    }
+  };
   let result;
   try {
     result = render();
   } catch (error) {
-    currentSoftSuspenseCollector = previousCollector;
+    restoreCollector();
     throw error;
   }
 
   if (isThenable(result)) {
-    return Promise.resolve(result).finally(() => {
-      currentSoftSuspenseCollector = previousCollector;
-    });
+    return Promise.resolve(result).finally(restoreCollector);
   }
 
-  currentSoftSuspenseCollector = previousCollector;
+  restoreCollector();
   return result;
 }
 
 export function collectSuspenseThenable(thenable) {
-  if (!currentSoftSuspenseCollector || !isThenable(thenable)) {
+  const collector =
+    getCurrentSsrRuntimeState()?.softSuspenseCollector ??
+    currentSoftSuspenseCollector;
+  if (!collector || !isThenable(thenable)) {
     return null;
   }
 
   const promise = Promise.resolve(thenable);
-  currentSoftSuspenseCollector.add(promise);
+  collector.add(promise);
   return promise;
 }
 

@@ -22,6 +22,11 @@ import {
   renderToStream,
   renderToString,
 } from "../packages/ssr/src/index.js";
+import {
+  createScopedSsrContext,
+  renderScopedTemplateToChunks,
+} from "../packages/ssr/src/scoped-rendering.js";
+import { withCurrentSsrRuntimeState } from "../packages/ssr/src/ssr-state.js";
 import { css } from "lit";
 import { prepareEffects, useMemoValue } from "../packages/core/src/effect-hooks.js";
 import { useId, useRef, useState, useExternalStore } from "../packages/core/src/state-hooks.js";
@@ -36,6 +41,7 @@ import {
 } from "../packages/core/src/context.js";
 import {
   ErrorBoundary,
+  collectSoftSuspenseThenables,
   createExecutionContextKey,
   getCurrentExecutionContext,
   renderWithSoftSuspense,
@@ -56,6 +62,91 @@ function createDeferred() {
 }
 
 describe("@litsx/ssr", () => {
+  it("isolates scoped registries and hydration contexts across interleaved renders", async () => {
+    class AlphaCard extends LitElement {
+      render() {
+        return html`<strong>alpha</strong>`;
+      }
+    }
+
+    class BetaCard extends LitElement {
+      render() {
+        return html`<strong>beta</strong>`;
+      }
+    }
+
+    const createRender = async (ctor, idPrefix) => {
+      const context = createScopedSsrContext({ idPrefix });
+      const iterable = await renderScopedTemplateToChunks(
+        __litsxScopedTemplate(html`<request-card></request-card>`, {
+          "request-card": ctor,
+        }),
+        { litsxSsrContext: context },
+      );
+      return { context, iterator: iterable[Symbol.asyncIterator](), html: "" };
+    };
+    const alpha = await createRender(AlphaCard, "alpha");
+    const beta = await createRender(BetaCard, "beta");
+    const renders = [alpha, beta];
+    let active = renders.length;
+
+    while (active > 0) {
+      active = 0;
+      for (const render of renders) {
+        if (!render.iterator) continue;
+        const step = await render.iterator.next();
+        if (step.done) {
+          render.iterator = null;
+          continue;
+        }
+        render.html += step.value;
+        active += 1;
+      }
+    }
+
+    assert.match(alpha.html, /<strong>alpha<\/strong>/);
+    assert.doesNotMatch(alpha.html, /<strong>beta<\/strong>/);
+    assert.match(beta.html, /<strong>beta<\/strong>/);
+    assert.doesNotMatch(beta.html, /<strong>alpha<\/strong>/);
+    assert.deepStrictEqual(alpha.context.hydrationData.roots, [
+      { id: "alpha-root-0", tagName: "request-card" },
+    ]);
+    assert.deepStrictEqual(beta.context.hydrationData.roots, [
+      { id: "beta-root-0", tagName: "request-card" },
+    ]);
+  });
+
+  it("isolates soft suspense collectors across concurrent SSR requests", async () => {
+    const alphaCollector = new Set();
+    const betaCollector = new Set();
+    const alphaGate = createDeferred();
+    const betaGate = createDeferred();
+
+    const collectRequest = (collector, gate) =>
+      withCurrentSsrRuntimeState({}, () =>
+        collectSoftSuspenseThenables(collector, async () => {
+          await gate.promise;
+          renderWithSoftSuspense({}, () => {
+            throw Promise.resolve();
+          });
+        })
+      );
+    const alpha = collectRequest(alphaCollector, alphaGate);
+    const beta = collectRequest(betaCollector, betaGate);
+
+    alphaGate.resolve();
+    await alpha;
+    betaGate.resolve();
+    await beta;
+
+    assert.strictEqual(alphaCollector.size, 1);
+    assert.strictEqual(betaCollector.size, 1);
+    assert.notStrictEqual(
+      [...alphaCollector][0],
+      [...betaCollector][0],
+    );
+  });
+
   it("renders dynamic LitSX noscript fallbacks without hydration markers", async () => {
     const title = `<fallback & title>`;
     const url = `/?q=<unsafe>&x="quoted"`;
