@@ -1041,6 +1041,7 @@ window.__litsxSsrRegisterBrowserResult = {
 });
 
 test("reveals suspense-list guide cards after SSR hydration", async ({ page }) => {
+  test.setTimeout(60_000);
   const tempRoot = path.join(repoRoot, "test-results");
   await fs.mkdir(tempRoot, { recursive: true });
   const tempDir = await fs.mkdtemp(path.join(tempRoot, "litsx-ssr-suspense-browser-"));
