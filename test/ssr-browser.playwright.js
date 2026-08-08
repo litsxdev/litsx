@@ -768,6 +768,12 @@ export const SuspenseGuideApp = () => {
   }, []);
 
   const renderGuideCard = (stepIndex, renderCard) => {
+    // These delays model client-side staged reveal. On the server, their
+    // promises have no lifecycle hook to resolve them, so suspending here
+    // would prevent SSR from ever producing the hydration shell.
+    if (typeof window === "undefined") {
+      return renderCard();
+    }
     suspendUntil(pendingStepsRef, stepIndex, revealedCount);
     return renderCard();
   };
