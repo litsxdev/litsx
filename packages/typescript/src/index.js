@@ -11,6 +11,7 @@ import {
   inferLitsxAttributeCompletionContext,
   inferLitsxMarkupCompletionContext,
   looksLikeLitsxJsx,
+  needsToolingVirtualization,
   mapOriginalPositionToToolingVirtual,
   remapVirtualText,
   remapToolingTextSpanToOriginal,
@@ -798,7 +799,7 @@ export default function init(modules) {
           };
         }
 
-        if (!looksLikeLitsxJsx(sourceText)) {
+        if (!needsToolingVirtualization(sourceText)) {
           clearRecord(fileName);
           return {
             snapshot,

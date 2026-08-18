@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import defaultTs from "typescript";
+import { toStandardJsxEventPropName } from "@litsx/authoring";
 
 import {
   collectLitsxAuthoredDiagnostics,
@@ -13,7 +14,7 @@ import {
   inferLitsxAttributeInfoAtPosition,
   inferLitsxMarkupCompletionContext,
   inferLitsxStaticHoistInfoAtPosition,
-  looksLikeLitsxJsx,
+  needsToolingVirtualization,
   mapOriginalPositionToToolingVirtual,
   remapToolingTextSpanToOriginal,
   getLitsxMarkupCompletionNames,
@@ -588,8 +589,11 @@ function getImportedComponentReference(ts, sourceFile, tagName) {
 }
 
 function getComponentEventCompletionEntries(service, ts, queryFileName, sourceText, position, adaptKind) {
-  const context = inferLitsxAttributeCompletionContext(sourceText, position);
-  if (!context || context.prefix !== "@" || !/^[A-Z]/.test(context.tagName)) {
+  const explicitContext = inferLitsxAttributeCompletionContext(sourceText, position);
+  const markupContext = inferLitsxMarkupCompletionContext(sourceText, position);
+  const standardContext = markupContext;
+  const context = explicitContext?.prefix === "@" ? explicitContext : standardContext;
+  if (!context || !/^[A-Z]/.test(context.tagName)) {
     return [];
   }
 
@@ -619,17 +623,32 @@ function getComponentEventCompletionEntries(service, ts, queryFileName, sourceTe
     plugins: getSourceParserPlugins(componentFileName),
   })[reference.exportName] ?? [];
 
+  const standard = Boolean(standardContext);
   return eventNames
-    .filter((name) => typeof name === "string" && name.startsWith(context.partialName))
-    .map((name) => ({
-      ...getContextualCompletionEdit(`@${name}`, context),
-      label: `@${name}`,
+    .flatMap((name) => {
+      const label = standard ? toStandardJsxEventPropName(name) : `@${name}`;
+      return standard && label
+        ? [{ name, label }, { name, label: `${label}Capture` }]
+        : [{ name, label }];
+    })
+    .filter(({ name, label }) => (
+      typeof name === "string" && typeof label === "string" && (
+        standard
+          ? label.startsWith(context.partialName)
+          : name.startsWith(context.partialName)
+      )
+    ))
+    .map(({ name, label }) => ({
+      ...(standard
+        ? { start: context.start, length: context.length }
+        : getContextualCompletionEdit(label, context)),
+      label,
       kind: adaptKind("Event", {
         source: "litsx-component-event",
-        label: `@${name}`,
+        label,
       }),
       detail: `Emitted by <${context.tagName}>`,
-      documentation: `LitSX custom event emitted by <${context.tagName}>.`,
+      documentation: `Listens for the "${name}" custom event emitted by <${context.tagName}>.`,
     }));
 }
 
@@ -990,7 +1009,7 @@ function createLitsxEditorSession(options = {}) {
         let virtualization = null;
         let toolingText = nextSourceText;
 
-        if (isRelevantFile(nextFileName) && looksLikeLitsxJsx(nextSourceText)) {
+        if (isRelevantFile(nextFileName) && needsToolingVirtualization(nextSourceText)) {
           virtualization = createToolingVirtualLitsxSource(nextSourceText, {
             plugins: getPluginsForFile(nextFileName, languageId),
           });

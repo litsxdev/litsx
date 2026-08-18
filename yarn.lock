@@ -1530,6 +1530,7 @@ __metadata:
   dependencies:
     "@lit/context": "npm:^1.1.6"
     "@lit/reactive-element": "npm:^2.1.2"
+    "@litsx/authoring": "npm:^0.5.0"
     "@litsx/scoped-registry-shim": "npm:^0.2.6"
     lit: "npm:^3.3.3"
   peerDependencies:

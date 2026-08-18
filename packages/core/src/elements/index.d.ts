@@ -3,6 +3,7 @@ export type LitsxConstructor<TInstance = object> = abstract new (
 ) => TInstance;
 
 export declare const LITSX_COMPONENT: unique symbol;
+export declare const LITSX_EVENTS: unique symbol;
 export declare const LITSX_HOST_TYPE_ID: unique symbol;
 export declare const LITSX_HYDRATABLE_TAG: unique symbol;
 export declare const LITSX_SCOPED_TEMPLATE: unique symbol;
@@ -11,8 +12,22 @@ export declare const LITSX_SSR_CONTEXT: unique symbol;
 export declare const LITSX_SERVER_COMPONENT: unique symbol;
 export declare const LITSX_SERVER_COMPONENT_CALL: unique symbol;
 
-export interface LitsxComponentStatic {
+export interface LitsxEventMetadata {
+  readonly events: readonly string[];
+  readonly complete: boolean;
+}
+export interface LitsxEventDeclaration<
+  Events extends Record<string, unknown>,
+  Complete extends boolean = boolean,
+> extends LitsxEventMetadata {
+  readonly complete: Complete;
+  readonly __types?: Events;
+}
+
+export interface LitsxComponentStatic<Events extends Record<string, unknown> = Record<string, unknown>> {
   readonly [LITSX_COMPONENT]: true;
+  readonly [LITSX_EVENTS]?: LitsxEventDeclaration<Events, boolean>;
+  readonly events?: LitsxEventDeclaration<Events, boolean>;
 }
 
 export interface LitsxHydratableComponentStatic extends LitsxComponentStatic {

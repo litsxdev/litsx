@@ -6,6 +6,7 @@ import {
   getLitsxAttributeCompletionNames,
   inferLitsxComponentPropNames,
   inferLitsxComponentEventNames,
+  inferLitsxComponentEventMetadata,
   inferLitsxAttributeCompletionContext,
   inferLitsxAttributeInfoAtPosition,
   inferLitsxMarkupCompletionContext,
@@ -26,20 +27,12 @@ import {
  */
 
 export function createToolingVirtualLitsxSource(sourceText, options = {}) {
-  const virtualization = createVirtualLitsxJsxSource(sourceText, options);
+  let virtualization = createVirtualLitsxJsxSource(sourceText, options);
   const hoistNames = new Set();
   const usesTypeScriptSyntax = options.plugins?.includes("typescript");
 
   for (const match of virtualization.code.matchAll(STATIC_HOIST_CALL_RE)) {
     hoistNames.add(match[1]);
-  }
-
-  if (hoistNames.size === 0) {
-    return {
-      ...virtualization,
-      toolingPreamble: "",
-      toolingPreambleLength: 0,
-    };
   }
 
   const toolingDeclarations = [];
@@ -63,13 +56,76 @@ export function createToolingVirtualLitsxSource(sourceText, options = {}) {
   );
 
   const toolingPreamble = toolingDeclarations.join("");
+  const componentEvents = inferLitsxComponentEventMetadata(sourceText, options);
+  const toolingInsertions = [];
+  const appendixEntries = [];
+
+  for (const [componentName, metadata] of Object.entries(componentEvents)) {
+      if (metadata.alreadyDeclared) continue;
+      const runtimeValue = `{ events: ${JSON.stringify(metadata.events)}, complete: ${metadata.complete} }`;
+      const inferredEventMap = metadata.events.length > 0
+        ? `{ ${metadata.events.map((name) => `${JSON.stringify(name)}: unknown`).join("; ")} }`
+        : "Record<string, unknown>";
+      const eventMap = metadata.typeExpression ?? inferredEventMap;
+      const declaration = `${runtimeValue} as import("@litsx/core").LitsxEventDeclaration<${eventMap}, ${metadata.complete}>`;
+
+      if (
+        usesTypeScriptSyntax &&
+        (metadata.nodeType === "ArrowFunctionExpression" || metadata.nodeType === "FunctionExpression") &&
+        typeof metadata.nodeStart === "number" &&
+        typeof metadata.nodeEnd === "number"
+      ) {
+        const originalStart = remapTextSpanToOriginal(
+          { start: metadata.nodeStart, length: 0 },
+          virtualization.replacements,
+        ).start;
+        const originalEnd = remapTextSpanToOriginal(
+          { start: metadata.nodeEnd, length: 0 },
+          virtualization.replacements,
+        ).start;
+        toolingInsertions.push(
+          { start: originalStart, end: originalStart, replacement: "Object.assign(" },
+          { start: originalEnd, end: originalEnd, replacement: `, { events: ${declaration} })` },
+        );
+      } else if (usesTypeScriptSyntax && metadata.nodeType === "FunctionDeclaration") {
+        appendixEntries.push(
+          `${metadata.exported ? "export " : ""}namespace ${componentName} { export const events = ${declaration}; }\n`,
+        );
+      } else {
+        appendixEntries.push(
+          `/** @type {import("@litsx/core").LitsxEventDeclaration<Record<string, *>>} */\n${componentName}.events = ${runtimeValue};\n`,
+        );
+      }
+  }
+
+  if (toolingInsertions.length > 0) {
+    const replacements = [...virtualization.replacements, ...toolingInsertions]
+      .sort((left, right) => left.start - right.start || left.end - right.end);
+    let cursor = 0;
+    let code = "";
+    for (const replacement of replacements) {
+      code += sourceText.slice(cursor, replacement.start);
+      code += replacement.replacement;
+      cursor = replacement.end;
+    }
+    code += sourceText.slice(cursor);
+    virtualization = { ...virtualization, code, replacements };
+  }
+
+  const toolingAppendix = appendixEntries.join("");
 
   return {
     ...virtualization,
-    code: `${toolingPreamble}${virtualization.code}`,
+    code: `${toolingPreamble}${virtualization.code}${toolingAppendix ? `\n${toolingAppendix}` : ""}`,
     toolingPreamble,
     toolingPreambleLength: toolingPreamble.length,
+    toolingAppendix,
+    toolingAppendixLength: toolingAppendix.length,
   };
+}
+
+export function needsToolingVirtualization(sourceText) {
+  return looksLikeLitsxJsx(sourceText) || /\buseEmit\b/.test(sourceText ?? "");
 }
 
 export function mapOriginalPositionToToolingVirtual(position, virtualization) {
@@ -114,6 +170,7 @@ export {
   getLitsxAttributeCompletionNames,
   inferLitsxComponentPropNames,
   inferLitsxComponentEventNames,
+  inferLitsxComponentEventMetadata,
   inferLitsxAttributeCompletionContext,
   inferLitsxAttributeInfoAtPosition,
   inferLitsxMarkupCompletionContext,

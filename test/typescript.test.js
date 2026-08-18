@@ -10,6 +10,7 @@ import {
   collectLitsxAuthoredIssues,
   inferLitsxStaticHoistInfoAtPosition,
   inferLitsxComponentEventNames,
+  inferLitsxComponentEventMetadata,
   inferLitsxComponentPropNames,
 } from "../packages/typescript/src/authored-semantics.js";
 
@@ -219,6 +220,15 @@ describe("@litsx/typescript", () => {
       ].join("\n"));
       fs.writeFileSync(sourcePath, `
         import { css } from "${repoRoot.replaceAll("\\", "/")}/node_modules/lit/index.js";
+        import { useEmit } from "${repoRoot.replaceAll("\\", "/")}/packages/core/src/index.js";
+
+        type CardEvents = { "primary-action": { id: string } };
+        const emit = useEmit<CardEvents>();
+        emit("primary-action", { id: "ready" });
+        // @ts-expect-error typed event payload
+        emit("primary-action", { id: 1 });
+        // @ts-expect-error typed event name
+        emit("secondary-action", { id: "ready" });
 
         const Card = ({ label }: { label: string }) => <article>{label}</article>;
         Card.styles = css\`:host { display: block; }\`;
@@ -243,6 +253,56 @@ describe("@litsx/typescript", () => {
           noEmit: true,
           strict: true,
           jsx: ts.JsxEmit.Preserve,
+          module: ts.ModuleKind.ESNext,
+          moduleResolution: ts.ModuleResolutionKind.Bundler,
+          target: ts.ScriptTarget.ESNext,
+          lib: ["lib.esnext.d.ts", "lib.dom.d.ts"],
+        },
+      });
+      const diagnostics = ts.getPreEmitDiagnostics(program);
+      assert.deepStrictEqual(
+        diagnostics.map((diagnostic) => ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n")),
+        [],
+      );
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  }, 30000);
+
+  it("types events exposed by a compiled third-party component", () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-published-events-"));
+    const sourcePath = path.join(tempDir, "index.tsx");
+    const repoRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
+    const coreSource = path.join(repoRoot, "packages/core/src").replaceAll("\\", "/");
+
+    try {
+      fs.writeFileSync(sourcePath, `
+        import type { LitsxEventDeclaration } from "${coreSource}/index.js";
+
+        type CardEvents = { "primary-action": { id: string } };
+        declare class PublishedButton extends HTMLElement {
+          static readonly events: LitsxEventDeclaration<CardEvents, true>;
+        }
+
+        const valid = <PublishedButton onPrimaryAction={(event) => event.detail.id.toUpperCase()} />;
+        const captured = <PublishedButton onPrimaryActionCapture={(event) => event.detail.id.toUpperCase()} />;
+        const invalid = (
+          // @ts-expect-error published event payload is typed
+          <PublishedButton onPrimaryAction={(event) => event.detail.id.toFixed()} />
+        );
+        const typo = (
+          // @ts-expect-error complete metadata rejects unknown events
+          <PublishedButton onPrimaryActon={() => undefined} />
+        );
+      `);
+
+      const program = ts.createProgram({
+        rootNames: [sourcePath],
+        options: {
+          noEmit: true,
+          strict: true,
+          jsx: ts.JsxEmit.ReactJSX,
+          jsxImportSource: coreSource,
           module: ts.ModuleKind.ESNext,
           moduleResolution: ts.ModuleResolutionKind.Bundler,
           target: ts.ScriptTarget.ESNext,
@@ -433,6 +493,7 @@ describe("@litsx/typescript", () => {
               __litsx_event_input={handleCustomInput}
               __litsx_event_select={handleSelect}
               __litsx_event_quantity-change={handleQuantityChange}
+              onPrimaryAction={handleQuantityChange}
               __litsx_bool_checked={checked}
               slot="content"
               ref={ref}
@@ -455,6 +516,7 @@ describe("@litsx/typescript", () => {
           );
 
           const invalid = <VdsProductCard foo="bar" />;
+          const invalidListenerCase = <VdsProductCard onprimaryAction={handleQuantityChange} />;
         `,
       );
 
@@ -478,15 +540,16 @@ describe("@litsx/typescript", () => {
 
       assert.strictEqual(
         diagnostics.length,
-        1,
+        2,
         diagnostics.map((diagnostic) =>
           ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n")
         ).join("\n"),
       );
-      assert.match(
-        ts.flattenDiagnosticMessageText(diagnostics[0].messageText, "\n"),
-        /Property 'foo' does not exist/,
+      const messages = diagnostics.map((diagnostic) =>
+        ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n")
       );
+      assert.ok(messages.some((message) => /Property 'foo' does not exist/.test(message)));
+      assert.ok(messages.some((message) => /Property 'onprimaryAction' does not exist/.test(message)));
     } finally {
       fs.rmSync(tempDir, { recursive: true, force: true });
     }
@@ -1774,10 +1837,41 @@ describe("@litsx/typescript", () => {
       {
         AssignedCard: ["assigned-ready"],
         ArrowCard: ["arrow-ready"],
-        LocalCard: ["function-ready"],
+        FunctionCard: ["function-ready"],
         NamedCard: ["named-ready"],
       },
     );
+    const metadata = inferLitsxComponentEventMetadata(`
+      import { useEmit as usePublisher } from "@litsx/core";
+      import * as Core from "@litsx/core";
+      type Events = { "typed-ready": { id: string } };
+      const TypedCard = () => {
+        const emit = usePublisher<Events>();
+        emit("typed-ready", { id: "ready" });
+        return <button />;
+      };
+      const DynamicCard = () => {
+        const emit = Core.useEmit();
+        emit(dynamicName);
+        return <button />;
+      };
+    `, { plugins: ["typescript"] });
+    assert.strictEqual(metadata.TypedCard.typeExpression, "Events");
+    assert.strictEqual(metadata.TypedCard.complete, true);
+    assert.strictEqual(metadata.DynamicCard.complete, false);
+    const publishedMetadata = inferLitsxComponentEventMetadata(`
+      import type { LitsxEventDeclaration } from "@litsx/core";
+      interface PublishedEvents { "published-ready": { id: string } }
+      declare class PublishedCard {
+        static readonly events: LitsxEventDeclaration<PublishedEvents, true>;
+      }
+      class CompiledCard {
+        static events = { events: ["compiled-ready"], complete: true };
+      }
+    `, { plugins: ["typescript"] });
+    assert.deepStrictEqual(publishedMetadata.PublishedCard.events, ["published-ready"]);
+    assert.strictEqual(publishedMetadata.PublishedCard.complete, true);
+    assert.deepStrictEqual(publishedMetadata.CompiledCard.events, ["compiled-ready"]);
     assert.deepStrictEqual(inferLitsxComponentEventNames("<button"), {});
   });
 

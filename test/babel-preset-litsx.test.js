@@ -2489,6 +2489,79 @@ describe("@litsx/babel-preset-litsx", () => {
     assert.match(result.code, /prepareEffects\(this\);/);
     assert.match(result.code, /const emit = useEmit\(this\);/);
     assert.match(result.code, /emit\('change', this\.value, \{\s*cancelable: true\s*\}\);/);
+    assert.match(result.code, /static \[Symbol\.for\("litsx\.events"\)\] = \{\s*events: \["change"\],\s*complete: true\s*\};/);
+    assert.match(result.code, /static events = \{\s*events: \["change"\],\s*complete: true\s*\};/);
+    assert.deepStrictEqual(result.metadata.litsxComponentEvents.Counter, {
+      events: ["change"],
+      complete: true,
+    });
+  });
+
+  it("discovers events through aliased and namespace useEmit imports", () => {
+    const source = [
+      "import { useEmit as createEmitter } from '@litsx/core';",
+      "import * as core from '@litsx/core';",
+      "export function Aliased() {",
+      "  const emit = createEmitter();",
+      "  emit('primary-action');",
+      "  return <button />;",
+      "}",
+      "export function Namespaced() {",
+      "  const emit = core.useEmit();",
+      "  emit('url-change');",
+      "  return <button />;",
+      "}",
+    ].join("\n");
+
+    const result = transformFromAstSync(
+      parser.parse(source, { sourceType: "module" }),
+      source,
+      {
+        configFile: false,
+        babelrc: false,
+        presets: [[nativePreset, { jsxTemplate: false }]],
+      }
+    );
+
+    assert.deepStrictEqual(result.metadata.litsxComponentEvents.Aliased, {
+      events: ["primary-action"],
+      complete: true,
+    });
+    assert.deepStrictEqual(result.metadata.litsxComponentEvents.Namespaced, {
+      events: ["url-change"],
+      complete: true,
+    });
+  });
+
+  it("preserves explicit public event metadata as the component contract", () => {
+    const source = [
+      "import { useEmit } from '@litsx/core';",
+      "export function Counter() {",
+      "  const emit = useEmit();",
+      "  emit(this.eventName);",
+      "  return <button />;",
+      "}",
+      "Counter.events = { events: ['primary-action'], complete: true };",
+    ].join("\n");
+
+    const result = transformFromAstSync(
+      parser.parse(source, { sourceType: "module" }),
+      source,
+      {
+        configFile: false,
+        babelrc: false,
+        presets: [[nativePreset, { jsxTemplate: false }]],
+      }
+    );
+
+    assert.match(result.code, /static \[Symbol\.for\("litsx\.events"\)\] = \{\s*events: \["primary-action"\],\s*complete: true\s*\};/);
+    assert.doesNotMatch(result.code, /static events =/);
+    assert.match(result.code, /Counter\.events = \{\s*events: \['primary-action'\],\s*complete: true\s*\};/);
+    assert.deepStrictEqual(result.metadata.litsxComponentEvents.Counter, {
+      events: ["primary-action"],
+      complete: true,
+      explicit: true,
+    });
   });
 
   it("lowers native useRef DOM bindings through the canonical preset", () => {

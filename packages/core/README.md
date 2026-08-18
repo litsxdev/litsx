@@ -56,7 +56,53 @@ code should not add manual snapshot adapters or hydration bootstrap calls.
 - JSX compatibility helpers:
   - `jsxSpreadElement(tagName, sources, options?, children?)` merges JSX prop sources in authored order. It uses an `ElementPart` in the browser and regular Lit parts during SSR.
   - Explicit `.prop`, `?boolean`, and `@event` keys override inference; otherwise the destination constructor, reactive component API, and native DOM properties determine the binding channel.
+  - In spreads targeting components or custom elements, a declared `onX` API member remains a property. An undeclared standard listener such as `onPrimaryAction` listens for `primary-action`; known DOM event names keep their native spelling.
   - Hydratable spread output should be rendered with `@litsx/ssr` and hydrated with `@litsx/ssr/client` so the two template shapes are reconciled without replacing DOM nodes.
+
+## Typed component events
+
+Give `useEmit` an event map to type both emission and JSX consumers:
+
+```tsx
+type ButtonEvents = {
+  "primary-action": { id: string };
+  "url-change": URL;
+};
+
+export function ActionButton() {
+  const emit = useEmit<ButtonEvents>();
+  return <button onClick={() => emit("primary-action", { id: "save" })}>Save</button>;
+}
+
+const view = (
+  <ActionButton onPrimaryAction={(event) => event.detail.id} />
+);
+```
+
+The compiler publishes the inferred contract as `ActionButton.events` and under
+`Symbol.for("litsx.events")`. This lets TypeScript, editor tooling, spreads, and
+downstream packages consume the same event API without inspecting source. A
+literal event name makes the inferred contract complete; a dynamic name keeps it
+open so consumers may still use unknown `onX` listeners.
+
+Libraries can declare the contract explicitly when inference is not possible:
+
+```ts
+import type { LitsxEventDeclaration } from "@litsx/core";
+
+export declare class ActionButton extends HTMLElement {
+  static readonly events: LitsxEventDeclaration<ButtonEvents, true>;
+}
+```
+
+Standard JSX event names use PascalCase words: `primary-action` becomes
+`onPrimaryAction` and `url-change` becomes `onUrlChange`. Acronym spellings such
+as `onURLChange` compile to the same event, but generated declarations and editor
+completions use the canonical form. Appending `Capture` (for example,
+`onPrimaryActionCapture`) installs the same typed listener in the capture phase.
+Event names that cannot be represented
+without ambiguity (`menu:open`, `state.change`, or names ending in `-capture`)
+remain available through explicit Lit syntax such as `@menu:open`.
 
 All helpers accept the Lit element instance as the first argument. The Babel transforms insert it automatically, but you can also call the runtime manually.
 

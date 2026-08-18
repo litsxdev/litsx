@@ -60,14 +60,28 @@ export declare function useSsrResourceSnapshot(
 ): void;
 export declare const LITSX_HOOK: unique symbol;
 export declare const LITSX_COMPONENT: unique symbol;
+export declare const LITSX_EVENTS: unique symbol;
 export declare const LITSX_HOST_TYPE_ID: unique symbol;
 export declare const LITSX_HYDRATABLE_TAG: unique symbol;
 export declare const STRUCTURAL_HOOK_ENTRIES: unique symbol;
 export interface LitsxHook {
   readonly [LITSX_HOOK]: true;
 }
-export interface LitsxComponentStatic {
+export interface LitsxEventMetadata {
+  readonly events: readonly string[];
+  readonly complete: boolean;
+}
+export interface LitsxEventDeclaration<
+  Events extends Record<string, unknown>,
+  Complete extends boolean = boolean,
+> extends LitsxEventMetadata {
+  readonly complete: Complete;
+  readonly __types?: Events;
+}
+export interface LitsxComponentStatic<Events extends Record<string, unknown> = Record<string, unknown>> {
   readonly [LITSX_COMPONENT]: true;
+  readonly [LITSX_EVENTS]?: LitsxEventDeclaration<Events, boolean>;
+  readonly events?: LitsxEventDeclaration<Events, boolean>;
 }
 export interface LitsxHydratableComponentStatic extends LitsxComponentStatic {
   readonly [LITSX_HYDRATABLE_TAG]: string;
@@ -210,6 +224,50 @@ export type LitsxStandardDomEventAttributes<Target = EventTarget> = {
   onTransitionEnd?: LitsxEventHandler<TransitionEvent & { currentTarget: Target }>;
 };
 
+/**
+ * Standard JSX spelling for custom-element events. The compiler only uses this
+ * fallback when the component API does not declare the same `onX` name as a
+ * property, so declared callback props retain their own type and semantics.
+ */
+type LitsxUppercaseLetter =
+  | "A" | "B" | "C" | "D" | "E" | "F" | "G" | "H" | "I" | "J" | "K" | "L" | "M"
+  | "N" | "O" | "P" | "Q" | "R" | "S" | "T" | "U" | "V" | "W" | "X" | "Y" | "Z";
+
+export type LitsxStandardCustomEventAttributes<Props = {}> = {
+  [Name in `on${LitsxUppercaseLetter}${string}`]?: Name extends keyof Props
+    ? Props[Name]
+    : LitsxEventHandler<any>;
+};
+
+type LitsxPascalEventName<Name extends string> =
+  Name extends `${infer Head}-${infer Tail}`
+    ? `${Capitalize<Head>}${LitsxPascalEventName<Tail>}`
+    : Capitalize<Name>;
+
+type LitsxStandardRepresentableEventName<Name extends string> =
+  Name extends Lowercase<Name>
+    ? Name extends `${string}:${string}` | `${string}.${string}` | `${string}-capture`
+      ? never
+      : Name
+    : never;
+
+export type LitsxTypedCustomEventAttributes<
+  Events extends Record<string, unknown>,
+  Target = EventTarget,
+> = {
+  [Name in Extract<keyof Events, string> as LitsxStandardRepresentableEventName<Name> extends never
+    ? never
+    : `on${LitsxPascalEventName<Name>}`]?: LitsxEventHandler<
+    CustomEvent<Events[Name]> & { currentTarget: Target }
+  >;
+} & {
+  [Name in Extract<keyof Events, string> as LitsxStandardRepresentableEventName<Name> extends never
+    ? never
+    : `on${LitsxPascalEventName<Name>}Capture`]?: LitsxEventHandler<
+    CustomEvent<Events[Name]> & { currentTarget: Target }
+  >;
+};
+
 export type LitsxDomAttributes<Target = EventTarget> =
   & LitsxKnownDomEventAttributes<Target>
   & LitsxFormEventAttributes<Target>
@@ -290,8 +348,12 @@ export type LitsxIntrinsicElements = {
   >;
 } & LitsxCustomIntrinsicElements;
 
-export type LitsxComponent<Props = Record<string, unknown>> =
-  (props: Props) => LitsxRenderable;
+export type LitsxComponent<
+  Props = Record<string, unknown>,
+  Events extends Record<string, unknown> = Record<string, unknown>,
+> = ((props: Props) => LitsxRenderable) & {
+  readonly events?: LitsxEventDeclaration<Events, boolean>;
+};
 
 export interface SuspenseBoundaryProps {
   /**
@@ -853,15 +915,30 @@ export declare function useEvent<T extends (...args: never[]) => unknown>(
 /**
  * Emit a CustomEvent from the current host.
  */
-export declare function useEmit(): <T = undefined>(
+export type LitsxEmitOptions = {
+  bubbles?: boolean;
+  composed?: boolean;
+  cancelable?: boolean;
+};
+
+export type LitsxEmit = <T = undefined>(
   type: string,
   detail?: T,
-  options?: {
-    bubbles?: boolean;
-    composed?: boolean;
-    cancelable?: boolean;
-  }
+  options?: LitsxEmitOptions
 ) => boolean;
+
+export type LitsxTypedEmit<Events extends Record<string, unknown>> = <
+  Name extends Extract<keyof Events, string>,
+>(
+  type: Name,
+  ...args: undefined extends Events[Name]
+    ? [detail?: Events[Name], options?: LitsxEmitOptions]
+    : [detail: Events[Name], options?: LitsxEmitOptions]
+) => boolean;
+
+export declare function useEmit<
+  Events extends Record<string, unknown> | undefined = undefined,
+>(): Events extends Record<string, unknown> ? LitsxTypedEmit<Events> : LitsxEmit;
 /**
  * Read the value from the previous render.
  */

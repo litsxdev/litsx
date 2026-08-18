@@ -422,6 +422,131 @@ function getTypeResolverForFunction(functionPath, state) {
   return getOrCreateTypeResolver(state);
 }
 
+function isUseEmitCall(callPath) {
+  const calleePath = callPath.get("callee");
+  if (calleePath.isMemberExpression?.() && !calleePath.node.computed) {
+    const objectPath = calleePath.get("object");
+    const propertyPath = calleePath.get("property");
+    if (!objectPath.isIdentifier() || !propertyPath.isIdentifier({ name: "useEmit" })) return false;
+    const binding = callPath.scope.getBinding(objectPath.node.name);
+    const importDeclaration = binding?.path?.findParent((path) => path.isImportDeclaration?.());
+    return binding?.path?.isImportNamespaceSpecifier?.() && importDeclaration?.node?.source?.value === "@litsx/core";
+  }
+  if (!calleePath.isIdentifier()) return false;
+  const binding = callPath.scope.getBinding(calleePath.node.name);
+  if (!binding) return calleePath.node.name === "useEmit";
+  if (!binding.path.isImportSpecifier?.()) return false;
+  const imported = binding.path.node.imported;
+  const importedName = imported?.name ?? imported?.value;
+  const importDeclaration = binding.path.findParent((path) => path.isImportDeclaration?.());
+  const source = importDeclaration?.node?.source?.value;
+  return importedName === "useEmit" && source === "@litsx/core";
+}
+
+function getEventMapNames(typeNode, programPath, seen = new Set()) {
+  if (!typeNode) return [];
+  if (t.isTSTypeLiteral(typeNode)) {
+    return typeNode.members
+      .filter((member) => t.isTSPropertySignature(member))
+      .map((member) => member.key?.name ?? member.key?.value)
+      .filter((name) => typeof name === "string");
+  }
+  if (t.isTSTypeReference(typeNode) && t.isIdentifier(typeNode.typeName)) {
+    if (seen.has(typeNode.typeName.name)) return [];
+    seen.add(typeNode.typeName.name);
+    for (const statement of programPath.node.body ?? []) {
+      const declaration = statement.type === "ExportNamedDeclaration" ? statement.declaration : statement;
+      if (t.isTSTypeAliasDeclaration(declaration) && declaration.id.name === typeNode.typeName.name) {
+        return getEventMapNames(declaration.typeAnnotation, programPath, seen);
+      }
+      if (t.isTSInterfaceDeclaration(declaration) && declaration.id.name === typeNode.typeName.name) {
+        return getEventMapNames(t.tsTypeLiteral(declaration.body.body), programPath, seen);
+      }
+    }
+  }
+  return [];
+}
+
+function readExplicitEventMetadata(node) {
+  let value = node;
+  if (t.isTSAsExpression(value) || t.isTSTypeAssertion(value)) value = value.expression;
+  if (!t.isObjectExpression(value)) return null;
+  let events = null;
+  let complete = null;
+  for (const property of value.properties) {
+    if (!t.isObjectProperty(property)) continue;
+    const name = property.key?.name ?? property.key?.value;
+    if (name === "events" && t.isArrayExpression(property.value)) {
+      events = property.value.elements
+        .filter((entry) => t.isStringLiteral(entry))
+        .map((entry) => entry.value);
+    }
+    if (name === "complete" && t.isBooleanLiteral(property.value)) complete = property.value.value;
+  }
+  return events && typeof complete === "boolean"
+    ? { events: events.sort(), complete, explicit: true }
+    : null;
+}
+
+function collectComponentEventMetadata(functionPath, programPath, componentName) {
+  const emitBindings = new Set();
+  const events = new Set();
+  let complete = true;
+  let typed = false;
+
+  functionPath.traverse({
+    VariableDeclarator(path) {
+      if (
+        path.get("id").isIdentifier() &&
+        path.get("init").isCallExpression() &&
+        isUseEmitCall(path.get("init"))
+      ) {
+        emitBindings.add(path.node.id.name);
+        const typeNode = path.node.init.typeParameters?.params?.[0] ?? path.node.init.typeArguments?.params?.[0];
+        const typedNames = getEventMapNames(typeNode, programPath);
+        if (typedNames.length > 0) {
+          typed = true;
+          for (const name of typedNames) events.add(name);
+        }
+      }
+    },
+  });
+
+  let explicitMetadata = null;
+  for (const statement of programPath.node.body ?? []) {
+    const expression = statement?.type === "ExpressionStatement" ? statement.expression : null;
+    if (
+      t.isAssignmentExpression(expression, { operator: "=" }) &&
+      t.isMemberExpression(expression.left) &&
+      t.isIdentifier(expression.left.object, { name: componentName }) &&
+      (
+        (!expression.left.computed && t.isIdentifier(expression.left.property, { name: "events" })) ||
+        (expression.left.computed && t.isStringLiteral(expression.left.property, { value: "events" }))
+      )
+    ) {
+      explicitMetadata = readExplicitEventMetadata(expression.right);
+      break;
+    }
+  }
+
+  if (explicitMetadata) return explicitMetadata;
+  if (emitBindings.size === 0) return null;
+
+  functionPath.traverse({
+    CallExpression(path) {
+      const callee = path.get("callee");
+      if (!callee.isIdentifier() || !emitBindings.has(callee.node.name)) return;
+      const binding = path.scope.getBinding(callee.node.name);
+      if (!binding || binding.path.node.type !== "VariableDeclarator") return;
+      const firstArgument = path.node.arguments[0];
+      if (t.isStringLiteral(firstArgument)) events.add(firstArgument.value);
+      else complete = false;
+    },
+  });
+
+  return { events: [...events].sort(), complete: typed ? true : complete };
+}
+
 function transformFunction(functionPath, programPath, className, options = {}) {
   const { node } = functionPath;
   const elementCandidates = getAnnotatedElementCandidates(functionPath, programPath, options);
@@ -449,6 +574,15 @@ function transformFunction(functionPath, programPath, className, options = {}) {
   }
 
   className = resolvedName;
+  const eventMetadata = collectComponentEventMetadata(functionPath, programPath, className);
+
+  if (eventMetadata && (eventMetadata.events.length > 0 || eventMetadata.complete === false)) {
+    if (options.state?.file) {
+      options.state.file.metadata ||= {};
+      const componentEvents = options.state.file.metadata.litsxComponentEvents ||= {};
+      componentEvents[className] = eventMetadata;
+    }
+  }
 
   const {
     properties: propertiesStatic,
@@ -533,6 +667,7 @@ function transformFunction(functionPath, programPath, className, options = {}) {
     hoistMembers,
     hoistSymbolDeclarations,
     hostTypeId: createStableIdentity("litsx-host-type-", functionPath, options.state || {}),
+    eventMetadata,
     needsStaticHoistsMixin,
     lightDomRequested,
     needsCss,

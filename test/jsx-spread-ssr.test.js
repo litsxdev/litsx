@@ -60,6 +60,29 @@ describe("jsxSpreadElement SSR", () => {
     assert.doesNotMatch(output, /payload="/);
   });
 
+  it("keeps declared callback props and custom-event listeners out of SSR markup", () => {
+    const tagName = "litsx-jsx-spread-ssr-events";
+    if (!customElements.get(tagName)) {
+      customElements.define(tagName, class extends LitElement {
+        static properties = {
+          onCallback: { attribute: false },
+        };
+
+        render() {
+          return html`<strong>${typeof this.onCallback}</strong>`;
+        }
+      });
+    }
+
+    const output = renderToString(jsxSpreadElement(tagName, [{
+      onCallback: () => {},
+      onPrimaryAction: () => {},
+    }]));
+
+    assert.match(output, /<strong[^>]*>[\s\S]*function/);
+    assert.doesNotMatch(output, /onCallback|onPrimaryAction|primary-action/);
+  });
+
   it("renders React inner HTML and keeps refs out of server markup", () => {
     const output = renderToString(
       jsxSpreadElement("section", [{

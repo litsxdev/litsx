@@ -23,6 +23,12 @@ It provides:
 - remapped diagnostics and quick info spans
 - filtered completions that hide the internal `__litsx_*` names
 - contextual completions for `@event`, `.prop` and `?attr`
+- typed standard JSX event completions inferred from `useEmit<EventMap>()` and
+  from published `Component.events` metadata, including dependencies that only
+  expose JavaScript plus declarations
+- typo diagnostics for unknown `onX` listeners when a component publishes a
+  complete event contract; incomplete or dynamic contracts retain the open
+  custom-event fallback
 - authored diagnostics for obviously invalid Lit bindings
 - a `litsx-tsc` CLI path for virtualized type-checking when authored source uses Lit<sup>sx</sup>-specific syntax that plain `tsc` cannot parse directly
 

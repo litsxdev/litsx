@@ -94,6 +94,7 @@ export function createComponentClass({
   hoistMembers,
   hoistSymbolDeclarations,
   hostTypeId,
+  eventMetadata,
   needsStaticHoistsMixin,
   lightDomRequested,
   needsCss,
@@ -125,6 +126,28 @@ export function createComponentClass({
     classNode.body.body.unshift(componentMarkerProperty);
     classNode.body.body.unshift(hydratableTagProperty);
     classNode.body.body.unshift(hostTypeIdProperty);
+  }
+
+  if (eventMetadata?.events?.length > 0 || eventMetadata?.complete === false) {
+    const createEventMetadataValue = () => t.objectExpression([
+        t.objectProperty(
+          t.identifier("events"),
+          t.arrayExpression(eventMetadata.events.map((name) => t.stringLiteral(name))),
+        ),
+        t.objectProperty(t.identifier("complete"), t.booleanLiteral(eventMetadata.complete)),
+      ]);
+    if (!eventMetadata.explicit) {
+      const publicEventsProperty = t.classProperty(
+        t.identifier("events"),
+        createEventMetadataValue(),
+      );
+      publicEventsProperty.static = true;
+      classNode.body.body.unshift(publicEventsProperty);
+    }
+    classNode.body.body.unshift(createStaticRuntimeMetadataProperty(
+      "litsx.events",
+      createEventMetadataValue(),
+    ));
   }
 
   if (hoistMembers.length > 0) {

@@ -85,6 +85,38 @@ describe("jsxSpreadElement", () => {
     assert.strictEqual(element.getAttribute("data-id"), "ready");
   });
 
+  it("distinguishes declared callback props from conventional custom events", () => {
+    const tag = "jsx-spread-custom-events";
+    if (!customElements.get(tag)) {
+      customElements.define(tag, class extends LitElement {
+        static properties = {
+          onCallback: { attribute: false },
+        };
+      });
+    }
+    const container = document.createElement("div");
+    const onCallback = () => {};
+    let primaryActions = 0;
+    let urlChanges = 0;
+    let animations = 0;
+
+    render(jsxSpreadElement(tag, [{
+      onCallback,
+      onPrimaryAction: () => { primaryActions += 1; },
+      onURLChange: () => { urlChanges += 1; },
+      onAnimationEnd: () => { animations += 1; },
+    }]), container);
+
+    const element = container.querySelector(tag);
+    assert.strictEqual(element.onCallback, onCallback);
+    element.dispatchEvent(new CustomEvent("primary-action"));
+    element.dispatchEvent(new CustomEvent("url-change"));
+    element.dispatchEvent(new Event("animationend"));
+    assert.strictEqual(primaryActions, 1);
+    assert.strictEqual(urlChanges, 1);
+    assert.strictEqual(animations, 1);
+  });
+
   it("keeps normalized aliases and stable refs correct across updates", () => {
     const container = document.createElement("div");
     const refValues = [];

@@ -22,6 +22,7 @@ export const LITSX_SERVER_COMPONENT_CALL = Symbol.for("litsx.serverComponentCall
 // hydration runtime recreates the normal `{ current }` ref from its markers.
 export const LITSX_FORWARDED_REF = Symbol.for("litsx.forwardedRef");
 export const LITSX_LIGHT_DOM = Symbol.for("litsx.lightDom");
+export const LITSX_EVENTS = Symbol.for("litsx.events");
 let shadowDomRegistryAttachKey;
 let shadowDomRegistryAttachShadowRef;
 let shadowDomRegistryCtorRef;

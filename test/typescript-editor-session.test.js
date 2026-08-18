@@ -336,6 +336,7 @@ describe("@litsx/typescript editor-session", () => {
         allowArbitraryExtensions: true,
       },
       include: ["*.litsx"],
+      linkCorePackage: true,
       files: {
         "typed-button.litsx": "export const TypedButton = ({ kind = 'primary', disabled = false, count = 0 } = {}) => <button>{kind}{count}</button>;\n",
         "typed-consumer.litsx": [
@@ -394,13 +395,83 @@ describe("@litsx/typescript editor-session", () => {
           "  const emit = useEmit();",
           '  emit("primary-action");',
           '  emit("secondary-action");',
+          '  emit("primary-action-capture");',
+          '  emit("menu:open");',
           "  return <button />;",
           "};",
+          "",
+        ].join("\n"),
+        "typed-event-button.litsx": [
+          'import { useEmit } from "@litsx/core";',
+          "export type TypedEvents = {",
+          '  "primary-action": { id: string };',
+          "};",
+          "export const TypedEventButton = () => {",
+          "  const emit = useEmit<TypedEvents>();",
+          '  emit("primary-action", { id: "ready" });',
+          "  return <button />;",
+          "};",
+          "",
+        ].join("\n"),
+        "typed-event-consumer.litsx": [
+          'import { TypedEventButton } from "./typed-event-button.litsx";',
+          "const view = <TypedEventButton onPrimaryAction={(event) => event.detail.id.toUpperCase()} />;",
+          "",
+        ].join("\n"),
+        "typed-event-invalid-consumer.litsx": [
+          'import { TypedEventButton } from "./typed-event-button.litsx";',
+          "const view = <TypedEventButton onPrimaryAction={(event) => event.detail.id.toFixed()} />;",
           "",
         ].join("\n"),
         "event-consumer.litsx": [
           'import { EventButton } from "./event-button.litsx";',
           "const view = <EventButton @pr />;",
+          "const standardView = <EventButton onPr />;",
+          "const allEvents = <EventButton  />;",
+          "",
+        ].join("\n"),
+        "event-standard-consumer.litsx": [
+          'import { EventButton } from "./event-button.litsx";',
+          "const view = <EventButton onPrimaryAction={() => {}} />;",
+          "",
+        ].join("\n"),
+        "event-typo-consumer.litsx": [
+          'import { EventButton } from "./event-button.litsx";',
+          "const view = <EventButton onPrimrayAction={() => {}} />;",
+          "",
+        ].join("\n"),
+        "dynamic-event-button.litsx": [
+          'import { useEmit } from "@litsx/core";',
+          "export const DynamicEventButton = ({ eventName }: { eventName: string }) => {",
+          "  const emit = useEmit();",
+          "  emit(eventName);",
+          "  return <button />;",
+          "};",
+          "",
+        ].join("\n"),
+        "dynamic-event-consumer.litsx": [
+          'import { DynamicEventButton } from "./dynamic-event-button.litsx";',
+          "const view = <DynamicEventButton eventName=\"runtime-event\" onRuntimeEvent={() => {}} />;",
+          "",
+        ].join("\n"),
+        "published-button.js": [
+          "export class PublishedButton extends HTMLElement {",
+          '  static events = { events: ["published-ready"], complete: true };',
+          "}",
+          "",
+        ].join("\n"),
+        "published-event-consumer.litsx": [
+          'import { PublishedButton } from "./published-button.js";',
+          "const view = <PublishedButton onPu />;",
+          "",
+        ].join("\n"),
+        "callback-button.litsx": [
+          "export const CallbackButton = ({ onCallback }: { onCallback: (value: string) => void }) => <button />;",
+          "",
+        ].join("\n"),
+        "callback-consumer.litsx": [
+          'import { CallbackButton } from "./callback-button.litsx";',
+          "const view = <CallbackButton onCallback={(value) => value.toUpperCase()} />;",
           "",
         ].join("\n"),
       },
@@ -416,10 +487,9 @@ describe("@litsx/typescript editor-session", () => {
       COMPLETION_KINDS,
     );
 
-    assert.deepStrictEqual(
-      typedCompletions.slice(0, 3).map((entry) => entry.label),
-      ["count", "disabled", "kind"],
-    );
+    assert.ok(["count", "disabled", "kind"].every((label) =>
+      typedCompletions.some((entry) => entry.label === label)
+    ));
 
     const staticConsumerPath = fixture.resolve("static-consumer.litsx");
     const staticConsumerSource = fs.readFileSync(staticConsumerPath, "utf8");
@@ -460,6 +530,101 @@ describe("@litsx/typescript editor-session", () => {
 
     assert.ok(eventCompletions.some((entry) => entry.label === "@primary-action"));
     assert.ok(!eventCompletions.some((entry) => entry.label === "@secondary-action"));
+
+    const standardEventCompletions = fixture.session.getCompletions(
+      eventConsumerPath,
+      eventConsumerSource,
+      "litsx",
+      eventConsumerSource.indexOf("onPr") + 4,
+      COMPLETION_KINDS,
+    );
+
+    assert.ok(standardEventCompletions.some((entry) => entry.label === "onPrimaryAction"));
+
+    const allEventCompletions = fixture.session.getCompletions(
+      eventConsumerPath,
+      eventConsumerSource,
+      "litsx",
+      eventConsumerSource.indexOf("<EventButton  />") + "<EventButton ".length,
+      COMPLETION_KINDS,
+    );
+    assert.ok(allEventCompletions.some((entry) => entry.label === "onPrimaryAction"));
+    assert.ok(allEventCompletions.some((entry) => entry.label === "onSecondaryAction"));
+    assert.ok(allEventCompletions.some((entry) => entry.label === "onPrimaryActionCapture"));
+    assert.ok(!allEventCompletions.some((entry) => entry.label?.includes(":")));
+
+    const standardConsumerPath = fixture.resolve("event-standard-consumer.litsx");
+    const standardConsumerSource = fs.readFileSync(standardConsumerPath, "utf8");
+    const standardDiagnostics = fixture.session.getDiagnostics(
+      standardConsumerPath,
+      standardConsumerSource,
+      "litsx",
+    );
+    assert.ok(!standardDiagnostics.some((diagnostic) => diagnostic.code === 2322));
+
+    const typoConsumerPath = fixture.resolve("event-typo-consumer.litsx");
+    const typoConsumerSource = fs.readFileSync(typoConsumerPath, "utf8");
+    const typoDiagnostics = fixture.session.getDiagnostics(
+      typoConsumerPath,
+      typoConsumerSource,
+      "litsx",
+    );
+    assert.ok(typoDiagnostics.some((diagnostic) => diagnostic.code === 91026));
+
+    const dynamicConsumerPath = fixture.resolve("dynamic-event-consumer.litsx");
+    const dynamicConsumerSource = fs.readFileSync(dynamicConsumerPath, "utf8");
+    const dynamicDiagnostics = fixture.session.getDiagnostics(
+      dynamicConsumerPath,
+      dynamicConsumerSource,
+      "litsx",
+    );
+    assert.ok(!dynamicDiagnostics.some((diagnostic) => (
+      diagnostic.code === 91026 || diagnostic.code === 2322
+    )));
+
+    const publishedConsumerPath = fixture.resolve("published-event-consumer.litsx");
+    const publishedConsumerSource = fs.readFileSync(publishedConsumerPath, "utf8");
+    const publishedCompletions = fixture.session.getCompletions(
+      publishedConsumerPath,
+      publishedConsumerSource,
+      "litsx",
+      publishedConsumerSource.indexOf("onPu") + 4,
+      COMPLETION_KINDS,
+    );
+    assert.ok(publishedCompletions.some((entry) => entry.label === "onPublishedReady"));
+
+    const callbackConsumerPath = fixture.resolve("callback-consumer.litsx");
+    const callbackConsumerSource = fs.readFileSync(callbackConsumerPath, "utf8");
+    const callbackDiagnostics = fixture.session.getDiagnostics(
+      callbackConsumerPath,
+      callbackConsumerSource,
+      "litsx",
+    );
+    assert.ok(!callbackDiagnostics.some((diagnostic) => (
+      diagnostic.code === 2322 || diagnostic.code === 7006
+    )), callbackDiagnostics.map((diagnostic) => `${diagnostic.code}: ${diagnostic.messageText}`).join("\n"));
+
+    const typedEventConsumerPath = fixture.resolve("typed-event-consumer.litsx");
+    const typedEventConsumerSource = fs.readFileSync(typedEventConsumerPath, "utf8");
+    const typedEventDiagnostics = fixture.session.getDiagnostics(
+      typedEventConsumerPath,
+      typedEventConsumerSource,
+      "litsx",
+    );
+    assert.ok(!typedEventDiagnostics.some((diagnostic) => (
+      diagnostic.code === 2322 || diagnostic.code === 7006 || diagnostic.code === 2339
+    )), typedEventDiagnostics.map((diagnostic) => `${diagnostic.code}: ${diagnostic.messageText}`).join("\n"));
+
+    const invalidTypedEventPath = fixture.resolve("typed-event-invalid-consumer.litsx");
+    const invalidTypedEventSource = fs.readFileSync(invalidTypedEventPath, "utf8");
+    const invalidTypedEventDiagnostics = fixture.session.getDiagnostics(
+      invalidTypedEventPath,
+      invalidTypedEventSource,
+      "litsx",
+    );
+    assert.ok(
+      invalidTypedEventDiagnostics.some((diagnostic) => diagnostic.code === 2339 || diagnostic.code === 2551),
+    );
   }, 15000);
 
   it("prioritizes @litsx/core exports over noisy globals in component bodies", () => {

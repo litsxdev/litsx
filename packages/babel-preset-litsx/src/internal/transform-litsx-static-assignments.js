@@ -97,7 +97,7 @@ export default function transformLitsxStaticAssignments(api) {
             if (!/^[$A-Z_a-z][$\w]*$/.test(assigned.staticName)) continue;
             // React propTypes are executable compatibility metadata, not LitSX
             // host configuration. Leave them for react-compat (or userland).
-            if (assigned.staticName === "propTypes") continue;
+            if (assigned.staticName === "propTypes" || assigned.staticName === "events") continue;
 
             if (
               assigned.staticName === "styles" &&

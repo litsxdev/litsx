@@ -56,11 +56,11 @@ describe("standard JSX authoring", () => {
 
   it("infers native DOM listeners, aliases, live values, and booleans", () => {
     const source = `
-      function Form({ value, disabled, onChange, onClick }) {
+      function Form({ value, disabled, onChange, onClick, onAnimationEnd }) {
         return <section>
           <label className="field" htmlFor="query">Query</label>
           <input id="query" value={value} disabled={disabled} onChange={onChange} />
-          <button onClick={onClick}>Save</button>
+          <button onClick={onClick} onAnimationEnd={onAnimationEnd}>Save</button>
         </section>;
       }
     `;
@@ -71,7 +71,7 @@ describe("standard JSX authoring", () => {
 
     assert.match(code, /<label class="field" for="query">/);
     assert.match(code, /<input id="query" \.value=\$\{this\.value\} \?disabled=\$\{this\.disabled\} @input=\$\{this\.onChange\}>/);
-    assert.match(code, /<button @click=\$\{this\.onClick\}>Save<\/button>/);
+    assert.match(code, /<button @click=\$\{this\.onClick\} @animationend=\$\{this\.onAnimationEnd\}>Save<\/button>/);
   });
 
   it("infers bindings from imported component types", () => {
@@ -149,6 +149,50 @@ describe("standard JSX authoring", () => {
     assert.match(code, /\.payload=\$\{this\.payload\}/);
     assert.match(code, /\.onCommit=\$\{this\.onCommit\}/);
     assert.doesNotMatch(code, /@commit=/);
+  });
+
+  it("maps undeclared standard callback names to kebab-case custom events", () => {
+    const source = `
+      type ActionProps = {
+        onCallback: (value: string) => void;
+      };
+      function Action(props: ActionProps) {
+        return <button>{String(props.onCallback)}</button>;
+      }
+      function Screen({ onCallback, onPrimaryAction, onURLChange, onAnimationEnd }) {
+        return <section>
+          <Action
+            onCallback={onCallback}
+            onPrimaryAction={onPrimaryAction}
+            onURLChangeCapture={onURLChange}
+            onAnimationEnd={onAnimationEnd}
+          />
+          <third-party-action
+            onPrimaryAction={onPrimaryAction}
+            onURLChange={onURLChange}
+            onAnimationEnd={onAnimationEnd}
+          />
+          <third-party-action
+            @primary-action-capture={onPrimaryAction}
+            @menu:open={onURLChange}
+          />
+        </section>;
+      }
+    `;
+
+    const { code } = transformLitsxSync(source, {
+      filename: "/tmp/litsx-standard-custom-events.tsx",
+    });
+
+    assert.match(code, /<action[^>]*\.onCallback=\$\{this\.onCallback\}/);
+    assert.match(code, /@primary-action=\$\{this\.onPrimaryAction\}/);
+    assert.match(code, /@url-change=\$\{\{[\s\S]*handleEvent: this\.onURLChange,[\s\S]*capture: true/);
+    assert.match(code, /<action[^>]*@animationend=\$\{this\.onAnimationEnd\}/);
+    assert.match(code, /<third-party-action[^>]*@primary-action=\$\{this\.onPrimaryAction\}/);
+    assert.match(code, /<third-party-action[^>]*@url-change=\$\{this\.onURLChange\}/);
+    assert.match(code, /<third-party-action[^>]*@animationend=\$\{this\.onAnimationEnd\}/);
+    assert.match(code, /@primary-action-capture=\$\{this\.onPrimaryAction\}/);
+    assert.match(code, /@menu:open=\$\{this\.onURLChange\}/);
   });
 
   it("uses a published HTMLElementTagNameMap custom-element API", () => {

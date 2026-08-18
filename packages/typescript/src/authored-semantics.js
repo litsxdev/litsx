@@ -9,12 +9,16 @@ import {
   createVirtualLitsxJsxSource,
   decodeVirtualAttributeName,
   decodeVirtualStaticHoistName,
+  isStandardDomEventPropName,
+  isStandardJsxEventPropName,
   NATIVE_STATIC_HOISTS,
   looksLikeLitsxJsx,
   mapOriginalPositionToVirtual,
   remapTextSpanToOriginal,
   remapVirtualText,
+  resolveStandardJsxEventName,
   STATIC_HOIST_CALL_RE,
+  toStandardJsxEventPropName,
 } from "@litsx/authoring";
 
 const EVENT_COMPLETIONS = [
@@ -460,6 +464,116 @@ function collectJsxAttributes(ast) {
   return attributes;
 }
 
+function collectStandardCustomEventIssues(ast, virtualization, sourceText, options) {
+  const issues = [];
+  const imports = new Map();
+  const namespaces = new Map();
+
+  for (const statement of ast.program?.body ?? []) {
+    if (statement?.type !== "ImportDeclaration") continue;
+    for (const specifier of statement.specifiers ?? []) {
+      const localName = specifier.local?.name;
+      if (!localName) continue;
+      if (specifier.type === "ImportNamespaceSpecifier") {
+        namespaces.set(localName, statement.source.value);
+      } else {
+        imports.set(localName, {
+          source: statement.source.value,
+          exportName: specifier.type === "ImportDefaultSpecifier"
+            ? "default"
+            : specifier.imported?.name ?? specifier.imported?.value,
+        });
+      }
+    }
+  }
+
+  const localMetadata = inferLitsxComponentEventMetadata(sourceText, options);
+  const localProps = inferLitsxComponentPropNames(sourceText, options);
+  const moduleCache = new Map();
+
+  function getImportedSurface(reference) {
+    const resolvedFileName = resolveAuthoredModule(options.filename, reference.source, options);
+    if (!resolvedFileName) return null;
+    let cached = moduleCache.get(resolvedFileName);
+    if (!cached) {
+      const importedSource = readAuthoredModuleSource(resolvedFileName, options);
+      if (typeof importedSource !== "string") return null;
+      const parserOptions = {
+        ...options,
+        filename: resolvedFileName,
+        plugins: getParserPluginsForModule(resolvedFileName, importedSource, options.plugins),
+      };
+      cached = {
+        events: inferLitsxComponentEventMetadata(importedSource, parserOptions),
+        props: inferLitsxComponentPropNames(importedSource, parserOptions),
+      };
+      moduleCache.set(resolvedFileName, cached);
+    }
+    return {
+      metadata: cached.events[reference.exportName] ?? null,
+      props: cached.props[reference.exportName] ?? [],
+    };
+  }
+
+  for (const attribute of collectJsxAttributes(ast)) {
+    const rawName = attribute.name?.name;
+    if (!isStandardJsxEventPropName(rawName) || isStandardDomEventPropName(rawName)) continue;
+    const tagNode = attribute.__openingElement?.name;
+    let componentName = null;
+    let surface = null;
+
+    if (tagNode?.type === "JSXIdentifier" && /^[A-Z]/.test(tagNode.name)) {
+      componentName = tagNode.name;
+      const imported = imports.get(componentName);
+      surface = imported
+        ? getImportedSurface(imported)
+        : {
+            metadata: localMetadata[componentName] ?? null,
+            props: localProps[componentName] ?? [],
+          };
+    } else if (
+      tagNode?.type === "JSXMemberExpression" &&
+      tagNode.object?.type === "JSXIdentifier" &&
+      tagNode.property?.type === "JSXIdentifier"
+    ) {
+      const source = namespaces.get(tagNode.object.name);
+      componentName = `${tagNode.object.name}.${tagNode.property.name}`;
+      if (source) {
+        surface = getImportedSurface({ source, exportName: tagNode.property.name });
+      }
+    }
+
+    if (
+      !surface?.metadata?.complete ||
+      surface.metadata.nodeType === "ClassDeclaration" ||
+      surface.metadata.nodeType === "ClassExpression" ||
+      surface.metadata.nodeType === "StaticAssignment" ||
+      surface.props.includes(rawName)
+    ) continue;
+    const resolved = resolveStandardJsxEventName(rawName, { customElement: true });
+    if (!resolved || surface.metadata.events.includes(resolved.name)) continue;
+    const standardNames = surface.metadata.events
+      .map(toStandardJsxEventPropName)
+      .filter(Boolean);
+    const suggestion = findClosestAttributeSuggestion("", rawName, standardNames);
+    const virtualSpan = {
+      start: attribute.name.start ?? attribute.start ?? 0,
+      length: (attribute.name.end ?? attribute.end ?? 0) - (attribute.name.start ?? attribute.start ?? 0),
+    };
+    issues.push(createOriginalIssue(virtualization, {
+      kind: "unknown-standard-custom-event",
+      severity: "warning",
+      code: 91026,
+      start: virtualSpan.start,
+      length: virtualSpan.length,
+      message:
+        `Standard JSX listener "${rawName}" resolves to "${resolved.name}", which is not emitted by <${componentName}>.${suggestion ? ` Did you mean "${suggestion}"?` : " Use an explicit @event binding for intentionally dynamic or non-standard names."}`,
+    }));
+  }
+
+  return issues;
+}
+
 function createOriginalIssue(virtualization, config) {
   const virtualStart = typeof config.start === "number" ? config.start : 0;
   const virtualLength = typeof config.length === "number" ? config.length : 0;
@@ -877,6 +991,14 @@ function getFunctionLikeBody(node) {
 }
 
 function getComponentLikeFunctionName(node, parent) {
+  if (
+    (node.type === "FunctionExpression" || node.type === "ArrowFunctionExpression") &&
+    parent?.type === "VariableDeclarator" &&
+    parent.id?.type === "Identifier"
+  ) {
+    return parent.id.name;
+  }
+
   if (
     (node.type === "FunctionDeclaration" || node.type === "FunctionExpression") &&
     node.id?.type === "Identifier"
@@ -1466,8 +1588,12 @@ function collectTemplateInterpolationBindingIssues(sourceText) {
   return issues;
 }
 
-function inferEmitAliases(functionNode) {
-  const aliases = new Set();
+function inferEmitDeclarations(
+  functionNode,
+  useEmitNames = new Set(["useEmit"]),
+  useEmitNamespaces = new Set(),
+) {
+  const aliases = new Map();
   const body = getFunctionLikeBody(functionNode);
 
   if (!body) {
@@ -1479,49 +1605,180 @@ function inferEmitAliases(functionNode) {
       child?.type === "VariableDeclarator" &&
       child.id?.type === "Identifier" &&
       child.init?.type === "CallExpression" &&
-      child.init.callee?.type === "Identifier" &&
-      child.init.callee.name === "useEmit"
+      (
+        (child.init.callee?.type === "Identifier" && useEmitNames.has(child.init.callee.name)) ||
+        (
+          child.init.callee?.type === "MemberExpression" &&
+          child.init.callee.computed === false &&
+          child.init.callee.object?.type === "Identifier" &&
+          useEmitNamespaces.has(child.init.callee.object.name) &&
+          child.init.callee.property?.type === "Identifier" &&
+          child.init.callee.property.name === "useEmit"
+        )
+      )
     ) {
-      aliases.add(child.id.name);
+      aliases.set(child.id.name, child.init.typeParameters?.params?.[0] ?? child.init.typeArguments?.params?.[0] ?? null);
     }
   });
 
   return aliases;
 }
 
-function inferEmittedEventNames(functionNode) {
-  const aliases = inferEmitAliases(functionNode);
+function inferEmittedEventMetadata(
+  functionNode,
+  sourceText,
+  useEmitNames,
+  useEmitNamespaces,
+  typeDeclarations,
+) {
+  const aliases = inferEmitDeclarations(functionNode, useEmitNames, useEmitNamespaces);
   if (aliases.size === 0) {
-    return [];
+    return null;
   }
 
   const emittedEventNames = new Set();
+  let complete = true;
   const body = getFunctionLikeBody(functionNode);
   if (!body) {
-    return [];
+    return null;
   }
 
   walk(body, (child) => {
     if (
       child?.type === "CallExpression" &&
       child.callee?.type === "Identifier" &&
-      aliases.has(child.callee.name) &&
-      child.arguments?.[0]?.type === "StringLiteral"
+      aliases.has(child.callee.name)
     ) {
-      emittedEventNames.add(child.arguments[0].value);
+      if (child.arguments?.[0]?.type === "StringLiteral") {
+        emittedEventNames.add(child.arguments[0].value);
+      } else {
+        complete = false;
+      }
     }
   });
 
-  return Array.from(emittedEventNames).sort();
+  const typeExpressions = Array.from(aliases.values())
+    .filter((node) => node && typeof node.start === "number" && typeof node.end === "number")
+    .map((node) => sourceText.slice(node.start, node.end))
+    .filter(Boolean);
+  const typedEventNames = Array.from(aliases.values())
+    .flatMap((node) => getEventMapTypeNames(node, typeDeclarations));
+  for (const name of typedEventNames) emittedEventNames.add(name);
+
+  return {
+    events: Array.from(emittedEventNames).sort(),
+    complete: typedEventNames.length > 0 ? true : complete,
+    typeExpression: typeExpressions.length > 0
+      ? Array.from(new Set(typeExpressions)).join(" & ")
+      : null,
+  };
 }
 
-export function inferLitsxComponentEventNames(sourceText, options = {}) {
-  const { ast } = parseAuthoredAst(sourceText, options);
+function getEventMapTypeNames(typeNode, typeDeclarations, seen = new Set()) {
+  if (!typeNode) return [];
+  if (typeNode.type === "TSTypeLiteral") {
+    return (typeNode.members ?? [])
+      .filter((member) => member?.type === "TSPropertySignature")
+      .map((member) => member.key?.name ?? member.key?.value)
+      .filter((name) => typeof name === "string")
+      .sort();
+  }
+  if (typeNode.type === "TSInterfaceDeclaration") {
+    return getEventMapTypeNames({ type: "TSTypeLiteral", members: typeNode.body?.body ?? [] }, typeDeclarations, seen);
+  }
+  if (typeNode.type === "TSTypeAliasDeclaration") {
+    return getEventMapTypeNames(typeNode.typeAnnotation, typeDeclarations, seen);
+  }
+  if (typeNode.type === "TSTypeReference" && typeNode.typeName?.type === "Identifier") {
+    if (seen.has(typeNode.typeName.name)) return [];
+    seen.add(typeNode.typeName.name);
+    return getEventMapTypeNames(typeDeclarations.get(typeNode.typeName.name), typeDeclarations, seen);
+  }
+  return [];
+}
+
+function getStaticEventMetadata(node, sourceText, explicitTypeNode = null, typeDeclarations = new Map()) {
+  let value = node;
+  let typeExpression = null;
+  let declarationType = explicitTypeNode?.type === "TSTypeAnnotation"
+    ? explicitTypeNode.typeAnnotation
+    : explicitTypeNode;
+  if (value?.type === "TSAsExpression" || value?.type === "TSTypeAssertion") {
+    declarationType = value.typeAnnotation;
+    const typeParameters = declarationType?.typeParameters?.params ?? declarationType?.typeArguments?.params;
+    const eventMapNode = typeParameters?.[0];
+    if (eventMapNode && typeof eventMapNode.start === "number" && typeof eventMapNode.end === "number") {
+      typeExpression = sourceText.slice(eventMapNode.start, eventMapNode.end);
+    }
+    value = value.expression;
+  }
+  if (value?.type !== "ObjectExpression") {
+    const typeParameters = declarationType?.typeParameters?.params ?? declarationType?.typeArguments?.params;
+    const eventMapNode = typeParameters?.[0];
+    const completeNode = typeParameters?.[1];
+    if (!eventMapNode) return null;
+    if (typeof eventMapNode.start === "number" && typeof eventMapNode.end === "number") {
+      typeExpression = sourceText.slice(eventMapNode.start, eventMapNode.end);
+    }
+    const events = getEventMapTypeNames(eventMapNode, typeDeclarations);
+    const complete = completeNode?.type === "TSLiteralType" && completeNode.literal?.type === "BooleanLiteral"
+      ? completeNode.literal.value
+      : false;
+    return { events, complete, typeExpression };
+  }
+
+  let events = null;
+  let complete = null;
+  for (const property of value.properties ?? []) {
+    if (property?.type !== "ObjectProperty") continue;
+    const name = property.key?.name ?? property.key?.value;
+    if (name === "events" && property.value?.type === "ArrayExpression") {
+      events = property.value.elements
+        .filter((entry) => entry?.type === "StringLiteral")
+        .map((entry) => entry.value)
+        .sort();
+    }
+    if (name === "complete" && property.value?.type === "BooleanLiteral") {
+      complete = property.value.value;
+    }
+  }
+  if (!events || typeof complete !== "boolean") return null;
+  return { events, complete, typeExpression };
+}
+
+export function inferLitsxComponentEventMetadata(sourceText, options = {}) {
+  const { ast, virtualization } = parseAuthoredAst(sourceText, options);
   if (!ast) {
     return {};
   }
 
-  const componentEventNames = {};
+  const componentEvents = {};
+  const useEmitNames = new Set(["useEmit"]);
+  const useEmitNamespaces = new Set();
+  for (const statement of ast.program?.body ?? []) {
+    if (statement?.type !== "ImportDeclaration" || statement.source?.value !== "@litsx/core") continue;
+    for (const specifier of statement.specifiers ?? []) {
+      if (specifier.type === "ImportNamespaceSpecifier" && specifier.local?.name) {
+        useEmitNamespaces.add(specifier.local.name);
+      }
+      if (
+        specifier.type === "ImportSpecifier" &&
+        (specifier.imported?.name ?? specifier.imported?.value) === "useEmit" &&
+        specifier.local?.name
+      ) {
+        useEmitNames.add(specifier.local.name);
+      }
+    }
+  }
+  const typeDeclarations = new Map();
+  walk(ast.program ?? ast, (node) => {
+    if (
+      (node?.type === "TSTypeAliasDeclaration" || node?.type === "TSInterfaceDeclaration") &&
+      node.id?.type === "Identifier"
+    ) {
+      typeDeclarations.set(node.id.name, node);
+    }
+  });
 
   for (const { node, parent } of collectComponentLikeFunctions(ast)) {
     const componentName = getComponentLikeFunctionName(node, parent);
@@ -1529,13 +1786,94 @@ export function inferLitsxComponentEventNames(sourceText, options = {}) {
       continue;
     }
 
-    const emittedEventNames = inferEmittedEventNames(node);
-    if (emittedEventNames.length > 0) {
-      componentEventNames[componentName] = emittedEventNames;
+    const eventMetadata = inferEmittedEventMetadata(
+      node,
+      virtualization.code,
+      useEmitNames,
+      useEmitNamespaces,
+      typeDeclarations,
+    );
+    if (eventMetadata) {
+      componentEvents[componentName] = {
+        ...eventMetadata,
+        nodeStart: node.start ?? null,
+        nodeEnd: node.end ?? null,
+        nodeType: node.type,
+        exported: parent?.type === "ExportNamedDeclaration" || parent?.type === "ExportDefaultDeclaration",
+      };
     }
   }
 
-  return componentEventNames;
+  function collectClassMetadata(node, parentClass = null) {
+    if (!node || typeof node !== "object") return;
+    const nextClass = node.type === "ClassDeclaration" || node.type === "ClassExpression"
+      ? node
+      : parentClass;
+    if (
+      nextClass &&
+      (node.type === "ClassProperty" || node.type === "PropertyDefinition") &&
+      node.static === true &&
+      (node.key?.name ?? node.key?.value) === "events"
+    ) {
+      const componentName = nextClass.id?.name;
+      const metadata = getStaticEventMetadata(
+        node.value,
+        virtualization.code,
+        node.typeAnnotation,
+        typeDeclarations,
+      );
+      if (componentName && metadata) {
+        componentEvents[componentName] = {
+          ...metadata,
+          nodeStart: nextClass.start ?? null,
+          nodeEnd: nextClass.end ?? null,
+          nodeType: nextClass.type,
+          exported: false,
+          alreadyDeclared: true,
+        };
+      }
+    }
+    if (
+      node.type === "AssignmentExpression" &&
+      node.left?.type === "MemberExpression" &&
+      node.left.computed === false &&
+      node.left.object?.type === "Identifier" &&
+      node.left.property?.type === "Identifier" &&
+      node.left.property.name === "events"
+    ) {
+      const metadata = getStaticEventMetadata(node.right, virtualization.code, null, typeDeclarations);
+      if (metadata) {
+        componentEvents[node.left.object.name] = {
+          ...metadata,
+          nodeStart: null,
+          nodeEnd: null,
+          nodeType: "StaticAssignment",
+          exported: false,
+          alreadyDeclared: true,
+        };
+      }
+    }
+    for (const [key, value] of Object.entries(node)) {
+      if (key === "loc" || key === "leadingComments" || key === "innerComments" || key === "trailingComments") continue;
+      if (Array.isArray(value)) {
+        for (const child of value) if (child && typeof child.type === "string") collectClassMetadata(child, nextClass);
+      } else if (value && typeof value.type === "string") {
+        collectClassMetadata(value, nextClass);
+      }
+    }
+  }
+  collectClassMetadata(ast.program ?? ast);
+
+  return componentEvents;
+}
+
+export function inferLitsxComponentEventNames(sourceText, options = {}) {
+  const metadata = inferLitsxComponentEventMetadata(sourceText, options);
+  return Object.fromEntries(
+    Object.entries(metadata)
+      .filter(([, value]) => value.events.length > 0)
+      .map(([name, value]) => [name, value.events]),
+  );
 }
 
 function inferStaticPropertyNames(functionNode) {
@@ -2099,6 +2437,7 @@ export function collectLitsxAuthoredIssues(sourceText, options = {}) {
   issues.push(...collectUseExposeIssues(ast, virtualization));
   issues.push(...collectReactMemoIssues(ast, virtualization));
   issues.push(...collectReactCompatSurfaceIssues(ast, virtualization));
+  issues.push(...collectStandardCustomEventIssues(ast, virtualization, sourceText, options));
   issues.push(...collectDestructuredPropsMetadataIssues(ast, virtualization, sourceText, options));
   issues.push(...collectPropsAccessIssues(ast, virtualization));
   issues.push(...collectHoistsFirstIssues(ast, virtualization));

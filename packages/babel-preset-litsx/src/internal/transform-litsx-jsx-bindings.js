@@ -1,6 +1,9 @@
 import helperPluginUtils from "@babel/helper-plugin-utils";
 import jsxSyntaxPlugin from "@babel/plugin-syntax-jsx";
-import { decodeVirtualAttributeName } from "@litsx/authoring";
+import {
+  decodeVirtualAttributeName,
+  resolveStandardJsxEventName,
+} from "@litsx/authoring";
 import {
   createTypeResolver,
   ensureTypescriptModule,
@@ -50,11 +53,6 @@ const HTML_ATTRIBUTE_ALIASES = new Map([
   ["className", "class"],
   ["htmlFor", "for"],
   ["httpEquiv", "http-equiv"],
-]);
-const EVENT_ALIASES = new Map([
-  ["doubleclick", { name: "dblclick" }],
-  ["focus", { name: "focusin", capture: true }],
-  ["blur", { name: "focusout", capture: true }],
 ]);
 const INPUT_CHANGE_TYPES = new Set(["checkbox", "radio", "file"]);
 const LIVE_VALUE_TAGS = new Set(["input", "textarea", "select"]);
@@ -342,22 +340,12 @@ function wrapCapture(attribute, t) {
   );
 }
 
-function resolveEvent(rawName, tagName, attributes, t) {
-  if (!/^on[A-Z]/.test(rawName)) return null;
-
-  let eventName = rawName.slice(2);
-  let capture = false;
-  if (eventName.endsWith("Capture")) {
-    capture = true;
-    eventName = eventName.slice(0, -7);
-  }
-
-  let normalized = eventName.replace(/[A-Z]/g, (match) => match.toLowerCase());
-  const alias = EVENT_ALIASES.get(normalized);
-  if (alias) {
-    normalized = alias.name;
-    capture ||= alias.capture;
-  }
+function resolveEvent(rawName, tagName, attributes, t, customEvent = false) {
+  const resolved = resolveStandardJsxEventName(rawName, {
+    customElement: customEvent,
+  });
+  if (!resolved) return null;
+  let { name: normalized, capture } = resolved;
 
   if (normalized === "change" && (tagName === "input" || tagName === "textarea")) {
     const checked = attributes.some((attribute) => {
@@ -535,6 +523,12 @@ function transformOpeningElement(path, state, t) {
         if (kind === "property") renameAttribute(attribute, `.${rawName}`, t);
         continue;
       }
+      const event = resolveEvent(rawName, tagName, path.node.attributes, t, true);
+      if (event) {
+        renameAttribute(attribute, `@${event.name}`, t);
+        if (event.capture) wrapCapture(attribute, t);
+        continue;
+      }
       if (!t.isStringLiteral(attribute.value)) {
         renameAttribute(attribute, `.${rawName}`, t);
       }
@@ -587,7 +581,13 @@ function transformOpeningElement(path, state, t) {
       continue;
     }
 
-    const event = resolveEvent(rawName, tagName, path.node.attributes, t);
+    const event = resolveEvent(
+      rawName,
+      tagName,
+      path.node.attributes,
+      t,
+      customElement,
+    );
     if (event) {
       renameAttribute(attribute, `@${event.name}`, t);
       if (event.capture) wrapCapture(attribute, t);

@@ -5,7 +5,7 @@ import { getOrCreateProjectTsSession } from "@litsx/typescript-session";
 
 import {
   createToolingVirtualLitsxSource,
-  looksLikeLitsxJsx,
+  needsToolingVirtualization,
   remapToolingTextSpanToOriginal,
   remapVirtualText,
 } from "./virtualization.js";
@@ -138,7 +138,7 @@ function createVirtualizationState() {
       return cachedRecord;
     }
 
-    if (!isRelevantFile(fileName) || !looksLikeLitsxJsx(sourceText)) {
+    if (!isRelevantFile(fileName) || !needsToolingVirtualization(sourceText)) {
       clear(fileName);
       return null;
     }

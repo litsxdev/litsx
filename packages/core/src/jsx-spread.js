@@ -1,3 +1,4 @@
+import { resolveStandardJsxEventName } from "@litsx/authoring";
 import { html, isServer, noChange, nothing } from "lit";
 import { Directive, PartType, directive } from "lit/directive.js";
 import { ifDefined } from "lit/directives/if-defined.js";
@@ -9,7 +10,6 @@ const BOOLEAN_ATTRIBUTE_NAMES = new Set(["allowfullscreen", "async", "autofocus"
 const BOOLEAN_VALUE_ATTRIBUTE_NAMES = new Set(["contenteditable", "draggable", "spellcheck"]);
 const HTML_ATTRIBUTE_ALIASES = new Map([["acceptCharset", "accept-charset"], ["className", "class"], ["htmlFor", "for"], ["httpEquiv", "http-equiv"]]);
 const NATIVE_PROPERTY_NAMES = new Set(["checked", "files", "indeterminate", "selectedIndex", "value"]);
-const EVENT_ALIASES = new Map([["doubleclick", "dblclick"], ["focus", "focusin"], ["blur", "focusout"]]);
 const SKIPPED_KEYS = new Set(["__proto__", "constructor", "prototype", "key", "children"]);
 const SERVER_STRINGS_CACHE = new Map();
 const CLIENT_STRINGS_CACHE = new Map();
@@ -41,9 +41,15 @@ function normalizeName(rawName, nativeHtml) {
   if (prefix === "?") return { kind: "boolean", name: rawName.slice(1) };
   if (prefix === "@") return { kind: "event", name: rawName.slice(1) };
   if (/^on[A-Z]/.test(rawName)) {
-    const reactName = rawName.slice(2).replace(/Capture$/, "");
-    const normalized = reactName.replace(/[A-Z]/g, (match) => match.toLowerCase());
-    return { kind: "event", name: EVENT_ALIASES.get(normalized) ?? normalized, capture: rawName.endsWith("Capture") || normalized === "focus" || normalized === "blur" };
+    const resolved = resolveStandardJsxEventName(rawName, {
+      customElement: !nativeHtml,
+    });
+    return {
+      kind: nativeHtml ? "event" : "custom-event-candidate",
+      name: resolved.name,
+      propertyName: rawName,
+      capture: resolved.capture,
+    };
   }
   if (rawName === "ref" || rawName === "style" || rawName === "dangerouslySetInnerHTML") {
     return { kind: "inferred", name: rawName, propertyName: rawName };
@@ -75,6 +81,11 @@ function inferDescriptor(tagName, rawName, value, component, element, namespace)
   const nativeHtml = namespace !== "svg" && !tagName.includes("-") && !component;
   const descriptor = normalizeName(rawName, nativeHtml);
   if (!SAFE_BINDING_NAME.test(descriptor.name)) return null;
+  if (descriptor.kind === "custom-event-candidate") {
+    return hasComponentProperty(tagName, descriptor.propertyName, component, element)
+      ? { kind: "property", name: descriptor.propertyName }
+      : { kind: "event", name: descriptor.name, capture: descriptor.capture };
+  }
   if (descriptor.kind !== "inferred") return descriptor;
   const { name, propertyName } = descriptor;
   if (name === "ref") return { kind: "ref", name };

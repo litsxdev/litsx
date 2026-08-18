@@ -15,8 +15,11 @@ import {
   looksLikeLitsxJsx,
   mapOriginalPositionToVirtual,
   mapVirtualPositionToOriginal,
+  isStandardDomEventPropName,
+  resolveStandardJsxEventName,
   remapVirtualText,
   remapTextSpanToOriginal,
+  toStandardJsxEventPropName,
 } from "../packages/authoring/src/index.js";
 import {
   getLitsxVirtualizationMetadata,
@@ -25,6 +28,32 @@ import {
 import parser from "./helpers/litsx-parser.js";
 
 describe("@litsx/authoring", () => {
+  it("normalizes standard JSX event names consistently", () => {
+    assert.deepStrictEqual(
+      resolveStandardJsxEventName("onPrimaryAction", { customElement: true }),
+      { name: "primary-action", capture: false },
+    );
+    assert.deepStrictEqual(
+      resolveStandardJsxEventName("onURLChangeCapture", { customElement: true }),
+      { name: "url-change", capture: true },
+    );
+    assert.deepStrictEqual(
+      resolveStandardJsxEventName("onAnimationEnd", { customElement: true }),
+      { name: "animationend", capture: false },
+    );
+    assert.strictEqual(isStandardDomEventPropName("onAnimationEnd"), true);
+    assert.strictEqual(isStandardDomEventPropName("onPrimaryAction"), false);
+    assert.strictEqual(toStandardJsxEventPropName("primary-action"), "onPrimaryAction");
+    assert.strictEqual(toStandardJsxEventPropName("primary-action-capture"), null);
+    assert.strictEqual(toStandardJsxEventPropName("menu:open"), null);
+    const special = createVirtualLitsxJsxSource("<widget-box @menu:open={handler} @state.change={handler} />");
+    assert.match(special.code, /__litsx_event_encoded_/);
+    assert.deepStrictEqual(
+      special.replacements.map((entry) => decodeVirtualAttributeName(entry.replacement)),
+      ["@menu:open", "@state.change"],
+    );
+  });
+
   it("virtualizes lit-flavoured jsx attribute prefixes into ts-safe names", () => {
     const source = `
       const view = (

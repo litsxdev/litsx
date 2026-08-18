@@ -13,6 +13,13 @@ export {
   LITSX_IMPLICIT_CHILDREN_UNSUPPORTED_CODE,
   LITSX_IMPLICIT_CHILDREN_UNSUPPORTED_MESSAGE,
 } from "./implicit-children.js";
+export {
+  isStandardJsxEventPropName,
+  isStandardDomEventPropName,
+  resolveStandardJsxEventName,
+  toKebabEventName,
+  toStandardJsxEventPropName,
+} from "./event-names.js";
 
 const PREFIX_TO_KIND = {
   "@": "event",
@@ -26,7 +33,7 @@ const KIND_TO_PREFIX = {
   bool: "?",
 };
 
-const ATTR_NAME_CHAR = /[\w:-]/;
+const ATTR_NAME_CHAR = /[\w:.-]/;
 const TAG_NAME_START_CHAR = /[A-Za-z]/;
 const TAG_NAME_CHAR = /[\w:.-]/;
 const MACRO_NAME_START_CHAR = /[A-Za-z$_]/;
@@ -568,10 +575,23 @@ export function encodeVirtualAttributeName(name) {
     return name;
   }
 
+  if (/[:.]/.test(localName)) {
+    const encoded = Array.from(localName, (char) => char.codePointAt(0).toString(16)).join("_");
+    return `__litsx_${kind}_encoded_${encoded}`;
+  }
   return `__litsx_${kind}_${localName}`;
 }
 
 export function decodeVirtualAttributeName(name) {
+  const encodedMatch = /^__litsx_(event|prop|bool)_encoded_([0-9a-f]+(?:_[0-9a-f]+)*)$/i.exec(name);
+  if (encodedMatch) {
+    const [, kind, encoded] = encodedMatch;
+    const localName = encoded
+      .split("_")
+      .map((value) => String.fromCodePoint(Number.parseInt(value, 16)))
+      .join("");
+    return `${KIND_TO_PREFIX[kind]}${localName}`;
+  }
   const match = /^__litsx_(event|prop|bool)_(.+)$/.exec(name);
 
   if (!match) {
