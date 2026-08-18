@@ -41,12 +41,26 @@ describe("@litsx/ssr JSX spread integration", () => {
     }
   });
 
-  it("applies the same reconciliation through renderToStream", async () => {
-    const value = html`<div>${jsxSpreadElement("span", [{ title: "stream" }], {}, "ready")}</div>`;
+  it("preserves async ordering while reconciling spreads through renderToStream", async () => {
+    const asyncSpread = Promise.resolve(
+      jsxSpreadElement("span", [{ title: "stream" }], {}, "inside"),
+    );
+    const value = html`<div>before${asyncSpread}after</div>`;
     const stringResult = await renderToString(value);
     const { stream, allReady } = await renderToStream(value);
     const streamed = await readStream(stream);
     await allReady;
+
     assert.strictEqual(streamed, stringResult.html);
+    assert.match(streamed, /<span[^>]*title="stream"/);
+    assert.doesNotMatch(streamed, /@__litsx_spread/);
+
+    const beforeIndex = streamed.indexOf("before");
+    const spreadIndex = streamed.indexOf('title="stream"');
+    const insideIndex = streamed.indexOf("inside");
+    const afterIndex = streamed.indexOf("after");
+    assert.ok(beforeIndex < spreadIndex);
+    assert.ok(spreadIndex < insideIndex);
+    assert.ok(insideIndex < afterIndex);
   });
 });
