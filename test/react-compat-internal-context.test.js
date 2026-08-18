@@ -97,7 +97,7 @@ describe("react compat internal context", () => {
       "export const Example = () => <ThemeContext.Provider {...props} value='dark'><div /></ThemeContext.Provider>;",
     ].join("\n");
 
-    assert.throws(() => run(spreadAttr), /does not support spread attributes/);
+    assert.doesNotThrow(() => run(spreadAttr));
 
     const unsupportedProp = [
       "import { createContext } from 'react';",

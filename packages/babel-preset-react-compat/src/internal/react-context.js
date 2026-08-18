@@ -308,7 +308,7 @@ export default declare((api) => {
     return false;
   }
 
-  function getContextMemberKind(nameNode, state) {
+  function getContextMemberKind(nameNode, state, scope) {
     if (!t.isJSXMemberExpression(nameNode)) {
       return null;
     }
@@ -316,6 +316,17 @@ export default declare((api) => {
     const propertyName = getJsxMemberPropertyName(nameNode, t);
     if (propertyName !== "Provider" && propertyName !== "Consumer") {
       return null;
+    }
+
+    if (t.isJSXIdentifier(nameNode.object)) {
+      const objectName = nameNode.object.name;
+      const binding = scope?.getBinding?.(objectName);
+      if (
+        binding?.path?.isImportNamespaceSpecifier?.() &&
+        !state.localContextBindingNames.has(objectName)
+      ) {
+        return null;
+      }
     }
 
     return {
@@ -467,7 +478,11 @@ export default declare((api) => {
         }
       },
       JSXElement(path, state) {
-        const contextMember = getContextMemberKind(path.node.openingElement.name, state);
+        const contextMember = getContextMemberKind(
+          path.node.openingElement.name,
+          state,
+          path.scope
+        );
         if (!contextMember) {
           return;
         }
@@ -477,8 +492,9 @@ export default declare((api) => {
           const valueAttr = attributes.find(
             (attr) => t.isJSXAttribute(attr) && t.isJSXIdentifier(attr.name, { name: "value" })
           );
+          const hasSpreadAttribute = attributes.some((attr) => t.isJSXSpreadAttribute(attr));
 
-          if (!valueAttr) {
+          if (!valueAttr && !hasSpreadAttribute) {
             createCompileError(
               path,
               "React context Provider requires a value prop."
@@ -487,11 +503,9 @@ export default declare((api) => {
 
           const nextAttributes = [];
           for (const attr of attributes) {
-            if (!t.isJSXAttribute(attr)) {
-              createCompileError(
-                path,
-                "React context Provider does not support spread attributes."
-              );
+            if (t.isJSXSpreadAttribute(attr)) {
+              nextAttributes.push(t.cloneNode(attr, true));
+              continue;
             }
 
             const attrName = t.isJSXIdentifier(attr.name) ? attr.name.name : null;
@@ -518,12 +532,15 @@ export default declare((api) => {
             );
           }
 
-          nextAttributes.unshift(
-            t.jsxAttribute(
-              t.jsxIdentifier(".context"),
-              t.jsxExpressionContainer(t.cloneNode(contextMember.contextExpression, true))
-            )
+          const contextAttribute = t.jsxAttribute(
+            t.jsxIdentifier(".context"),
+            t.jsxExpressionContainer(t.cloneNode(contextMember.contextExpression, true))
           );
+          if (hasSpreadAttribute) {
+            nextAttributes.push(contextAttribute);
+          } else {
+            nextAttributes.unshift(contextAttribute);
+          }
 
           state.needsContextProvider = true;
 

@@ -36,6 +36,12 @@ export declare function isLitsxHook(value: unknown): value is LitsxHook;
 export declare function isLitsxComponentClass(
   value: unknown
 ): value is LitsxComponentStatic;
+export declare function jsxSpreadElement(
+  tagName: string,
+  sources: ReadonlyArray<Record<string, unknown> | null | undefined>,
+  options?: { component?: boolean; void?: boolean },
+  children?: unknown
+): import("lit").TemplateResult;
 
 export interface LitsxBaseAttributes {
   key?: string | number;

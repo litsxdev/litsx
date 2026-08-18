@@ -83,6 +83,39 @@ describe("@litsx/babel-preset-react-compat", () => {
     assert.match(code, /<input type="checkbox" \?checked=\$\{this\.enabled\} @change=\$\{this\.onEnabledChange\}>/);
   });
 
+  it("lowers JSX spreads with surrounding React props in source order", () => {
+    const source = `
+      export const Action = ({ props, active, onClick }) => (
+        <button {...props} className="action" disabled={active} onClick={onClick} />
+      );
+    `;
+
+    const code = run(source);
+
+    assert.match(code, /import \{[^}]*jsxSpreadElement[^}]*\} from "@litsx\/core"/);
+    assert.match(code, /jsxSpreadElement\("button", \[props, \{/);
+    assert.match(code, /class: "action"/);
+    assert.match(code, /disabled: active/);
+    assert.match(code, /"@click": onClick/);
+  });
+
+  it("expands typed object rest bindings into their remaining component props", () => {
+    const source = `
+      export function Action(
+        { disabled, ...props }: { disabled: boolean; title?: string }
+      ) {
+        return <button {...props} disabled={disabled} />;
+      }
+    `;
+
+    const code = run(source, { parser: { plugins: ["typescript"] } });
+
+    assert.match(code, /static properties = \{[\s\S]*disabled: \{\s*type: Boolean/);
+    assert.match(code, /title: \{\s*type: String/);
+    assert.match(code, /jsxSpreadElement\("button", \[\{\s*title: this\.title\s*\}, \{/);
+    assert.doesNotMatch(code, /jsxSpreadElement\("button", \[this\.props/);
+  });
+
   it("preserves React event alias behavior for focus, blur, and double click", () => {
     const source = `
       export const AliasedEvents = ({ onFocus, onBlur, onDoubleClick }) => {

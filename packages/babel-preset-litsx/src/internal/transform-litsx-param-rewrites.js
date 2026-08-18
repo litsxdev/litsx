@@ -1,5 +1,13 @@
 let t;
 
+function isPropsAliasBinding(bindingInfo) {
+  return Boolean(
+    bindingInfo &&
+    typeof bindingInfo === "object" &&
+    (bindingInfo.kind === "alias" || bindingInfo.kind === "rest-alias")
+  );
+}
+
 export function setParamRewriteBabelTypes(nextTypes) {
   t = nextTypes;
 }
@@ -65,7 +73,7 @@ function isSupportedImplicitChildrenReference(refPath, bindingInfo) {
   if (
     bindingInfo &&
     typeof bindingInfo === "object" &&
-    bindingInfo.kind === "alias" &&
+    isPropsAliasBinding(bindingInfo) &&
     refPath.parentPath?.isMemberExpression() &&
     refPath.parentKey === "object" &&
     !refPath.parentPath.node.computed &&
@@ -91,10 +99,12 @@ function createPropsObjectExpression(bindingInfo, propertyMap = new Map()) {
   }
 
   const propNames = new Set([
-    ...(bindingInfo && typeof bindingInfo === "object" && bindingInfo.kind === "alias"
+    ...(isPropsAliasBinding(bindingInfo)
       ? Array.from(bindingInfo.properties?.keys?.() || [])
       : []),
-    ...Array.from(propertyMap.keys?.() || []),
+    ...(bindingInfo?.kind === "rest-alias"
+      ? []
+      : Array.from(propertyMap.keys?.() || [])),
   ]);
   const properties = Array.from(propNames)
     .filter((propName) => typeof propName === "string" && propName.length > 0)
@@ -167,7 +177,7 @@ function registerLocalPropAliases(functionPath, bindings) {
         if (!t.isObjectPattern(id)) return;
 
         const bindingInfo = bindings.get(init.name);
-        if (!bindingInfo || typeof bindingInfo !== "object" || bindingInfo.kind !== "alias") {
+        if (!isPropsAliasBinding(bindingInfo)) {
           return;
         }
 
@@ -242,7 +252,7 @@ export function replaceParamReferences(functionPath, bindings, propertyMap = new
       if (
         bindingInfo &&
         typeof bindingInfo === "object" &&
-        bindingInfo.kind === "alias" &&
+        isPropsAliasBinding(bindingInfo) &&
         (!refPath.parentPath || !refPath.parentPath.isMemberExpression())
       ) {
         if (shouldCapturePropReference(refPath, functionPath)) {
@@ -274,7 +284,7 @@ export function replaceParamReferences(functionPath, bindings, propertyMap = new
       if (
         bindingInfo &&
         typeof bindingInfo === "object" &&
-        bindingInfo.kind === "alias" &&
+        isPropsAliasBinding(bindingInfo) &&
         refPath.parentPath &&
         refPath.parentPath.isMemberExpression() &&
         refPath.parentKey === "object" &&

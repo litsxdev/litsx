@@ -9,6 +9,23 @@ import {
 
 let t;
 
+function containsJsxSpreadAttribute(node) {
+  if (!node || typeof node !== "object") return false;
+  if (
+    t.isJSXElement(node) &&
+    node.openingElement.attributes.some((attr) => t.isJSXSpreadAttribute(attr))
+  ) {
+    return true;
+  }
+  const visitorKeys = t.VISITOR_KEYS?.[node.type] || [];
+  return visitorKeys.some((key) => {
+    const value = node[key];
+    return Array.isArray(value)
+      ? value.some(containsJsxSpreadAttribute)
+      : containsJsxSpreadAttribute(value);
+  });
+}
+
 function replaceNode(path, state) {
   if (path.parentPath?.isJSXElement() || path.parentPath?.isJSXFragment()) {
     return;
@@ -21,6 +38,10 @@ function replaceNode(path, state) {
     state.file?.opts?.filename ??
     state.file?.metadata?.sourceFileName ??
     null;
+
+  if (containsJsxSpreadAttribute(path.node)) {
+    state.__litsxNeedsSpreadHelper = true;
+  }
 
   state.__litsxTemplateAttributeMappings.push(
     ...collectLitAttributeSourcemapMetadata(path.node, [], {
@@ -139,12 +160,16 @@ export default function transformJsxHtmlTemplatePlugin(api) {
           state.__litsxNeedsTaggedImport = false;
           state.__litsxTaggedImportName = null;
           state.__litsxTemplateAttributeMappings = [];
+          state.__litsxNeedsSpreadHelper = false;
           state.opts = state.opts || {};
         },
         exit(programPath, state) {
           const importName = state.__litsxTaggedImportName;
           if (state.__litsxNeedsTaggedImport && importName) {
             ensureTaggedImport(programPath, importName);
+          }
+          if (state.__litsxNeedsSpreadHelper) {
+            ensureNamedImport(programPath, "@litsx/core", "jsxSpreadElement");
           }
 
           if (state.__litsxTemplateAttributeMappings.length > 0) {
@@ -163,6 +188,33 @@ export default function transformJsxHtmlTemplatePlugin(api) {
       },
     },
   };
+}
+
+function ensureNamedImport(programPath, moduleName, importName) {
+  const bodyPaths = programPath.get("body");
+  const existing = bodyPaths.find(
+    (path) => path.isImportDeclaration() && path.node.source.value === moduleName
+  );
+  if (existing) {
+    const present = existing.node.specifiers.some(
+      (specifier) =>
+        t.isImportSpecifier(specifier) &&
+        t.isIdentifier(specifier.imported, { name: importName })
+    );
+    if (!present) {
+      existing.node.specifiers.push(
+        t.importSpecifier(t.identifier(importName), t.identifier(importName))
+      );
+    }
+    return;
+  }
+  programPath.unshiftContainer(
+    "body",
+    t.importDeclaration(
+      [t.importSpecifier(t.identifier(importName), t.identifier(importName))],
+      t.stringLiteral(moduleName)
+    )
+  );
 }
 
 function ensureTaggedImport(programPath, importName) {

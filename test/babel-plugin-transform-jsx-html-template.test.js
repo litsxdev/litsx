@@ -316,17 +316,21 @@ describe("@litsx/babel-plugin-transform-jsx-html-template", () => {
     assert.match(code, /html`<span>\$\{value\}<\/span>`/);
   });
 
-  it("throws on unsupported spread attributes", () => {
-    const source = `const x = <div {...rest}></div>;`;
+  it("lowers spread attributes and surrounding explicit props in source order", () => {
+    const source = `const x = <div {...rest} id="fixed" disabled={active}></div>;`;
     const ast = parser.parse(source, { sourceType: "module" });
 
-    assert.throws(() => {
-      transformFromAstSync(ast, source, {
-        configFile: false,
-        babelrc: false,
-        plugins: [plugin],
-      });
-    }, /JSXSpreadAttribute is not supported/);
+    const { code } = transformFromAstSync(ast, source, {
+      configFile: false,
+      babelrc: false,
+      plugins: [plugin],
+    });
+
+    assert.match(code, /import \{ jsxSpreadElement \} from "@litsx\/core"/);
+    assert.match(
+      code,
+      /jsxSpreadElement\("div", \[rest, \{\s*id: "fixed"\s*\}, \{\s*disabled: active\s*\}\], \{\s*component: false,\s*void: false\s*\}/
+    );
   });
 
   it("throws on spread children", () => {

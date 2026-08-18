@@ -340,6 +340,55 @@ function shouldLowerAuthoredComponentAttributeAsProperty(attr, rawName) {
   return !attr.value || attr.value.type === "JSXExpressionContainer";
 }
 
+function getAttributeValue(attr, opts) {
+  if (!attr.value) {
+    return t.booleanLiteral(true);
+  }
+  if (attr.value.type === "JSXExpressionContainer") {
+    return lowerEmbeddedJsx(attr.value.expression, opts);
+  }
+  if (attr.value.type === "StringLiteral") {
+    return t.stringLiteral(attr.value.value);
+  }
+  return t.cloneNode(attr.value, true);
+}
+
+function createSpreadElementCall(node, opts, name, isAuthoredComponentTag) {
+  const sources = node.openingElement.attributes.map((attr) => {
+    if (attr.type === "JSXSpreadAttribute") {
+      return lowerEmbeddedJsx(t.cloneNode(attr.argument, true), opts);
+    }
+
+    const rawName = decodeVirtualAttributeName(attr.name.name) ?? attr.name.name;
+    const key = /^[$_a-zA-Z][$_a-zA-Z0-9]*$/.test(rawName)
+      ? t.identifier(rawName)
+      : t.stringLiteral(rawName);
+    return t.objectExpression([
+      t.objectProperty(key, getAttributeValue(attr, opts)),
+    ]);
+  });
+
+  const children = t.jsxFragment(
+    t.jsxOpeningFragment(),
+    t.jsxClosingFragment(),
+    node.children.map((child) => t.cloneNode(child, true))
+  );
+  const isVoid = isVoidHtmlTagName(name);
+  const helperName = opts?.spreadHelperName || "jsxSpreadElement";
+  return t.callExpression(t.identifier(helperName), [
+    t.stringLiteral(name),
+    t.arrayExpression(sources),
+    t.objectExpression([
+      t.objectProperty(
+        t.identifier("component"),
+        t.booleanLiteral(isAuthoredComponentTag || name.includes("-"))
+      ),
+      t.objectProperty(t.identifier("void"), t.booleanLiteral(isVoid)),
+    ]),
+    isVoid ? t.nullLiteral() : createJsxReplacement(children, opts),
+  ]);
+}
+
 const transforms = {
   JSXElement({ node, strings, keys }, opts) {
     const { name, isComponent, isAuthoredComponentTag } = getTag(node.openingElement);
@@ -349,13 +398,24 @@ const transforms = {
       return;
     }
 
+    const hasSpreadAttributes = node.openingElement.attributes.some(
+      (attr) => attr.type === "JSXSpreadAttribute"
+    );
+    if (hasSpreadAttributes) {
+      addKey(
+        strings,
+        keys,
+        createSpreadElementCall(node, opts, name, isAuthoredComponentTag)
+      );
+      return;
+    }
+
     addString(strings, keys, `<${name}`, node.openingElement, node.openingElement.name);
 
     node.openingElement.attributes.forEach((attr) => {
       if (attr.type === "JSXSpreadAttribute") {
-        throw new Error("JSXSpreadAttribute is not supported");
+        return;
       }
-
       const rawName = decodeVirtualAttributeName(attr.name.name) ?? attr.name.name;
       const prefix = rawName[0];
 

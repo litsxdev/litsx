@@ -80,3 +80,5 @@ export {
   useExpose,
   useExternalStore,
 } from "./state-hooks.js";
+
+export { jsxSpreadElement } from "./jsx-spread.js";

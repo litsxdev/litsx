@@ -1033,11 +1033,41 @@ export function extractProperties(functionPath, programPath, options = {}) {
     const typeMap =
       getCheckerPropertyMapForPattern(pattern, typeResolver) ||
       getTsLiteralPropertyTypes(pattern.typeAnnotation, programPath);
+    const explicitlyDestructuredNames = new Set(
+      pattern.properties
+        .filter((prop) => t.isObjectProperty(prop))
+        .map((prop) =>
+          t.isIdentifier(prop.key)
+            ? prop.key.name
+            : t.isStringLiteral(prop.key)
+              ? prop.key.value
+              : null
+        )
+        .filter(Boolean)
+    );
     pattern.properties.forEach((prop) => {
       if (t.isRestElement(prop) && t.isIdentifier(prop.argument)) {
         const restName = prop.argument.name;
+        if (typeMap.size === 0) {
+          ensureProperty(restName, createPropertyConfig(t.identifier("Object")));
+          registerBinding(restName, restName);
+          return;
+        }
+        const restProperties = new Map(
+          Array.from(typeMap.entries()).filter(
+            ([propName]) => !explicitlyDestructuredNames.has(propName)
+          )
+        );
+        // Keep the authored rest binding in the public metadata for backwards
+        // compatibility while also exposing its statically known members.
         ensureProperty(restName, createPropertyConfig(t.identifier("Object")));
-        registerBinding(restName, restName);
+        restProperties.forEach((propertyConfig, propName) => {
+          ensureProperty(propName, propertyConfig);
+        });
+        registerBinding(restName, {
+          kind: "rest-alias",
+          properties: restProperties,
+        });
         return;
       }
 

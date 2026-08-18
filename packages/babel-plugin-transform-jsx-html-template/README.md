@@ -13,7 +13,7 @@ The Lit<sup>SX</sup> JSX-to-template bridge: turn JSX trees into `lit-html` temp
 - Preserves `.prop`, `?attr` and `@event` prefixes as part of the resulting template syntax.
 - Rewrites React-style listeners (`onClick`, `onPointerDownCapture`, …) into Lit listeners, automatically lowercasing DOM event names and enabling capture mode when necessary.
 - Supports component factories by turning capitalised tags into function calls and passing props/children explicitly.
-- Declares clear error messages for unsupported constructs like spread attributes, helping you migrate incrementally.
+- Lowers JSX spread attributes through `jsxSpreadElement`, preserving source-order precedence around explicit props and inspecting the destination component API when available to select property, boolean, event, or attribute semantics.
 - Injects (or augments) the `lit` import so the generated tag (`html` by default) is always available.
 - Handles fragments and nested expression trees (e.g. `items.map(() => <span/>)`) so iterated JSX turns into nested `html` calls.
 
@@ -66,3 +66,4 @@ const view = html`<button .label=${text} ?disabled=${disabled} @click=${handleCl
 - Works best in tandem with the Lit<sup>SX</sup> parser fork so JSX attribute prefixes are available in the AST.
 - `...Capture` listeners are translated into the object-listener form (`{ handleEvent, capture: true }`) that Lit expects for capture semantics.
 - Keeps source maps aligned with Babel defaults so editor tooling continues to work after the transform.
+- Spread lowering creates ordinary Lit attribute, property, boolean, and event parts, so the same output works in browser rendering and Lit SSR.
