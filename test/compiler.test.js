@@ -2002,6 +2002,37 @@ describe("@litsx/compiler", () => {
     assert.ok(actual.column >= expected.column);
   }, 30_000);
 
+  it("keeps inferred standard JSX bindings aligned in the final sourcemap", async () => {
+    const source = [
+      "export function Counter({ save, name, busy }){",
+      "  return <input onClick={save} value={name} disabled={busy} />;",
+      "}",
+    ].join("\n");
+
+    const result = await transformLitsx(source, {
+      filename: "/virtual/StandardCounter.tsx",
+      sourceMaps: true,
+    });
+
+    assert.ok(result.map, "expected compiler to emit a sourcemap");
+    const traceMap = new TraceMap(result.map);
+    const checks = [
+      ["@click", "onClick"],
+      [".value", "value"],
+      ["?disabled", "disabled"],
+    ];
+
+    for (const [generatedNeedle, originalNeedle] of checks) {
+      const generated = findPosition(result.code, generatedNeedle);
+      const expected = findPosition(source, originalNeedle);
+      const actual = originalPositionFor(traceMap, generated);
+
+      assert.strictEqual(actual.source, "/virtual/StandardCounter.tsx");
+      assert.strictEqual(actual.line, expected.line);
+      assert.strictEqual(actual.column, expected.column);
+    }
+  }, 30_000);
+
   it("can consume a shared TypeScript project session from typecheck for native typed compilation", () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-shared-ts-session-"));
     const tsconfigPath = path.join(tempDir, "tsconfig.json");

@@ -347,10 +347,22 @@ function mergeTemplateLoweringMetadata(
     secondPassMetadata.litsxTemplateAttributeMappings || [],
     firstPassMap,
   );
-  const templateAttributeMappings =
-    authoredTemplateAttributeMappings.length > 0
-      ? authoredTemplateAttributeMappings
-      : remappedTemplateAttributeMappings;
+  const templateAttributeMappings = authoredTemplateAttributeMappings.length > 0
+    ? authoredTemplateAttributeMappings.map((mapping, index) => {
+        // The first pass can rename an authored JSX attribute (`onClick` ->
+        // `@click`) while retaining its position in traversal order. Babel's
+        // intermediate map points generated attribute names at the preceding
+        // token in some JSX shapes, so location matching is not reliable here.
+        const generated = remappedTemplateAttributeMappings[index];
+        return generated
+          ? {
+              ...mapping,
+              generatedNeedle: generated.generatedNeedle,
+              generatedOffset: generated.generatedOffset,
+            }
+          : mapping;
+      })
+    : remappedTemplateAttributeMappings;
 
   return {
     ...firstPassMetadata,
@@ -651,6 +663,7 @@ export function createLitsxTransformConfig(source, options = {}) {
           transformJsxHtmlTemplate,
           {
             ssr: options.ssr === true,
+            componentAttributeFallback: false,
             ...(options.jsxTemplateOptions || {}),
           },
         ],

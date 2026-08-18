@@ -1,5 +1,13 @@
 let t;
 
+function getEventAttributeName(nameNode) {
+  if (!t.isJSXIdentifier(nameNode)) return null;
+  const name = nameNode.name;
+  if (/^on[A-Z]/.test(name)) return name;
+  if (!name.startsWith("@") || name.length === 1) return null;
+  return `on${name[1].toUpperCase()}${name.slice(2)}`;
+}
+
 export function setHandlersBabelTypes(types) {
   t = types;
 }
@@ -127,10 +135,8 @@ function hoistEventHandlers(functionPath, usedNames) {
       if (attrPath.getFunctionParent() !== functionPath) return;
 
       const { node } = attrPath;
-      if (!t.isJSXIdentifier(node.name)) return;
-
-      const attrName = node.name.name;
-      if (!/^on[A-Z]/.test(attrName)) return;
+      const attrName = getEventAttributeName(node.name);
+      if (!attrName) return;
 
       const valuePath = attrPath.get("value");
       if (!valuePath.isJSXExpressionContainer()) return;

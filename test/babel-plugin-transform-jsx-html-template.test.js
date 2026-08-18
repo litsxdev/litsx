@@ -333,6 +333,20 @@ describe("@litsx/babel-plugin-transform-jsx-html-template", () => {
     );
   });
 
+  it("marks SVG spread namespaces and returns to HTML inside foreignObject", () => {
+    const source = `const x = <svg><circle {...shape} /><foreignObject><div {...htmlProps} /></foreignObject></svg>;`;
+    const ast = parser.parse(source, { sourceType: "module" });
+
+    const { code } = transformFromAstSync(ast, source, {
+      configFile: false,
+      babelrc: false,
+      plugins: [plugin],
+    });
+
+    assert.match(code, /jsxSpreadElement\("circle", \[shape\], \{[\s\S]*namespace: "svg"/);
+    assert.match(code, /jsxSpreadElement\("div", \[htmlProps\], \{\s*component: false,\s*void: false\s*\}/);
+  });
+
   it("passes an authored component constructor for spread prop inference", () => {
     const source = `const x = <ThirdPartyButton {...props}></ThirdPartyButton>;`;
     const ast = parser.parse(source, { sourceType: "module" });

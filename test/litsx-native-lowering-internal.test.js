@@ -661,8 +661,8 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
       presets: [[nativePreset, { jsxTemplate: false }]],
     });
 
-    assert.match(code, /onClick=\{this\.handleClick\}/);
-    assert.doesNotMatch(code, /onClick=\{\(.*=>/);
+    assert.match(code, /@click=\{this\.handleClick\}/);
+    assert.doesNotMatch(code, /@click=\{\(.*=>/);
 
     const ast = parser.parse(code, { sourceType: "module" });
     const classDecl = ast.program.body.find(
@@ -697,7 +697,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
     });
 
     assert.doesNotMatch(code, /const handleClick/);
-    assert.match(code, /onClick=\{this\.handleClick\}/);
+    assert.match(code, /@click=\{this\.handleClick\}/);
 
     const ast = parser.parse(code, { sourceType: "module" });
     const classDecl = ast.program.body.find(
@@ -729,7 +729,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
       presets: [[nativePreset, { jsxTemplate: false }]],
     });
 
-    assert.match(code, /onClick=\{\(.*=>/);
+    assert.match(code, /@click=\{\(.*=>/);
 
     const ast = parser.parse(code, { sourceType: "module" });
     const classDecl = ast.program.body.find(
@@ -1568,7 +1568,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
 
     assert.match(code, /handleClick\(\)/);
     assert.match(code, /handleClick2\(\)/);
-    assert.match(code, /onClick=\{this\.handleClick2\}/);
+    assert.match(code, /@click=\{this\.handleClick2\}/);
   });
 
   it("lifts static styles into a static Lit stylesheet", () => {

@@ -42,6 +42,16 @@
       "require": "./dist/internal/transform-litsx-properties.cjs",
       "default": "./src/internal/transform-litsx-properties.js"
     },
+    "./internal/transform-litsx-jsx-bindings": {
+      "import": "./src/internal/transform-litsx-jsx-bindings.js",
+      "require": "./dist/internal/transform-litsx-jsx-bindings.cjs",
+      "default": "./src/internal/transform-litsx-jsx-bindings.js"
+    },
+    "./internal/transform-litsx-static-assignments": {
+      "import": "./src/internal/transform-litsx-static-assignments.js",
+      "require": "./dist/internal/transform-litsx-static-assignments.cjs",
+      "default": "./src/internal/transform-litsx-static-assignments.js"
+    },
     "./internal/transform-litsx-static-ir": {
       "import": "./src/internal/transform-litsx-static-ir.js",
       "require": "./dist/internal/transform-litsx-static-ir.cjs",

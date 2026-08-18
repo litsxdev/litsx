@@ -81,7 +81,11 @@ export declare function isLitsxComponentClass(
 export declare function jsxSpreadElement(
   tagName: string,
   sources: ReadonlyArray<Record<string, unknown> | null | undefined>,
-  options?: { component?: boolean | CustomElementConstructor; void?: boolean },
+  options?: {
+    component?: boolean | CustomElementConstructor;
+    void?: boolean;
+    namespace?: "html" | "svg";
+  },
   children?: unknown
 ): import("lit").TemplateResult;
 
@@ -100,6 +104,9 @@ export interface LitsxBaseAttributes {
   key?: string | number;
   slot?: string;
   class?: string;
+  className?: string;
+  autoFocus?: boolean;
+  spellCheck?: boolean;
   part?: string;
   /**
    * Inline style attribute text.
@@ -153,17 +160,62 @@ export type LitsxAnyEventAttributes = {
   [attributeName: `__litsx_event_${string}`]: LitsxEventHandler<any> | undefined;
 };
 
+export type LitsxStandardDomEventAttributes<Target = EventTarget> = {
+  [EventName in keyof GlobalEventHandlersEventMap as `on${Capitalize<EventName & string>}`]?: LitsxEventHandler<
+    GlobalEventHandlersEventMap[EventName] & { currentTarget: Target }
+  >;
+} & {
+  [EventName in keyof GlobalEventHandlersEventMap as `on${Capitalize<EventName & string>}Capture`]?: LitsxEventHandler<
+    GlobalEventHandlersEventMap[EventName] & { currentTarget: Target }
+  >;
+} & {
+  onDoubleClick?: LitsxEventHandler<MouseEvent & { currentTarget: Target }>;
+  onDoubleClickCapture?: LitsxEventHandler<MouseEvent & { currentTarget: Target }>;
+  onMouseDown?: LitsxEventHandler<MouseEvent & { currentTarget: Target }>;
+  onMouseDownCapture?: LitsxEventHandler<MouseEvent & { currentTarget: Target }>;
+  onMouseUp?: LitsxEventHandler<MouseEvent & { currentTarget: Target }>;
+  onMouseUpCapture?: LitsxEventHandler<MouseEvent & { currentTarget: Target }>;
+  onMouseMove?: LitsxEventHandler<MouseEvent & { currentTarget: Target }>;
+  onMouseMoveCapture?: LitsxEventHandler<MouseEvent & { currentTarget: Target }>;
+  onMouseEnter?: LitsxEventHandler<MouseEvent & { currentTarget: Target }>;
+  onMouseLeave?: LitsxEventHandler<MouseEvent & { currentTarget: Target }>;
+  onPointerDown?: LitsxEventHandler<PointerEvent & { currentTarget: Target }>;
+  onPointerDownCapture?: LitsxEventHandler<PointerEvent & { currentTarget: Target }>;
+  onPointerUp?: LitsxEventHandler<PointerEvent & { currentTarget: Target }>;
+  onPointerUpCapture?: LitsxEventHandler<PointerEvent & { currentTarget: Target }>;
+  onPointerMove?: LitsxEventHandler<PointerEvent & { currentTarget: Target }>;
+  onPointerMoveCapture?: LitsxEventHandler<PointerEvent & { currentTarget: Target }>;
+  onPointerEnter?: LitsxEventHandler<PointerEvent & { currentTarget: Target }>;
+  onPointerLeave?: LitsxEventHandler<PointerEvent & { currentTarget: Target }>;
+  onPointerCancel?: LitsxEventHandler<PointerEvent & { currentTarget: Target }>;
+  onKeyDown?: LitsxEventHandler<KeyboardEvent & { currentTarget: Target }>;
+  onKeyDownCapture?: LitsxEventHandler<KeyboardEvent & { currentTarget: Target }>;
+  onKeyUp?: LitsxEventHandler<KeyboardEvent & { currentTarget: Target }>;
+  onKeyUpCapture?: LitsxEventHandler<KeyboardEvent & { currentTarget: Target }>;
+  onTouchStart?: LitsxEventHandler<TouchEvent & { currentTarget: Target }>;
+  onTouchStartCapture?: LitsxEventHandler<TouchEvent & { currentTarget: Target }>;
+  onTouchMove?: LitsxEventHandler<TouchEvent & { currentTarget: Target }>;
+  onTouchMoveCapture?: LitsxEventHandler<TouchEvent & { currentTarget: Target }>;
+  onTouchEnd?: LitsxEventHandler<TouchEvent & { currentTarget: Target }>;
+  onTouchEndCapture?: LitsxEventHandler<TouchEvent & { currentTarget: Target }>;
+  onDragStart?: LitsxEventHandler<DragEvent & { currentTarget: Target }>;
+  onDragEnd?: LitsxEventHandler<DragEvent & { currentTarget: Target }>;
+  onDragEnter?: LitsxEventHandler<DragEvent & { currentTarget: Target }>;
+  onDragLeave?: LitsxEventHandler<DragEvent & { currentTarget: Target }>;
+  onDragOver?: LitsxEventHandler<DragEvent & { currentTarget: Target }>;
+  onAnimationStart?: LitsxEventHandler<AnimationEvent & { currentTarget: Target }>;
+  onAnimationEnd?: LitsxEventHandler<AnimationEvent & { currentTarget: Target }>;
+  onAnimationIteration?: LitsxEventHandler<AnimationEvent & { currentTarget: Target }>;
+  onTransitionEnd?: LitsxEventHandler<TransitionEvent & { currentTarget: Target }>;
+};
+
 export type LitsxDomAttributes<Target = EventTarget> =
   & LitsxKnownDomEventAttributes<Target>
   & LitsxFormEventAttributes<Target>
   & LitsxCustomEventAttributes
   & LitsxAnyEventAttributes
+  & LitsxStandardDomEventAttributes<Target>
   & {
-    /**
-     * Reserved for future JSX-authored event typing.
-     * LitSX currently treats Lit listener syntax (`@event`) as a parser-level feature,
-     * so the public JSX type surface intentionally avoids React-style `onClick` props.
-     */
     _currentTarget?: Target | undefined;
     /**
      * Tooling virtualizes authored `.prop` bindings to `__litsx_prop_*` attributes
@@ -214,7 +266,6 @@ export type LitsxSuspenseBoundaryElementProps =
 
 export type LitsxCustomElementProps =
   & LitsxBaseAttributes
-  & LitsxDomAttributes<EventTarget>
   & {
     [attributeName: string]: unknown;
   };
@@ -225,20 +276,18 @@ export type LitsxReservedIntrinsicElementName =
   | "suspense-list";
 
 export type LitsxCustomIntrinsicElements = {
-  [TagName in `${string}-${string}` as TagName extends LitsxReservedIntrinsicElementName
-    ? never
-    : TagName]: LitsxCustomElementProps;
+  [TagName in `${string}-${string}`]:
+    TagName extends "error-boundary" ? LitsxErrorBoundaryElementProps :
+    TagName extends "suspense-boundary" ? LitsxSuspenseBoundaryElementProps :
+    TagName extends "suspense-list" ? LitsxElementProps<SuspenseList> & SuspenseListProps :
+    LitsxCustomElementProps;
 };
 
 export type LitsxIntrinsicElements = {
   [TagName in keyof HTMLElementTagNameMap]: LitsxElementProps<
     HTMLElementTagNameMap[TagName]
   >;
-} & LitsxCustomIntrinsicElements & {
-  "error-boundary": LitsxErrorBoundaryElementProps;
-  "suspense-boundary": LitsxSuspenseBoundaryElementProps;
-  "suspense-list": LitsxElementProps<SuspenseList> & SuspenseListProps;
-};
+} & LitsxCustomIntrinsicElements;
 
 export type LitsxComponent<Props = Record<string, unknown>> =
   (props: Props) => LitsxRenderable;

@@ -234,7 +234,9 @@ function createClassProperty(name, elements, programPath, options = {}) {
 }
 
 function createElementRegistryValue(entry, programPath, options = {}) {
-  const baseValue = t.identifier(entry.originalName);
+  const baseValue = entry.expression
+    ? t.cloneNode(entry.expression, true)
+    : t.identifier(entry.originalName);
   if (options?.ssr !== true) {
     return baseValue;
   }
@@ -548,6 +550,32 @@ function hasNamedImport(programPath, moduleName, importName) {
   });
 }
 
+function getNamespaceMemberInfo(nameNode, availableMap) {
+  if (!t.isJSXMemberExpression(nameNode)) return null;
+  const properties = [];
+  let current = nameNode;
+  while (t.isJSXMemberExpression(current)) {
+    if (!t.isJSXIdentifier(current.property)) return null;
+    properties.unshift(current.property.name);
+    current = current.object;
+  }
+  if (!t.isJSXIdentifier(current) || properties.length === 0) return null;
+  const namespaceEntry = availableMap.get(current.name);
+  if (!namespaceEntry?.namespace) return null;
+
+  let expression = t.identifier(current.name);
+  for (const property of properties) {
+    expression = t.memberExpression(expression, t.identifier(property));
+  }
+  const parts = [current.name, ...properties];
+  return {
+    key: parts.join("."),
+    tagName: parts.map(toKebab).join("-"),
+    expression,
+    source: namespaceEntry.source,
+  };
+}
+
 function detectElementsFromClass(classPath, programPath, availableMap, precomputedCandidates, options = {}) {
   if (availableMap.size === 0) {
     return {
@@ -576,6 +604,19 @@ function detectElementsFromClass(classPath, programPath, availableMap, precomput
       if (isInsideNoscriptFallback(path)) return;
       hasRenderableTemplate = true;
       const nameNode = path.get("name");
+      if (nameNode.isJSXMemberExpression()) {
+        const member = getNamespaceMemberInfo(nameNode.node, availableMap);
+        if (!member) return;
+        nameNode.replaceWith(t.jsxIdentifier(member.tagName));
+        nameToTag.set(member.key, member.tagName);
+        used.set(member.key, {
+          originalName: member.key,
+          tagName: member.tagName,
+          expression: member.expression,
+          source: member.source,
+        });
+        return;
+      }
       if (!nameNode.isJSXIdentifier()) return;
       const originalName = nameNode.node.__scopedOriginal || nameNode.node.name;
       if (!availableMap.has(originalName)) return;
@@ -597,6 +638,12 @@ function detectElementsFromClass(classPath, programPath, availableMap, precomput
       if (isInsideNoscriptFallback(path)) return;
       hasRenderableTemplate = true;
       const nameNode = path.get("name");
+      if (nameNode.isJSXMemberExpression()) {
+        const member = getNamespaceMemberInfo(nameNode.node, availableMap);
+        const tagName = member ? nameToTag.get(member.key) : null;
+        if (tagName) nameNode.replaceWith(t.jsxIdentifier(tagName));
+        return;
+      }
       if (!nameNode.isJSXIdentifier()) return;
       const originalName = nameNode.node.__scopedOriginal || nameNode.node.name;
       const tagName = nameToTag.get(originalName);

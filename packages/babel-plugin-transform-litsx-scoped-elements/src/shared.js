@@ -27,6 +27,7 @@ export function toKebab(name) {
 
 export function buildAvailableMap(programPath, options = {}) {
   const availableMap = new Map();
+  const namespaceImports = new Set();
   const filename = normalizeFilePath(options.filename || programPath.hub.file?.opts?.filename || "");
 
   programPath.get("body").forEach((nodePath) => {
@@ -43,6 +44,20 @@ export function buildAvailableMap(programPath, options = {}) {
             lightDom: Boolean(importedName && CORE_LIGHT_DOM_EXPORTS.has(importedName)),
             moduleId: resolveImportModuleId(filename, nodePath.node.source.value),
           });
+          return;
+        }
+
+        if (t.isImportNamespaceSpecifier(specifier)) {
+          namespaceImports.add(specifier.local.name);
+          const source = nodePath.node.source.value;
+          if (source !== "react" && source !== "@litsx/react" && !source.startsWith("react/")) {
+            availableMap.set(specifier.local.name, {
+              originalName: specifier.local.name,
+              namespace: true,
+              source,
+              moduleId: resolveImportModuleId(filename, source),
+            });
+          }
         }
       });
       return;
@@ -61,7 +76,45 @@ export function buildAvailableMap(programPath, options = {}) {
     });
   });
 
+  programPath.get("body").forEach((nodePath) => {
+    if (!nodePath.isVariableDeclaration()) return;
+
+    nodePath.node.declarations.forEach((declarator) => {
+      if (!t.isIdentifier(declarator.id)) return;
+      const init = unwrapNamespaceAliasExpression(declarator.init);
+      const object = t.isMemberExpression(init)
+        ? unwrapNamespaceAliasExpression(init.object)
+        : null;
+      if (
+        !t.isMemberExpression(init) ||
+        init.computed ||
+        !t.isIdentifier(object) ||
+        !t.isIdentifier(init.property) ||
+        !namespaceImports.has(object.name)
+      ) {
+        return;
+      }
+
+      availableMap.set(declarator.id.name, {
+        originalName: declarator.id.name,
+      });
+    });
+  });
+
   return availableMap;
+}
+
+function unwrapNamespaceAliasExpression(node) {
+  let current = node;
+  while (
+    t.isTSAsExpression(current) ||
+    t.isTSTypeAssertion(current) ||
+    t.isTSNonNullExpression(current) ||
+    t.isTSSatisfiesExpression?.(current)
+  ) {
+    current = current.expression;
+  }
+  return current;
 }
 
 function resolveImportModuleId(fromFilename, sourceSpecifier) {

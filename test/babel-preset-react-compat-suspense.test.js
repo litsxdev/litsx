@@ -277,7 +277,7 @@ describe("@litsx/babel-preset-react-compat suspense boundaries", () => {
     assert.match(code, /\.content=\{\(\)\s*=>\s*<div>ready<\/div>\}/);
   });
 
-  it("leaves non-React namespace suspense lookalikes untouched", () => {
+  it("registers non-React namespace suspense components without treating them as boundaries", () => {
     const source = [
       "import * as UI from 'ui-kit';",
       "",
@@ -288,7 +288,8 @@ describe("@litsx/babel-preset-react-compat suspense boundaries", () => {
 
     const code = run(source);
 
-    assert.match(code, /<UI\.Suspense fallback="loading"><div>ready<\/div><\/UI\.Suspense>/);
+    assert.match(code, /<ui-suspense fallback="loading"><div>ready<\/div><\/ui-suspense>/);
+    assert.match(code, /static elements = \{[\s\S]*"ui-suspense": UI\.Suspense/);
     assert.doesNotMatch(code, /<suspense-boundary/);
   });
 

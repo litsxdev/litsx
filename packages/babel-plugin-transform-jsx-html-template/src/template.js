@@ -19,17 +19,8 @@ const VOID_HTML_TAGS = new Set([
   "wbr",
 ]);
 const ATTRIBUTE_PASSTHROUGH_NAMES = new Set([
-  "class",
-  "className",
-  "id",
-  "slot",
-  "style",
-  "part",
-  "exportparts",
-  "role",
-  "title",
-  "tabindex",
-  "tabIndex",
+  "class", "className", "id", "slot", "style", "part", "exportparts",
+  "role", "title", "tabindex", "tabIndex",
 ]);
 const DANGEROUS_OBJECT_KEYS = new Set([
   "__proto__",
@@ -402,19 +393,16 @@ function createComponentCallee(nameNode) {
   return t.identifier(stringifyJsxName(nameNode));
 }
 
-function shouldLowerAuthoredComponentAttributeAsProperty(attr, rawName) {
+function shouldLowerAuthoredComponentAttributeAsProperty(attr, rawName, opts) {
   if (
-    rawName.startsWith(".") ||
-    rawName.startsWith("?") ||
-    rawName.startsWith("@") ||
-    rawName.startsWith("data-") ||
-    rawName.startsWith("aria-") ||
+    opts?.componentAttributeFallback === false ||
+    rawName.startsWith(".") || rawName.startsWith("?") || rawName.startsWith("@") ||
+    rawName.startsWith("data-") || rawName.startsWith("aria-") ||
     ATTRIBUTE_PASSTHROUGH_NAMES.has(rawName) ||
     !/^[$_a-zA-Z][$_a-zA-Z0-9]*$/.test(rawName)
   ) {
     return false;
   }
-
   return !attr.value || attr.value.type === "JSXExpressionContainer";
 }
 
@@ -431,7 +419,7 @@ function getAttributeValue(attr, opts) {
   return t.cloneNode(attr.value, true);
 }
 
-function createSpreadElementCall(node, opts, name, isAuthoredComponentTag, componentExpression) {
+function createSpreadElementCall(node, opts, name, isAuthoredComponentTag, componentExpression, namespace, childOptions) {
   const sources = [];
   let adjacentProperties = [];
   const flushAdjacentProperties = () => {
@@ -478,15 +466,23 @@ function createSpreadElementCall(node, opts, name, isAuthoredComponentTag, compo
           : t.booleanLiteral(isAuthoredComponentTag || name.includes("-"))
       ),
       t.objectProperty(t.identifier("void"), t.booleanLiteral(isVoid)),
+      ...(namespace === "svg"
+        ? [t.objectProperty(t.identifier("namespace"), t.stringLiteral("svg"))]
+        : []),
     ]),
   ];
-  if (hasChildren) args.push(createJsxReplacement(children, opts));
+  if (hasChildren) args.push(createJsxReplacement(children, childOptions));
   return t.callExpression(t.identifier(helperName), args);
 }
 
 const transforms = {
   JSXElement({ node, strings, keys }, opts) {
     const { name, isComponent, isAuthoredComponentTag, componentExpression } = getTag(node.openingElement);
+    const inheritedNamespace = opts?.jsxNamespace ?? (opts?.tag === "svg" ? "svg" : "html");
+    const namespace = inheritedNamespace === "svg" || name === "svg" ? "svg" : "html";
+    const childOptions = namespace === "svg" && name === "foreignObject"
+      ? { ...opts, jsxNamespace: "html" }
+      : { ...opts, jsxNamespace: namespace };
 
     if (isComponent) {
       addKey(strings, keys, createComponent(node, opts));
@@ -501,7 +497,7 @@ const transforms = {
       addKey(
         strings,
         keys,
-        createSpreadElementCall(node, opts, name, isAuthoredComponentTag, componentExpression)
+        createSpreadElementCall(node, opts, name, isAuthoredComponentTag, componentExpression, namespace, childOptions)
       );
       return;
     }
@@ -518,15 +514,15 @@ const transforms = {
       const rawName = decodeVirtualAttributeName(attr.name.name) ?? attr.name.name;
       const prefix = rawName[0];
 
-      if (isAuthoredComponentTag && shouldLowerAuthoredComponentAttributeAsProperty(attr, rawName)) {
+      if (isAuthoredComponentTag && shouldLowerAuthoredComponentAttributeAsProperty(attr, rawName, opts)) {
         addString(strings, keys, ` .${rawName}=`, attr);
-
-        if (attr.value) {
-          addKey(strings, keys, lowerEmbeddedJsx(attr.value.expression, opts));
-        } else {
-          addKey(strings, keys, t.booleanLiteral(true));
-        }
-
+        addKey(
+          strings,
+          keys,
+          attr.value
+            ? lowerEmbeddedJsx(attr.value.expression, opts)
+            : t.booleanLiteral(true),
+        );
         return;
       }
 
@@ -584,7 +580,7 @@ const transforms = {
       // compiling hydratable Lit templates. Keep dynamic fallback content out
       // of that template and hand it to the SSR-only primitive instead.
     } else {
-      node.children.forEach((child) => transforms[child.type]({ node: child, strings, keys }, opts));
+      node.children.forEach((child) => transforms[child.type]({ node: child, strings, keys }, childOptions));
     }
 
     if (!node.closingElement) return;

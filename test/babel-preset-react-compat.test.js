@@ -95,7 +95,7 @@ describe("@litsx/babel-preset-react-compat", () => {
     assert.match(code, /import \{[^}]*jsxSpreadElement[^}]*\} from "@litsx\/core"/);
     assert.match(code, /jsxSpreadElement\("button", \[props, \{/);
     assert.match(code, /class: "action"/);
-    assert.match(code, /disabled: active/);
+    assert.match(code, /"\?disabled": active/);
     assert.match(code, /"@click": onClick/);
   });
 
@@ -409,6 +409,26 @@ describe("@litsx/babel-preset-react-compat", () => {
       () => run(source),
       /Consumer requires a function child/
     );
+  });
+
+  it("preserves named-imported Context Provider and Consumer semantics before namespace element lowering", () => {
+    const source = `
+      import { ThemeContext } from "./theme-context.js";
+
+      export function ContextPanel({ theme }) {
+        return (
+          <ThemeContext.Provider value={theme}>
+            <ThemeContext.Consumer>{value => <span>{value}</span>}</ThemeContext.Consumer>
+          </ThemeContext.Provider>
+        );
+      }
+    `;
+
+    const code = run(source);
+
+    assert.match(code, /<litsx-context-provider \.context=\$\{ThemeContext\} \.value=\$\{this\.theme\}>/);
+    assert.match(code, /renderContext\(this, ThemeContext, value => html`<span>\$\{value\}<\/span>`\)/);
+    assert.doesNotMatch(code, /theme-context-(?:provider|consumer)/);
   });
 
   it("errors on truly undeclared PascalCase JSX", () => {

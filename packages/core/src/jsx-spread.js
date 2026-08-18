@@ -6,6 +6,8 @@ import { styleMap } from "lit/directives/style-map.js";
 
 const ATTRIBUTE_NAMES = new Set(["class", "id", "slot", "part", "exportparts", "role", "title", "tabindex"]);
 const BOOLEAN_ATTRIBUTE_NAMES = new Set(["allowfullscreen", "async", "autofocus", "autoplay", "checked", "controls", "default", "defer", "disabled", "formnovalidate", "hidden", "inert", "ismap", "itemscope", "loop", "multiple", "muted", "nomodule", "novalidate", "open", "playsinline", "readonly", "required", "reversed", "selected"]);
+const BOOLEAN_VALUE_ATTRIBUTE_NAMES = new Set(["contenteditable", "draggable", "spellcheck"]);
+const HTML_ATTRIBUTE_ALIASES = new Map([["acceptCharset", "accept-charset"], ["className", "class"], ["htmlFor", "for"], ["httpEquiv", "http-equiv"]]);
 const NATIVE_PROPERTY_NAMES = new Set(["checked", "files", "indeterminate", "selectedIndex", "value"]);
 const EVENT_ALIASES = new Map([["doubleclick", "dblclick"], ["focus", "focusin"], ["blur", "focusout"]]);
 const SKIPPED_KEYS = new Set(["__proto__", "constructor", "prototype", "key", "children"]);
@@ -31,8 +33,9 @@ function cacheTemplate(cache, key, strings) {
   return strings;
 }
 
-function normalizeName(rawName) {
+function normalizeName(rawName, nativeHtml) {
   if (rawName === "className") return { kind: "attribute", name: "class" };
+  if (rawName === "htmlFor" && nativeHtml) return { kind: "attribute", name: "for" };
   const prefix = rawName[0];
   if (prefix === ".") return { kind: "property", name: rawName.slice(1) };
   if (prefix === "?") return { kind: "boolean", name: rawName.slice(1) };
@@ -42,7 +45,14 @@ function normalizeName(rawName) {
     const normalized = reactName.replace(/[A-Z]/g, (match) => match.toLowerCase());
     return { kind: "event", name: EVENT_ALIASES.get(normalized) ?? normalized, capture: rawName.endsWith("Capture") || normalized === "focus" || normalized === "blur" };
   }
-  return { kind: "inferred", name: rawName };
+  if (rawName === "ref" || rawName === "style" || rawName === "dangerouslySetInnerHTML") {
+    return { kind: "inferred", name: rawName, propertyName: rawName };
+  }
+  return {
+    kind: "inferred",
+    name: nativeHtml ? (HTML_ATTRIBUTE_ALIASES.get(rawName) ?? rawName.toLowerCase()) : rawName,
+    propertyName: rawName,
+  };
 }
 
 function isAttributeName(name) {
@@ -61,22 +71,26 @@ function hasComponentProperty(tagName, name, component, element) {
   return Boolean((properties && typeof properties.has === "function" && properties.has(name)) || (constructor?.prototype && name in constructor.prototype));
 }
 
-function inferDescriptor(tagName, rawName, value, component, element) {
-  const descriptor = normalizeName(rawName);
+function inferDescriptor(tagName, rawName, value, component, element, namespace) {
+  const nativeHtml = namespace !== "svg" && !tagName.includes("-") && !component;
+  const descriptor = normalizeName(rawName, nativeHtml);
   if (!SAFE_BINDING_NAME.test(descriptor.name)) return null;
   if (descriptor.kind !== "inferred") return descriptor;
-  const { name } = descriptor;
+  const { name, propertyName } = descriptor;
   if (name === "ref") return { kind: "ref", name };
   if (name === "dangerouslySetInnerHTML") return { kind: "inner-html", name };
   if (name === "style" && value && typeof value === "object") return { kind: "style", name };
   if (isAttributeName(name)) return { kind: "attribute", name };
-  if (hasComponentProperty(tagName, name, component, element)) return { kind: "property", name };
-  if (BOOLEAN_ATTRIBUTE_NAMES.has(name.toLowerCase()) || typeof value === "boolean") return { kind: "boolean", name };
-  if (NATIVE_PROPERTY_NAMES.has(name) || (value != null && (typeof value === "object" || typeof value === "function"))) return { kind: "property", name };
+  if (nativeHtml && BOOLEAN_ATTRIBUTE_NAMES.has(name)) return { kind: "boolean", name };
+  if (nativeHtml && BOOLEAN_VALUE_ATTRIBUTE_NAMES.has(name)) return { kind: "attribute", name, booleanValue: true };
+  if (namespace === "svg" && typeof value === "boolean") return { kind: "attribute", name, booleanValue: true };
+  if (hasComponentProperty(tagName, propertyName, component, element)) return { kind: "property", name: propertyName };
+  if (typeof value === "boolean") return { kind: "boolean", name };
+  if (NATIVE_PROPERTY_NAMES.has(propertyName) || (value != null && (typeof value === "object" || typeof value === "function"))) return { kind: "property", name: propertyName };
   return { kind: "attribute", name };
 }
 
-function inferClientDescriptor(tagName, rawName, value, component, element) {
+function inferClientDescriptor(tagName, rawName, value, component, element, namespace) {
   const constructor = resolveConstructor(tagName, component, element) ?? element.constructor;
   let cache = CLIENT_DESCRIPTOR_CACHE.get(constructor);
   if (!cache) {
@@ -84,15 +98,17 @@ function inferClientDescriptor(tagName, rawName, value, component, element) {
     CLIENT_DESCRIPTOR_CACHE.set(constructor, cache);
   }
   if (cache.has(rawName)) return cache.get(rawName);
-  const descriptor = inferDescriptor(tagName, rawName, value, component, element);
-  const normalized = normalizeName(rawName);
+  const descriptor = inferDescriptor(tagName, rawName, value, component, element, namespace);
+  const nativeHtml = namespace !== "svg" && !tagName.includes("-") && !component;
+  const normalized = normalizeName(rawName, nativeHtml);
   const valueDependent = normalized.kind === "inferred" && (
     normalized.name === "style" || (
       normalized.name !== "ref" && normalized.name !== "dangerouslySetInnerHTML" &&
       !isAttributeName(normalized.name) &&
-      !hasComponentProperty(tagName, normalized.name, component, element) &&
+      !hasComponentProperty(tagName, normalized.propertyName, component, element) &&
       !BOOLEAN_ATTRIBUTE_NAMES.has(normalized.name.toLowerCase()) &&
-      !NATIVE_PROPERTY_NAMES.has(normalized.name)
+      !BOOLEAN_VALUE_ATTRIBUTE_NAMES.has(normalized.name.toLowerCase()) &&
+      !NATIVE_PROPERTY_NAMES.has(normalized.propertyName)
     )
   );
   if (!valueDependent) cache.set(rawName, descriptor);
@@ -101,21 +117,21 @@ function inferClientDescriptor(tagName, rawName, value, component, element) {
 
 const descriptorKey = (descriptor) => `${descriptor.kind}:${descriptor.name}`;
 
-function mergeSources(tagName, sources, component, element) {
+function mergeSources(tagName, sources, component, element, namespace) {
   const merged = new Map();
   for (const source of sources || []) {
     if (source == null || (typeof source !== "object" && typeof source !== "function")) continue;
     for (const rawName of Object.keys(source)) {
       if (SKIPPED_KEYS.has(rawName)) continue;
       const value = source[rawName];
-      const descriptor = inferDescriptor(tagName, rawName, value, component, element);
+      const descriptor = inferDescriptor(tagName, rawName, value, component, element, namespace);
       if (descriptor) merged.set(descriptorKey(descriptor), { descriptor, value });
     }
   }
   return [...merged.values()];
 }
 
-function mergeSourcesReverse(tagName, sources, component, element, seen) {
+function mergeSourcesReverse(tagName, sources, component, element, seen, namespace) {
   const bindings = [];
   const validSources = sources || [];
   const dedupe = validSources.length > 1;
@@ -128,7 +144,7 @@ function mergeSourcesReverse(tagName, sources, component, element, seen) {
       const rawName = names[nameIndex];
       if (SKIPPED_KEYS.has(rawName)) continue;
       const value = source[rawName];
-      const descriptor = inferClientDescriptor(tagName, rawName, value, component, element);
+      const descriptor = inferClientDescriptor(tagName, rawName, value, component, element, namespace);
       if (!descriptor) continue;
       const key = descriptorKey(descriptor);
       if (dedupe && seen.has(key)) continue;
@@ -157,7 +173,10 @@ function reactRef(value) {
 }
 
 function serverBindingValue(descriptor, value) {
-  if (descriptor.kind === "attribute") return ifDefined(value == null || value === false ? undefined : value === true ? "" : value);
+  if (descriptor.kind === "attribute") {
+    if (descriptor.booleanValue) return ifDefined(value == null ? undefined : String(value));
+    return ifDefined(value == null || value === false ? undefined : value === true ? "" : value);
+  }
   if (descriptor.kind === "style") return styleMap(value || {});
   if (descriptor.kind === "ref") return ref(reactRef(value));
   if (descriptor.kind === "event" && descriptor.capture && value != null) return { handleEvent: value, capture: true };
@@ -223,7 +242,7 @@ function clearBinding(element, descriptor, previous) {
 function applyBinding(element, descriptor, value, previous, adoptAttributes) {
   if (descriptor.kind === "attribute") {
     if (adoptAttributes) return;
-    const next = serializedValue(value);
+    const next = descriptor.booleanValue && value != null ? String(value) : serializedValue(value);
     if (next == null) element.removeAttribute(descriptor.name);
     else if (element.getAttribute(descriptor.name) !== next) element.setAttribute(descriptor.name, next);
   } else if (descriptor.kind === "boolean") {
@@ -261,7 +280,7 @@ class JsxSpreadDirective extends Directive {
   render() { return noChange; }
   update(part, [tagName, sources, options]) {
     const element = this.element = part.element;
-    const next = mergeSourcesReverse(tagName, sources, options.component, element, this.seen);
+    const next = mergeSourcesReverse(tagName, sources, options.component, element, this.seen, options.namespace);
     const nextKeys = new Set(next.map(({ descriptor }) => descriptorKey(descriptor)));
     for (const [key, previous] of this.bindings) if (!nextKeys.has(key)) clearBinding(element, previous.descriptor, previous);
     const adoptAttributes = !this.hydrated && (globalThis[HYDRATION_DEPTH] ?? 0) > 0;
@@ -297,7 +316,7 @@ export function jsxSpreadElement(tagName, sources, options = {}, children = noth
     if (hasChildren) values.push(children);
     return html(clientStrings, ...values);
   }
-  const descriptors = mergeSources(tagName, sources, options.component);
+  const descriptors = mergeSources(tagName, sources, options.component, undefined, options.namespace);
   const innerHtml = descriptors.find(({ descriptor }) => descriptor.kind === "inner-html");
   const bindings = innerHtml ? descriptors.filter(({ descriptor }) => descriptor.kind !== "inner-html") : descriptors;
   const serverHasChildren = !isVoid && (innerHtml != null || hasChildren);

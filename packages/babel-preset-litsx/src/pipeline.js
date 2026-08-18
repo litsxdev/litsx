@@ -4,6 +4,8 @@ import transformLitsxDomRefs from "./internal/transform-litsx-dom-refs.js";
 import transformLitsxHooks from "./internal/transform-litsx-hooks.js";
 import transformLitsxComponents from "./internal/transform-litsx-components.js";
 import transformLitsxRendererProps from "./internal/transform-litsx-renderer-props.js";
+import transformLitsxJsxBindings from "./internal/transform-litsx-jsx-bindings.js";
+import transformLitsxStaticAssignments from "./internal/transform-litsx-static-assignments.js";
 import transformLitsxBoundaries from "./internal/transform-litsx-boundaries.js";
 import transformLitsxServerComponents from "./internal/transform-litsx-server-components.js";
 import transformLitsxSsrRoots from "./internal/transform-litsx-ssr-roots.js";
@@ -265,6 +267,8 @@ export function createLitsxPresetPlugins(options = {}, sourceFeatures = null) {
 
   plugins.push(
     [transformLitsxRendererProps, options.transformLitsxRendererProps || {}],
+    transformLitsxStaticAssignments,
+    [transformLitsxJsxBindings, normalizedTransformOptions],
     [
       transformLitsxServerComponents,
       {
@@ -312,6 +316,7 @@ export function createLitsxPresetPlugins(options = {}, sourceFeatures = null) {
       transformJsxHtmlTemplate,
       {
         ...normalizedTransformOptions,
+        componentAttributeFallback: false,
         ...(options.jsxTemplateOptions || {}),
       },
     ]);

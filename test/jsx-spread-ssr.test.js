@@ -71,4 +71,23 @@ describe("jsxSpreadElement SSR", () => {
     assert.match(output, /<em>trusted fixture<\/em>/);
     assert.doesNotMatch(output, /dangerouslySetInnerHTML|\sref=/);
   });
+
+  it("serializes false for boolean-valued enumerated HTML attributes", () => {
+    const output = renderToString(jsxSpreadElement("div", [{
+      draggable: false,
+      spellCheck: false,
+      contentEditable: false,
+    }]));
+
+    assert.match(output, /draggable="false"/);
+    assert.match(output, /spellcheck="false"/);
+    assert.match(output, /contenteditable="false"/);
+
+    const svgOutput = renderToString(jsxSpreadElement(
+      "circle",
+      [{ focusable: false }],
+      { namespace: "svg" },
+    ));
+    assert.match(svgOutput, /focusable="false"/);
+  });
 });

@@ -98,4 +98,24 @@ describe("jsxSpreadElement", () => {
     assert.strictEqual(element.className, "second");
     assert.deepStrictEqual(refValues, [element]);
   });
+
+  it("serializes boolean-valued HTML attributes instead of toggling their presence", () => {
+    const container = document.createElement("div");
+    const view = (value) => jsxSpreadElement("div", [{
+      draggable: value,
+      spellCheck: value,
+      contentEditable: value,
+    }]);
+
+    render(view(false), container);
+    const element = container.querySelector("div");
+    assert.strictEqual(element.getAttribute("draggable"), "false");
+    assert.strictEqual(element.getAttribute("spellcheck"), "false");
+    assert.strictEqual(element.getAttribute("contenteditable"), "false");
+
+    render(view(true), container);
+    assert.strictEqual(element.getAttribute("draggable"), "true");
+    assert.strictEqual(element.getAttribute("spellcheck"), "true");
+    assert.strictEqual(element.getAttribute("contenteditable"), "true");
+  });
 });

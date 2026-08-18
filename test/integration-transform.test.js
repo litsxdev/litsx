@@ -97,7 +97,7 @@ describe("integration: parser + all plugins", () => {
 
     assert.match(code, /class TypedForm extends ShadowDomMixin\(LitElement\)/);
     assert.match(code, /static properties = {\s*label: {\s*type: String\s*},\s*count: {\s*type: Number\s*}\s*};/s);
-    assert.match(code, /<fancy-button \.ref=\{buttonRef\} \.label=\{this\.label\} mode=\{"primary" as ButtonMode\}>/);
+    assert.match(code, /<fancy-button \.ref=\{buttonRef\} \.label=\{this\.label\} \.mode=\{"primary" as ButtonMode\}>/);
     assert.doesNotMatch(code, /data-ref="_buttonRefElement"/);
     assert.doesNotMatch(code, /get _buttonRefElement\(\)/);
     assert.match(code, /static elements = {\s*"fancy-button": FancyButton\s*};/);

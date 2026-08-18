@@ -5,6 +5,8 @@ import { normalizeTransformLitsxOptions } from "@litsx/babel-preset-litsx/pipeli
 import transformLitsxDomRefs from "@litsx/babel-preset-litsx/internal/transform-litsx-dom-refs";
 import transformLitsxHooks from "@litsx/babel-preset-litsx/internal/transform-litsx-hooks";
 import transformLitsxComponents from "@litsx/babel-preset-litsx/internal/transform-litsx-components";
+import transformLitsxJsxBindings from "@litsx/babel-preset-litsx/internal/transform-litsx-jsx-bindings";
+import transformLitsxStaticAssignments from "@litsx/babel-preset-litsx/internal/transform-litsx-static-assignments";
 import transformLitsxRendererProps from "@litsx/babel-preset-litsx/internal/transform-litsx-renderer-props";
 import reactAttributes from "./internal/react-attributes.js";
 import reactDomAttributes from "./internal/react-dom-attributes.js";
@@ -42,6 +44,11 @@ export function createReactCompatPresetPlugins(options = {}) {
     [reactContext, options.reactContext || {}],
     [litsxPropTypes, options.litsxPropTypes || {}],
     [transformLitsxRendererProps, options.transformLitsxRendererProps || {}],
+    transformLitsxStaticAssignments,
+    [transformLitsxJsxBindings, {
+      ...normalizedOptions.transformLitsx,
+      reactCompatBoundaries: true,
+    }],
     [
       transformLitsxComponents,
       {
@@ -69,11 +76,10 @@ export function createReactCompatPresetPlugins(options = {}) {
   ];
 
   if (options.jsxTemplate !== false) {
-    if (options.jsxTemplateOptions && Object.keys(options.jsxTemplateOptions).length > 0) {
-      plugins.push([transformJsxHtmlTemplate, options.jsxTemplateOptions]);
-    } else {
-      plugins.push(transformJsxHtmlTemplate);
-    }
+    plugins.push([transformJsxHtmlTemplate, {
+      componentAttributeFallback: false,
+      ...(options.jsxTemplateOptions || {}),
+    }]);
   }
 
   return plugins;

@@ -199,6 +199,60 @@ describe("@litsx/typescript", () => {
     }
   }, 30000);
 
+  it("typechecks standard JSX aliases and DOM event props", () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-standard-jsx-types-"));
+    const sourcePath = path.join(tempDir, "index.tsx");
+    const globalsPath = path.join(tempDir, "global.d.ts");
+    const repoRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
+    const jsxRuntimePath = path.join(repoRoot, "packages/core/src/jsx-runtime.d.ts").replaceAll("\\", "/");
+
+    try {
+      fs.writeFileSync(globalsPath, [
+        `import type { JSX as LitsxJSX } from "${jsxRuntimePath}";`,
+        "declare global {",
+        "  namespace JSX {",
+        "    interface Element extends LitsxJSX.Element {}",
+        "    interface IntrinsicElements extends LitsxJSX.IntrinsicElements {}",
+        "  }",
+        "}",
+        "export {};",
+      ].join("\n"));
+      fs.writeFileSync(sourcePath, `
+        const view = <label className="field" htmlFor="query">
+          <input
+            id="query"
+            style={{ color: "red" }}
+            autoFocus
+            spellCheck={false}
+            onChange={(event) => event.currentTarget.value}
+            onPointerDownCapture={(event) => event.currentTarget.setPointerCapture(event.pointerId)}
+          />
+          <button onClick={(event) => event.currentTarget.focus()}>Save</button>
+        </label>;
+      `);
+
+      const program = ts.createProgram({
+        rootNames: [sourcePath, globalsPath],
+        options: {
+          noEmit: true,
+          strict: true,
+          jsx: ts.JsxEmit.Preserve,
+          module: ts.ModuleKind.ESNext,
+          moduleResolution: ts.ModuleResolutionKind.Bundler,
+          target: ts.ScriptTarget.ESNext,
+          lib: ["lib.esnext.d.ts", "lib.dom.d.ts"],
+        },
+      });
+      const diagnostics = ts.getPreEmitDiagnostics(program);
+      assert.deepStrictEqual(
+        diagnostics.map((diagnostic) => ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n")),
+        [],
+      );
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  }, 30000);
+
   it("allows arbitrary attributes only on custom element intrinsic tags", () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-intrinsic-custom-attrs-"));
     const filePath = path.join(tempDir, "index.tsx");
