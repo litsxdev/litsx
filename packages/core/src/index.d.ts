@@ -1,5 +1,6 @@
 import type { LitElement, ReactiveElement, TemplateResult } from "lit";
 import type { DirectiveResult } from "lit/directive.js";
+export { css } from "lit";
 
 export interface LitsxJsxNode {
   $$typeof: symbol;

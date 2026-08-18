@@ -1,7 +1,8 @@
 import { beforeAll, afterAll } from 'vitest';
 import assert from "assert";
-import { nothing } from "lit";
+import { css as litCss, nothing } from "lit";
 import {
+  css,
   collectSoftSuspenseThenables,
   EffectsController,
   ensureLazyElement,
@@ -195,6 +196,10 @@ describe("litsx effects controller", () => {
       controller.hostUpdated();
     }
   }
+
+  it("re-exports Lit's css tag without wrapping it", () => {
+    assert.strictEqual(css, litCss);
+  });
 
   it("runs effects registered with [] only once", () => {
     const host = new TestHost();

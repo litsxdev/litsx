@@ -276,7 +276,7 @@ describe("standard JSX authoring", () => {
 
   it("accepts component static configuration through standard assignments", () => {
     const source = `
-      import { css } from "lit";
+      import { css } from "@litsx/core";
 
       function Card({ title, payload }) {
         return <article>{title}:{String(payload)}</article>;
@@ -304,6 +304,8 @@ describe("standard JSX authoring", () => {
     assert.match(code, /payload: \{[\s\S]*type: Object,[\s\S]*attribute: false/);
     assert.match(code, /static get styles\(\)/);
     assert.match(code, /css`:host \{ display: block; \}`/);
+    assert.match(code, /import \{[^}]*css[^}]*\} from "@litsx\/core"/);
+    assert.doesNotMatch(code, /import \{[^}]*css[^}]*\} from "lit"/);
     assert.match(code, /static get shadowRootOptions\(\)/);
     assert.match(code, /class Plain extends LightDomMixin\(LitElement\)/);
     assert.doesNotMatch(code, /Card\.properties\s*=/);

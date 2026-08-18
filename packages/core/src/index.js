@@ -1,3 +1,8 @@
+// `css` is the canonical LitSX component-style authoring primitive. Re-export
+// the original Lit binding so component modules can keep their common imports
+// on one line without introducing a parallel styling abstraction.
+export { css } from "lit";
+
 export {
   ErrorBoundary,
   ErrorBoundaryElement,

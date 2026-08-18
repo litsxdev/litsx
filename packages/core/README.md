@@ -45,6 +45,10 @@ code should not add manual snapshot adapters or hydration bootstrap calls.
 - SSR request execution context:
   - `createExecutionContextKey(...)`
   - `getCurrentExecutionContext()`
+- Component styling:
+  - `css` is the original Lit template tag re-exported for the common
+    `Component.styles = css\`...\`` authoring pattern. Lit directives remain
+    available from their normal Lit entrypoints.
 - Structural host middleware infrastructure:
   - `HostMiddlewareRuntime`
   - `HostMiddlewareMixin`
