@@ -18,6 +18,7 @@ import {
   withCurrentSsrCustomElementInstanceStack,
   withCurrentSsrRuntimeState,
 } from "./ssr-state.js";
+import { createSpreadDigestRewriter } from "./spread-template-digests.js";
 
 const SCOPED_CUSTOM_ELEMENT_LOOKUP = Symbol.for(
   "litsx.ssr.scopedCustomElementLookup",
@@ -185,6 +186,7 @@ function createScopedRenderIterable(value, renderInfo = {}) {
     );
 
   return (async function* streamScopedChunks() {
+    const spreadDigestRewriter = createSpreadDigestRewriter();
     const releaseScopedCustomElementLookup = acquireScopedCustomElementLookup();
 
     scopedSsrContextStack.push(ssrContext);
@@ -217,8 +219,11 @@ function createScopedRenderIterable(value, renderInfo = {}) {
           break;
         }
 
-        yield step.value;
+        const output = spreadDigestRewriter.write(await step.value);
+        if (output) yield output;
       }
+      const finalOutput = spreadDigestRewriter.end();
+      if (finalOutput) yield finalOutput;
     } finally {
       try {
         if (iterator && typeof iterator.return === "function") {

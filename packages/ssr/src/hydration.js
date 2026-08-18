@@ -4,6 +4,7 @@ import {
   isHydratableCustomElementClass,
   LITSX_HYDRATABLE_TAG,
 } from "@litsx/core/elements";
+import { withLitsxHydration } from "./hydration-state.js";
 
 const SSR_RESOURCE_SNAPSHOT_BRIDGE = Symbol.for(
   "litsx.ssr.resourceSnapshotBridge",
@@ -603,7 +604,7 @@ export async function registerHydrationModules(modules) {
  *
  * `await hydrate(document, { register: () => import("./main.js"), clientImports });`
  */
-export async function hydrate(
+async function hydrateImpl(
   root = typeof document === "undefined" ? null : document,
   options = {},
 ) {
@@ -633,7 +634,11 @@ export async function hydrate(
   return hydrationRoots.length > 0 ? hydrationRoots : root;
 }
 
-export async function hydrateRoot(
+export async function hydrate(root, options = {}) {
+  return withLitsxHydration(() => hydrateImpl(root, options));
+}
+
+async function hydrateRootImpl(
   root,
   options = {},
 ) {
@@ -691,6 +696,10 @@ export async function hydrateRoot(
   });
 
   return match.element ?? element;
+}
+
+export async function hydrateRoot(root, options = {}) {
+  return withLitsxHydration(() => hydrateRootImpl(root, options));
 }
 
 export async function hydrateDocument(options = {}) {
