@@ -6,6 +6,7 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."
 
 export const packageDirsByName = new Map([
   ["@litsx/core", "packages/core"],
+  ["@litsx/ssr", "packages/ssr"],
   ["@litsx/compiler", "packages/compiler"],
   ["@litsx/storybook", "packages/storybook"],
   ["@litsx/vite-plugin", "packages/vite-plugin"],

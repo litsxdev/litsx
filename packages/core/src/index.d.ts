@@ -39,7 +39,7 @@ export declare function isLitsxComponentClass(
 export declare function jsxSpreadElement(
   tagName: string,
   sources: ReadonlyArray<Record<string, unknown> | null | undefined>,
-  options?: { component?: boolean; void?: boolean },
+  options?: { component?: boolean | CustomElementConstructor; void?: boolean },
   children?: unknown
 ): import("lit").TemplateResult;
 

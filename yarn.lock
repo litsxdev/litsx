@@ -1254,7 +1254,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@lit-labs/ssr-client@npm:^1.1.7":
+"@lit-labs/ssr-client@npm:^1.1.7, @lit-labs/ssr-client@npm:^1.1.8":
   version: 1.1.8
   resolution: "@lit-labs/ssr-client@npm:1.1.8"
   dependencies:
@@ -1478,6 +1478,17 @@ __metadata:
   resolution: "@litsx/shiki-languages@workspace:packages/shiki-languages"
   dependencies:
     shiki: "npm:^2.1.0"
+  languageName: unknown
+  linkType: soft
+
+"@litsx/ssr@workspace:packages/ssr":
+  version: 0.0.0-use.local
+  resolution: "@litsx/ssr@workspace:packages/ssr"
+  dependencies:
+    "@lit-labs/ssr": "npm:^4.1.0"
+    "@lit-labs/ssr-client": "npm:^1.1.8"
+  peerDependencies:
+    lit: ">=3"
   languageName: unknown
   linkType: soft
 

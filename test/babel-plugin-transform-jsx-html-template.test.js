@@ -333,6 +333,18 @@ describe("@litsx/babel-plugin-transform-jsx-html-template", () => {
     );
   });
 
+  it("passes an authored component constructor for spread prop inference", () => {
+    const source = `const x = <ThirdPartyButton {...props}></ThirdPartyButton>;`;
+    const ast = parser.parse(source, { sourceType: "module" });
+    const { code } = transformFromAstSync(ast, source, {
+      configFile: false,
+      babelrc: false,
+      plugins: [plugin],
+    });
+
+    assert.match(code, /jsxSpreadElement\("third-party-button", \[props\], \{\s*component: ThirdPartyButton,/);
+  });
+
   it("throws on spread children", () => {
     const source = `const x = <div>{...items}</div>;`;
     const ast = parser.parse(source, { sourceType: "module" });

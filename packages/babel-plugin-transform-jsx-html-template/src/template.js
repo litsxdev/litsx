@@ -241,6 +241,7 @@ function getTag(node) {
       name: isCapitalized ? toKebab(originalName) : originalName,
       isComponent: false,
       isAuthoredComponentTag: isCapitalized,
+      componentExpression: isCapitalized ? t.identifier(originalName) : null,
     };
   }
 
@@ -248,6 +249,7 @@ function getTag(node) {
     name: stringifyJsxName(node.name),
     isComponent: true,
     isAuthoredComponentTag: false,
+    componentExpression: null,
   };
 }
 
@@ -353,7 +355,7 @@ function getAttributeValue(attr, opts) {
   return t.cloneNode(attr.value, true);
 }
 
-function createSpreadElementCall(node, opts, name, isAuthoredComponentTag) {
+function createSpreadElementCall(node, opts, name, isAuthoredComponentTag, componentExpression) {
   const sources = [];
   let adjacentProperties = [];
   const flushAdjacentProperties = () => {
@@ -386,23 +388,29 @@ function createSpreadElementCall(node, opts, name, isAuthoredComponentTag) {
   );
   const isVoid = isVoidHtmlTagName(name);
   const helperName = opts?.spreadHelperName || "jsxSpreadElement";
-  return t.callExpression(t.identifier(helperName), [
+  const hasChildren = !isVoid && node.children.some(
+    (child) => child.type !== "JSXText" || trimString(child.value) !== ""
+  );
+  const args = [
     t.stringLiteral(name),
     t.arrayExpression(sources),
     t.objectExpression([
       t.objectProperty(
         t.identifier("component"),
-        t.booleanLiteral(isAuthoredComponentTag || name.includes("-"))
+        componentExpression
+          ? t.cloneNode(componentExpression, true)
+          : t.booleanLiteral(isAuthoredComponentTag || name.includes("-"))
       ),
       t.objectProperty(t.identifier("void"), t.booleanLiteral(isVoid)),
     ]),
-    isVoid ? t.nullLiteral() : createJsxReplacement(children, opts),
-  ]);
+  ];
+  if (hasChildren) args.push(createJsxReplacement(children, opts));
+  return t.callExpression(t.identifier(helperName), args);
 }
 
 const transforms = {
   JSXElement({ node, strings, keys }, opts) {
-    const { name, isComponent, isAuthoredComponentTag } = getTag(node.openingElement);
+    const { name, isComponent, isAuthoredComponentTag, componentExpression } = getTag(node.openingElement);
 
     if (isComponent) {
       addKey(strings, keys, createComponent(node, opts));
@@ -416,7 +424,7 @@ const transforms = {
       addKey(
         strings,
         keys,
-        createSpreadElementCall(node, opts, name, isAuthoredComponentTag)
+        createSpreadElementCall(node, opts, name, isAuthoredComponentTag, componentExpression)
       );
       return;
     }

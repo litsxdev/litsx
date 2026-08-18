@@ -1,5 +1,6 @@
 export const npmReleasePackages = [
   "packages/core",
+  "packages/ssr",
   "packages/compiler",
   "packages/storybook",
   "packages/vite-plugin",

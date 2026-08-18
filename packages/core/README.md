@@ -34,8 +34,9 @@ The package also exposes `@litsx/core/jsx-runtime` and `@litsx/core/jsx-dev-runt
   - `HostMiddlewareMixin`
   - `createHostMiddlewareRuntime(...)`
 - JSX compatibility helpers:
-  - `jsxSpreadElement(tagName, sources, options?, children?)` merges JSX prop sources in authored order and returns an SSR-compatible Lit template for the destination element.
-  - Explicit `.prop`, `?boolean`, and `@event` keys override inference; otherwise reactive component APIs and native DOM properties determine the binding channel.
+  - `jsxSpreadElement(tagName, sources, options?, children?)` merges JSX prop sources in authored order. It uses an `ElementPart` in the browser and regular Lit parts during SSR.
+  - Explicit `.prop`, `?boolean`, and `@event` keys override inference; otherwise the destination constructor, reactive component API, and native DOM properties determine the binding channel.
+  - Hydratable spread output should be rendered with `@litsx/ssr` and hydrated with `@litsx/ssr/client` so the two template shapes are reconciled without replacing DOM nodes.
 
 All helpers accept the Lit element instance as the first argument. The Babel transforms insert it automatically, but you can also call the runtime manually.
 
