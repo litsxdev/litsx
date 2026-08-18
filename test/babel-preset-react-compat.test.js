@@ -99,6 +99,58 @@ describe("@litsx/babel-preset-react-compat", () => {
     assert.match(code, /"@click": onClick/);
   });
 
+  it("lowers keyed React map expressions through Lit repeat", () => {
+    const source = `
+      const Row = ({ item }) => <li>{item.label}</li>;
+      export const List = ({ items }) => (
+        <ul>{items.map((item, index) => <Row key={item.id} item={item} index={index} />)}</ul>
+      );
+    `;
+
+    const code = run(source);
+
+    assert.match(code, /import \{ repeat \} from "lit\/directives\/repeat\.js"/);
+    assert.match(code, /repeat\(items, \(item, index\) => item\.id, \(item, index\) => html`<row/);
+    assert.doesNotMatch(code, /(?:\s|\.)key=/);
+
+    const blockCode = run(`
+      const Row = ({ item }) => <li>{item.label}</li>;
+      export const List = ({ items }) => (
+        <ul>{items.map(item => { return <Row key={item.id} item={item} />; })}</ul>
+      );
+    `);
+    assert.match(blockCode, /repeat\(items, item => item\.id, item => \{\s*return html`<row/);
+
+    assert.throws(
+      () => run(`
+        const Row = ({ item }) => <li>{item.label}</li>;
+        export const List = ({ items }) => <ul>{items.map(item => {
+          const key = item.id;
+          return <Row key={key} item={item} />;
+        })}</ul>;
+      `),
+      /cannot be lowered safely[\s\S]*repeat/,
+    );
+  });
+
+  it("lowers standalone React keys through Lit keyed and can disable key compatibility", () => {
+    const source = `
+      const Panel = ({ label }) => <section>{label}</section>;
+      export const Screen = ({ selectedId, label }) => (
+        <main><Panel key={selectedId} label={label} /></main>
+      );
+    `;
+
+    const code = run(source);
+    assert.match(code, /import \{ keyed \} from "lit\/directives\/keyed\.js"/);
+    assert.match(code, /keyed\(selectedId, html`<panel label="\$\{label\}"><\/panel>`\)/);
+    assert.doesNotMatch(code, /(?:\s|\.)key=/);
+
+    const disabledCode = run(source, { preset: { reactKeys: false } });
+    assert.doesNotMatch(disabledCode, /lit\/directives\/(?:repeat|keyed)\.js/);
+    assert.match(disabledCode, /<panel[^>]*\.key=\$\{selectedId\}/);
+  });
+
   it("expands typed object rest bindings into their remaining component props", () => {
     const source = `
       export function Action(

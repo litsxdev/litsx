@@ -356,4 +356,20 @@ describe("standard JSX authoring", () => {
     assert.match(code, /Card\.propTypes = \{/);
     assert.doesNotMatch(code, /static get propTypes/);
   });
+
+  it("does not enable React key reconciliation in the native pipeline", () => {
+    const source = `
+      function Row({ item }) { return <li>{item.label}</li>; }
+      function List({ items }) {
+        return <ul>{items.map(item => <Row key={item.id} item={item} />)}</ul>;
+      }
+    `;
+
+    const { code } = transformLitsxSync(source, {
+      filename: "/tmp/litsx-native-key.tsx",
+    });
+
+    assert.doesNotMatch(code, /lit\/directives\/(?:repeat|keyed)\.js/);
+    assert.match(code, /<row \.key=\$\{item\.id\}/);
+  });
 });

@@ -513,6 +513,8 @@ function transformOpeningElement(path, state, t) {
       continue;
     }
 
+    if (state.__litsxTransformReactKeys && rawName === "key") continue;
+
     const propertyType = typeResolver && tsTagNode
       ? getPropertyType(typeResolver, targetType, rawName, tsTagNode)
       : null;
@@ -640,6 +642,7 @@ export default declare((api, options = {}) => {
     pre() {
       this.__litsxLocalPropertyKinds = new WeakMap();
       this.__litsxDeferReactBoundaryAttributes = options.reactCompatBoundaries === true;
+      this.__litsxTransformReactKeys = options.reactCompatKeys === true;
       this.__litsxSuppressNativeClassNameWarning = options.suppressNativeClassNameWarning === true;
       this.__litsxJsxBindingTypeResolver = createTypeResolver(
         this.file?.opts?.filename,

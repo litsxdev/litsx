@@ -14,14 +14,15 @@ This preset wires the supported React compatibility pipeline in a fixed order:
 1. React attribute aliases such as `className`
 2. React context lowering (`createContext`, `Provider`, `Consumer`, `useContext`)
 3. LitSX component lowering
-4. React hooks, `useState`, and `useRef`
-5. React lazy and React suspense lowering
-6. Native LitSX suspense lowering
-7. React-style error boundaries
-8. React `propTypes` compat lowering to native `static properties = ...`
-9. scoped elements
-10. React DOM/form attribute compatibility
-11. React event lowering
+4. React `key` lowering onto Lit's `repeat` and `keyed` directives
+5. React hooks, `useState`, and `useRef`
+6. React lazy and React suspense lowering
+7. Native LitSX suspense lowering
+8. React-style error boundaries
+9. React `propTypes` compat lowering to native static properties
+10. scoped elements
+11. React DOM/form attribute compatibility
+12. React event lowering
 
 That ordering makes compatibility for React 19-style `ref` props, `forwardRef(...)`, and wrappers such as `memo(...)` part of one explicit migration contract instead of accidental composition.
 
@@ -74,6 +75,20 @@ Use `domMode: "light"` when a migration needs every authored component in that c
 ```
 
 `domMode` defaults to `"shadow"`. This option only affects components lowered by the preset in the current compilation; it does not rewrite imported components from elsewhere.
+
+React `key` compatibility is enabled only in this preset. A concise keyed
+`items.map(item => <Row key={item.id} />)` expression lowers to Lit's `repeat`,
+while a standalone keyed element lowers to `keyed`. Complex keyed `map`
+callbacks fail with guidance to author `repeat` explicitly rather than silently
+using index-based reconciliation. Set `reactKeys: false` to disable this stage:
+
+```json
+{
+  "presets": [
+    ["@litsx/babel-preset-react-compat", { "reactKeys": false }]
+  ]
+}
+```
 
 ## Scope
 

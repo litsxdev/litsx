@@ -18,6 +18,7 @@ import reactSuspense from "./internal/react-suspense.js";
 import reactErrorBoundary from "./internal/react-error-boundary.js";
 import reactEvents from "./internal/react-events.js";
 import reactContext from "./internal/react-context.js";
+import reactKeys from "./internal/react-keys.js";
 
 export function normalizeReactCompatOptions(options = {}) {
   const domMode = options.domMode === "light" ? "light" : "shadow";
@@ -48,6 +49,7 @@ export function createReactCompatPresetPlugins(options = {}) {
     [transformLitsxJsxBindings, {
       ...normalizedOptions.transformLitsx,
       reactCompatBoundaries: true,
+      reactCompatKeys: options.reactKeys !== false,
     }],
     [
       transformLitsxComponents,
@@ -56,6 +58,9 @@ export function createReactCompatPresetPlugins(options = {}) {
         getWrapperMetadata: getReactWrapperMetadata,
       },
     ],
+    ...(options.reactKeys === false
+      ? []
+      : [[reactKeys, options.reactKeys || {}]]),
     [
       transformLitsxHooks,
       {
