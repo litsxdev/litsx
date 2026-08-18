@@ -45,16 +45,13 @@ function getComponentFunctionPath(statementPath, t) {
 function insertStaticAssignments(functionPath, assignments, t) {
   if (assignments.length === 0) return;
   const statements = assignments.map(({ staticName, value, sourceNode }) => {
-    const normalizedValue =
-      staticName === "styles" &&
-      t.isTaggedTemplateExpression(value) &&
-      t.isIdentifier(value.tag, { name: "css" })
-        ? value.quasi
-        : value;
+    const macroName = staticName === "styles"
+      ? "__litsx_static_styles_value"
+      : `__litsx_static_${staticName}`;
     const statement = t.expressionStatement(
       t.callExpression(
-        t.identifier(`__litsx_static_${staticName}`),
-        [t.cloneNode(normalizedValue, true)],
+        t.identifier(macroName),
+        [t.cloneNode(value, true)],
       ),
     );
     statement.loc = sourceNode.loc;
@@ -101,6 +98,16 @@ export default function transformLitsxStaticAssignments(api) {
             // React propTypes are executable compatibility metadata, not LitSX
             // host configuration. Leave them for react-compat (or userland).
             if (assigned.staticName === "propTypes") continue;
+
+            if (
+              assigned.staticName === "styles" &&
+              (t.isStringLiteral(expression.right) || t.isTemplateLiteral(expression.right))
+            ) {
+              throw statementPath.buildCodeFrameError(
+                `${assigned.componentName}.styles must be a Lit CSSResultGroup. ` +
+                "Use css`...` from lit instead of a plain string or untagged template literal.",
+              );
+            }
 
             const assignments = assignmentsByComponent.get(assigned.componentName) || [];
             assignments.push({

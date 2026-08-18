@@ -303,10 +303,38 @@ describe("standard JSX authoring", () => {
     assert.match(code, /title: \{[\s\S]*type: String[\s\S]*reflect: true/);
     assert.match(code, /payload: \{[\s\S]*type: Object,[\s\S]*attribute: false/);
     assert.match(code, /static get styles\(\)/);
+    assert.match(code, /css`:host \{ display: block; \}`/);
     assert.match(code, /static get shadowRootOptions\(\)/);
     assert.match(code, /class Plain extends LightDomMixin\(LitElement\)/);
     assert.doesNotMatch(code, /Card\.properties\s*=/);
     assert.doesNotMatch(code, /Plain\.lightDom\s*=/);
+  });
+
+  it("preserves Lit CSSResultGroup assignments and rejects plain style strings", () => {
+    const source = `
+      import { css } from "lit";
+      const sharedStyles = css\`:host { box-sizing: border-box; }\`;
+
+      function Card() {
+        return <article />;
+      }
+      Card.styles = [sharedStyles, css\`article { display: block; }\`];
+    `;
+
+    const { code } = transformLitsxSync(source, {
+      filename: "/tmp/litsx-standard-css-results.tsx",
+    });
+
+    assert.match(code, /\[sharedStyles, css`article \{ display: block; \}`\]/);
+    assert.doesNotMatch(code, /unsafeCSS\(sharedStyles\)/);
+
+    assert.throws(
+      () => transformLitsxSync(`
+        function InvalidStyles() { return <div />; }
+        InvalidStyles.styles = \`:host { display: block; }\`;
+      `, { filename: "/tmp/litsx-invalid-standard-styles.tsx" }),
+      /must be a Lit CSSResultGroup[\s\S]*css`\.\.\.`/,
+    );
   });
 
   it("leaves React propTypes assignments outside LitSX static configuration", () => {

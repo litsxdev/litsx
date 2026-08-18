@@ -218,8 +218,10 @@ describe("@litsx/typescript", () => {
         "export {};",
       ].join("\n"));
       fs.writeFileSync(sourcePath, `
+        import { css } from "${repoRoot.replaceAll("\\", "/")}/node_modules/lit/index.js";
+
         const Card = ({ label }: { label: string }) => <article>{label}</article>;
-        Card.styles = ":host { display: block; }";
+        Card.styles = css\`:host { display: block; }\`;
         Card.properties = { label: { type: String } };
 
         const view = <label className="field" htmlFor="query">

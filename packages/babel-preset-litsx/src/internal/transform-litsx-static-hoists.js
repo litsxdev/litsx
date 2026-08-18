@@ -346,15 +346,38 @@ function getStaticStylesExpression(statement, functionPath) {
   if (!t.isCallExpression(statement.expression)) return null;
   const isLegacyStaticStyles = t.isIdentifier(statement.expression.callee, { name: "staticStyles" });
   const isHoistedStyles = t.isIdentifier(statement.expression.callee, { name: "__litsx_static_styles" });
+  const isAssignedStyles = t.isIdentifier(
+    statement.expression.callee,
+    { name: "__litsx_static_styles_value" },
+  );
   if (
     !isLegacyStaticStyles &&
-    !isHoistedStyles
+    !isHoistedStyles &&
+    !isAssignedStyles
   ) {
     return null;
   }
   if (statement.expression.arguments.length !== 1) return null;
 
   const [argument] = statement.expression.arguments;
+
+  if (isAssignedStyles) {
+    if (
+      t.isStringLiteral(argument) ||
+      t.isTemplateLiteral(argument) ||
+      t.isFunctionExpression(argument) ||
+      t.isArrowFunctionExpression(argument)
+    ) {
+      throw new Error(
+        "Component.styles must be a Lit CSSResultGroup. Use css`...` from lit instead of a plain string, untagged template literal, or function.",
+      );
+    }
+    return {
+      __litsxHoistedStyles: true,
+      __litsxNeedsCssImport: false,
+      expression: t.cloneNode(argument, true),
+    };
+  }
 
   if (isHoistedStyles && (t.isFunctionExpression(argument) || t.isArrowFunctionExpression(argument))) {
     throw new Error("static styles = ... only accepts static values. Move dynamic values to useStyle(...) or CSS custom properties.");
@@ -707,6 +730,7 @@ export function processStaticHoists({
         staticHoists.unshift({
           name: "styles",
           expression: cssExpression.expression,
+          needsCssImport: cssExpression.__litsxNeedsCssImport !== false,
         });
       } else {
         staticStyles.unshift(cssExpression);
@@ -815,7 +839,9 @@ export function processStaticHoists({
     needsStaticHoistsMixin,
     needsCss:
       staticStyles.length > 0 ||
-      staticHoists.some((entry) => entry.name === "styles"),
+      staticHoists.some(
+        (entry) => entry.name === "styles" && entry.needsCssImport !== false,
+      ),
     needsUnsafeCss:
       staticStyles.some(containsUnsafeCssCall) ||
       staticHoists.some(
