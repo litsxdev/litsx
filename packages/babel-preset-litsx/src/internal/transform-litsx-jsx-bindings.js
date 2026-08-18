@@ -254,6 +254,42 @@ function getGlobalElementType(typeResolver, tagName, location, svg) {
   return null;
 }
 
+function getIntrinsicElementPropsType(typeResolver, tagName, location) {
+  const ts = ensureTypescriptModule();
+  const { checker } = typeResolver;
+  let jsxSymbol;
+  try {
+    jsxSymbol = checker.resolveName(
+      "JSX",
+      location,
+      ts.SymbolFlags.Namespace,
+      false,
+    );
+  } catch {
+    return null;
+  }
+  if (!jsxSymbol) return null;
+
+  let intrinsicElementsSymbol;
+  try {
+    intrinsicElementsSymbol = checker
+      .getExportsOfModule(jsxSymbol)
+      .find((symbol) => symbol.name === "IntrinsicElements");
+  } catch {
+    return null;
+  }
+  if (!intrinsicElementsSymbol) return null;
+
+  let intrinsicElementsType;
+  try {
+    intrinsicElementsType = checker.getDeclaredTypeOfSymbol(intrinsicElementsSymbol);
+  } catch {
+    return null;
+  }
+  const elementSymbol = checker.getPropertyOfType(intrinsicElementsType, tagName);
+  return getTypeOfSymbol(checker, elementSymbol, location);
+}
+
 function getPropertyType(typeResolver, targetType, propertyName, location) {
   if (!targetType) return null;
   const symbol = typeResolver.checker.getPropertyOfType(targetType, propertyName);
@@ -447,6 +483,7 @@ function transformOpeningElement(path, state, t) {
   // A custom element name contains a hyphen by definition. Keep both custom
   // elements and SVG out of HTML attribute-name/boolean inference.
   const nativeHtml = Boolean(tagName && !tagName.includes("-") && !svg);
+  const customElement = Boolean(tagName?.includes("-"));
   const reactBoundaryKind = state.__litsxDeferReactBoundaryAttributes
     ? getReactBoundaryKind(path, tagNode, t)
     : null;
@@ -457,7 +494,8 @@ function transformOpeningElement(path, state, t) {
   const targetType = component
     ? getComponentPropsType(typeResolver, tagNode)
     : tagName && typeResolver && tsTagNode
-      ? getGlobalElementType(typeResolver, tagName, tsTagNode, svg)
+      ? getGlobalElementType(typeResolver, tagName, tsTagNode, svg) ||
+        getIntrinsicElementPropsType(typeResolver, tagName, tsTagNode)
       : null;
 
   for (const attribute of path.node.attributes) {
@@ -535,6 +573,15 @@ function transformOpeningElement(path, state, t) {
     }
     if (tagName && LIVE_VALUE_TAGS.has(tagName) && (rawName === "value" || rawName === "defaultValue")) {
       renameAttribute(attribute, ".value", t);
+      continue;
+    }
+
+    // A package can publish a concrete JSX.IntrinsicElements contract for its
+    // lowercase custom-element tag. Treat non-primitive members of that API as
+    // properties before applying the untyped `onX` custom-event fallback.
+    if (customElement && propertyType) {
+      const kind = classifyDeclaredProperty(propertyType, typeResolver.checker);
+      if (kind !== "attribute") renameAttribute(attribute, `.${rawName}`, t);
       continue;
     }
 

@@ -113,6 +113,76 @@ describe("standard JSX authoring", () => {
     assert.match(code, /<child[^>]*\.onCommit=\$\{this\.onCommit\}/);
   });
 
+  it("uses published intrinsic custom-element props without runtime metadata", () => {
+    const source = `
+      export {};
+      type ThirdPartyWidgetProps = {
+        active: boolean;
+        label: string;
+        payload: { id: string };
+        onCommit: (id: string) => void;
+      };
+      declare global {
+        namespace JSX {
+          interface IntrinsicElements {
+            "third-party-widget": ThirdPartyWidgetProps;
+          }
+        }
+      }
+
+      function Screen({ active, label, payload, onCommit }: ThirdPartyWidgetProps) {
+        return <third-party-widget
+          active={active}
+          label={label}
+          payload={payload}
+          onCommit={onCommit}
+        />;
+      }
+    `;
+
+    const { code } = transformLitsxSync(source, {
+      filename: "/tmp/litsx-standard-custom-intrinsic.tsx",
+    });
+
+    assert.match(code, /<third-party-widget[^>]*\.active=\$\{this\.active\}/);
+    assert.match(code, /label="\$\{this\.label\}"/);
+    assert.match(code, /\.payload=\$\{this\.payload\}/);
+    assert.match(code, /\.onCommit=\$\{this\.onCommit\}/);
+    assert.doesNotMatch(code, /@commit=/);
+  });
+
+  it("uses a published HTMLElementTagNameMap custom-element API", () => {
+    const source = `
+      export {};
+      class ThirdPartySwitch extends HTMLElement {
+        active = false;
+        label = "";
+        payload: { id: string } | null = null;
+      }
+      declare global {
+        interface HTMLElementTagNameMap {
+          "third-party-switch": ThirdPartySwitch;
+        }
+      }
+
+      function Screen({ active, label, payload }: {
+        active: boolean;
+        label: string;
+        payload: { id: string };
+      }) {
+        return <third-party-switch active={active} label={label} payload={payload} />;
+      }
+    `;
+
+    const { code } = transformLitsxSync(source, {
+      filename: "/tmp/litsx-standard-custom-element-map.tsx",
+    });
+
+    assert.match(code, /<third-party-switch[^>]*\.active=\$\{this\.active\}/);
+    assert.match(code, /label="\$\{this\.label\}"/);
+    assert.match(code, /\.payload=\$\{this\.payload\}/);
+  });
+
   it("infers and registers namespace component elements across .litsx modules", () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-standard-namespace-"));
     const childFile = path.join(root, "controls.litsx");
