@@ -25,6 +25,7 @@ class BenchmarkSpreadDirective extends Directive {
     if (partInfo.type !== PartType.ELEMENT) {
       throw new Error("benchmarkSpread requires an ElementPart");
     }
+    this.seen = new Set();
   }
 
   render() {
@@ -32,7 +33,6 @@ class BenchmarkSpreadDirective extends Directive {
   }
 
   update(part, [sources, adoptSsrAttributes = false]) {
-    const merged = sources.length === 1 ? sources[0] : Object.assign({}, ...sources);
     const element = part.element;
     let tagDescriptors = DESCRIPTOR_CACHE.get(element.localName);
     if (!tagDescriptors) {
@@ -40,39 +40,48 @@ class BenchmarkSpreadDirective extends Directive {
       DESCRIPTOR_CACHE.set(element.localName, tagDescriptors);
     }
 
-    for (const name in merged) {
-      const value = merged[name];
-      // This deliberately includes the classification and comparison work the
-      // production spread directive needs, while avoiding redundant writes.
-      let kind = tagDescriptors.get(name);
-      if (!kind) {
-        kind = /^on[A-Z]/.test(name)
-          ? "event"
-          : name.startsWith("data-") || name.startsWith("aria-") || name === "title"
-          ? "attribute"
-          : typeof value === "boolean"
-            ? "boolean"
-            : name in element || (value != null && typeof value === "object")
-              ? "property"
-              : "attribute";
-        tagDescriptors.set(name, kind);
-      }
-
-      if (kind === "attribute") {
-        if (adoptSsrAttributes) continue;
-        const next = serializedValue(value);
-        if (next === null) {
-          if (element.hasAttribute(name)) element.removeAttribute(name);
-        } else if (element.getAttribute(name) !== next) {
-          element.setAttribute(name, next);
+    const needsDedupe = sources.length > 1;
+    if (needsDedupe) this.seen.clear();
+    for (let sourceIndex = sources.length - 1; sourceIndex >= 0; sourceIndex -= 1) {
+      const source = sources[sourceIndex];
+      for (const name in source) {
+        if (needsDedupe) {
+          if (this.seen.has(name)) continue;
+          this.seen.add(name);
         }
-      } else if (kind === "boolean") {
-        if (adoptSsrAttributes) continue;
-        if (element.hasAttribute(name) !== value) element.toggleAttribute(name, value);
-      } else if (kind === "property") {
-        if (element[name] !== value) element[name] = value;
-      } else if (kind === "event") {
-        element.addEventListener(name.slice(2).toLowerCase(), value);
+        const value = source[name];
+        // This deliberately includes the classification and comparison work the
+        // production spread directive needs, while avoiding redundant writes.
+        let kind = tagDescriptors.get(name);
+        if (!kind) {
+          kind = /^on[A-Z]/.test(name)
+            ? "event"
+            : name.startsWith("data-") || name.startsWith("aria-") || name === "title"
+              ? "attribute"
+              : typeof value === "boolean"
+                ? "boolean"
+                : name in element || (value != null && typeof value === "object")
+                  ? "property"
+                  : "attribute";
+          tagDescriptors.set(name, kind);
+        }
+
+        if (kind === "attribute") {
+          if (adoptSsrAttributes) continue;
+          const next = serializedValue(value);
+          if (next === null) {
+            if (element.hasAttribute(name)) element.removeAttribute(name);
+          } else if (element.getAttribute(name) !== next) {
+            element.setAttribute(name, next);
+          }
+        } else if (kind === "boolean") {
+          if (adoptSsrAttributes) continue;
+          if (element.hasAttribute(name) !== value) element.toggleAttribute(name, value);
+        } else if (kind === "property") {
+          if (element[name] !== value) element[name] = value;
+        } else if (kind === "event") {
+          element.addEventListener(name.slice(2).toLowerCase(), value);
+        }
       }
     }
     return noChange;

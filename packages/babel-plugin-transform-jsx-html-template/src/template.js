@@ -354,19 +354,30 @@ function getAttributeValue(attr, opts) {
 }
 
 function createSpreadElementCall(node, opts, name, isAuthoredComponentTag) {
-  const sources = node.openingElement.attributes.map((attr) => {
+  const sources = [];
+  let adjacentProperties = [];
+  const flushAdjacentProperties = () => {
+    if (adjacentProperties.length === 0) return;
+    sources.push(t.objectExpression(adjacentProperties));
+    adjacentProperties = [];
+  };
+
+  node.openingElement.attributes.forEach((attr) => {
     if (attr.type === "JSXSpreadAttribute") {
-      return lowerEmbeddedJsx(t.cloneNode(attr.argument, true), opts);
+      flushAdjacentProperties();
+      sources.push(lowerEmbeddedJsx(t.cloneNode(attr.argument, true), opts));
+      return;
     }
 
     const rawName = decodeVirtualAttributeName(attr.name.name) ?? attr.name.name;
     const key = /^[$_a-zA-Z][$_a-zA-Z0-9]*$/.test(rawName)
       ? t.identifier(rawName)
       : t.stringLiteral(rawName);
-    return t.objectExpression([
+    adjacentProperties.push(
       t.objectProperty(key, getAttributeValue(attr, opts)),
-    ]);
+    );
   });
+  flushAdjacentProperties();
 
   const children = t.jsxFragment(
     t.jsxOpeningFragment(),

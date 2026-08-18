@@ -317,7 +317,7 @@ describe("@litsx/babel-plugin-transform-jsx-html-template", () => {
   });
 
   it("lowers spread attributes and surrounding explicit props in source order", () => {
-    const source = `const x = <div {...rest} id="fixed" disabled={active}></div>;`;
+    const source = `const x = <div title="before" {...first} id="fixed" disabled={active} {...second} hidden></div>;`;
     const ast = parser.parse(source, { sourceType: "module" });
 
     const { code } = transformFromAstSync(ast, source, {
@@ -329,7 +329,7 @@ describe("@litsx/babel-plugin-transform-jsx-html-template", () => {
     assert.match(code, /import \{ jsxSpreadElement \} from "@litsx\/core"/);
     assert.match(
       code,
-      /jsxSpreadElement\("div", \[rest, \{\s*id: "fixed"\s*\}, \{\s*disabled: active\s*\}\], \{\s*component: false,\s*void: false\s*\}/
+      /jsxSpreadElement\("div", \[\{\s*title: "before"\s*\}, first, \{\s*id: "fixed",\s*disabled: active\s*\}, second, \{\s*hidden: true\s*\}\], \{\s*component: false,\s*void: false\s*\}/
     );
   });
 
