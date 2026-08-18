@@ -6,6 +6,7 @@ import path from "path";
 import { afterEach, describe, it } from "vitest";
 
 import { createReleaseManifest, stageReleasePackage } from "../scripts/release/release-manifest.js";
+import { readPackageVersion } from "../scripts/release/package-version-map.js";
 
 const tempDirs = [];
 
@@ -143,6 +144,9 @@ describe("release manifest staging", () => {
           build: "rollup -c",
           prepack: "yarn build",
         },
+        dependencies: {
+          "@litsx/core": "workspace:*",
+        },
       }, null, 2)}\n`,
     );
     fs.writeFileSync(path.join(packageRoot, "src", "index.js"), "export const src = true;\n");
@@ -154,7 +158,7 @@ describe("release manifest staging", () => {
     fs.writeFileSync(path.join(packageRoot, "README.md"), "# demo\n");
     fs.writeFileSync(path.join(packageRoot, "NOTICE.txt"), "notice\n");
 
-    const { releaseManifest, stagingDir } = stageReleasePackage({
+    const { manifest, releaseManifest, stagingDir } = stageReleasePackage({
       packageDir: "packages/demo",
       packageRoot,
       stagingRoot,
@@ -164,6 +168,8 @@ describe("release manifest staging", () => {
     assert.strictEqual(releaseManifest.types, "./dist/index.d.ts");
     assert.ok(!releaseManifest.files.includes("src"));
     assert.ok(!releaseManifest.scripts?.prepack);
+    assert.strictEqual(manifest.dependencies["@litsx/core"], "workspace:*");
+    assert.strictEqual(releaseManifest.dependencies["@litsx/core"], `^${readPackageVersion("@litsx/core")}`);
     assert.ok(fs.existsSync(path.join(stagingDir, "dist", "index.js")));
     assert.ok(fs.existsSync(path.join(stagingDir, "dist", "index.cjs")));
     assert.ok(fs.existsSync(path.join(stagingDir, "dist", "index.d.ts")));

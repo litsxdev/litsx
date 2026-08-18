@@ -55,9 +55,9 @@
   "dependencies": {
     "@lit-labs/ssr": "^4.0.0",
     "@lit-labs/ssr-client": "^1.1.7",
-    "@litsx/compiler": "^0.10.0",
-    "@litsx/core": "^0.16.0",
-    "@litsx/vite-plugin": "^0.3.2"
+    "@litsx/compiler": "workspace:*",
+    "@litsx/core": "workspace:*",
+    "@litsx/vite-plugin": "workspace:*"
   },
   "devDependencies": {
     "lit": "^3.2.1"
