@@ -152,10 +152,11 @@ Use this when you need to introduce extra authored syntax or conventions on top 
 
 ### `reactCompat?: boolean | object`
 
-Selects `@litsx/babel-preset-react-compat` instead of the native preset. The object form forwards
-React compatibility options such as `transformDependencies`. Build-tool integrations must ensure
-that every selected dependency module is passed to the compiler; `@litsx/vite-plugin` handles that
-automatically.
+Selects `@litsx/babel-preset-react-compat` instead of the native preset. `true` uses the compatibility defaults (`domMode: "light"` and `reactKeys: true`). The object form accepts `domMode`, `reactKeys`, and `transformDependencies`; see the [complete react-compat option reference](../babel-preset-react-compat/README.md#options).
+
+`jsxTemplate` and `jsxTemplateOptions` remain top-level compiler options. They control the compiler's shared final output pass after either the native or react-compat feature pipeline has run.
+
+Build-tool integrations must ensure that every package named by `transformDependencies` is passed to the compiler in both client and SSR pipelines. `@litsx/vite-plugin` handles transformation, dependency-optimization exclusion, and SSR externalization automatically.
 
 ### `outputPlugins?: unknown[]`
 

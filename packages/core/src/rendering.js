@@ -5,6 +5,7 @@ import { render as renderLightDom } from "lit/html.js";
 import { Directive, PartType, directive } from "lit/directive.js";
 import {
   createLightDomRegistry,
+  upgradeScopedRegistryTree,
   withLightDomCreationContext,
 } from "@litsx/scoped-registry-shim";
 import {
@@ -544,6 +545,10 @@ export function syncRendererHost(
     rendered?.context ?? null,
     { creationContextHost },
   );
+  const contextualRegistry = rendered?.context?.host?.registry ?? null;
+  if (typeof contextualRegistry?._getDefinition === "function") {
+    upgradeScopedRegistryTree(rendererRoot ?? host, contextualRegistry);
+  }
   host[RENDERER_HOST_INITIALIZED] = true;
 }
 

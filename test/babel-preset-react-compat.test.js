@@ -77,7 +77,7 @@ describe("@litsx/babel-preset-react-compat", () => {
 
     const code = run(source);
 
-    assert.match(code, /class FancyForm extends ShadowDomMixin\(LitsxStaticHoistsMixin\(LitElement\)\)/);
+    assert.match(code, /class FancyForm extends LightDomMixin\(LitsxStaticHoistsMixin\(LitElement\)\)/);
     assert.match(code, /prepareEffects\(this\);/);
     assert.match(code, /useAfterUpdate\(this,/);
     assert.match(code, /return html`<div>\$\{jsxSpreadElement\("fancy-button", \[\{[\s\S]*?"\.ref": buttonRef,[\s\S]*?"\.label": this\.label[\s\S]*?component: FancyButton[\s\S]*?\)\}<\/div>`;/);
@@ -501,7 +501,7 @@ describe("@litsx/babel-preset-react-compat", () => {
       export { a as Counter };
     `);
 
-    assert.match(code, /export class Counter extends LitElement/);
+    assert.match(code, /export class Counter extends LightDomMixin\(LitElement\)/);
     assert.match(code, /useState\(this, 0\)/);
     assert.match(code, /return html`<button @click=/);
   });
@@ -518,7 +518,7 @@ describe("@litsx/babel-preset-react-compat", () => {
       export const ThemeProvider = (props) => React.createElement(Internal, props);
     `);
 
-    assert.match(code, /class Internal extends LitElement/);
+    assert.match(code, /class Internal extends LightDomMixin\(LitElement\)/);
     assert.match(code, /useState\(this, "light"\)/);
     assert.match(code, /useAfterUpdate\(this,/);
     assert.match(code, /prepareEffects\(this\);/);
@@ -534,7 +534,7 @@ describe("@litsx/babel-preset-react-compat", () => {
       }
     `);
 
-    assert.match(code, /export class WelcomeToast extends LitElement/);
+    assert.match(code, /export class WelcomeToast extends LightDomMixin\(LitElement\)/);
     assert.match(code, /useAfterUpdate\(this,/);
     assert.match(code, /render\(\)[\s\S]*return null/);
   });
@@ -725,7 +725,7 @@ describe("@litsx/babel-preset-react-compat", () => {
 
     const code = run(source, { preset: { jsxTemplate: false } });
 
-    assert.match(code, /class FilterForm extends LitElement/);
+    assert.match(code, /class FilterForm extends LightDomMixin\(LitElement\)/);
     assert.match(code, /return <input \.value=\{this\.query\} @input=\{this\.onQueryChange\} \/>;/);
     assert.doesNotMatch(code, /html`/);
   });
@@ -858,7 +858,7 @@ describe("@litsx/babel-preset-react-compat", () => {
 
     const code = run(source);
 
-    assert.match(code, /class CardShell extends LitElement/);
+    assert.match(code, /class CardShell extends LightDomMixin\(LitElement\)/);
     assert.match(code, /from "@litsx\/core\/react-compat"/);
     assert.match(code, /toLitRef\(this\.ref\)/);
     assert.doesNotMatch(code, /\bmemo\(/);
@@ -867,7 +867,7 @@ describe("@litsx/babel-preset-react-compat", () => {
     assert.doesNotMatch(code, /data-ref|querySelector/);
   });
 
-  it("rejects forced light DOM output for react-compat migrations when scoped elements are required", () => {
+  it("uses contextual scoped elements in default light DOM react-compat output", () => {
     const source = `
       import FancyButton from './FancyButton.js';
 
@@ -880,10 +880,12 @@ describe("@litsx/babel-preset-react-compat", () => {
       };
     `;
 
-    assert.throws(
-      () => run(source, { preset: { domMode: "light" } }),
-      /does not support scoped elements in light DOM/
-    );
+    const code = run(source);
+    assert.match(code, /class LightForm extends LightDomMixin\(LitElement\)/);
+    assert.match(code, /static elements = \{\s*"fancy-button": FancyButton\s*\}/);
+
+    const shadowCode = run(source, { preset: { domMode: "shadow" } });
+    assert.match(shadowCode, /class LightForm extends ShadowDomMixin\(LitElement\)/);
   });
 
   it("rewrites ErrorBoundary and Suspense together to final Lit output", () => {
@@ -908,7 +910,7 @@ describe("@litsx/babel-preset-react-compat", () => {
 
     assert.match(code, /import \{ LitElement, html \} from "lit";/);
     assert.match(code, /import \{[^}]*ensureLazyElement[^}]*ErrorBoundary[^}]*SuspenseBoundary[^}]*\} from "@litsx\/core"|import \{[^}]*ensureLazyElement[^}]*SuspenseBoundary[^}]*ErrorBoundary[^}]*\} from "@litsx\/core"|import \{[^}]*ErrorBoundary[^}]*ensureLazyElement[^}]*SuspenseBoundary[^}]*\} from "@litsx\/core"|import \{[^}]*SuspenseBoundary[^}]*ErrorBoundary[^}]*ensureLazyElement[^}]*\} from "@litsx\/core"/);
-    assert.match(code, /import \{[^}]*ShadowDomMixin[^}]*\} from "@litsx\/core\/elements";/);
+    assert.match(code, /import \{[^}]*LightDomMixin[^}]*\} from "@litsx\/core\/elements";/);
     assert.match(code, /const ResultsPanel = \(\) => import\("\.\/ResultsPanel\.js"\);/);
     assert.match(code, /ensureLazyElement\(this, "results-panel", ResultsPanel\);/);
     assert.match(code, /html`<error-boundary \.fallback=\$\{\(\) => html`<p>Oops<\/p>`\} \.content=\$\{bindRendererContext\([\s\S]*?\(\) => html`<suspense-boundary \.fallback=\$\{\(\) => html`<p>Loading<\/p>`\} \.content=\$\{bindRendererContext\([\s\S]*?\(\) => html`<results-panel value="ready"><\/results-panel>`, \{\s*projected: true\s*\}\)\}><\/suspense-boundary>`, \{\s*projected: true\s*\}\)\}><\/error-boundary>`;/);

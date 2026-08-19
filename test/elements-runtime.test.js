@@ -215,7 +215,7 @@ describe("litsx elements runtime", () => {
     }
   });
 
-  it("rejects scoped elements on LightDomMixin hosts", () => {
+  it("connects and disconnects contextual registries on LightDomMixin hosts", () => {
     const childTag = nextTag("litsx-runtime-child");
     const hostTag = nextTag("litsx-runtime-elements-host");
 
@@ -229,7 +229,16 @@ describe("litsx elements runtime", () => {
       }
     }
 
-    class ChildElement extends HTMLElement {}
+    class ChildElement extends HTMLElement {
+      constructor() {
+        super();
+        this.initialized = true;
+      }
+
+      connectedCallback() {
+        this.childConnected = true;
+      }
+    }
 
     class HostElement extends LightDomMixin(Base) {
       static elements = {
@@ -237,13 +246,31 @@ describe("litsx elements runtime", () => {
       };
     }
 
-    assert.throws(
-      () => defineTestElement(hostTag, HostElement),
-      /cannot use static elements with LightDomMixin/
-    );
+    const host = defineTestElement(hostTag, HostElement);
+    assert.strictEqual(host.registry?.get(childTag), ChildElement);
+    assert.strictEqual(host.connected, undefined);
+
+    host.innerHTML = `<${childTag}></${childTag}>`;
+    document.body.appendChild(host);
+    host.update?.();
+
+    const child = host.querySelector(childTag);
+    assert.strictEqual(Object.getPrototypeOf(child), ChildElement.prototype);
+    assert.strictEqual(child.initialized, true);
+    assert.strictEqual(child.childConnected, true);
+    assert.strictEqual(host.connected, true);
+
+    const registry = host.registry;
+    host.remove();
+    assert.strictEqual(host.disconnected, true);
+    assert.strictEqual(host.registry, null);
+
+    document.body.appendChild(host);
+    assert.strictEqual(host.registry, registry);
+    host.remove();
   });
 
-  it("rejects existing light-dom children when a light-dom host declares scoped elements", async () => {
+  it("supports light-dom hosts that declare scoped elements", async () => {
     const childTag = nextTag("litsx-runtime-light-upgrade-child");
     const hostTag = nextTag("litsx-runtime-light-upgrade-host");
 
@@ -263,10 +290,8 @@ describe("litsx elements runtime", () => {
 
     customElements.define(hostTag, HostElement);
 
-    assert.throws(
-      () => document.createElement(hostTag),
-      /cannot use static elements with LightDomMixin/
-    );
+    const host = document.createElement(hostTag);
+    assert.strictEqual(host.registry?.get(childTag), ChildElement);
   });
 
   it("dedupes repeated light-dom element mixin applications", () => {

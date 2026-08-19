@@ -146,7 +146,7 @@ describe("@litsx/babel-plugin-transform-litsx-scoped-elements", () => {
         node.type === "ImportDeclaration" &&
         node.source.value === "@litsx/core/elements"
     );
-    assert(mixinImport, "expected ShadowDomMixin import to be added");
+    assert(mixinImport, "expected LightDomMixin import to be added");
 
     const fancyFormClass = outputAst.program.body.find(
       (node) => node.type === "ClassDeclaration" && node.id.name === "FancyForm"
@@ -155,11 +155,11 @@ describe("@litsx/babel-plugin-transform-litsx-scoped-elements", () => {
     assert.strictEqual(
       fancyFormClass.superClass.type,
       "CallExpression",
-      "FancyForm should extend ShadowDomMixin(LitElement)"
+      "FancyForm should extend LightDomMixin(LitElement)"
     );
     assert.strictEqual(
       fancyFormClass.superClass.callee.name,
-      "ShadowDomMixin"
+      "LightDomMixin"
     );
 
     const elementsField = fancyFormClass.body.body.find(
@@ -276,7 +276,7 @@ describe("@litsx/babel-plugin-transform-litsx-scoped-elements", () => {
     assert.doesNotMatch(code, /static elements/);
   });
 
-  it("rejects scoped elements in light DOM components", () => {
+  it("registers scoped elements in light DOM components", () => {
     const source = `
       import FancyButton from './FancyButton.js';
 
@@ -287,13 +287,11 @@ describe("@litsx/babel-plugin-transform-litsx-scoped-elements", () => {
       LightScreen.lightDom = true;
     `;
 
-    assert.throws(
-      () =>
-        transformWithNativePreset(source, {
-          parserPlugins: ["typescript"],
-        }),
-      /does not support scoped elements in light DOM/
-    );
+    const { code } = transformWithNativePreset(source, {
+      parserPlugins: ["typescript"],
+    });
+    assert.match(code, /class LightScreen extends LightDomMixin\(LitElement\)/);
+    assert.match(code, /static elements = \{\s*"fancy-button": FancyButton\s*\}/);
   });
 
   it("uses LightDomMixin for light DOM components without element dependencies", () => {
@@ -449,15 +447,13 @@ describe("@litsx/babel-plugin-transform-litsx-scoped-elements", () => {
       lightDom: true,
     };
 
-    assert.throws(
-      () =>
-        transformFromAstSync(ast, source, {
-          configFile: false,
-          babelrc: false,
-          plugins: [plugin],
-        }),
-      /does not support scoped elements in light DOM/
-    );
+    const { code } = transformFromAstSync(ast, source, {
+      configFile: false,
+      babelrc: false,
+      plugins: [plugin],
+    });
+    assert.match(code, /class HostCard extends LightDomMixin\(LitElement\)/);
+    assert.match(code, /static elements = \{\s*"child-card": ChildCard\s*\}/);
   });
 
   it("rewrites JSX opening tags with attributes to kebab-case consistently", () => {
@@ -560,25 +556,21 @@ describe("@litsx/babel-plugin-transform-litsx-scoped-elements", () => {
       SecondScreen.lightDom = true;
     `;
 
-    assert.throws(
-      () =>
-        transformWithNativePreset(sourceA, {
-          filename: "/app/screens/FirstScreen.tsx",
-          parserPlugins: ["typescript"],
-        }),
-      /does not support scoped elements in light DOM/
-    );
-    assert.throws(
-      () =>
-        transformWithNativePreset(sourceB, {
-          filename: "/app/screens/SecondScreen.tsx",
-          parserPlugins: ["typescript"],
-        }),
-      /does not support scoped elements in light DOM/
-    );
+    const first = transformWithNativePreset(sourceA, {
+      filename: "/app/screens/FirstScreen.tsx",
+      parserPlugins: ["typescript"],
+    }).code;
+    const second = transformWithNativePreset(sourceB, {
+      filename: "/app/screens/SecondScreen.tsx",
+      parserPlugins: ["typescript"],
+    }).code;
+    assert.match(first, /"profile-chip": ProfileChip/);
+    assert.match(second, /"profile-chip": ProfileChip/);
+    assert.match(first, /LightDomMixin/);
+    assert.match(second, /LightDomMixin/);
   }, 30000);
 
-  it("rejects repeated light DOM components that require scoped elements from the same source", () => {
+  it("supports repeated light DOM components that require scoped elements from the same source", () => {
     const source = `
       import ProfileChip from './profile/ProfileChip.js';
 
@@ -594,14 +586,12 @@ describe("@litsx/babel-plugin-transform-litsx-scoped-elements", () => {
       SecondScreen.lightDom = true;
     `;
 
-    assert.throws(
-      () =>
-        transformWithNativePreset(source, {
-          filename: "/app/screens/SharedScreens.tsx",
-          parserPlugins: ["typescript"],
-        }),
-      /does not support scoped elements in light DOM/
-    );
+    const { code } = transformWithNativePreset(source, {
+      filename: "/app/screens/SharedScreens.tsx",
+      parserPlugins: ["typescript"],
+    });
+    assert.strictEqual((code.match(/"profile-chip": ProfileChip/g) || []).length, 2);
+    assert.strictEqual((code.match(/extends LightDomMixin\(LitElement\)/g) || []).length, 2);
   }, 30000);
 
   it("still rewrites scoped tags when candidates were precomputed by transform-litsx", () => {

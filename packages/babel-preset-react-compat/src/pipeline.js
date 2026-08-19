@@ -27,7 +27,7 @@ import reactPolymorphicElements from "./internal/react-polymorphic-elements.js";
 import reactRefs from "./internal/react-refs.js";
 
 export function normalizeReactCompatOptions(options = {}) {
-  const domMode = options.domMode === "light" ? "light" : "shadow";
+  const domMode = options.domMode === "shadow" ? "shadow" : "light";
 
   return {
     domMode,

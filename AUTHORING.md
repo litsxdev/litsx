@@ -207,5 +207,7 @@ React-specific aliases and behavior such as `className`, `htmlFor`, `onClick`,
 hooks. Native LitSX authoring should not adopt those forms merely because the
 compatibility compiler can consume them.
 
+React compatibility lowers migrated components to light DOM by default so React-style nesting and global CSS continue to work. Consumers can opt into shadow roots with `domMode: "shadow"`; see the [react-compat option reference](./packages/babel-preset-react-compat/README.md#options). This migration default does not change the native LitSX DOM-mode contract.
+
 The final output of both pipelines is Lit: Lit elements, Lit templates, Lit
 directives, and web-component lifecycle semantics.

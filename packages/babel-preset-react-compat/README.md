@@ -124,6 +124,43 @@ of React-style bailout semantics or as a native LitSX performance primitive.
 }
 ```
 
+## Options
+
+| Option | Type | Default | Purpose |
+| --- | --- | --- | --- |
+| `domMode` | `"light" \| "shadow"` | `"light"` | Selects the render root for components lowered in the current compilation. |
+| `jsxTemplate` | `boolean` | `true` | Runs the final JSX-to-Lit `html` template lowering. |
+| `jsxTemplateOptions` | `object` | `{}` | Forwards bounded configuration to the final template-lowering stage. |
+| `reactKeys` | `boolean` | `true` | Lowers React `key` semantics through Lit's `repeat()` and `keyed()` directives. |
+| `transformDependencies` | `string[]` | `[]` | Allows hook implementations from named React-authored packages to participate in compilation. |
+
+The preset also accepts the type-resolution options shared with the native LitSX pipeline:
+
+- `typeResolutionMode?: "auto" | "in-memory"`
+- `inMemoryFiles?: Record<string, string>`
+- `compilerOptions?: object`
+- `typescriptSession?: object`
+
+These are primarily useful to compiler and build-tool integrations. Application Babel configs normally only need the five options in the table.
+
+### `domMode`
+
+React compatibility defaults to light DOM so migrated component trees preserve React's DOM nesting and global CSS behavior. Scoped JSX dependencies still compile to `static elements` and resolve through the nearest contextual light DOM registry. The registry shim activates only for components that actually need that map; a plain light DOM component does not activate it.
+
+Use shadow DOM when the migrated tree intentionally wants style and DOM encapsulation:
+
+```json
+{
+  "presets": [
+    ["@litsx/babel-preset-react-compat", { "domMode": "shadow" }]
+  ]
+}
+```
+
+This option only affects components lowered in the current compilation. It does not rewrite the render mode of imported, already-compiled components. Light and shadow components may be nested in either direction.
+
+### `jsxTemplate` and `jsxTemplateOptions`
+
 By default the preset compiles all the way to Lit `html` tagged templates. Set `jsxTemplate: false` when you intentionally want the intermediate JSX-shaped LitSX output instead:
 
 ```json
@@ -134,24 +171,13 @@ By default the preset compiles all the way to Lit `html` tagged templates. Set `
 }
 ```
 
-Use `domMode: "light"` when a migration needs every authored component in that compilation to participate in global CSS instead of shadow-root encapsulation:
+`jsxTemplateOptions` is forwarded to `@litsx/babel-plugin-transform-jsx-html-template`. It is intended for build-tool integration and focused output configuration; it does not change the React compatibility stages that run before final template generation.
 
-```json
-{
-  "presets": [
-    ["@litsx/babel-preset-react-compat", { "domMode": "light" }]
-  ]
-}
-```
+### `reactKeys`
 
-`domMode` defaults to `"shadow"`. This option only affects components lowered by the preset in the current compilation; it does not rewrite imported components from elsewhere.
+React `key` compatibility is enabled only in this preset. A concise keyed `items.map(item => <Row key={item.id} />)` expression lowers to Lit's `repeat`, while a standalone keyed element lowers to `keyed`. Complex keyed `map` callbacks with a final JSX return are decorated once per item before lowering, preserving their pre-return statements and avoiding duplicate evaluation.
 
-React `key` compatibility is enabled only in this preset. A concise keyed
-`items.map(item => <Row key={item.id} />)` expression lowers to Lit's `repeat`,
-while a standalone keyed element lowers to `keyed`. Complex keyed `map`
-callbacks with a final JSX return are decorated once per item before lowering,
-preserving their pre-return statements and avoiding duplicate evaluation. Set
-`reactKeys: false` to disable this stage:
+Set `reactKeys: false` to disable identity lowering. In that mode `key` continues through the ordinary JSX binding path and does not preserve keyed reconciliation:
 
 ```json
 {
@@ -160,6 +186,37 @@ preserving their pre-return statements and avoiding duplicate evaluation. Set
   ]
 }
 ```
+
+### `transformDependencies`
+
+This allowlist is required when application code imports a custom hook whose implementation still uses supported React hooks and must therefore be compiled too:
+
+```json
+{
+  "presets": [
+    [
+      "@litsx/babel-preset-react-compat",
+      { "transformDependencies": ["resize-hooks", "@scope/theme-hooks"] }
+    ]
+  ]
+}
+```
+
+The raw Babel preset uses the allowlist for analysis, but Babel itself does not discover and transform every module in those packages. The build tool must send each selected dependency module through this preset. With Vite, configure the same option under `reactCompat`; the LitSX plugin also disables prebundling for those packages and adds them to `ssr.noExternal`:
+
+```js
+litsx({
+  reactCompat: {
+    transformDependencies: ["resize-hooks"],
+  },
+});
+```
+
+An allowlisted dependency still fails with a precise diagnostic if traversal reaches an unsupported React hook, React private internals, or a non-allowlisted opaque hook dependency.
+
+### Internal stage options
+
+The implementation accepts per-stage option bags used by LitSX's own compiler and tests. Those names mirror internal Babel plugins and are not a stable consumer API. Prefer the options above; if a migration needs a new behavioral switch, it should be added as an explicit preset option rather than depending on pipeline ordering or an internal plugin object.
 
 ## Scope
 

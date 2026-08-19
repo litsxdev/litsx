@@ -52,7 +52,7 @@ describe("integration: parser + all plugins", () => {
     });
 
     assert.match(code, /import \{[^}]*prepareEffects[^}]*useAfterUpdate[^}]*\} from "@litsx\/core";/);
-    assert.match(code, /class FancyForm extends ShadowDomMixin\(LitsxStaticHoistsMixin\(LitElement\)\)/);
+    assert.match(code, /class FancyForm extends LightDomMixin\(LitsxStaticHoistsMixin\(LitElement\)\)/);
     assert.match(code, /static elements = {/);
     assert.match(code, /<fancy-button \.ref=\{buttonRef\} \.label=\{this\.label\} \/>/);
     assert.doesNotMatch(code, /data-ref="_buttonRefElement"/);
@@ -60,7 +60,7 @@ describe("integration: parser + all plugins", () => {
     assert.match(code, /prepareEffects\(this\);/);
     assert.match(code, /useAfterUpdate\(this, \(\) => {\s*buttonRef\.current\.focus\(\);/s);
     assert.match(code, /static get properties\(\)/);
-    assert.match(code, /class Alert extends LitElement/);
+    assert.match(code, /class Alert extends LightDomMixin\(LitElement\)/);
     assert.doesNotMatch(code, /PropTypes|\.propTypes\s*=/);
   });
 
@@ -95,7 +95,7 @@ describe("integration: parser + all plugins", () => {
       generatorOpts: { decoratorsBeforeExport: true },
     });
 
-    assert.match(code, /class TypedForm extends ShadowDomMixin\(LitElement\)/);
+    assert.match(code, /class TypedForm extends LightDomMixin\(LitElement\)/);
     assert.match(code, /static properties = {\s*label: {\s*type: String\s*},\s*count: {\s*type: Number\s*}\s*};/s);
     assert.match(code, /<fancy-button \.ref=\{buttonRef\} \.label=\{this\.label\} \.mode=\{"primary" as ButtonMode\}>/);
     assert.doesNotMatch(code, /data-ref="_buttonRefElement"/);
@@ -213,7 +213,7 @@ describe("integration: parser + all plugins", () => {
       generatorOpts: { decoratorsBeforeExport: true },
     });
 
-    assert.match(code, /class CardShell extends LitElement/);
+    assert.match(code, /class CardShell extends LightDomMixin\(LitElement\)/);
     assert.match(code, /\bref\b/);
     assert.doesNotMatch(code, /React\.memo|memo\(/);
     assert.doesNotMatch(code, /React\.forwardRef|forwardRef\(/);
@@ -279,7 +279,7 @@ describe("integration: parser + all plugins", () => {
       generatorOpts: { decoratorsBeforeExport: true },
     });
 
-    assert.match(code, /export class Demo extends ShadowDomMixin\(LitElement\)/);
+    assert.match(code, /export class Demo extends LightDomMixin\(LitElement\)/);
     assert.match(code, /const ResultsPanel = \(\) => import\("\.\/ResultsPanel\.js"\);/);
     assert.match(code, /ensureLazyElement/);
     assert.match(code, /SuspenseBoundary/);
@@ -290,7 +290,7 @@ describe("integration: parser + all plugins", () => {
     assert.doesNotMatch(code, /<ErrorBoundary/);
   });
 
-  it("rejects forced light DOM output when scoped elements are required", () => {
+  it("emits contextual scoped elements for forced light DOM output", () => {
     const source = `
       import FancyButton from './FancyButton.js';
 
@@ -305,16 +305,14 @@ describe("integration: parser + all plugins", () => {
 
     const ast = parser.parse(source, { sourceType: "module" });
 
-    assert.throws(
-      () =>
-        transformFromAstSync(ast, source, {
-          configFile: false,
-          babelrc: false,
-          presets: [[REACT_COMPAT_PRESET, { domMode: "light", jsxTemplate: false }]],
-          generatorOpts: { decoratorsBeforeExport: true },
-        }),
-      /does not support scoped elements in light DOM/
-    );
+    const { code } = transformFromAstSync(ast, source, {
+      configFile: false,
+      babelrc: false,
+      presets: [[REACT_COMPAT_PRESET, { domMode: "light", jsxTemplate: false }]],
+      generatorOpts: { decoratorsBeforeExport: true },
+    });
+    assert.match(code, /class LightForm extends LightDomMixin\(LitElement\)/);
+    assert.match(code, /"fancy-button": FancyButton/);
   });
 
   it("ignores shadowRootOptions when forcing light DOM", () => {

@@ -1734,7 +1734,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
     assert.doesNotMatch(code, /static elements = \{\s*"child-two": ChildTwo\s*\}/);
   });
 
-  it("rejects static elements when static lightDom is authored explicitly", () => {
+  it("supports static elements when static lightDom is authored explicitly", () => {
     const source = `
       import { FancyButton } from "./fancy-button.tsx";
 
@@ -1748,13 +1748,13 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
       };
     `;
 
-    assert.throws(
-      () => transformWithNativePreset(source),
-      /does not support scoped elements in light DOM/
-    );
+    const { code } = transformWithNativePreset(source);
+    assert.match(code, /class Card extends LightDomMixin\(LitsxStaticHoistsMixin\(LitElement\)\)/);
+    assert.match(code, /static get elements\(\)/);
+    assert.match(code, /"fancy-button": FancyButton/);
   });
 
-  it("rejects repeated light-dom scoped element passes", () => {
+  it("preserves existing light-dom scoped element infrastructure", () => {
     const source = `
       import { LightDomMixin } from "@litsx/core/elements";
       import { LitElement } from "lit";
@@ -1771,10 +1771,9 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
       }
     `;
 
-    assert.throws(
-      () => transformWithNativePreset(source),
-      /does not support scoped elements in light DOM/
-    );
+    const { code } = transformWithNativePreset(source);
+    assert.strictEqual((code.match(/LightDomMixin\(/g) || []).length, 1);
+    assert.match(code, /static elements = \{\s*"fancy-button": FancyButton\s*\}/);
   });
 
   it("ignores static shadowRootOptions when static lightDom is present", () => {

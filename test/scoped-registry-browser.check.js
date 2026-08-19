@@ -91,6 +91,136 @@ describe("scoped registry browser fixture", () => {
     serverHandle?.stop();
   });
 
+  async function runProbe(name, argument) {
+    const page = await browser.newPage();
+    const errors = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    try {
+      await page.goto(baseUrl, { waitUntil: "networkidle" });
+      const result = await page.evaluate(
+        async ({ probeName, probeArgument }) =>
+          window.__repro[probeName](probeArgument),
+        { probeName: name, probeArgument: argument },
+      );
+      assert.deepStrictEqual(errors, []);
+      return result;
+    } finally {
+      await page.close();
+    }
+  }
+
+  it("does not activate the registry shim for plain light-dom components", async () => {
+    const result = await runProbe("probePlainLightDomCost");
+
+    assert.deepStrictEqual(result, {
+      hostCtor: "PlainLightHost",
+      usesLightDom: true,
+      shimActive: false,
+      registryUnchanged: true,
+      text: "plain",
+    });
+  }, 30000);
+
+  it("initializes light-dom scoped children and preserves lifecycle identity", async () => {
+    const result = await runProbe("probeLightDomInitialization");
+
+    assert.deepStrictEqual(result.beforeReconnect, {
+      hostCtor: "InitHost",
+      hostUsesLightDom: true,
+      childCtor: "InitChild",
+      value: "bound-value",
+      enabled: true,
+      enabledAttribute: true,
+      renderedValue: "bound-value",
+      calls: ["child:constructor", "child:connected"],
+    });
+    assert.deepStrictEqual(result.afterReconnect, {
+      sameChild: true,
+      registryRestored: true,
+      calls: [
+        "child:constructor",
+        "child:connected",
+        "child:disconnected",
+        "child:connected",
+      ],
+    });
+  }, 30000);
+
+  it("resolves the nearest constructor for nested light-dom scopes sharing a tag", async () => {
+    const result = await runProbe("probeNestedLightScopes");
+
+    assert.deepStrictEqual(result, {
+      outerHostCtor: "OuterHost",
+      innerHostCtor: "InnerHost",
+      outerItemCtor: "OuterItem",
+      innerItemCtor: "InnerItem",
+      outerKind: "outer",
+      innerKind: "inner",
+    });
+  }, 30000);
+
+  it("initializes a light -> shadow -> light -> shadow component chain", async () => {
+    const result = await runProbe("probeLightShadowInteroperability");
+
+    assert.deepStrictEqual(result, {
+      outerCtor: "OuterLight",
+      shadowCtor: "MiddleShadow",
+      shadowHasRoot: true,
+      innerCtor: "InnerLight",
+      innerUsesLightDom: true,
+      innerRegistryLeaf: "MixedLeaf",
+      innerRegistryKind: "shim",
+      leafRoot: "ShadowRoot",
+      leafCtor: "MixedLeaf",
+      leafInitialized: "leaf-ready",
+      leafHtml: "leaf-ready",
+      composedEventDetail: "leaf-ready",
+    });
+  }, 30000);
+
+  it("initializes a shadow -> light -> scoped child chain", async () => {
+    const result = await runProbe("probeShadowToLightInitialization");
+
+    assert.deepStrictEqual(result, {
+      shadowCtor: "ReverseShadow",
+      lightCtor: "ReverseLight",
+      lightUsesLightDom: true,
+      leafCtor: "ReverseLeaf",
+      leafInitialized: true,
+      leafConnected: true,
+    });
+  }, 30000);
+
+  it("keeps globally registered third-party elements initialized after shim activation", async () => {
+    const result = await runProbe("probeGlobalElementInteroperability");
+
+    assert.deepStrictEqual(result, {
+      globalCtor: "ThirdPartyElement",
+      scopedCtor: "ScopedChild",
+      scopedInitialized: true,
+      globalStillRegistered: "ThirdPartyElement",
+      calls: ["global:constructor", "global:connected"],
+    });
+  }, 30000);
+
+  it("upgrades an existing light-dom node after an asynchronous definition", async () => {
+    const result = await runProbe("probeLateLightDefinition");
+
+    assert.deepStrictEqual(result, {
+      before: {
+        ctor: "HTMLElement",
+        value: "before-definition",
+      },
+      after: {
+        sameNode: true,
+        ctor: "LateChild",
+        constructed: true,
+        value: "before-definition",
+        html: "before-definition",
+      },
+    });
+  }, 30000);
+
   it("upgrades nested scoped children in the direct async story", async () => {
     const page = await browser.newPage();
 
@@ -165,7 +295,7 @@ describe("scoped registry browser fixture", () => {
     }
   }, 30000);
 
-  it("characterizes same-tag light-dom shim collisions against native shadow hosts", async () => {
+  it("keeps same-tag light and native shadow registries independently initialized", async () => {
     const differentPage = await browser.newPage();
     await differentPage.goto(baseUrl, { waitUntil: "networkidle" });
     const differentTag = await differentPage.evaluate(async () =>
@@ -196,13 +326,13 @@ describe("scoped registry browser fixture", () => {
     assert.deepStrictEqual(sameTag, {
       sameTag: true,
       independent: {
-        panelCtor: "HTMLElement",
-        cardCtor: null,
+        panelCtor: "ProbePanel",
+        cardCtor: "ProbeCard",
       },
       nested: {
         hostCtor: "ProbeHost",
-        panelCtor: "HTMLElement",
-        cardCtor: null,
+        panelCtor: "ProbePanel",
+        cardCtor: "ProbeCard",
       },
     });
   }, 30000);

@@ -170,8 +170,19 @@ Extra Babel plugins appended after the built-in LitSX transform pipeline.
 
 ### `reactCompat?: boolean | object`
 
-Selects the optional React compatibility pipeline. Use `true` for application source only, or
-allowlist React-authored hook packages that should be transformed with the application:
+Selects the optional React compatibility pipeline. `true` uses its defaults: light DOM, final Lit template lowering, and React `key` compatibility enabled.
+
+The object form accepts the compatibility options that select React-specific behavior:
+
+| Option | Type | Default |
+| --- | --- | --- |
+| `domMode` | `"light" \| "shadow"` | `"light"` |
+| `reactKeys` | `boolean` | `true` |
+| `transformDependencies` | `string[]` | `[]` |
+
+`jsxTemplate` and `jsxTemplateOptions` remain top-level `litsx(...)` options because final template generation belongs to the compiler integration, not specifically to React compatibility.
+
+For example, this keeps React-compatible light DOM while compiling a React-authored hook package with the application:
 
 ```js
 export default defineConfig({
@@ -189,6 +200,8 @@ Allowlisted dependency modules are transformed even when they use `.js` or `.ts`
 Vite dependency prebundling, and added to `ssr.noExternal`. The compiler follows custom-hook imports
 inside each selected package, lowers supported React hooks, and reports the exact unsupported hook
 boundary instead of leaving a React dispatcher call in the output.
+
+Use `reactCompat: { domMode: "shadow" }` when migrated application components should use shadow roots. The option applies equally to Vite's client and SSR transformation pipelines. See the [`@litsx/babel-preset-react-compat` option reference](../babel-preset-react-compat/README.md#options) for detailed semantics and limitations.
 
 ## Storybook Example
 

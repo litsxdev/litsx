@@ -5,15 +5,15 @@
 [![Module](https://img.shields.io/badge/module-ESM%20%2B%20CJS-0366d6)](./package.json)
 [![Provenance](https://img.shields.io/badge/npm_provenance-enabled-2ea44f)](../../RELEASING.md)
 
-Automatically wires the Lit<sup>sx</sup> DOM mixins for LitElement classes so components can use locally registered custom elements through the shared `static elements` contract in shadow DOM.
+Automatically wires the Lit<sup>sx</sup> DOM mixins for LitElement classes so components can use locally registered custom elements through the shared `static elements` contract in shadow or light DOM.
 
 ## What it does
 
 - Finds JSX tags that correspond to imported components and rewrites them to kebab-case custom elements.
 - Injects a static `elements` map with the detected components.
 - Wraps shadow DOM components in `ShadowDomMixin`, which resolves `elements` through native or shimmed scoped custom element registries.
-- Wraps components declared with `Component.lightDom = true` in `LightDomMixin` only when they do not require scoped elements.
-- Throws when a component combines light DOM authoring with `static elements` requirements.
+- Wraps components declared with `Component.lightDom = true` in `LightDomMixin`; when they have `static elements`, the mixin creates a contextual light DOM registry.
+- Emits an empty `static elements` map when a dynamic dependency such as `lazy()` needs a registry before its constructor is available.
 - Adds the required `@litsx/core/elements` import only when a component needs a LitSX DOM mixin, keeping untouched classes minimal.
 - Updates matching closing tags and leaves unrelated JSX nodes unchanged.
 - Detects scoped usage inside `html` tagged template literals as well, ensuring templates converted by the JSX plugin still register components.
@@ -70,6 +70,7 @@ class MyElement extends ShadowDomMixin(LitElement) {
 ## Notes
 
 - Imported and locally declared sibling components can both be collected into `static elements`.
-- `Component.lightDom = true` is a root-mode choice, not a scoped-elements transport. If JSX analysis or authored `Component.elements` would require scoped element resolution, the transform fails with a diagnostic.
+- `Component.lightDom = true` remains a root-mode choice. Scoped children keep their ordinary tag names and are resolved against the nearest contextual host, so nested light hosts may map the same tag to different constructors.
+- The light DOM registry shim is activated lazily only for hosts that actually declare or dynamically require `static elements`; plain light DOM components do not pay its global runtime cost.
 - Classes that already wrap the superclass with another mixin still work; the plugin nests the Lit<sup>sx</sup> DOM mixin around the existing expression.
 - The helper pairs nicely with other Lit<sup>SX</sup> transforms such as the JSX-to-template and function-to-class plugins.

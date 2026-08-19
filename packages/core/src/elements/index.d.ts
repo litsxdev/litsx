@@ -164,11 +164,11 @@ export declare function ShadowDomMixin<TBase extends LitsxConstructor>(
 
 export interface LightDomHost {
   /**
-   * LightDomMixin keeps Lit rendering in light DOM.
-   * Scoped elements are not supported in this mode.
+   * LightDomMixin keeps Lit rendering in light DOM and resolves component-local
+   * element definitions through a contextual registry when needed.
    */
   createRenderRoot(): this;
-  registry: null;
+  registry: LitsxScopedRegistryLike | null;
 }
 
 export declare function LightDomMixin<TBase extends LitsxConstructor>(

@@ -275,16 +275,6 @@ function getRuntime() {
         return direct;
       }
 
-      const root = typeof current.getRootNode === "function"
-        ? current.getRootNode()
-        : null;
-      if (root && root !== current) {
-        const rootRegistry = registryFromScope(root);
-        if (rootRegistry && root !== document) {
-          return rootRegistry;
-        }
-      }
-
       if (current.parentNode) {
         current = current.parentNode;
         continue;
@@ -544,7 +534,7 @@ function getRuntime() {
     const definition = tagName ? registry._getDefinition(tagName) : null;
     const currentDefinition = definitionForElement.get(element) ?? null;
     const effectiveRegistry = registryForNode(element);
-    if (effectiveRegistry && effectiveRegistry !== registry) {
+    if (element.isConnected && effectiveRegistry && effectiveRegistry !== registry) {
       return false;
     }
     if (
@@ -663,14 +653,17 @@ function getRuntime() {
   const creationContext = [document];
 
   function installScopedCreationMethod(ctor, method, from) {
-    const native = (from ? Object.getPrototypeOf(from) : ctor.prototype)[method];
+    const scopedNative = ctor.prototype[method];
+    const fallbackNative = from ? Object.getPrototypeOf(from)[method] : undefined;
+    const native = typeof scopedNative === "function" ? scopedNative : fallbackNative;
     if (typeof native !== "function") {
       return;
     }
 
     ctor.prototype[method] = function (...args) {
       creationContext.push(this);
-      const result = native.apply(from || this, args);
+      const receiver = typeof scopedNative === "function" ? this : (from || this);
+      const result = native.apply(receiver, args);
       const registry = registryForNode(this);
       upgradeCreatedTree(result, registry);
       if (result !== undefined) {
