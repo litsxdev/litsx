@@ -5,7 +5,12 @@ export function setRefsBabelTypes(nextTypes) {
 }
 
 function createThisMemberExpression(propName) {
-  return t.memberExpression(t.thisExpression(), t.identifier(propName));
+  const computed = !t.isValidIdentifier(propName);
+  return t.memberExpression(
+    t.thisExpression(),
+    computed ? t.stringLiteral(propName) : t.identifier(propName),
+    computed,
+  );
 }
 
 function createManagedRefLookupExpression(refName) {

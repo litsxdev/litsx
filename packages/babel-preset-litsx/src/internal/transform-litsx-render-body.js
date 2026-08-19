@@ -19,7 +19,12 @@ export function setRenderBodyBabelTypes(nextTypes) {
 }
 
 function createThisMemberExpression(propName) {
-  return t.memberExpression(t.thisExpression(), t.identifier(propName));
+  const computed = !t.isValidIdentifier(propName);
+  return t.memberExpression(
+    t.thisExpression(),
+    computed ? t.stringLiteral(propName) : t.identifier(propName),
+    computed,
+  );
 }
 
 function createNestedInitializerStatement(pattern, root, defaultValue) {
@@ -66,7 +71,7 @@ function isRenderableJsx(node) {
   return t.isJSXElement(node) || t.isJSXFragment(node);
 }
 
-function collectReturnStatement(functionPath, bindings, state) {
+function collectReturnStatement(functionPath, bindings, state, allowNullRender = false) {
   let returnStatement = null;
 
   functionPath.traverse({
@@ -75,10 +80,15 @@ function collectReturnStatement(functionPath, bindings, state) {
         return;
       }
 
-      if (isRenderableJsx(returnPath.node.argument)) {
+      if (
+        isRenderableJsx(returnPath.node.argument) ||
+        (allowNullRender && t.isNullLiteral(returnPath.node.argument))
+      ) {
         returnStatement = returnPath.node;
-        transformJSXRendererCalls(returnPath, bindings, state);
-        transformJSXExpressions(returnPath, bindings, state);
+        if (isRenderableJsx(returnPath.node.argument)) {
+          transformJSXRendererCalls(returnPath, bindings, state);
+          transformJSXExpressions(returnPath, bindings, state);
+        }
       }
     },
   });
@@ -93,7 +103,8 @@ export function prepareComponentRender(functionPath, node, propertyNames, bindin
   const returnStatement = collectReturnStatement(
     functionPath,
     bindings,
-    options.state ?? null
+    options.state ?? null,
+    options.allowNullRender === true,
   );
 
   if (!returnStatement) {

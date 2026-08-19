@@ -22,8 +22,8 @@ const SOURCE_EXTENSIONS = [
   ".tsx",
   ".ts",
   ".jsx",
-  ".js",
   ".mjs",
+  ".js",
   ".cjs",
 ];
 const DEFAULT_MODULE_RESOLUTION_OPTIONS = {

@@ -963,7 +963,9 @@ export function extractProperties(functionPath, programPath, options = {}) {
     if (!entry) {
       entry = {
         node: t.objectProperty(
-          t.identifier(propName),
+          t.isValidIdentifier(propName)
+            ? t.identifier(propName)
+            : t.stringLiteral(propName),
           createPropertyValue(normalizedConfig, options.defaultType !== false)
         ),
       };

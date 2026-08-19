@@ -86,7 +86,12 @@ function isSupportedImplicitChildrenReference(refPath, bindingInfo) {
 }
 
 function createThisMemberExpression(propName) {
-  return t.memberExpression(t.thisExpression(), t.identifier(propName));
+  const computed = !t.isValidIdentifier(propName);
+  return t.memberExpression(
+    t.thisExpression(),
+    computed ? t.stringLiteral(propName) : t.identifier(propName),
+    computed,
+  );
 }
 
 function createPropsObjectExpression(bindingInfo, propertyMap = new Map()) {
@@ -156,10 +161,7 @@ export function transformJSXExpressions(jsxPath, bindings, state = null) {
         const name = expressionPath.node.expression.name;
         if (localNames.includes(name)) {
           const propName = bindings.get(name) || name;
-          expressionPath.node.expression = t.memberExpression(
-            t.thisExpression(),
-            t.identifier(propName)
-          );
+          expressionPath.node.expression = createThisMemberExpression(propName);
         }
       }
     },
@@ -250,7 +252,7 @@ export function replaceParamReferences(functionPath, bindings, propertyMap = new
       return t.cloneNode(aliasId);
     }
 
-    return t.memberExpression(t.thisExpression(), t.identifier(propName));
+    return createThisMemberExpression(propName);
   }
 
   bindings.forEach((bindingInfo, localName) => {

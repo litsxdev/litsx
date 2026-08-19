@@ -196,6 +196,20 @@ describe("@litsx/babel-preset-react-compat", () => {
     assert.doesNotMatch(code, /jsxSpreadElement\("button", \[this\.props/);
   });
 
+  it("quotes hyphenated typed component properties", () => {
+    const code = run(`
+      export function AccessibleLabel(
+        { "aria-label": ariaLabel }: { "aria-label"?: string }
+      ) {
+        return <span aria-label={ariaLabel}>Label</span>;
+      }
+    `, { parser: { plugins: ["typescript"] } });
+
+    assert.match(code, /"aria-label": \{/);
+    assert.match(code, /this\["aria-label"\]/);
+    assert.doesNotMatch(code, /this\.aria-label/);
+  });
+
   it("preserves TypeScript type/value namespaces during component lowering", () => {
     const code = run(`
       import type { FilterItem } from "./types";
@@ -472,6 +486,98 @@ describe("@litsx/babel-preset-react-compat", () => {
     assert.match(code, /useAfterUpdate\(this,/);
     assert.match(code, /prepareEffects\(this\);/);
     assert.doesNotMatch(code, /React\.use(?:State|Effect)/);
+  });
+
+  it("recognizes effect-only components that render null", () => {
+    const code = run(`
+      import { useEffect } from "react";
+      export function WelcomeToast() {
+        useEffect(() => announce(), []);
+        return null;
+      }
+    `);
+
+    assert.match(code, /export class WelcomeToast extends LitElement/);
+    assert.match(code, /useAfterUpdate\(this,/);
+    assert.match(code, /render\(\)[\s\S]*return null/);
+  });
+
+  it("recognizes internal components exported by a trailing specifier", () => {
+    const code = run(`
+      import * as React from "react";
+      import { Button } from "./button.js";
+      function CalendarDayButton({ active }) {
+        const ref = React.useRef(null);
+        React.useEffect(() => { if (active) ref.current?.focus(); }, [active]);
+        return <Button ref={ref} active={active} />;
+      }
+      export { CalendarDayButton };
+    `);
+
+    assert.match(code, /class CalendarDayButton extends/);
+    assert.match(code, /import \{[^}]*useRef[^}]*\} from "@litsx\/core"/);
+    assert.match(code, /useRef\(this, null\)/);
+    assert.match(code, /useAfterUpdate\(this,/);
+    assert.doesNotMatch(code, /React\.use(?:Ref|Effect)/);
+  });
+
+  it("expands statically bounded polymorphic component aliases", () => {
+    const code = run(`
+      import { Slot } from "@radix-ui/react-slot";
+      export function Trigger({ asChild, children, ...props }) {
+        const Comp = asChild ? Slot : "button";
+        return <Comp {...props}>{children}</Comp>;
+      }
+    `);
+
+    assert.match(code, /this\.asChild\s*\?/);
+    assert.match(code, /<slot/);
+    assert.match(code, /<button/);
+    assert.doesNotMatch(code, /<Comp/);
+  });
+
+  it("treats hooks from allowlisted ESM dependency exports as host-aware", () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-transform-esm-dep-"));
+    try {
+      const packageDir = path.join(tempDir, "node_modules", "next-themes");
+      const distDir = path.join(packageDir, "dist");
+      fs.mkdirSync(distDir, { recursive: true });
+      fs.writeFileSync(path.join(packageDir, "package.json"), JSON.stringify({
+        name: "next-themes",
+        exports: {
+          ".": {
+            types: "./dist/index.d.ts",
+            import: "./dist/index.mjs",
+            require: "./dist/index.js",
+          },
+        },
+      }));
+      fs.writeFileSync(path.join(distDir, "index.d.ts"), "export declare function useTheme(): string;");
+      fs.writeFileSync(path.join(distDir, "index.js"), "exports.useTheme = () => 'light';");
+      fs.writeFileSync(
+        path.join(distDir, "index.mjs"),
+        'import * as React from "react"; const a = () => React.useContext(ThemeContext); export { a as useTheme };',
+      );
+      const filename = path.join(tempDir, "src", "theme-label.tsx");
+      fs.mkdirSync(path.dirname(filename), { recursive: true });
+      const source = `
+        import { useTheme } from "next-themes";
+        export function ThemeLabel() {
+          const theme = useTheme();
+          return <span>{theme}</span>;
+        }
+      `;
+
+      const code = run(source, {
+        filename,
+        parser: { plugins: ["typescript"] },
+        preset: { transformDependencies: ["next-themes"] },
+      });
+
+      assert.match(code, /useTheme\(this\)/);
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
   });
 
   it("normalizes jsx-runtime calls, fragments, keys, and nested children", () => {

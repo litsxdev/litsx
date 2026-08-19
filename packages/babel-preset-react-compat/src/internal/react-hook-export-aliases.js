@@ -69,8 +69,7 @@ export default declare((api) => {
               const exportedName = specifier.exported?.name ?? specifier.exported?.value;
               const needsHookName =
                 isCustomHookName(exportedName) && !isCustomHookName(localName);
-              const needsComponentName =
-                isComponentName(exportedName) && localName !== exportedName;
+              const needsComponentName = isComponentName(exportedName);
               if (!localName || (!needsHookName && !needsComponentName)) {
                 continue;
               }

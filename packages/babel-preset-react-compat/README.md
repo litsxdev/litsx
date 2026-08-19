@@ -74,6 +74,14 @@ element types, `cloneElement`, portals, computed prop definitions, and keyed or 
 fragments stop with a diagnostic instead of producing output whose identity or lifecycle would be
 incorrect.
 
+React component recovery also covers effect-only components that render `null`, components exposed
+through trailing named exports, namespace hook calls such as `React.useRef(...)`, and statically
+bounded polymorphic aliases such as `const Comp = asChild ? Slot : "button"`. Polymorphic aliases
+are expanded into their two JSX branches before component lowering; arbitrary dynamic element
+types remain outside the static contract. For allowlisted dependencies, hook analysis follows the
+ESM implementation selected by the package's import surface rather than inspecting a sibling
+CommonJS build or declarations file.
+
 ## Wrapper Semantics
 
 `memo(...)` is accepted as a migration wrapper so React-authored components can pass through the

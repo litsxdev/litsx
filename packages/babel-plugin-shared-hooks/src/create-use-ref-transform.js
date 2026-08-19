@@ -283,6 +283,32 @@ function getComponentRefAttributeName(attrPath) {
 }
 
 function getSupportedHookImportLocal(calleePath, scope, importSources, supportedHookNames, t) {
+  if (calleePath.isMemberExpression({ computed: false })) {
+    const objectPath = calleePath.get("object");
+    const propertyPath = calleePath.get("property");
+    if (!objectPath.isIdentifier() || !propertyPath.isIdentifier()) {
+      return null;
+    }
+    if (!supportedHookNames.includes(propertyPath.node.name)) {
+      return null;
+    }
+    const binding = scope.getBinding(objectPath.node.name);
+    if (
+      !binding ||
+      (!binding.path.isImportNamespaceSpecifier() && !binding.path.isImportDefaultSpecifier())
+    ) {
+      return null;
+    }
+    const importDecl = binding.path.parentPath;
+    if (
+      !importDecl?.isImportDeclaration() ||
+      !importSources.includes(importDecl.node.source.value)
+    ) {
+      return null;
+    }
+    return propertyPath.node.name;
+  }
+
   if (!calleePath.isIdentifier()) {
     return null;
   }
@@ -329,6 +355,7 @@ function transformMutableRefCall(callPath, state, hostInfo, t) {
     state.loweredMutableRuntimeLocals = new Set();
   }
   state.loweredMutableRuntimeLocals.add(importedLocalName);
+  state.mutableRuntimeImportLocals?.add(importedLocalName);
 
   if (
     existingArgs.length > 0 &&
@@ -614,12 +641,18 @@ export function createUseRefTransform({
       if (!t.isIdentifier(id)) return;
 
       const refName = id.name;
-      const init = declaratorPath.node.init;
+      const initPath = declaratorPath.get("init");
+      const init = initPath.node;
 
       if (
         !t.isCallExpression(init) ||
-        !t.isIdentifier(init.callee) ||
-        !supportedHookNames.includes(init.callee.name)
+        !getSupportedHookImportLocal(
+          initPath.get("callee"),
+          declaratorPath.scope,
+          importSources,
+          supportedHookNames,
+          t
+        )
       ) {
         return;
       }
@@ -699,7 +732,6 @@ export function createUseRefTransform({
           classPath.node[pendingPropertyKey] = pendingList;
         }
 
-        const initPath = declaratorPath.get("init");
         const hostInfo = resolveHostInfo(initPath, t);
         if (!hostInfo) {
           state.pendingMutableCalls.push(initPath);
@@ -743,7 +775,6 @@ export function createUseRefTransform({
         return;
       }
 
-      const initPath = declaratorPath.get("init");
       const hostInfo = resolveHostInfo(initPath, t);
       if (!hostInfo) {
         state.pendingMutableCalls.push(initPath);
