@@ -1,11 +1,3 @@
-export const STATIC_HOIST_CALL_RE = /\b(__litsx_static_[A-Za-z_$][\w$]*)\s*\(/g;
-export const NATIVE_STATIC_HOISTS = new Set([
-  "styles",
-  "properties",
-  "shadowRootOptions",
-  "lightDom",
-]);
-
 function isPascalCaseName(name) {
   return typeof name === "string" && /^[A-Z]/.test(name);
 }

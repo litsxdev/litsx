@@ -4,11 +4,11 @@ let t;
 
 const RUNTIME_MODULE = "@litsx/core";
 
-function ensureRuntimeImport(programPath, importedName, localName, t) {
+function ensureRuntimeImport(programPath, importedName, localName, t, runtimeModule = RUNTIME_MODULE) {
   const runtimeImports = programPath
     .get("body")
     .filter(
-      (child) => child.isImportDeclaration() && child.node.source.value === RUNTIME_MODULE
+      (child) => child.isImportDeclaration() && child.node.source.value === runtimeModule
     );
 
   let targetImport = runtimeImports.find(
@@ -21,7 +21,7 @@ function ensureRuntimeImport(programPath, importedName, localName, t) {
         ? t.importSpecifier(t.identifier(localName), t.identifier(importedName))
         : t.importSpecifier(t.identifier(localName), t.identifier(importedName));
 
-    const importDecl = t.importDeclaration([specifier], t.stringLiteral(RUNTIME_MODULE));
+    const importDecl = t.importDeclaration([specifier], t.stringLiteral(runtimeModule));
     const [firstImport] = programPath
       .get("body")
       .filter((child) => child.isImportDeclaration());
@@ -618,6 +618,9 @@ export function createUseRefTransform({
   pluginName,
   pendingPropertyKey = "_litsxPendingRefs",
   onlyManagedDomRefs = false,
+  useLitDirectiveRefs = false,
+  runtimeModule = RUNTIME_MODULE,
+  runtimeHookName = "useRef",
 } = {}) {
   const importSources = Array.isArray(importSource) ? importSource : [importSource];
   const supportedHookNames = Array.isArray(hookNames) && hookNames.length > 0
@@ -710,6 +713,16 @@ export function createUseRefTransform({
       const usedAsElement = Boolean(classPath) && (foundRefAttribute || templateHasRef);
 
       if (usedAsElement) {
+        if (useLitDirectiveRefs) {
+          const hostInfo = resolveHostInfo(initPath, t);
+          if (!hostInfo) {
+            state.pendingMutableCalls.push(initPath);
+          } else {
+            transformMutableRefCall(initPath, state, hostInfo, t);
+          }
+          return;
+        }
+
         const managedRefName = classPath.scope.generateUidIdentifier(`${refName}Element`).name;
 
         elementRefAttributePaths.forEach((attrPath) => {
@@ -890,9 +903,10 @@ export function createUseRefTransform({
               Array.from(state.mutableRuntimeImportLocals).forEach((localName) => {
                 ensureRuntimeImport(
                   programPath,
-                  "useRef",
+                  runtimeHookName,
                   localName,
-                  t
+                  t,
+                  runtimeModule
                 );
               });
             }
@@ -913,6 +927,7 @@ export function createUseRefTransform({
         },
         ClassMethod(methodPath, state) {
           if (!t.isIdentifier(methodPath.node.key, { name: "render" })) return;
+          if (useLitDirectiveRefs) return;
           const classPath = methodPath.findParent((parent) => parent.isClassDeclaration());
           methodPath.traverse({
             JSXAttribute(attrPath) {

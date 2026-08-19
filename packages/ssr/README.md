@@ -806,3 +806,20 @@ compiler and integration suites, but they are not a separate SSR-specific
 browser contract.
 
 For the browser hydration entrypoint, see `@litsx/ssr/hydration`.
+
+Use these entrypoints as a pair whenever compiled JSX can contain spreads. In
+the browser, a spread uses an `ElementPart` so LitSX can inspect the live target
+and route each value as an attribute, boolean, property, event, style, or ref.
+During SSR the same values must be expressed as ordinary Lit parts. `render()`
+records a bounded digest mapping and `hydrate()` consumes it to reconcile those
+two template shapes without replacing the server DOM.
+
+Refs themselves are never serialized into HTML. SSR emits only the element and
+Lit hydration markers. During hydration Lit attaches the client element part to
+the existing node and then invokes the ref directive. Native object refs receive
+that node through `.value` and are cleared with `undefined`; react-compat facades
+expose the same lifecycle as `.current` and `null`.
+
+This package does not patch or fork `@lit-labs/ssr`. See the repository's
+[native authoring contract](../../AUTHORING.md) for the corresponding JSX
+surface.

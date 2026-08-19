@@ -1,9 +1,3 @@
-import {
-  createPropertyConfig,
-  createPropertyValue,
-  mergePropertyConfig,
-} from "./transform-litsx-properties.js";
-
 let t;
 
 function copySourceLocation(target, source) {
@@ -34,7 +28,7 @@ function isLightDomHoist(statement) {
     return true;
   }
 
-  throw new Error("static lightDom = true only accepts the literal value true.");
+  throw new Error("Component.lightDom = true only accepts the literal value true.");
 }
 
 function createStaticHoistGetter(name, symbolId, expression) {
@@ -65,185 +59,38 @@ function resolveStaticHoistExpression(expression) {
   );
 }
 
-function createPropertiesHoistResolver(propertiesStatic, staticProps, expression) {
-  const mergedProperties = propertiesStatic.map((property) => t.cloneNode(property));
-  if (staticProps.length > 0) {
-    mergeStaticPropsIntoProperties(mergedProperties, staticProps);
-  }
-
+function createPropertiesHoistResolver(propertiesStatic, expression) {
   return t.callExpression(
     t.memberExpression(t.thisExpression(), t.identifier("__litsxMergeProperties")),
     [
-      t.objectExpression(mergedProperties),
+      t.objectExpression(propertiesStatic.map((property) => t.cloneNode(property))),
       resolveStaticHoistExpression(expression),
     ]
   );
 }
 
-function createStylesHoistResolver(staticStyles, expression) {
-  const resolvedExpression = resolveStaticHoistExpression(expression);
-  if (staticStyles.length === 0) {
-    return resolvedExpression;
-  }
-
-  const baseStyles =
-    staticStyles.length === 1
-      ? t.cloneNode(staticStyles[0])
-      : t.arrayExpression(staticStyles.map((style) => t.cloneNode(style)));
-
-  return t.logicalExpression("||", resolvedExpression, baseStyles);
-}
-
-function getStaticPropsExpression(statement) {
+function getGeneratedPropertiesExpression(statement) {
   if (!t.isExpressionStatement(statement)) return null;
   if (!t.isCallExpression(statement.expression)) return null;
-  const isLegacyStaticProps = t.isIdentifier(statement.expression.callee, { name: "staticProps" });
   const isHoistedProperties = t.isIdentifier(
     statement.expression.callee,
     { name: "__litsx_static_properties" }
   );
-  if (
-    !isLegacyStaticProps &&
-    !isHoistedProperties
-  ) {
+  if (!isHoistedProperties) {
     return null;
   }
   if (statement.expression.arguments.length !== 1) return null;
 
   const [argument] = statement.expression.arguments;
   if (isHoistedProperties && (t.isFunctionExpression(argument) || t.isArrowFunctionExpression(argument))) {
-    throw new Error("static properties = ... only accepts an object literal with static Lit property options.");
+    throw new Error("Component.properties = ... only accepts an object literal with static Lit property options.");
   }
 
   if (!t.isObjectExpression(argument)) {
-    throw new Error("static properties = ... only accepts an object literal with static Lit property options.");
+    throw new Error("Component.properties = ... only accepts an object literal with static Lit property options.");
   }
 
-  return isHoistedProperties ? {
-    __litsxHoistedProperties: true,
-    expression: t.cloneNode(argument),
-  } : t.cloneNode(argument);
-}
-
-function getStaticPropertyName(node) {
-  if (t.isIdentifier(node)) return node.name;
-  if (t.isStringLiteral(node)) return node.value;
-  return null;
-}
-
-function normalizeStaticPropOverrideValue(value) {
-  if (
-    t.isIdentifier(value) &&
-    ["String", "Number", "Boolean", "Object", "Array", "Date"].includes(value.name)
-  ) {
-    return createPropertyConfig(t.identifier(value.name));
-  }
-
-  if (t.isObjectExpression(value)) {
-    const typeProperty = value.properties.find(
-      (prop) =>
-        t.isObjectProperty(prop) &&
-        t.isIdentifier(prop.key, { name: "type" }) &&
-        t.isIdentifier(prop.value)
-    );
-
-    const attributeProperty = value.properties.find(
-      (prop) =>
-        t.isObjectProperty(prop) &&
-        t.isIdentifier(prop.key, { name: "attribute" }) &&
-        t.isBooleanLiteral(prop.value) &&
-        prop.value.value === false
-    );
-
-    return createPropertyConfig(typeProperty ? typeProperty.value : null, {
-      attribute: attributeProperty ? false : undefined,
-    });
-  }
-
-  throw new Error(
-    "static properties = ... values must be Lit property option objects or constructor references."
-  );
-}
-
-function mergeStaticPropertyObject(targetNode, overrideObject) {
-  if (!t.isObjectProperty(targetNode) || !t.isObjectExpression(targetNode.value)) {
-    return;
-  }
-
-  overrideObject.properties.forEach((property) => {
-    if (!t.isObjectProperty(property) && !t.isObjectMethod(property)) {
-      throw new Error("static properties = ... only accepts plain object members.");
-    }
-
-    const keyName = getStaticPropertyName(property.key);
-    if (!keyName) {
-      throw new Error("static properties = ... property option names must be static identifiers or strings.");
-    }
-
-    const existing = targetNode.value.properties.find(
-      (candidate) =>
-        (t.isObjectProperty(candidate) || t.isObjectMethod(candidate)) &&
-        getStaticPropertyName(candidate.key) === keyName
-    );
-
-    if (existing) {
-      const nextNode = t.cloneNode(property);
-      const index = targetNode.value.properties.indexOf(existing);
-      targetNode.value.properties.splice(index, 1, nextNode);
-    } else {
-      targetNode.value.properties.push(t.cloneNode(property));
-    }
-  });
-}
-
-function mergeStaticPropsIntoProperties(propertiesStatic, staticProps) {
-  const propertyMap = new Map();
-
-  propertiesStatic.forEach((propertyNode) => {
-    if (!t.isObjectProperty(propertyNode)) return;
-    const keyName = getStaticPropertyName(propertyNode.key);
-    if (!keyName) return;
-    propertyMap.set(keyName, propertyNode);
-  });
-
-  staticProps.forEach((optionsObject) => {
-    optionsObject.properties.forEach((property) => {
-      if (!t.isObjectProperty(property)) {
-        throw new Error("static properties = ... only accepts plain object properties.");
-      }
-
-      const keyName = getStaticPropertyName(property.key);
-      if (!keyName) {
-        throw new Error("static properties = ... property names must be static identifiers or strings.");
-      }
-
-      const existing = propertyMap.get(keyName);
-      const normalized = normalizeStaticPropOverrideValue(property.value);
-
-      if (!existing) {
-        const node = t.objectProperty(
-          t.identifier(keyName),
-          createPropertyValue(normalized, false)
-        );
-        if (t.isObjectExpression(property.value)) {
-          mergeStaticPropertyObject(node, property.value);
-        }
-        propertiesStatic.push(node);
-        propertyMap.set(keyName, node);
-        return;
-      }
-
-      mergePropertyConfig(
-        { node: existing },
-        normalized,
-        false
-      );
-
-      if (t.isObjectExpression(property.value)) {
-        mergeStaticPropertyObject(existing, property.value);
-      }
-    });
-  });
+  return t.cloneNode(argument);
 }
 
 function normalizePropertiesIr(staticIr, renderStatements) {
@@ -256,155 +103,46 @@ function normalizePropertiesIr(staticIr, renderStatements) {
       index: entry.index ?? index,
       expression: entry.expression ? t.cloneNode(entry.expression) : null,
     })),
-    legacy: (staticIr?.properties?.legacy || []).map((entry, index) => ({
-      index: entry.index ?? index,
-      expression: entry.expression ? t.cloneNode(entry.expression) : null,
-    })),
   };
 
   if (!staticIr && Array.isArray(renderStatements)) {
     renderStatements.forEach((statement, index) => {
-      const propertyOptions = getStaticPropsExpression(statement);
+      const propertyOptions = getGeneratedPropertiesExpression(statement);
       if (!propertyOptions) return;
 
-      if (propertyOptions.__litsxHoistedProperties) {
-        properties.authored.push({
-          index,
-          expression: propertyOptions.expression,
-        });
-      } else {
-        properties.legacy.push({
-          index,
-          expression: propertyOptions,
-        });
-      }
+      properties.authored.push({
+        index,
+        expression: propertyOptions,
+      });
     });
   }
 
   properties.authored.sort((left, right) => left.index - right.index);
-  properties.legacy.sort((left, right) => left.index - right.index);
   return properties;
 }
 
-function normalizeStylesTemplate(argument, functionPath) {
-  if (t.isTemplateLiteral(argument)) {
-    if (
-      !argument.expressions.every((expression) =>
-        isStaticStylesExpression(expression, functionPath)
-      )
-    ) {
-      return null;
-    }
-    return t.templateLiteral(
-      argument.quasis,
-      argument.expressions.map((expression) =>
-        wrapStaticStylesInterpolation(expression)
-      )
-    );
-  }
-
-  if (t.isStringLiteral(argument)) {
-    return t.templateLiteral(
-      [t.templateElement({ raw: argument.value, cooked: argument.value }, true)],
-      []
-    );
-  }
-
-  if (isStaticStylesExpression(argument, functionPath)) {
-    return t.templateLiteral(
-      [
-        t.templateElement({ raw: "", cooked: "" }, false),
-        t.templateElement({ raw: "", cooked: "" }, true),
-      ],
-      [wrapStaticStylesInterpolation(argument)]
-    );
-  }
-
-  return null;
-}
-
-function wrapStaticStylesInterpolation(expression) {
-  if (
-    t.isTaggedTemplateExpression(expression) &&
-    t.isIdentifier(expression.tag, { name: "css" })
-  ) {
-    return expression;
-  }
-
-  if (t.isNumericLiteral(expression)) {
-    return expression;
-  }
-
-  return t.callExpression(
-    t.identifier("unsafeCSS"),
-    [expression]
-  );
-}
-
-function getStaticStylesExpression(statement, functionPath) {
+function getGeneratedStylesExpression(statement) {
   if (!t.isExpressionStatement(statement)) return null;
   if (!t.isCallExpression(statement.expression)) return null;
-  const isLegacyStaticStyles = t.isIdentifier(statement.expression.callee, { name: "staticStyles" });
-  const isHoistedStyles = t.isIdentifier(statement.expression.callee, { name: "__litsx_static_styles" });
-  const isAssignedStyles = t.isIdentifier(
+  if (!t.isIdentifier(
     statement.expression.callee,
     { name: "__litsx_static_styles_value" },
-  );
-  if (
-    !isLegacyStaticStyles &&
-    !isHoistedStyles &&
-    !isAssignedStyles
-  ) {
-    return null;
-  }
+  )) return null;
   if (statement.expression.arguments.length !== 1) return null;
 
   const [argument] = statement.expression.arguments;
 
-  if (isAssignedStyles) {
-    if (
-      t.isStringLiteral(argument) ||
-      t.isTemplateLiteral(argument) ||
-      t.isFunctionExpression(argument) ||
-      t.isArrowFunctionExpression(argument)
-    ) {
-      throw new Error(
-        "Component.styles must be a Lit CSSResultGroup. Use css`...` from lit instead of a plain string, untagged template literal, or function.",
-      );
-    }
-    return {
-      __litsxHoistedStyles: true,
-      __litsxNeedsCssImport: false,
-      expression: t.cloneNode(argument, true),
-    };
-  }
-
-  if (isHoistedStyles && (t.isFunctionExpression(argument) || t.isArrowFunctionExpression(argument))) {
-    throw new Error("static styles = ... only accepts static values. Move dynamic values to useStyle(...) or CSS custom properties.");
-  }
-
-  if (isHoistedStyles && t.isTaggedTemplateExpression(argument)) {
+  if (
+    t.isStringLiteral(argument) ||
+    t.isTemplateLiteral(argument) ||
+    t.isFunctionExpression(argument) ||
+    t.isArrowFunctionExpression(argument)
+  ) {
     throw new Error(
-      "static styles = ... must use a direct template literal such as static styles = `...`. " +
-      "Tagged templates such as static styles = css`...` are not supported."
+      "Component.styles must be a Lit CSSResultGroup. Use css`...` from lit instead of a plain string, untagged template literal, or function.",
     );
   }
-
-  const template = normalizeStylesTemplate(
-    argument,
-    functionPath
-  );
-  if (!template) {
-    throw new Error("static styles = ... only accepts static values. Move dynamic values to useStyle(...) or CSS custom properties.");
-  }
-
-  const expression = copySourceLocation(
-    t.taggedTemplateExpression(t.identifier("css"), template),
-    argument,
-  );
-  return isHoistedStyles
-    ? { __litsxHoistedStyles: true, expression }
-    : expression;
+  return t.cloneNode(argument, true);
 }
 
 function getStaticHoistExpression(statement, functionPath) {
@@ -423,7 +161,7 @@ function getStaticHoistExpression(statement, functionPath) {
   }
 
   if (statement.expression.arguments.length !== 1) {
-    throw new Error(`static ${name} = ... expects exactly one argument.`);
+    throw new Error(`Component.${name} = ... expects exactly one value.`);
   }
 
   const [argument] = statement.expression.arguments;
@@ -435,15 +173,15 @@ function getStaticHoistExpression(statement, functionPath) {
       };
     }
 
-    throw new Error("static expose = ... only accepts an object literal.");
+    throw new Error("Component.expose = ... only accepts an object literal.");
   }
 
   if (t.isFunctionExpression(argument) || t.isArrowFunctionExpression(argument)) {
-    throw new Error(`static ${name} = ... only accepts a direct static value.`);
+    throw new Error(`Component.${name} = ... only accepts a direct static value.`);
   }
 
   if (!isStaticStylesExpression(argument, functionPath)) {
-    throw new Error(`static ${name} = ... only accepts a direct static value.`);
+    throw new Error(`Component.${name} = ... only accepts a direct static value.`);
   }
 
   return {
@@ -467,7 +205,7 @@ function normalizeExposeHoistExpression(expression) {
     };
   }
 
-  throw new Error("static expose = ... only accepts an object literal.");
+  throw new Error("Component.expose = ... only accepts an object literal.");
 }
 
 function createExposeClassMethod(property) {
@@ -478,12 +216,12 @@ function createExposeClassMethod(property) {
 
 function normalizeExposePropertyToClassMethod(property) {
   if (t.isSpreadElement(property)) {
-    throw new Error("static expose = ... does not accept spread elements.");
+    throw new Error("Component.expose = ... does not accept spread elements.");
   }
 
   if (t.isObjectMethod(property)) {
     if (property.kind !== "method") {
-      throw new Error("static expose = ... only accepts plain methods.");
+      throw new Error("Component.expose = ... only accepts plain methods.");
     }
 
     return t.classMethod(
@@ -496,12 +234,12 @@ function normalizeExposePropertyToClassMethod(property) {
   }
 
   if (!t.isObjectProperty(property)) {
-    throw new Error("static expose = ... only accepts plain methods.");
+    throw new Error("Component.expose = ... only accepts plain methods.");
   }
 
   const value = property.value;
   if (!t.isFunctionExpression(value) && !t.isArrowFunctionExpression(value)) {
-    throw new Error("static expose = ... values must be functions.");
+    throw new Error("Component.expose = ... values must be functions.");
   }
 
   const body = t.isBlockStatement(value.body)
@@ -539,7 +277,7 @@ export function assertStaticHoistsStayTopLevel(functionPath) {
 
       const macroName = callPath.node.callee.name.slice("__litsx_static_".length);
       throw callPath.buildCodeFrameError(
-        `static ${macroName} = ... must appear as a top-level statement in the component body.`
+        `Internal static metadata ${macroName} must appear as a top-level statement in the generated component body.`
       );
     },
   });
@@ -701,12 +439,8 @@ export function processStaticHoists({
   options = {},
   getOrCreateModuleStaticHoistSymbol,
 }) {
-  const staticStyles = [];
   const propertiesIr = normalizePropertiesIr(staticIr, renderStatements);
   const effectivePropertiesStatic = propertiesIr.inferred
-    .map((entry) => entry.expression)
-    .filter(Boolean);
-  const staticProps = propertiesIr.legacy
     .map((entry) => entry.expression)
     .filter(Boolean);
   const staticHoists = propertiesIr.authored
@@ -718,23 +452,19 @@ export function processStaticHoists({
 
   if (t.isBlockStatement(node.body)) {
     for (let index = renderStatements.length - 1; index >= 0; index -= 1) {
-      const propertyOptions = getStaticPropsExpression(renderStatements[index]);
+      const propertyOptions = getGeneratedPropertiesExpression(renderStatements[index]);
       if (propertyOptions) {
         renderStatements.splice(index, 1);
         continue;
       }
 
-      const cssExpression = getStaticStylesExpression(renderStatements[index], functionPath);
+      const cssExpression = getGeneratedStylesExpression(renderStatements[index]);
       if (!cssExpression) continue;
-      if (cssExpression.__litsxHoistedStyles) {
-        staticHoists.unshift({
-          name: "styles",
-          expression: cssExpression.expression,
-          needsCssImport: cssExpression.__litsxNeedsCssImport !== false,
-        });
-      } else {
-        staticStyles.unshift(cssExpression);
-      }
+      staticHoists.unshift({
+        name: "styles",
+        expression: cssExpression,
+        needsCssImport: false,
+      });
       renderStatements.splice(index, 1);
     }
 
@@ -761,10 +491,6 @@ export function processStaticHoists({
     }
   }
 
-  if (staticProps.length > 0) {
-    mergeStaticPropsIntoProperties(effectivePropertiesStatic, staticProps);
-  }
-
   const hasHoistedProperties = staticHoists.some((entry) => entry.name === "properties");
   if (effectivePropertiesStatic.length > 0 && !hasHoistedProperties) {
     const classProperties = t.classProperty(
@@ -777,19 +503,6 @@ export function processStaticHoists({
 
     classProperties.static = true;
     classMembers.push(classProperties);
-  }
-
-  const hasHoistedStyles = staticHoists.some((entry) => entry.name === "styles");
-  if (staticStyles.length > 0 && !hasHoistedStyles) {
-    const stylesProperty = copySourceLocation(t.classProperty(
-      t.identifier("styles"),
-      staticStyles.length === 1 ? staticStyles[0] : t.arrayExpression(staticStyles),
-      null,
-      [],
-      false
-    ), staticStyles[0]);
-    stylesProperty.static = true;
-    classMembers.push(stylesProperty);
   }
 
   const hoistSymbolDeclarations = [];
@@ -813,7 +526,7 @@ export function processStaticHoists({
       return createStaticHoistGetter(
         "properties",
         symbolId,
-        createPropertiesHoistResolver(effectivePropertiesStatic, staticProps, hoist.expression)
+        createPropertiesHoistResolver(effectivePropertiesStatic, hoist.expression)
       );
     }
 
@@ -821,7 +534,7 @@ export function processStaticHoists({
       return createStaticHoistGetter(
         "styles",
         symbolId,
-        createStylesHoistResolver(staticStyles, hoist.expression)
+        resolveStaticHoistExpression(hoist.expression)
       );
     }
 
@@ -838,12 +551,10 @@ export function processStaticHoists({
     hoistSymbolDeclarations,
     needsStaticHoistsMixin,
     needsCss:
-      staticStyles.length > 0 ||
       staticHoists.some(
         (entry) => entry.name === "styles" && entry.needsCssImport !== false,
       ),
     needsUnsafeCss:
-      staticStyles.some(containsUnsafeCssCall) ||
       staticHoists.some(
         (entry) => entry.name === "styles" && containsUnsafeCssCall(entry.expression)
       ),

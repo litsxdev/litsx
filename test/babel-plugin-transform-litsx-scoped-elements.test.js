@@ -281,9 +281,10 @@ describe("@litsx/babel-plugin-transform-litsx-scoped-elements", () => {
       import FancyButton from './FancyButton.js';
 
       function LightScreen() {
-        static lightDom = true;
         return <FancyButton />;
       }
+
+      LightScreen.lightDom = true;
     `;
 
     assert.throws(
@@ -298,9 +299,10 @@ describe("@litsx/babel-plugin-transform-litsx-scoped-elements", () => {
   it("uses LightDomMixin for light DOM components without element dependencies", () => {
     const source = `
       function LightCard() {
-        static lightDom = true;
         return <div>ready</div>;
       }
+
+      LightCard.lightDom = true;
     `;
 
     const { code } = transformWithNativePreset(source, {
@@ -400,7 +402,6 @@ describe("@litsx/babel-plugin-transform-litsx-scoped-elements", () => {
       properties: {
         inferred: [],
         authored: [],
-        legacy: [],
       },
       elements: {
         localCandidates: [],
@@ -439,7 +440,6 @@ describe("@litsx/babel-plugin-transform-litsx-scoped-elements", () => {
       properties: {
         inferred: [],
         authored: [],
-        legacy: [],
       },
       elements: {
         localCandidates: ["ChildCard"],
@@ -544,18 +544,20 @@ describe("@litsx/babel-plugin-transform-litsx-scoped-elements", () => {
       import ProfileChip from './profile/ProfileChip.js';
 
       export function FirstScreen() {
-        static lightDom = true;
         return <ProfileChip />;
       }
+
+      FirstScreen.lightDom = true;
     `;
 
     const sourceB = `
       import ProfileChip from '../shared/ProfileChip.js';
 
       export function SecondScreen() {
-        static lightDom = true;
         return <ProfileChip />;
       }
+
+      SecondScreen.lightDom = true;
     `;
 
     assert.throws(
@@ -581,14 +583,15 @@ describe("@litsx/babel-plugin-transform-litsx-scoped-elements", () => {
       import ProfileChip from './profile/ProfileChip.js';
 
       export function FirstScreen() {
-        static lightDom = true;
         return <ProfileChip />;
       }
 
       export function SecondScreen() {
-        static lightDom = true;
         return <ProfileChip />;
       }
+
+      FirstScreen.lightDom = true;
+      SecondScreen.lightDom = true;
     `;
 
     assert.throws(

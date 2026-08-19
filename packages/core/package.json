@@ -42,6 +42,12 @@
       "import": "./src/context.js",
       "require": "./dist/context.cjs",
       "default": "./src/context.js"
+    },
+    "./react-compat": {
+      "types": "./src/react-compat.d.ts",
+      "import": "./src/react-compat.js",
+      "require": "./dist/react-compat.cjs",
+      "default": "./src/react-compat.js"
     }
   },
   "files": [

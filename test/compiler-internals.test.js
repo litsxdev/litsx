@@ -79,7 +79,6 @@ describe("compiler internals", () => {
 
     prepareLitsxAuthoredInput.mockReturnValue({
       filename: "/virtual/Example.jsx",
-      virtualization: { map: { version: 3 } },
       inputAst: { type: "File" },
       authoredWarnings: [{ code: "WARN" }],
       moduleAnalysis: { imports: [], exports: [], declarations: [], jsxReferences: [] },

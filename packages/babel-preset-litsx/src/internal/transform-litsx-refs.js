@@ -74,7 +74,11 @@ function createForwardedTargetRefSyncStatement(propName, refName) {
                 t.expressionStatement(
                   t.assignmentExpression(
                     "=",
-                    t.memberExpression(t.identifier("componentRef"), t.identifier("current")),
+                    t.memberExpression(
+                      t.identifier("componentRef"),
+                      t.stringLiteral("value"),
+                      true,
+                    ),
                     t.identifier("node")
                   )
                 ),
@@ -258,7 +262,11 @@ export function createComponentInstanceRefSyncStatement() {
                 t.expressionStatement(
                   t.assignmentExpression(
                     "=",
-                    t.memberExpression(t.identifier("componentRef"), t.identifier("current")),
+                    t.memberExpression(
+                      t.identifier("componentRef"),
+                      t.stringLiteral("value"),
+                      true,
+                    ),
                     t.identifier("node")
                   )
                 ),
@@ -317,42 +325,18 @@ export function hasRefProp(functionPath) {
 }
 
 export function lowerForwardedElementRefs(functionPath, propName) {
-  if (!propName) {
-    return [];
-  }
-
-  const callbackStatements = [];
-  const seenRefNames = new Set();
-
+  if (!propName) return [];
   functionPath.traverse({
     JSXAttribute(attrPath) {
       if (!t.isJSXIdentifier(attrPath.node.name, { name: "ref" })) return;
-
-      const value = attrPath.node.value;
-      if (!t.isJSXExpressionContainer(value)) return;
-      if (
-        !t.isMemberExpression(value.expression) ||
-        !t.isThisExpression(value.expression.object) ||
-        !t.isIdentifier(value.expression.property, { name: propName }) ||
-        value.expression.computed
-      ) {
-        return;
-      }
-
       const openingElement = attrPath.parentPath;
       if (!openingElement?.isJSXOpeningElement()) return;
-      if (!isStandardElementJsxName(openingElement.node.name)) return;
-
-      const managedRefName = functionPath.scope.generateUidIdentifier(`${propName}Element`).name;
-      attrPath.replaceWith(
-        t.jsxAttribute(t.jsxIdentifier("data-ref"), t.stringLiteral(managedRefName))
-      );
-
-      if (seenRefNames.has(managedRefName)) return;
-      seenRefNames.add(managedRefName);
-      callbackStatements.push(createForwardedTargetRefSyncStatement(propName, managedRefName));
+      if (!isStandardElementJsxName(openingElement.node.name)) {
+        attrPath.node.name = t.jsxIdentifier(".ref");
+      }
     },
   });
-
-  return callbackStatements;
+  // Native-element refs remain JSX `ref` attributes. The final JSX-to-template
+  // pass lowers them directly to Lit's ElementPart ref() directive.
+  return [];
 }

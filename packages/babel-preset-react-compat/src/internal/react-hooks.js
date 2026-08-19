@@ -212,7 +212,10 @@ function createReducerRuntimeCall(state, argNodes) {
 function createImperativeRuntimeCall(state, _refNode, factoryNode, depNodes) {
   const args = [
     cloneHostExpression(state),
-    t.cloneNode(_refNode, true),
+    t.callExpression(
+      t.identifier(state.reactRefAdapterLocal || "toLitRef"),
+      [t.cloneNode(_refNode, true)],
+    ),
     t.cloneNode(factoryNode, true),
   ];
 
@@ -221,6 +224,29 @@ function createImperativeRuntimeCall(state, _refNode, factoryNode, depNodes) {
   }
 
   return t.callExpression(t.identifier("useExpose"), args);
+}
+
+function ensureReactRefAdapterImport(programPath, state) {
+  if (!state.imperativeNeeded) return;
+  const moduleName = "@litsx/core/react-compat";
+  const existing = programPath.get("body").find(
+    (child) => child.isImportDeclaration() && child.node.source.value === moduleName
+  );
+  const present = existing?.node.specifiers.some(
+    (specifier) => t.isImportSpecifier(specifier) &&
+      t.isIdentifier(specifier.imported, { name: "toLitRef" }) &&
+      t.isIdentifier(specifier.local, { name: state.reactRefAdapterLocal })
+  );
+  if (present) return;
+  const specifier = t.importSpecifier(
+    t.identifier(state.reactRefAdapterLocal),
+    t.identifier("toLitRef"),
+  );
+  if (existing) existing.node.specifiers.push(specifier);
+  else programPath.unshiftContainer(
+    "body",
+    t.importDeclaration([specifier], t.stringLiteral(moduleName)),
+  );
 }
 
 function createExternalStoreRuntimeCall(state, subscribeNode, getSnapshotNode, getServerSnapshotNode) {
@@ -851,12 +877,16 @@ export default declare((api, options = {}) => {
           state.transitionNeeded = false;
           state.deferredNeeded = false;
           state.startTransitionNeeded = false;
+          state.reactRefAdapterLocal = path.scope.hasBinding("toLitRef")
+            ? path.scope.generateUidIdentifier("toLitRef").name
+            : "toLitRef";
         },
         exit(path, state) {
           processDeclaredCustomHooks(path, state);
           attachCompiledCustomHookMetadata(path, state);
           removeHookImports(path, state);
           ensureRuntimeImport(path, state);
+          ensureReactRefAdapterImport(path, state);
         },
       },
       ImportDeclaration(path, state) {

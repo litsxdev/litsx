@@ -231,12 +231,12 @@ describe("native properties internals", () => {
 
     const propertyNames = [...result.propertyNames].sort();
     assert.deepStrictEqual(propertyNames, [
+      "__litsxRestProps",
       "data-id",
       "forwardedRef",
       "list",
       "nested",
       "ready",
-      "restProps",
       "title",
     ]);
 
@@ -244,6 +244,9 @@ describe("native properties internals", () => {
     assert.strictEqual(bindings.get("props").kind, "alias");
     assert.strictEqual(bindings.get("dataId"), "data-id");
     assert.strictEqual(bindings.get("ref"), "forwardedRef");
+    assert.strictEqual(bindings.get("restProps").kind, "rest-alias");
+    assert.strictEqual(bindings.get("restProps").propertyName, "__litsxRestProps");
+    assert.deepStrictEqual(result.restProps, { propertyName: "__litsxRestProps" });
 
     const defaults = result.defaults;
     assert(defaults.has("list"));
@@ -610,7 +613,7 @@ describe("native properties internals", () => {
         },
         props
       ) {
-        return <article>{first}{second}{aliasOne}{aliasTwo}{ref?.current}{props.title}</article>;
+        return <article>{first}{second}{aliasOne}{aliasTwo}{ref?.value}{props.title}</article>;
       }
     `;
 

@@ -22,6 +22,37 @@ function normalizePluginList(plugins) {
   return Array.isArray(plugins) ? plugins : [];
 }
 
+function assertNoRemovedAuthoringCalls(ast) {
+  function visit(node) {
+    if (!node || typeof node !== "object") return;
+
+    if (
+      node.type === "CallExpression" &&
+      node.callee?.type === "Identifier" &&
+      (
+        node.callee.name === "staticProps" ||
+        node.callee.name === "staticStyles" ||
+        node.callee.name.startsWith("__litsx_static_")
+      )
+    ) {
+      throw new SyntaxError(
+        `LitSX no longer accepts ${node.callee.name}(...) in authored source. ` +
+        "Assign metadata with Component.properties, Component.styles, or the corresponding Component field.",
+      );
+    }
+
+    for (const value of Object.values(node)) {
+      if (Array.isArray(value)) {
+        value.forEach(visit);
+      } else if (value && typeof value === "object") {
+        visit(value);
+      }
+    }
+  }
+
+  visit(ast?.program ?? ast);
+}
+
 export function ensureLitsxParserPlugins(filename, parserPlugins = [], { requireJsx = false } = {}) {
   const normalized = normalizeParserPlugins(filename, parserPlugins);
   if (!requireJsx) {
@@ -62,6 +93,7 @@ export function prepareLitsxAuthoredInput(
     plugins: parserPlugins,
     sourceFileName: filename,
   });
+  assertNoRemovedAuthoringCalls(parsedAst);
   const authoredWarnings = mergeLitsxWarnings(
     collectNativeClassNameWarnings(parsedAst).map((warning) => ({
       ...warning,
@@ -96,7 +128,6 @@ export function prepareLitsxAuthoredInput(
 
   return {
     filename,
-    virtualization: null,
     inputAst,
     authoredWarnings,
     moduleAnalysis: analyzeLitsxModule(inputAst),

@@ -51,7 +51,6 @@ function createStaticIr({
     properties: {
       inferred: [],
       authored: [],
-      legacy: [],
     },
     elements: {
       localCandidates,

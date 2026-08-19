@@ -2,7 +2,6 @@ import helperPluginUtils from "@babel/helper-plugin-utils";
 import * as babelParser from "@babel/parser";
 import babelTraverse from "@babel/traverse";
 import jsxSyntaxPlugin from "@babel/plugin-syntax-jsx";
-import { parseWithLitsxVirtualization } from "@litsx/authoring/internal/parser";
 import fs from "node:fs";
 import path from "node:path";
 import { normalizeFilePath } from "@litsx/typescript-session";
@@ -715,7 +714,7 @@ function getOrCreateModuleAnalysis(filename, context) {
 
   let programPath = null;
   try {
-    const ast = parseWithLitsxVirtualization(babelParser.parse, source, {
+    const ast = babelParser.parse(source, {
       sourceType: "module",
       plugins: getParserPluginsForModule(normalizedFilename, source),
     });
@@ -849,14 +848,14 @@ function resolveExportedHelper(moduleAnalysis, exportedName, context, seen = new
 
 function getParserPluginsForModule(filename, source) {
   if (/\.(?:[cm]?ts|tsx|litsx)$/i.test(filename)) {
-    return ["typescript"];
+    return ["jsx", "typescript"];
   }
 
   if (/\b(?:as|satisfies)\s+[^;,)]+/.test(source)) {
-    return ["typescript"];
+    return ["jsx", "typescript"];
   }
 
-  return [];
+  return ["jsx"];
 }
 
 function isSymbolForMarker(node, markerKey) {

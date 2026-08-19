@@ -3,7 +3,6 @@ import * as babelParser from "@babel/parser";
 import fs from "node:fs";
 import path from "node:path";
 import traverse from "@babel/traverse";
-import { parseWithLitsxVirtualization } from "@litsx/authoring/internal/parser";
 import { ensureTypescriptModule } from "./transform-litsx-properties.js";
 import {
   isLitsxRuntimeHookName,
@@ -328,12 +327,12 @@ function createStructuralHookResolver(options = {}) {
 
   function getParserPluginsForModule(filename, source) {
     if (/\.(?:[cm]?ts|tsx|litsx)$/i.test(filename)) {
-      return ["typescript"];
+      return ["jsx", "typescript"];
     }
     if (/\b(?:as|satisfies)\s+[^;,)]+/.test(source)) {
-      return ["typescript"];
+      return ["jsx", "typescript"];
     }
-    return [];
+    return ["jsx"];
   }
 
   function getImportedName(specifier) {
@@ -505,7 +504,7 @@ function createStructuralHookResolver(options = {}) {
 
     let ast;
     try {
-      ast = parseWithLitsxVirtualization(babelParser.parse, source, {
+      ast = babelParser.parse(source, {
         sourceType: "module",
         plugins: getParserPluginsForModule(normalizedFilename, source),
       });

@@ -9,7 +9,6 @@ export function createEmptyStaticIr() {
     properties: {
       inferred: [],
       authored: [],
-      legacy: [],
     },
     elements: {
       localCandidates: [],
@@ -44,10 +43,6 @@ export function normalizeStaticIr(ir = null) {
     ...entry,
     expression: entry.expression ? t.cloneNode(entry.expression) : null,
   }));
-  next.properties.legacy = (ir.properties?.legacy || []).map((entry) => ({
-    ...entry,
-    expression: entry.expression ? t.cloneNode(entry.expression) : null,
-  }));
   next.elements.localCandidates = [...(ir.elements?.localCandidates || [])];
   next.elements.importedCandidates = (ir.elements?.importedCandidates || [])
     .map(cloneImportedCandidate);
@@ -73,9 +68,6 @@ function isStaticPropertiesCall(statement) {
   const callee = statement.expression.callee;
   if (t.isIdentifier(callee, { name: "__litsx_static_properties" })) {
     return "authored";
-  }
-  if (t.isIdentifier(callee, { name: "staticProps" })) {
-    return "legacy";
   }
   return null;
 }
@@ -141,7 +133,6 @@ export function setStaticIrInferredProperties(ir, properties = []) {
   ir.properties ||= {
     inferred: [],
     authored: [],
-    legacy: [],
   };
   ir.properties.inferred = properties.map((expression, index) => ({
     index,

@@ -98,3 +98,4 @@ export {
 } from "./state-hooks.js";
 
 export { jsxSpreadElement } from "./jsx-spread.js";
+export { createRef, ref } from "lit/directives/ref.js";

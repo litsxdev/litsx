@@ -235,6 +235,7 @@ function toKebab(name) {
 function getTag(node) {
   if (t.isJSXIdentifier(node.name)) {
     const originalName = node.name.name;
+    const routedComponentName = node.__litsxRestComponentName;
     const isCapitalized =
       originalName.charAt(0) === originalName.charAt(0).toUpperCase() &&
       originalName.charAt(0) !== originalName.charAt(0).toLowerCase();
@@ -242,8 +243,12 @@ function getTag(node) {
     return {
       name: isCapitalized ? toKebab(originalName) : originalName,
       isComponent: false,
-      isAuthoredComponentTag: isCapitalized,
-      componentExpression: isCapitalized ? t.identifier(originalName) : null,
+      isAuthoredComponentTag: isCapitalized || Boolean(routedComponentName),
+      componentExpression: routedComponentName
+        ? t.identifier(routedComponentName)
+        : isCapitalized
+          ? t.identifier(originalName)
+          : null,
     };
   }
 
@@ -473,6 +478,12 @@ function createSpreadElementCall(node, opts, name, isAuthoredComponentTag, compo
       ...(opts?.reactCompatEvents === true
         ? [t.objectProperty(t.identifier("reactCompatEvents"), t.booleanLiteral(true))]
         : []),
+      ...(opts?.reactCompatRefs === true
+        ? [t.objectProperty(
+          t.identifier("refAdapter"),
+          t.identifier(opts?.reactRefAdapterName || "toLitRef")
+        )]
+        : []),
     ]),
   ];
   if (hasChildren) args.push(createJsxReplacement(children, childOptions));
@@ -497,7 +508,10 @@ const transforms = {
     const hasSpreadAttributes = node.openingElement.attributes.some(
       (attr) => attr.type === "JSXSpreadAttribute"
     );
-    if (hasSpreadAttributes && !isNoscript) {
+    const routeComponentRestProps = opts?.componentRestProps === true &&
+      isAuthoredComponentTag && node.openingElement.__litsxRouteRestProps === true &&
+      node.openingElement.attributes.length > 0;
+    if ((hasSpreadAttributes || routeComponentRestProps) && !isNoscript) {
       addKey(
         strings,
         keys,
@@ -519,6 +533,34 @@ const transforms = {
       const rawName = decodeVirtualAttributeName(jsxName) ?? jsxName;
       const prefix = rawName[0];
 
+      if (rawName === "ref") {
+        const value = attr.value?.type === "JSXExpressionContainer"
+          ? lowerEmbeddedJsx(attr.value.expression, opts)
+          : attr.value
+            ? t.cloneNode(attr.value, true)
+            : t.identifier("undefined");
+        if (isAuthoredComponentTag || name.includes("-")) {
+          addString(strings, keys, " .ref=", attr);
+          addKey(
+            strings,
+            keys,
+            opts?.reactCompatRefs === true
+              ? t.callExpression(t.identifier(opts?.reactRefAdapterName || "toLitRef"), [value])
+              : value,
+          );
+          return;
+        }
+        const adaptedValue = opts?.reactCompatRefs === true
+          ? t.callExpression(t.identifier(opts?.reactRefAdapterName || "toLitRef"), [value])
+          : value;
+        addString(strings, keys, " ", attr);
+        addKey(strings, keys, t.callExpression(
+          t.identifier(opts?.refDirectiveName || "ref"),
+          [adaptedValue]
+        ));
+        return;
+      }
+
       if (isAuthoredComponentTag && shouldLowerAuthoredComponentAttributeAsProperty(attr, rawName, opts)) {
         addString(strings, keys, ` .${rawName}=`, attr);
         addKey(
@@ -537,7 +579,14 @@ const transforms = {
 
         if (attr.value) {
           if (attr.value.type === "JSXExpressionContainer") {
-            addKey(strings, keys, lowerEmbeddedJsx(attr.value.expression, opts));
+            const expression = lowerEmbeddedJsx(attr.value.expression, opts);
+            addKey(
+              strings,
+              keys,
+              rawName === ".ref" && opts?.reactCompatRefs === true
+                ? t.callExpression(t.identifier(opts?.reactRefAdapterName || "toLitRef"), [expression])
+                : expression,
+            );
           } else if (attr.value.type === "StringLiteral") {
             addKey(strings, keys, t.stringLiteral(attr.value.value));
           } else {

@@ -21,7 +21,11 @@ The recommended LitSX source model is ordinary `.jsx` or `.tsx`:
 - attach component metadata with standard assignments such as `Button.styles = css\`...\`` and `Button.properties = {...}`
 - import `css` from `@litsx/core` when declaring component styles
 
-LitSX compilation is still required: it lowers functions and JSX to Lit elements and templates. Authored code is standard JSX/TSX and uses the normal TypeScript, editor, and formatting toolchain. The unreleased `.litsx`, `@event`, `.prop`, `?attr`, and in-function `static ...` authoring experiments have been removed rather than carried as a compatibility surface.
+LitSX compilation is still required: it lowers functions and JSX to Lit elements and templates. Authored code is standard JSX/TSX and uses the normal TypeScript, editor, and formatting toolchain. The unreleased `.litsx`, `@event`, `.prop`, `?attr`, in-function `static ...`, `staticProps(...)`, and `staticStyles(...)` authoring experiments have been removed rather than carried as a compatibility surface.
+
+The complete native syntax, binding, event, spread, ref, and identity contract is
+defined in [`AUTHORING.md`](./AUTHORING.md). Treat that document as the source of
+truth when updating the website documentation.
 
 ## Workspace layout
 

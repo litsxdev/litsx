@@ -63,6 +63,18 @@ describe("@litsx/babel-preset-litsx", () => {
     assert.match(result.code, /return html`<button>\$\{this\.label\}<\/button>`;/);
   });
 
+  it("routes ordinary JSX props into local component rest bags", () => {
+    const source = [
+      "const Action = ({ label, ...props }) => { return <button {...props}>{label}</button>; };",
+      "export const Screen = () => { return <Action label=\"Save\" aria-label=\"Save action\" />; };",
+    ].join("\n");
+
+    const result = compileWithNativePreset(source);
+
+    assert.match(result.code, /static \[Symbol\.for\("litsx\.restProps"\)\] = \{/);
+    assert.match(result.code, /jsxSpreadElement\("action", \[\{[\s\S]*?label: "Save",[\s\S]*?"aria-label": "Save action"/);
+  });
+
   it("matches the direct preset plugin factory", () => {
     const source = [
       "import FancyButton from './FancyButton.js';",
@@ -182,7 +194,7 @@ describe("@litsx/babel-preset-litsx", () => {
 
   it("compiles static-only structural hooks without host lifecycle wrapping", () => {
     const source = [
-      'import { defineHook } from "@litsx/core";',
+      'import { css, defineHook } from "@litsx/core";',
       "const useStaticResource = defineHook({",
       "  static(name, meta) {",
       "    return { key: name, path: meta.callsitePath };",
@@ -192,10 +204,10 @@ describe("@litsx/babel-preset-litsx", () => {
       "  },",
       "});",
       "export function StaticCard() {",
-      "  static styles = `:host { display: block; }`;",
       "  const value = useStaticResource('catalog');",
       "  return <div>{value}</div>;",
       "}",
+      "StaticCard.styles = css`:host { display: block; }`;",
     ].join("\n");
 
     const result = transformFromAstSync(parser.parse(source, { sourceType: "module" }), source, {
@@ -378,12 +390,12 @@ describe("@litsx/babel-preset-litsx", () => {
     const source = [
       'import { useElementInternals, useFormValidity, useFormValue } from "@litsx/core";',
       "export function FormField() {",
-      "  static formAssociated = true;",
       "  const internals = useElementInternals();",
       "  const control = useFormValue('draft');",
       "  const validity = useFormValidity();",
       "  return <div>{internals.supported ? control.value : validity.validationMessage}</div>;",
       "}",
+      "FormField.formAssociated = true;",
     ].join("\n");
 
     const result = transformFromAstSync(parser.parse(source, { sourceType: "module" }), source, {
@@ -437,13 +449,13 @@ describe("@litsx/babel-preset-litsx", () => {
     const authoredStaticSource = [
       ...baseHook,
       "export function ProductCard(props: { title: string }) {",
-      "  static properties = {",
-      "    messages: { reflect: true },",
-      "    title: { reflect: true },",
-      "  };",
       "  useMessages();",
       "  return <div>{props.title}</div>;",
       "}",
+      "ProductCard.properties = {",
+      "  messages: { reflect: true },",
+      "  title: { reflect: true },",
+      "};",
     ].join("\n");
 
     const baseResult = compileWithNativePreset(noStaticSource, {
@@ -608,12 +620,12 @@ describe("@litsx/babel-preset-litsx", () => {
     const source = [
       'import * as core from "@litsx/core";',
       "export function FormField() {",
-      "  static formAssociated = true;",
       "  const internals = core.useElementInternals();",
       "  const control = core.useFormValue('draft');",
       "  const validity = core.useFormValidity();",
       "  return <div>{internals.supported ? control.value : validity.validationMessage}</div>;",
       "}",
+      "FormField.formAssociated = true;",
     ].join("\n");
 
     const result = transformFromAstSync(parser.parse(source, { sourceType: "module" }), source, {
@@ -1241,9 +1253,9 @@ describe("@litsx/babel-preset-litsx", () => {
       detectLitsxSourceFeatures(
         [
           "export function Greeting() {",
-          "  static lightDom = true;",
           "  return <div>ready</div>;",
           "}",
+          "Greeting.lightDom = true;",
         ].join("\n"),
         {},
       ),
@@ -2247,18 +2259,18 @@ describe("@litsx/babel-preset-litsx", () => {
     assert.doesNotMatch(result.code, /__litsx_static_properties\(/);
   });
 
-  it("covers a combined native preset path with static hoists, handlers, refs, and scoped elements", () => {
+  it("covers a combined native preset path with standard metadata, handlers, refs, and scoped elements", () => {
     const source = [
       "import FancyButton from './FancyButton.js';",
-      "import { useRef, useState } from '@litsx\/core';",
+      "import { css, useRef, useState } from '@litsx\/core';",
       "type Props = { label: string; active: boolean };",
       "export function ActionCard({ label, active }: Props) {",
       "  const buttonRef = useRef(null);",
       "  const [count, setCount] = useState(0);",
-      "  static styles = `:host { display: block; }`;",
-      "  static properties = { active: { reflect: true } };",
-      "  return <FancyButton ref={buttonRef} .label={label} @click={() => setCount(count + 1)}>{active ? count : 0}</FancyButton>;",
+      "  return <FancyButton ref={buttonRef} label={label} on:click={() => setCount(count + 1)}>{active ? count : 0}</FancyButton>;",
       "}",
+      "ActionCard.styles = css`:host { display: block; }`;",
+      "ActionCard.properties = { active: { reflect: true } };",
     ].join("\n");
 
     const result = transformFromAstSync(
@@ -2584,13 +2596,11 @@ describe("@litsx/babel-preset-litsx", () => {
     );
 
     assert.match(result.code, /import \{[^}]*useRef[^}]*\} from ['"]@litsx\/core['"]/);
-    assert.match(result.code, /import \{[^}]*useCallbackRef[^}]*\} from ['"]@litsx\/core['"]/);
     assert.match(result.code, /import \{[^}]*prepareEffects[^}]*\} from ['"]@litsx\/core['"]/);
     assert.match(result.code, /prepareEffects\(this\);/);
     assert.match(result.code, /const buttonRef = useRef\(this, null\);/);
-    assert.match(result.code, /useCallbackRef\(this, \(\) => this\._buttonRefElement, node => buttonRef\.current = node\);/);
-    assert.match(result.code, /get _buttonRefElement\(\)/);
-    assert.match(result.code, /data-ref="_buttonRefElement"/);
+    assert.match(result.code, /<button ref=\{buttonRef\}>Click<\/button>/);
+    assert.doesNotMatch(result.code, /data-ref|querySelector|_buttonRefElement/);
   });
 
   it("keeps non-DOM native useRef bindings as mutable refs through the preset", () => {
@@ -2598,8 +2608,8 @@ describe("@litsx/babel-preset-litsx", () => {
       "import { useRef } from '@litsx\/core';",
       "export function Counter() {",
       "  const workerRef = useRef(null);",
-      "  workerRef.current = 'ok';",
-      "  return <div>{workerRef.current}</div>;",
+      "  workerRef.value = 'ok';",
+      "  return <div>{workerRef.value}</div>;",
       "}",
     ].join("\n");
 
@@ -2614,7 +2624,7 @@ describe("@litsx/babel-preset-litsx", () => {
     );
 
     assert.match(result.code, /const workerRef = useRef\(this, null\);/);
-    assert.match(result.code, /workerRef\.current = 'ok';/);
+    assert.match(result.code, /workerRef\.value = 'ok';/);
     assert.doesNotMatch(result.code, /get workerRef\(\)/);
     assert.doesNotMatch(result.code, /data-ref="/);
   });

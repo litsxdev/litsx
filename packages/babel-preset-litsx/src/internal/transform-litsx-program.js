@@ -63,41 +63,6 @@ function ensureNamedImport(importPath, importedName) {
   return true;
 }
 
-function pruneUnusedLitsxStaticImports(programPath) {
-  programPath.scope.crawl();
-
-  const bodyPaths = programPath.get("body");
-  const litsxImports = bodyPaths.filter(
-    (path) => path.isImportDeclaration() && path.node.source.value === "@litsx/core"
-  );
-
-  litsxImports.forEach((importPath) => {
-    const removableSpecifiers = importPath.get("specifiers").filter((specifierPath) => {
-      if (!specifierPath.isImportSpecifier()) return false;
-      if (!t.isIdentifier(specifierPath.node.imported)) return false;
-
-      const importedName = specifierPath.node.imported.name;
-      if (importedName !== "staticStyles" && importedName !== "staticProps") {
-        return false;
-      }
-
-      const localName = t.isIdentifier(specifierPath.node.local)
-        ? specifierPath.node.local.name
-        : importedName;
-      const binding = specifierPath.scope.getBinding(localName);
-      return !binding || binding.referencePaths.length === 0;
-    });
-
-    removableSpecifiers.forEach((specifierPath) => {
-      specifierPath.remove();
-    });
-
-    if (importPath.node.specifiers.length === 0) {
-      importPath.remove();
-    }
-  });
-}
-
 export function finalizeProgram(programPath, state) {
   if (!state?.__litsxTransformCount) {
     return;
@@ -278,5 +243,4 @@ export function finalizeProgram(programPath, state) {
     }
   }
 
-  pruneUnusedLitsxStaticImports(programPath);
 }

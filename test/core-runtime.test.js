@@ -276,7 +276,7 @@ describe("litsx effects controller", () => {
     const controller = host.controllers[0];
     let unsubscribed = 0;
 
-    controller.imperatives.push({ ref: { current: { value: 1 } } }, null);
+    controller.imperatives.push({ ref: { value: { value: 1 } } }, null);
     controller.externalStores.push(
       { unsubscribe: () => { unsubscribed += 1; } },
       { unsubscribe: null },
@@ -284,7 +284,7 @@ describe("litsx effects controller", () => {
     controller.hostDisconnected();
 
     assert.equal(unsubscribed, 1);
-    assert.strictEqual(controller.imperatives[0].ref.current, null);
+    assert.strictEqual(controller.imperatives[0].ref.value, undefined);
     assert.equal(controller.externalStores.length, 0);
   });
 
@@ -1440,7 +1440,7 @@ describe("litsx effects controller", () => {
 
     host.disconnect();
 
-    assert.strictEqual(values.at(-1), null);
+    assert.strictEqual(values.at(-1), undefined);
     assert.strictEqual(host.focus, undefined);
   });
 
@@ -1698,7 +1698,7 @@ describe("litsx effects controller", () => {
     prepareEffects(host);
     const ref = useRef(null, 123);
 
-    assert.strictEqual(ref.current, 123);
+    assert.strictEqual(ref.value, 123);
     assert.strictEqual(host.controllers.length, 1);
   });
 
@@ -1718,14 +1718,14 @@ describe("litsx effects controller", () => {
     const firstRef = useRef(host, "alpha");
     update(host);
 
-    firstRef.current = "beta";
+    firstRef.value = "beta";
 
     prepareEffects(host);
     const secondRef = useRef(host, "gamma");
     update(host);
 
     assert.strictEqual(firstRef, secondRef);
-    assert.strictEqual(secondRef.current, "beta");
+    assert.strictEqual(secondRef.value, "beta");
   });
 
   it("keeps DOM targets when using callback refs without an imperative override", () => {
@@ -1871,7 +1871,7 @@ describe("litsx effects controller", () => {
     host.disconnect();
 
     assert.strictEqual(calls[0], node);
-    assert.strictEqual(calls.at(-1), null);
+    assert.strictEqual(calls.at(-1), undefined);
   });
 
   it("cleans the previous callback ref when the callback changes", () => {
@@ -1891,7 +1891,7 @@ describe("litsx effects controller", () => {
 
     assert.deepStrictEqual(calls, [
       ["first", node],
-      ["first", null],
+      ["first", undefined],
       ["second", node],
     ]);
   });
@@ -1899,11 +1899,11 @@ describe("litsx effects controller", () => {
   it("keeps callback refs bound to their DOM targets when useExpose is also used", () => {
     const host = new TestHost();
     const node = { tagName: "INPUT" };
-    const ref = { current: null };
+    const ref = { value: undefined };
 
     prepareEffects(host);
     useCallbackRef(host, () => node, (value) => {
-      ref.current = value;
+      ref.value = value;
     }, [ref]);
     useExpose(host, () => ({
       focus() {
@@ -1912,18 +1912,18 @@ describe("litsx effects controller", () => {
     }), []);
     update(host);
 
-    assert.strictEqual(ref.current, node);
+    assert.strictEqual(ref.value, node);
     assert.strictEqual(host.focus(), "focus");
   });
 
   it("lets ref-targeted useExpose override a forwarded DOM target on that ref channel", () => {
     const host = new TestHost();
     const node = { tagName: "INPUT" };
-    const ref = { current: null };
+    const ref = { value: undefined };
 
     prepareEffects(host);
     useCallbackRef(host, () => node, (value) => {
-      ref.current = value;
+      ref.value = value;
     }, [ref]);
     useExpose(host, ref, () => ({
       focus() {
@@ -1932,14 +1932,14 @@ describe("litsx effects controller", () => {
     }), [ref]);
     update(host);
 
-    assert.strictEqual(typeof ref.current.focus, "function");
-    assert.strictEqual(ref.current.focus(), "focus");
+    assert.strictEqual(typeof ref.value.focus, "function");
+    assert.strictEqual(ref.value.focus(), "focus");
     assert.strictEqual(host.focus, undefined);
   });
 
   it("lets later ref-targeted useExpose calls override the same method on one ref channel", () => {
     const host = new TestHost();
-    const ref = { current: null };
+    const ref = { value: undefined };
 
     prepareEffects(host);
     useExpose(host, ref, () => ({
@@ -1954,7 +1954,7 @@ describe("litsx effects controller", () => {
     }));
     update(host);
 
-    assert.strictEqual(ref.current.focus(), "second");
+    assert.strictEqual(ref.value.focus(), "second");
 
     prepareEffects(host);
     useExpose(host, ref, () => ({
@@ -1964,7 +1964,7 @@ describe("litsx effects controller", () => {
     }));
     update(host);
 
-    assert.strictEqual(ref.current.focus(), "first");
+    assert.strictEqual(ref.value.focus(), "first");
   });
 
   it("observes host content reactively", () => {

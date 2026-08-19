@@ -106,6 +106,18 @@ describe("@litsx/compiler", () => {
     assert.deepStrictEqual(packageJson.files, ["dist", "src", "README.md"]);
   });
 
+  it("preserves rest-props routing across the compiler's reparsed template pass", () => {
+    const source = [
+      "const Action = ({ label, ...props }) => { return <button {...props}>{label}</button>; };",
+      "export const Screen = () => { return <Action label=\"Save\" aria-label=\"Save action\" />; };",
+    ].join("\n");
+
+    const result = transformLitsxSync(source, { filename: "/virtual/rest-routing.tsx" });
+
+    assert.match(result.code, /static \[Symbol\.for\("litsx\.restProps"\)\] = \{/);
+    assert.match(result.code, /jsxSpreadElement\("action", \[\{[\s\S]*?label: "Save",[\s\S]*?"aria-label": "Save action"/);
+  });
+
   it("compiles authored LitSX source and returns metadata", () => {
     const source = [
       "export const Counter = ({ label = 'Save' }) => {",

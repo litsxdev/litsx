@@ -27,6 +27,9 @@ describe("compiler authored input helpers", () => {
       "const view = <input .value={value} />;",
       "const view = <input ?disabled={disabled} />;",
       "function View() { static styles = `:host {}`; return <div />; }",
+      "function View() { staticProps({ title: String }); return <div />; }",
+      "function View() { staticStyles(`:host {}`); return <div />; }",
+      "function View() { __litsx_static_properties({ title: String }); return <div />; }",
     ]) {
       assert.throws(() => prepareLitsxAuthoredInput(source, {
         filename: "/virtual/View.tsx",
@@ -188,7 +191,7 @@ describe("compiler authored input helpers", () => {
     );
   });
 
-  it("builds compiler config with virtualization sourcemaps and normalized output plugins", () => {
+  it("builds compiler config with standard parsing and normalized output plugins", () => {
     const source = "export const Example = () => <button class='cta'>Save</button>;";
     const result = createLitsxTransformConfig(source, {
       filename: "/virtual/Example.jsx",
@@ -197,7 +200,7 @@ describe("compiler authored input helpers", () => {
     });
 
     assert.ok(result.inputAst);
-    assert.strictEqual(result.babelOptions.inputSourceMap, undefined);
+    assert.ok(!Object.hasOwn(result.babelOptions, "inputSourceMap"));
     assert.strictEqual(result.babelOptions.sourceMaps, true);
     assert.ok(Array.isArray(result.babelOptions.plugins));
   });

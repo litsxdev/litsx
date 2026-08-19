@@ -320,9 +320,10 @@ describe("react compat internal hooks", () => {
     const code = run(source);
 
     assert.match(code, /import \{[^}]*useExpose[^}]*\} from "@litsx\/core";/);
+    assert.match(code, /import \{[^}]*toLitRef[^}]*\} from "@litsx\/core\/react-compat";/);
     assert.match(
       code,
-      /useExpose\(this, this\.ref,[\s\S]*focus\(\)[\s\S]*\[this\.ref\]\);/
+      /useExpose\(this, toLitRef\(this\.ref\),[\s\S]*focus\(\)[\s\S]*\[this\.ref\]\);/
     );
     assert.doesNotMatch(code, /from\s+['"]react['"]/);
   });

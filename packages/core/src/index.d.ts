@@ -1,6 +1,7 @@
 import type { LitElement, ReactiveElement, TemplateResult } from "lit";
 import type { DirectiveResult } from "lit/directive.js";
 export { css } from "lit";
+export { createRef, ref } from "lit/directives/ref.js";
 
 export interface LitsxJsxNode {
   $$typeof: symbol;
@@ -22,7 +23,12 @@ export type LitsxRenderable =
   | undefined
   | Iterable<unknown>;
 
-export type LitsxRef<T> = T | ((value: T | null) => void) | null;
+/** A Lit-native ref. Assignment uses `.value`; cleanup publishes `undefined`. */
+export type LitsxRef<T> =
+  | { value: T | undefined }
+  | {
+      bivarianceHack(value: T | undefined): void;
+    }["bivarianceHack"];
 export interface ExecutionContextKey<T> {
   readonly __brand?: T;
 }
@@ -100,6 +106,7 @@ export declare function jsxSpreadElement(
     component?: boolean | CustomElementConstructor;
     void?: boolean;
     namespace?: "html" | "svg";
+    refAdapter?: (value: unknown) => unknown;
   },
   children?: unknown
 ): import("lit").TemplateResult;
@@ -116,10 +123,8 @@ export declare function __getLitsxNoscriptFactory(value: unknown): {
 } | null;
 
 export interface LitsxBaseAttributes {
-  key?: string | number;
   slot?: string;
   class?: string;
-  className?: string;
   autoFocus?: boolean;
   spellCheck?: boolean;
   part?: string;
@@ -156,6 +161,7 @@ export type LitsxEventListener<TEvent extends Event = Event> =
       passive?: boolean;
     };
 
+/** React-style DOM event props used by the optional compatibility surface. */
 export type LitsxStandardDomEventAttributes<Target = EventTarget> = {
   [EventName in keyof GlobalEventHandlersEventMap as `on${Capitalize<EventName & string>}`]?: LitsxEventHandler<
     GlobalEventHandlersEventMap[EventName] & { currentTarget: Target }
@@ -239,14 +245,13 @@ export type LitsxTypedCustomEventAttributes<
 
 export type LitsxDomAttributes<Target = EventTarget> =
   & LitsxExplicitDomEventAttributes<Target>
-  & LitsxStandardDomEventAttributes<Target>
   & {
     _currentTarget?: Target | undefined;
   };
 
 export type LitsxHostElementProps<TElement> = Omit<
   Partial<TElement>,
-  "children" | "style" | "part" | "slot" | "className"
+  "children" | "style" | "part" | "slot" | "className" | "htmlFor"
 >;
 
 export type LitsxNativeAttributeAliases<TElement> =
@@ -977,11 +982,13 @@ export declare function useStyle(
     | [compute: LitsxStyleFactory, deps: unknown[]]
 ): void;
 /**
- * Store a mutable value across renders without causing updates.
+ * Store a Lit-native mutable value across renders without causing updates.
+ * The returned object exposes `.value`; an attached JSX ref is cleared with
+ * `undefined` when its target disconnects.
  */
 export declare function useRef<T>(
   initialValue?: T
-): { current: T | undefined };
+): { value: T | undefined };
 /**
  * Generate a stable id for the current component instance.
  */
@@ -1008,8 +1015,8 @@ export declare function useStableId(): string;
  * Run a callback ref through the component lifecycle.
  */
 export declare function useCallbackRef(
-  getTarget: () => Element | null,
-  callback: (node: Element | null) => void,
+  getTarget: () => Element | undefined,
+  callback: (node: Element | undefined) => void,
   deps?: unknown[]
 ): void;
 /**
@@ -1021,7 +1028,7 @@ export declare function useExpose<T extends Record<string, (...args: any[]) => u
   deps?: unknown[]
 ): void;
 export declare function useExpose<T extends Record<string, (...args: any[]) => unknown>>(
-  ref: { current: T | null } | ((value: T | null) => void),
+  ref: { value: T | undefined } | ((value: T | undefined) => void),
   createHandle: () => T,
   deps?: unknown[]
 ): void;

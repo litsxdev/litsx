@@ -15,7 +15,7 @@ export function BrokenScreen() {
       <SuspenseList revealOrder="sideways" />
 
       {/* @ts-expect-error invalid tail */}
-      <suspense-list tail="visible" />
+      <SuspenseList tail="visible" />
 
       {/* @ts-expect-error fallbackRenderer is not part of the SuspenseBoundary authoring contract */}
       <SuspenseBoundary fallbackRenderer={() => "loading"} />
@@ -25,6 +25,18 @@ export function BrokenScreen() {
 
       {/* @ts-expect-error ActionButton requires a label */}
       <ActionButton />
+
+      {/* @ts-expect-error native LitSX uses class */}
+      <div className="legacy" />
+
+      {/* @ts-expect-error native LitSX uses for */}
+      <label htmlFor="query">Query</label>
+
+      {/* @ts-expect-error native LitSX uses on:event */}
+      <button onClick={() => undefined}>Save</button>
+
+      {/* @ts-expect-error native LitSX key has no reconciliation contract */}
+      <div key="legacy" />
     </>
   );
 }

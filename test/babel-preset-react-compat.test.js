@@ -11,6 +11,25 @@ const { transformFromAstSync } = babelCore;
 let reactCompatPreset;
 
 describe("@litsx/babel-preset-react-compat", () => {
+  it("lowers React createRef and namespace createRef to Lit-backed facades", () => {
+    const source = `
+      import React, { createRef as makeRef } from "react";
+      const first = makeRef();
+      const second = React.createRef();
+      export function RefPair() {
+        return <><input ref={first} /><button ref={second} /></>;
+      }
+    `;
+
+    const code = run(source);
+
+    assert.match(code, /createReactRef/);
+    assert.strictEqual((code.match(/createReactRef\(\)/g) || []).length, 2);
+    assert.match(code, /ref\(toLitRef\(first\)\)/);
+    assert.match(code, /ref\(toLitRef\(second\)\)/);
+    assert.doesNotMatch(code, /React\.createRef|makeRef\(\)|data-ref/);
+  });
+
   beforeAll(async () => {
     const mod = await import("../packages/babel-preset-react-compat/src/index.js");
     reactCompatPreset = interopDefault(mod);
@@ -61,7 +80,7 @@ describe("@litsx/babel-preset-react-compat", () => {
     assert.match(code, /class FancyForm extends ShadowDomMixin\(LitsxStaticHoistsMixin\(LitElement\)\)/);
     assert.match(code, /prepareEffects\(this\);/);
     assert.match(code, /useAfterUpdate\(this,/);
-    assert.match(code, /return html`<div><fancy-button \.ref=\$\{buttonRef\} \.label=\$\{this\.label\}><\/fancy-button><\/div>`;/);
+    assert.match(code, /return html`<div>\$\{jsxSpreadElement\("fancy-button", \[\{[\s\S]*?"\.ref": buttonRef,[\s\S]*?"\.label": this\.label[\s\S]*?component: FancyButton[\s\S]*?\)\}<\/div>`;/);
     assert.match(code, /static elements = \{\s*"fancy-button": FancyButton\s*\}/);
     assert.match(code, /static get properties\(\)/);
     assert.doesNotMatch(code, /PropTypes|\.propTypes\s*=/);
@@ -179,7 +198,7 @@ describe("@litsx/babel-preset-react-compat", () => {
     assert.match(disabledCode, /<panel[^>]*\.key=\$\{selectedId\}/);
   });
 
-  it("expands typed object rest bindings into their remaining component props", () => {
+  it("keeps typed object rest bindings in a compact reactive bag", () => {
     const source = `
       export function Action(
         { disabled, ...props }: { disabled: boolean; title?: string }
@@ -191,9 +210,27 @@ describe("@litsx/babel-preset-react-compat", () => {
     const code = run(source, { parser: { plugins: ["typescript"] } });
 
     assert.match(code, /static properties = \{[\s\S]*disabled: \{\s*type: Boolean/);
-    assert.match(code, /title: \{\s*type: String/);
-    assert.match(code, /jsxSpreadElement\("button", \[\{\s*title: this\.title\s*\}, \{/);
-    assert.doesNotMatch(code, /jsxSpreadElement\("button", \[this\.props/);
+    assert.match(code, /__litsxRestProps: \{\s*type: Object,\s*attribute: false/);
+    assert.match(code, /static \[Symbol\.for\("litsx\.restProps"\)\] = \{\s*property: "__litsxRestProps"/);
+    assert.doesNotMatch(code, /title: \{\s*type: String/);
+    assert.match(code, /jsxSpreadElement\("button", \[this\.__litsxRestProps, \{/);
+  });
+
+  it("routes explicit callsite props into a local component rest bag", () => {
+    const source = `
+      function Action({ disabled, ...props }) {
+        return <button {...props} disabled={disabled} />;
+      }
+
+      export function App() {
+        return <Action disabled aria-label="Save" data-track="primary" />;
+      }
+    `;
+
+    const code = run(source);
+
+    assert.match(code, /static \[Symbol\.for\("litsx\.restProps"\)\] = \{\s*property: "__litsxRestProps"/);
+    assert.match(code, /jsxSpreadElement\("action", \[\{[\s\S]*?disabled: true,[\s\S]*?"aria-label": "Save",[\s\S]*?"data-track": "primary"/);
   });
 
   it("quotes hyphenated typed component properties", () => {
@@ -515,7 +552,7 @@ describe("@litsx/babel-preset-react-compat", () => {
     `);
 
     assert.match(code, /class CalendarDayButton extends/);
-    assert.match(code, /import \{[^}]*useRef[^}]*\} from "@litsx\/core"/);
+    assert.match(code, /import \{[^}]*useReactRef as useRef[^}]*\} from "@litsx\/core\/react-compat"/);
     assert.match(code, /useRef\(this, null\)/);
     assert.match(code, /useAfterUpdate\(this,/);
     assert.doesNotMatch(code, /React\.use(?:Ref|Effect)/);
@@ -822,10 +859,12 @@ describe("@litsx/babel-preset-react-compat", () => {
     const code = run(source);
 
     assert.match(code, /class CardShell extends LitElement/);
-    assert.match(code, /useCallbackRef\(this, \(\) => this\.renderRoot\?\./);
+    assert.match(code, /from "@litsx\/core\/react-compat"/);
+    assert.match(code, /toLitRef\(this\.ref\)/);
     assert.doesNotMatch(code, /\bmemo\(/);
     assert.doesNotMatch(code, /\bforwardRef\(/);
-    assert.match(code, /return html`<label data-ref="_refElement">\$\{this\.title\}<\/label>`;/);
+    assert.match(code, /return html`<label \$\{ref\(toLitRef\(this\.ref\)\)\}>\$\{this\.title\}<\/label>`;/);
+    assert.doesNotMatch(code, /data-ref|querySelector/);
   });
 
   it("rejects forced light DOM output for react-compat migrations when scoped elements are required", () => {

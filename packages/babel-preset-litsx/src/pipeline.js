@@ -26,7 +26,7 @@ const NATIVE_TRANSFORM_OPTION_KEYS = [
 const HOOK_FEATURE_PATTERN = /\bdefineHook\b/;
 const REF_FEATURE_PATTERN = /\buseRef\b|\bref\s*=/;
 const SCOPED_ELEMENTS_PATTERN = /<\s*(?:[A-Z][\w.]*(?=[\s/>])|[a-z][\w]*-[\w-]*(?=[\s/>]))/;
-const LIGHT_DOM_PATTERN = /\^lightDom\b|static\s+lightDom\s*=\s*true\b/;
+const LIGHT_DOM_PATTERN = /\b[A-Z][\w$]*\.lightDom\s*=\s*true\b/;
 const BOUNDARY_PATTERN = /\b(?:ErrorBoundary|SuspenseBoundary)\b/;
 
 function escapeRegExp(value) {
@@ -314,14 +314,14 @@ export function createLitsxPresetPlugins(options = {}, sourceFeatures = null) {
   ]);
 
   if (options.jsxTemplate !== false) {
-    plugins.push([
-      transformJsxHtmlTemplate,
-      {
-        ...normalizedTransformOptions,
-        componentAttributeFallback: false,
-        ...(options.jsxTemplateOptions || {}),
-      },
-    ]);
+    plugins.push([transformJsxHtmlTemplate, {
+      ...normalizedTransformOptions,
+      componentAttributeFallback: false,
+      componentRestProps: true,
+      importedComponentRestProps: false,
+      reactCompatRefs: false,
+      ...(options.jsxTemplateOptions || {}),
+    }]);
   }
 
   return plugins;

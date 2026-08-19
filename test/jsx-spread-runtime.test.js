@@ -41,7 +41,7 @@ describe("jsxSpreadElement", () => {
 
   it("uses properties for component props and supports style, ref, and inner HTML", () => {
     const container = document.createElement("div");
-    const ref = { current: null };
+    const ref = { value: undefined };
 
     render(
       jsxSpreadElement("article", [{
@@ -56,7 +56,7 @@ describe("jsxSpreadElement", () => {
     const article = container.querySelector("article");
     assert.deepStrictEqual(article.payload, { ready: true });
     assert.strictEqual(article.style.color, "red");
-    assert.strictEqual(ref.current, article);
+    assert.strictEqual(ref.value, article);
     assert.strictEqual(article.querySelector("strong").textContent, "ready");
   });
 
@@ -83,6 +83,65 @@ describe("jsxSpreadElement", () => {
     assert.strictEqual(element.payload, payload);
     assert.strictEqual(element.active, true);
     assert.strictEqual(element.getAttribute("data-id"), "ready");
+  });
+
+  it("routes undeclared component inputs into a reactive rest-props bag", async () => {
+    const tag = "jsx-spread-rest-props";
+    if (!customElements.get(tag)) {
+      customElements.define(tag, class extends LitElement {
+        static [Symbol.for("litsx.restProps")] = { property: "__litsxRestProps" };
+        static properties = {
+          variant: { type: String },
+          __litsxRestProps: { type: Object, attribute: false },
+        };
+
+        render() {
+          return jsxSpreadElement("button", [this.__litsxRestProps], { reactCompatEvents: true }, this.variant);
+        }
+      });
+    }
+    const container = document.createElement("div");
+    document.body.append(container);
+    const onClick = () => {};
+    const onclick = () => {};
+    const payload = { id: 1 };
+
+    render(jsxSpreadElement(tag, [{
+      variant: "primary",
+      "aria-label": "Save",
+      ".payload": payload,
+      "?disabled": true,
+      onClick,
+      ".onclick": onclick,
+    }], { component: customElements.get(tag), reactCompatEvents: true }), container);
+
+    let host = container.querySelector(tag);
+    await host.updateComplete;
+    let button = host.shadowRoot.querySelector("button");
+    assert.strictEqual(host.variant, "primary");
+    assert.strictEqual(host.onclick, onclick);
+    assert.strictEqual(host.hasAttribute("aria-label"), false);
+    assert.deepStrictEqual(host.__litsxRestProps, {
+      "aria-label": "Save",
+      payload: { id: 1 },
+      disabled: true,
+      onClick,
+    });
+    assert.strictEqual(button.getAttribute("aria-label"), "Save");
+    assert.deepStrictEqual(button.payload, { id: 1 });
+    assert.strictEqual(button.disabled, true);
+
+    render(jsxSpreadElement(tag, [{ variant: "secondary", title: "Next" }], {
+      component: customElements.get(tag),
+      reactCompatEvents: true,
+    }), container);
+    host = container.querySelector(tag);
+    await host.updateComplete;
+    assert.deepStrictEqual(host.__litsxRestProps, { title: "Next" });
+    button = host.shadowRoot.querySelector("button");
+    assert.strictEqual(button.getAttribute("aria-label"), null);
+    assert.strictEqual(button.disabled, false);
+    assert.strictEqual(button.title, "Next");
   });
 
   it("distinguishes onX callback props from explicit custom events", () => {

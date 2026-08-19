@@ -7,6 +7,9 @@
 
 Official Vite integration for LitSX.
 
+The plugin compiles the standard source language defined by the repository's
+[native authoring contract](../../AUTHORING.md).
+
 This package is the recommended default for:
 
 - Vite apps
@@ -159,7 +162,7 @@ Forwarded to `@litsx/babel-plugin-transform-jsx-html-template`.
 
 ### `authoringPlugins?: unknown[]`
 
-Extra Babel plugins applied after LitSX virtualization/parsing and before the built-in LitSX lowering pipeline.
+Extra Babel plugins applied after standard JSX/TSX parsing and before the built-in LitSX lowering pipeline.
 
 ### `outputPlugins?: unknown[]`
 

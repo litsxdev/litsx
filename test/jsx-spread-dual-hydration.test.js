@@ -6,6 +6,7 @@ import { LitElement, nothing, render } from "lit";
 import { hydrate as hydrateLit } from "@lit-labs/ssr-client";
 import { afterEach, describe, it } from "vitest";
 import { jsxSpreadElement } from "../packages/core/src/jsx-spread.js";
+import { createReactRef, toLitRef } from "../packages/core/src/react-compat.js";
 import { withLitsxHydrationSync } from "../packages/ssr/src/hydration-state.js";
 
 const workspace = process.cwd();
@@ -131,9 +132,13 @@ describe("JSX spread dual SSR/client hydration", () => {
 
   it("attaches events and refs and renders dangerous HTML without extra topology", () => {
     let clicks = 0;
-    const ref = { current: null };
+    const ref = createReactRef();
     const server = { tag: "button", sources: [{ dangerouslySetInnerHTML: { __html: "<strong>ready</strong>" } }] };
-    const client = { ...server, sources: [{ ...server.sources[0], "on:click": () => { clicks += 1; }, ref }] };
+    const client = {
+      ...server,
+      options: { refAdapter: toLitRef },
+      sources: [{ ...server.sources[0], "on:click": () => { clicks += 1; }, ref }],
+    };
     const container = document.createElement("div");
     const markup = serverMarkup(server);
     assert.doesNotMatch(markup, /onclick=|onClick=|\sref=/);
@@ -145,6 +150,9 @@ describe("JSX spread dual SSR/client hydration", () => {
     assert.strictEqual(original.textContent, "ready");
     assert.strictEqual(clicks, 1);
     assert.strictEqual(ref.current, original);
+
+    render(jsxSpreadElement("button", [{}]), container);
+    assert.strictEqual(ref.current, null);
   });
 
   it("infers third-party properties before boolean attributes", () => {

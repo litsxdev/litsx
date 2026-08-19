@@ -7,6 +7,11 @@
 
 Canonical Babel preset for migrating React-authored source onto the LitSX runtime model.
 
+This preset is intentionally separate from the repository's
+[native LitSX authoring contract](../../AUTHORING.md). It accepts React source
+and translates React-specific contracts at the compatibility boundary; it does
+not redefine native LitSX syntax.
+
 ## What It Includes
 
 This preset wires the supported React compatibility pipeline in a fixed order:
@@ -26,6 +31,14 @@ This preset wires the supported React compatibility pipeline in a fixed order:
 13. React event lowering
 
 That ordering makes compatibility for React 19-style `ref` props, `forwardRef(...)`, and wrappers such as `memo(...)` part of one explicit migration contract instead of accidental composition.
+
+Refs are Lit-native after lowering. React `useRef` and `createRef` calls produce
+stable facades whose `.current` property observes the underlying Lit `.value`,
+and callback refs translate Lit's `undefined` cleanup to React's `null` cleanup.
+React 19 callback refs that return a cleanup function run that cleanup instead.
+The same adapter is applied at native-element, component, `forwardRef`, spread,
+SSR, and hydration boundaries. Existing React source keeps using `.current` and
+`null`; native LitSX code uses `.value` and `undefined`.
 
 This preset is the supported public entrypoint for React migration. React event aliasing, effect lowering, wrapper lowering, ref handling, and other migration stages are internal to the preset.
 
@@ -81,6 +94,13 @@ are expanded into their two JSX branches before component lowering; arbitrary dy
 types remain outside the static contract. For allowlisted dependencies, hook analysis follows the
 ESM implementation selected by the package's import surface rather than inspecting a sibling
 CommonJS build or declarations file.
+
+Object-rest component props stay dynamic. Given `({ variant, ...props })`, react-compat exposes
+`variant` as an ordinary reactive property and stores the remaining inputs in one internal reactive
+bag. It does not expand `React.ComponentProps<"button">` into hundreds of host properties. Calls to
+local rest-prop components and imported components are routed through `jsxSpreadElement`, which
+uses `Symbol.for("litsx.restProps")` metadata on compiled destination classes to split their declared
+API from the forwarded rest object. The same contract is used during browser rendering and SSR.
 
 ## Wrapper Semantics
 

@@ -17,12 +17,12 @@ const NATIVE_PROPERTY_NAMES = new Set(["checked", "files", "indeterminate", "sel
 const SKIPPED_KEYS = new Set(["__proto__", "constructor", "prototype", "key", "children"]);
 const SERVER_STRINGS_CACHE = new Map();
 const CLIENT_STRINGS_CACHE = new Map();
-const REACT_REF_CALLBACKS = new WeakMap();
 const CLIENT_DESCRIPTOR_CACHE = new WeakMap();
 const SAFE_BINDING_NAME = /^[A-Za-z_$][A-Za-z0-9_$:.-]*$/;
 const DIGEST_MAPPINGS = Symbol.for("@litsx/ssr/spread-digest-mappings");
 const HYDRATION_DEPTH = Symbol.for("@litsx/ssr/hydration-depth");
 const CLIENT_RUNTIME = Symbol.for("@litsx/ssr/client-runtime");
+const REST_PROPS = Symbol.for("litsx.restProps");
 const MAX_DIGEST_MAPPINGS = 2048;
 const MAX_TEMPLATE_STRINGS = 2048;
 
@@ -92,6 +92,60 @@ function hasComponentProperty(tagName, name, component, element) {
   return Boolean((properties && typeof properties.has === "function" && properties.has(name)) || (constructor?.prototype && name in constructor.prototype));
 }
 
+function hasDeclaredComponentProperty(tagName, name, component, element) {
+  const constructor = resolveConstructor(tagName, component, element);
+  const properties = constructor?.elementProperties;
+  return Boolean(properties && typeof properties.has === "function" && properties.has(name));
+}
+
+function routeComponentRestProps(tagName, sources, component, element) {
+  const constructor = resolveConstructor(tagName, component, element);
+  const metadata = constructor?.[REST_PROPS];
+  const propertyName = metadata?.property;
+  if (typeof propertyName !== "string" || propertyName.length === 0) return sources;
+
+  constructor?.finalize?.();
+  const routed = [];
+  const rest = {};
+  let hasRest = false;
+
+  for (const source of sources || []) {
+    if (source == null || (typeof source !== "object" && typeof source !== "function")) continue;
+    const explicit = {};
+    let hasExplicit = false;
+    for (const rawName of Object.keys(source)) {
+      if (SKIPPED_KEYS.has(rawName) || rawName === propertyName) continue;
+      const prefix = rawName[0];
+      const routedName = prefix === "." || prefix === "?" || prefix === "@"
+        ? rawName.slice(1)
+        : rawName;
+      const targetsHost = prefix === "@" || rawName === "ref" ||
+        isNativeDomEventHandlerPropertyName(routedName) ||
+        hasDeclaredComponentProperty(tagName, routedName, component, element);
+      if (targetsHost) {
+        explicit[rawName] = source[rawName];
+        hasExplicit = true;
+      } else {
+        rest[routedName] = source[rawName];
+        hasRest = true;
+      }
+    }
+    if (hasExplicit) routed.push(explicit);
+  }
+
+  routed.push({ [propertyName]: hasRest ? rest : {} });
+  return routed;
+}
+
+function shallowEqualRecords(left, right) {
+  if (left === right) return true;
+  if (!left || !right || typeof left !== "object" || typeof right !== "object") return false;
+  const leftKeys = Object.keys(left);
+  const rightKeys = Object.keys(right);
+  if (leftKeys.length !== rightKeys.length) return false;
+  return leftKeys.every((key) => Object.prototype.hasOwnProperty.call(right, key) && Object.is(left[key], right[key]));
+}
+
 function inferDescriptor(tagName, rawName, value, component, element, namespace, reactCompatEvents = false) {
   const nativeHtml = namespace !== "svg" && !tagName.includes("-") && !component;
   const descriptor = normalizeName(rawName, nativeHtml, reactCompatEvents);
@@ -145,6 +199,7 @@ function inferClientDescriptor(tagName, rawName, value, component, element, name
 const descriptorKey = (descriptor) => `${descriptor.kind}:${descriptor.name}`;
 
 function mergeSources(tagName, sources, component, element, namespace, reactCompatEvents = false) {
+  sources = routeComponentRestProps(tagName, sources, component, element);
   const merged = new Map();
   for (const source of sources || []) {
     if (source == null || (typeof source !== "object" && typeof source !== "function")) continue;
@@ -160,7 +215,7 @@ function mergeSources(tagName, sources, component, element, namespace, reactComp
 
 function mergeSourcesReverse(tagName, sources, component, element, seen, namespace, reactCompatEvents = false) {
   const bindings = [];
-  const validSources = sources || [];
+  const validSources = routeComponentRestProps(tagName, sources, component, element) || [];
   const dedupe = validSources.length > 1;
   if (dedupe) seen.clear();
   for (let sourceIndex = validSources.length - 1; sourceIndex >= 0; sourceIndex -= 1) {
@@ -189,14 +244,22 @@ function bindingPrefix(descriptor) {
   return descriptor.name;
 }
 
-function reactRef(value) {
-  if (!(value && typeof value === "object" && "current" in value)) return value;
-  let callback = REACT_REF_CALLBACKS.get(value);
-  if (!callback) {
-    callback = (element) => { value.current = element; };
-    REACT_REF_CALLBACKS.set(value, callback);
+function assignRef(value, element) {
+  if (typeof value === "function") value(element);
+  else if (value && typeof value === "object") value.value = element;
+}
+
+function adaptRefBindings(bindings, adapter) {
+  if (typeof adapter !== "function") return bindings;
+  for (const binding of bindings) {
+    if (
+      binding.descriptor.kind === "ref" ||
+      (binding.descriptor.kind === "property" && binding.descriptor.name === "ref")
+    ) {
+      binding.value = adapter(binding.value);
+    }
   }
-  return callback;
+  return bindings;
 }
 
 function serverBindingValue(descriptor, value) {
@@ -205,7 +268,7 @@ function serverBindingValue(descriptor, value) {
     return ifDefined(value == null || value === false ? undefined : value === true ? "" : value);
   }
   if (descriptor.kind === "style") return styleMap(value || {});
-  if (descriptor.kind === "ref") return ref(reactRef(value));
+  if (descriptor.kind === "ref") return ref(value);
   if (descriptor.kind === "event" && descriptor.capture && value != null) return { handleEvent: value, capture: true };
   return value;
 }
@@ -269,7 +332,7 @@ function eventOptions(descriptor, value) {
 function clearBinding(element, descriptor, previous) {
   if (!element) return;
   if (descriptor.kind === "event") element.removeEventListener(descriptor.name, previous.value, eventOptions(descriptor, previous.value));
-  else if (descriptor.kind === "ref") reactRef(previous.value)?.(null);
+  else if (descriptor.kind === "ref") assignRef(previous.value, undefined);
   else if (descriptor.kind === "style") for (const name of Object.keys(previous.value || {})) element.style[name] = "";
   else if (descriptor.kind === "property") element[descriptor.name] = typeof element[descriptor.name] === "boolean" ? false : undefined;
   else if (descriptor.kind !== "inner-html") element.removeAttribute(descriptor.name);
@@ -291,8 +354,8 @@ function applyBinding(element, descriptor, value, previous, adoptAttributes) {
     if (value != null) element.addEventListener(descriptor.name, value, eventOptions(descriptor, value));
   } else if (descriptor.kind === "ref") {
     if (previous?.value === value) return;
-    if (previous) reactRef(previous.value)?.(null);
-    reactRef(value)?.(element);
+    if (previous) assignRef(previous.value, undefined);
+    assignRef(value, element);
   } else if (descriptor.kind === "style") {
     const oldStyle = previous?.value || {};
     const nextStyle = value || {};
@@ -316,14 +379,26 @@ class JsxSpreadDirective extends Directive {
   render() { return noChange; }
   update(part, [tagName, sources, options]) {
     const element = this.element = part.element;
-    const next = mergeSourcesReverse(tagName, sources, options.component, element, this.seen, options.namespace, options.reactCompatEvents === true);
+    const next = adaptRefBindings(
+      mergeSourcesReverse(tagName, sources, options.component, element, this.seen, options.namespace, options.reactCompatEvents === true),
+      options.refAdapter,
+    );
+    const restPropertyName = resolveConstructor(tagName, options.component, element)?.[REST_PROPS]?.property;
     const nextKeys = new Set(next.map(({ descriptor }) => descriptorKey(descriptor)));
     for (const [key, previous] of this.bindings) if (!nextKeys.has(key)) clearBinding(element, previous.descriptor, previous);
     const adoptAttributes = !this.hydrated && (globalThis[HYDRATION_DEPTH] ?? 0) > 0;
     const updated = new Map();
     for (const binding of next) {
       const key = descriptorKey(binding.descriptor);
-      applyBinding(element, binding.descriptor, binding.value, this.bindings.get(key), adoptAttributes);
+      const previous = this.bindings.get(key);
+      if (
+        binding.descriptor.kind === "property" &&
+        binding.descriptor.name === restPropertyName &&
+        shallowEqualRecords(previous?.value ?? element[restPropertyName], binding.value)
+      ) {
+        binding.value = previous?.value ?? element[restPropertyName];
+      }
+      applyBinding(element, binding.descriptor, binding.value, previous, adoptAttributes);
       updated.set(key, binding);
     }
     this.bindings = updated;
@@ -352,7 +427,10 @@ export function jsxSpreadElement(tagName, sources, options = {}, children = noth
     if (hasChildren) values.push(children);
     return html(clientStrings, ...values);
   }
-  const descriptors = mergeSources(tagName, sources, options.component, undefined, options.namespace, options.reactCompatEvents === true);
+  const descriptors = adaptRefBindings(
+    mergeSources(tagName, sources, options.component, undefined, options.namespace, options.reactCompatEvents === true),
+    options.refAdapter,
+  );
   const innerHtml = descriptors.find(({ descriptor }) => descriptor.kind === "inner-html");
   const bindings = innerHtml ? descriptors.filter(({ descriptor }) => descriptor.kind !== "inner-html") : descriptors;
   const serverHasChildren = !isVoid && (innerHtml != null || hasChildren);

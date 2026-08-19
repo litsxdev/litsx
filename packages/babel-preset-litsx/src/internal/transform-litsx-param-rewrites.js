@@ -95,6 +95,10 @@ function createThisMemberExpression(propName) {
 }
 
 function createPropsObjectExpression(bindingInfo, propertyMap = new Map()) {
+  if (bindingInfo?.kind === "rest-alias" && bindingInfo.propertyName) {
+    return createThisMemberExpression(bindingInfo.propertyName);
+  }
+
   if (
     bindingInfo &&
     typeof bindingInfo !== "object" &&
@@ -264,11 +268,29 @@ export function replaceParamReferences(functionPath, bindings, propertyMap = new
       if (!refPath.node) return;
 
       if (
+        bindingInfo?.kind === "rest-alias" &&
+        bindingInfo.propertyName &&
+        refPath.parentPath?.isMemberExpression() &&
+        refPath.parentKey === "object"
+      ) {
+        refPath.replaceWith(getReplacementForProp(bindingInfo.propertyName, refPath));
+        return;
+      }
+
+      if (
         bindingInfo &&
         typeof bindingInfo === "object" &&
         isPropsAliasBinding(bindingInfo) &&
         (!refPath.parentPath || !refPath.parentPath.isMemberExpression())
       ) {
+        if (
+          bindingInfo.kind === "rest-alias" &&
+          bindingInfo.propertyName &&
+          shouldCapturePropReference(refPath, functionPath)
+        ) {
+          refPath.replaceWith(getReplacementForProp(bindingInfo.propertyName, refPath));
+          return;
+        }
         if (shouldCapturePropReference(refPath, functionPath)) {
           return;
         }

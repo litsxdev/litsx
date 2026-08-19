@@ -590,6 +590,7 @@ function transformFunction(functionPath, programPath, className, options = {}) {
     bindings,
     defaults,
     nestedInitializers,
+    restProps,
   } = extractProperties(
     functionPath,
     programPath,
@@ -673,6 +674,7 @@ function transformFunction(functionPath, programPath, className, options = {}) {
     needsCss,
     needsUnsafeCss,
     needsCallbackRef,
+    restProps,
     needsModuleIdMetadata: options?.ssr === true,
     moduleId:
       options?.ssr === true

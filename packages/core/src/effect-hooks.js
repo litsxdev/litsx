@@ -47,7 +47,7 @@ export function useAfterUpdate(host, callback, deps) {
  * @example
  * useOnCommit(() => {
  *   if (shouldFocus) {
- *     inputRef.current?.focus();
+ *     inputRef.value?.focus();
  *   }
  * }, []);
  * @param {import('lit').ReactiveControllerHost} host

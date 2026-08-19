@@ -3,8 +3,6 @@ export {
   collectComponentLikeFunctions,
   collectNativeClassNameWarnings,
   collectReactMemoWarnings,
-  NATIVE_STATIC_HOISTS,
-  STATIC_HOIST_CALL_RE,
 } from "./authored-semantics.js";
 export {
   collectImplicitChildrenProjectionIssues,
@@ -41,8 +39,6 @@ const KIND_TO_PREFIX = {
 const ATTR_NAME_CHAR = /[\w:.-]/;
 const TAG_NAME_START_CHAR = /[A-Za-z]/;
 const TAG_NAME_CHAR = /[\w:.-]/;
-const MACRO_NAME_START_CHAR = /[A-Za-z$_]/;
-const MACRO_NAME_CHAR = /[A-Za-z0-9$_]/;
 
 function isWhitespace(char) {
   return char === " " || char === "\t" || char === "\n" || char === "\r";
@@ -56,23 +52,11 @@ function sanitizeIdentifierTailChar(char) {
   return /[A-Za-z0-9$_]/.test(char) ? char : "_";
 }
 
-function isIdentifierStartChar(char) {
-  return /[A-Za-z$_]/.test(char);
-}
-
-function isIdentifierChar(char) {
-  return /[A-Za-z0-9$_]/.test(char);
-}
-
 function encodeEditorVirtualAttributeName(name) {
   const prefix = name[0];
   const localName = name.slice(1);
   const encodedPrefix = prefix === "@" ? "e" : prefix === "." ? "p" : "b";
   return `${encodedPrefix}${Array.from(localName, sanitizeIdentifierTailChar).join("")}`;
-}
-
-function encodeEditorStaticHoistAssignment(name) {
-  return `const $${name} = `;
 }
 
 function scanQuotedString(sourceText, start, quote) {
@@ -235,36 +219,6 @@ function scanBalancedBracesWithJsx(sourceText, start, replacements, encodeAttrib
   }
 
   return index;
-}
-
-function trimTrailingWhitespaceAndComments(sourceText) {
-  let text = sourceText;
-  let changed = true;
-
-  while (changed) {
-    changed = false;
-
-    const trimmedWhitespace = text.replace(/\s+$/u, "");
-    if (trimmedWhitespace !== text) {
-      text = trimmedWhitespace;
-      changed = true;
-    }
-
-    const trimmedLineComment = text.replace(/\/\/[^\n\r]*$/u, "");
-    if (trimmedLineComment !== text) {
-      text = trimmedLineComment;
-      changed = true;
-      continue;
-    }
-
-    const trimmedBlockComment = text.replace(/\/\*[\s\S]*?\*\/$/u, "");
-    if (trimmedBlockComment !== text) {
-      text = trimmedBlockComment;
-      changed = true;
-    }
-  }
-
-  return text;
 }
 
 function previousSignificantIndex(sourceText, start) {
@@ -607,31 +561,17 @@ export function decodeVirtualAttributeName(name) {
   return `${KIND_TO_PREFIX[kind]}${localName}`;
 }
 
-export function decodeVirtualStaticHoistName(name) {
-  const match = /^__litsx_static_([A-Za-z$_][A-Za-z0-9$_]*)$/.exec(name);
-
-  if (!match) {
-    return null;
-  }
-
-  return `static ${match[1]}`;
-}
-
 export function remapVirtualText(text) {
   if (typeof text !== "string") {
     return text;
   }
 
-  return text
-    .replace(/__litsx_(event|prop|bool)_[\w:-]+/g, (name) => (
-      decodeVirtualAttributeName(name) ?? name
-    ))
-    .replace(/__litsx_static_[A-Za-z$_][A-Za-z0-9$_]*/g, (name) => (
-      decodeVirtualStaticHoistName(name) ?? name
-    ));
+  return text.replace(/__litsx_(event|prop|bool)_[\w:-]+/g, (name) => (
+    decodeVirtualAttributeName(name) ?? name
+  ));
 }
 
-export function looksLikeLitsxJsx(sourceText) {
+export function looksLikeGeneratedLitsxJsxBindings(sourceText) {
   if (typeof sourceText !== "string") {
     return false;
   }
@@ -694,191 +634,7 @@ export function looksLikeLitsxJsx(sourceText) {
     sawWhitespaceAfterTagName = false;
   }
 
-  return (
-    hasLitLikeAttributeTag ||
-    /(?:^|[;{}]\s*)static\s+[A-Za-z$_][A-Za-z0-9$_]*\s*=/m.test(sourceText) ||
-    /^\s*static\s+[A-Za-z$_][A-Za-z0-9$_]*\s*=/m.test(sourceText)
-  );
-}
-
-function isLikelyStaticHoistAssignmentStart(sourceText, index) {
-  if (sourceText.slice(index, index + 6) !== "static") {
-    return false;
-  }
-
-  const previousChar = sourceText[index - 1];
-  if (previousChar && /[A-Za-z0-9$_]/.test(previousChar)) {
-    return false;
-  }
-
-  const next = sourceText[index + 6];
-  if (!isWhitespace(next || "")) {
-    return false;
-  }
-
-  const prefix = trimTrailingWhitespaceAndComments(sourceText.slice(0, index));
-  if (!prefix) {
-    return true;
-  }
-
-  const previousSignificantChar = prefix[prefix.length - 1];
-  return (
-    previousSignificantChar === ";" ||
-    previousSignificantChar === "{" ||
-    previousSignificantChar === "}"
-  );
-}
-
-function readStaticHoistAssignment(sourceText, start) {
-  let index = start + 6;
-
-  while (index < sourceText.length && isWhitespace(sourceText[index])) {
-    index += 1;
-  }
-
-  const nameStart = index;
-  if (!MACRO_NAME_START_CHAR.test(sourceText[index] || "")) {
-    return null;
-  }
-
-  index += 1;
-  while (index < sourceText.length && MACRO_NAME_CHAR.test(sourceText[index])) {
-    index += 1;
-  }
-
-  const macroName = sourceText.slice(nameStart, index);
-
-  while (index < sourceText.length && isWhitespace(sourceText[index])) {
-    index += 1;
-  }
-
-  if (sourceText[index] !== "=") {
-    return null;
-  }
-
-  index += 1;
-  while (index < sourceText.length && isWhitespace(sourceText[index])) {
-    index += 1;
-  }
-
-  return {
-    macroName,
-    valueStart: index,
-  };
-}
-
-function scanStaticHoistAssignment(sourceText, start, replacements, strategy) {
-  const assignment = readStaticHoistAssignment(sourceText, start);
-  if (!assignment) {
-    return start + 1;
-  }
-
-  const { macroName, valueStart } = assignment;
-
-  let index = valueStart;
-  let parenDepth = 0;
-  let bracketDepth = 0;
-  let braceDepth = 0;
-  let statementEnd = sourceText.length;
-
-  while (index < sourceText.length) {
-    const char = sourceText[index];
-    const next = sourceText[index + 1];
-
-    if (char === "'" || char === "\"") {
-      index = scanQuotedString(sourceText, index, char);
-      continue;
-    }
-
-    if (char === "`") {
-      index = scanTemplateLiteral(sourceText, index);
-      continue;
-    }
-
-    if (char === "/" && next === "/") {
-      index = scanLineComment(sourceText, index);
-      continue;
-    }
-
-    if (char === "/" && next === "*") {
-      index = scanBlockComment(sourceText, index);
-      continue;
-    }
-
-    if (char === "(") {
-      parenDepth += 1;
-      index += 1;
-      continue;
-    }
-
-    if (char === ")") {
-      parenDepth = Math.max(0, parenDepth - 1);
-      index += 1;
-      continue;
-    }
-
-    if (char === "[") {
-      bracketDepth += 1;
-      index += 1;
-      continue;
-    }
-
-    if (char === "]") {
-      bracketDepth = Math.max(0, bracketDepth - 1);
-      index += 1;
-      continue;
-    }
-
-    if (char === "{") {
-      braceDepth += 1;
-      index += 1;
-      continue;
-    }
-
-    if (char === "}") {
-      if (parenDepth === 0 && bracketDepth === 0 && braceDepth === 0) {
-        statementEnd = index;
-        break;
-      }
-
-      braceDepth = Math.max(0, braceDepth - 1);
-      index += 1;
-      continue;
-    }
-
-    if (
-      char === ";" &&
-      parenDepth === 0 &&
-      bracketDepth === 0 &&
-      braceDepth === 0
-    ) {
-      statementEnd = index + 1;
-      break;
-    }
-
-    index += 1;
-  }
-
-  const hasSemicolon = statementEnd > valueStart && sourceText[statementEnd - 1] === ";";
-  const expressionSegment = sourceText.slice(
-    valueStart,
-    hasSemicolon ? statementEnd - 1 : statementEnd,
-  );
-  const statementBody = sourceText.slice(valueStart, statementEnd);
-  const expressionText = trimTrailingWhitespaceAndComments(expressionSegment);
-  const trailingText = statementBody.slice(expressionSegment.length);
-
-  replacements.push({
-    start,
-    end: statementEnd,
-    originalName: `static ${macroName}`,
-    replacement:
-      strategy === "editor"
-        ? `${encodeEditorStaticHoistAssignment(macroName)}${statementBody}`
-        : `__litsx_static_${macroName}(${expressionText})${trailingText}`,
-  });
-
-  return statementEnd;
+  return hasLitLikeAttributeTag;
 }
 
 export function createVirtualLitsxJsxSource(sourceText, options = {}) {
@@ -906,7 +662,7 @@ export function createVirtualLitsxJsxSource(sourceText, options = {}) {
     };
   }
 
-  if (!looksLikeLitsxJsx(sourceText)) {
+  if (!looksLikeGeneratedLitsxJsxBindings(sourceText)) {
     return {
       code: sourceText,
       map: null,
@@ -916,9 +672,6 @@ export function createVirtualLitsxJsxSource(sourceText, options = {}) {
 
   const replacements = [];
   let index = 0;
-  let braceDepth = 0;
-  const blockStack = [];
-  let pendingClassBody = false;
 
   while (index < sourceText.length) {
     const char = sourceText[index];
@@ -947,55 +700,6 @@ export function createVirtualLitsxJsxSource(sourceText, options = {}) {
     if (char === "<" && isLikelyJsxTagStart(sourceText, index)) {
       index = scanJsxElement(sourceText, index, replacements, encodeAttributeName);
       continue;
-    }
-
-    if (
-      char === "s" &&
-      blockStack[blockStack.length - 1] !== "class" &&
-      isLikelyStaticHoistAssignmentStart(sourceText, index)
-    ) {
-      index = scanStaticHoistAssignment(sourceText, index, replacements, strategy);
-      continue;
-    }
-
-    if (isIdentifierStartChar(char)) {
-      const wordStart = index;
-      index += 1;
-      while (index < sourceText.length && isIdentifierChar(sourceText[index])) {
-        index += 1;
-      }
-
-      const word = sourceText.slice(wordStart, index);
-      if (word === "class") {
-        let lookahead = index;
-        while (lookahead < sourceText.length && isWhitespace(sourceText[lookahead])) {
-          lookahead += 1;
-        }
-
-        pendingClassBody = sourceText[lookahead] !== ":";
-      }
-
-      continue;
-    }
-
-    if (char === "{") {
-      braceDepth += 1;
-      blockStack.push(pendingClassBody ? "class" : "block");
-      pendingClassBody = false;
-      index += 1;
-      continue;
-    }
-
-    if (char === "}") {
-      braceDepth = Math.max(0, braceDepth - 1);
-      blockStack.pop();
-      pendingClassBody = false;
-      index += 1;
-      continue;
-    }
-
-    if (char === ";" || char === "=") {
-      pendingClassBody = false;
     }
 
     index += 1;

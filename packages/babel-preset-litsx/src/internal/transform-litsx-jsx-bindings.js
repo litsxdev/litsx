@@ -408,8 +408,27 @@ function getLocalPropertyKinds(path, tagNode, state, t) {
       ])
       .filter(([name]) => name),
   );
-  state.__litsxLocalPropertyKinds.set(functionPath.node, kinds);
-  return kinds;
+  const info = { kinds, restProps: result.restProps };
+  state.__litsxLocalPropertyKinds.set(functionPath.node, info);
+  return info;
+}
+
+function isExternalComponentRequiringRuntimeRouting(path, tagNode, t) {
+  const rootName = getRootJsxIdentifier(tagNode, t);
+  if (!rootName) return false;
+  const bindingPath = path.scope.getBinding(rootName)?.path;
+  if (!bindingPath?.isImportSpecifier?.() &&
+      !bindingPath?.isImportDefaultSpecifier?.() &&
+      !bindingPath?.isImportNamespaceSpecifier?.()) {
+    return false;
+  }
+  const source = bindingPath.parentPath?.node?.source?.value;
+  return typeof source === "string" &&
+    source !== "react" &&
+    source !== "react-error-boundary" &&
+    !source.startsWith("react/") &&
+    source !== "@litsx/core" &&
+    !source.startsWith("@litsx/core/");
 }
 
 function transformOpeningElement(path, state, t) {
@@ -429,9 +448,19 @@ function transformOpeningElement(path, state, t) {
   const reactBoundaryKind = state.__litsxDeferReactBoundaryAttributes
     ? getReactBoundaryKind(path, tagNode, t)
     : null;
-  const localPropertyKinds = component
+  const localPropertyInfo = component
     ? getLocalPropertyKinds(path, tagNode, state, t)
     : null;
+  if (
+    component &&
+    (localPropertyInfo?.restProps || (
+      state.__litsxRouteImportedRestProps &&
+      isExternalComponentRequiringRuntimeRouting(path, tagNode, t)
+    ))
+  ) {
+    path.node.__litsxRouteRestProps = true;
+  }
+  const localPropertyKinds = localPropertyInfo?.kinds ?? null;
   const tsTagNode = getTsNode(typeResolver, tagNode);
   const targetType = component
     ? getComponentPropsType(typeResolver, tagNode)
@@ -602,6 +631,7 @@ export default declare((api, options = {}) => {
       this.__litsxTransformReactKeys = options.reactCompatKeys === true;
       this.__litsxDeferReactEvents = options.reactCompatEvents === true;
       this.__litsxSuppressNativeClassNameWarning = options.suppressNativeClassNameWarning === true;
+      this.__litsxRouteImportedRestProps = options.importedComponentRestProps === true;
       this.__litsxJsxBindingTypeResolver = createTypeResolver(
         this.file?.opts?.filename,
         this.file?.code,

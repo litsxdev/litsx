@@ -64,6 +64,59 @@ describe("@litsx/babel-plugin-transform-jsx-html-template", () => {
     assert.match(code, /\$\{count\}/);
   });
 
+  it("lowers native JSX refs to Lit ref directives without DOM markers", () => {
+    const source = `const inputRef = createRef(); const view = <input ref={inputRef} />;`;
+    const ast = parser.parse(source, { sourceType: "module" });
+    const { code } = transformFromAstSync(ast, source, {
+      configFile: false,
+      babelrc: false,
+      plugins: [plugin],
+    });
+
+    assert.match(code, /import \{ ref \} from "@litsx\/core";/);
+    assert.match(code, /html`<input \$\{ref\(inputRef\)\}>`/);
+    assert.doesNotMatch(code, /data-ref/);
+  });
+
+  it("adapts React refs at native, component, and spread boundaries", () => {
+    const source = `
+      const view = <section>
+        <input ref={inputRef} />
+        <x-field ref={fieldRef} />
+        <button {...props} />
+      </section>;
+    `;
+    const ast = parser.parse(source, { sourceType: "module" });
+    const { code } = transformFromAstSync(ast, source, {
+      configFile: false,
+      babelrc: false,
+      plugins: [[plugin, { reactCompatRefs: true }]],
+    });
+
+    assert.match(code, /from "@litsx\/core\/react-compat"/);
+    assert.match(code, /ref\(toLitRef\(inputRef\)\)/);
+    assert.match(code, /<x-field \.ref=\$\{toLitRef\(fieldRef\)\}>/);
+    assert.match(code, /refAdapter: toLitRef/);
+  });
+
+  it("aliases the generated ref helpers when authoring bindings use their names", () => {
+    const source = `
+      const ref = "local";
+      const toLitRef = "local";
+      const view = <input ref={inputRef} />;
+    `;
+    const ast = parser.parse(source, { sourceType: "module" });
+    const { code } = transformFromAstSync(ast, source, {
+      configFile: false,
+      babelrc: false,
+      plugins: [[plugin, { reactCompatRefs: true }]],
+    });
+
+    assert.match(code, /ref as _litsxRef/);
+    assert.match(code, /toLitRef as _toLitRef/);
+    assert.match(code, /_litsxRef\(_toLitRef\(inputRef\)\)/);
+  });
+
   it("keeps Lit-style listener attributes intact", () => {
     const source = `const view = <button @click={handleClick}></button>;`;
 

@@ -284,19 +284,19 @@ export function useDeferredValue(host, value, options) {
  * Store a mutable value across renders without causing updates.
  * @usage Use useRef for stable mutable cells such as timers, previous snapshots, and imperative handles.
  * @usage Attach a ref created by useRef to JSX `ref=...` when it should point at a rendered element or component instance.
- * @behavior The ref object exposes a mutable current property.
- * @behavior When attached to an intrinsic element, the Lit<sup>sx</sup> transform layer keeps current synchronized with that rendered element.
+ * @behavior The ref object exposes Lit's mutable value property.
+ * @behavior When attached to an intrinsic element, Lit's ref directive keeps value synchronized with that rendered element.
  * @behavior When attached to a component tag, the ref resolves to the component instance by default.
  * @behavior Components can override that default target by explicitly forwarding the incoming ref to another element or child component.
  * @behavior When used as plain mutable storage, the ref persists across renders without causing updates on writes.
  * @mentalModel useRef is the single mutable ref primitive in Lit<sup>sx</sup>, whether the ref stores arbitrary data, tracks a rendered DOM node, or points at a component instance.
- * @pitfall Do not read ref.current as a source of truth for render decisions if that value can change outside the current render pass.
+ * @pitfall Do not read ref.value as a source of truth for render decisions if that value can change outside the current render pass.
  * @pitfall Prefer state hooks when a change should trigger an update. Refs are for persistence and imperative coordination.
  * @example
- * const inputRef = useRef(null);
+ * const inputRef = useRef();
  *
  * useOnCommit(() => {
- *   inputRef.current?.focus();
+ *   inputRef.value?.focus();
  * }, []);
  * @param {import('lit').ReactiveControllerHost} host
  * @param {any} [initialValue]
@@ -375,7 +375,7 @@ export function useCallbackRef(host, getTarget, callback, deps) {
  * @example
  * useExpose(() => ({
  *   focus() {
- *     inputRef.current?.focus();
+ *     inputRef.value?.focus();
  *   },
  *   clear() {
  *     setValue("");
@@ -384,11 +384,11 @@ export function useCallbackRef(host, getTarget, callback, deps) {
  *
  * useExpose(forwardedRef, () => ({
  *   focus() {
- *     innerRef.current?.focus();
+ *     innerRef.value?.focus();
  *   },
  * }), [forwardedRef, innerRef]);
  * @param {import('lit').ReactiveControllerHost} host
- * @param {{ current: Record<string, Function> | null } | ((value: Record<string, Function> | null) => void) | (() => Record<string, Function>)} refOrCreateHandle
+ * @param {{ value: Record<string, Function> | undefined } | ((value: Record<string, Function> | undefined) => void) | (() => Record<string, Function>)} refOrCreateHandle
  * Either the target ref that should receive the exposed methods, or the handle factory when targeting the host instance directly.
  * @param {(() => Record<string, Function>) | ReadonlyArray<unknown>} [createHandleOrDeps]
  * Handle factory for the ref-targeted signature, or dependency list for the host-targeted signature.

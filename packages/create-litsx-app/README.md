@@ -7,11 +7,15 @@
 
 Scaffold a new LitSX project with standard TSX, TypeScript type-checking, and the recommended Vite build setup.
 
+Generated code follows the repository's [native authoring contract](../../AUTHORING.md).
+
 Generated projects demonstrate:
 
 - ordinary JSX prop names with compiler-driven Lit binding inference
 - `on:event` listeners such as `on:click` and `on:primary-action`
 - standard static assignments such as `Component.styles = css\`...\``
+- Lit-native refs with `.value` and `undefined` cleanup
+- Lit directives such as `repeat()` for keyed collection identity
 - `.tsx` source checked directly by `tsc`
 
 The official authoring posture is:

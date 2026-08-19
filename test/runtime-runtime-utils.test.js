@@ -50,7 +50,7 @@ describe("runtime utility internals", () => {
     const functionRef = (value) => {
       calls.push(value);
     };
-    const objectRef = { current: "initial" };
+    const objectRef = { value: "initial" };
 
     assignRef(null, "ignored");
     assignRef("not-a-ref", "ignored");
@@ -59,8 +59,8 @@ describe("runtime utility internals", () => {
     cleanupRef(functionRef);
     cleanupRef(objectRef);
 
-    assert.deepStrictEqual(calls, ["value", null]);
-    assert.strictEqual(objectRef.current, null);
+    assert.deepStrictEqual(calls, ["value", undefined]);
+    assert.strictEqual(objectRef.value, undefined);
   });
 
   it("flushes scheduled work by priority and clears queues defensively", () => {

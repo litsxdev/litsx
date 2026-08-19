@@ -925,6 +925,7 @@ export function extractProperties(functionPath, programPath, options = {}) {
   const bindings = new Map();
   const defaults = new Map();
   const nestedInitializers = [];
+  let restProps = null;
   const forwardRefOptions = options.forwardRef;
 
   function isSpecialRefPropName(name) {
@@ -1050,24 +1051,21 @@ export function extractProperties(functionPath, programPath, options = {}) {
     pattern.properties.forEach((prop) => {
       if (t.isRestElement(prop) && t.isIdentifier(prop.argument)) {
         const restName = prop.argument.name;
-        if (typeMap.size === 0) {
-          ensureProperty(restName, createPropertyConfig(t.identifier("Object")));
-          registerBinding(restName, restName);
-          return;
-        }
+        const internalName = "__litsxRestProps";
         const restProperties = new Map(
           Array.from(typeMap.entries()).filter(
             ([propName]) => !explicitlyDestructuredNames.has(propName)
           )
         );
-        // Keep the authored rest binding in the public metadata for backwards
-        // compatibility while also exposing its statically known members.
-        ensureProperty(restName, createPropertyConfig(t.identifier("Object")));
-        restProperties.forEach((propertyConfig, propName) => {
-          ensureProperty(propName, propertyConfig);
-        });
+        const entry = ensureProperty(
+          internalName,
+          createPropertyConfig(t.identifier("Object"), { attribute: false })
+        );
+        ensureAttributeFalse(entry);
+        restProps = { propertyName: internalName };
         registerBinding(restName, {
           kind: "rest-alias",
+          propertyName: internalName,
           properties: restProperties,
         });
         return;
@@ -1149,7 +1147,7 @@ export function extractProperties(functionPath, programPath, options = {}) {
       if (!propertyMap.has(propName) && warn) {
         warn({
           code: 91018,
-          message: `Falling back to String for prop "${propName}" inferred from opaque props access. Prefer destructuring, TypeScript types, or static properties = ... for stronger property metadata.`,
+          message: `Falling back to String for prop "${propName}" inferred from opaque props access. Prefer destructuring, TypeScript types, or Component.properties = ... for stronger property metadata.`,
           propName,
           localName: bindingName,
           line: memberPath.node.loc?.start?.line ?? null,
@@ -1350,5 +1348,5 @@ export function extractProperties(functionPath, programPath, options = {}) {
   const properties = Array.from(propertyMap.values()).map((entry) => entry.node);
   const propertyNames = new Set(propertyMap.keys());
 
-  return { properties, propertyNames, bindings, defaults, nestedInitializers };
+  return { properties, propertyNames, bindings, defaults, nestedInitializers, restProps };
 }

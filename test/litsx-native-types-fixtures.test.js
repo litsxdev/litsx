@@ -3,6 +3,7 @@ import fs from "fs";
 import path from "path";
 import babelCore from "@babel/core";
 import parser from "./helpers/litsx-parser.js";
+import ts from "typescript";
 import { beforeAll, describe, it } from "vitest";
 import { interopDefault } from "./helpers/interop-default.js";
 
@@ -33,6 +34,23 @@ beforeAll(async () => {
 });
 
 describe("@litsx/babel-preset-litsx typed fixtures", () => {
+  it("typechecks the native JSX authoring contract", () => {
+    const configPath = path.resolve("test/fixtures/typescript/tsconfig.litsx-jsx.json");
+    const config = ts.readConfigFile(configPath, ts.sys.readFile);
+    const parsed = ts.parseJsonConfigFileContent(
+      config.config,
+      ts.sys,
+      path.dirname(configPath),
+    );
+    const program = ts.createProgram(parsed.fileNames, parsed.options);
+    const diagnostics = ts.getPreEmitDiagnostics(program);
+
+    assert.deepStrictEqual(
+      diagnostics.map((diagnostic) => ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n")),
+      [],
+    );
+  }, TEST_TIMEOUT);
+
   it("resolves imported utility types and merges static properties overrides", () => {
     const code = transformFixture("shared-card.tsx");
 

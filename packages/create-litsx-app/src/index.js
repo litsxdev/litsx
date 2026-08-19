@@ -962,13 +962,13 @@ function createDeferred() {
   return { promise, resolve } satisfies DeferredStep;
 }
 
-function resolvePendingSteps(pendingStepsRef: { current: Map<number, DeferredStep> | null | undefined }) {
-  pendingStepsRef.current ??= new Map<number, DeferredStep>();
-  return pendingStepsRef.current;
+function resolvePendingSteps(pendingStepsRef: { value: Map<number, DeferredStep> | null | undefined }) {
+  pendingStepsRef.value ??= new Map<number, DeferredStep>();
+  return pendingStepsRef.value;
 }
 
 function suspendUntil(
-  pendingStepsRef: { current: Map<number, DeferredStep> | null | undefined },
+  pendingStepsRef: { value: Map<number, DeferredStep> | null | undefined },
   stepIndex: number,
   revealedCount: number,
 ) {
@@ -1005,7 +1005,7 @@ export const StarterGuide = () => {
     for (const deferred of resolvePendingSteps(pendingStepsRef).values()) {
       deferred.resolve?.();
     }
-    pendingStepsRef.current = new Map<number, DeferredStep>();
+    pendingStepsRef.value = new Map<number, DeferredStep>();
     setRevealedCount(0);
 
     const [firstDelay = 0, ...remainingDelays] = delays;
@@ -1038,7 +1038,7 @@ export const StarterGuide = () => {
       for (const deferred of resolvePendingSteps(pendingStepsRef).values()) {
         deferred.resolve?.();
       }
-      pendingStepsRef.current = new Map<number, DeferredStep>();
+      pendingStepsRef.value = new Map<number, DeferredStep>();
     };
   }, []);
 

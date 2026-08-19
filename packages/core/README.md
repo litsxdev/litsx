@@ -22,6 +22,9 @@ imports `@litsx/ssr`.
 This is infrastructure for libraries such as i18n or data runtimes. Application
 code should not add manual snapshot adapters or hydration bootstrap calls.
 
+For authored syntax and binding rules, see the repository's
+[native authoring contract](../../AUTHORING.md).
+
 ## What it provides
 
 - `EffectsController`: a Lit `ReactiveController` implementation that tracks hook registrations, dependency arrays, effect queues, transitions, refs, and external-store subscriptions per host instance.
@@ -36,7 +39,7 @@ code should not add manual snapshot adapters or hydration bootstrap calls.
   - `useTransition`, `startTransition`, `useDeferredValue`
 - Host and ref primitives:
   - `useHost`, `useHostContent`, `useTextContent`, `useSlot`
-  - `useRef`, `useCallbackRef`, `useExpose`, `useId`, `useStableId`
+  - `createRef`, `ref`, `useRef`, `useCallbackRef`, `useExpose`, `useId`, `useStableId`
   - `useMemoValue`, `useStableCallback`, `useEvent`, `useEmit`, `usePrevious`
   - `useExternalStore`, `useStyle`
 - Async and error primitives:
@@ -48,16 +51,42 @@ code should not add manual snapshot adapters or hydration bootstrap calls.
 - Component styling:
   - `css` is the original Lit template tag re-exported for the common
     `Component.styles = css\`...\`` authoring pattern. Lit directives remain
-    available from their normal Lit entrypoints.
+    available from their normal Lit entrypoints; `createRef` and `ref` are also
+    re-exported because JSX refs lower directly to Lit's ref directive.
 - Structural host middleware infrastructure:
   - `HostMiddlewareRuntime`
   - `HostMiddlewareMixin`
   - `createHostMiddlewareRuntime(...)`
 - JSX compatibility helpers:
   - `jsxSpreadElement(tagName, sources, options?, children?)` merges JSX prop sources in authored order. It uses an `ElementPart` in the browser and regular Lit parts during SSR.
+  - Compiled components with an object-rest parameter publish `Symbol.for("litsx.restProps")` metadata. `jsxSpreadElement` uses it to keep declared reactive props on the component host while routing undeclared inputs through one compact reactive object for forwarding to an inner element.
   - `on:event` is the explicit JSX event channel. The destination constructor, reactive component API, and native DOM properties determine whether ordinary JSX names become Lit property, boolean-attribute, or attribute bindings.
   - `onX` names are ordinary component properties/callbacks. React-style `onClick` event conversion belongs exclusively to react-compat. Native handler properties such as `onclick` remain available and are assigned as properties.
   - Hydratable spread output should be rendered with `@litsx/ssr` and hydrated with `@litsx/ssr/client` so the two template shapes are reconciled without replacing DOM nodes.
+
+## Ref semantics
+
+Native LitSX refs follow Lit's contract: object refs expose `.value`, and refs are
+cleared with `undefined`. JSX keeps the standard `ref={...}` shape while the
+compiler lowers intrinsic-element refs to Lit's element-part directive:
+
+```tsx
+const inputRef = useRef<HTMLInputElement>();
+
+useOnCommit(() => inputRef.value?.focus(), []);
+return <input ref={inputRef} />;
+```
+
+Component refs travel through the `.ref` property until they reach their final
+host, forwarded element, or `useExpose` handle. Object refs, callback refs,
+spreads, SSR, and hydration share the same `.value`/`undefined` lifecycle. The
+React compatibility preset supplies `.current`/`null` facades without changing
+the native runtime contract.
+
+SSR serializes the element and Lit's hydration markers, never the ref object or
+callback. On the client, Lit reconnects its element part to the existing server
+node and only then publishes that node through the ref. Hydration therefore does
+not recreate an element merely to populate its ref.
 
 ## Typed component events
 

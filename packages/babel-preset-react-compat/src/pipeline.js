@@ -24,6 +24,7 @@ import reactUnsupportedHooks from "./internal/react-unsupported-hooks.js";
 import reactHookExportAliases from "./internal/react-hook-export-aliases.js";
 import reactElementRuntime from "./internal/react-element-runtime.js";
 import reactPolymorphicElements from "./internal/react-polymorphic-elements.js";
+import reactRefs from "./internal/react-refs.js";
 
 export function normalizeReactCompatOptions(options = {}) {
   const domMode = options.domMode === "light" ? "light" : "shadow";
@@ -48,6 +49,7 @@ export function createReactCompatPresetPlugins(options = {}) {
     transformTypescriptNamespaceCollisions,
     reactHookExportAliases,
     reactElementRuntime,
+    reactRefs,
     reactPolymorphicElements,
     [reactAttributes, options.reactAttributes || {}],
     [reactWrappers, options.reactWrappers || {}],
@@ -63,6 +65,7 @@ export function createReactCompatPresetPlugins(options = {}) {
       reactCompatBoundaries: true,
       reactCompatEvents: true,
       reactCompatKeys: options.reactKeys !== false,
+      importedComponentRestProps: true,
     }],
     [
       transformLitsxComponents,
@@ -108,6 +111,9 @@ export function createReactCompatPresetPlugins(options = {}) {
     plugins.push([transformJsxHtmlTemplate, {
       componentAttributeFallback: false,
       reactCompatEvents: true,
+      componentRestProps: true,
+      importedComponentRestProps: true,
+      reactCompatRefs: true,
       ...(options.jsxTemplateOptions || {}),
     }]);
   }

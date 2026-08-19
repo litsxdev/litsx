@@ -11,6 +11,88 @@ import {
 
 let t;
 
+function isRestPropsMetadataKey(node) {
+  return t.isCallExpression(node) &&
+    t.isMemberExpression(node.callee) &&
+    t.isIdentifier(node.callee.object, { name: "Symbol" }) &&
+    t.isIdentifier(node.callee.property, { name: "for" }) &&
+    node.arguments.length === 1 &&
+    t.isStringLiteral(node.arguments[0], { value: "litsx.restProps" });
+}
+
+function classHasRestPropsMetadata(classNode) {
+  return classNode?.body?.body?.some((member) =>
+    t.isClassProperty(member) &&
+    member.static === true &&
+    member.computed === true &&
+    isRestPropsMetadataKey(member.key)
+  ) === true;
+}
+
+function isExternalRoutableImport(binding) {
+  const bindingPath = binding?.path;
+  if (!bindingPath?.isImportSpecifier?.() &&
+      !bindingPath?.isImportDefaultSpecifier?.() &&
+      !bindingPath?.isImportNamespaceSpecifier?.()) {
+    return false;
+  }
+  const source = bindingPath.parentPath?.node?.source?.value;
+  return typeof source === "string" &&
+    source !== "react" &&
+    source !== "react-error-boundary" &&
+    !source.startsWith("react/") &&
+    source !== "@litsx/core" &&
+    !source.startsWith("@litsx/core/");
+}
+
+function annotateReparsedRestRoutes(programPath, routeImportedComponents = false) {
+  programPath.scope.crawl();
+  const localRestComponents = new Set();
+  const scopedElementsByClass = new WeakMap();
+  for (const statementPath of programPath.get("body")) {
+    const declarationPath = statementPath.isExportNamedDeclaration() || statementPath.isExportDefaultDeclaration()
+      ? statementPath.get("declaration")
+      : statementPath;
+    if (declarationPath?.isClassDeclaration?.() && classHasRestPropsMetadata(declarationPath.node)) {
+      const name = declarationPath.node.id?.name;
+      if (name) localRestComponents.add(name);
+    }
+    if (declarationPath?.isClassDeclaration?.()) {
+      const elements = new Map();
+      for (const member of declarationPath.node.body.body) {
+        const keyName = member.key?.name ?? member.key?.value;
+        if (!t.isClassProperty(member) || member.static !== true || keyName !== "elements" ||
+            !t.isObjectExpression(member.value)) continue;
+        for (const property of member.value.properties) {
+          if (!t.isObjectProperty(property) || !t.isIdentifier(property.value)) continue;
+          const tagName = property.key?.name ?? property.key?.value;
+          if (typeof tagName === "string") elements.set(tagName, property.value.name);
+        }
+      }
+      if (elements.size > 0) scopedElementsByClass.set(declarationPath.node, elements);
+    }
+  }
+  programPath.traverse({
+    JSXOpeningElement(path) {
+      const name = path.node.name;
+      if (!t.isJSXIdentifier(name)) return;
+      let componentName = /^[A-Z]/.test(name.name) ? name.name : null;
+      if (!componentName) {
+        const classPath = path.findParent((parent) => parent.isClassDeclaration?.());
+        componentName = scopedElementsByClass.get(classPath?.node)?.get(name.name) ?? null;
+      }
+      if (!componentName) return;
+      if (localRestComponents.has(componentName) || (
+        routeImportedComponents &&
+        isExternalRoutableImport(path.scope.getBinding(componentName))
+      )) {
+        path.node.__litsxRouteRestProps = true;
+        path.node.__litsxRestComponentName = componentName;
+      }
+    },
+  });
+}
+
 function containsJsxSpreadAttribute(node) {
   if (!node || typeof node !== "object") return false;
   if (
@@ -28,6 +110,46 @@ function containsJsxSpreadAttribute(node) {
   });
 }
 
+function containsJsxRefAttribute(node) {
+  if (!node || typeof node !== "object") return false;
+  if (
+    t.isJSXElement(node) &&
+    node.openingElement.attributes.some(
+      (attr) => t.isJSXAttribute(attr) && t.isJSXIdentifier(attr.name, { name: "ref" })
+    )
+  ) {
+    return true;
+  }
+  const visitorKeys = t.VISITOR_KEYS?.[node.type] || [];
+  return visitorKeys.some((key) => {
+    const value = node[key];
+    return Array.isArray(value)
+      ? value.some(containsJsxRefAttribute)
+      : containsJsxRefAttribute(value);
+  });
+}
+
+function containsRoutedComponentProps(node) {
+  if (!node || typeof node !== "object") return false;
+  if (t.isJSXElement(node)) {
+    const name = node.openingElement.name;
+    if (
+      t.isJSXIdentifier(name) &&
+      node.openingElement.__litsxRouteRestProps === true &&
+      node.openingElement.attributes.length > 0
+    ) {
+      return true;
+    }
+  }
+  const visitorKeys = t.VISITOR_KEYS?.[node.type] || [];
+  return visitorKeys.some((key) => {
+    const value = node[key];
+    return Array.isArray(value)
+      ? value.some(containsRoutedComponentProps)
+      : containsRoutedComponentProps(value);
+  });
+}
+
 function replaceNode(path, state) {
   if (path.parentPath?.isJSXElement() || path.parentPath?.isJSXFragment()) {
     return;
@@ -41,8 +163,21 @@ function replaceNode(path, state) {
     state.file?.metadata?.sourceFileName ??
     null;
 
-  if (containsJsxSpreadAttribute(path.node)) {
+  const hasSpreadAttributes = containsJsxSpreadAttribute(path.node);
+  const hasRefAttributes = containsJsxRefAttribute(path.node);
+  const hasRoutedComponentProps =
+    state.opts.componentRestProps === true && containsRoutedComponentProps(path.node);
+  if (hasSpreadAttributes || hasRoutedComponentProps) {
     state.__litsxNeedsSpreadHelper = true;
+  }
+  if (hasRefAttributes) {
+    state.__litsxNeedsRefDirective = true;
+  }
+  if (
+    state.opts.reactCompatRefs === true &&
+    (hasRefAttributes || hasSpreadAttributes || hasRoutedComponentProps)
+  ) {
+    state.__litsxNeedsReactRefAdapter = true;
   }
 
   state.__litsxTemplateAttributeMappings.push(
@@ -276,13 +411,32 @@ export default function transformJsxHtmlTemplatePlugin(api) {
     inherits: jsxSyntaxPlugin.default || jsxSyntaxPlugin,
     visitor: {
       Program: {
-        enter(_, state) {
+        enter(programPath, state) {
           state.__litsxNeedsTaggedImport = false;
           state.__litsxTaggedImportName = null;
           state.__litsxTemplateAttributeMappings = [];
           state.__litsxNeedsSpreadHelper = false;
-          state.opts = state.opts || {};
-          state.opts.__litsxNeedsNoscriptRuntime = false;
+          state.__litsxNeedsRefDirective = false;
+          state.__litsxNeedsReactRefAdapter = false;
+          const baseOptions = state.opts || {};
+          const refDirectiveName = programPath.scope.hasBinding("ref")
+            ? programPath.scope.generateUidIdentifier("litsxRef").name
+            : "ref";
+          const reactRefAdapterName = programPath.scope.hasBinding("toLitRef")
+            ? programPath.scope.generateUidIdentifier("toLitRef").name
+            : "toLitRef";
+          state.opts = {
+            ...baseOptions,
+            refDirectiveName,
+            reactRefAdapterName,
+            __litsxNeedsNoscriptRuntime: false,
+          };
+          if (state.opts.componentRestProps === true) {
+            annotateReparsedRestRoutes(
+              programPath,
+              state.opts.importedComponentRestProps === true,
+            );
+          }
         },
         exit(programPath, state) {
           const importName = state.__litsxTaggedImportName;
@@ -292,7 +446,34 @@ export default function transformJsxHtmlTemplatePlugin(api) {
           if (state.__litsxNeedsSpreadHelper) {
             ensureNamedImport(programPath, "@litsx/core", "jsxSpreadElement");
           }
-          if (state.opts.__litsxNeedsNoscriptRuntime) {
+          if (state.__litsxNeedsRefDirective) {
+            ensureNamedImport(
+              programPath,
+              "@litsx/core",
+              "ref",
+              state.opts.refDirectiveName,
+            );
+          }
+          if (state.__litsxNeedsReactRefAdapter) {
+            ensureNamedImport(
+              programPath,
+              "@litsx/core/react-compat",
+              "toLitRef",
+              state.opts.reactRefAdapterName,
+            );
+          }
+          let needsNoscriptRuntime = state.opts.__litsxNeedsNoscriptRuntime === true;
+          if (!needsNoscriptRuntime) {
+            programPath.traverse({
+              ReferencedIdentifier(identifierPath) {
+                if (identifierPath.node.name === "__litsxNoscript") {
+                  needsNoscriptRuntime = true;
+                  identifierPath.stop();
+                }
+              },
+            });
+          }
+          if (needsNoscriptRuntime) {
             ensureNamedImport(programPath, "@litsx/core", "__litsxNoscript");
           }
 
@@ -314,6 +495,40 @@ export default function transformJsxHtmlTemplatePlugin(api) {
   };
 }
 
+function ensureNamedImport(programPath, moduleName, importName, localName = importName) {
+  const bodyPaths = programPath.get("body");
+  const existing = bodyPaths.find(
+    (path) => path.isImportDeclaration() && path.node.source.value === moduleName
+  );
+  if (existing) {
+    const present = existing.node.specifiers.some(
+      (specifier) =>
+        t.isImportSpecifier(specifier) &&
+        t.isIdentifier(specifier.imported, { name: importName }) &&
+        t.isIdentifier(specifier.local, { name: localName })
+    );
+    if (!present) {
+      if (existing.node.specifiers.some((specifier) => t.isImportNamespaceSpecifier(specifier))) {
+        existing.insertAfter(t.importDeclaration(
+          [t.importSpecifier(t.identifier(localName), t.identifier(importName))],
+          t.stringLiteral(moduleName),
+        ));
+        return;
+      }
+      existing.node.specifiers.push(
+        t.importSpecifier(t.identifier(localName), t.identifier(importName))
+      );
+    }
+    return;
+  }
+  programPath.unshiftContainer(
+    "body",
+    t.importDeclaration(
+      [t.importSpecifier(t.identifier(localName), t.identifier(importName))],
+      t.stringLiteral(moduleName)
+    )
+  );
+}
 function ensureTaggedImport(programPath, importName) {
   const bodyPaths = programPath.get("body");
   const litImports = bodyPaths.filter(
@@ -360,31 +575,4 @@ function ensureTaggedImport(programPath, importName) {
   } else {
     programPath.unshiftContainer("body", taggedImport);
   }
-}
-
-function ensureNamedImport(programPath, source, importName) {
-  const bodyPaths = programPath.get("body");
-  const existing = bodyPaths.find(
-    (path) => path.isImportDeclaration() && path.node.source.value === source,
-  );
-  if (existing) {
-    if (existing.node.specifiers.some(
-      (specifier) => t.isImportSpecifier(specifier) && t.isIdentifier(specifier.imported, { name: importName }),
-    )) {
-      return;
-    }
-    if (existing.node.specifiers.some((specifier) => t.isImportNamespaceSpecifier(specifier))) {
-      existing.insertAfter(t.importDeclaration(
-        [t.importSpecifier(t.identifier(importName), t.identifier(importName))],
-        t.stringLiteral(source),
-      ));
-      return;
-    }
-    existing.node.specifiers.push(t.importSpecifier(t.identifier(importName), t.identifier(importName)));
-    return;
-  }
-  programPath.unshiftContainer("body", t.importDeclaration(
-    [t.importSpecifier(t.identifier(importName), t.identifier(importName))],
-    t.stringLiteral(source),
-  ));
 }

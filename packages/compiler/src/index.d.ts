@@ -38,7 +38,6 @@ export type TransformLitsxResult = {
 
 export type PreparedLitsxAuthoredInput = {
   filename?: string;
-  virtualization: null;
   inputAst: object;
   authoredWarnings: unknown[];
   moduleAnalysis: import("./authored-input.js").LitsxModuleAnalysis;

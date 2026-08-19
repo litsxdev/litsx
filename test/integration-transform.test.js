@@ -320,10 +320,11 @@ describe("integration: parser + all plugins", () => {
   it("ignores shadowRootOptions when forcing light DOM", () => {
     const source = `
       export const ConflictingPanel = () => {
-        static shadowRootOptions = { delegatesFocus: true };
-        static lightDom = true;
         return <div>ready</div>;
       };
+
+      ConflictingPanel.shadowRootOptions = { delegatesFocus: true };
+      ConflictingPanel.lightDom = true;
     `;
 
     const ast = parser.parse(source, { sourceType: "module" });
@@ -371,9 +372,10 @@ describe("integration: parser + all plugins", () => {
 
     assert.match(code, /useDeferredValue\(this, this\.query, \{\s*timeout: 200\s*\}\)/);
     assert.match(code, /useMemoValue\(this, \(\) => deferredQuery\.trim\(\), \[deferredQuery\]\)/);
-    assert.match(code, /useExpose\(this, this\.expose, \(\) => \(\{/);
+    assert.match(code, /useExpose\(this, toLitRef\(this\.expose\), \(\) => \(\{/);
     assert.match(code, /useTransition\(this\)/);
-    assert.match(code, /data-ref="_apiRefElement"/);
-    assert.match(code, /<input data-ref="_apiRefElement" \.value=\{summary\} data-pending=\{isPending\} \/>/);
+    assert.match(code, /useReactRef as useRef/);
+    assert.match(code, /<input ref=\{apiRef\} \.value=\{summary\} data-pending=\{isPending\} \/>/);
+    assert.doesNotMatch(code, /data-ref|querySelector/);
   });
 });

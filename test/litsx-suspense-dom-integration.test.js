@@ -53,8 +53,8 @@ function getRegionRoot(boundary, region) {
 }
 
 function getPendingSteps(pendingStepsRef) {
-  pendingStepsRef.current ??= new Map();
-  return pendingStepsRef.current;
+  pendingStepsRef.value ??= new Map();
+  return pendingStepsRef.value;
 }
 
 function suspendUntil(pendingStepsRef, stepIndex, revealedCount) {
@@ -327,7 +327,7 @@ describe("litsx suspense DOM integration", () => {
           for (const deferred of getPendingSteps(pendingStepsRef).values()) {
             deferred.resolve?.();
           }
-          pendingStepsRef.current = new Map();
+          pendingStepsRef.value = new Map();
           setRevealedCount(0);
 
           const firstTimeoutId = setTimeout(() => {
@@ -346,7 +346,7 @@ describe("litsx suspense DOM integration", () => {
             for (const deferred of getPendingSteps(pendingStepsRef).values()) {
               deferred.resolve?.();
             }
-            pendingStepsRef.current = new Map();
+            pendingStepsRef.value = new Map();
           };
         }, []);
 

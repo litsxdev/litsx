@@ -105,6 +105,7 @@ export function createComponentClass({
   needsCss,
   needsUnsafeCss,
   needsCallbackRef = false,
+  restProps = null,
   needsModuleIdMetadata = false,
   moduleId = null,
 }) {
@@ -114,6 +115,18 @@ export function createComponentClass({
     t.classBody(classMembers)
   );
   classNode.__litsxGeneratedComponent = true;
+
+  if (restProps?.propertyName) {
+    classNode.body.body.unshift(createStaticRuntimeMetadataProperty(
+      "litsx.restProps",
+      t.objectExpression([
+        t.objectProperty(
+          t.identifier("property"),
+          t.stringLiteral(restProps.propertyName)
+        ),
+      ])
+    ));
+  }
 
   if (hostTypeId) {
     const componentMarkerProperty = createStaticRuntimeMetadataProperty(

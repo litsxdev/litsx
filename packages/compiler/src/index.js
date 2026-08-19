@@ -350,8 +350,9 @@ function mergeTemplateLoweringMetadata(
   );
   const templateAttributeMappings = authoredTemplateAttributeMappings.length > 0
     ? authoredTemplateAttributeMappings.map((mapping, index) => {
-        // The first pass can rename an authored JSX attribute (`onClick` ->
-        // `@click`) while retaining its position in traversal order. Babel's
+        // The first pass can rename an authored JSX attribute (`on:click` ->
+        // `@click`, or react-compat's `onClick` -> `@click`) while retaining its
+        // position in traversal order. Babel's
         // intermediate map points generated attribute names at the preceding
         // token in some JSX shapes, so location matching is not reliable here.
         const generated = remappedTemplateAttributeMappings[index];
@@ -672,7 +673,7 @@ export function createLitsxTransformConfig(source, options = {}) {
     profile,
   );
   const authoredInputCacheKey = featureCacheKey;
-  const { filename, virtualization, inputAst, authoredWarnings, moduleAnalysis } = profilePhase(
+  const { filename, inputAst, authoredWarnings, moduleAnalysis } = profilePhase(
     "authored-input",
     () => {
       if (compilationSession?.authoredInputCache?.has(authoredInputCacheKey)) {
@@ -706,14 +707,13 @@ export function createLitsxTransformConfig(source, options = {}) {
 
   const finalTemplatePlugins = shouldRunFinalTemplatePass
     ? [
-        [
-          transformJsxHtmlTemplate,
-          {
-            ssr: options.ssr === true,
-            componentAttributeFallback: false,
-            ...(options.jsxTemplateOptions || {}),
-          },
-        ],
+        [transformJsxHtmlTemplate, {
+          ssr: options.ssr === true,
+          componentAttributeFallback: false,
+          componentRestProps: true,
+          importedComponentRestProps: options.reactCompat != null && options.reactCompat !== false,
+          ...(options.jsxTemplateOptions || {}),
+        }],
         ...outputPlugins,
         ...(shouldStripTypescriptSyntax(filename)
           ? [[transformTypescript, { isTSX: true, allowDeclareFields: true }]]
@@ -746,8 +746,6 @@ export function createLitsxTransformConfig(source, options = {}) {
       sourceFileName: filename,
       configFile: false,
       babelrc: false,
-      inputSourceMap:
-        options.sourceMaps === true ? virtualization?.map ?? undefined : undefined,
       sourceMaps: options.sourceMaps === true,
       plugins: shouldRunFinalTemplatePass
         ? [...presetPlugins]

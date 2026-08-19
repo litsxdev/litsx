@@ -179,7 +179,6 @@ function normalizeStaticIr(ir) {
     properties: {
       inferred: [...(ir?.properties?.inferred || [])],
       authored: [...(ir?.properties?.authored || [])],
-      legacy: [...(ir?.properties?.legacy || [])],
     },
     elements: {
       localCandidates: [...(ir?.elements?.localCandidates || [])],

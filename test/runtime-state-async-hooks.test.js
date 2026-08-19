@@ -53,7 +53,7 @@ function createHookHarness() {
     useRef(_host, initialValue) {
       const slotIndex = refIndex++;
       if (!refSlots[slotIndex]) {
-        refSlots[slotIndex] = { current: initialValue };
+        refSlots[slotIndex] = { value: initialValue };
       }
       return refSlots[slotIndex];
     },

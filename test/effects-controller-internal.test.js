@@ -70,7 +70,7 @@ describe("effects controller internals", () => {
     const host = new TestHost();
     const controller = new EffectsController(host);
     const registered = [];
-    const ref = { current: null };
+    const ref = { value: undefined };
 
     controller.register = (callback, deps, layout) => {
       registered.push({ callback, deps, layout });
@@ -83,9 +83,9 @@ describe("effects controller internals", () => {
     assert.strictEqual(registered[0].layout, true);
 
     registered[0].callback();
-    assert.deepStrictEqual(ref.current, { focus: true });
+    assert.deepStrictEqual(ref.value, { focus: true });
     registered[0].callback();
-    assert.deepStrictEqual(ref.current, { focus: true });
+    assert.deepStrictEqual(ref.value, { focus: true });
 
     controller.registerExpose(() => ({ reportValidity() { return true; } }), ["api"]);
     assert.deepStrictEqual(registered[1].deps, ["api"]);
@@ -100,8 +100,8 @@ describe("effects controller internals", () => {
     assert.strictEqual(registered[2].layout, true);
 
     registered[2].callback();
-    assert.strictEqual(typeof ref.current.focus, "function");
-    assert.strictEqual(ref.current.focus(), "ref");
+    assert.strictEqual(typeof ref.value.focus, "function");
+    assert.strictEqual(ref.value.focus(), "ref");
 
     controller.transitionState = { pendingCount: 0, isPending: true };
     controller.resolvePendingTransitions();

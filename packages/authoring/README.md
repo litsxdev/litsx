@@ -2,6 +2,10 @@
 
 Shared authoring semantics used by the LitSX compiler and lint tooling.
 
+The public source-language contract lives in [`../../AUTHORING.md`](../../AUTHORING.md).
+This package implements shared analysis for that contract; it does not define a
+second authoring dialect.
+
 Application source is standard `.jsx` or `.tsx`. This package centralizes:
 
 - `on:event` parsing and event-name normalization
@@ -9,4 +13,10 @@ Application source is standard `.jsx` or `.tsx`. This package centralizes:
 - component and implicit-children semantic analysis
 - internal encoding used between LitSX compiler passes
 
-The internal encoding may contain Lit binding prefixes, but it is not a public authored syntax and should never be written in application source.
+The internal encoding may contain Lit binding prefixes, but it is not public
+authored syntax and must never be presented as application source in diagnostics,
+examples, or website documentation.
+
+The `@litsx/authoring/internal/parser` export exists only to reparse generated
+compiler IR. Application files and imported source dependencies are parsed with
+the standard Babel JSX/TypeScript parser and cannot use that encoding.
