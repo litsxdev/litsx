@@ -64,6 +64,23 @@ describe("@litsx/babel-plugin-transform-jsx-html-template", () => {
     assert.match(code, /\$\{count\}/);
   });
 
+  it("escapes template syntax in JSX text emitted inside Lit templates", () => {
+    const source =
+      'const view = <code>Component.styles = css`...`; C:\\\\styles</code>;';
+    const ast = parser.parse(source, { sourceType: "module" });
+    const { code } = transformFromAstSync(ast, source, {
+      configFile: false,
+      babelrc: false,
+      plugins: [plugin],
+    });
+
+    assert.match(
+      code,
+      /html`<code>Component\.styles = css\\`\.\.\.\\`; C:\\\\\\\\styles<\/code>`/
+    );
+    assert.doesNotThrow(() => parser.parse(code, { sourceType: "module" }));
+  });
+
   it("lowers native JSX refs to Lit ref directives without DOM markers", () => {
     const source = `const inputRef = createRef(); const view = <input ref={inputRef} />;`;
     const ast = parser.parse(source, { sourceType: "module" });
