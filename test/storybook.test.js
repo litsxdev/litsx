@@ -239,7 +239,7 @@ describe("@litsx/storybook", () => {
     );
   });
 
-  it("validates property-bound stories after compiling LitSX syntax", async () => {
+  it("validates ordinary component props after compiling standard JSX syntax", async () => {
     let receivedCode = "";
     const plugin = litsxStoryRegistrationPlugin({
       storybookCsfLoader(code) {
@@ -254,13 +254,13 @@ describe("@litsx/storybook", () => {
     const source = [
       'import { ProductCard } from "../product-card.tsx";',
       'export default { title: "Catalog/Product" };',
-      'export const Default = { render: ({ title = "Default" } = {}) => <ProductCard .title={title} /> };',
+      'export const Default = { render: ({ title = "Default" } = {}) => <ProductCard title={title} /> };',
     ].join("\n");
 
     await plugin.transform(source, "/project/catalog.stories.tsx");
 
     assert.match(receivedCode, /html`<product-card/);
-    assert.doesNotMatch(receivedCode, /\.title=\{/);
+    assert.doesNotMatch(receivedCode, /<ProductCard|title=\{/);
   });
 
   it("creates a Storybook config wrapper over web-components-vite", async () => {

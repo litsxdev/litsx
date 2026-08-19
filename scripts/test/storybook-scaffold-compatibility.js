@@ -158,8 +158,24 @@ for (const version of versions) {
     const packagePath = path.join(fixtureDir, "package.json");
     const packageJson = JSON.parse(fs.readFileSync(packagePath, "utf8"));
 
-    packageJson.devDependencies["@litsx/storybook"] =
-      `file:${path.join(repoRoot, "packages", "storybook")}`;
+    const localLitsxPackages = {
+      "@litsx/authoring": "authoring",
+      "@litsx/babel-plugin-shared-hooks": "babel-plugin-shared-hooks",
+      "@litsx/babel-plugin-transform-jsx-html-template": "babel-plugin-transform-jsx-html-template",
+      "@litsx/babel-plugin-transform-litsx-scoped-elements": "babel-plugin-transform-litsx-scoped-elements",
+      "@litsx/babel-preset-litsx": "babel-preset-litsx",
+      "@litsx/compiler": "compiler",
+      "@litsx/core": "core",
+      "@litsx/eslint-plugin": "eslint-plugin-litsx",
+      "@litsx/scoped-registry-shim": "scoped-registry-shim",
+      "@litsx/storybook": "storybook",
+      "@litsx/typescript-session": "typescript-session",
+      "@litsx/vite-plugin": "vite-plugin",
+    };
+    for (const [packageName, directory] of Object.entries(localLitsxPackages)) {
+      packageJson.devDependencies[packageName] =
+        `file:${path.join(repoRoot, "packages", directory)}`;
+    }
     for (const packageName of [
       "storybook",
       "@storybook/addon-a11y",
