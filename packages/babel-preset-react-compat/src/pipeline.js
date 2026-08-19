@@ -20,6 +20,8 @@ import reactErrorBoundary from "./internal/react-error-boundary.js";
 import reactEvents from "./internal/react-events.js";
 import reactContext from "./internal/react-context.js";
 import reactKeys from "./internal/react-keys.js";
+import reactUnsupportedHooks from "./internal/react-unsupported-hooks.js";
+import reactHookExportAliases from "./internal/react-hook-export-aliases.js";
 
 export function normalizeReactCompatOptions(options = {}) {
   const domMode = options.domMode === "light" ? "light" : "shadow";
@@ -42,6 +44,7 @@ export function createReactCompatPresetPlugins(options = {}) {
 
   const plugins = [
     transformTypescriptNamespaceCollisions,
+    reactHookExportAliases,
     [reactAttributes, options.reactAttributes || {}],
     [reactWrappers, options.reactWrappers || {}],
     [reactContext, options.reactContext || {}],
@@ -72,6 +75,8 @@ export function createReactCompatPresetPlugins(options = {}) {
       {
         ...normalizedOptions.transformLitsx,
         ignoredCustomHookSources: ["react", "@litsx/core/context"],
+        runtimeCustomHookSources: ["react"],
+        runtimeCustomHookNames: ["startTransition"],
         ...(options.transformLitsxHooks || {}),
       },
     ],
@@ -88,6 +93,7 @@ export function createReactCompatPresetPlugins(options = {}) {
     [reactLazy, options.reactLazy || {}],
     [reactErrorBoundary, options.reactErrorBoundary || {}],
     [reactSuspense, options.reactSuspense || {}],
+    reactUnsupportedHooks,
     [reactDomAttributes, options.reactDomAttributes || {}],
     [reactEvents, options.reactEvents || {}],
     [transformLitsxScopedElements, options.transformLitsxScopedElements || {}],

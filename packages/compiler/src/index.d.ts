@@ -16,6 +16,11 @@ export type TransformLitsxOptions = {
   authoringPlugins?: unknown[];
   outputPlugins?: unknown[];
   requireJsx?: boolean;
+  reactCompat?: boolean | {
+    transformDependencies?: string[];
+    reactKeys?: boolean;
+    domMode?: "shadow" | "light";
+  };
 };
 
 export type LitsxCompilationSession = {

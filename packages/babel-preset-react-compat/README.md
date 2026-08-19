@@ -41,6 +41,26 @@ dispatcher, while changing it to `useTheme(this)` would corrupt the package API 
 its implementation. Migrate those calls through a local LitSX adapter or use a package compiled for
 LitSX.
 
+Raw React hook packages can opt into the same transformation with `transformDependencies`:
+
+```json
+{
+  "presets": [
+    [
+      "@litsx/babel-preset-react-compat",
+      { "transformDependencies": ["resize-hooks"] }
+    ]
+  ]
+}
+```
+
+Every module from an allowlisted package must pass through this preset. Its custom hooks receive the
+LitSX host, supported React hooks are lowered, and compiled hooks are marked with
+`Symbol.for("litsx.hook")`. Traversal stops with a diagnostic when it reaches an unsupported React
+hook or a non-allowlisted external hook dependency. With Vite, prefer the official
+`reactCompat.transformDependencies` option because it also configures dependency optimization and
+SSR externalization correctly.
+
 ## Wrapper Semantics
 
 `memo(...)` is accepted as a migration wrapper so React-authored components can pass through the

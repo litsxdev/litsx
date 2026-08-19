@@ -17,6 +17,7 @@ const NATIVE_TRANSFORM_OPTION_KEYS = [
   "typeResolutionMode",
   "inMemoryFiles",
   "compilerOptions",
+  "transformDependencies",
   "typescriptSession",
   "suppressNativeClassNameWarning",
   "__litsxCompilationSession",

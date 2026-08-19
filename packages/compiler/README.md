@@ -146,6 +146,13 @@ Additional Babel plugins applied after LitSX virtualization/parsing and before t
 
 Use this when you need to introduce extra authored syntax or conventions on top of LitSX source without patching the core preset ordering.
 
+### `reactCompat?: boolean | object`
+
+Selects `@litsx/babel-preset-react-compat` instead of the native preset. The object form forwards
+React compatibility options such as `transformDependencies`. Build-tool integrations must ensure
+that every selected dependency module is passed to the compiler; `@litsx/vite-plugin` handles that
+automatically.
+
 ### `outputPlugins?: unknown[]`
 
 Additional Babel plugins appended after the default LitSX pipeline.

@@ -165,6 +165,28 @@ Extra Babel plugins applied after LitSX virtualization/parsing and before the bu
 
 Extra Babel plugins appended after the built-in LitSX transform pipeline.
 
+### `reactCompat?: boolean | object`
+
+Selects the optional React compatibility pipeline. Use `true` for application source only, or
+allowlist React-authored hook packages that should be transformed with the application:
+
+```js
+export default defineConfig({
+  plugins: [
+    litsx({
+      reactCompat: {
+        transformDependencies: ["resize-hooks"],
+      },
+    }),
+  ],
+});
+```
+
+Allowlisted dependency modules are transformed even when they use `.js` or `.ts`, excluded from
+Vite dependency prebundling, and added to `ssr.noExternal`. The compiler follows custom-hook imports
+inside each selected package, lowers supported React hooks, and reports the exact unsupported hook
+boundary instead of leaving a React dispatcher call in the output.
+
 ## Storybook Example
 
 For `@storybook/web-components-vite`:

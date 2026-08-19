@@ -323,6 +323,101 @@ describe("@litsx/babel-preset-react-compat", () => {
     }
   });
 
+  it("transforms allowlisted external custom hooks through their React hook graph", () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-transform-hook-dep-"));
+    try {
+      const packageDir = path.join(tempDir, "node_modules", "resize-hooks");
+      fs.mkdirSync(packageDir, { recursive: true });
+      fs.writeFileSync(path.join(packageDir, "package.json"), JSON.stringify({
+        name: "resize-hooks",
+        type: "module",
+        exports: "./index.js",
+      }));
+      const hookFilename = path.join(packageDir, "index.js");
+      const hookSource = `
+        import { useResizeEffect } from "./resize-effect.js";
+        const a = (listener) => {
+          useResizeEffect(listener);
+        };
+        export { a as useWindowResize };
+      `;
+      const innerHookFilename = path.join(packageDir, "resize-effect.js");
+      const innerHookSource = `
+        import { useEffect } from "react";
+        export function useResizeEffect(listener) {
+          useEffect(() => {
+            window.addEventListener("resize", listener);
+            return () => window.removeEventListener("resize", listener);
+          }, [listener]);
+        }
+      `;
+      fs.writeFileSync(hookFilename, hookSource);
+      fs.writeFileSync(innerHookFilename, innerHookSource);
+      fs.mkdirSync(path.join(tempDir, "src"), { recursive: true });
+      const consumerFilename = path.join(tempDir, "src", "ResizePanel.tsx");
+      const consumerSource = `
+        import { useWindowResize } from "resize-hooks";
+        export function ResizePanel() {
+          useWindowResize(() => {});
+          return <section>Ready</section>;
+        }
+      `;
+      fs.writeFileSync(consumerFilename, consumerSource);
+      const preset = { transformDependencies: ["resize-hooks"] };
+
+      const hookCode = run(hookSource, { filename: hookFilename, preset });
+      const innerHookCode = run(innerHookSource, { filename: innerHookFilename, preset });
+      const consumerCode = run(consumerSource, {
+        filename: consumerFilename,
+        parser: { plugins: ["typescript"] },
+        preset,
+      });
+
+      assert.match(hookCode, /(?:const|let) useWindowResize = \(.*host.*listener\) =>/);
+      assert.match(hookCode, /useResizeEffect\(_host, listener\)/);
+      assert.match(hookCode, /Symbol\.for\("litsx\.hook"\)/);
+      assert.match(innerHookCode, /useAfterUpdate\(/);
+      assert.match(innerHookCode, /Symbol\.for\("litsx\.hook"\)/);
+      assert.match(consumerCode, /useWindowResize\(this, \(\) => \{\}\)/);
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("reports the unsupported React hook where dependency transformation stops", () => {
+    const source = `
+      import { useInsertionEffect } from "react";
+      export function useCssRuntime() {
+        useInsertionEffect(() => {}, []);
+      }
+    `;
+
+    assert.throws(
+      () => run(source, {
+        filename: "/virtual/node_modules/css-hooks/index.js",
+        preset: { transformDependencies: ["css-hooks"] },
+      }),
+      /Cannot transform React hook "useInsertionEffect"[\s\S]*no LitSX equivalent/,
+    );
+  });
+
+  it("reports private React internals as dependency transformation boundaries", () => {
+    const source = `
+      import React from "react";
+      export function useDispatcherOwner() {
+        return React.__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE;
+      }
+    `;
+
+    assert.throws(
+      () => run(source, {
+        filename: "/virtual/node_modules/internal-hooks/index.js",
+        preset: { transformDependencies: ["internal-hooks"] },
+      }),
+      /Cannot transform access to React internal[\s\S]*private React runtime boundary/,
+    );
+  });
+
   it("preserves React event alias behavior for focus, blur, and double click", () => {
     const source = `
       export const AliasedEvents = ({ onFocus, onBlur, onDoubleClick }) => {

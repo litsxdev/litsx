@@ -266,6 +266,9 @@ function transformCustomHookDefinition(binding, state) {
 
   const hostId = ensureHostParamIdentifier(fnPath, state);
   state.processedCustomHooks.add(fnPath.node);
+  if (binding.identifier?.name) {
+    state.compiledCustomHookNames.add(binding.identifier.name);
+  }
 
   pushHostExpression(state, hostId);
 
@@ -276,6 +279,56 @@ function transformCustomHookDefinition(binding, state) {
   });
 
   popHostExpression(state);
+}
+
+function attachCompiledCustomHookMetadata(programPath, state) {
+  for (const hookName of state.compiledCustomHookNames || []) {
+    const binding = programPath.scope.getBinding(hookName);
+    if (!binding?.path?.node) continue;
+    let alreadyMarked = false;
+    for (const statement of programPath.node.body) {
+      const expression = statement?.type === "ExpressionStatement" ? statement.expression : null;
+      const left = expression?.type === "AssignmentExpression" ? expression.left : null;
+      if (
+        left?.type === "MemberExpression" &&
+        left.computed === true &&
+        left.object?.type === "Identifier" &&
+        left.object.name === hookName &&
+        left.property?.type === "CallExpression" &&
+        left.property.callee?.type === "MemberExpression" &&
+        left.property.callee.object?.type === "Identifier" &&
+        left.property.callee.object.name === "Symbol" &&
+        left.property.callee.property?.type === "Identifier" &&
+        left.property.callee.property.name === "for" &&
+        left.property.arguments?.[0]?.type === "StringLiteral" &&
+        left.property.arguments[0].value === "litsx.hook"
+      ) {
+        alreadyMarked = true;
+        break;
+      }
+    }
+    if (alreadyMarked) continue;
+
+    const statement = t.expressionStatement(
+      t.assignmentExpression(
+        "=",
+        t.memberExpression(
+          t.identifier(hookName),
+          t.callExpression(
+            t.memberExpression(t.identifier("Symbol"), t.identifier("for")),
+            [t.stringLiteral("litsx.hook")],
+          ),
+          true,
+        ),
+        t.booleanLiteral(true),
+      ),
+    );
+    if (binding.path.isFunctionDeclaration()) {
+      binding.path.insertAfter(statement);
+    } else if (binding.path.isVariableDeclarator()) {
+      binding.path.getStatementParent()?.insertAfter(statement);
+    }
+  }
 }
 
 function processHookCall(callPath, state) {
@@ -781,6 +834,7 @@ export default declare((api, options = {}) => {
           state.customHookHostParams = new WeakMap();
           state.customHookLocals = new Set();
           state.customHookNamespaces = new Set();
+          state.compiledCustomHookNames = new Set();
           state.runtimeNeeded = false;
           state.effectNeeded = false;
           state.layoutNeeded = false;
@@ -797,6 +851,7 @@ export default declare((api, options = {}) => {
         },
         exit(path, state) {
           processDeclaredCustomHooks(path, state);
+          attachCompiledCustomHookMetadata(path, state);
           removeHookImports(path, state);
           ensureRuntimeImport(path, state);
         },

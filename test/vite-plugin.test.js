@@ -125,6 +125,68 @@ describe("@litsx/vite-plugin", () => {
     assert.strictEqual(result, null);
   });
 
+  it("runs react-compat for allowlisted dependencies in client and SSR pipelines", async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-vite-react-dep-"));
+    try {
+      const packageDir = path.join(tempDir, "node_modules", "resize-hooks");
+      fs.mkdirSync(packageDir, { recursive: true });
+      fs.writeFileSync(path.join(packageDir, "package.json"), JSON.stringify({
+        name: "resize-hooks",
+        type: "module",
+        exports: "./index.js",
+      }));
+      const hookFilename = path.join(packageDir, "index.js");
+      const hookSource = `
+        import { useEffect } from "react";
+        export function useWindowResize(listener) {
+          useEffect(() => () => listener(), [listener]);
+        }
+      `;
+      fs.writeFileSync(hookFilename, hookSource);
+      const plugin = litsx({
+        reactCompat: {
+          transformDependencies: ["resize-hooks"],
+        },
+      });
+      const config = plugin.config({
+        optimizeDeps: { exclude: ["existing-dependency"] },
+        ssr: { noExternal: ["existing-ssr-dependency"] },
+      });
+
+      assert.deepStrictEqual(config.optimizeDeps.exclude, [
+        "existing-dependency",
+        "resize-hooks",
+      ]);
+      assert.deepStrictEqual(config.ssr.noExternal, [
+        "existing-ssr-dependency",
+        "resize-hooks",
+      ]);
+
+      const result = await plugin.transform(hookSource, hookFilename);
+      assert.ok(result);
+      assert.match(result.code, /function useWindowResize\(.*host.*listener\)/);
+      assert.match(result.code, /useAfterUpdate\(/);
+      assert.match(result.code, /Symbol\.for\("litsx\.hook"\)/);
+
+      const componentDir = path.join(tempDir, "src");
+      fs.mkdirSync(componentDir, { recursive: true });
+      const componentFilename = path.join(componentDir, "ResizePanel.tsx");
+      const componentSource = `
+        import { useWindowResize } from "resize-hooks";
+        export function ResizePanel() {
+          useWindowResize(() => {});
+          return <section>Ready</section>;
+        }
+      `;
+      fs.writeFileSync(componentFilename, componentSource);
+      const componentResult = await plugin.transform(componentSource, componentFilename);
+      assert.match(componentResult.code, /useWindowResize\(this, \(\) => \{\}\)/);
+      assert.match(componentResult.code, /html`<section>Ready<\/section>`/);
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  }, 30000);
+
   it("supports custom include filters", async () => {
     const plugin = litsx({
       include: (id) => id.endsWith(".demo"),

@@ -1,6 +1,7 @@
 ---
 "@litsx/authoring": minor
 "@litsx/babel-plugin-transform-jsx-html-template": minor
+"@litsx/babel-plugin-shared-hooks": minor
 "@litsx/babel-preset-litsx": minor
 "@litsx/babel-preset-react-compat": minor
 "@litsx/compiler": minor
@@ -13,3 +14,5 @@
 Make standard JSX and TSX the recommended LitSX authoring surface. Infer Lit attribute, boolean, and property bindings from ordinary prop names; add the explicit `on:event` listener convention for HTML and custom elements; preserve native lowercase handler properties; type published custom-event metadata; and keep React `onX` conversion isolated to react-compat.
 
 Make standard `.jsx` and `.tsx` the only authored source formats. Generate projects with ordinary component props, `Component.styles = css\`...\`` assignments, native `tsc` type-checking, standard Prettier formatting, and TSX Storybook stories. Remove the unreleased `.litsx`, prefixed binding, static-hoist, custom TypeScript, Prettier-plugin, and syntax-highlighting compatibility surfaces.
+
+Allow React-authored hook dependencies to opt into recursive react-compat transformation. Vite now keeps selected packages out of dependency prebundling and SSR externalization, transforms their JavaScript and TypeScript modules, propagates the LitSX host through custom-hook graphs, emits compiled-hook metadata, and stops with a diagnostic at unsupported React hook boundaries.

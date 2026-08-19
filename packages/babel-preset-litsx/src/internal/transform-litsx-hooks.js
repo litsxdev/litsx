@@ -40,6 +40,19 @@ function normalizeFilePath(value) {
   return normalizeStableIdentityPath(value);
 }
 
+function getNodeModulesPackageName(filename) {
+  const normalized = normalizeFilePath(filename);
+  const marker = "/node_modules/";
+  const markerIndex = normalized.lastIndexOf(marker);
+  if (markerIndex === -1) return null;
+  const packagePath = normalized.slice(markerIndex + marker.length);
+  const segments = packagePath.split("/");
+  if (segments[0]?.startsWith("@")) {
+    return segments.length >= 2 ? `${segments[0]}/${segments[1]}` : null;
+  }
+  return segments[0] || null;
+}
+
 function getDeclarationImplementationBase(filename) {
   if (typeof filename !== "string") {
     return null;
@@ -100,6 +113,9 @@ function createStructuralHookResolver(options = {}) {
     options?.typescriptSession?.projectSession || options?.typescriptSession || null;
   const compilerOptionsCache = new Map();
   const moduleResolutionHostCache = new Map();
+  const transformedDependencies = new Set(options.transformDependencies || []);
+  const runtimeCustomHookSources = new Set(options.runtimeCustomHookSources || []);
+  const runtimeCustomHookNames = new Set(options.runtimeCustomHookNames || []);
 
   function getProgramForFile(filename) {
     if (!providedTypescriptSession?.getProgram || !filename) {
@@ -292,6 +308,11 @@ function createStructuralHookResolver(options = {}) {
   function isExternalPackageFile(filename) {
     return typeof filename === "string" &&
       normalizeFilePath(filename).split("/").includes("node_modules");
+  }
+
+  function isTransformedDependencyFile(filename) {
+    const packageName = getNodeModulesPackageName(filename);
+    return packageName != null && transformedDependencies.has(packageName);
   }
 
   function resolveModuleReference(analysis, reference) {
@@ -540,7 +561,7 @@ function createStructuralHookResolver(options = {}) {
 
           if (declarationPath?.isFunctionDeclaration?.()) {
             const localName = declarationPath.node.id?.name;
-            if (localName && /^use[A-Z0-9]/.test(localName)) {
+            if (localName) {
               analysis.customHookPaths.set(localName, declarationPath);
             }
           }
@@ -554,7 +575,6 @@ function createStructuralHookResolver(options = {}) {
                 analysis.structuralLocals.add(id.name);
                 analysis.structuralLocalInfo.set(id.name, getDefineHookPhaseInfo(init));
               } else if (
-                /^use[A-Z0-9]/.test(id.name) &&
                 (
                   init?.type === "FunctionExpression" ||
                   init?.type === "ArrowFunctionExpression"
@@ -656,17 +676,29 @@ function createStructuralHookResolver(options = {}) {
   function isNamespaceRuntimeHelperUse(analysis, objectName, propertyName) {
     const importInfo = analysis.importBindings.get(objectName);
     return (
-      isLitsxRuntimeImportSource(importInfo?.source) &&
+      (
+        isLitsxRuntimeImportSource(importInfo?.source) ||
+        runtimeCustomHookSources.has(importInfo?.source)
+      ) &&
       importInfo.importedName === "*" &&
-      isLitsxRuntimeHookName(propertyName)
+      (
+        isLitsxRuntimeHookName(propertyName) ||
+        runtimeCustomHookNames.has(propertyName)
+      )
     );
   }
 
   function isRuntimeHelperImport(analysis, localName) {
     const importInfo = analysis.importBindings.get(localName);
     return (
-      isLitsxRuntimeImportSource(importInfo?.source) &&
-      isLitsxRuntimeHookName(importInfo.importedName)
+      (
+        isLitsxRuntimeImportSource(importInfo?.source) ||
+        runtimeCustomHookSources.has(importInfo?.source)
+      ) &&
+      (
+        isLitsxRuntimeHookName(importInfo.importedName) ||
+        runtimeCustomHookNames.has(importInfo.importedName)
+      )
     );
   }
 
@@ -1075,26 +1107,27 @@ function createStructuralHookResolver(options = {}) {
     const resolved = resolveImport(filename, source);
     if (!resolved) return runtimeCustomOnly ? "unresolved-custom-hook" : false;
     const isExternal = isExternalPackageFile(resolved);
+    const isTransformedDependency = isTransformedDependencyFile(resolved);
     const analysis = analyzeModule(resolved);
     if (!analysis && runtimeCustomOnly) {
-      return isExternal
+      return isExternal && !isTransformedDependency
         ? "unsupported-external-hook"
         : "unresolved-custom-hook";
     }
     if (runtimeCustomOnly) {
       const exportStatus = hasExportBinding(analysis, importedName);
       if (exportStatus !== true) {
-        return isExternal
+        return isExternal && !isTransformedDependency
           ? "unsupported-external-hook"
           : "unresolved-custom-hook";
       }
-      const isHostAware = isExternal
+      const isHostAware = isExternal && !isTransformedDependency
         ? isCompiledRuntimeCustomExport(analysis, importedName)
         : isRuntimeCustomExport(analysis, importedName);
       if (isHostAware) {
         return "runtime-custom-hook";
       }
-      return isExternal
+      return isExternal && !isTransformedDependency
         ? "unsupported-external-hook"
         : false;
     }

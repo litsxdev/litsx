@@ -8,6 +8,7 @@ import {
   createLitsxPresetPlugins,
   detectLitsxSourceFeatures,
 } from "@litsx/babel-preset-litsx";
+import { createReactCompatPresetPlugins } from "@litsx/babel-preset-react-compat";
 import { ensureTypescriptModule } from "@litsx/babel-preset-litsx/internal/transform-litsx-properties";
 import { parseWithLitsxVirtualization } from "@litsx/authoring/internal/parser";
 import {
@@ -383,14 +384,31 @@ function getStandaloneTsSessionKey(filename = "", ts = ensureTypescriptModule())
 }
 
 function getMemoizedPresetPlugins(options, sourceFeatures = null, session = null) {
-  const featureKey = getSourceFeaturesCacheKey(sourceFeatures);
+  const reactCompatOptions = options?.reactCompat === true
+    ? {}
+    : options?.reactCompat && typeof options.reactCompat === "object"
+      ? options.reactCompat
+      : null;
+  const featureKey = reactCompatOptions == null
+    ? getSourceFeaturesCacheKey(sourceFeatures)
+    : "react-compat";
+  const createPlugins = () => {
+    if (reactCompatOptions == null) {
+      return createLitsxPresetPlugins(options || {}, sourceFeatures);
+    }
+    const { reactCompat: _reactCompat, ...baseOptions } = options || {};
+    return createReactCompatPresetPlugins({
+      ...baseOptions,
+      ...reactCompatOptions,
+    });
+  };
   if (session) {
     const cache = session.presetPluginsByOptions;
     const optionsKey = options && typeof options === "object" ? options : null;
 
     if (!optionsKey) {
       if (!cache.default.has(featureKey)) {
-        cache.default.set(featureKey, createLitsxPresetPlugins({}, sourceFeatures));
+        cache.default.set(featureKey, createPlugins());
       }
       return cache.default.get(featureKey);
     }
@@ -406,7 +424,7 @@ function getMemoizedPresetPlugins(options, sourceFeatures = null, session = null
       return cachedPlugins;
     }
 
-    const plugins = createLitsxPresetPlugins(options, sourceFeatures);
+    const plugins = createPlugins();
     cachedPluginsByFeature.set(featureKey, plugins);
     return plugins;
   }
@@ -415,7 +433,7 @@ function getMemoizedPresetPlugins(options, sourceFeatures = null, session = null
     if (!DEFAULT_PRESET_PLUGIN_CACHE.has(featureKey)) {
       DEFAULT_PRESET_PLUGIN_CACHE.set(
         featureKey,
-        createLitsxPresetPlugins({}, sourceFeatures),
+        createPlugins(),
       );
     }
     return DEFAULT_PRESET_PLUGIN_CACHE.get(featureKey);
@@ -432,7 +450,7 @@ function getMemoizedPresetPlugins(options, sourceFeatures = null, session = null
     return cachedPlugins;
   }
 
-  const plugins = createLitsxPresetPlugins(options, sourceFeatures);
+  const plugins = createPlugins();
   cachedPluginsByFeature.set(featureKey, plugins);
   return plugins;
 }
