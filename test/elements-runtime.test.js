@@ -526,6 +526,54 @@ describe("litsx elements runtime", () => {
     }
   });
 
+  it("passes a scoped creationScope to Lit for native shadow registries", () => {
+    const importedNodes = [];
+    const registry = {
+      define() {},
+      get() {
+        return undefined;
+      },
+      initialize() {},
+    };
+    const shadowRoot = {
+      registry,
+      firstChild: null,
+      ownerDocument: {
+        importNode(node, options) {
+          importedNodes.push({ node, options });
+          return node;
+        },
+      },
+    };
+
+    class Base {
+      constructor() {
+        this.shadowRoot = shadowRoot;
+        this.renderOptions = {};
+        this.registry = registry;
+      }
+
+      static finalize() {}
+    }
+
+    const Host = ShadowDomMixin(Base);
+    const host = new Host();
+
+    assert.strictEqual(host.createRenderRoot(), shadowRoot);
+    assert.notStrictEqual(host.renderOptions.creationScope, shadowRoot);
+    const node = {};
+    assert.strictEqual(host.renderOptions.creationScope.importNode(node, true), node);
+    assert.deepStrictEqual(importedNodes, [
+      {
+        node,
+        options: {
+          customElementRegistry: registry,
+          selfOnly: false,
+        },
+      },
+    ]);
+  });
+
   it("defines scoped elements on reused shadow roots when the host already owns the registry", () => {
     const originalCustomElementRegistry = globalThis.CustomElementRegistry;
 

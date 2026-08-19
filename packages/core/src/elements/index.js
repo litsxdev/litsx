@@ -10,6 +10,7 @@ import {
 const DEDUPE_MIXIN_MARK = Symbol("litsx.dedupeMixinMark");
 const HYDRATION_RENDER_BEFORE = Symbol("litsx.hydrationRenderBefore");
 const LIGHT_DOM_STYLE_ELEMENT = Symbol("litsx.lightDomStyleElement");
+const SHADOW_DOM_CREATION_SCOPE = Symbol("litsx.shadowDomCreationScope");
 const SHADOW_DOM_REGISTRY = Symbol("litsx.shadowDomRegistry");
 export const LITSX_COMPONENT = Symbol.for("litsx.component");
 export const LITSX_HOST_TYPE_ID = Symbol.for("litsx.hostTypeId");
@@ -508,12 +509,34 @@ function syncShadowRootCreationScope(host, shadowRoot, registry) {
     return;
   }
 
-  const canUseScopedCreationScope =
-    typeof shadowRoot?.importNode === "function" &&
-    typeof registry?._getDefinition === "function";
+  let creationScope = null;
+  if (typeof shadowRoot?.importNode === "function" && registry) {
+    creationScope = shadowRoot;
+  } else if (registry && typeof registry.initialize === "function") {
+    const ownerDocument = shadowRoot?.ownerDocument ?? host.ownerDocument;
+    if (typeof ownerDocument?.importNode === "function") {
+      const cached = shadowRoot[SHADOW_DOM_CREATION_SCOPE];
+      if (cached?.registry === registry) {
+        creationScope = cached.scope;
+      } else {
+        creationScope = {
+          importNode(node, deep = false) {
+            return ownerDocument.importNode(node, {
+              customElementRegistry: registry,
+              selfOnly: deep === false,
+            });
+          },
+        };
+        shadowRoot[SHADOW_DOM_CREATION_SCOPE] = {
+          registry,
+          scope: creationScope,
+        };
+      }
+    }
+  }
 
-  if (canUseScopedCreationScope) {
-    host.renderOptions.creationScope = shadowRoot;
+  if (creationScope) {
+    host.renderOptions.creationScope = creationScope;
     host.renderOptions.renderBefore ??= shadowRoot.firstChild;
     return;
   }
