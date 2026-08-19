@@ -90,6 +90,8 @@ describe("@litsx/storybook", () => {
       "function VdsModalStory() {",
       "  return <VdsModal />;",
       "}",
+      "const LocalPanel = () => <VdsButton label=\"Nested\" />;",
+      "const NestedHost = () => <LocalPanel />;",
       "",
       "export const Default = {",
       "  render: () => (",
@@ -100,6 +102,7 @@ describe("@litsx/storybook", () => {
       "    </div>",
       "  ),",
       "};",
+      "export const Playground = Default;",
       "",
     ].join("\n");
 
@@ -120,6 +123,10 @@ describe("@litsx/storybook", () => {
     assert.match(
       transformed.code,
       /customElements\.define\("vds-modal", __litsxStoryElement1\);/,
+    );
+    assert.doesNotMatch(
+      transformed.code,
+      /customElements\.define\("local-panel"/,
     );
     assert.match(
       transformed.code,

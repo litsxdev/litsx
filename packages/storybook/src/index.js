@@ -33,7 +33,10 @@ function findImportedValueSpecifier(moduleAnalysis, localName) {
   return null;
 }
 
-function collectStoryRegistrations(moduleAnalysis = null) {
+function collectStoryRegistrations(
+  moduleAnalysis = null,
+  { nestedLocalNames = new Set() } = {},
+) {
   if (!moduleAnalysis || !Array.isArray(moduleAnalysis.jsxReferences)) {
     return [];
   }
@@ -42,6 +45,12 @@ function collectStoryRegistrations(moduleAnalysis = null) {
   const seen = new Set();
 
   for (const entry of moduleAnalysis.jsxReferences) {
+    if (
+      entry?.source === "local-declaration" &&
+      nestedLocalNames.has(entry.localName)
+    ) {
+      continue;
+    }
     if (
       entry?.source !== "imported-authored-module" &&
       entry?.source !== "local-declaration"
@@ -76,8 +85,8 @@ function collectStoryRegistrations(moduleAnalysis = null) {
   return registrations;
 }
 
-function createRegistrationSource(moduleAnalysis = null) {
-  const registrations = collectStoryRegistrations(moduleAnalysis);
+function createRegistrationSource(moduleAnalysis = null, options = {}) {
+  const registrations = collectStoryRegistrations(moduleAnalysis, options);
   if (registrations.length === 0) {
     return "";
   }
@@ -260,13 +269,79 @@ function getTopLevelLocalBindings(program) {
   return bindings;
 }
 
-function resolveExportValue(node, bindings) {
+function collectNestedLocalComponentReferences(program) {
+  const localNames = new Set(
+    [...getTopLevelLocalBindings(program).keys()].filter((name) =>
+      /^[A-Z]/.test(name),
+    ),
+  );
+  const nestedLocalNames = new Set();
+  const topLevelLocalNames = new Set();
+
+  const visit = (node, ownerName = null) => {
+    if (!node || typeof node !== "object") {
+      return;
+    }
+
+    if (
+      node.type === "VariableDeclarator" &&
+      node.id?.type === "Identifier" &&
+      /^[A-Z]/.test(node.id.name) &&
+      (node.init?.type === "ArrowFunctionExpression" ||
+        node.init?.type === "FunctionExpression")
+    ) {
+      visit(node.init, node.id.name);
+      return;
+    }
+
+    const nextOwner =
+      node.type === "FunctionDeclaration" &&
+      node.id?.type === "Identifier" &&
+      /^[A-Z]/.test(node.id.name)
+        ? node.id.name
+        : ownerName;
+
+    if (
+      node.type === "JSXOpeningElement" &&
+      node.name?.type === "JSXIdentifier" &&
+      localNames.has(node.name.name)
+    ) {
+      if (nextOwner) {
+        nestedLocalNames.add(node.name.name);
+      } else {
+        topLevelLocalNames.add(node.name.name);
+      }
+    }
+
+    for (const [key, value] of Object.entries(node)) {
+      if (key === "loc" || key === "start" || key === "end" || key === "extra") {
+        continue;
+      }
+      if (Array.isArray(value)) {
+        value.forEach((child) => visit(child, nextOwner));
+      } else {
+        visit(value, nextOwner);
+      }
+    }
+  };
+
+  visit(program);
+  return new Set(
+    [...nestedLocalNames].filter((name) => !topLevelLocalNames.has(name)),
+  );
+}
+
+function resolveExportValue(node, bindings, seen = new Set()) {
   if (!node) {
     return null;
   }
 
   if (node.type === "Identifier") {
-    return bindings.get(node.name) ?? null;
+    if (seen.has(node.name)) {
+      return null;
+    }
+    seen.add(node.name);
+    return resolveExportValue(bindings.get(node.name) ?? null, bindings, seen);
   }
 
   return node;
@@ -350,7 +425,8 @@ function validateLitsxStoryModule(source, filename, compilerOptions = {}) {
             getNodeStartLoc(declarator.id ?? declarator),
           );
         }
-        if (!declarator.init || declarator.init.type !== "ObjectExpression") {
+        const value = resolveExportValue(declarator.init, bindings);
+        if (!value || value.type !== "ObjectExpression") {
           throw createStorybookValidationError(
             filename,
             `named export "${declarator.id.name}" must be a plain object literal.`,
@@ -359,7 +435,7 @@ function validateLitsxStoryModule(source, filename, compilerOptions = {}) {
         }
 
         validateObjectExpressionShape(
-          declarator.init,
+          value,
           filename,
           `named export "${declarator.id.name}"`,
         );
@@ -401,6 +477,10 @@ function validateLitsxStoryModule(source, filename, compilerOptions = {}) {
       "default export is required and must define the story meta object.",
     );
   }
+
+  return {
+    nestedLocalNames: collectNestedLocalComponentReferences(program),
+  };
 }
 
 async function readAuthoredStorySource(transformedSource, id) {
@@ -495,7 +575,11 @@ export function litsxStoryRegistrationPlugin(options = {}) {
         }
 
         const authoredSource = await readAuthoredStorySource(source, id);
-        validateLitsxStoryModule(authoredSource, id, compilerOptions);
+        const storyAnalysis = validateLitsxStoryModule(
+          authoredSource,
+          id,
+          compilerOptions,
+        );
         const result = transformLitsxSync(authoredSource, {
           ...compilerOptions,
           filename: id,
@@ -513,6 +597,7 @@ export function litsxStoryRegistrationPlugin(options = {}) {
         );
         const registrationSource = createRegistrationSource(
           resolvedModuleAnalysis,
+          storyAnalysis,
         );
         if (!registrationSource) {
           return null;

@@ -69,10 +69,10 @@ export namespace JSX {
 
   type LitsxComponentAuthoredAttributes<TProps, TEvents extends Record<string, unknown>> =
     LitsxBaseAttributes &
-    LitsxDomAttributes<EventTarget> &
     (keyof TEvents extends never
       ? LitsxExplicitCustomEventAttributes
-      : LitsxTypedCustomEventAttributes<TEvents>);
+      : Omit<LitsxDomAttributes<EventTarget>, `on:${Extract<keyof TEvents, string>}`> &
+        LitsxTypedCustomEventAttributes<TEvents>);
 
   type LitsxNormalizeManagedProps<TProps> = 0 extends (1 & TProps) ? {} : TProps;
 

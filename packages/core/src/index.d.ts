@@ -125,6 +125,8 @@ export declare function __getLitsxNoscriptFactory(value: unknown): {
 export interface LitsxBaseAttributes {
   slot?: string;
   class?: string;
+  hidden?: boolean | "until-found";
+  inert?: boolean;
   autoFocus?: boolean;
   spellCheck?: boolean;
   part?: string;
@@ -219,7 +221,7 @@ export type LitsxExplicitDomEventAttributes<Target = EventTarget> = {
 
 /** Explicit JSX event channel for custom-element events. */
 export type LitsxExplicitCustomEventAttributes = {
-  [Name in `on:${string}`]?: LitsxEventListener<CustomEvent<any>>;
+  [Name in `on:${string}`]?: LitsxEventListener<any>;
 };
 
 /** @deprecated Use LitsxExplicitCustomEventAttributes. */

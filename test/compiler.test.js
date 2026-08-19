@@ -42,6 +42,25 @@ function findPosition(text, needle) {
 }
 
 describe("@litsx/compiler", () => {
+  it("does not duplicate runtime helpers across separate core imports", () => {
+    const source = [
+      'import { css } from "@litsx/core";',
+      'import { type LitsxJsxNode, useCallbackRef } from "@litsx/core";',
+      "export const Icon = ({ label }): LitsxJsxNode => <span>{label}</span>;",
+      "Icon.styles = css`:host { display: inline-flex; }`;",
+    ].join("\n");
+
+    const result = transformLitsxSync(source, {
+      filename: "/virtual/separate-core-imports.tsx",
+    });
+
+    assert.match(result.code, /class Icon extends/);
+    assert.strictEqual(
+      (result.code.match(/\buseCallbackRef\b/g) ?? []).length,
+      2,
+    );
+  });
+
   it("lowers dynamic noscript content through the LitSX SSR primitive", () => {
     const result = transformLitsxSync(
       `export const view = (title) => <main><noscript><h2>{title}</h2></noscript></main>;`,

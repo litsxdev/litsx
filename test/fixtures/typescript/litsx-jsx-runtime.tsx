@@ -24,8 +24,16 @@ export function Screen() {
           <ActionButton label="Secondary" disabled />
         </SuspenseBoundary>
       </SuspenseList>
-      <ActionButton label="Standalone" />
-      <button disabled>click</button>
+      <ActionButton
+        label="Standalone"
+        hidden
+        inert
+        on:change={(event?: CustomEvent) => void event}
+      />
+      <button
+        disabled
+        ref={(node: HTMLButtonElement | undefined) => void node}
+      >click</button>
       <suspense-boundary
         fallback={<span>loading inline</span>}
       >
