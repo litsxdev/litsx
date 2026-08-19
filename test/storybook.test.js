@@ -103,23 +103,23 @@ describe("@litsx/storybook", () => {
       "",
     ].join("\n");
 
-    const transformed = await plugin.transform(
+    const transformed = await plugin.transform.handler(
       source,
       "/project/src/stories/catalog.stories.tsx",
     );
 
-    assert.strictEqual(plugin.enforce, "pre");
+    assert.strictEqual(plugin.enforce, "post");
     assert.match(
       transformed.code,
-      /customElements\.define\("vds-button", VdsButton\);/,
+      /customElements\.define\("vds-button", __litsxStoryElement2\);/,
     );
     assert.match(
       transformed.code,
-      /customElements\.define\("vds-drawer", DrawerElement\);/,
+      /customElements\.define\("vds-drawer", __litsxStoryElement0\);/,
     );
     assert.match(
       transformed.code,
-      /customElements\.define\("vds-modal", VdsModal\);/,
+      /customElements\.define\("vds-modal", __litsxStoryElement1\);/,
     );
     assert.match(
       transformed.code,
@@ -141,13 +141,16 @@ describe("@litsx/storybook", () => {
       transformed.code,
       /customElements\.define\("vds-ignored-story", VdsIgnoredStory\);/,
     );
-    const standardTsx = await plugin.transform(
+    const standardTsx = await plugin.transform.handler(
       source,
       "/project/src/stories/catalog.stories.tsx",
     );
-    assert.match(standardTsx.code, /customElements\.define\("vds-button", VdsButton\);/);
+    assert.match(
+      standardTsx.code,
+      /customElements\.define\("vds-button", __litsxStoryElement2\);/,
+    );
     assert.strictEqual(
-      await plugin.transform(source, "/project/src/catalog.tsx"),
+      await plugin.transform.handler(source, "/project/src/catalog.tsx"),
       null,
     );
   });
@@ -163,18 +166,42 @@ describe("@litsx/storybook", () => {
       "export const Default = { render: () => <div><ProductCard /><ProductPrice /></div> };",
     ].join("\n");
 
-    const transformed = await plugin.transform(
+    const transformed = await plugin.transform.handler(
       source,
       "/project/catalog.stories.tsx",
     );
 
     assert.match(
       transformed.code,
-      /customElements\.define\("product-card", ProductCard\)/,
+      /customElements\.define\("product-card", __litsxStoryElement0\)/,
     );
     assert.match(
       transformed.code,
-      /customElements\.define\("product-price", ProductPrice\)/,
+      /customElements\.define\("product-price", __litsxStoryElement1\)/,
+    );
+  });
+
+  it("resolves extensionless local imports to authored TSX modules", async () => {
+    const source = [
+      'import { ProductCard } from "./product-card";',
+      'export default { title: "Catalog/Product" };',
+      "export const Default = { render: () => <ProductCard /> };",
+    ].join("\n");
+    const fileName = createStoryFile(source);
+    fs.writeFileSync(
+      path.join(path.dirname(fileName), "product-card.tsx"),
+      "export const ProductCard = () => <article />;",
+      "utf8",
+    );
+    const plugin = litsxStoryRegistrationPlugin({
+      storybookCsfLoader: createPassingCsfLoader(),
+    });
+
+    const transformed = await plugin.transform.handler(source, fileName);
+
+    assert.match(
+      transformed.code,
+      /customElements\.define\("product-card", __litsxStoryElement0\)/,
     );
   });
 
@@ -187,11 +214,15 @@ describe("@litsx/storybook", () => {
       'export default { title: "Catalog/Product" };',
       "export const Default = { render: () => <ProductCard /> };",
     ].join("\n");
-    const transformed = await plugin.transform(
+    const transformed = await plugin.transform.handler(
       source,
       "/project/catalog.stories.tsx",
     );
-    const registrationSource = transformed.code.slice(source.length);
+    const registrationSource = transformed.code
+      .slice(source.length)
+      .split("\n")
+      .filter((line) => line.startsWith("if ("))
+      .join("\n");
     const ProductCard = class ProductCard {};
     const definitions = new Map([["product-card", ProductCard]]);
     let defineCount = 0;
@@ -203,7 +234,7 @@ describe("@litsx/storybook", () => {
       },
     };
 
-    new Function("customElements", "ProductCard", registrationSource)(
+    new Function("customElements", "__litsxStoryElement0", registrationSource)(
       customElements,
       ProductCard,
     );
@@ -230,7 +261,7 @@ describe("@litsx/storybook", () => {
       "export const Default = { render: () => <ProductCard /> };",
     ].join("\n");
 
-    await plugin.transform(source, "/project/catalog.stories.tsx");
+    await plugin.transform.handler(source, "/project/catalog.stories.tsx");
 
     assert.strictEqual(typeof receivedOptions.makeTitle, "function");
     assert.strictEqual(
@@ -257,7 +288,7 @@ describe("@litsx/storybook", () => {
       'export const Default = { render: ({ title = "Default" } = {}) => <ProductCard title={title} /> };',
     ].join("\n");
 
-    await plugin.transform(source, "/project/catalog.stories.tsx");
+    await plugin.transform.handler(source, "/project/catalog.stories.tsx");
 
     assert.match(receivedCode, /html`<product-card/);
     assert.doesNotMatch(receivedCode, /<ProductCard|title=\{/);
@@ -290,13 +321,14 @@ describe("@litsx/storybook", () => {
     assert.strictEqual(config.plugins[2].name, "litsx");
   });
 
-  it("registers stories before an existing LitSX transform can erase authored metadata", () => {
+  it("registers stories after existing transforms using authored source metadata", () => {
     const existingLitsxPlugin = { name: "litsx", enforce: "pre" };
     const config = withLitsxStorybookViteConfig({
       plugins: [existingLitsxPlugin],
     });
 
     assert.strictEqual(config.plugins[0].name, "litsx-story-registration");
+    assert.strictEqual(config.plugins[0].enforce, "post");
     assert.strictEqual(config.plugins[1], existingLitsxPlugin);
   });
 
@@ -308,7 +340,10 @@ describe("@litsx/storybook", () => {
 
     await assert.rejects(
       () =>
-        plugin.transform(source, "/project/src/stories/catalog.stories.tsx"),
+        plugin.transform.handler(
+          source,
+          "/project/src/stories/catalog.stories.tsx",
+        ),
       /default export is required/i,
     );
   });
@@ -326,7 +361,10 @@ describe("@litsx/storybook", () => {
 
     await assert.rejects(
       () =>
-        plugin.transform(source, "/project/src/stories/catalog.stories.tsx"),
+        plugin.transform.handler(
+          source,
+          "/project/src/stories/catalog.stories.tsx",
+        ),
       /named story exports must be object literals/i,
     );
   });
@@ -341,7 +379,10 @@ describe("@litsx/storybook", () => {
     ].join("\n");
 
     await assert.doesNotReject(() =>
-      plugin.transform(source, "/project/src/stories/catalog.stories.tsx"),
+      plugin.transform.handler(
+        source,
+        "/project/src/stories/catalog.stories.tsx",
+      ),
     );
   });
 
@@ -356,7 +397,10 @@ describe("@litsx/storybook", () => {
 
     await assert.rejects(
       () =>
-        plugin.transform(source, "/project/src/stories/catalog.stories.tsx"),
+        plugin.transform.handler(
+          source,
+          "/project/src/stories/catalog.stories.tsx",
+        ),
       (error) => {
         assert.match(error.message, /does not support computed property keys/i);
         assert.strictEqual(error.code, "LITSX_STORYBOOK_INVALID_STORY_MODULE");
@@ -389,7 +433,10 @@ describe("@litsx/storybook", () => {
 
     await assert.rejects(
       () =>
-        plugin.transform(source, "/project/src/stories/catalog.stories.tsx"),
+        plugin.transform.handler(
+          source,
+          "/project/src/stories/catalog.stories.tsx",
+        ),
       (error) => {
         assert.strictEqual(error.code, "LITSX_STORYBOOK_INVALID_CSF");
         assert.match(error.message, /Invalid Storybook CSF generated/i);
