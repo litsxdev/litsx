@@ -21,7 +21,6 @@ export type TransformLitsxOptions = {
 export type LitsxCompilationSession = {
   transform(source: string, options?: TransformLitsxOptions): Promise<TransformLitsxResult>;
   transformSync(source: string, options?: TransformLitsxOptions): TransformLitsxResult;
-  getTypecheckSession(rawArgs?: string[]): unknown;
   invalidate(files?: string[] | null): void;
   dispose(): void;
 };
@@ -34,10 +33,7 @@ export type TransformLitsxResult = {
 
 export type PreparedLitsxAuthoredInput = {
   filename?: string;
-  virtualization: {
-    code?: string;
-    map?: object | null;
-  } | null;
+  virtualization: null;
   inputAst: object;
   authoredWarnings: unknown[];
   moduleAnalysis: import("./authored-input.js").LitsxModuleAnalysis;

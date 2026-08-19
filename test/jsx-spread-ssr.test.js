@@ -76,11 +76,12 @@ describe("jsxSpreadElement SSR", () => {
 
     const output = renderToString(jsxSpreadElement(tagName, [{
       onCallback: () => {},
-      onPrimaryAction: () => {},
+      onclick: () => {},
+      "on:primary-action": () => {},
     }]));
 
     assert.match(output, /<strong[^>]*>[\s\S]*function/);
-    assert.doesNotMatch(output, /onCallback|onPrimaryAction|primary-action/);
+    assert.doesNotMatch(output, /onCallback|onPrimaryAction|onclick|primary-action/);
   });
 
   it("renders React inner HTML and keeps refs out of server markup", () => {

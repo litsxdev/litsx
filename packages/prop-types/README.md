@@ -12,7 +12,7 @@ This package has two surfaces:
 - `@litsx/prop-types/runtime` for the runtime helper layer used by React compat transforms
 - `@litsx/prop-types` for descriptor builders that return Lit property option objects
 
-For native LitSX authoring, prefer TypeScript prop inference and `static properties = ...` directly.
+For native LitSX authoring, prefer TypeScript prop inference and, when explicit metadata is needed, `Component.properties = ...`.
 
 ## Runtime Helpers
 
@@ -30,7 +30,7 @@ import {
   instanceOf,
 } from "@litsx/prop-types/runtime";
 
-static properties = {
+ExampleComponent.properties = {
   title: {
     type: String,
     ...required(),
@@ -85,6 +85,6 @@ That surface is available when you want descriptor composition in plain JavaScri
 Prefer:
 
 - TypeScript prop inference
-- `static properties = ...`
+- `Component.properties = ...`
 
 Use `@litsx/babel-preset-react-compat` when you want React `propTypes` migration support; that preset lowers `propTypes` through `@litsx/babel-plugin-litsx-proptypes` and these runtime helpers.

@@ -1,7 +1,7 @@
 {
   "name": "@litsx/eslint-plugin",
   "version": "0.3.7",
-  "description": "Official ESLint processor support for LitSX-authored syntax",
+  "description": "Official ESLint rules for standard LitSX JSX and TSX",
   "author": "LitSX Team",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -11,11 +11,6 @@
       "import": "./src/index.js",
       "require": "./dist/index.cjs",
       "default": "./src/index.js"
-    },
-    "./processor": {
-      "import": "./src/processor.js",
-      "require": "./dist/processor.cjs",
-      "default": "./src/processor.js"
     }
   },
   "files": [
@@ -51,9 +46,7 @@
     "@babel/core": "^7.29.6",
     "@babel/eslint-parser": "^7.28.6",
     "@babel/plugin-syntax-jsx": "^7.28.6",
-    "@babel/plugin-syntax-typescript": "^7.27.1",
-    "@litsx/authoring": "^0.5.0",
-    "@litsx/typescript": "^0.9.0"
+    "@babel/plugin-syntax-typescript": "^7.27.1"
   },
   "scripts": {
     "build": "../../node_modules/.bin/rollup --config rollup.config.js",

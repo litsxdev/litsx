@@ -14,9 +14,14 @@ export {
   LITSX_IMPLICIT_CHILDREN_UNSUPPORTED_MESSAGE,
 } from "./implicit-children.js";
 export {
+  isExplicitJsxEventAttributeName,
+  isDeclarativeEventName,
+  isNativeDomEventHandlerPropertyName,
   isStandardJsxEventPropName,
   isStandardDomEventPropName,
+  resolveExplicitJsxEventName,
   resolveStandardJsxEventName,
+  toExplicitJsxEventAttributeName,
   toKebabEventName,
   toStandardJsxEventPropName,
 } from "./event-names.js";

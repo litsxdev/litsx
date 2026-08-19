@@ -15,11 +15,14 @@ import {
   looksLikeLitsxJsx,
   mapOriginalPositionToVirtual,
   mapVirtualPositionToOriginal,
+  isNativeDomEventHandlerPropertyName,
   isStandardDomEventPropName,
+  resolveExplicitJsxEventName,
   resolveStandardJsxEventName,
   remapVirtualText,
   remapTextSpanToOriginal,
   toStandardJsxEventPropName,
+  toExplicitJsxEventAttributeName,
 } from "../packages/authoring/src/index.js";
 import {
   getLitsxVirtualizationMetadata,
@@ -52,6 +55,17 @@ describe("@litsx/authoring", () => {
       special.replacements.map((entry) => decodeVirtualAttributeName(entry.replacement)),
       ["@menu:open", "@state.change"],
     );
+  });
+
+  it("recognizes explicit JSX event channels and native handler properties", () => {
+    assert.strictEqual(resolveExplicitJsxEventName("on:menu-open"), "menu-open");
+    assert.strictEqual(resolveExplicitJsxEventName("onMenuOpen"), null);
+    assert.strictEqual(resolveExplicitJsxEventName("on:menuOpen"), null);
+    assert.strictEqual(toExplicitJsxEventAttributeName("menu-open"), "on:menu-open");
+    assert.strictEqual(toExplicitJsxEventAttributeName("menu:open"), null);
+    assert.strictEqual(isNativeDomEventHandlerPropertyName("onclick"), true);
+    assert.strictEqual(isNativeDomEventHandlerPropertyName("onchange"), true);
+    assert.strictEqual(isNativeDomEventHandlerPropertyName("onClick"), false);
   });
 
   it("virtualizes lit-flavoured jsx attribute prefixes into ts-safe names", () => {
@@ -125,6 +139,15 @@ describe("@litsx/authoring", () => {
     const invalidIssues = collectImplicitChildrenProjectionIssues(invalidAst);
     assert.strictEqual(invalidIssues.length, 1);
     assert.strictEqual(invalidIssues[0].code, 91021);
+
+    const conditionalAst = parser.parse(`
+      export function Panel({ loading, children }) {
+        if (loading) return <section>{loading ? <span /> : children}</section>;
+        return <aside>{children ?? <span />}</aside>;
+      }
+    `, { sourceType: "module" });
+
+    assert.deepStrictEqual(collectImplicitChildrenProjectionIssues(conditionalAst), []);
   });
 
   it("supports tsx sources through the litsx parser", () => {

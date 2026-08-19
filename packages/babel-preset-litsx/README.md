@@ -35,11 +35,13 @@ It wires the native lowering stages in the supported order, then optionally runs
 - This is the canonical raw-Babel entrypoint for native LitSX.
 - For programmatic compilation with parser setup and sourcemap chaining, prefer [`@litsx/compiler`](../compiler/README.md).
 - This preset owns the supported native plugin order.
-- Standard JSX listener names preserve declared component callback props. When
-  no `onX` prop exists, component and custom-element tags use `onPrimaryAction`
-  as a listener for `primary-action`; known DOM listeners such as
-  `onAnimationEnd` retain their browser event name (`animationend`). Explicit
-  `.onPrimaryAction` and `@primary-action` bindings always override inference.
+- Standard top-level assignments such as `Component.styles = css\`...\`` and
+  `Component.properties = {...}` are collected before component lowering.
+- Native LitSX uses `on:event` as its unambiguous JSX listener channel on both
+  HTML and custom elements. Names such as `onPrimaryAction` remain ordinary
+  component callback properties. Exact native handler properties such as
+  `onclick` are assigned as properties; React-style `onClick` conversion is
+  owned exclusively by react-compat.
 - Literal events emitted through `useEmit()` are published on the generated
   component as static event metadata. Typed `useEmit<EventMap>()` declarations
   also carry payload types through the TypeScript tooling surface. Dynamic event
@@ -48,6 +50,7 @@ It wires the native lowering stages in the supported order, then optionally runs
 - A library-authored `Component.events = { events, complete }` declaration is
   treated as the public contract and is preserved. The compiler additionally
   emits the symbol-keyed runtime form without replacing the public declaration.
-- Canonical completion spelling is word-based (`url-change` → `onUrlChange`).
-  Explicit `@event` syntax remains the escape hatch for names containing `:` or
-  `.`, and for literal event names ending in `-capture`.
+- Canonical completion preserves lowercase kebab-case (`url-change` →
+  `on:url-change`). Events containing additional `:` or `.` separators are
+  consumed with `addEventListener()`. Lit's `@event` form exists only in the
+  compiler-generated template passed to the final lowering stage.

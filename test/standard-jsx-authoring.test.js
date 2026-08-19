@@ -54,13 +54,14 @@ describe("standard JSX authoring", () => {
     assert.match(code, /<child[^>]*\.payload=\$\{this\.payload\}/);
   });
 
-  it("infers native DOM listeners, aliases, live values, and booleans", () => {
+  it("uses explicit native DOM listeners with live values and booleans", () => {
     const source = `
       function Form({ value, disabled, onChange, onClick, onAnimationEnd }) {
         return <section>
           <label className="field" htmlFor="query">Query</label>
-          <input id="query" value={value} disabled={disabled} onChange={onChange} />
-          <button onClick={onClick} onAnimationEnd={onAnimationEnd}>Save</button>
+          <input id="query" value={value} disabled={disabled} on:input={onChange} />
+          <button on:click={onClick} on:animationend={onAnimationEnd}>Save</button>
+          <button onclick={onClick}>Native property</button>
         </section>;
       }
     `;
@@ -72,6 +73,7 @@ describe("standard JSX authoring", () => {
     assert.match(code, /<label class="field" for="query">/);
     assert.match(code, /<input id="query" \.value=\$\{this\.value\} \?disabled=\$\{this\.disabled\} @input=\$\{this\.onChange\}>/);
     assert.match(code, /<button @click=\$\{this\.onClick\} @animationend=\$\{this\.onAnimationEnd\}>Save<\/button>/);
+    assert.match(code, /<button \.onclick=\$\{this\.onClick\}>Native property<\/button>/);
   });
 
   it("infers bindings from imported component types", () => {
@@ -151,7 +153,7 @@ describe("standard JSX authoring", () => {
     assert.doesNotMatch(code, /@commit=/);
   });
 
-  it("maps undeclared standard callback names to kebab-case custom events", () => {
+  it("keeps onX callbacks as properties and uses on:event for custom events", () => {
     const source = `
       type ActionProps = {
         onCallback: (value: string) => void;
@@ -164,17 +166,21 @@ describe("standard JSX authoring", () => {
           <Action
             onCallback={onCallback}
             onPrimaryAction={onPrimaryAction}
-            onURLChangeCapture={onURLChange}
-            onAnimationEnd={onAnimationEnd}
-          />
-          <third-party-action
-            onPrimaryAction={onPrimaryAction}
             onURLChange={onURLChange}
             onAnimationEnd={onAnimationEnd}
+            on:primary-action={onPrimaryAction}
+            on:url-change={{ handleEvent: onURLChange, capture: true }}
+            on:animationend={onAnimationEnd}
           />
           <third-party-action
-            @primary-action-capture={onPrimaryAction}
-            @menu:open={onURLChange}
+            onclick={onCallback}
+            on:primary-action={onPrimaryAction}
+            on:url-change={onURLChange}
+            on:animationend={onAnimationEnd}
+          />
+          <third-party-action
+            on:primary-action-capture={onPrimaryAction}
+            on:menu-open={onURLChange}
           />
         </section>;
       }
@@ -185,14 +191,26 @@ describe("standard JSX authoring", () => {
     });
 
     assert.match(code, /<action[^>]*\.onCallback=\$\{this\.onCallback\}/);
+    assert.match(code, /<action[^>]*\.onPrimaryAction=\$\{this\.onPrimaryAction\}/);
+    assert.match(code, /<action[^>]*\.onURLChange=\$\{this\.onURLChange\}/);
+    assert.match(code, /<action[^>]*\.onAnimationEnd=\$\{this\.onAnimationEnd\}/);
     assert.match(code, /@primary-action=\$\{this\.onPrimaryAction\}/);
     assert.match(code, /@url-change=\$\{\{[\s\S]*handleEvent: this\.onURLChange,[\s\S]*capture: true/);
     assert.match(code, /<action[^>]*@animationend=\$\{this\.onAnimationEnd\}/);
+    assert.match(code, /<third-party-action[^>]*\.onclick=\$\{this\.onCallback\}/);
     assert.match(code, /<third-party-action[^>]*@primary-action=\$\{this\.onPrimaryAction\}/);
     assert.match(code, /<third-party-action[^>]*@url-change=\$\{this\.onURLChange\}/);
     assert.match(code, /<third-party-action[^>]*@animationend=\$\{this\.onAnimationEnd\}/);
     assert.match(code, /@primary-action-capture=\$\{this\.onPrimaryAction\}/);
-    assert.match(code, /@menu:open=\$\{this\.onURLChange\}/);
+    assert.match(code, /@menu-open=\$\{this\.onURLChange\}/);
+
+    assert.throws(
+      () => transformLitsxSync(
+        "function Invalid({ handler }) { return <div on:menuOpen={handler} />; }",
+        { filename: "/tmp/litsx-invalid-event-name.jsx" },
+      ),
+      /must use lowercase kebab-case/,
+    );
   });
 
   it("uses a published HTMLElementTagNameMap custom-element API", () => {
@@ -227,10 +245,10 @@ describe("standard JSX authoring", () => {
     assert.match(code, /\.payload=\$\{this\.payload\}/);
   });
 
-  it("infers and registers namespace component elements across .litsx modules", () => {
+  it("infers and registers namespace component elements across .tsx modules", () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-standard-namespace-"));
-    const childFile = path.join(root, "controls.litsx");
-    const parentFile = path.join(root, "screen.litsx");
+    const childFile = path.join(root, "controls.tsx");
+    const parentFile = path.join(root, "screen.tsx");
     tempDirs.push(root);
 
     fs.writeFileSync(childFile, `
@@ -248,7 +266,7 @@ describe("standard JSX authoring", () => {
     `);
 
     const source = `
-      import * as Controls from "./controls.litsx";
+      import * as Controls from "./controls.tsx";
       export function Screen({ enabled, tone, model }) {
         return <>
           <Controls.Toggle
@@ -293,7 +311,7 @@ describe("standard JSX authoring", () => {
             contentEditable={editable}
             draggable={draggable}
             hidden={hidden}
-            onPointerDownCapture={onPointerDown}
+            on:pointerdown={{ handleEvent: onPointerDown, capture: true }}
             aria-live="polite"
           />
           <textarea spellCheck={spellCheck} readOnly={readOnly} />

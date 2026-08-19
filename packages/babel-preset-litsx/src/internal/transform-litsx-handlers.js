@@ -1,11 +1,24 @@
 let t;
 
 function getEventAttributeName(nameNode) {
+  if (t.isJSXNamespacedName(nameNode)) {
+    if (nameNode.namespace.name !== "on") return null;
+    return toHandlerAttributeName(nameNode.name.name);
+  }
   if (!t.isJSXIdentifier(nameNode)) return null;
   const name = nameNode.name;
   if (/^on[A-Z]/.test(name)) return name;
   if (!name.startsWith("@") || name.length === 1) return null;
-  return `on${name[1].toUpperCase()}${name.slice(2)}`;
+  return toHandlerAttributeName(name.slice(1));
+}
+
+function toHandlerAttributeName(eventName) {
+  const segment = String(eventName)
+    .split(/[^A-Za-z0-9]+/)
+    .filter(Boolean)
+    .map((part) => part[0].toUpperCase() + part.slice(1))
+    .join("");
+  return segment ? `on${segment}` : null;
 }
 
 export function setHandlersBabelTypes(types) {

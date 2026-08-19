@@ -56,6 +56,11 @@
       "import": "./src/internal/transform-litsx-static-ir.js",
       "require": "./dist/internal/transform-litsx-static-ir.cjs",
       "default": "./src/internal/transform-litsx-static-ir.js"
+    },
+    "./internal/transform-typescript-namespace-collisions": {
+      "import": "./src/internal/transform-typescript-namespace-collisions.js",
+      "require": "./dist/internal/transform-typescript-namespace-collisions.cjs",
+      "default": "./src/internal/transform-typescript-namespace-collisions.js"
     }
   },
   "files": [

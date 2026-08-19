@@ -13,7 +13,7 @@ beforeAll(() => {
   setElementCandidatesBabelTypes(babelCore.types);
 });
 
-function transform(source, filename = "/virtual/Demo.litsx") {
+function transform(source, filename = "/virtual/Demo.tsx") {
   const ast = parser.parse(source, { sourceType: "module" });
   return transformFromAstSync(ast, source, {
     configFile: false,
@@ -27,7 +27,7 @@ describe("native renderer-props internals", () => {
   it("adds bindRendererContext to an existing runtime import without duplicating the import", () => {
     const source = [
       'import { renderRendererCall } from "@litsx/core/rendering";',
-      'import { FancyButton } from "./fancy-button.litsx";',
+      'import { FancyButton } from "./fancy-button.tsx";',
       "const renderCard = () => <FancyButton />;",
       "export const Demo = () => <GuideCard .header={renderCard} />;",
     ].join("\n");
@@ -47,14 +47,14 @@ describe("native renderer-props internals", () => {
   it("binds imported renderer helpers that transitively return component JSX", () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-renderer-props-"));
     try {
-      const rootFile = path.join(tempDir, "demo.litsx");
+      const rootFile = path.join(tempDir, "demo.tsx");
       const helperFile = path.join(tempDir, "renderers.js");
-      const buttonFile = path.join(tempDir, "fancy-button.litsx");
+      const buttonFile = path.join(tempDir, "fancy-button.tsx");
 
       fs.writeFileSync(
         helperFile,
         [
-          'import { FancyButton } from "./fancy-button.litsx";',
+          'import { FancyButton } from "./fancy-button.tsx";',
           "export function renderHeader() {",
           "  return <FancyButton />;",
           "}",
@@ -85,7 +85,7 @@ describe("native renderer-props internals", () => {
   it("does not bind member-expression renderer props or intrinsic targets", () => {
     const source = [
       "const helpers = { renderHeader: () => <FancyButton /> };",
-      'import { FancyButton } from "./fancy-button.litsx";',
+      'import { FancyButton } from "./fancy-button.tsx";',
       "export const Demo = () => (",
       "  <>",
       "    <GuideCard .header={helpers.renderHeader} />",
@@ -102,7 +102,7 @@ describe("native renderer-props internals", () => {
 
   it("binds inline renderers through fragments, arrays, conditionals, and helper calls that return component JSX", () => {
     const source = [
-      'import { FancyButton } from "./fancy-button.litsx";',
+      'import { FancyButton } from "./fancy-button.tsx";',
       "const renderInner = () => <FancyButton />;",
       "export const Demo = () => (",
       "  <GuideCard",
@@ -136,7 +136,7 @@ describe("native renderer-props internals", () => {
 
   it("treats member-expression and namespaced tags as component-like surfaces", () => {
     const source = [
-      'import { FancyButton } from "./fancy-button.litsx";',
+      'import { FancyButton } from "./fancy-button.tsx";',
       "const renderCard = () => <FancyButton />;",
       "export const Demo = () => (",
       "  <>",

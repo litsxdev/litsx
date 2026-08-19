@@ -763,7 +763,7 @@ function ensureRuntimeImport(programPath, state) {
   }
 }
 
-export default declare((api) => {
+export default declare((api, options = {}) => {
   api.assertVersion(7);
   t = api.types;
 
@@ -833,7 +833,10 @@ export default declare((api) => {
           return;
         }
 
-        if (IGNORED_CUSTOM_HOOK_SOURCES.has(source)) {
+        if (
+          IGNORED_CUSTOM_HOOK_SOURCES.has(source) ||
+          options.transformImportedCustomHooks === false
+        ) {
           return;
         }
 

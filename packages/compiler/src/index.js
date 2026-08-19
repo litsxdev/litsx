@@ -9,9 +9,9 @@ import {
   detectLitsxSourceFeatures,
 } from "@litsx/babel-preset-litsx";
 import { ensureTypescriptModule } from "@litsx/babel-preset-litsx/internal/transform-litsx-properties";
-import { parseWithLitsxVirtualization } from "@litsx/authoring/parser";
-import { createLitsxTypecheckSession } from "@litsx/typescript/typecheck";
+import { parseWithLitsxVirtualization } from "@litsx/authoring/internal/parser";
 import {
+  createProjectTsSession,
   createStandaloneTsSession,
   normalizeFilePath,
 } from "@litsx/typescript-session";
@@ -91,7 +91,7 @@ function normalizePluginList(plugins) {
 }
 
 function shouldStripTypescriptSyntax(filename = "") {
-  return /\.(?:ts|tsx|litsx)$/.test(filename) || filename.endsWith(".litsx.jsx");
+  return /\.tsx?$/.test(filename);
 }
 
 function reparseTemplateLoweringAst(source, options = {}) {
@@ -524,6 +524,37 @@ function createStandaloneCompilerTsSession(options = {}) {
   });
 }
 
+function createProjectCompilerTsSession(projectPath, typescriptModule = ensureTypescriptModule()) {
+  const configFile = typescriptModule.readConfigFile(projectPath, typescriptModule.sys.readFile);
+  if (configFile.error) {
+    throw new Error(typescriptModule.flattenDiagnosticMessageText(configFile.error.messageText, "\n"));
+  }
+
+  const normalizedProjectPath = normalizeFilePath(projectPath);
+  const lastSlash = normalizedProjectPath.lastIndexOf("/");
+  const basePath = lastSlash > 0 ? normalizedProjectPath.slice(0, lastSlash) : ".";
+  const parsedCommandLine = typescriptModule.parseJsonConfigFileContent(
+    configFile.config,
+    typescriptModule.sys,
+    basePath,
+    undefined,
+    normalizedProjectPath,
+  );
+  const configErrors = (parsedCommandLine.errors || [])
+    .filter((diagnostic) => diagnostic.code !== 18003);
+  if (configErrors.length) {
+    throw new Error(configErrors
+      .map((diagnostic) => typescriptModule.flattenDiagnosticMessageText(diagnostic.messageText, "\n"))
+      .join("\n"));
+  }
+
+  return createProjectTsSession({
+    sessionKey: `project:${normalizedProjectPath}`,
+    typescript: typescriptModule,
+    parsedCommandLine,
+  });
+}
+
 export function createLitsxCompilationSession(sessionOptions = {}) {
   const caches = createCompilerCaches();
   const session = {
@@ -531,7 +562,10 @@ export function createLitsxCompilationSession(sessionOptions = {}) {
     transformOptions: sessionOptions.transformOptions || {},
     typescriptSession:
       sessionOptions.projectPath
-        ? createLitsxTypecheckSession(["--project", sessionOptions.projectPath]).projectSession
+        ? createProjectCompilerTsSession(
+            sessionOptions.projectPath,
+            sessionOptions.typescriptModule,
+          )
         : createStandaloneCompilerTsSession({
             filename: sessionOptions.transformOptions?.filename,
             typescriptModule: sessionOptions.typescriptModule,
@@ -556,11 +590,6 @@ export function createLitsxCompilationSession(sessionOptions = {}) {
         ...options,
         typescriptSession: this.typescriptSession,
         __litsxCompilationSession: this,
-      });
-    },
-    getTypecheckSession(rawArgs = this.projectPath ? ["--project", this.projectPath] : []) {
-      return createLitsxTypecheckSession(rawArgs, {
-        projectSession: this.typescriptSession,
       });
     },
     invalidate(files = null) {
@@ -593,7 +622,7 @@ export function createLitsxCompilationSession(sessionOptions = {}) {
             this.resolvedImportCache.delete(key);
           }
         }
-        if (/\.(jsx|tsx|js|ts|litsx)$/.test(file) || file.endsWith(".litsx.jsx")) {
+        if (/\.[cm]?[jt]sx?$/.test(file)) {
           this.typescriptSession?.invalidate?.();
         }
       }

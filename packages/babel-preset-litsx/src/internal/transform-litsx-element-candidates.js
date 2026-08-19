@@ -2,7 +2,7 @@ import helperPluginUtils from "@babel/helper-plugin-utils";
 import * as babelParser from "@babel/parser";
 import babelTraverse from "@babel/traverse";
 import jsxSyntaxPlugin from "@babel/plugin-syntax-jsx";
-import { parseWithLitsxVirtualization } from "@litsx/authoring/parser";
+import { parseWithLitsxVirtualization } from "@litsx/authoring/internal/parser";
 import fs from "node:fs";
 import path from "node:path";
 import { normalizeFilePath } from "@litsx/typescript-session";
@@ -15,11 +15,9 @@ import {
 const { declare } = helperPluginUtils;
 const traverse = babelTraverse.default || babelTraverse;
 const IMPORT_RESOLUTION_EXTENSIONS = [
-  ".litsx",
-  ".litsx.jsx",
+  ".tsx",
   ".jsx",
   ".js",
-  ".tsx",
   ".ts",
 ];
 const DEFAULT_MODULE_RESOLUTION_OPTIONS = {
@@ -1084,7 +1082,10 @@ function importedBindingHasLightDomHoist(importInfo, context) {
 function collectCandidateResult(functionPath, programPath, options = {}) {
   const result = createEmptyCandidateResult();
   if (!programPath || !functionPath?.node) return result;
-  programPath.scope.crawl();
+  // Babel's recrawl currently treats a legal TypeScript type/value namespace
+  // pair (for example `import type { Row }; function Row() {}`) as a duplicate
+  // block-scoped declaration. The initial program scope already contains the
+  // bindings needed by this analysis, so avoid invalidating it here.
   const compilationSession = options.__litsxCompilationSession || null;
 
   const rootFilename = normalizeFilePath(
@@ -1314,7 +1315,6 @@ export function importedBindingNeedsRendererContext(programPath, localName, opti
     return false;
   }
 
-  programPath.scope.crawl();
   const compilationSession = options.__litsxCompilationSession || null;
   const rootFilename = normalizeFilePath(
     options.filename || programPath.hub.file?.opts?.filename || ""

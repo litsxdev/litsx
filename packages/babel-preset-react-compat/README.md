@@ -28,9 +28,18 @@ That ordering makes compatibility for React 19-style `ref` props, `forwardRef(..
 
 This preset is the supported public entrypoint for React migration. React event aliasing, effect lowering, wrapper lowering, ref handling, and other migration stages are internal to the preset.
 
-`propTypes` support here should be read as migration compatibility only. Native LitSX authoring should use TypeScript prop inference or explicit `static properties = ...` hoists instead of `Component.propTypes = { ... }`.
+React `onClick`-style names are interpreted as events only on DOM and custom-element tags. An `onAction` passed to `<Child>` remains an ordinary component property. Native LitSX uses `on:event` instead, so the React convention never leaks into the native pipeline.
+
+`propTypes` support here should be read as migration compatibility only. Native LitSX authoring should use TypeScript prop inference or explicit `Component.properties = ...` assignments instead of `Component.propTypes = { ... }`.
 
 React context support here should also be read as migration compatibility only. It lowers onto `@lit/context` through the LitSX runtime surface; it is not a native LitSX authoring primitive.
+
+Imported custom hooks are rewritten only when LitSX can prove that their implementation is part of
+the current compilation, or when a published package exposes LitSX hook metadata. An opaque hook
+from a React package is rejected: preserving `useTheme()` would still require React's hook
+dispatcher, while changing it to `useTheme(this)` would corrupt the package API without compiling
+its implementation. Migrate those calls through a local LitSX adapter or use a package compiled for
+LitSX.
 
 ## Wrapper Semantics
 
@@ -79,8 +88,9 @@ Use `domMode: "light"` when a migration needs every authored component in that c
 React `key` compatibility is enabled only in this preset. A concise keyed
 `items.map(item => <Row key={item.id} />)` expression lowers to Lit's `repeat`,
 while a standalone keyed element lowers to `keyed`. Complex keyed `map`
-callbacks fail with guidance to author `repeat` explicitly rather than silently
-using index-based reconciliation. Set `reactKeys: false` to disable this stage:
+callbacks with a final JSX return are decorated once per item before lowering,
+preserving their pre-return statements and avoiding duplicate evaluation. Set
+`reactKeys: false` to disable this stage:
 
 ```json
 {

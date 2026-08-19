@@ -4,6 +4,7 @@ import transformLitsxDomRefs from "./internal/transform-litsx-dom-refs.js";
 import transformLitsxHooks from "./internal/transform-litsx-hooks.js";
 import transformLitsxComponents from "./internal/transform-litsx-components.js";
 import transformLitsxRendererProps from "./internal/transform-litsx-renderer-props.js";
+import transformTypescriptNamespaceCollisions from "./internal/transform-typescript-namespace-collisions.js";
 import transformLitsxJsxBindings from "./internal/transform-litsx-jsx-bindings.js";
 import transformLitsxStaticAssignments from "./internal/transform-litsx-static-assignments.js";
 import transformLitsxBoundaries from "./internal/transform-litsx-boundaries.js";
@@ -253,7 +254,7 @@ function shouldIncludeFeaturePlugin(sourceFeatures, key) {
 
 export function createLitsxPresetPlugins(options = {}, sourceFeatures = null) {
   const normalizedTransformOptions = normalizeTransformLitsxOptions(options);
-  const plugins = [];
+  const plugins = [transformTypescriptNamespaceCollisions];
 
   if (shouldIncludeFeaturePlugin(sourceFeatures, "boundaries")) {
     plugins.push([

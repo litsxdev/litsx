@@ -1,4 +1,4 @@
-import { useState } from "@litsx/core";
+import { css, useState } from "@litsx/core";
 
 interface DxSmokeAppProps {
   title?: string;
@@ -8,46 +8,23 @@ export const DxSmokeApp = ({ title = "Hello LitSX" }: DxSmokeAppProps) => {
   const [count, setCount] = useState(0);
   const [items, setItems] = useState(["alpha", "beta", "gamma"]);
 
-  static styles = `
-    :host {
-      display: block;
-    }
-
-    .shell {
-      max-width: 840px;
-      margin: 0 auto;
-      padding: 48px 24px 96px;
-    }
-
-    .cta {
-      margin-top: 24px;
-      border: 0;
-      border-radius: 999px;
-      padding: 12px 18px;
-      background: #1f2937;
-      color: white;
-      font: inherit;
-      cursor: pointer;
-    }
-  `;
-
   return (
     <main class="shell">
       <h1>{title}</h1>
-      <button class="cta" @click={() => setCount((value) => value + 1)}>
+      <button class="cta" on:click={() => setCount((value) => value + 1)}>
         Count: {count}
       </button>
 
-      <input .valuee={count} />
-      
-      <button @clcik={() => setCount((v) => v + 1)} />
-      <button ?disbled={count > 3} />
+      <input value={String(count)} />
+
+      <button on:click={() => setCount((value) => value + 1)} />
+      <button disabled={count > 3} />
 
       <section class="shell">
         <h2>Stress Test</h2>
         <button
           class="cta"
-          @click={() => {
+          on:click={() => {
             setCount((value) => value + 1);
             setItems((current) =>
               current.map((entry, index) =>
@@ -55,13 +32,13 @@ export const DxSmokeApp = ({ title = "Hello LitSX" }: DxSmokeAppProps) => {
               ),
             );
           }}
-          ?disabled={items.length > 4 && count > 8}
+          disabled={items.length > 4 && count > 8}
         >
           {count % 2 === 0 ? (
-            <span .title={title}>
+            <span title={title}>
               even:
               {items.map((entry, index) => (
-                <strong @mouseenter={() => setCount((v) => v + index + 1)}>
+                <strong on:mouseenter={() => setCount((value) => value + index + 1)}>
                   {index % 2 === 0 ? entry : <em>{entry.toLowerCase()}</em>}
                 </strong>
               ))}
@@ -71,7 +48,7 @@ export const DxSmokeApp = ({ title = "Hello LitSX" }: DxSmokeAppProps) => {
               odd:
               {{
                 value: (
-                  <code ?hidden={count < 2}>
+                  <code hidden={count < 2}>
                     {items.join(" / ")}
                   </code>
                 ),
@@ -82,11 +59,11 @@ export const DxSmokeApp = ({ title = "Hello LitSX" }: DxSmokeAppProps) => {
 
         <ul>
           {items.map((entry, index) => (
-            <li .datasetValue={entry}>
+            <li data-value={entry}>
               <button
-                @focus={() => {}}
-                @clcik={() => setCount((v) => v + index + 1)}
-                ?disbled={index > count}
+                on:focus={() => {}}
+                on:click={() => setCount((value) => value + index + 1)}
+                disabled={index > count}
               >
                 {(() => (
                   index === 1 ? <span>{entry}</span> : <span>{entry.length}</span>
@@ -99,3 +76,26 @@ export const DxSmokeApp = ({ title = "Hello LitSX" }: DxSmokeAppProps) => {
     </main>
   );
 };
+
+DxSmokeApp.styles = css`
+  :host {
+    display: block;
+  }
+
+  .shell {
+    max-width: 840px;
+    margin: 0 auto;
+    padding: 48px 24px 96px;
+  }
+
+  .cta {
+    margin-top: 24px;
+    border: 0;
+    border-radius: 999px;
+    padding: 12px 18px;
+    background: #1f2937;
+    color: white;
+    font: inherit;
+    cursor: pointer;
+  }
+`;

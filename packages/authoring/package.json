@@ -1,7 +1,7 @@
 {
   "name": "@litsx/authoring",
   "version": "0.5.0",
-  "description": "Shared LitSX authored syntax utilities for parser and tooling integrations",
+  "description": "Shared standard JSX semantics and internal compiler encoding for LitSX",
   "author": "LitSX Team",
   "homepage": "https://litsx.dev/",
   "bugs": {
@@ -26,7 +26,7 @@
       "require": "./dist/index.cjs",
       "default": "./src/index.js"
     },
-    "./parser": {
+    "./internal/parser": {
       "import": "./src/parser.js",
       "require": "./dist/parser.cjs",
       "default": "./src/parser.js"

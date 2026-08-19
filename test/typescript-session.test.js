@@ -15,7 +15,7 @@ import {
 } from "../packages/typescript-session/src/index.js";
 
 function createInMemoryConfig() {
-  const sourceFilename = "/virtual/demo.litsx";
+  const sourceFilename = "/virtual/demo.tsx";
   const defaultLibFileName = "/virtual/lib.d.ts";
   return {
     typescript: ts,
@@ -77,8 +77,8 @@ describe("@litsx/typescript-session", () => {
     assert.strictEqual(session.host.directoryExists("/other"), false);
     assert.deepStrictEqual(session.host.getDirectories(), []);
     assert.strictEqual(
-      session.host.getCanonicalFileName("\\virtual\\demo.litsx"),
-      "/virtual/demo.litsx"
+      session.host.getCanonicalFileName("\\virtual\\demo.tsx"),
+      "/virtual/demo.tsx"
     );
     assert.strictEqual(session.host.useCaseSensitiveFileNames(), true);
     assert.strictEqual(session.host.getNewLine(), "\n");
@@ -273,15 +273,15 @@ describe("@litsx/typescript-session", () => {
     }
   });
 
-  it("resolves .litsx imports as project source modules", () => {
+  it("resolves .tsx imports as project source modules", () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-project-session-import-"));
     const entryFile = path.join(tempDir, "entry.tsx");
-    const componentFile = path.join(tempDir, "vds-button.litsx");
+    const componentFile = path.join(tempDir, "vds-button.tsx");
 
     try {
       fs.writeFileSync(
         entryFile,
-        'import { VdsButton } from "./vds-button.litsx";\nexport const view = <VdsButton label="Buy" />;\n',
+        'import { VdsButton } from "./vds-button.tsx";\nexport const view = <VdsButton label="Buy" />;\n',
         "utf8",
       );
       fs.writeFileSync(

@@ -1,10 +1,10 @@
 # `@litsx/storybook`
 
-Official Storybook integration helpers for LitSX-authored stories.
+Official Storybook integration helpers for standard LitSX JSX/TSX stories.
 
 This package currently builds on top of `@storybook/web-components-vite` and provides:
 
-- `.stories.litsx` indexing
+- normal Storybook indexing for `.stories.jsx` and `.stories.tsx`
 - structural story-element registration based on LitSX compiler metadata
 - a small config helper for Storybook + Vite projects
 

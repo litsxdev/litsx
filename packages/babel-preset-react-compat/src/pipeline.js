@@ -8,6 +8,7 @@ import transformLitsxComponents from "@litsx/babel-preset-litsx/internal/transfo
 import transformLitsxJsxBindings from "@litsx/babel-preset-litsx/internal/transform-litsx-jsx-bindings";
 import transformLitsxStaticAssignments from "@litsx/babel-preset-litsx/internal/transform-litsx-static-assignments";
 import transformLitsxRendererProps from "@litsx/babel-preset-litsx/internal/transform-litsx-renderer-props";
+import transformTypescriptNamespaceCollisions from "@litsx/babel-preset-litsx/internal/transform-typescript-namespace-collisions";
 import reactAttributes from "./internal/react-attributes.js";
 import reactDomAttributes from "./internal/react-dom-attributes.js";
 import reactHooks from "./internal/react-hooks.js";
@@ -40,15 +41,20 @@ export function createReactCompatPresetPlugins(options = {}) {
   const normalizedOptions = normalizeReactCompatOptions(options);
 
   const plugins = [
+    transformTypescriptNamespaceCollisions,
     [reactAttributes, options.reactAttributes || {}],
     [reactWrappers, options.reactWrappers || {}],
     [reactContext, options.reactContext || {}],
     [litsxPropTypes, options.litsxPropTypes || {}],
-    [transformLitsxRendererProps, options.transformLitsxRendererProps || {}],
+    [transformLitsxRendererProps, {
+      deferComponentImportsFrom: ["react", "react-error-boundary"],
+      ...(options.transformLitsxRendererProps || {}),
+    }],
     transformLitsxStaticAssignments,
     [transformLitsxJsxBindings, {
       ...normalizedOptions.transformLitsx,
       reactCompatBoundaries: true,
+      reactCompatEvents: true,
       reactCompatKeys: options.reactKeys !== false,
     }],
     [
@@ -64,25 +70,33 @@ export function createReactCompatPresetPlugins(options = {}) {
     [
       transformLitsxHooks,
       {
+        ...normalizedOptions.transformLitsx,
         ignoredCustomHookSources: ["react", "@litsx/core/context"],
         ...(options.transformLitsxHooks || {}),
       },
     ],
     [transformLitsxDomRefs, options.transformLitsxDomRefs || {}],
-    [reactHooks, options.reactHooks || {}],
+    [reactHooks, {
+      // The structural hook pass immediately above already rewrites imported
+      // hooks whose implementation proves that they need the active host.
+      // Avoid treating every opaque third-party `use*` export as host-aware.
+      transformImportedCustomHooks: false,
+      ...(options.reactHooks || {}),
+    }],
     [reactUseState, { allowReactAttributes: true, ...(options.reactUseState || {}) }],
     [reactUseRef, options.reactUseRef || {}],
     [reactLazy, options.reactLazy || {}],
     [reactErrorBoundary, options.reactErrorBoundary || {}],
     [reactSuspense, options.reactSuspense || {}],
-    [transformLitsxScopedElements, options.transformLitsxScopedElements || {}],
     [reactDomAttributes, options.reactDomAttributes || {}],
     [reactEvents, options.reactEvents || {}],
+    [transformLitsxScopedElements, options.transformLitsxScopedElements || {}],
   ];
 
   if (options.jsxTemplate !== false) {
     plugins.push([transformJsxHtmlTemplate, {
       componentAttributeFallback: false,
+      reactCompatEvents: true,
       ...(options.jsxTemplateOptions || {}),
     }]);
   }

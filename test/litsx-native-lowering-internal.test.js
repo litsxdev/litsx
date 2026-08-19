@@ -650,7 +650,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
   it("hoists inline event handlers into class methods", () => {
     const source = `
       const Button = ({ label }) => {
-        return <button onClick={() => console.log(label)}>{label}</button>;
+        return <button on:click={() => console.log(label)}>{label}</button>;
       };
     `;
 
@@ -685,7 +685,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
           console.log(label, event.type);
         };
 
-        return <button onClick={handleClick}>{label}</button>;
+        return <button on:click={handleClick}>{label}</button>;
       };
     `;
 
@@ -718,7 +718,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
     const source = `
       const Button = ({ label }) => {
         const prefix = '>>>';
-        return <button onClick={() => console.log(prefix, label)}>{prefix}{label}</button>;
+        return <button on:click={() => console.log(prefix, label)}>{prefix}{label}</button>;
       };
     `;
 
@@ -1552,7 +1552,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
       const Button = ({ label }) => {
         const handleClick = () => console.log('declared');
         return (
-          <button onClick={() => console.log('inline')}>
+          <button on:click={() => console.log('inline')}>
             {label}
           </button>
         );
@@ -1686,7 +1686,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
 
   it("uses ShadowDomMixin when static elements is authored explicitly", () => {
     const source = `
-      import { FancyButton } from "./fancy-button.litsx";
+      import { FancyButton } from "./fancy-button.tsx";
 
       function Card() {
         static elements = {
@@ -1706,8 +1706,8 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
 
   it("does not overwrite authored static elements when JSX also contains component candidates", () => {
     const source = `
-      import { ChildOne } from "./child-one.litsx";
-      import { ChildTwo } from "./child-two.litsx";
+      import { ChildOne } from "./child-one.tsx";
+      import { ChildTwo } from "./child-two.tsx";
 
       function Wrapper() {
         static elements = {
@@ -1728,7 +1728,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
 
   it("rejects static elements when static lightDom is authored explicitly", () => {
     const source = `
-      import { FancyButton } from "./fancy-button.litsx";
+      import { FancyButton } from "./fancy-button.tsx";
 
       function Card() {
         static lightDom = true;
@@ -1750,7 +1750,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
     const source = `
       import { LightDomMixin } from "@litsx/core/elements";
       import { LitElement } from "lit";
-      import { FancyButton } from "./fancy-button.litsx";
+      import { FancyButton } from "./fancy-button.tsx";
 
       class Card extends LightDomMixin(LitElement) {
         render() {

@@ -132,12 +132,24 @@ export function transformJSXExpressions(jsxPath, bindings, state = null) {
 
   jsxPath.traverse({
     JSXExpressionContainer(expressionPath) {
-      if (
-        isDirectJsxChildExpression(expressionPath) &&
-        isImplicitChildrenExpression(expressionPath.node.expression, bindings)
-      ) {
-        expressionPath.replaceWith(createDefaultSlotElement());
-        return;
+      if (isDirectJsxChildExpression(expressionPath)) {
+        if (isImplicitChildrenExpression(expressionPath.node.expression, bindings)) {
+          expressionPath.replaceWith(createDefaultSlotElement());
+          return;
+        }
+
+        expressionPath.get("expression").traverse({
+          MemberExpression(memberPath) {
+            if (!isImplicitChildrenExpression(memberPath.node, bindings)) return;
+            memberPath.replaceWith(createDefaultSlotElement());
+            memberPath.skip();
+          },
+          Identifier(identifierPath) {
+            if (!isImplicitChildrenExpression(identifierPath.node, bindings)) return;
+            identifierPath.replaceWith(createDefaultSlotElement());
+            identifierPath.skip();
+          },
+        });
       }
 
       if (t.isIdentifier(expressionPath.node.expression)) {

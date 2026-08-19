@@ -13,7 +13,7 @@ import elementCandidatesPlugin, {
   importedBindingNeedsRendererContext,
   setElementCandidatesBabelTypes,
 } from "../packages/babel-preset-litsx/src/internal/transform-litsx-element-candidates.js";
-import { createLitsxTypecheckSession } from "../packages/typescript/src/typecheck.js";
+import { createLitsxCompilationSession } from "../packages/compiler/src/index.js";
 
 const traverse = babelTraverse.default || babelTraverse;
 const { transformFromAstSync } = babelCore;
@@ -92,7 +92,7 @@ describe("native element candidate internals", () => {
       }
     `);
 
-    const imported = [{ sourceFile: "/tmp/FancyButton.litsx", importedName: "FancyButton", tagName: "fancy-button" }];
+    const imported = [{ sourceFile: "/tmp/FancyButton.tsx", importedName: "FancyButton", tagName: "fancy-button" }];
     const cardPath = functionPaths.get("Card");
     cardPath.node._litsxStaticIr = createStaticIr({
       importedCandidates: imported,
@@ -377,10 +377,10 @@ describe("native element candidate internals", () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-candidate-imports-"));
 
     try {
-      const rootFile = path.join(tempDir, "demo.litsx");
+      const rootFile = path.join(tempDir, "demo.tsx");
       const middleFile = path.join(tempDir, "renderers.js");
       const leafFile = path.join(tempDir, "leaf.js");
-      const widgetFile = path.join(tempDir, "widget-box.litsx");
+      const widgetFile = path.join(tempDir, "widget-box.tsx");
 
       fs.writeFileSync(
         middleFile,
@@ -391,7 +391,7 @@ describe("native element candidate internals", () => {
       fs.writeFileSync(
         leafFile,
         [
-          'import WidgetBox from "./widget-box.litsx";',
+          'import WidgetBox from "./widget-box.tsx";',
           "export default function renderHeader() {",
           "  return <WidgetBox />;",
           "}",
@@ -401,7 +401,7 @@ describe("native element candidate internals", () => {
 
       const { programPath, functionPaths } = getPaths(`
         import { renderHeader } from "./renderers.js";
-        import { GuideCard } from "./guide-card.litsx";
+        import { GuideCard } from "./guide-card.tsx";
         export function Card() {
           return <GuideCard .header={renderHeader} />;
         }
@@ -430,7 +430,7 @@ describe("native element candidate internals", () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-candidate-namespace-alias-"));
 
     try {
-      const rootFile = path.join(tempDir, "demo.litsx");
+      const rootFile = path.join(tempDir, "demo.tsx");
       const helperFile = path.join(tempDir, "renderers.js");
       const iconsFile = path.join(tempDir, "icons.js");
 
@@ -448,7 +448,7 @@ describe("native element candidate internals", () => {
 
       const { programPath, functionPaths } = getPaths(`
         import { renderHeader } from "./renderers.js";
-        import { GuideCard } from "./guide-card.litsx";
+        import { GuideCard } from "./guide-card.tsx";
         export function Card() {
           return <GuideCard .header={renderHeader} />;
         }
@@ -475,7 +475,7 @@ describe("native element candidate internals", () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-candidate-noncomponent-"));
 
     try {
-      const rootFile = path.join(tempDir, "demo.litsx");
+      const rootFile = path.join(tempDir, "demo.tsx");
       const helperFile = path.join(tempDir, "renderers.js");
       const utilFile = path.join(tempDir, "util.js");
 
@@ -512,8 +512,8 @@ describe("native element candidate internals", () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-candidate-bad-import-"));
 
     try {
-      const missingRoot = path.join(tempDir, "missing-demo.litsx");
-      const brokenRoot = path.join(tempDir, "broken-demo.litsx");
+      const missingRoot = path.join(tempDir, "missing-demo.tsx");
+      const brokenRoot = path.join(tempDir, "broken-demo.tsx");
       const brokenHelper = path.join(tempDir, "broken.js");
 
       fs.writeFileSync(
@@ -553,7 +553,7 @@ describe("native element candidate internals", () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-candidate-unexported-"));
 
     try {
-      const rootFile = path.join(tempDir, "demo.litsx");
+      const rootFile = path.join(tempDir, "demo.tsx");
       const helperFile = path.join(tempDir, "renderers.js");
 
       fs.writeFileSync(
@@ -568,7 +568,7 @@ describe("native element candidate internals", () => {
 
       const { programPath, functionPaths } = getPaths(`
         import { renderHeader } from "./renderers.js";
-        import { GuideCard } from "./guide-card.litsx";
+        import { GuideCard } from "./guide-card.tsx";
         export function Card() {
           return <GuideCard .header={renderHeader} />;
         }
@@ -591,14 +591,14 @@ describe("native element candidate internals", () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-candidate-context-"));
 
     try {
-      const rootFile = path.join(tempDir, "demo.litsx");
+      const rootFile = path.join(tempDir, "demo.tsx");
       const helperFile = path.join(tempDir, "renderers.js");
-      const buttonFile = path.join(tempDir, "fancy-button.litsx");
+      const buttonFile = path.join(tempDir, "fancy-button.tsx");
 
       fs.writeFileSync(
         helperFile,
         [
-          'import { FancyButton } from "./fancy-button.litsx";',
+          'import { FancyButton } from "./fancy-button.tsx";',
           "export function renderHeader() {",
           "  return <FancyButton />;",
           "}",
@@ -633,9 +633,9 @@ describe("native element candidate internals", () => {
     try {
       const srcDir = path.join(tempDir, "src");
       fs.mkdirSync(path.join(srcDir, "components"), { recursive: true });
-      const rootFile = path.join(srcDir, "demo.litsx");
+      const rootFile = path.join(srcDir, "demo.tsx");
       const helperFile = path.join(srcDir, "renderers.js");
-      const buttonFile = path.join(srcDir, "components", "fancy-button.litsx");
+      const buttonFile = path.join(srcDir, "components", "fancy-button.tsx");
       const tsconfigPath = path.join(tempDir, "tsconfig.json");
 
       fs.writeFileSync(tsconfigPath, JSON.stringify({
@@ -655,7 +655,7 @@ describe("native element candidate internals", () => {
       fs.writeFileSync(
         helperFile,
         [
-          'import { FancyButton } from "@/components/fancy-button.litsx";',
+          'import { FancyButton } from "@/components/fancy-button.tsx";',
           "export const renderHeader = () => <FancyButton />;",
         ].join("\n")
       );
@@ -669,17 +669,17 @@ describe("native element candidate internals", () => {
       `);
       programPath.hub = { file: { opts: { filename: rootFile } } };
 
-      const session = createLitsxTypecheckSession(["--project", tsconfigPath]);
+      const session = createLitsxCompilationSession({ projectPath: tsconfigPath });
       try {
         assert.strictEqual(
           importedBindingNeedsRendererContext(programPath, "renderHeader", {
             filename: rootFile,
-            typescriptSession: session.projectSession,
+            typescriptSession: session.typescriptSession,
           }),
           true
         );
       } finally {
-        session.projectSession.dispose?.();
+        session.dispose();
       }
     } finally {
       fs.rmSync(tempDir, { recursive: true, force: true });
@@ -692,9 +692,9 @@ describe("native element candidate internals", () => {
     try {
       const srcDir = path.join(tempDir, "src");
       fs.mkdirSync(path.join(srcDir, "components"), { recursive: true });
-      const rootFile = path.join(srcDir, "demo.litsx");
+      const rootFile = path.join(srcDir, "demo.tsx");
       const helperFile = path.join(srcDir, "renderers.js");
-      const buttonFile = path.join(srcDir, "components", "fancy-button.litsx");
+      const buttonFile = path.join(srcDir, "components", "fancy-button.tsx");
       const tsconfigPath = path.join(tempDir, "tsconfig.json");
 
       fs.writeFileSync(tsconfigPath, JSON.stringify({
@@ -730,17 +730,17 @@ describe("native element candidate internals", () => {
       `);
       programPath.hub = { file: { opts: { filename: rootFile } } };
 
-      const session = createLitsxTypecheckSession(["--project", tsconfigPath]);
+      const session = createLitsxCompilationSession({ projectPath: tsconfigPath });
       try {
         assert.strictEqual(
           importedBindingNeedsRendererContext(programPath, "renderHeader", {
             filename: rootFile,
-            typescriptSession: session.projectSession,
+            typescriptSession: session.typescriptSession,
           }),
           true
         );
       } finally {
-        session.projectSession.dispose?.();
+        session.dispose();
       }
     } finally {
       fs.rmSync(tempDir, { recursive: true, force: true });

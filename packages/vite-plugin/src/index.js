@@ -84,7 +84,7 @@ function shouldTransform(id, include) {
     return include.test(id);
   }
 
-  return /\.(jsx|tsx|litsx)$/.test(id) || id.endsWith(".litsx.jsx");
+  return /\.[jt]sx$/.test(id);
 }
 
 function formatWarningLocation(warning) {

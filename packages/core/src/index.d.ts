@@ -147,33 +147,14 @@ export type LitsxEventHandler<TEvent extends Event = Event> = {
   bivarianceHack(event: TEvent): unknown;
 }["bivarianceHack"];
 
-export type LitsxKnownDomEventAttributes<Target = EventTarget> = {
-  [EventName in keyof GlobalEventHandlersEventMap as `__litsx_event_${EventName & string}`]?: LitsxEventHandler<
-    GlobalEventHandlersEventMap[EventName] & CustomEvent<any> & { currentTarget: Target }
-  >;
-};
-
-export type LitsxFormEventAttributes<Target = EventTarget> =
-  Target extends HTMLFormElement
-    ? {
-        __litsx_event_reset?: LitsxEventHandler<Event & { currentTarget: Target }>;
-        __litsx_event_formdata?: LitsxEventHandler<FormDataEvent & { currentTarget: Target }>;
-      }
-    : {};
-
-export type LitsxCustomEventAttributes = {
-  [attributeName: `__litsx_event_${string}-${string}`]: LitsxEventHandler<CustomEvent<any>> | undefined;
-};
-
-export type LitsxAnyEventAttributes = {
-  /**
-   * Last-resort fallback for authored event names that do not have a reliable DOM event map entry.
-   * All authored events also accept CustomEvent handlers; this escape stays intentionally
-   * broad so the catch-all index does not over-constrain known DOM or custom events when
-   * intersected with narrower maps.
-   */
-  [attributeName: `__litsx_event_${string}`]: LitsxEventHandler<any> | undefined;
-};
+export type LitsxEventListener<TEvent extends Event = Event> =
+  | LitsxEventHandler<TEvent>
+  | {
+      handleEvent: LitsxEventHandler<TEvent>;
+      capture?: boolean;
+      once?: boolean;
+      passive?: boolean;
+    };
 
 export type LitsxStandardDomEventAttributes<Target = EventTarget> = {
   [EventName in keyof GlobalEventHandlersEventMap as `on${Capitalize<EventName & string>}`]?: LitsxEventHandler<
@@ -224,29 +205,23 @@ export type LitsxStandardDomEventAttributes<Target = EventTarget> = {
   onTransitionEnd?: LitsxEventHandler<TransitionEvent & { currentTarget: Target }>;
 };
 
-/**
- * Standard JSX spelling for custom-element events. The compiler only uses this
- * fallback when the component API does not declare the same `onX` name as a
- * property, so declared callback props retain their own type and semantics.
- */
-type LitsxUppercaseLetter =
-  | "A" | "B" | "C" | "D" | "E" | "F" | "G" | "H" | "I" | "J" | "K" | "L" | "M"
-  | "N" | "O" | "P" | "Q" | "R" | "S" | "T" | "U" | "V" | "W" | "X" | "Y" | "Z";
-
-export type LitsxStandardCustomEventAttributes<Props = {}> = {
-  [Name in `on${LitsxUppercaseLetter}${string}`]?: Name extends keyof Props
-    ? Props[Name]
-    : LitsxEventHandler<any>;
+export type LitsxExplicitDomEventAttributes<Target = EventTarget> = {
+  [EventName in keyof GlobalEventHandlersEventMap as `on:${EventName & string}`]?: LitsxEventListener<
+    GlobalEventHandlersEventMap[EventName] & { currentTarget: Target }
+  >;
 };
 
-type LitsxPascalEventName<Name extends string> =
-  Name extends `${infer Head}-${infer Tail}`
-    ? `${Capitalize<Head>}${LitsxPascalEventName<Tail>}`
-    : Capitalize<Name>;
+/** Explicit JSX event channel for custom-element events. */
+export type LitsxExplicitCustomEventAttributes = {
+  [Name in `on:${string}`]?: LitsxEventListener<CustomEvent<any>>;
+};
+
+/** @deprecated Use LitsxExplicitCustomEventAttributes. */
+export type LitsxStandardCustomEventAttributes<Props = {}> = LitsxExplicitCustomEventAttributes;
 
 type LitsxStandardRepresentableEventName<Name extends string> =
   Name extends Lowercase<Name>
-    ? Name extends `${string}:${string}` | `${string}.${string}` | `${string}-capture`
+    ? Name extends `${string}:${string}` | `${string}.${string}`
       ? never
       : Name
     : never;
@@ -257,35 +232,16 @@ export type LitsxTypedCustomEventAttributes<
 > = {
   [Name in Extract<keyof Events, string> as LitsxStandardRepresentableEventName<Name> extends never
     ? never
-    : `on${LitsxPascalEventName<Name>}`]?: LitsxEventHandler<
-    CustomEvent<Events[Name]> & { currentTarget: Target }
-  >;
-} & {
-  [Name in Extract<keyof Events, string> as LitsxStandardRepresentableEventName<Name> extends never
-    ? never
-    : `on${LitsxPascalEventName<Name>}Capture`]?: LitsxEventHandler<
+    : `on:${Name}`]?: LitsxEventListener<
     CustomEvent<Events[Name]> & { currentTarget: Target }
   >;
 };
 
 export type LitsxDomAttributes<Target = EventTarget> =
-  & LitsxKnownDomEventAttributes<Target>
-  & LitsxFormEventAttributes<Target>
-  & LitsxCustomEventAttributes
-  & LitsxAnyEventAttributes
+  & LitsxExplicitDomEventAttributes<Target>
   & LitsxStandardDomEventAttributes<Target>
   & {
     _currentTarget?: Target | undefined;
-    /**
-     * Tooling virtualizes authored `.prop` bindings to `__litsx_prop_*` attributes
-     * while preserving the original source spans for editor features.
-     */
-    [attributeName: `__litsx_prop_${string}`]: unknown;
-    /**
-     * Tooling virtualizes authored `?attr` bindings to `__litsx_bool_*` attributes
-     * while preserving the original source spans for editor features.
-     */
-    [attributeName: `__litsx_bool_${string}`]: boolean | undefined;
   };
 
 export type LitsxHostElementProps<TElement> = Omit<

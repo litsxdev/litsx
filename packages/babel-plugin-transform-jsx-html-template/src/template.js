@@ -435,7 +435,8 @@ function createSpreadElementCall(node, opts, name, isAuthoredComponentTag, compo
       return;
     }
 
-    const rawName = decodeVirtualAttributeName(attr.name.name) ?? attr.name.name;
+    const jsxName = stringifyJsxName(attr.name);
+    const rawName = decodeVirtualAttributeName(jsxName) ?? jsxName;
     const key = /^[$_a-zA-Z][$_a-zA-Z0-9]*$/.test(rawName)
       ? t.identifier(rawName)
       : t.stringLiteral(rawName);
@@ -468,6 +469,9 @@ function createSpreadElementCall(node, opts, name, isAuthoredComponentTag, compo
       t.objectProperty(t.identifier("void"), t.booleanLiteral(isVoid)),
       ...(namespace === "svg"
         ? [t.objectProperty(t.identifier("namespace"), t.stringLiteral("svg"))]
+        : []),
+      ...(opts?.reactCompatEvents === true
+        ? [t.objectProperty(t.identifier("reactCompatEvents"), t.booleanLiteral(true))]
         : []),
     ]),
   ];
@@ -511,7 +515,8 @@ const transforms = {
       if (attr.name.name === NOSCRIPT_COMPONENT_ATTRIBUTE) {
         return;
       }
-      const rawName = decodeVirtualAttributeName(attr.name.name) ?? attr.name.name;
+      const jsxName = stringifyJsxName(attr.name);
+      const rawName = decodeVirtualAttributeName(jsxName) ?? jsxName;
       const prefix = rawName[0];
 
       if (isAuthoredComponentTag && shouldLowerAuthoredComponentAttributeAsProperty(attr, rawName, opts)) {

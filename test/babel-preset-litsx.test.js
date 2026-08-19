@@ -18,7 +18,7 @@ let detectLitsxSourceFeatures;
 let isLitsxRuntimeHookName;
 
 function compileWithNativePreset(source, {
-  filename = "/virtual/test.litsx",
+  filename = "/virtual/test.tsx",
   parserPlugins = [],
   presetOptions = {},
 } = {}) {
@@ -102,7 +102,7 @@ describe("@litsx/babel-preset-litsx", () => {
     const result = transformFromAstSync(parser.parse(source, { sourceType: "module" }), source, {
       configFile: false,
       babelrc: false,
-      filename: "/virtual/stable-ids.litsx",
+      filename: "/virtual/stable-ids.tsx",
       presets: [[nativePreset, { jsxTemplate: false }]],
     });
 
@@ -128,13 +128,13 @@ describe("@litsx/babel-preset-litsx", () => {
     const firstResult = transformFromAstSync(parser.parse(source, { sourceType: "module" }), source, {
       configFile: false,
       babelrc: false,
-      filename: "/virtual/stable-class-ids.litsx",
+      filename: "/virtual/stable-class-ids.tsx",
       presets: [[nativePreset, { jsxTemplate: false }]],
     });
     const secondResult = transformFromAstSync(parser.parse(source, { sourceType: "module" }), source, {
       configFile: false,
       babelrc: false,
-      filename: "/virtual/stable-class-ids.litsx",
+      filename: "/virtual/stable-class-ids.tsx",
       presets: [[nativePreset, { jsxTemplate: false }]],
     });
 
@@ -168,7 +168,7 @@ describe("@litsx/babel-preset-litsx", () => {
     const result = transformFromAstSync(parser.parse(source, { sourceType: "module" }), source, {
       configFile: false,
       babelrc: false,
-      filename: "/virtual/structural.litsx",
+      filename: "/virtual/structural.tsx",
       presets: [[nativePreset, { jsxTemplate: false }]],
     });
 
@@ -201,7 +201,7 @@ describe("@litsx/babel-preset-litsx", () => {
     const result = transformFromAstSync(parser.parse(source, { sourceType: "module" }), source, {
       configFile: false,
       babelrc: false,
-      filename: "/virtual/static-structural.litsx",
+      filename: "/virtual/static-structural.tsx",
       presets: [[nativePreset, { jsxTemplate: false }]],
     });
 
@@ -243,7 +243,7 @@ describe("@litsx/babel-preset-litsx", () => {
     const result = transformFromAstSync(parser.parse(source, { sourceType: "module" }), source, {
       configFile: false,
       babelrc: false,
-      filename: "/virtual/mixed-structural.litsx",
+      filename: "/virtual/mixed-structural.tsx",
       presets: [[nativePreset, { jsxTemplate: false }]],
     });
 
@@ -273,7 +273,7 @@ describe("@litsx/babel-preset-litsx", () => {
     const result = transformFromAstSync(parser.parse(source, { sourceType: "module" }), source, {
       configFile: false,
       babelrc: false,
-      filename: "/virtual/structural-custom.litsx",
+      filename: "/virtual/structural-custom.tsx",
       presets: [[nativePreset, { jsxTemplate: false }]],
     });
 
@@ -289,7 +289,7 @@ describe("@litsx/babel-preset-litsx", () => {
 
   it("compiles imported structural hooks discovered from authored modules", () => {
     const source = [
-      'import { useLocale } from "./hooks.litsx";',
+      'import { useLocale } from "./hooks.tsx";',
       "export function Greeting() {",
       "  const locale = useLocale('en');",
       "  return <div>{locale}</div>;",
@@ -307,11 +307,11 @@ describe("@litsx/babel-preset-litsx", () => {
     const result = transformFromAstSync(parser.parse(source, { sourceType: "module" }), source, {
       configFile: false,
       babelrc: false,
-      filename: "/virtual/imported-structural.litsx",
+      filename: "/virtual/imported-structural.tsx",
       presets: [[nativePreset, {
         jsxTemplate: false,
         inMemoryFiles: {
-          "/virtual/hooks.litsx": hooksSource,
+          "/virtual/hooks.tsx": hooksSource,
         },
       }]],
     });
@@ -323,7 +323,7 @@ describe("@litsx/babel-preset-litsx", () => {
 
   it("merges imported structural hook props into generated static properties", () => {
     const source = [
-      'import { useMessages } from "./i18n-hooks.litsx";',
+      'import { useMessages } from "./i18n-hooks.tsx";',
       "export function Greeting({ title }: { title: string }) {",
       "  useMessages();",
       "  return <div>{title}</div>;",
@@ -357,12 +357,12 @@ describe("@litsx/babel-preset-litsx", () => {
     ].join("\n");
 
     const result = compileWithNativePreset(source, {
-      filename: "/virtual/imported-structural-props.litsx",
+      filename: "/virtual/imported-structural-props.tsx",
       parserPlugins: ["typescript"],
       presetOptions: {
         jsxTemplate: false,
         inMemoryFiles: {
-          "/virtual/i18n-hooks.litsx": hooksSource,
+          "/virtual/i18n-hooks.tsx": hooksSource,
         },
       },
     });
@@ -370,7 +370,7 @@ describe("@litsx/babel-preset-litsx", () => {
     assert.match(result.code, /import \{[^}]*resolveStructuralProps[^}]*\} from "@litsx\/core";/);
     assert.match(result.code, /static get properties\(\)/);
     assert.match(result.code, /resolveStructuralProps\(this,\s*\{/);
-    assert.match(result.code, /import \{ useMessages \} from "\.\/i18n-hooks\.litsx";/);
+    assert.match(result.code, /import \{ useMessages \} from "\.\/i18n-hooks\.tsx";/);
     assert.match(result.code, /static structuralEntries = \[[\s\S]*definition: useMessages/s);
   });
 
@@ -389,7 +389,7 @@ describe("@litsx/babel-preset-litsx", () => {
     const result = transformFromAstSync(parser.parse(source, { sourceType: "module" }), source, {
       configFile: false,
       babelrc: false,
-      filename: path.join(process.cwd(), "test", "fixtures", "imported-core-structural.litsx"),
+      filename: path.join(process.cwd(), "test", "fixtures", "imported-core-structural.tsx"),
       presets: [[nativePreset, { jsxTemplate: false }]],
     });
 
@@ -447,12 +447,12 @@ describe("@litsx/babel-preset-litsx", () => {
     ].join("\n");
 
     const baseResult = compileWithNativePreset(noStaticSource, {
-      filename: "/virtual/structural-props.litsx",
+      filename: "/virtual/structural-props.tsx",
       parserPlugins: ["typescript"],
       presetOptions: { jsxTemplate: false },
     });
     const mergeResult = compileWithNativePreset(authoredStaticSource, {
-      filename: "/virtual/structural-props-merge.litsx",
+      filename: "/virtual/structural-props-merge.tsx",
       parserPlugins: ["typescript"],
       presetOptions: { jsxTemplate: false },
     });
@@ -502,7 +502,7 @@ describe("@litsx/babel-preset-litsx", () => {
     ].join("\n");
 
     const result = compileWithNativePreset(source, {
-      filename: "/virtual/structural-props-precedence.litsx",
+      filename: "/virtual/structural-props-precedence.tsx",
       presetOptions: { jsxTemplate: false },
     });
 
@@ -545,7 +545,7 @@ describe("@litsx/babel-preset-litsx", () => {
     ].join("\n");
 
     const result = compileWithNativePreset(source, {
-      filename: "/virtual/structural-props-overwrite-warning.litsx",
+      filename: "/virtual/structural-props-overwrite-warning.tsx",
       presetOptions: { jsxTemplate: false },
     });
 
@@ -593,7 +593,7 @@ describe("@litsx/babel-preset-litsx", () => {
     ].join("\n");
 
     const result = compileWithNativePreset(source, {
-      filename: "/virtual/structural-accessors-overwrite-warning.litsx",
+      filename: "/virtual/structural-accessors-overwrite-warning.tsx",
       presetOptions: { jsxTemplate: false },
     });
 
@@ -619,7 +619,7 @@ describe("@litsx/babel-preset-litsx", () => {
     const result = transformFromAstSync(parser.parse(source, { sourceType: "module" }), source, {
       configFile: false,
       babelrc: false,
-      filename: path.join(process.cwd(), "test", "fixtures", "imported-core-namespace-structural.litsx"),
+      filename: path.join(process.cwd(), "test", "fixtures", "imported-core-namespace-structural.tsx"),
       presets: [[nativePreset, { jsxTemplate: false }]],
     });
 
@@ -632,7 +632,7 @@ describe("@litsx/babel-preset-litsx", () => {
 
   it("compiles imported static-only structural hooks without host lifecycle wrapping", () => {
     const source = [
-      'import { useStaticLocale } from "./hooks.litsx";',
+      'import { useStaticLocale } from "./hooks.tsx";',
       "export function Greeting() {",
       "  const locale = useStaticLocale('en');",
       "  return <div>{locale}</div>;",
@@ -654,11 +654,11 @@ describe("@litsx/babel-preset-litsx", () => {
     const result = transformFromAstSync(parser.parse(source, { sourceType: "module" }), source, {
       configFile: false,
       babelrc: false,
-      filename: "/virtual/imported-static-structural.litsx",
+      filename: "/virtual/imported-static-structural.tsx",
       presets: [[nativePreset, {
         jsxTemplate: false,
         inMemoryFiles: {
-          "/virtual/hooks.litsx": hooksSource,
+          "/virtual/hooks.tsx": hooksSource,
         },
       }]],
     });
@@ -696,7 +696,7 @@ describe("@litsx/babel-preset-litsx", () => {
     const result = transformFromAstSync(parser.parse(source, { sourceType: "module" }), source, {
       configFile: false,
       babelrc: false,
-      filename: "/virtual/structural-accessors.litsx",
+      filename: "/virtual/structural-accessors.tsx",
       presets: [[nativePreset, { jsxTemplate: false }]],
     });
 
@@ -741,7 +741,7 @@ describe("@litsx/babel-preset-litsx", () => {
       () => transformFromAstSync(parser.parse(source, { sourceType: "module" }), source, {
         configFile: false,
         babelrc: false,
-        filename: "/virtual/structural-props-accessors-collision.litsx",
+        filename: "/virtual/structural-props-accessors-collision.tsx",
         presets: [[nativePreset, { jsxTemplate: false }]],
       }),
       /declares "messages" in both props and accessors/
@@ -750,7 +750,7 @@ describe("@litsx/babel-preset-litsx", () => {
 
   it("compiles namespace imported structural hooks discovered from authored modules", () => {
     const source = [
-      'import * as hooks from "./hooks.litsx";',
+      'import * as hooks from "./hooks.tsx";',
       "export function Greeting() {",
       "  const locale = hooks.useLocale('en');",
       "  return <div>{locale}</div>;",
@@ -769,11 +769,11 @@ describe("@litsx/babel-preset-litsx", () => {
     const result = transformFromAstSync(parser.parse(source, { sourceType: "module" }), source, {
       configFile: false,
       babelrc: false,
-      filename: "/virtual/imported-namespace-structural.litsx",
+      filename: "/virtual/imported-namespace-structural.tsx",
       presets: [[nativePreset, {
         jsxTemplate: false,
         inMemoryFiles: {
-          "/virtual/hooks.litsx": hooksSource,
+          "/virtual/hooks.tsx": hooksSource,
         },
       }]],
     });
@@ -785,7 +785,7 @@ describe("@litsx/babel-preset-litsx", () => {
 
   it("resolves imported structural hooks through TypeScript path aliases", () => {
     const source = [
-      'import { useLocale } from "@/hooks.litsx";',
+      'import { useLocale } from "@/hooks.tsx";',
       "export function Greeting() {",
       "  const locale = useLocale('en');",
       "  return <div>{locale}</div>;",
@@ -803,7 +803,7 @@ describe("@litsx/babel-preset-litsx", () => {
     const result = transformFromAstSync(parser.parse(source, { sourceType: "module" }), source, {
       configFile: false,
       babelrc: false,
-      filename: "/virtual/src/path-alias-structural.litsx",
+      filename: "/virtual/src/path-alias-structural.tsx",
       presets: [[nativePreset, {
         jsxTemplate: false,
         compilerOptions: {
@@ -813,7 +813,7 @@ describe("@litsx/babel-preset-litsx", () => {
           },
         },
         inMemoryFiles: {
-          "/virtual/src/hooks.litsx": hooksSource,
+          "/virtual/src/hooks.tsx": hooksSource,
         },
       }]],
     });
@@ -825,7 +825,7 @@ describe("@litsx/babel-preset-litsx", () => {
 
   it("wraps hosts that call imported custom hooks containing structural hooks", () => {
     const source = [
-      'import { useMessage } from "./hooks.litsx";',
+      'import { useMessage } from "./hooks.tsx";',
       "export function Greeting() {",
       "  const message = useMessage('hello');",
       "  return <div>{message}</div>;",
@@ -846,11 +846,11 @@ describe("@litsx/babel-preset-litsx", () => {
     const result = transformFromAstSync(parser.parse(source, { sourceType: "module" }), source, {
       configFile: false,
       babelrc: false,
-      filename: "/virtual/imported-structural-custom.litsx",
+      filename: "/virtual/imported-structural-custom.tsx",
       presets: [[nativePreset, {
         jsxTemplate: false,
         inMemoryFiles: {
-          "/virtual/hooks.litsx": hooksSource,
+          "/virtual/hooks.tsx": hooksSource,
         },
       }]],
     });
@@ -877,7 +877,7 @@ describe("@litsx/babel-preset-litsx", () => {
     const result = transformFromAstSync(parser.parse(source, { sourceType: "module" }), source, {
       configFile: false,
       babelrc: false,
-      filename: "/virtual/hooks-with-metadata.litsx",
+      filename: "/virtual/hooks-with-metadata.tsx",
       presets: [[nativePreset, { jsxTemplate: false }]],
     });
 
@@ -904,7 +904,7 @@ describe("@litsx/babel-preset-litsx", () => {
     const options = {
       configFile: false,
       babelrc: false,
-      filename: "/virtual/structural-stability.litsx",
+      filename: "/virtual/structural-stability.tsx",
       presets: [[nativePreset, { jsxTemplate: false }]],
     };
 
@@ -938,7 +938,7 @@ describe("@litsx/babel-preset-litsx", () => {
       "  return <div>{value}</div>;",
       "}",
     ].join("\n");
-    const filename = "/virtual/ssr-client-structural.litsx";
+    const filename = "/virtual/ssr-client-structural.tsx";
     const transform = () => transformFromAstSync(parser.parse(source, { sourceType: "module" }), source, {
       configFile: false,
       babelrc: false,
@@ -981,7 +981,7 @@ describe("@litsx/babel-preset-litsx", () => {
     const result = transformFromAstSync(parser.parse(source, { sourceType: "module" }), source, {
       configFile: false,
       babelrc: false,
-      filename: "/virtual/nested-structural.litsx",
+      filename: "/virtual/nested-structural.tsx",
       presets: [[nativePreset, { jsxTemplate: false }]],
     });
 
@@ -995,8 +995,8 @@ describe("@litsx/babel-preset-litsx", () => {
   });
 
   it("compiles the structural hooks authoring fixture end-to-end", () => {
-    const fixturePath = path.resolve("test/fixtures/structural-hooks/consumer.litsx");
-    const hooksPath = path.resolve("test/fixtures/structural-hooks/resource-hooks.litsx");
+    const fixturePath = path.resolve("test/fixtures/structural-hooks/consumer.tsx");
+    const hooksPath = path.resolve("test/fixtures/structural-hooks/resource-hooks.tsx");
     const source = fs.readFileSync(fixturePath, "utf8");
     const hooksSource = fs.readFileSync(hooksPath, "utf8");
 
@@ -1013,7 +1013,7 @@ describe("@litsx/babel-preset-litsx", () => {
       presets: [[nativePreset, { jsxTemplate: false }]],
     });
 
-    assert.match(result.code, /import \{ useScopedResource \} from "\.\/resource-hooks\.litsx";/);
+    assert.match(result.code, /import \{ useScopedResource \} from "\.\/resource-hooks\.tsx";/);
     assert.match(result.code, /class ResourceConsumer extends HostMiddlewareMixin\(LitElement\)/);
     assert.match(result.code, /static structuralEntries = \[\{\s*id: "litsx-structural-[^"]+"/);
     assert.match(result.code, /definition: useScopedResource/);
@@ -1038,7 +1038,7 @@ describe("@litsx/babel-preset-litsx", () => {
       () => transformFromAstSync(parser.parse(source, { sourceType: "module" }), source, {
         configFile: false,
         babelrc: false,
-        filename: "/virtual/invalid-structural.litsx",
+        filename: "/virtual/invalid-structural.tsx",
         presets: [[nativePreset, { jsxTemplate: false }]],
       }),
       /cannot be created through an alias/,
@@ -1060,7 +1060,7 @@ describe("@litsx/babel-preset-litsx", () => {
       () => transformFromAstSync(parser.parse(source, { sourceType: "module" }), source, {
         configFile: false,
         babelrc: false,
-        filename: "/virtual/invalid-dynamic-structural.litsx",
+        filename: "/virtual/invalid-dynamic-structural.tsx",
         presets: [[nativePreset, { jsxTemplate: false }]],
       }),
       /cannot be created through an alias/,
@@ -1086,7 +1086,7 @@ describe("@litsx/babel-preset-litsx", () => {
         () => transformFromAstSync(parser.parse(source, { sourceType: "module" }), source, {
           configFile: false,
           babelrc: false,
-          filename: "/virtual/invalid-container-structural.litsx",
+          filename: "/virtual/invalid-container-structural.tsx",
           presets: [[nativePreset, { jsxTemplate: false }]],
         }),
         /cannot be stored in object or array containers/,
@@ -1096,7 +1096,7 @@ describe("@litsx/babel-preset-litsx", () => {
 
   it("rejects computed namespace access for imported structural hooks", () => {
     const source = [
-      'import * as hooks from "./hooks.litsx";',
+      'import * as hooks from "./hooks.tsx";',
       "const name = 'useLocale';",
       "export function Greeting() {",
       "  return <div>{hooks[name]('en')}</div>;",
@@ -1111,11 +1111,11 @@ describe("@litsx/babel-preset-litsx", () => {
       () => transformFromAstSync(parser.parse(source, { sourceType: "module" }), source, {
         configFile: false,
         babelrc: false,
-        filename: "/virtual/invalid-computed-namespace-structural.litsx",
+        filename: "/virtual/invalid-computed-namespace-structural.tsx",
         presets: [[nativePreset, {
           jsxTemplate: false,
           inMemoryFiles: {
-            "/virtual/hooks.litsx": hooksSource,
+            "/virtual/hooks.tsx": hooksSource,
           },
         }]],
       }),
@@ -1257,11 +1257,11 @@ describe("@litsx/babel-preset-litsx", () => {
 
     assert.strictEqual(
       createLitsxPresetPlugins({}, detectLitsxSourceFeatures(plainSource, {})).length,
-      5,
+      6,
     );
     assert.strictEqual(
       createLitsxPresetPlugins({}, detectLitsxSourceFeatures(featureSource, {})).length,
-      8,
+      9,
     );
   });
 

@@ -2,7 +2,8 @@ import helperPluginUtils from "@babel/helper-plugin-utils";
 import jsxSyntaxPlugin from "@babel/plugin-syntax-jsx";
 import {
   decodeVirtualAttributeName,
-  resolveStandardJsxEventName,
+  isNativeDomEventHandlerPropertyName,
+  resolveExplicitJsxEventName,
 } from "@litsx/authoring";
 import {
   createTypeResolver,
@@ -54,7 +55,6 @@ const HTML_ATTRIBUTE_ALIASES = new Map([
   ["htmlFor", "for"],
   ["httpEquiv", "http-equiv"],
 ]);
-const INPUT_CHANGE_TYPES = new Set(["checkbox", "radio", "file"]);
 const LIVE_VALUE_TAGS = new Set(["input", "textarea", "select"]);
 const REACT_BOUNDARY_ATTRIBUTES = new Map([
   ["ErrorBoundary", new Set(["fallback", "onError", "key"])],
@@ -140,22 +140,12 @@ function getTagName(name, t) {
 }
 
 function getAttributeName(attribute, t) {
-  if (!t.isJSXAttribute(attribute) || !t.isJSXIdentifier(attribute.name)) {
-    return null;
+  if (!t.isJSXAttribute(attribute)) return null;
+  if (t.isJSXNamespacedName(attribute.name)) {
+    return `${attribute.name.namespace.name}:${attribute.name.name.name}`;
   }
+  if (!t.isJSXIdentifier(attribute.name)) return null;
   return decodeVirtualAttributeName(attribute.name.name) ?? attribute.name.name;
-}
-
-function getStaticStringValue(attribute, t) {
-  if (!t.isJSXAttribute(attribute) || !attribute.value) return null;
-  if (t.isStringLiteral(attribute.value)) return attribute.value.value;
-  if (
-    t.isJSXExpressionContainer(attribute.value) &&
-    t.isStringLiteral(attribute.value.expression)
-  ) {
-    return attribute.value.expression.value;
-  }
-  return null;
 }
 
 function isInsideSvg(path, t) {
@@ -328,42 +318,6 @@ function renameAttribute(attribute, name, t) {
   attribute.name = t.jsxIdentifier(name);
 }
 
-function wrapCapture(attribute, t) {
-  const expression = t.isJSXExpressionContainer(attribute.value)
-    ? attribute.value.expression
-    : attribute.value || t.booleanLiteral(true);
-  attribute.value = t.jsxExpressionContainer(
-    t.objectExpression([
-      t.objectProperty(t.identifier("handleEvent"), t.cloneNode(expression, true)),
-      t.objectProperty(t.identifier("capture"), t.booleanLiteral(true)),
-    ]),
-  );
-}
-
-function resolveEvent(rawName, tagName, attributes, t, customEvent = false) {
-  const resolved = resolveStandardJsxEventName(rawName, {
-    customElement: customEvent,
-  });
-  if (!resolved) return null;
-  let { name: normalized, capture } = resolved;
-
-  if (normalized === "change" && (tagName === "input" || tagName === "textarea")) {
-    const checked = attributes.some((attribute) => {
-      const name = getAttributeName(attribute, t);
-      return name === "checked" || name === "defaultChecked" || name === "?checked";
-    });
-    const typeAttribute = attributes.find(
-      (attribute) => getAttributeName(attribute, t) === "type",
-    );
-    const inputType = getStaticStringValue(typeAttribute, t)?.toLowerCase() ?? null;
-    if (tagName === "textarea" || (!checked && (!inputType || !INPUT_CHANGE_TYPES.has(inputType)))) {
-      normalized = "input";
-    }
-  }
-
-  return { name: normalized, capture };
-}
-
 function normalizeHtmlAttributeName(rawName) {
   return HTML_ATTRIBUTE_ALIASES.get(rawName) ?? rawName.toLowerCase();
 }
@@ -488,10 +442,25 @@ function transformOpeningElement(path, state, t) {
 
   for (const attribute of path.node.attributes) {
     const rawName = getAttributeName(attribute, t);
+    const explicitEventName = resolveExplicitJsxEventName(rawName);
+    if (rawName?.startsWith("on:") && !explicitEventName) {
+      throw path.buildCodeFrameError(
+        `Declarative event "${rawName.slice(3)}" must use lowercase kebab-case. ` +
+        "Use addEventListener() for event names outside that convention.",
+      );
+    }
+    if (explicitEventName) {
+      renameAttribute(attribute, `@${explicitEventName}`, t);
+      continue;
+    }
     if (!rawName || rawName.startsWith(".") || rawName.startsWith("?") || rawName.startsWith("@")) {
       continue;
     }
     if (rawName === "ref") continue;
+
+    if (state.__litsxDeferReactEvents && !component && /^on[A-Z]/.test(rawName)) {
+      continue;
+    }
 
     if (
       state.__litsxDeferReactBoundaryAttributes &&
@@ -523,12 +492,6 @@ function transformOpeningElement(path, state, t) {
         if (kind === "property") renameAttribute(attribute, `.${rawName}`, t);
         continue;
       }
-      const event = resolveEvent(rawName, tagName, path.node.attributes, t, true);
-      if (event) {
-        renameAttribute(attribute, `@${event.name}`, t);
-        if (event.capture) wrapCapture(attribute, t);
-        continue;
-      }
       if (!t.isStringLiteral(attribute.value)) {
         renameAttribute(attribute, `.${rawName}`, t);
       }
@@ -555,6 +518,13 @@ function transformOpeningElement(path, state, t) {
       renameAttribute(attribute, "for", t);
       continue;
     }
+    // Custom elements and SVG elements inherit the native `on*` IDL handler
+    // properties too; exact lowercase spellings are property assignments on
+    // every DOM element, not only built-in HTML tags.
+    if (!component && isNativeDomEventHandlerPropertyName(rawName)) {
+      renameAttribute(attribute, `.${rawName}`, t);
+      continue;
+    }
     if (tagName === "input" && rawName === "defaultChecked") {
       renameAttribute(attribute, "?checked", t);
       continue;
@@ -578,19 +548,6 @@ function transformOpeningElement(path, state, t) {
     if (customElement && propertyType) {
       const kind = classifyDeclaredProperty(propertyType, typeResolver.checker);
       if (kind !== "attribute") renameAttribute(attribute, `.${rawName}`, t);
-      continue;
-    }
-
-    const event = resolveEvent(
-      rawName,
-      tagName,
-      path.node.attributes,
-      t,
-      customElement,
-    );
-    if (event) {
-      renameAttribute(attribute, `@${event.name}`, t);
-      if (event.capture) wrapCapture(attribute, t);
       continue;
     }
 
@@ -643,6 +600,7 @@ export default declare((api, options = {}) => {
       this.__litsxLocalPropertyKinds = new WeakMap();
       this.__litsxDeferReactBoundaryAttributes = options.reactCompatBoundaries === true;
       this.__litsxTransformReactKeys = options.reactCompatKeys === true;
+      this.__litsxDeferReactEvents = options.reactCompatEvents === true;
       this.__litsxSuppressNativeClassNameWarning = options.suppressNativeClassNameWarning === true;
       this.__litsxJsxBindingTypeResolver = createTypeResolver(
         this.file?.opts?.filename,

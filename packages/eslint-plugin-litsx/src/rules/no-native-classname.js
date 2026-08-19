@@ -1,23 +1,33 @@
-import { createIssueBackedRule } from "../rule-utils.js";
+function isNativeElementName(name) {
+  return name?.type === "JSXIdentifier" && /^[a-z]/.test(name.name);
+}
 
-export default createIssueBackedRule({
-  name: "@litsx/no-native-classname",
+export default {
   meta: {
     type: "suggestion",
     docs: {
-      description: "Disallow className on native LitSX intrinsic elements.",
+      description: "Use the standard class attribute on native JSX elements.",
     },
     fixable: "code",
     schema: [],
   },
-  matchesIssue: (issue) => issue.kind === "native-classname",
-  buildFix: (issue) => (
-    issue.fix?.text
-      ? {
-        start: issue.start,
-        end: issue.start + issue.length,
-        text: issue.fix.text,
-      }
-      : null
-  ),
-});
+  create(context) {
+    return {
+      JSXAttribute(node) {
+        if (
+          node.name?.type !== "JSXIdentifier" ||
+          node.name.name !== "className" ||
+          !isNativeElementName(node.parent?.name)
+        ) {
+          return;
+        }
+
+        context.report({
+          node: node.name,
+          message: "Use \"class\" instead of React's \"className\" on native elements.",
+          fix: (fixer) => fixer.replaceText(node.name, "class"),
+        });
+      },
+    };
+  },
+};

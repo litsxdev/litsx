@@ -5,7 +5,5 @@ export const publishedPackageVersions = {
   "@litsx/eslint-plugin": "^0.3.7",
   "@litsx/storybook": "^0.1.2",
   "@litsx/ssr": "^0.1.0",
-  "@litsx/typescript": "^0.9.0",
-  "@litsx/vite-plugin": "^0.3.2",
-  "prettier-plugin-litsx": "^0.3.4"
+  "@litsx/vite-plugin": "^0.3.2"
 };

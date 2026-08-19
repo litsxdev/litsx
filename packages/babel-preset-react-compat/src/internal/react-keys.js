@@ -42,14 +42,20 @@ function isMapCall(expression, t) {
 }
 
 function getReturnedElement(callback, t) {
-  if (t.isJSXElement(callback.body)) return callback.body;
+  if (t.isJSXElement(callback.body)) {
+    return { element: callback.body, returnStatement: null };
+  }
   if (
     t.isBlockStatement(callback.body) &&
-    callback.body.body.length === 1 &&
-    t.isReturnStatement(callback.body.body[0]) &&
-    t.isJSXElement(callback.body.body[0].argument)
+    callback.body.body.length > 0
   ) {
-    return callback.body.body[0].argument;
+    const returnStatement = callback.body.body.at(-1);
+    if (t.isReturnStatement(returnStatement) && t.isJSXElement(returnStatement.argument)) {
+      return {
+        element: returnStatement.argument,
+        returnStatement: callback.body.body.length === 1 ? null : returnStatement,
+      };
+    }
   }
   return null;
 }
@@ -73,16 +79,62 @@ function getMapParts(expression, t) {
     return null;
   }
 
-  const element = getReturnedElement(callback, t);
-  if (!element) return null;
-  const keyAttribute = getKeyAttribute(element, t);
+  const returned = getReturnedElement(callback, t);
+  if (!returned) return null;
+  const keyAttribute = getKeyAttribute(returned.element, t);
   if (!keyAttribute) return null;
   return {
     items: expression.callee.object,
     callback,
-    element,
+    element: returned.element,
+    returnStatement: returned.returnStatement,
     keyAttribute,
   };
+}
+
+function createDecoratedRepeat(parts, keyExpression, repeatLocalName, t) {
+  const decoratedCallback = t.cloneNode(parts.callback, true);
+  const returnStatement = decoratedCallback.body.body.at(-1);
+  returnStatement.argument = t.arrayExpression([
+    t.cloneNode(keyExpression, true),
+    returnStatement.argument,
+  ]);
+
+  const entryForKey = t.identifier("entry");
+  const entryForValue = t.identifier("entry");
+  return t.callExpression(t.identifier(repeatLocalName), [
+    t.callExpression(
+      t.memberExpression(t.cloneNode(parts.items, true), t.identifier("map")),
+      [decoratedCallback],
+    ),
+    t.arrowFunctionExpression(
+      [entryForKey],
+      t.memberExpression(t.cloneNode(entryForKey), t.numericLiteral(0), true),
+    ),
+    t.arrowFunctionExpression(
+      [entryForValue],
+      t.memberExpression(t.cloneNode(entryForValue), t.numericLiteral(1), true),
+    ),
+  ]);
+}
+
+function lowerMapParts(parts, state, t) {
+  const keyExpression = attributeValueToExpression(parts.keyAttribute, t);
+  removeAttribute(parts.element, parts.keyAttribute);
+  state.repeatNeeded = true;
+  if (parts.returnStatement) {
+    return createDecoratedRepeat(parts, keyExpression, state.repeatLocalName, t);
+  }
+
+  const keyFunction = t.arrowFunctionExpression(
+    parts.callback.params.map((parameter) => t.cloneNode(parameter, true)),
+    keyExpression,
+  );
+  return t.callExpression(t.identifier(state.repeatLocalName), [
+    t.cloneNode(parts.items, true),
+    keyFunction,
+    parts.callback,
+  ]);
 }
 
 function isInsideMapCallback(path, t) {
@@ -179,22 +231,12 @@ export default declare((api) => {
       JSXExpressionContainer(path, state) {
         const parts = getMapParts(path.node.expression, t);
         if (!parts) return;
-
-        const keyExpression = attributeValueToExpression(parts.keyAttribute, t);
-        removeAttribute(parts.element, parts.keyAttribute);
-        const keyFunction = t.arrowFunctionExpression(
-          parts.callback.params.map((parameter) => t.cloneNode(parameter, true)),
-          keyExpression,
-        );
-        state.repeatNeeded = true;
-        path.node.expression = t.callExpression(
-          t.identifier(state.repeatLocalName),
-          [
-            t.cloneNode(parts.items, true),
-            keyFunction,
-            parts.callback,
-          ],
-        );
+        path.node.expression = lowerMapParts(parts, state, t);
+      },
+      CallExpression(path, state) {
+        const parts = getMapParts(path.node, t);
+        if (!parts) return;
+        path.replaceWith(lowerMapParts(parts, state, t));
       },
       JSXElement(path, state) {
         const keyAttribute = getKeyAttribute(path.node, t);

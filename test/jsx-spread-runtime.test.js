@@ -16,8 +16,8 @@ describe("jsxSpreadElement", () => {
 
     render(
       view([
-        { title: "first", onClick: onFirst, disabled: true },
-        { title: "second", onClick: onSecond },
+        { title: "first", "on:click": onFirst, disabled: true },
+        { title: "second", "on:click": onSecond },
       ]),
       container
     );
@@ -85,7 +85,7 @@ describe("jsxSpreadElement", () => {
     assert.strictEqual(element.getAttribute("data-id"), "ready");
   });
 
-  it("distinguishes declared callback props from conventional custom events", () => {
+  it("distinguishes onX callback props from explicit custom events", () => {
     const tag = "jsx-spread-custom-events";
     if (!customElements.get(tag)) {
       customElements.define(tag, class extends LitElement {
@@ -99,22 +99,48 @@ describe("jsxSpreadElement", () => {
     let primaryActions = 0;
     let urlChanges = 0;
     let animations = 0;
+    let nativeClicks = 0;
 
     render(jsxSpreadElement(tag, [{
       onCallback,
-      onPrimaryAction: () => { primaryActions += 1; },
-      onURLChange: () => { urlChanges += 1; },
-      onAnimationEnd: () => { animations += 1; },
+      onclick: () => { nativeClicks += 1; },
+      "on:primary-action": () => { primaryActions += 1; },
+      "on:url-change": () => { urlChanges += 1; },
+      "on:animationend": () => { animations += 1; },
     }]), container);
 
     const element = container.querySelector(tag);
     assert.strictEqual(element.onCallback, onCallback);
+    assert.strictEqual(element.hasAttribute("onclick"), false);
+    element.dispatchEvent(new Event("click"));
     element.dispatchEvent(new CustomEvent("primary-action"));
     element.dispatchEvent(new CustomEvent("url-change"));
     element.dispatchEvent(new Event("animationend"));
+    assert.strictEqual(nativeClicks, 1);
     assert.strictEqual(primaryActions, 1);
     assert.strictEqual(urlChanges, 1);
     assert.strictEqual(animations, 1);
+  });
+
+  it("supports listener objects and event options through on:event spreads", () => {
+    const container = document.createElement("div");
+    let calls = 0;
+    const listener = {
+      capture: true,
+      once: true,
+      passive: true,
+      handleEvent() { calls += 1; },
+    };
+
+    render(jsxSpreadElement("button", [{ "on:click": listener }]), container);
+    const button = container.querySelector("button");
+    button.click();
+    button.click();
+    assert.strictEqual(calls, 1);
+    assert.throws(
+      () => render(jsxSpreadElement("button", [{ "on:menuOpen": listener }]), container),
+      /must use lowercase kebab-case/,
+    );
   });
 
   it("keeps normalized aliases and stable refs correct across updates", () => {

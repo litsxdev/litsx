@@ -133,7 +133,7 @@ describe("JSX spread dual SSR/client hydration", () => {
     let clicks = 0;
     const ref = { current: null };
     const server = { tag: "button", sources: [{ dangerouslySetInnerHTML: { __html: "<strong>ready</strong>" } }] };
-    const client = { ...server, sources: [{ ...server.sources[0], onClick: () => { clicks += 1; }, ref }] };
+    const client = { ...server, sources: [{ ...server.sources[0], "on:click": () => { clicks += 1; }, ref }] };
     const container = document.createElement("div");
     const markup = serverMarkup(server);
     assert.doesNotMatch(markup, /onclick=|onClick=|\sref=/);

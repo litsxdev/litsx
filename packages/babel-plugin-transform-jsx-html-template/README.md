@@ -5,13 +5,14 @@
 [![Module](https://img.shields.io/badge/module-ESM%20%2B%20CJS-0366d6)](./package.json)
 [![Provenance](https://img.shields.io/badge/npm_provenance-enabled-2ea44f)](../../RELEASING.md)
 
-The Lit<sup>SX</sup> JSX-to-template bridge: turn JSX trees into `lit-html` template literals while keeping Lit-specific attribute prefixes and listener semantics intact.
+The Lit<sup>SX</sup> JSX-to-template bridge: turn standard JSX trees into `lit-html` template literals while preserving the binding decisions made by the LitSX preset.
 
 ## What it does
 
 - Converts JSX expressions into tagged template literals (default tag `html`) understood by the `lit` runtime.
-- Preserves `.prop`, `?attr` and `@event` prefixes as part of the resulting template syntax.
-- Rewrites React-style listeners (`onClick`, `onPointerDownCapture`, …) into Lit listeners, automatically lowercasing DOM event names and enabling capture mode when necessary.
+- Converts standard `on:event` JSX names into Lit `@event` listeners.
+- Consumes compiler-generated `.prop`, `?attr`, and `@event` bindings during the internal template pass.
+- Can rewrite React-style listeners when invoked by the optional react-compat pipeline.
 - Supports component factories by turning capitalised tags into function calls and passing props/children explicitly.
 - Lowers JSX spread attributes through `jsxSpreadElement`, preserving source-order precedence around explicit props and inspecting the destination component API when available to select property, boolean, event, or attribute semantics.
 - Injects (or augments) the `lit` import so the generated tag (`html` by default) is always available.
@@ -39,7 +40,7 @@ yarn add --dev @litsx/babel-plugin-transform-jsx-html-template
 
 ```js
 const view = (
-  <button .label={text} ?disabled={disabled} @click={handleClick}>
+  <button title={text} on:click={handleClick}>
     {text}
   </button>
 );
@@ -50,7 +51,7 @@ const view = (
 ```js
 import { html } from "lit";
 
-const view = html`<button .label=${text} ?disabled=${disabled} @click=${handleClick}>
+const view = html`<button title=${text} @click=${handleClick}>
   ${text}
 </button>`;
 ```
@@ -63,7 +64,7 @@ const view = html`<button .label=${text} ?disabled=${disabled} @click=${handleCl
 ## Notes
 
 - Whitespace is trimmed to match Lit expectations—leading/trailing newlines are removed while intentional spacing stays intact.
-- Works best in tandem with the Lit<sup>SX</sup> parser fork so JSX attribute prefixes are available in the AST.
-- `...Capture` listeners are translated into the object-listener form (`{ handleEvent, capture: true }`) that Lit expects for capture semantics.
+- Authored standard JSX/TSX needs no parser adapter. Generated binding prefixes are an internal compiler protocol.
+- Listener options use the object-listener form (`{ handleEvent, capture, once, passive }`) understood by Lit.
 - Keeps source maps aligned with Babel defaults so editor tooling continues to work after the transform.
 - Spread lowering creates ordinary Lit attribute, property, boolean, and event parts, so the same output works in browser rendering and Lit SSR.

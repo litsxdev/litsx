@@ -11,7 +11,7 @@ This package is the recommended default for:
 
 - Vite apps
 - Storybook using the Vite builder
-- any Vite-based toolchain that needs to compile authored LitSX source
+- any Vite-based toolchain that needs to compile JSX/TSX components through LitSX
 
 Internally it uses [`@litsx/compiler`](../compiler/README.md), so callers do not need to wire Babel parser setup, sourcemap chaining, or Lit template sourcemap patching manually.
 
@@ -34,15 +34,15 @@ export default defineConfig({
 });
 ```
 
-This transforms authored `.jsx` and `.tsx` modules before the rest of the Vite pipeline.
+This transforms standard `.jsx` and `.tsx` modules before the rest of the Vite pipeline.
 
 ## What the Plugin Handles
 
 The plugin applies the supported LitSX compilation pipeline through `@litsx/compiler`, including:
 
-- LitSX authored-syntax virtualization
+- standard JSX binding inference and `on:event` lowering
 - LitSX Babel plugin ordering
-- virtualization sourcemap chaining
+- authored-source sourcemap chaining
 - final Lit-style attribute sourcemap patching
 
 That means Vite consumers do not need to know about:
@@ -62,7 +62,7 @@ Returns a Vite plugin with:
 
 Default behavior:
 
-- transforms `.jsx`, `.tsx`, `.litsx`, and `.litsx.jsx`
+- transforms `.jsx` and `.tsx`
 - returns `{ code, map }`
 - delegates compilation to `@litsx/compiler`
 
@@ -106,7 +106,7 @@ Controls which module ids are transformed.
 Default behavior:
 
 ```js
-/\.(jsx|tsx|litsx)$/
+/\.[jt]sx$/
 ```
 
 Examples:
@@ -120,7 +120,7 @@ litsx({
 ```js
 litsx({
   include(id) {
-    return id.endsWith(".jsx") || id.endsWith(".tsx") || id.endsWith(".litsx");
+    return id.endsWith(".jsx") || id.endsWith(".tsx");
   },
 });
 ```

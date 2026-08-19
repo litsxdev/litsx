@@ -3,7 +3,7 @@ import * as babelParser from "@babel/parser";
 import fs from "node:fs";
 import path from "node:path";
 import traverse from "@babel/traverse";
-import { parseWithLitsxVirtualization } from "@litsx/authoring/parser";
+import { parseWithLitsxVirtualization } from "@litsx/authoring/internal/parser";
 import { ensureTypescriptModule } from "./transform-litsx-properties.js";
 import {
   isLitsxRuntimeHookName,
@@ -19,7 +19,6 @@ const IMPORT_SOURCES = LITSX_RUNTIME_IMPORT_SOURCES;
 
 const SOURCE_EXTENSIONS = [
   "",
-  ".litsx",
   ".tsx",
   ".ts",
   ".jsx",
@@ -288,6 +287,11 @@ function createStructuralHookResolver(options = {}) {
 
     resolvedImportCache.set(cacheKey, resolved);
     return resolved;
+  }
+
+  function isExternalPackageFile(filename) {
+    return typeof filename === "string" &&
+      normalizeFilePath(filename).split("/").includes("node_modules");
   }
 
   function resolveModuleReference(analysis, reference) {
@@ -1016,20 +1020,82 @@ function createStructuralHookResolver(options = {}) {
     return false;
   }
 
+  function isCompiledRuntimeCustomExport(analysis, exportedName, seen = new Set()) {
+    if (!analysis || !exportedName) return false;
+    const key = `${analysis.filename}:compiled-runtime-custom:${exportedName}`;
+    if (seen.has(key)) return false;
+    const nextSeen = new Set(seen);
+    nextSeen.add(key);
+
+    const exportInfo = analysis.exportBindings.get(exportedName);
+    if (!exportInfo) {
+      for (const exportAll of analysis.exportAllSources || []) {
+        const resolvedSource = resolveModuleReference(analysis, exportAll);
+        if (!resolvedSource) continue;
+        if (
+          isCompiledRuntimeCustomExport(
+            analyzeModule(resolvedSource),
+            exportedName,
+            nextSeen
+          )
+        ) {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    const exportSource = resolveModuleReference(analysis, exportInfo);
+    if (exportSource) {
+      return isCompiledRuntimeCustomExport(
+        analyzeModule(exportSource),
+        exportInfo.importedName,
+        nextSeen
+      );
+    }
+
+    if (analysis.compiledRuntimeHookLocals.has(exportInfo.localName)) {
+      return true;
+    }
+
+    const importInfo = analysis.importBindings.get(exportInfo.localName);
+    const importSource = resolveModuleReference(analysis, importInfo);
+    if (importSource && importInfo.importedName !== "*") {
+      return isCompiledRuntimeCustomExport(
+        analyzeModule(importSource),
+        importInfo.importedName,
+        nextSeen
+      );
+    }
+
+    return false;
+  }
+
   return function structuralHookResolver({ filename, source, importedName, runtimeCustomOnly = false }) {
     const resolved = resolveImport(filename, source);
     if (!resolved) return runtimeCustomOnly ? "unresolved-custom-hook" : false;
+    const isExternal = isExternalPackageFile(resolved);
     const analysis = analyzeModule(resolved);
     if (!analysis && runtimeCustomOnly) {
-      return "unresolved-custom-hook";
+      return isExternal
+        ? "unsupported-external-hook"
+        : "unresolved-custom-hook";
     }
     if (runtimeCustomOnly) {
       const exportStatus = hasExportBinding(analysis, importedName);
       if (exportStatus !== true) {
-        return "unresolved-custom-hook";
+        return isExternal
+          ? "unsupported-external-hook"
+          : "unresolved-custom-hook";
       }
-      return isRuntimeCustomExport(analysis, importedName)
-        ? "runtime-custom-hook"
+      const isHostAware = isExternal
+        ? isCompiledRuntimeCustomExport(analysis, importedName)
+        : isRuntimeCustomExport(analysis, importedName);
+      if (isHostAware) {
+        return "runtime-custom-hook";
+      }
+      return isExternal
+        ? "unsupported-external-hook"
         : false;
     }
     const structuralInfo = getStructuralExportInfo(analysis, importedName);
@@ -1074,7 +1140,10 @@ export default function transformLitsxHooks(api, options = {}) {
         importedName,
         runtimeCustomOnly: true,
       });
-      if (result === "unresolved-custom-hook") {
+      if (
+        result === "unresolved-custom-hook" ||
+        result === "unsupported-external-hook"
+      ) {
         return result;
       }
       return result === "runtime-custom-hook";

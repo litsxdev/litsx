@@ -42,6 +42,31 @@ function getTag(node) {
   return { name, isComponent };
 }
 
+function getRootJsxIdentifier(nameNode) {
+  let current = nameNode;
+  while (t.isJSXMemberExpression(current)) {
+    current = current.object;
+  }
+  return t.isJSXIdentifier(current) ? current.name : null;
+}
+
+function collectDeferredComponentNames(programPath, sources) {
+  const names = new Set();
+  if (!sources || sources.size === 0) {
+    return names;
+  }
+
+  for (const statement of programPath.node.body) {
+    if (!t.isImportDeclaration(statement) || !sources.has(statement.source.value)) {
+      continue;
+    }
+    for (const specifier of statement.specifiers) {
+      names.add(specifier.local.name);
+    }
+  }
+  return names;
+}
+
 function unwrapExpression(node) {
   let current = node;
 
@@ -347,7 +372,13 @@ function isBindableFunctionReference(expressionPath, options = {}) {
 }
 
 function getRendererBindingExpression(attributePath, rawName, expressionPath, options = {}) {
-  if (typeof rawName !== "string" || rawName[0] !== ".") {
+  if (
+    typeof rawName !== "string" ||
+    rawName.length === 0 ||
+    rawName[0] === "@" ||
+    rawName[0] === "?" ||
+    rawName.startsWith("on:")
+  ) {
     return null;
   }
 
@@ -358,6 +389,13 @@ function getRendererBindingExpression(attributePath, rawName, expressionPath, op
 
   const { isComponent } = getTag(openingElement.node);
   if (!isComponent) {
+    return null;
+  }
+
+  if (
+    rawName[0] !== "." &&
+    options.deferredComponentNames?.has(getRootJsxIdentifier(openingElement.node.name))
+  ) {
     return null;
   }
 
@@ -413,7 +451,7 @@ function ensureRendererBindingImport(programPath) {
   ));
 }
 
-export default function transformLitsxRendererProps(api) {
+export default function transformLitsxRendererProps(api, options = {}) {
   api.assertVersion?.(7);
   t = api.types;
 
@@ -422,8 +460,12 @@ export default function transformLitsxRendererProps(api) {
     inherits: jsxSyntaxPlugin.default || jsxSyntaxPlugin,
     visitor: {
       Program: {
-        enter(_, state) {
+        enter(programPath, state) {
           state.__litsxNeedsRendererBindingImport = false;
+          state.__litsxDeferredRendererComponentNames = collectDeferredComponentNames(
+            programPath,
+            new Set(options.deferComponentImportsFrom || [])
+          );
         },
         exit(programPath, state) {
           if (state.__litsxNeedsRendererBindingImport) {
@@ -445,9 +487,14 @@ export default function transformLitsxRendererProps(api) {
 
         const rendererBinding = getRendererBindingExpression(path, rawName, expressionPath, {
           filename: state.file?.opts?.filename || "",
+          deferredComponentNames: state.__litsxDeferredRendererComponentNames,
         });
         if (!rendererBinding) {
           return;
+        }
+
+        if (rawName[0] !== "." && node.name?.type === "JSXIdentifier") {
+          node.name.name = `.${rawName}`;
         }
 
         if (rendererBinding.needsContext) {

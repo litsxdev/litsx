@@ -99,6 +99,18 @@ describe("native handlers internals", () => {
     assert.deepStrictEqual(handlerInfos.map((entry) => entry.name), []);
   });
 
+  it("creates identifier-safe methods for explicit custom event handlers", () => {
+    const functionPath = getFunctionPath(`
+      function Card() {
+        return <action-button on:primary-action={() => save()} />;
+      }
+    `);
+
+    const handlerInfos = processHandlers(functionPath, new Set());
+
+    assert.deepStrictEqual(handlerInfos.map((entry) => entry.name), ["handlePrimaryAction"]);
+  });
+
   it("collects className warnings only for native intrinsic JSX and preserves missing locations", () => {
     const source = `
       function Card() {

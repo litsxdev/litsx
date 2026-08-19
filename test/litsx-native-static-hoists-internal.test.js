@@ -239,7 +239,7 @@ describe("native static hoists internals", () => {
       elementCandidates: new Set(["ChildCard"]),
       importedElementCandidates: [
         {
-          sourceFile: "/project/child-card.litsx",
+          sourceFile: "/project/child-card.tsx",
           importedName: "ChildCard",
           tagName: "child-card",
         },
@@ -253,7 +253,7 @@ describe("native static hoists internals", () => {
     assert.deepStrictEqual(ir.elements.localCandidates, ["ChildCard"]);
     assert.deepStrictEqual(ir.elements.importedCandidates, [
       {
-        sourceFile: "/project/child-card.litsx",
+        sourceFile: "/project/child-card.tsx",
         importedName: "ChildCard",
         tagName: "child-card",
       },

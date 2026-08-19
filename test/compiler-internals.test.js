@@ -9,7 +9,7 @@ const detectLitsxSourceFeatures = vi.fn();
 const prepareLitsxAuthoredInput = vi.fn();
 const mergeLitsxWarnings = vi.fn();
 const ensureTypescriptModule = vi.fn();
-const createLitsxTypecheckSession = vi.fn();
+const createProjectTsSession = vi.fn();
 const createStandaloneTsSession = vi.fn();
 const normalizeFilePath = vi.fn((value = "") => String(value).replace(/\\/g, "/"));
 
@@ -34,11 +34,8 @@ vi.mock("@litsx/babel-preset-litsx/internal/transform-litsx-properties", () => (
   ensureTypescriptModule,
 }));
 
-vi.mock("@litsx/typescript/typecheck", () => ({
-  createLitsxTypecheckSession,
-}));
-
 vi.mock("@litsx/typescript-session", () => ({
+  createProjectTsSession,
   createStandaloneTsSession,
   normalizeFilePath,
 }));
@@ -69,12 +66,10 @@ describe("compiler internals", () => {
       clearOverlayFiles: vi.fn(),
     });
 
-    createLitsxTypecheckSession.mockImplementation((args, options = {}) => ({
-      projectSession: options.projectSession || {
-        invalidate: vi.fn(),
-        clearOverlayFiles: vi.fn(),
-      },
-    }));
+    createProjectTsSession.mockReturnValue({
+      invalidate: vi.fn(),
+      clearOverlayFiles: vi.fn(),
+    });
 
     detectLitsxSourceFeatures.mockReturnValue({
       hooks: false,
@@ -267,17 +262,11 @@ describe("compiler internals", () => {
 
     const mod = await import("../packages/compiler/src/index.js");
     const session = mod.createLitsxCompilationSession({
-      transformOptions: { filename: "Component.litsx.jsx" },
+      transformOptions: { filename: "Component.tsx" },
     });
 
     try {
-      const wrapped = session.getTypecheckSession();
-      expect(createLitsxTypecheckSession).toHaveBeenLastCalledWith([], {
-        projectSession: session.typescriptSession,
-      });
-      assert.strictEqual(wrapped.projectSession, session.typescriptSession);
-
-      session.invalidate(["/virtual/Component.litsx.jsx"]);
+      session.invalidate(["/virtual/Component.tsx"]);
       expect(standaloneSession.invalidate).toHaveBeenCalled();
     } finally {
       session.dispose();

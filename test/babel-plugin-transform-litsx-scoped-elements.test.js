@@ -424,7 +424,7 @@ describe("@litsx/babel-plugin-transform-litsx-scoped-elements", () => {
   it("consumes early static IR for element candidates and light DOM", () => {
     const source = `
       import { LitElement } from 'lit';
-      import { ChildCard } from './child-card.litsx';
+      import { ChildCard } from './child-card.tsx';
 
       class HostCard extends LitElement {
         render() {

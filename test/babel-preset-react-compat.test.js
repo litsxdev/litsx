@@ -1,5 +1,8 @@
 import assert from "assert";
 import babelCore from "@babel/core";
+import fs from "fs";
+import os from "os";
+import path from "path";
 import parser from "./helpers/litsx-parser.js";
 import { beforeAll, describe, it } from "vitest";
 import { interopDefault } from "./helpers/interop-default.js";
@@ -21,6 +24,7 @@ describe("@litsx/babel-preset-react-compat", () => {
     const result = transformFromAstSync(ast, code, {
       configFile: false,
       babelrc: false,
+      filename: options.filename,
       presets: [[reactCompatPreset, options.preset || {}]],
       generatorOpts: { decoratorsBeforeExport: true },
     });
@@ -83,6 +87,19 @@ describe("@litsx/babel-preset-react-compat", () => {
     assert.match(code, /<input type="checkbox" \?checked=\$\{this\.enabled\} @change=\$\{this\.onEnabledChange\}>/);
   });
 
+  it("keeps onX component props distinct from React DOM events", () => {
+    const source = `
+      const Child = ({ onAction }) => <button onClick={onAction}>Run</button>;
+      export const Parent = ({ onAction }) => <Child onAction={onAction} />;
+    `;
+
+    const code = run(source);
+
+    assert.match(code, /html`<button @click=\$\{onAction\}>Run<\/button>`/);
+    assert.match(code, /html`<child \.onAction=\$\{onAction\}><\/child>`/);
+    assert.doesNotMatch(code, /<child[^>]*@action=/);
+  });
+
   it("lowers JSX spreads with surrounding React props in source order", () => {
     const source = `
       export const Action = ({ props, active, onClick }) => (
@@ -121,16 +138,27 @@ describe("@litsx/babel-preset-react-compat", () => {
     `);
     assert.match(blockCode, /repeat\(items, item => item\.id, item => \{\s*return html`<row/);
 
-    assert.throws(
-      () => run(`
-        const Row = ({ item }) => <li>{item.label}</li>;
-        export const List = ({ items }) => <ul>{items.map(item => {
-          const key = item.id;
-          return <Row key={key} item={item} />;
-        })}</ul>;
-      `),
-      /cannot be lowered safely[\s\S]*repeat/,
+    const decoratedCode = run(`
+      const Row = ({ item }) => <li>{item.label}</li>;
+      export const List = ({ items }) => <ul>{items.map(item => {
+        const key = item.id;
+        return <Row key={key} item={item} />;
+      })}</ul>;
+    `);
+    assert.match(
+      decoratedCode,
+      /repeat\(items\.map\(item => \{\s*const key = item\.id;\s*return \[key, html`<row/,
     );
+    assert.match(decoratedCode, /entry => entry\[0\], entry => entry\[1\]\)/);
+    assert.doesNotMatch(decoratedCode, /(?:\s|\.)key=/);
+
+    const directReturnCode = run(`
+      const Row = ({ item }) => <li>{item.label}</li>;
+      export function List({ items }) {
+        return items.map(item => <Row key={item.id} item={item} />);
+      }
+    `);
+    assert.match(directReturnCode, /return repeat\(items, item => item\.id/);
   });
 
   it("lowers standalone React keys through Lit keyed and can disable key compatibility", () => {
@@ -166,6 +194,133 @@ describe("@litsx/babel-preset-react-compat", () => {
     assert.match(code, /title: \{\s*type: String/);
     assert.match(code, /jsxSpreadElement\("button", \[\{\s*title: this\.title\s*\}, \{/);
     assert.doesNotMatch(code, /jsxSpreadElement\("button", \[this\.props/);
+  });
+
+  it("preserves TypeScript type/value namespaces during component lowering", () => {
+    const code = run(`
+      import type { FilterItem } from "./types";
+      export function FilterItem() {
+        return <li>Item</li>;
+      }
+    `, { parser: { plugins: ["typescript"] } });
+
+    assert.match(code, /export class FilterItem extends/);
+    assert.doesNotMatch(code, /import type \{ FilterItem \}/);
+  });
+
+  it("rejects declaration-only hooks from external packages", () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-external-hook-"));
+    try {
+      const packageDir = path.join(tempDir, "node_modules", "theme-lib");
+      fs.mkdirSync(packageDir, { recursive: true });
+      fs.writeFileSync(path.join(packageDir, "package.json"), JSON.stringify({
+        name: "theme-lib",
+        types: "index.d.ts",
+      }));
+      fs.writeFileSync(
+        path.join(packageDir, "index.d.ts"),
+        "export declare function useTheme(): { theme: string };",
+      );
+      fs.mkdirSync(path.join(tempDir, "src"), { recursive: true });
+      const filename = path.join(tempDir, "src", "ThemeLabel.tsx");
+      const source = `
+        import { useTheme } from "theme-lib";
+        export function ThemeLabel() {
+          const { theme } = useTheme();
+          return <span>{theme}</span>;
+        }
+      `;
+      fs.writeFileSync(filename, source);
+
+      assert.throws(
+        () => run(source, {
+          filename,
+          parser: { plugins: ["typescript"] },
+        }),
+        /Cannot compile external hook "useTheme" from "theme-lib"[\s\S]*not marked as LitSX-compatible[\s\S]*React's hook runtime/,
+      );
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("accepts external hooks carrying LitSX compilation metadata", () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-compiled-hook-"));
+    try {
+      const packageDir = path.join(tempDir, "node_modules", "theme-lib");
+      fs.mkdirSync(packageDir, { recursive: true });
+      fs.writeFileSync(path.join(packageDir, "package.json"), JSON.stringify({
+        name: "theme-lib",
+        type: "module",
+        exports: "./index.js",
+      }));
+      fs.writeFileSync(
+        path.join(packageDir, "index.js"),
+        [
+          "export function useTheme(host) { return host.theme; }",
+          'useTheme[Symbol.for("litsx.hook")] = true;',
+        ].join("\n"),
+      );
+      fs.mkdirSync(path.join(tempDir, "src"), { recursive: true });
+      const filename = path.join(tempDir, "src", "ThemeLabel.tsx");
+      const source = `
+        import { useTheme } from "theme-lib";
+        export function ThemeLabel() {
+          const theme = useTheme();
+          return <span>{theme}</span>;
+        }
+      `;
+      fs.writeFileSync(filename, source);
+
+      const code = run(source, {
+        filename,
+        parser: { plugins: ["typescript"] },
+      });
+
+      assert.match(code, /useTheme\(this\)/);
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects uncompiled external React hooks even when their source is available", () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-react-hook-"));
+    try {
+      const packageDir = path.join(tempDir, "node_modules", "theme-lib");
+      fs.mkdirSync(packageDir, { recursive: true });
+      fs.writeFileSync(path.join(packageDir, "package.json"), JSON.stringify({
+        name: "theme-lib",
+        type: "module",
+        exports: "./index.js",
+      }));
+      fs.writeFileSync(
+        path.join(packageDir, "index.js"),
+        [
+          'import { useState } from "react";',
+          "export function useTheme() { return useState(\"light\")[0]; }",
+        ].join("\n"),
+      );
+      fs.mkdirSync(path.join(tempDir, "src"), { recursive: true });
+      const filename = path.join(tempDir, "src", "ThemeLabel.tsx");
+      const source = `
+        import { useTheme } from "theme-lib";
+        export function ThemeLabel() {
+          const theme = useTheme();
+          return <span>{theme}</span>;
+        }
+      `;
+      fs.writeFileSync(filename, source);
+
+      assert.throws(
+        () => run(source, {
+          filename,
+          parser: { plugins: ["typescript"] },
+        }),
+        /Cannot compile external hook "useTheme" from "theme-lib"/,
+      );
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
   });
 
   it("preserves React event alias behavior for focus, blur, and double click", () => {

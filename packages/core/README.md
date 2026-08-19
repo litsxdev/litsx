@@ -55,8 +55,8 @@ code should not add manual snapshot adapters or hydration bootstrap calls.
   - `createHostMiddlewareRuntime(...)`
 - JSX compatibility helpers:
   - `jsxSpreadElement(tagName, sources, options?, children?)` merges JSX prop sources in authored order. It uses an `ElementPart` in the browser and regular Lit parts during SSR.
-  - Explicit `.prop`, `?boolean`, and `@event` keys override inference; otherwise the destination constructor, reactive component API, and native DOM properties determine the binding channel.
-  - In spreads targeting components or custom elements, a declared `onX` API member remains a property. An undeclared standard listener such as `onPrimaryAction` listens for `primary-action`; known DOM event names keep their native spelling.
+  - `on:event` is the explicit JSX event channel. The destination constructor, reactive component API, and native DOM properties determine whether ordinary JSX names become Lit property, boolean-attribute, or attribute bindings.
+  - `onX` names are ordinary component properties/callbacks. React-style `onClick` event conversion belongs exclusively to react-compat. Native handler properties such as `onclick` remain available and are assigned as properties.
   - Hydratable spread output should be rendered with `@litsx/ssr` and hydrated with `@litsx/ssr/client` so the two template shapes are reconciled without replacing DOM nodes.
 
 ## Typed component events
@@ -71,11 +71,11 @@ type ButtonEvents = {
 
 export function ActionButton() {
   const emit = useEmit<ButtonEvents>();
-  return <button onClick={() => emit("primary-action", { id: "save" })}>Save</button>;
+  return <button on:click={() => emit("primary-action", { id: "save" })}>Save</button>;
 }
 
 const view = (
-  <ActionButton onPrimaryAction={(event) => event.detail.id} />
+  <ActionButton on:primary-action={(event) => event.detail.id} />
 );
 ```
 
@@ -83,7 +83,7 @@ The compiler publishes the inferred contract as `ActionButton.events` and under
 `Symbol.for("litsx.events")`. This lets TypeScript, editor tooling, spreads, and
 downstream packages consume the same event API without inspecting source. A
 literal event name makes the inferred contract complete; a dynamic name keeps it
-open so consumers may still use unknown `onX` listeners.
+open so consumers may still use unknown `on:event` listeners.
 
 Libraries can declare the contract explicitly when inference is not possible:
 
@@ -95,14 +95,11 @@ export declare class ActionButton extends HTMLElement {
 }
 ```
 
-Standard JSX event names use PascalCase words: `primary-action` becomes
-`onPrimaryAction` and `url-change` becomes `onUrlChange`. Acronym spellings such
-as `onURLChange` compile to the same event, but generated declarations and editor
-completions use the canonical form. Appending `Capture` (for example,
-`onPrimaryActionCapture`) installs the same typed listener in the capture phase.
-Event names that cannot be represented
-without ambiguity (`menu:open`, `state.change`, or names ending in `-capture`)
-remain available through explicit Lit syntax such as `@menu:open`.
+Public declarative events use lowercase kebab-case and preserve their exact name:
+`primary-action` becomes `on:primary-action`. The value can also be a listener
+object with `capture`, `once`, or `passive` options. Event names outside the
+canonical JSX channel, such as `menu:open` or `state.change`, remain available
+through `addEventListener()`.
 
 All helpers accept the Lit element instance as the first argument. The Babel transforms insert it automatically, but you can also call the runtime manually.
 
@@ -316,13 +313,13 @@ const locale = resolveStructuralEntry(
 
 Static-only hooks lower through `resolveStructuralStaticEntry(...)` and a generated `static structuralStaticEntries` table. They do not wrap the generated host with `HostMiddlewareMixin(...)` and do not pay lifecycle middleware overhead. Mixed hooks with `setup(...)` or `middlewares` lower through the instance structural runtime.
 
-Existing LitSX static hoists such as `static styles`, `static properties`, `static shadowRootOptions`, `static elements`, and `static lightDom` remain class/type-phase work. `static expose` still materializes as real static class methods. None of these hoists are modeled as instance lifecycle middleware.
+Standard assignments such as `Component.styles`, `Component.properties`, `Component.shadowRootOptions`, `Component.elements`, and `Component.lightDom` remain class/type-phase work. None of these declarations are modeled as instance lifecycle middleware.
 
 The hook can be declared in the same module or imported from another authored module with a statically discoverable `defineHook()` export:
 
 ```js
-import { useLocale } from "./locale-hooks.litsx";
-import * as resources from "./resource-hooks.litsx";
+import { useLocale } from "./locale-hooks";
+import * as resources from "./resource-hooks";
 
 const locale = useLocale("en");
 const catalog = resources.useCatalog("checkout");

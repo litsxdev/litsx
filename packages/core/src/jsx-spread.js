@@ -1,4 +1,8 @@
-import { resolveStandardJsxEventName } from "@litsx/authoring";
+import {
+  isNativeDomEventHandlerPropertyName,
+  resolveExplicitJsxEventName,
+  resolveStandardJsxEventName,
+} from "@litsx/authoring";
 import { html, isServer, noChange, nothing } from "lit";
 import { Directive, PartType, directive } from "lit/directive.js";
 import { ifDefined } from "lit/directives/if-defined.js";
@@ -33,14 +37,25 @@ function cacheTemplate(cache, key, strings) {
   return strings;
 }
 
-function normalizeName(rawName, nativeHtml) {
+function normalizeName(rawName, nativeHtml, reactCompatEvents = false) {
   if (rawName === "className") return { kind: "attribute", name: "class" };
   if (rawName === "htmlFor" && nativeHtml) return { kind: "attribute", name: "for" };
   const prefix = rawName[0];
   if (prefix === ".") return { kind: "property", name: rawName.slice(1) };
   if (prefix === "?") return { kind: "boolean", name: rawName.slice(1) };
   if (prefix === "@") return { kind: "event", name: rawName.slice(1) };
-  if (/^on[A-Z]/.test(rawName)) {
+  if (isNativeDomEventHandlerPropertyName(rawName)) {
+    return { kind: "property", name: rawName };
+  }
+  const explicitEventName = resolveExplicitJsxEventName(rawName);
+  if (rawName.startsWith("on:") && !explicitEventName) {
+    throw new TypeError(
+      `Declarative event "${rawName.slice(3)}" must use lowercase kebab-case. ` +
+      "Use addEventListener() for event names outside that convention.",
+    );
+  }
+  if (explicitEventName) return { kind: "event", name: explicitEventName };
+  if (reactCompatEvents && /^on[A-Z]/.test(rawName)) {
     const resolved = resolveStandardJsxEventName(rawName, {
       customElement: !nativeHtml,
     });
@@ -77,9 +92,9 @@ function hasComponentProperty(tagName, name, component, element) {
   return Boolean((properties && typeof properties.has === "function" && properties.has(name)) || (constructor?.prototype && name in constructor.prototype));
 }
 
-function inferDescriptor(tagName, rawName, value, component, element, namespace) {
+function inferDescriptor(tagName, rawName, value, component, element, namespace, reactCompatEvents = false) {
   const nativeHtml = namespace !== "svg" && !tagName.includes("-") && !component;
-  const descriptor = normalizeName(rawName, nativeHtml);
+  const descriptor = normalizeName(rawName, nativeHtml, reactCompatEvents);
   if (!SAFE_BINDING_NAME.test(descriptor.name)) return null;
   if (descriptor.kind === "custom-event-candidate") {
     return hasComponentProperty(tagName, descriptor.propertyName, component, element)
@@ -101,17 +116,18 @@ function inferDescriptor(tagName, rawName, value, component, element, namespace)
   return { kind: "attribute", name };
 }
 
-function inferClientDescriptor(tagName, rawName, value, component, element, namespace) {
+function inferClientDescriptor(tagName, rawName, value, component, element, namespace, reactCompatEvents = false) {
   const constructor = resolveConstructor(tagName, component, element) ?? element.constructor;
   let cache = CLIENT_DESCRIPTOR_CACHE.get(constructor);
   if (!cache) {
     cache = new Map();
     CLIENT_DESCRIPTOR_CACHE.set(constructor, cache);
   }
-  if (cache.has(rawName)) return cache.get(rawName);
-  const descriptor = inferDescriptor(tagName, rawName, value, component, element, namespace);
+  const cacheKey = `${reactCompatEvents ? "react" : "native"}:${rawName}`;
+  if (cache.has(cacheKey)) return cache.get(cacheKey);
+  const descriptor = inferDescriptor(tagName, rawName, value, component, element, namespace, reactCompatEvents);
   const nativeHtml = namespace !== "svg" && !tagName.includes("-") && !component;
-  const normalized = normalizeName(rawName, nativeHtml);
+  const normalized = normalizeName(rawName, nativeHtml, reactCompatEvents);
   const valueDependent = normalized.kind === "inferred" && (
     normalized.name === "style" || (
       normalized.name !== "ref" && normalized.name !== "dangerouslySetInnerHTML" &&
@@ -122,27 +138,27 @@ function inferClientDescriptor(tagName, rawName, value, component, element, name
       !NATIVE_PROPERTY_NAMES.has(normalized.propertyName)
     )
   );
-  if (!valueDependent) cache.set(rawName, descriptor);
+  if (!valueDependent) cache.set(cacheKey, descriptor);
   return descriptor;
 }
 
 const descriptorKey = (descriptor) => `${descriptor.kind}:${descriptor.name}`;
 
-function mergeSources(tagName, sources, component, element, namespace) {
+function mergeSources(tagName, sources, component, element, namespace, reactCompatEvents = false) {
   const merged = new Map();
   for (const source of sources || []) {
     if (source == null || (typeof source !== "object" && typeof source !== "function")) continue;
     for (const rawName of Object.keys(source)) {
       if (SKIPPED_KEYS.has(rawName)) continue;
       const value = source[rawName];
-      const descriptor = inferDescriptor(tagName, rawName, value, component, element, namespace);
+      const descriptor = inferDescriptor(tagName, rawName, value, component, element, namespace, reactCompatEvents);
       if (descriptor) merged.set(descriptorKey(descriptor), { descriptor, value });
     }
   }
   return [...merged.values()];
 }
 
-function mergeSourcesReverse(tagName, sources, component, element, seen, namespace) {
+function mergeSourcesReverse(tagName, sources, component, element, seen, namespace, reactCompatEvents = false) {
   const bindings = [];
   const validSources = sources || [];
   const dedupe = validSources.length > 1;
@@ -155,7 +171,7 @@ function mergeSourcesReverse(tagName, sources, component, element, seen, namespa
       const rawName = names[nameIndex];
       if (SKIPPED_KEYS.has(rawName)) continue;
       const value = source[rawName];
-      const descriptor = inferClientDescriptor(tagName, rawName, value, component, element, namespace);
+      const descriptor = inferClientDescriptor(tagName, rawName, value, component, element, namespace, reactCompatEvents);
       if (!descriptor) continue;
       const key = descriptorKey(descriptor);
       if (dedupe && seen.has(key)) continue;
@@ -241,9 +257,18 @@ function serializedValue(value) {
   return value == null || value === false ? null : value === true ? "" : String(value);
 }
 
+function eventOptions(descriptor, value) {
+  const listener = value && typeof value === "object" ? value : null;
+  return {
+    capture: descriptor.capture === true || listener?.capture === true,
+    once: listener?.once === true,
+    passive: listener?.passive === true,
+  };
+}
+
 function clearBinding(element, descriptor, previous) {
   if (!element) return;
-  if (descriptor.kind === "event") element.removeEventListener(descriptor.name, previous.value, { capture: descriptor.capture });
+  if (descriptor.kind === "event") element.removeEventListener(descriptor.name, previous.value, eventOptions(descriptor, previous.value));
   else if (descriptor.kind === "ref") reactRef(previous.value)?.(null);
   else if (descriptor.kind === "style") for (const name of Object.keys(previous.value || {})) element.style[name] = "";
   else if (descriptor.kind === "property") element[descriptor.name] = typeof element[descriptor.name] === "boolean" ? false : undefined;
@@ -262,8 +287,8 @@ function applyBinding(element, descriptor, value, previous, adoptAttributes) {
     if (element[descriptor.name] !== value) element[descriptor.name] = value;
   } else if (descriptor.kind === "event") {
     if (previous?.value === value) return;
-    if (previous) element.removeEventListener(descriptor.name, previous.value, { capture: descriptor.capture });
-    if (value != null) element.addEventListener(descriptor.name, value, { capture: descriptor.capture });
+    if (previous) element.removeEventListener(descriptor.name, previous.value, eventOptions(descriptor, previous.value));
+    if (value != null) element.addEventListener(descriptor.name, value, eventOptions(descriptor, value));
   } else if (descriptor.kind === "ref") {
     if (previous?.value === value) return;
     if (previous) reactRef(previous.value)?.(null);
@@ -291,7 +316,7 @@ class JsxSpreadDirective extends Directive {
   render() { return noChange; }
   update(part, [tagName, sources, options]) {
     const element = this.element = part.element;
-    const next = mergeSourcesReverse(tagName, sources, options.component, element, this.seen, options.namespace);
+    const next = mergeSourcesReverse(tagName, sources, options.component, element, this.seen, options.namespace, options.reactCompatEvents === true);
     const nextKeys = new Set(next.map(({ descriptor }) => descriptorKey(descriptor)));
     for (const [key, previous] of this.bindings) if (!nextKeys.has(key)) clearBinding(element, previous.descriptor, previous);
     const adoptAttributes = !this.hydrated && (globalThis[HYDRATION_DEPTH] ?? 0) > 0;
@@ -327,7 +352,7 @@ export function jsxSpreadElement(tagName, sources, options = {}, children = noth
     if (hasChildren) values.push(children);
     return html(clientStrings, ...values);
   }
-  const descriptors = mergeSources(tagName, sources, options.component, undefined, options.namespace);
+  const descriptors = mergeSources(tagName, sources, options.component, undefined, options.namespace, options.reactCompatEvents === true);
   const innerHtml = descriptors.find(({ descriptor }) => descriptor.kind === "inner-html");
   const bindings = innerHtml ? descriptors.filter(({ descriptor }) => descriptor.kind !== "inner-html") : descriptors;
   const serverHasChildren = !isVoid && (innerHtml != null || hasChildren);

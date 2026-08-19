@@ -7,7 +7,7 @@
 
 Build-facing LitSX compilation facade.
 
-Use this package when you need to compile authored LitSX source programmatically and want the correct compilation pipeline applied by default:
+Use this package when you need to compile standard JSX/TSX to Lit elements and templates programmatically and want the correct pipeline applied by default:
 
 - LitSX-authored source virtualization and AST remapping
 - LitSX Babel transforms in the supported order
@@ -28,10 +28,11 @@ Typical consumers also need the runtime packages used by their compiled output, 
 
 ## What It Solves
 
-LitSX authored JSX is not plain JSX. The compilation path needs to handle:
+The compilation path handles:
 
-- Lit-style attributes such as `@click`, `.value`, and `?disabled`
-- LitSX macros and authored syntax that are virtualized before parsing
+- ordinary JSX props with destination-aware Lit binding inference
+- explicit `on:event` listeners and component static assignments
+- compiler-generated Lit binding forms such as `@click`, `.value`, and `?disabled`
 - Babel plugin ordering
 - sourcemap composition across virtualization and template lowering
 
@@ -52,7 +53,7 @@ import { transformLitsx } from "@litsx/compiler";
 
 const source = `
   export const Counter = ({ label = "Save" }) => {
-    return <button @click={save}>{label}</button>;
+    return <button on:click={save}>{label}</button>;
   };
 `;
 
@@ -153,11 +154,10 @@ Use this for bounded, consumer-specific post-processing on already-lowered outpu
 
 ## Output Contract
 
-The compiler always parses authored source through the standard Babel parser plus LitSX's virtualization/remap layer, and always applies the supported LitSX transform chain internally.
+The compiler parses authored standard JSX/TSX directly through Babel. Internal generated templates may use Lit binding prefixes during lowering, but those prefixes are not part of the authored language.
 
 When `sourceMaps: true`, the returned map includes:
 
-- the authored-to-virtual sourcemap from attribute virtualization
 - the transform chain sourcemap from Babel
 - the final patching needed for Lit-style attributes after JSX has been lowered to `html\`\``
 

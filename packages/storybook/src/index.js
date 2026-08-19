@@ -3,7 +3,7 @@ import { prepareLitsxAuthoredInput } from "@litsx/compiler/authored-input";
 import { transformLitsxSync } from "@litsx/compiler";
 import { litsx } from "@litsx/vite-plugin";
 
-const STORY_FILE_PATTERN = /\.stories\.litsx(?:\?.*)?$/;
+const STORY_FILE_PATTERN = /\.stories\.[cm]?[jt]sx?(?:\?.*)?$/;
 
 function normalizeTagName(tagName) {
   return typeof tagName === "string" && tagName.includes("-") ? tagName : null;
@@ -384,7 +384,7 @@ async function validateStorybookCsfWithLoader(
 }
 
 export const litsxStoriesIndexer = {
-  test: /\.stories\.litsx$/,
+  test: /\.stories\.[cm]?[jt]sx?$/,
   async createIndex(fileName, { makeTitle } = {}) {
     const source = await fs.readFile(fileName, "utf8");
     validateLitsxStoryModule(source, fileName);
@@ -459,7 +459,7 @@ export function withLitsxStorybookViteConfig(config = {}, options = {}) {
 export function createLitsxStorybookConfig(options = {}) {
   const {
     stories = [
-      "../src/**/*.stories.@(js|jsx|ts|tsx|litsx|mdx)",
+      "../src/**/*.stories.@(js|jsx|ts|tsx|mdx)",
       "../src/**/*.docs.mdx",
     ],
     addons = ["@storybook/addon-docs", "@storybook/addon-a11y"],

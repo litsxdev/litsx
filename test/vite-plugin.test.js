@@ -92,7 +92,7 @@ describe("@litsx/vite-plugin", () => {
     const plugin = litsx({ sourceMaps: true });
     const source = [
       "export const Counter = () => {",
-      "  return <button @click={save}>Hi</button>;",
+      "  return <button on:click={save}>Hi</button>;",
       "};",
     ].join("\n");
 
@@ -103,15 +103,15 @@ describe("@litsx/vite-plugin", () => {
     assert.ok(result.map);
   }, 30000);
 
-  it("transforms .litsx files and returns code with a sourcemap", async () => {
+  it("transforms .tsx files and returns code with a sourcemap", async () => {
     const plugin = litsx({ sourceMaps: true });
     const source = [
       "export const Counter = ({ label }: { label: string }) => {",
-      "  return <button @click={save}>{label}</button>;",
+      "  return <button on:click={save}>{label}</button>;",
       "};",
     ].join("\n");
 
-    const result = await plugin.transform(source, "/virtual/Counter.litsx");
+    const result = await plugin.transform(source, "/virtual/Counter.tsx");
 
     assert.ok(result);
     assert.match(result.code, /html`/);
@@ -129,7 +129,7 @@ describe("@litsx/vite-plugin", () => {
     const plugin = litsx({
       include: (id) => id.endsWith(".demo"),
     });
-    const source = "export const Counter = () => <button @click={save}>Hi</button>;";
+    const source = "export const Counter = () => <button on:click={save}>Hi</button>;";
 
     const transformed = await plugin.transform(source, "/virtual/example.demo");
     const ignored = await plugin.transform(source, "/virtual/example.jsx");
@@ -143,7 +143,7 @@ describe("@litsx/vite-plugin", () => {
     const plugin = litsx({
       include: /\.demo$/,
     });
-    const source = "export const Counter = () => <button @click={save}>Hi</button>;";
+    const source = "export const Counter = () => <button on:click={save}>Hi</button>;";
 
     const transformed = await plugin.transform(source, "/virtual/example.demo");
     const ignored = await plugin.transform(source, "/virtual/example.jsx");
@@ -158,7 +158,7 @@ describe("@litsx/vite-plugin", () => {
     const sourcePath = path.join(tempDir, "Counter.jsx");
     fs.writeFileSync(
       sourcePath,
-      'export const Counter = () => { static styles = `:host { display: block; }`; return <button @click={save}>Hi</button>; };',
+      'export const Counter = () => { static styles = `:host { display: block; }`; return <button on:click={save}>Hi</button>; };',
       "utf8",
     );
 
@@ -281,7 +281,7 @@ describe("@litsx/vite-plugin", () => {
       },
       sourceMaps: true,
     });
-    const source = "export const Counter = () => <button @click={save}>Hi</button>;";
+    const source = "export const Counter = () => <button on:click={save}>Hi</button>;";
 
     const transformed = await plugin.transform(
       source,
@@ -485,7 +485,7 @@ describe("@litsx/vite-plugin", () => {
       const plugin = litsx();
       const result = await plugin.transform.call(
         { error },
-        "export const Broken = () => <button @click=>Hi</button>;",
+        "export const Broken = () => <button on:click=>Hi</button>;",
         "/virtual/Broken.jsx"
       );
 
@@ -527,7 +527,7 @@ describe("@litsx/vite-plugin", () => {
       const plugin = litsx();
 
       await assert.rejects(
-        () => plugin.transform("export const Broken = () => <button @click=>Hi</button>;", "/virtual/Broken.jsx"),
+        () => plugin.transform("export const Broken = () => <button on:click=>Hi</button>;", "/virtual/Broken.jsx"),
         (error) => {
           assert.match(error.message, /LitSX compilation failed in \/virtual\/Broken\.jsx/);
           assert.strictEqual(error.plugin, "litsx");

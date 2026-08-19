@@ -8,8 +8,6 @@ const templates = ["app", "component", "design-system"];
 const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-release-scaffold-"));
 const expectedVersions = createCaretVersionMap([
   "@litsx/core",
-  "@litsx/typescript",
-  "prettier-plugin-litsx",
 ]);
 
 function assert(condition, message) {
@@ -32,11 +30,9 @@ for (const template of templates) {
     manifest.dependencies?.["@litsx/core"] === expectedVersions["@litsx/core"],
     `${template} scaffold should depend on @litsx/core ${expectedVersions["@litsx/core"]}`,
   );
-  assert(manifest.devDependencies?.["@litsx/typescript"] === expectedVersions["@litsx/typescript"], `${template} scaffold should depend on @litsx/typescript ${expectedVersions["@litsx/typescript"]}`);
-  assert(manifest.devDependencies?.["prettier-plugin-litsx"] === expectedVersions["prettier-plugin-litsx"], `${template} scaffold should depend on prettier-plugin-litsx ${expectedVersions["prettier-plugin-litsx"]}`);
-  assert(fs.existsSync(path.join(targetDir, "prettier.config.js")), `${template} scaffold is missing prettier.config.js`);
+  assert(!fs.existsSync(path.join(targetDir, "prettier.config.js")), `${template} scaffold should use standard Prettier defaults`);
   assert(fs.existsSync(path.join(targetDir, "eslint.config.js")), `${template} scaffold is missing eslint.config.js`);
-  assert(fs.existsSync(path.join(targetDir, "jsconfig.json")), `${template} scaffold is missing jsconfig.json`);
+  assert(fs.existsSync(path.join(targetDir, "tsconfig.json")), `${template} scaffold is missing tsconfig.json`);
 }
 
 console.log(`scaffold smoke passed in ${tempRoot}`);

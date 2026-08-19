@@ -15,6 +15,25 @@ import {
 import { createLitsxCompilationSession, transformLitsx } from "../packages/compiler/src/index.js";
 
 describe("compiler authored input helpers", () => {
+  it("rejects the removed authored file extensions and binding syntax", () => {
+    assert.throws(
+      () => prepareLitsxAuthoredInput("export const View = () => <div />;", {
+        filename: "/virtual/View.litsx",
+      }),
+      /standard \.jsx or \.tsx extension/,
+    );
+    for (const source of [
+      "const view = <button @click={handler} />;",
+      "const view = <input .value={value} />;",
+      "const view = <input ?disabled={disabled} />;",
+      "function View() { static styles = `:host {}`; return <div />; }",
+    ]) {
+      assert.throws(() => prepareLitsxAuthoredInput(source, {
+        filename: "/virtual/View.tsx",
+      }));
+    }
+  });
+
   it("normalizes parser plugins from filenames and JSX requirements", () => {
     assert.deepStrictEqual(
       ensureLitsxParserPlugins("/virtual/File.tsx"),
@@ -69,7 +88,7 @@ describe("compiler authored input helpers", () => {
   it("collects generic module analysis facts from authored input", () => {
     const source = [
       'import type { StoryObj } from "storybook";',
-      'import { VdsButton } from "./vds-button.litsx";',
+      'import { VdsButton } from "./vds-button.tsx";',
       "const localMeta = { title: 'Components/Button' };",
       "const LocalStory = () => <VdsButton label={'Save'} />;",
       "export default localMeta;",
@@ -80,7 +99,7 @@ describe("compiler authored input helpers", () => {
     ].join("\n");
 
     const result = prepareLitsxAuthoredInput(source, {
-      filename: "/virtual/vds-button.stories.litsx",
+      filename: "/virtual/vds-button.stories.tsx",
     });
 
     assert.deepStrictEqual(result.moduleAnalysis.imports, [
@@ -90,7 +109,7 @@ describe("compiler authored input helpers", () => {
         specifiers: [{ importedName: "StoryObj", localName: "StoryObj", kind: "type" }],
       },
       {
-        source: "./vds-button.litsx",
+        source: "./vds-button.tsx",
         kind: "value",
         specifiers: [{ importedName: "VdsButton", localName: "VdsButton", kind: "value" }],
       },
@@ -110,7 +129,7 @@ describe("compiler authored input helpers", () => {
         localName: "VdsButton",
         tagName: "vds-button",
         source: "imported-authored-module",
-        importSource: "./vds-button.litsx",
+        importSource: "./vds-button.tsx",
       },
       {
         localName: "LocalStory",
@@ -260,8 +279,7 @@ describe("compiler authored input helpers", () => {
       });
 
       try {
-        const typecheck = session.getTypecheckSession();
-        assert.strictEqual(typecheck.projectSession, session.typescriptSession);
+        assert.strictEqual(session.typescriptSession.kind, "project");
         assert.strictEqual(session.projectPath, tsconfigPath);
       } finally {
         session.dispose();

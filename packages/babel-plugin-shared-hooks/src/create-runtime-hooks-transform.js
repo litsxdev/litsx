@@ -756,11 +756,7 @@ function localCustomHookUsesHost(binding, state, t, seen = new WeakSet()) {
           const imported = nestedBinding.path.node.imported;
           const importedName = imported?.name ?? imported?.value ?? callee.node.name;
           const result = resolveImportedHostAwareCustomHook(state, source, importedName);
-          if (result === "unresolved-custom-hook") {
-            throw callee.buildCodeFrameError(
-              `Unable to resolve imported custom hook "${callee.node.name}" from "${source}". LitSX must resolve imported custom hooks to determine whether the active host must be passed.`
-            );
-          }
+          assertImportedCustomHookResolution(result, callee, callee.node.name, source);
           if (result === true) {
             usesHost = true;
             innerPath.stop();
@@ -783,11 +779,7 @@ function localCustomHookUsesHost(binding, state, t, seen = new WeakSet()) {
         if (objectBinding?.path?.isImportNamespaceSpecifier()) {
           const source = objectBinding.path.parentPath?.node?.source?.value;
           const result = resolveImportedHostAwareCustomHook(state, source, property.node.name);
-          if (result === "unresolved-custom-hook") {
-            throw property.buildCodeFrameError(
-              `Unable to resolve imported custom hook "${property.node.name}" from "${source}". LitSX must resolve imported custom hooks to determine whether the active host must be passed.`
-            );
-          }
+          assertImportedCustomHookResolution(result, property, property.node.name, source);
           if (result === true) {
             usesHost = true;
             innerPath.stop();
@@ -984,11 +976,7 @@ function shouldTransformCustomHookCall(calleePath, state, t) {
       const imported = binding.path.node.imported;
       const importedName = imported?.name ?? imported?.value ?? calleePath.node.name;
       const result = resolveImportedHostAwareCustomHook(state, source, importedName);
-      if (result === "unresolved-custom-hook") {
-        throw calleePath.buildCodeFrameError(
-          `Unable to resolve imported custom hook "${calleePath.node.name}" from "${source}". LitSX must resolve imported custom hooks to determine whether the active host must be passed.`
-        );
-      }
+      assertImportedCustomHookResolution(result, calleePath, calleePath.node.name, source);
       return result === true;
     }
     return localCustomHookUsesHost(binding, state, t);
@@ -1004,11 +992,7 @@ function shouldTransformCustomHookCall(calleePath, state, t) {
     if (binding?.path?.isImportNamespaceSpecifier()) {
       const source = binding.path.parentPath?.node?.source?.value;
       const result = resolveImportedHostAwareCustomHook(state, source, property.node.name);
-      if (result === "unresolved-custom-hook") {
-        throw property.buildCodeFrameError(
-          `Unable to resolve imported custom hook "${property.node.name}" from "${source}". LitSX must resolve imported custom hooks to determine whether the active host must be passed.`
-        );
-      }
+      assertImportedCustomHookResolution(result, property, property.node.name, source);
       return result === true;
     }
     return true;
@@ -1030,6 +1014,19 @@ function resolveImportedHostAwareCustomHook(state, source, importedName) {
     importedName,
     filename: state.file?.opts?.filename || state.filename || "",
   });
+}
+
+function assertImportedCustomHookResolution(result, path, localName, source) {
+  if (result === "unsupported-external-hook") {
+    throw path.buildCodeFrameError(
+      `Cannot compile external hook "${localName}" from "${source}". Its implementation is not marked as LitSX-compatible and may depend on React's hook runtime. Use a LitSX adapter or a package compiled with LitSX hook metadata.`
+    );
+  }
+  if (result === "unresolved-custom-hook") {
+    throw path.buildCodeFrameError(
+      `Unable to resolve imported custom hook "${localName}" from "${source}". LitSX must resolve imported custom hooks to determine whether the active host must be passed.`
+    );
+  }
 }
 
 function isStructuralHookReference(path, state) {

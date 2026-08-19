@@ -9,7 +9,6 @@ import { describe, it, vi } from "vitest";
 import packageJson from "../packages/compiler/package.json" with { type: "json" };
 import * as jsxTemplateModule from "../packages/babel-plugin-transform-jsx-html-template/src/index.js";
 import * as presetModule from "../packages/babel-preset-litsx/src/index.js";
-import { createLitsxTypecheckSession } from "../packages/typescript/src/typecheck.js";
 
 import {
   createLitsxCompilationSession,
@@ -110,7 +109,7 @@ describe("@litsx/compiler", () => {
   it("compiles authored LitSX source and returns metadata", () => {
     const source = [
       "export const Counter = ({ label = 'Save' }) => {",
-      "  return <button class=\"cta\" @click={save}>{label}</button>;",
+      "  return <button class=\"cta\" on:click={save}>{label}</button>;",
       "};",
     ].join("\n");
 
@@ -128,7 +127,7 @@ describe("@litsx/compiler", () => {
 
   it("publishes generic module analysis metadata alongside compiled output", () => {
     const source = [
-      'import { VdsButton } from "./vds-button.litsx";',
+      'import { VdsButton } from "./vds-button.tsx";',
       "const meta = { title: 'Components/Button' };",
       "const StoryHost = ({ label = 'Save' }) => <VdsButton label={label} />;",
       "export default meta;",
@@ -138,7 +137,7 @@ describe("@litsx/compiler", () => {
     ].join("\n");
 
     const result = transformLitsxSync(source, {
-      filename: "/virtual/vds-button.stories.litsx",
+      filename: "/virtual/vds-button.stories.tsx",
     });
 
     assert.deepStrictEqual(result.metadata.litsxModuleAnalysis.exports, [
@@ -150,7 +149,7 @@ describe("@litsx/compiler", () => {
         localName: "VdsButton",
         tagName: "vds-button",
         source: "imported-authored-module",
-        importSource: "./vds-button.litsx",
+        importSource: "./vds-button.tsx",
       },
       {
         localName: "StoryHost",
@@ -161,15 +160,15 @@ describe("@litsx/compiler", () => {
     ]);
   }, 20000);
 
-  it("compiles .litsx source with TypeScript syntax by default", () => {
+  it("compiles .tsx source with TypeScript syntax by default", () => {
     const source = [
       "export const Counter = ({ label }: { label: string }) => {",
-      "  return <button class=\"cta\" @click={save}>{label}</button>;",
+      "  return <button class=\"cta\" on:click={save}>{label}</button>;",
       "};",
     ].join("\n");
 
     const result = transformLitsxSync(source, {
-      filename: "/virtual/Counter.litsx",
+      filename: "/virtual/Counter.tsx",
     });
 
     assert.match(result.code, /html`/);
@@ -198,7 +197,7 @@ describe("@litsx/compiler", () => {
     ].join("\n");
 
     const result = transformLitsxSync(source, {
-      filename: "/virtual/vds-drawer.stories.litsx",
+      filename: "/virtual/vds-drawer.stories.tsx",
     });
 
     assert.match(result.code, /class VdsDrawerStory extends LitElement/);
@@ -215,7 +214,7 @@ describe("@litsx/compiler", () => {
     ].join("\n");
 
     const result = transformLitsxSync(source, {
-      filename: "/virtual/VdsOverlayBar.litsx",
+      filename: "/virtual/VdsOverlayBar.tsx",
     });
 
     assert.match(result.code, /console\.log\("VdsOverlayBar props:", \{\s*heading: this\.heading\s*\}\);/);
@@ -254,7 +253,7 @@ describe("@litsx/compiler", () => {
       "}",
     ].join("\n");
     const options = {
-      filename: "/virtual/components/stable-ids.litsx",
+      filename: "/virtual/components/stable-ids.tsx",
       sourceMaps: false,
     };
 
@@ -281,7 +280,7 @@ describe("@litsx/compiler", () => {
       "}",
     ].join("\n");
     const options = {
-      filename: "/virtual/components/stable-class-ids.litsx",
+      filename: "/virtual/components/stable-class-ids.tsx",
       sourceMaps: false,
     };
 
@@ -398,7 +397,7 @@ describe("@litsx/compiler", () => {
       jsxTemplate: false,
     });
     const consumerResult = transformLitsxSync(consumerSource, {
-      filename: "/virtual/demo-component.litsx",
+      filename: "/virtual/demo-component.tsx",
       jsxTemplate: false,
       inMemoryFiles: {
         "/virtual/demo-type.tsx": hookSource,
@@ -462,7 +461,7 @@ describe("@litsx/compiler", () => {
       jsxTemplate: false,
     });
     const consumerResult = transformLitsxSync(consumerSource, {
-      filename: "/virtual/demo-consumer.litsx",
+      filename: "/virtual/demo-consumer.tsx",
       jsxTemplate: false,
       inMemoryFiles: {
         "/virtual/use-demo.tsx": hookSource,
@@ -500,7 +499,7 @@ describe("@litsx/compiler", () => {
     ].join("\n");
 
     const consumerResult = transformLitsxSync(consumerSource, {
-      filename: "/virtual/demo-consumer.litsx",
+      filename: "/virtual/demo-consumer.tsx",
       jsxTemplate: false,
       inMemoryFiles: {
         "/virtual/use-demo.js": compiledHookResult.code,
@@ -527,7 +526,7 @@ describe("@litsx/compiler", () => {
     ].join("\n");
 
     const consumerResult = transformLitsxSync(consumerSource, {
-      filename: "/virtual/demo-consumer.litsx",
+      filename: "/virtual/demo-consumer.tsx",
       jsxTemplate: false,
       inMemoryFiles: {
         "/virtual/use-demo.js": compiledHookSource,
@@ -558,7 +557,7 @@ describe("@litsx/compiler", () => {
     ].join("\n");
 
     const consumerResult = transformLitsxSync(consumerSource, {
-      filename: "/virtual/demo-consumer.litsx",
+      filename: "/virtual/demo-consumer.tsx",
       jsxTemplate: false,
       inMemoryFiles: {
         "/virtual/use-demo.js": compiledHookResult.code,
@@ -590,7 +589,7 @@ describe("@litsx/compiler", () => {
     ].join("\n");
 
     const consumerResult = transformLitsxSync(consumerSource, {
-      filename: "/virtual/demo-consumer.litsx",
+      filename: "/virtual/demo-consumer.tsx",
       jsxTemplate: false,
       inMemoryFiles: {
         "/virtual/hooks/use-demo.js": compiledHookResult.code,
@@ -643,7 +642,7 @@ describe("@litsx/compiler", () => {
       jsxTemplate: false,
     });
     const consumerResult = transformLitsxSync(consumerSource, {
-      filename: "/virtual/demo-component.litsx",
+      filename: "/virtual/demo-component.tsx",
       jsxTemplate: false,
       inMemoryFiles: {
         "/virtual/demo-hook.tsx": hookSource,
@@ -680,7 +679,7 @@ describe("@litsx/compiler", () => {
       jsxTemplate: false,
     });
     const consumerResult = transformLitsxSync(consumerSource, {
-      filename: "/virtual/demo-component.litsx",
+      filename: "/virtual/demo-component.tsx",
       jsxTemplate: false,
       inMemoryFiles: {
         "/virtual/theme-hook.tsx": hookSource,
@@ -712,7 +711,7 @@ describe("@litsx/compiler", () => {
     ].join("\n");
 
     const result = transformLitsxSync(consumerSource, {
-      filename: "/virtual/demo-consumer.litsx",
+      filename: "/virtual/demo-consumer.tsx",
       jsxTemplate: false,
       inMemoryFiles: {
         "/virtual/hooks/index.ts": barrelSource,
@@ -749,7 +748,7 @@ describe("@litsx/compiler", () => {
     ].join("\n");
 
     const consumerResult = transformLitsxSync(consumerSource, {
-      filename: "/virtual/greeting.litsx",
+      filename: "/virtual/greeting.tsx",
       jsxTemplate: false,
       inMemoryFiles: {
         "/virtual/use-message.js": compiledHookResult.code,
@@ -788,7 +787,7 @@ describe("@litsx/compiler", () => {
     ].join("\n");
 
     const consumerResult = transformLitsxSync(consumerSource, {
-      filename: "/virtual/greeting.litsx",
+      filename: "/virtual/greeting.tsx",
       jsxTemplate: false,
       inMemoryFiles: {
         "/virtual/use-message.js": compiledHookResult.code,
@@ -866,7 +865,7 @@ describe("@litsx/compiler", () => {
     ].join("\n");
 
     const result = transformLitsxSync(consumerSource, {
-      filename: "/virtual/demo-consumer.litsx",
+      filename: "/virtual/demo-consumer.tsx",
       jsxTemplate: false,
       inMemoryFiles: {
         "/virtual/use-demo.ts": hookSource,
@@ -889,7 +888,7 @@ describe("@litsx/compiler", () => {
 
     assert.throws(
       () => transformLitsxSync(source, {
-        filename: "/virtual/demo-consumer.litsx",
+        filename: "/virtual/demo-consumer.tsx",
         jsxTemplate: false,
       }),
       /Unable to resolve imported custom hook "useDemo" from "\.\/missing"/,
@@ -911,7 +910,7 @@ describe("@litsx/compiler", () => {
     ].join("\n");
 
     const result = transformLitsxSync(consumerSource, {
-      filename: "/virtual/demo-consumer.litsx",
+      filename: "/virtual/demo-consumer.tsx",
       jsxTemplate: false,
       inMemoryFiles: {
         "/virtual/format.ts": utilSource,
@@ -934,7 +933,7 @@ describe("@litsx/compiler", () => {
     ].join("\n");
 
     const result = transformLitsxSync(source, {
-      filename: "/virtual/demo-consumer.litsx",
+      filename: "/virtual/demo-consumer.tsx",
       jsxTemplate: false,
     });
 
@@ -948,16 +947,16 @@ describe("@litsx/compiler", () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-hook-renderer-cache-"));
 
     try {
-      const rootHookFile = path.join(tempDir, "hook-consumer.litsx");
-      const rootRendererFile = path.join(tempDir, "renderer-consumer.litsx");
+      const rootHookFile = path.join(tempDir, "hook-consumer.tsx");
+      const rootRendererFile = path.join(tempDir, "renderer-consumer.tsx");
       const helperFile = path.join(tempDir, "helpers.tsx");
-      const buttonFile = path.join(tempDir, "litsx-button.litsx");
+      const buttonFile = path.join(tempDir, "litsx-button.tsx");
 
       fs.writeFileSync(
         helperFile,
         [
           'import { useMemoValue } from "@litsx/core";',
-          'import { LitsxButton } from "./litsx-button.litsx";',
+          'import { LitsxButton } from "./litsx-button.tsx";',
           "export function useDemo(input: string) {",
           "  return useMemoValue(() => input, [input]);",
           "}",
@@ -987,7 +986,7 @@ describe("@litsx/compiler", () => {
       const rendererConsumer = [
         'import { renderHeader } from "./helpers";',
         "export const RendererConsumer = () => {",
-        "  return <guide-card .header={renderHeader} />;",
+        "  return <guide-card header={renderHeader} />;",
         "};",
       ].join("\n");
 
@@ -1008,7 +1007,7 @@ describe("@litsx/compiler", () => {
     }
   }, 20000);
 
-  it("strips top-level TypeScript declarations from compiled .litsx output", () => {
+  it("strips top-level TypeScript declarations from compiled .tsx output", () => {
     const source = [
       "interface ButtonProps {",
       "  label?: string;",
@@ -1022,7 +1021,7 @@ describe("@litsx/compiler", () => {
     ].join("\n");
 
     const result = transformLitsxSync(source, {
-      filename: "/virtual/Counter.litsx",
+      filename: "/virtual/Counter.tsx",
     });
 
     assert.match(result.code, /html`/);
@@ -1043,7 +1042,7 @@ describe("@litsx/compiler", () => {
     ].join("\n");
 
     const result = transformLitsxSync(source, {
-      filename: "/virtual/Counter.litsx",
+      filename: "/virtual/Counter.tsx",
       jsxTemplate: false,
     });
 
@@ -1052,7 +1051,7 @@ describe("@litsx/compiler", () => {
     assert.doesNotMatch(result.code, /label: string/);
   }, 20000);
 
-  it("strips generic TypeScript syntax from compiled .litsx output", () => {
+  it("strips generic TypeScript syntax from compiled .tsx output", () => {
     const source = [
       "function identity<T>(value: T): T {",
       "  return value;",
@@ -1064,7 +1063,7 @@ describe("@litsx/compiler", () => {
     ].join("\n");
 
     const result = transformLitsxSync(source, {
-      filename: "/virtual/Counter.litsx",
+      filename: "/virtual/Counter.tsx",
     });
 
     assert.match(result.code, /html`/);
@@ -1088,7 +1087,7 @@ describe("@litsx/compiler", () => {
     ].join("\n");
 
     const result = transformLitsxSync(source, {
-      filename: "/virtual/Children.litsx",
+      filename: "/virtual/Children.tsx",
     });
 
     assert.match(result.code, /return html`<section><slot><\/slot><\/section>`;/);
@@ -1107,7 +1106,7 @@ describe("@litsx/compiler", () => {
     ].join("\n");
 
     const result = transformLitsxSync(source, {
-      filename: "/virtual/Panel.litsx",
+      filename: "/virtual/Panel.tsx",
     });
 
     assert.match(result.code, /class Panel extends LitElement/);
@@ -1117,20 +1116,20 @@ describe("@litsx/compiler", () => {
   it("lowers authored JSX inside suspense content renderers", () => {
     const source = [
       'import { SuspenseBoundary } from "@litsx/core";',
-      'import { GuideCard } from "./guide-card.litsx";',
+      'import { GuideCard } from "./guide-card.tsx";',
       "export const Demo = () => {",
       "  return (",
       "    <SuspenseBoundary",
       "      fallback={null}",
       '    >',
-      '      <GuideCard .eyebrow={"x"} .titleRenderer={() => "y"} .contentRenderer={() => <p>z</p>} />',
+      '      <GuideCard eyebrow={"x"} titleRenderer={() => "y"} contentRenderer={() => <p>z</p>} />',
       "    </SuspenseBoundary>",
       "  );",
       "};",
     ].join("\n");
 
     const result = transformLitsxSync(source, {
-      filename: "/virtual/Demo.litsx",
+      filename: "/virtual/Demo.tsx",
       jsxTemplate: false,
     });
 
@@ -1146,23 +1145,23 @@ describe("@litsx/compiler", () => {
   it("binds only function props whose returned JSX needs component context", () => {
     const source = [
       'import { SuspenseBoundary } from "@litsx/core";',
-      'import { GuideCard } from "./guide-card.litsx";',
+      'import { GuideCard } from "./guide-card.tsx";',
       "const renderHeader = () => <p>plain</p>;",
       "const renderPanel = () => <fancy-panel />;",
       "export const Demo = () => {",
       "  return (",
       "    <>",
-      '      <SuspenseBoundary .content={renderHeader} />',
-      '      <guide-card .header={renderPanel} />',
-      '      <GuideCard .title={renderHeader} />',
-      '      <button .onclick={renderHeader}></button>',
+      '      <SuspenseBoundary content={renderHeader} />',
+      '      <guide-card header={renderPanel} />',
+      '      <GuideCard title={renderHeader} />',
+      '      <button onclick={renderHeader}></button>',
       "    </>",
       "  );",
       "};",
     ].join("\n");
 
     const result = transformLitsxSync(source, {
-      filename: "/virtual/Demo.litsx",
+      filename: "/virtual/Demo.tsx",
       jsxTemplate: false,
     });
 
@@ -1174,7 +1173,7 @@ describe("@litsx/compiler", () => {
 
   it("binds local helper references only when they transitively return component JSX", () => {
     const source = [
-      "import { GuideCard } from './guide-card.litsx';",
+      "import { GuideCard } from './guide-card.tsx';",
       "const renderPlain = () => <p>plain</p>;",
       "const renderCard = () => <GuideCard />;",
       "const wrapPlain = () => renderPlain();",
@@ -1182,15 +1181,15 @@ describe("@litsx/compiler", () => {
       "export const Demo = () => {",
       "  return (",
       "    <guide-card",
-      "      .plain={wrapPlain}",
-      "      .card={wrapCard}",
+      "      plain={wrapPlain}",
+      "      card={wrapCard}",
       "    />",
       "  );",
       "};",
     ].join("\n");
 
     const result = transformLitsxSync(source, {
-      filename: "/virtual/Demo.litsx",
+      filename: "/virtual/Demo.tsx",
       jsxTemplate: false,
     });
 
@@ -1202,14 +1201,14 @@ describe("@litsx/compiler", () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-imported-renderer-"));
 
     try {
-      const rootFile = path.join(tempDir, "demo.litsx");
+      const rootFile = path.join(tempDir, "demo.tsx");
       const helperFile = path.join(tempDir, "renderers.js");
-      const buttonFile = path.join(tempDir, "litsx-button.litsx");
+      const buttonFile = path.join(tempDir, "litsx-button.tsx");
 
       fs.writeFileSync(
         helperFile,
         [
-          "import { LitsxButton } from './litsx-button.litsx';",
+          "import { LitsxButton } from './litsx-button.tsx';",
           "export function renderHeader() {",
           "  return <LitsxButton label='Save' />;",
           "}",
@@ -1228,7 +1227,7 @@ describe("@litsx/compiler", () => {
       const source = [
         "import { renderHeader } from './renderers.js';",
         "export const Demo = () => {",
-        "  return <guide-card .header={renderHeader} />;",
+        "  return <guide-card header={renderHeader} />;",
         "};",
       ].join("\n");
 
@@ -1238,7 +1237,7 @@ describe("@litsx/compiler", () => {
       });
 
       assert.match(result.code, /import \{ renderHeader \} from ['"]\.\/renderers\.js['"]/);
-      assert.match(result.code, /import \{ LitsxButton(?: as __litsxImportedLitsxButton1)? \} from ['"]\.\/litsx-button\.litsx['"]/);
+      assert.match(result.code, /import \{ LitsxButton(?: as __litsxImportedLitsxButton1)? \} from ['"]\.\/litsx-button\.tsx['"]/);
       assert.match(result.code, /\.header=\{bindRendererContext\(typeof this === "undefined" \? null : this,\s*renderHeader,\s*\{\s*projected: true\s*\}\)\}/);
       assert.match(result.code, /static elements\s*=\s*\{[\s\S]*"litsx-button": (?:LitsxButton|__litsxImportedLitsxButton1)[\s\S]*\}/);
     } finally {
@@ -1250,10 +1249,10 @@ describe("@litsx/compiler", () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-imported-renderer-chain-"));
 
     try {
-      const rootFile = path.join(tempDir, "demo.litsx");
+      const rootFile = path.join(tempDir, "demo.tsx");
       const middleFile = path.join(tempDir, "renderers.js");
       const leafFile = path.join(tempDir, "deep-renderers.js");
-      const buttonFile = path.join(tempDir, "litsx-button.litsx");
+      const buttonFile = path.join(tempDir, "litsx-button.tsx");
 
       fs.writeFileSync(
         middleFile,
@@ -1266,7 +1265,7 @@ describe("@litsx/compiler", () => {
       fs.writeFileSync(
         leafFile,
         [
-          "import { LitsxButton } from './litsx-button.litsx';",
+          "import { LitsxButton } from './litsx-button.tsx';",
           "export const wrapHeader = () => renderHeader();",
           "function renderHeader() {",
           "  return <LitsxButton label='Chain' />;",
@@ -1286,7 +1285,7 @@ describe("@litsx/compiler", () => {
       const source = [
         "import { wrapHeader } from './renderers.js';",
         "export const Demo = () => {",
-        "  return <guide-card .header={wrapHeader} />;",
+        "  return <guide-card header={wrapHeader} />;",
         "};",
       ].join("\n");
 
@@ -1296,7 +1295,7 @@ describe("@litsx/compiler", () => {
       });
 
       assert.match(result.code, /\.header=\{bindRendererContext\(typeof this === "undefined" \? null : this,\s*wrapHeader,\s*\{\s*projected: true\s*\}\)\}/);
-      assert.match(result.code, /import \{ LitsxButton(?: as __litsxImportedLitsxButton1)? \} from ['"]\.\/litsx-button\.litsx['"]/);
+      assert.match(result.code, /import \{ LitsxButton(?: as __litsxImportedLitsxButton1)? \} from ['"]\.\/litsx-button\.tsx['"]/);
       assert.match(result.code, /static elements\s*=\s*\{[\s\S]*"litsx-button": (?:LitsxButton|__litsxImportedLitsxButton1)[\s\S]*\}/);
     } finally {
       fs.rmSync(tempDir, { recursive: true, force: true });
@@ -1307,7 +1306,7 @@ describe("@litsx/compiler", () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-imported-renderer-node-modules-"));
 
     try {
-      const rootFile = path.join(tempDir, "demo.litsx");
+      const rootFile = path.join(tempDir, "demo.tsx");
       const helperFile = path.join(tempDir, "renderers.js");
       const packageDir = path.join(tempDir, "node_modules", "@acme", "ui");
 
@@ -1341,7 +1340,7 @@ describe("@litsx/compiler", () => {
       const source = [
         "import { renderHeader } from './renderers.js';",
         "export const Demo = () => {",
-        "  return <guide-card .header={renderHeader} />;",
+        "  return <guide-card header={renderHeader} />;",
         "};",
       ].join("\n");
 
@@ -1366,9 +1365,9 @@ describe("@litsx/compiler", () => {
       const componentsDir = path.join(srcDir, "components");
       fs.mkdirSync(componentsDir, { recursive: true });
 
-      const rootFile = path.join(srcDir, "demo.litsx");
+      const rootFile = path.join(srcDir, "demo.tsx");
       const helperFile = path.join(srcDir, "renderers.js");
-      const buttonFile = path.join(componentsDir, "litsx-button.litsx");
+      const buttonFile = path.join(componentsDir, "litsx-button.tsx");
       const tsconfigFile = path.join(tempDir, "tsconfig.json");
 
       fs.writeFileSync(
@@ -1392,7 +1391,7 @@ describe("@litsx/compiler", () => {
       fs.writeFileSync(
         helperFile,
         [
-          "import { LitsxButton } from '@/components/litsx-button.litsx';",
+          "import { LitsxButton } from '@/components/litsx-button.tsx';",
           "export const renderHeader = () => <LitsxButton label='Alias' />;",
         ].join("\n")
       );
@@ -1413,7 +1412,7 @@ describe("@litsx/compiler", () => {
       const source = [
         "import { renderHeader } from './renderers.js';",
         "export const Demo = () => {",
-        "  return <guide-card .header={renderHeader} />;",
+        "  return <guide-card header={renderHeader} />;",
         "};",
       ].join("\n");
 
@@ -1422,7 +1421,7 @@ describe("@litsx/compiler", () => {
         jsxTemplate: false,
       });
 
-      assert.match(result.code, /import \{ LitsxButton(?: as __litsxImportedLitsxButton1)? \} from ['"]@\/components\/litsx-button\.litsx['"]/);
+      assert.match(result.code, /import \{ LitsxButton(?: as __litsxImportedLitsxButton1)? \} from ['"]@\/components\/litsx-button\.tsx['"]/);
       assert.match(result.code, /\.header=\{bindRendererContext\(typeof this === "undefined" \? null : this,\s*renderHeader,\s*\{\s*projected: true\s*\}\)\}/);
       assert.match(result.code, /static elements\s*=\s*\{[\s\S]*"litsx-button": (?:LitsxButton|__litsxImportedLitsxButton1)[\s\S]*\}/);
 
@@ -1434,8 +1433,8 @@ describe("@litsx/compiler", () => {
 
   it("does not include unrelated top-level helpers in static elements collection", () => {
     const source = [
-      "import { GuideCard } from './guide-card.litsx';",
-      "import { LitsxButton } from './litsx-button.litsx';",
+      "import { GuideCard } from './guide-card.tsx';",
+      "import { LitsxButton } from './litsx-button.tsx';",
       "function unusedHelper() {",
       "  return <LitsxButton type=\"secondary\" label=\"unused\" />;",
       "}",
@@ -1445,7 +1444,7 @@ describe("@litsx/compiler", () => {
     ].join("\n");
 
     const result = transformLitsxSync(source, {
-      filename: "/virtual/Demo.litsx",
+      filename: "/virtual/Demo.tsx",
       jsxTemplate: false,
     });
 
@@ -1462,7 +1461,7 @@ describe("@litsx/compiler", () => {
           "}",
         ].join("\n"),
         {
-          filename: "/virtual/Demo.litsx",
+          filename: "/virtual/Demo.tsx",
         }
       );
     }, /Unknown LitSX component "MissingThing"/);
@@ -1476,7 +1475,7 @@ describe("@litsx/compiler", () => {
     ].join("\n");
 
     const result = transformLitsxSync(source, {
-      filename: "/virtual/Demo.litsx",
+      filename: "/virtual/Demo.tsx",
     });
 
     assert.match(result.code, /return html`<section>\$\{\(\(\) => html`<fancy-panel><\/fancy-panel>`\)\(\)\}<\/section>`;/);
@@ -1491,7 +1490,7 @@ describe("@litsx/compiler", () => {
     ].join("\n");
 
     const result = transformLitsxSync(source, {
-      filename: "/virtual/Demo.litsx",
+      filename: "/virtual/Demo.tsx",
     });
 
     assert.match(result.code, /fn\(\) \{\s*return html`<fancy-panel><\/fancy-panel>`;\s*\}/);
@@ -1508,7 +1507,7 @@ describe("@litsx/compiler", () => {
     ].join("\n");
 
     const result = transformLitsxSync(source, {
-      filename: "/virtual/Demo.litsx",
+      filename: "/virtual/Demo.tsx",
     });
 
     assert.match(result.code, /one\(\) \{\s*return html`<fancy-panel><\/fancy-panel>`;\s*\}/);
@@ -1518,7 +1517,7 @@ describe("@litsx/compiler", () => {
 
   it("lowers capitalized JSX in lowercase helpers to equivalent html tags", () => {
     const source = [
-      "import { LitsxButton } from './litsx-button.litsx';",
+      "import { LitsxButton } from './litsx-button.tsx';",
       "function renderButtonHeader() {",
       "  return <LitsxButton type=\"secondary\" label=\"Renderer returns component\" />;",
       "}",
@@ -1528,7 +1527,7 @@ describe("@litsx/compiler", () => {
     ].join("\n");
 
     const result = transformLitsxSync(source, {
-      filename: "/virtual/Demo.litsx",
+      filename: "/virtual/Demo.tsx",
     });
 
     assert.match(result.code, /function renderButtonHeader\(\) \{\s*return html`<litsx-button type="secondary" label="Renderer returns component"><\/litsx-button>`;\s*\}/);
@@ -1537,7 +1536,7 @@ describe("@litsx/compiler", () => {
 
   it("lowers capitalized JSX in lowercase const helpers to equivalent html tags", () => {
     const source = [
-      "import { LitsxButton } from './litsx-button.litsx';",
+      "import { LitsxButton } from './litsx-button.tsx';",
       "const renderButtonHeader = () => {",
       "  return <LitsxButton type=\"secondary\" label=\"Renderer returns component\" />;",
       "};",
@@ -1547,7 +1546,7 @@ describe("@litsx/compiler", () => {
     ].join("\n");
 
     const result = transformLitsxSync(source, {
-      filename: "/virtual/Demo.litsx",
+      filename: "/virtual/Demo.tsx",
     });
 
     assert.match(result.code, /const renderButtonHeader = \(\) => \{\s*return html`<litsx-button type="secondary" label="Renderer returns component"><\/litsx-button>`;\s*\};/);
@@ -1556,14 +1555,14 @@ describe("@litsx/compiler", () => {
 
   it("materializes zero-arg inline thunks that return capitalized component JSX as equivalent html tags", () => {
     const source = [
-      "import { LitsxButton } from './litsx-button.litsx';",
+      "import { LitsxButton } from './litsx-button.tsx';",
       "export function Demo() {",
       "  return <section>{() => <LitsxButton type=\"primary\" label=\"Inline thunk child\" />}</section>;",
       "}",
     ].join("\n");
 
     const result = transformLitsxSync(source, {
-      filename: "/virtual/Demo.litsx",
+      filename: "/virtual/Demo.tsx",
     });
 
     assert.match(result.code, /return html`<section>\$\{\(\(\) => html`<litsx-button type="primary" label="Inline thunk child"><\/litsx-button>`\)\(\)\}<\/section>`;/);
@@ -1577,7 +1576,7 @@ describe("@litsx/compiler", () => {
     ].join("\n");
 
     const result = transformLitsxSync(source, {
-      filename: "/virtual/Demo.litsx",
+      filename: "/virtual/Demo.tsx",
       jsxTemplate: false,
     });
 
@@ -1587,17 +1586,17 @@ describe("@litsx/compiler", () => {
 
   it("binds renderer props that accept host-provided args and return component JSX", () => {
     const source = [
-      "import { LitsxButton } from './litsx-button.litsx';",
+      "import { LitsxButton } from './litsx-button.tsx';",
       "export function ProbeHost({ itemRenderer }) {",
       "  return <section>{itemRenderer('alpha')}</section>;",
       "}",
       "export function Demo() {",
-      "  return <ProbeHost .itemRenderer={(label) => <LitsxButton type=\"primary\" label={label} />} />;",
+      "  return <ProbeHost itemRenderer={(label) => <LitsxButton type=\"primary\" label={label} />} />;",
       "}",
     ].join("\n");
 
     const result = transformLitsxSync(source, {
-      filename: "/virtual/Demo.litsx",
+      filename: "/virtual/Demo.tsx",
     });
 
     assert.match(result.code, /\.itemRenderer=\$\{bindRendererContext\(typeof this === "undefined" \? null : this,\s*label => html`<litsx-button type="primary" label="\$\{label\}"><\/litsx-button>`,\s*\{\s*projected: true\s*\}\)\}/);
@@ -1607,23 +1606,23 @@ describe("@litsx/compiler", () => {
 
   it("binds transitive renderer helpers that return component JSX through wrapper functions", () => {
     const source = [
-      "import { LitsxButton } from './litsx-button.litsx';",
+      "import { LitsxButton } from './litsx-button.tsx';",
       "function renderHeader() {",
       "  return <LitsxButton type=\"secondary\" label=\"Projected\" />;",
       "}",
       "function wrapHeader() {",
       "  return renderHeader();",
       "}",
-      "export function Card({ header }) {",
+      "export function Card({ header }: { header: () => unknown }) {",
       "  return <section>{header()}</section>;",
       "}",
       "export function Demo() {",
-      "  return <Card .header={wrapHeader} />;",
+      "  return <Card header={wrapHeader} />;",
       "}",
     ].join("\n");
 
     const result = transformLitsxSync(source, {
-      filename: "/virtual/Demo.litsx",
+      filename: "/virtual/Demo.tsx",
     });
 
     assert.match(result.code, /function renderHeader\(\) \{\s*return html`<litsx-button type="secondary" label="Projected"><\/litsx-button>`;\s*\}/);
@@ -1634,17 +1633,17 @@ describe("@litsx/compiler", () => {
 
   it("wraps stored local JSX values passed to renderer props", () => {
     const source = [
-      "export function Card({ header }) {",
+      "export function Card({ header }: { header: () => unknown }) {",
       "  return <section>{header()}</section>;",
       "}",
       "export function Demo() {",
-      "  const header = <button @click={save}>Stored</button>;",
-      "  return <Card .header={header} />;",
+      "  const header = <button on:click={save}>Stored</button>;",
+      "  return <Card header={header} />;",
       "}",
     ].join("\n");
 
     const result = transformLitsxSync(source, {
-      filename: "/virtual/Demo.litsx",
+      filename: "/virtual/Demo.tsx",
     });
 
     assert.match(result.code, /const header = html`<button @click=\$\{save\}>Stored<\/button>`;/);
@@ -1654,18 +1653,18 @@ describe("@litsx/compiler", () => {
 
   it("wraps stored branching JSX values passed to renderer props and preserves projected context", () => {
     const source = [
-      "import { LitsxButton } from './litsx-button.litsx';",
+      "import { LitsxButton } from './litsx-button.tsx';",
       "export function Card({ header }) {",
       "  return <section>{header()}</section>;",
       "}",
       "export function Demo({ active }) {",
       "  const header = active ? <LitsxButton type=\"secondary\" label=\"Stored\" /> : <span>Idle</span>;",
-      "  return <Card .header={header} />;",
+      "  return <Card header={header} />;",
       "}",
     ].join("\n");
 
     const result = transformLitsxSync(source, {
-      filename: "/virtual/Demo.litsx",
+      filename: "/virtual/Demo.tsx",
     });
 
     assert.match(result.code, /const header = this\.active \? html`<litsx-button type="secondary" label="Stored"><\/litsx-button>` : html`<span>Idle<\/span>`;/);
@@ -1680,12 +1679,12 @@ describe("@litsx/compiler", () => {
       "  return <section>{header()}</section>;",
       "}",
       "export function Demo() {",
-      "  return <Card .header={<button @click={save}>Inline</button>} />;",
+      "  return <Card header={<button on:click={save}>Inline</button>} />;",
       "}",
     ].join("\n");
 
     const result = transformLitsxSync(source, {
-      filename: "/virtual/Demo.litsx",
+      filename: "/virtual/Demo.tsx",
     });
 
     assert.match(result.code, /\.header=\$\{\(\) => html`<button @click=\$\{save\}>Inline<\/button>`\}/);
@@ -1695,16 +1694,16 @@ describe("@litsx/compiler", () => {
   it("keeps renderer projection working in light DOM components", () => {
     const source = [
       "export function Card({ header }) {",
-      "  static lightDom = true;",
       "  return <section>{header()}</section>;",
       "}",
+      "Card.lightDom = true;",
       "export function Demo() {",
-      "  return <Card .header={() => <fancy-panel />} />;",
+      "  return <Card header={() => <fancy-panel />} />;",
       "}",
     ].join("\n");
 
     const result = transformLitsxSync(source, {
-      filename: "/virtual/Demo.litsx",
+      filename: "/virtual/Demo.tsx",
     });
 
     assert.match(result.code, /class Card extends LightDomMixin\(LitElement\)/);
@@ -1714,23 +1713,23 @@ describe("@litsx/compiler", () => {
 
   it("keeps renderer context through multiple container components", () => {
     const source = [
-      "import { LitsxButton } from './litsx-button.litsx';",
-      "export function Card({ header }) {",
+      "import { LitsxButton } from './litsx-button.tsx';",
+      "export function Card({ header }: { header: () => unknown }) {",
       "  return <section>{header()}</section>;",
       "}",
-      "export function Middle({ header }) {",
-      "  return <Card .header={header} />;",
+      "export function Middle({ header }: { header: () => unknown }) {",
+      "  return <Card header={header} />;",
       "}",
       "function renderHeader() {",
       "  return <LitsxButton type=\"secondary\" label=\"Deep\" />;",
       "}",
       "export function Outer() {",
-      "  return <Middle .header={renderHeader} />;",
+      "  return <Middle header={renderHeader} />;",
       "}",
     ].join("\n");
 
     const result = transformLitsxSync(source, {
-      filename: "/virtual/Demo.litsx",
+      filename: "/virtual/Demo.tsx",
     });
 
     assert.match(result.code, /<middle \.header=\$\{bindRendererContext\(typeof this === "undefined" \? null : this,\s*renderHeader,\s*\{\s*projected: true\s*\}\)\}><\/middle>/);
@@ -1741,18 +1740,18 @@ describe("@litsx/compiler", () => {
 
   it("keeps renderer projection working for light DOM components when no scoped host elements are required", () => {
     const source = [
-      "import { LitsxButton } from './litsx-button.litsx';",
+      "import { LitsxButton } from './litsx-button.tsx';",
       "export function Shell({ header }) {",
-      "  static lightDom = true;",
       "  return <section><header>{header()}</header><slot /></section>;",
       "}",
+      "Shell.lightDom = true;",
       "export function Demo() {",
-      "  return <Shell .header={() => <LitsxButton type=\"primary\" label=\"Mixed\" />}>Body</Shell>;",
+      "  return <Shell header={() => <LitsxButton type=\"primary\" label=\"Mixed\" />}>Body</Shell>;",
       "}",
     ].join("\n");
 
     const result = transformLitsxSync(source, {
-      filename: "/virtual/Demo.litsx",
+      filename: "/virtual/Demo.tsx",
     });
 
     assert.match(result.code, /class Shell extends LightDomMixin\(LitElement\)/);
@@ -1768,7 +1767,7 @@ describe("@litsx/compiler", () => {
     ].join("\n");
 
     const result = transformLitsxSync(source, {
-      filename: "/virtual/Demo.litsx",
+      filename: "/virtual/Demo.tsx",
       jsxTemplate: false,
     });
 
@@ -1814,17 +1813,17 @@ describe("@litsx/compiler", () => {
 
   it("lowers renderer props that return mixed fragments with components", () => {
     const source = [
-      "import { LitsxButton } from './litsx-button.litsx';",
+      "import { LitsxButton } from './litsx-button.tsx';",
       "export function Card({ header }) {",
       "  return <section>{header()}</section>;",
       "}",
       "export function Demo() {",
-      "  return <Card .header={() => <><span>Lead</span><LitsxButton type=\"secondary\" label=\"Tail\" /></>} />;",
+      "  return <Card header={() => <><span>Lead</span><LitsxButton type=\"secondary\" label=\"Tail\" /></>} />;",
       "}",
     ].join("\n");
 
     const result = transformLitsxSync(source, {
-      filename: "/virtual/Demo.litsx",
+      filename: "/virtual/Demo.tsx",
     });
 
     assert.match(result.code, /\.header=\$\{bindRendererContext\(typeof this === "undefined" \? null : this,\s*\(\) => html`<span>Lead<\/span><litsx-button type="secondary" label="Tail"><\/litsx-button>`,\s*\{\s*projected: true\s*\}\)\}/);
@@ -1835,7 +1834,7 @@ describe("@litsx/compiler", () => {
   it("keeps lit-style attributes aligned in the final sourcemap", async () => {
     const source = [
       "export function Counter(){",
-      "  return <button @click={save} .value={name} ?disabled={busy}>Hi</button>;",
+      "  return <input on:click={save} value={name} disabled={busy} />;",
       "}",
     ].join("\n");
 
@@ -1847,9 +1846,9 @@ describe("@litsx/compiler", () => {
     assert.ok(result.map, "expected compiler to emit a sourcemap");
     const traceMap = new TraceMap(result.map);
     const checks = [
-      ["@click", "@click"],
-      [".value", ".value"],
-      ["?disabled", "?disabled"],
+      ["@click", "on:click"],
+      [".value", "value"],
+      ["?disabled", "disabled"],
     ];
 
     for (const [generatedNeedle, originalNeedle] of checks) {
@@ -2005,7 +2004,7 @@ describe("@litsx/compiler", () => {
   it("keeps inferred standard JSX bindings aligned in the final sourcemap", async () => {
     const source = [
       "export function Counter({ save, name, busy }){",
-      "  return <input onClick={save} value={name} disabled={busy} />;",
+      "  return <input on:click={save} value={name} disabled={busy} />;",
       "}",
     ].join("\n");
 
@@ -2017,7 +2016,7 @@ describe("@litsx/compiler", () => {
     assert.ok(result.map, "expected compiler to emit a sourcemap");
     const traceMap = new TraceMap(result.map);
     const checks = [
-      ["@click", "onClick"],
+      ["@click", "on:click"],
       [".value", "value"],
       ["?disabled", "disabled"],
     ];
@@ -2067,12 +2066,12 @@ describe("@litsx/compiler", () => {
     fs.writeFileSync(filePath, source);
 
     try {
-      const sharedSession = createLitsxTypecheckSession(["--project", tsconfigPath]);
+      const sharedSession = createLitsxCompilationSession({ projectPath: tsconfigPath });
 
       const withSharedSession = transformLitsxSync(source, {
         filename: filePath,
         jsxTemplate: false,
-        typescriptSession: sharedSession.projectSession,
+        typescriptSession: sharedSession.typescriptSession,
       });
       const standalone = transformLitsxSync(source, {
         filename: filePath,
@@ -2082,6 +2081,7 @@ describe("@litsx/compiler", () => {
       assert.strictEqual(withSharedSession.code, standalone.code);
       assert.match(withSharedSession.code, /title: \{\s*type: String\s*\}/);
       assert.match(withSharedSession.code, /active: \{\s*type: Boolean\s*\}/);
+      sharedSession.dispose();
     } finally {
       fs.rmSync(tempDir, { recursive: true, force: true });
     }
@@ -2126,7 +2126,7 @@ describe("@litsx/compiler", () => {
   it("warns when external PascalCase imports are inferred as web components by usage", () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-external-pascal-warning-"));
     const nodeModulesDir = path.join(tempDir, "node_modules", "fancy-wc");
-    const filename = path.join(tempDir, "consumer.litsx");
+    const filename = path.join(tempDir, "consumer.tsx");
 
     try {
       fs.mkdirSync(nodeModulesDir, { recursive: true });
@@ -2170,7 +2170,7 @@ describe("@litsx/compiler", () => {
   it("does not warn for external PascalCase imports that carry LitSX component metadata", () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-external-pascal-compiled-"));
     const nodeModulesDir = path.join(tempDir, "node_modules", "fancy-litsx");
-    const filename = path.join(tempDir, "consumer.litsx");
+    const filename = path.join(tempDir, "consumer.tsx");
 
     try {
       fs.mkdirSync(nodeModulesDir, { recursive: true });
@@ -2210,7 +2210,7 @@ describe("@litsx/compiler", () => {
   it("does not warn for built-in boundary imports from compiled @litsx/core packages", () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-external-core-boundaries-"));
     const nodeModulesDir = path.join(tempDir, "node_modules", "@litsx", "core");
-    const filename = path.join(tempDir, "consumer.litsx");
+    const filename = path.join(tempDir, "consumer.tsx");
 
     try {
       fs.mkdirSync(nodeModulesDir, { recursive: true });
@@ -2261,7 +2261,7 @@ describe("@litsx/compiler", () => {
   it("does not warn for external PascalCase imports reexported from compiled LitSX modules", () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-external-pascal-reexported-"));
     const nodeModulesDir = path.join(tempDir, "node_modules", "fancy-litsx");
-    const filename = path.join(tempDir, "consumer.litsx");
+    const filename = path.join(tempDir, "consumer.tsx");
 
     try {
       fs.mkdirSync(nodeModulesDir, { recursive: true });
@@ -2307,7 +2307,7 @@ describe("@litsx/compiler", () => {
   it("warns for aliased external PascalCase imports inferred as web components", () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-external-pascal-alias-"));
     const nodeModulesDir = path.join(tempDir, "node_modules", "fancy-wc");
-    const filename = path.join(tempDir, "consumer.litsx");
+    const filename = path.join(tempDir, "consumer.tsx");
 
     try {
       fs.mkdirSync(nodeModulesDir, { recursive: true });
@@ -2345,7 +2345,7 @@ describe("@litsx/compiler", () => {
   it("warns for default external PascalCase imports inferred as web components", () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-external-pascal-default-"));
     const nodeModulesDir = path.join(tempDir, "node_modules", "fancy-wc");
-    const filename = path.join(tempDir, "consumer.litsx");
+    const filename = path.join(tempDir, "consumer.tsx");
 
     try {
       fs.mkdirSync(nodeModulesDir, { recursive: true });
@@ -2385,7 +2385,7 @@ describe("@litsx/compiler", () => {
   it("warns for namespace external PascalCase imports inferred as web components", () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-external-pascal-namespace-"));
     const nodeModulesDir = path.join(tempDir, "node_modules", "fancy-wc");
-    const filename = path.join(tempDir, "consumer.litsx");
+    const filename = path.join(tempDir, "consumer.tsx");
 
     try {
       fs.mkdirSync(nodeModulesDir, { recursive: true });
@@ -2424,7 +2424,7 @@ describe("@litsx/compiler", () => {
   it("warns for external PascalCase imports routed through package barrels", () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-external-pascal-barrel-"));
     const nodeModulesDir = path.join(tempDir, "node_modules", "fancy-wc");
-    const filename = path.join(tempDir, "consumer.litsx");
+    const filename = path.join(tempDir, "consumer.tsx");
 
     try {
       fs.mkdirSync(nodeModulesDir, { recursive: true });
@@ -2475,7 +2475,7 @@ describe("@litsx/compiler", () => {
     assert.throws(
       () => {
         transformLitsxSync(source, {
-          filename: "/virtual/ChildrenError.litsx",
+          filename: "/virtual/ChildrenError.tsx",
         });
       },
       /Implicit `children` projection is only supported as a direct JSX child expression/
@@ -2492,19 +2492,36 @@ describe("@litsx/compiler", () => {
     assert.throws(
       () => {
         transformLitsxSync(source, {
-          filename: "/virtual/ChildrenDuplicate.litsx",
+          filename: "/virtual/ChildrenDuplicate.tsx",
         });
       },
       /Implicit `children` projection can only appear once per component render/
     );
   }, 20000);
 
-  it("accepts static hoist assignments without surfacing deprecation warnings", () => {
+  it("projects implicit children through conditional expressions and exclusive returns", () => {
     const source = [
+      "export function Panel({ loading, children }) {",
+      "  if (loading) return <section>{loading ? <span>Wait</span> : children}</section>;",
+      "  return <aside>{children ?? <span>Empty</span>}</aside>;",
+      "}",
+    ].join("\n");
+
+    const result = transformLitsxSync(source, {
+      filename: "/virtual/ConditionalChildren.tsx",
+    });
+
+    assert.match(result.code, /this\.loading \? html`<span>Wait<\/span>` : html`<slot><\/slot>`/);
+    assert.match(result.code, /html`<slot><\/slot>` \?\? html`<span>Empty<\/span>`/);
+  }, 20000);
+
+  it("accepts standard static assignments without surfacing warnings", () => {
+    const source = [
+      "import { css } from '@litsx/core';",
       "export const Counter = () => {",
-      "  static styles = `:host { display: block; }`;",
       "  return <button>Save</button>;",
       "};",
+      "Counter.styles = css`:host { display: block; }`;",
     ].join("\n");
 
     const result = transformLitsxSync(source, {
@@ -2512,7 +2529,7 @@ describe("@litsx/compiler", () => {
     });
 
     assert.ok(Array.isArray(result.metadata.litsxWarnings));
-    assert.ok(!result.metadata.litsxWarnings.some((warning) => warning.code === 91020));
+    assert.deepStrictEqual(result.metadata.litsxWarnings ?? [], []);
   }, 20000);
 
   it("runs outputPlugins after the native preset pipeline", () => {
@@ -2580,7 +2597,7 @@ describe("@litsx/compiler", () => {
     });
 
     const result = transformLitsxSync(source, {
-      filename: "/virtual/Counter.litsx",
+      filename: "/virtual/Counter.tsx",
       outputPlugins: [captureTypesPlugin],
     });
 
@@ -2643,7 +2660,7 @@ describe("@litsx/compiler", () => {
     });
 
     const result = transformLitsxSync(source, {
-      filename: "/virtual/Counter.litsx",
+      filename: "/virtual/Counter.tsx",
       outputPlugins: [captureGenericTypesPlugin],
     });
 
@@ -2693,7 +2710,7 @@ describe("@litsx/compiler", () => {
   it("can skip final template lowering while preserving native class lowering", () => {
     const source = [
       "export const Counter = ({ label }) => {",
-      "  return <button @click={save}>{label}</button>;",
+      "  return <button on:click={save}>{label}</button>;",
       "};",
     ].join("\n");
 
@@ -2710,7 +2727,7 @@ describe("@litsx/compiler", () => {
   it("preserves the raw Babel sourcemap when final template lowering is disabled", () => {
     const source = [
       "export const Counter = ({ label }) => {",
-      "  return <button @click={save}>{label}</button>;",
+      "  return <button on:click={save}>{label}</button>;",
       "};",
     ].join("\n");
 
@@ -2803,7 +2820,7 @@ describe("@litsx/compiler", () => {
       });
 
       assert.strictEqual(first.code, second.code);
-      assert.equal(typeof session.getTypecheckSession, "function");
+      assert.equal(session.typescriptSession.kind, "standalone");
 
       session.invalidate(["/virtual/Counter.jsx"]);
 
@@ -2844,9 +2861,9 @@ describe("@litsx/compiler", () => {
     const session = createLitsxCompilationSession();
     const invalidateSpy = vi.spyOn(session.typescriptSession, "invalidate");
 
-    session.sourceFeaturesCache.set("/virtual/demo.litsx:src", {});
-    session.authoredInputCache.set("/virtual/demo.litsx:src", {});
-    session.invalidate(["/virtual/demo.litsx"]);
+    session.sourceFeaturesCache.set("/virtual/demo.tsx:src", {});
+    session.authoredInputCache.set("/virtual/demo.tsx:src", {});
+    session.invalidate(["/virtual/demo.tsx"]);
 
     assert.strictEqual(session.sourceFeaturesCache.size, 0);
     assert.strictEqual(session.authoredInputCache.size, 0);

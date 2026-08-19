@@ -6,11 +6,11 @@ import type {
   LitsxElementProps,
   LitsxErrorBoundaryElementProps,
   LitsxEventDeclaration,
+  LitsxExplicitCustomEventAttributes,
   LitsxIntrinsicElements,
   LitsxJsxNode,
   LitsxRenderable,
   LitsxRef,
-  LitsxStandardCustomEventAttributes,
   LitsxTypedCustomEventAttributes,
   LitsxSuspenseBoundaryElementProps,
   SuspenseBoundary,
@@ -71,7 +71,7 @@ export namespace JSX {
     LitsxBaseAttributes &
     LitsxDomAttributes<EventTarget> &
     (keyof TEvents extends never
-      ? LitsxStandardCustomEventAttributes<TProps>
+      ? LitsxExplicitCustomEventAttributes
       : LitsxTypedCustomEventAttributes<TEvents>);
 
   type LitsxNormalizeManagedProps<TProps> = 0 extends (1 & TProps) ? {} : TProps;

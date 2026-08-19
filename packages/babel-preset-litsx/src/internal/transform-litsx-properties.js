@@ -220,12 +220,7 @@ export function createTypeResolver(filename, source, options = {}) {
   const resolvedFilename =
     shouldUseInMemoryResolution || !filename
       ? VIRTUAL_SOURCE_FILENAME
-      : normalizeFilePath(filename).endsWith(".litsx") && !providedTypescriptSession
-        // TypeScript accepts .litsx as a resolved dependency through our host,
-        // but does not retain it as a standalone createProgram root. A sibling
-        // virtual TSX root preserves source spans and relative import semantics.
-        ? `${normalizeFilePath(filename)}.tsx`
-        : normalizeFilePath(filename);
+      : normalizeFilePath(filename);
   const normalizedFilename = normalizeFilePath(resolvedFilename);
   const compilerOptions = {
     target: ts.ScriptTarget.ESNext,

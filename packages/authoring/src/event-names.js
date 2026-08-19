@@ -4,7 +4,7 @@ const DOM_EVENT_NAMES = new Set([
   "abort",
   "animationcancel", "animationend", "animationiteration", "animationstart",
   "auxclick", "beforeinput", "beforematch", "beforetoggle", "canplay",
-  "canplaythrough", "cancel", "change", "click", "close", "command",
+  "canplaythrough", "cancel", "change", "click", "close", "command", "dblclick",
   "compositionend", "compositionstart", "compositionupdate",
   "contextlost", "contextmenu", "contextrestored", "dragend", "dragenter",
   "copy", "cuechange", "cut", "drag", "dragleave", "dragover", "dragstart",
@@ -35,11 +35,34 @@ export function isStandardJsxEventPropName(name) {
   return typeof name === "string" && /^on[A-Z]/.test(name);
 }
 
+export function isExplicitJsxEventAttributeName(name) {
+  return typeof name === "string" && name.startsWith("on:") && name.length > 3;
+}
+
+export function isDeclarativeEventName(name) {
+  return typeof name === "string" && /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/.test(name);
+}
+
+export function resolveExplicitJsxEventName(name) {
+  const eventName = isExplicitJsxEventAttributeName(name) ? name.slice(3) : null;
+  return isDeclarativeEventName(eventName) ? eventName : null;
+}
+
+export function toExplicitJsxEventAttributeName(eventName) {
+  return isDeclarativeEventName(eventName)
+    ? `on:${eventName}`
+    : null;
+}
+
 export function isStandardDomEventPropName(rawName) {
   if (!isStandardJsxEventPropName(rawName)) return false;
   const eventName = rawName.slice(2).replace(/Capture$/, "");
   const domName = eventName.replace(/[A-Z]/g, (match) => match.toLowerCase());
   return DOM_EVENT_NAMES.has(domName) || DOM_EVENT_ALIASES.has(domName);
+}
+
+export function isNativeDomEventHandlerPropertyName(name) {
+  return typeof name === "string" && /^on[a-z]/.test(name) && DOM_EVENT_NAMES.has(name.slice(2));
 }
 
 export function toKebabEventName(name) {

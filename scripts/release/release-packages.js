@@ -4,10 +4,8 @@ export const npmReleasePackages = [
   "packages/compiler",
   "packages/storybook",
   "packages/vite-plugin",
-  "packages/typescript",
   "packages/eslint-plugin-litsx",
   "packages/create-litsx-app",
-  "packages/prettier-plugin-litsx",
   "packages/scoped-registry-shim",
   "packages/ssr",
   "packages/authoring",
@@ -21,6 +19,4 @@ export const npmReleasePackages = [
   "packages/typescript-session",
 ];
 
-export const excludedPrivatePackages = [
-  "packages/shiki-languages",
-];
+export const excludedPrivatePackages = [];
