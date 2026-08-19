@@ -6,6 +6,7 @@
 "@litsx/babel-preset-react-compat": minor
 "@litsx/compiler": minor
 "@litsx/core": minor
+"@litsx/scoped-registry-shim": minor
 "@litsx/storybook": minor
 "@litsx/vite-plugin": minor
 "create-litsx-app": minor
@@ -26,3 +27,5 @@ Preserve object-rest component props as one reactive forwarding bag instead of e
 Lower native JSX refs directly to Lit's `ref()` directive and adopt Lit's `.value`/`undefined` contract throughout the core runtime, component forwarding, imperative handles, spreads, SSR, and hydration. React compatibility now creates `.current`/`null` facades over Lit refs and adapts callback and external refs at compiled React boundaries, preserving React-authored consumers without leaking React ref semantics into native LitSX.
 
 Align native JSX types, examples, fixtures, and package documentation with the same contract. Native intrinsic elements no longer advertise React-only `className`, `htmlFor`, `onClick`, or `key` props; use `class`, `for`, `on:event`, and Lit's `repeat()`/`keyed()` directives instead. React-authored source retains those forms through react-compat.
+
+Make light DOM the default for react-compat migrations and restore contextual scoped-element registries for light hosts. Activate the registry shim only when a component needs scoped elements, preserve initialization across nested light/shadow trees, projected renderers, asynchronous definitions, reconnects, and native/global custom-element coexistence, and retain `domMode: "shadow"` as an explicit opt-in.
