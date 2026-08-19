@@ -470,8 +470,11 @@ function processHookCall(callPath, state) {
       const depsResult = parseDependencies(args[1]);
       if (!depsResult.ok) return false;
 
-      const parent = callPath.parentPath;
-      if (!parent.isExpressionStatement()) return false;
+      let expressionPath = callPath;
+      while (expressionPath.parentPath?.isSequenceExpression()) {
+        expressionPath = expressionPath.parentPath;
+      }
+      if (!expressionPath.parentPath?.isExpressionStatement()) return false;
 
       state.runtimeNeeded = true;
       if (hookType === "useLayoutEffect") {
@@ -487,7 +490,7 @@ function processHookCall(callPath, state) {
         depsResult.deps
       );
 
-      parent.replaceWith(t.expressionStatement(runtimeCall));
+      callPath.replaceWith(runtimeCall);
       if (callee.isIdentifier()) {
         state.hookLocals.add(callee.node.name);
       }

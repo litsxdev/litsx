@@ -418,6 +418,136 @@ describe("@litsx/babel-preset-react-compat", () => {
     );
   });
 
+  it("normalizes static React.createElement calls before component lowering", () => {
+    const code = run(`
+      import React from "react";
+      const a = ({ label, disabled, rest }) => React.createElement(
+        "button",
+        { ...rest, className: "action", disabled, onClick: save },
+        label,
+      );
+      export { a as ActionButton };
+    `);
+
+    assert.match(code, /export const ActionButton/);
+    assert.match(code, /jsxSpreadElement\("button"/);
+    assert.match(code, /class: "action"/);
+    assert.match(code, /"\?disabled": disabled/);
+    assert.match(code, /"@click": save/);
+  });
+
+  it("recovers component hosts for hooks inside createElement-authored components", () => {
+    const code = run(`
+      import React, { useState } from "react";
+      const a = () => {
+        const [count, setCount] = useState(0);
+        return React.createElement(
+          "button",
+          { onClick: () => setCount(count + 1) },
+          count,
+        );
+      };
+      export { a as Counter };
+    `);
+
+    assert.match(code, /export class Counter extends LitElement/);
+    assert.match(code, /useState\(this, 0\)/);
+    assert.match(code, /return html`<button @click=/);
+  });
+
+  it("recovers namespace hooks in bundled internal createElement components", () => {
+    const code = run(`
+      import * as React from "react";
+      var names = ["theme"], Internal = ({ children }) => {
+        const [theme] = React.useState("light");
+        (React.useEffect(() => document.body.dataset.theme = theme, [theme]),
+          React.useEffect(() => document.body.dataset.ready = "true", []));
+        return React.createElement("section", { className: theme }, children);
+      };
+      export const ThemeProvider = (props) => React.createElement(Internal, props);
+    `);
+
+    assert.match(code, /class Internal extends LitElement/);
+    assert.match(code, /useState\(this, "light"\)/);
+    assert.match(code, /useAfterUpdate\(this,/);
+    assert.match(code, /prepareEffects\(this\);/);
+    assert.doesNotMatch(code, /React\.use(?:State|Effect)/);
+  });
+
+  it("normalizes jsx-runtime calls, fragments, keys, and nested children", () => {
+    const code = run(`
+      import * as r from "react/jsx-runtime";
+      export function ItemList({ items }) {
+        return r.jsxs(r.Fragment, {
+          children: [
+            r.jsx("h2", { children: "Items" }),
+            r.jsx("ul", {
+              children: items.map((item) => r.jsx("li", { children: item.label }, item.id)),
+            }),
+          ],
+        });
+      }
+    `);
+
+    assert.match(code, /html`<h2>Items<\/h2><ul>/);
+    assert.match(code, /repeat\(this\.items/);
+    assert.doesNotMatch(code, /react\/jsx-runtime/);
+  });
+
+  it("normalizes named jsxDEV calls with referenced props", () => {
+    const code = run(`
+      import { jsxDEV as renderDevElement } from "react/jsx-dev-runtime";
+      export const Preview = (props) => renderDevElement(
+        "article",
+        props,
+        "preview",
+        false,
+        { fileName: "preview.js", lineNumber: 2 },
+        this,
+      );
+    `);
+
+    assert.match(code, /jsxSpreadElement\("article", \[props\],/);
+    assert.match(code, /keyed\("preview",/);
+    assert.doesNotMatch(code, /react\/jsx-dev-runtime|renderDevElement/);
+  });
+
+  it("rejects dynamic createElement types, cloneElement, and portals", () => {
+    assert.throws(
+      () => run(`
+        import React from "react";
+        export function Dynamic({ kind }) {
+          return React.createElement(kind ? "a" : "button", null);
+        }
+      `),
+      /dynamic element type/,
+    );
+
+    assert.throws(
+      () => run(`
+        import { cloneElement } from "react";
+        export function Clone({ child }) { return cloneElement(child, { active: true }); }
+      `),
+      /React\.cloneElement cannot be transformed safely/,
+    );
+
+    assert.throws(
+      () => run(`
+        import { createPortal } from "react-dom";
+        export function Portal({ child, target }) { return createPortal(child, target); }
+      `),
+      /createPortal has no automatic LitSX template equivalent/,
+    );
+
+    assert.throws(
+      () => run(`
+        import * as ReactDOM from "react-dom";
+        export function Portal({ child, target }) { return ReactDOM.createPortal(child, target); }
+      `),
+      /createPortal has no automatic LitSX template equivalent/,
+    );
+  });
+
   it("preserves React event alias behavior for focus, blur, and double click", () => {
     const source = `
       export const AliasedEvents = ({ onFocus, onBlur, onDoubleClick }) => {

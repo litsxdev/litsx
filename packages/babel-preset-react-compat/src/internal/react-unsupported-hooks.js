@@ -2,6 +2,24 @@ import helperPluginUtils from "@babel/helper-plugin-utils";
 
 const { declare } = helperPluginUtils;
 
+const SUPPORTED_REACT_HOOKS = new Set([
+  "useState",
+  "useRef",
+  "useContext",
+  "useEffect",
+  "useLayoutEffect",
+  "useMemo",
+  "useCallback",
+  "useReducer",
+  "useId",
+  "useImperativeHandle",
+  "useSyncExternalStore",
+  "useOptimistic",
+  "useTransition",
+  "useDeferredValue",
+  "startTransition",
+]);
+
 function getImportedName(specifier) {
   if (specifier.type === "ImportDefaultSpecifier") return "default";
   if (specifier.type === "ImportNamespaceSpecifier") return "*";
@@ -16,6 +34,11 @@ function isReactHookName(name) {
 }
 
 function throwUnsupported(path, name, source) {
+  if (SUPPORTED_REACT_HOOKS.has(name)) {
+    throw path.buildCodeFrameError(
+      `Cannot transform React hook "${name}" from "${source}" because its enclosing function was not recognized as a LitSX component or custom hook, so no host could be assigned. The dependency transformation stopped at this compiled component boundary.`
+    );
+  }
   throw path.buildCodeFrameError(
     `Cannot transform React hook "${name}" from "${source}" because react-compat has no LitSX equivalent. The dependency transformation stopped at this hook boundary.`
   );

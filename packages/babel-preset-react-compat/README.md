@@ -11,18 +11,19 @@ Canonical Babel preset for migrating React-authored source onto the LitSX runtim
 
 This preset wires the supported React compatibility pipeline in a fixed order:
 
-1. React attribute aliases such as `className`
-2. React context lowering (`createContext`, `Provider`, `Consumer`, `useContext`)
-3. LitSX component lowering
-4. React `key` lowering onto Lit's `repeat` and `keyed` directives
-5. React hooks, `useState`, and `useRef`
-6. React lazy and React suspense lowering
-7. Native LitSX suspense lowering
-8. React-style error boundaries
-9. React `propTypes` compat lowering to native static properties
-10. scoped elements
-11. React DOM/form attribute compatibility
-12. React event lowering
+1. Compiled React element runtimes (`createElement`, `jsx`, `jsxs`, and `jsxDEV`)
+2. React attribute aliases such as `className`
+3. React context lowering (`createContext`, `Provider`, `Consumer`, `useContext`)
+4. LitSX component lowering
+5. React `key` lowering onto Lit's `repeat` and `keyed` directives
+6. React hooks, `useState`, and `useRef`
+7. React lazy and React suspense lowering
+8. Native LitSX suspense lowering
+9. React-style error boundaries
+10. React `propTypes` compat lowering to native static properties
+11. scoped elements
+12. React DOM/form attribute compatibility
+13. React event lowering
 
 That ordering makes compatibility for React 19-style `ref` props, `forwardRef(...)`, and wrappers such as `memo(...)` part of one explicit migration contract instead of accidental composition.
 
@@ -60,6 +61,18 @@ LitSX host, supported React hooks are lowered, and compiled hooks are marked wit
 hook or a non-allowlisted external hook dependency. With Vite, prefer the official
 `reactCompat.transformDependencies` option because it also configures dependency optimization and
 SSR externalization correctly.
+
+Allowlisted dependencies may already contain output from React's classic or automatic JSX
+runtime. The preset reconstructs JSX from static `React.createElement`, imported `createElement`,
+and `jsx`/`jsxs`/`jsxDEV` calls before running the ordinary compatibility pipeline. Named HTML
+tags, named components, member-expression components, fragments, props objects and spreads,
+children, `key`, and `ref` are supported. Minified public component exports are recovered from
+aliases, and comma-separated effect calls remain transformable.
+
+This is deliberately a static compilation boundary, not a React element-runtime emulator. Dynamic
+element types, `cloneElement`, portals, computed prop definitions, and keyed or attributed
+fragments stop with a diagnostic instead of producing output whose identity or lifecycle would be
+incorrect.
 
 ## Wrapper Semantics
 

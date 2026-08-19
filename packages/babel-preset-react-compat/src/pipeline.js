@@ -22,6 +22,7 @@ import reactContext from "./internal/react-context.js";
 import reactKeys from "./internal/react-keys.js";
 import reactUnsupportedHooks from "./internal/react-unsupported-hooks.js";
 import reactHookExportAliases from "./internal/react-hook-export-aliases.js";
+import reactElementRuntime from "./internal/react-element-runtime.js";
 
 export function normalizeReactCompatOptions(options = {}) {
   const domMode = options.domMode === "light" ? "light" : "shadow";
@@ -45,6 +46,7 @@ export function createReactCompatPresetPlugins(options = {}) {
   const plugins = [
     transformTypescriptNamespaceCollisions,
     reactHookExportAliases,
+    reactElementRuntime,
     [reactAttributes, options.reactAttributes || {}],
     [reactWrappers, options.reactWrappers || {}],
     [reactContext, options.reactContext || {}],
@@ -74,7 +76,7 @@ export function createReactCompatPresetPlugins(options = {}) {
       transformLitsxHooks,
       {
         ...normalizedOptions.transformLitsx,
-        ignoredCustomHookSources: ["react", "@litsx/core/context"],
+        ignoredCustomHookSources: ["react", "@litsx/core", "@litsx/core/context"],
         runtimeCustomHookSources: ["react"],
         runtimeCustomHookNames: ["startTransition"],
         ...(options.transformLitsxHooks || {}),
