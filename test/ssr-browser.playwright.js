@@ -1069,7 +1069,7 @@ export function defineSsrComponents() {
 `;
 }
 
-test("hydrates a real browser page rendered by @litsx/ssr", async ({
+test("hydrates a real browser page when component modules load before the hydration runtime", async ({
   browser,
   page,
 }) => {
@@ -1080,25 +1080,40 @@ test("hydrates a real browser page rendered by @litsx/ssr", async ({
   await fs.mkdir(srcDir, { recursive: true });
 
   const clientComponentsPath = path.join(srcDir, "components.client.tsx");
+  const clientPreloadPath = path.join(srcDir, "preload.js");
   const clientEntryPath = path.join(srcDir, "main.js");
   const componentsSource = createComponentsSource();
   await fs.writeFile(clientComponentsPath, componentsSource);
+  await fs.writeFile(
+    clientPreloadPath,
+    `
+import "./components.client.tsx";
+`,
+  );
   await fs.writeFile(
     clientEntryPath,
     `
 // The SSR bootstrap imports this entry through hydratePage({ register }).
 // Entries register custom elements; they must not hydrate the document again.
-if (new URL(window.location.href).searchParams.has("scoped-polyfill")) {
-  await import("@webcomponents/scoped-custom-element-registry");
-}
-const { defineSsrComponents } = await import("./components.client.tsx");
-defineSsrComponents();
+const components = await import("./components.client.tsx");
+const { registerHydrationModules } = await import("@litsx/ssr/hydration");
+await registerHydrationModules([components]);
 `,
   );
   const server = await createSsrDevServer({
     root: tempDir,
     vite: isolatedViteOptions(tempDir),
     clientEntry: "./src/main.js",
+    bootstrap: {
+      content: `
+if (new URL(window.location.href).searchParams.has("scoped-polyfill")) {
+  await import("@webcomponents/scoped-custom-element-registry");
+}
+await import("/src/preload.js");
+const { hydratePage } = await import("@litsx/ssr/hydration");
+await hydratePage({ register: () => import("/src/main.js") });
+`,
+    },
     logLevel: "silent",
     host: "127.0.0.1",
     strictPort: false,
@@ -1126,11 +1141,22 @@ defineSsrComponents();
     page.on("pageerror", (error) => pageErrors.push(error.stack || error.message));
     await page.addInitScript(() => {
       const captureSsrNode = () => {
-        const node = document
-          .querySelector("ssr-app-root")
-          ?.shadowRoot?.querySelector("#app-root");
+        const root = document.querySelector("ssr-app-root");
+        const node = root?.shadowRoot?.querySelector("#app-root");
         if (node && !window.__litsxInitialSsrAppRoot) {
           window.__litsxInitialSsrAppRoot = node;
+        }
+        const findLeafButton = (searchRoot) => {
+          for (const element of searchRoot?.querySelectorAll?.("*") ?? []) {
+            if (element.id === "leaf-button") return element;
+            const nested = element.shadowRoot && findLeafButton(element.shadowRoot);
+            if (nested) return nested;
+          }
+          return null;
+        };
+        const button = findLeafButton(root?.shadowRoot);
+        if (button && !window.__litsxInitialSsrLeafButton) {
+          window.__litsxInitialSsrLeafButton = button;
         }
       };
       new MutationObserver(captureSsrNode).observe(document, {
@@ -1151,12 +1177,24 @@ defineSsrComponents();
         preservedSsrNode:
           root?.shadowRoot?.querySelector("#app-root") ===
           window.__litsxInitialSsrAppRoot,
+        preservedSsrLeafButton: (() => {
+          const visit = (searchRoot) => {
+            for (const element of searchRoot?.querySelectorAll?.("*") ?? []) {
+              if (element.id === "leaf-button") return element;
+              const nested = element.shadowRoot && visit(element.shadowRoot);
+              if (nested) return nested;
+            }
+            return null;
+          };
+          return visit(root?.shadowRoot) === window.__litsxInitialSsrLeafButton;
+        })(),
       };
     }, LITSX_HYDRATION_PAYLOAD_PROPERTY);
     expect(consoleErrors).toEqual([]);
     expect(pageErrors).toEqual([]);
     expect(browserResult.hasDeclarativeShadowDom).toBe(true);
     expect(browserResult.preservedSsrNode).toBe(true);
+    expect(browserResult.preservedSsrLeafButton).toBe(true);
     expect(browserResult.rootText).toContain("Real Browser");
     expect(browserResult.rootPayload).toEqual({
       props: {

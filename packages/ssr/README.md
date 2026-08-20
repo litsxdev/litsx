@@ -688,7 +688,13 @@ The SSR/hydration invariants for that contract are:
 Importing `@litsx/ssr/hydration` is also the supported client bootstrap entry:
 it installs `@lit-labs/ssr-client/lit-element-hydrate-support.js` as its first
 top-level side effect, before pulling `@litsx/core`, so framework consumers do
-not need to import Lit's hydration patch manually.
+not need to import Lit's hydration patch manually. If a library has already
+evaluated the shared `LitElement` module before the hydration entrypoint loads,
+the public `registerHydrationModule(s)` helpers apply the same official
+hydration hook explicitly to that existing constructor before defining its
+elements. Eager component imports therefore do not turn the first update into
+a destructive client render. Applications must still deduplicate Lit so the
+components and the hydration runtime share one `LitElement` constructor.
 
 ### Library resource snapshots
 

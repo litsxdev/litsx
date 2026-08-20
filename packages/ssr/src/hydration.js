@@ -7,6 +7,52 @@ import {
 } from "@litsx/core/elements";
 import { withLitsxHydration } from "./hydration-state.js";
 
+const LIT_ELEMENT_HYDRATION_SUPPORT = Symbol.for(
+  "@litsx/ssr/lit-element-hydration-support",
+);
+
+function findLitElementConstructor(ctor) {
+  let current = ctor;
+  while (typeof current === "function" && current.prototype) {
+    const prototype = current.prototype;
+    const reactivePrototype = Object.getPrototypeOf(prototype);
+    if (
+      Object.hasOwn(prototype, "createRenderRoot") &&
+      Object.hasOwn(prototype, "update") &&
+      Object.hasOwn(prototype, "render") &&
+      typeof reactivePrototype?.performUpdate === "function"
+    ) {
+      return current;
+    }
+    current = Object.getPrototypeOf(current);
+  }
+  return null;
+}
+
+function ensureHydratableElementSupport(ctor) {
+  const LitElement = findLitElementConstructor(ctor);
+  if (!LitElement || LitElement[LIT_ELEMENT_HYDRATION_SUPPORT] === true) {
+    return;
+  }
+
+  const support = globalThis.litElementHydrateSupport;
+  // The official hook installs an own observedAttributes descriptor on
+  // LitElement. Inspect the descriptor itself: invoking a getter that was
+  // already wrapped would make a second installation observable as an error.
+  const alreadyInstalled = Object.hasOwn(LitElement, "observedAttributes");
+  if (
+    typeof support === "function" &&
+    !alreadyInstalled
+  ) {
+    support({ LitElement });
+  }
+  if (typeof support === "function") {
+    Object.defineProperty(LitElement, LIT_ELEMENT_HYDRATION_SUPPORT, {
+      value: true,
+      configurable: true,
+    });
+  }
+}
 
 const SSR_RESOURCE_SNAPSHOT_BRIDGE = Symbol.for(
   "litsx.ssr.resourceSnapshotBridge",
@@ -211,6 +257,8 @@ function registerHydratableElement(ctor) {
 
   const tagName = ctor[LITSX_HYDRATABLE_TAG];
   const registry = getCustomElementRegistry();
+
+  ensureHydratableElementSupport(ctor);
 
   if (!registry) {
     throw new Error(
