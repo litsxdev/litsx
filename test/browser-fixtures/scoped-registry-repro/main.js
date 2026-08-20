@@ -393,6 +393,8 @@ window.__repro = {
       outerCtor: outer.constructor.name,
       shadowCtor: shadow?.constructor?.name ?? null,
       shadowHasRoot: Boolean(shadow?.shadowRoot),
+      shadowRegistryKind:
+        typeof shadow?.registry?._getDefinition === "function" ? "shim" : "platform",
       innerCtor: inner?.constructor?.name ?? null,
       innerUsesLightDom: inner?.shadowRoot === null,
       innerRegistryLeaf: inner?.registry?.get?.(leafTag)?.name ?? null,

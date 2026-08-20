@@ -998,7 +998,7 @@ describe("litsx elements runtime", () => {
     }
   });
 
-  it("falls back to LitSX shadow registries when scoped registry support is polyfilled", () => {
+  it("delegates shadow registries to a polyfilled platform provider", () => {
     const shadowHostTag = nextTag("litsx-runtime-polyfilled-shadow-host");
     const originalCustomElementRegistry = globalThis.CustomElementRegistry;
     const originalAttachShadow = Element.prototype.attachShadow;
@@ -1049,7 +1049,7 @@ describe("litsx elements runtime", () => {
       const shadowHost = document.createElement(shadowHostTag);
       const root = shadowHost.createRenderRoot();
 
-      assert.notStrictEqual(shadowHost.registry.constructor, PolyfilledRegistry);
+      assert.strictEqual(shadowHost.registry.constructor, PolyfilledRegistry);
       assert.strictEqual(root.registry, shadowHost.registry);
       assert.strictEqual(shadowHost.registry.get("polyfilled-shadow-child"), ShadowChild);
     } finally {
@@ -1058,7 +1058,7 @@ describe("litsx elements runtime", () => {
     }
   });
 
-  it("replaces a polyfilled registry already assigned to a host before scoped registration", () => {
+  it("preserves a polyfilled registry already assigned to a host", () => {
     const shadowHostTag = nextTag("litsx-runtime-polyfilled-existing-registry-host");
     const childTag = nextTag("litsx-runtime-polyfilled-existing-registry-child");
     const originalCustomElementRegistry = globalThis.CustomElementRegistry;
@@ -1069,12 +1069,12 @@ describe("litsx elements runtime", () => {
         this.definitions = new Map();
       }
 
-      define() {
-        throw new Error("LitSX must not register generated children through the polyfill");
+      define(tagName, elementClass) {
+        this.definitions.set(tagName, elementClass);
       }
 
-      get() {
-        return null;
+      get(tagName) {
+        return this.definitions.get(tagName);
       }
 
       _getDefinition() {
@@ -1116,7 +1116,7 @@ describe("litsx elements runtime", () => {
       const shadowHost = document.createElement(shadowHostTag);
       const root = shadowHost.createRenderRoot();
 
-      assert.notStrictEqual(shadowHost.registry.constructor, PolyfilledRegistry);
+      assert.strictEqual(shadowHost.registry.constructor, PolyfilledRegistry);
       assert.strictEqual(shadowHost.registry.get(childTag), ScopedChild);
       assert.strictEqual(root.registry, shadowHost.registry);
       assert.strictEqual(customElements.get(childTag), undefined);
@@ -1126,7 +1126,7 @@ describe("litsx elements runtime", () => {
     }
   });
 
-  it("falls back to LitSX shadow registries when the platform exposes registry aliases but does not upgrade with them", () => {
+  it("trusts the scoped-registry provider instead of probing its implementation", () => {
     const shadowHostTag = nextTag("litsx-runtime-alias-only-shadow-host");
     const originalCustomElementRegistry = globalThis.CustomElementRegistry;
     const originalAttachShadow = Element.prototype.attachShadow;
@@ -1196,8 +1196,7 @@ describe("litsx elements runtime", () => {
       const shadowHost = document.createElement(shadowHostTag);
       const root = shadowHost.createRenderRoot();
 
-      assert.notStrictEqual(shadowHost.registry.constructor, AliasOnlyRegistry);
-      assert.strictEqual(typeof shadowHost.registry?._getDefinition, "function");
+      assert.strictEqual(shadowHost.registry.constructor, AliasOnlyRegistry);
       assert.strictEqual(root.registry, shadowHost.registry);
       assert.strictEqual(shadowHost.registry.get("alias-only-shadow-child"), ShadowChild);
     } finally {

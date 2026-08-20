@@ -43,11 +43,8 @@ function getRuntime() {
   }
 
   const polyfillWindow = window;
-  if (!polyfillWindow.CustomElementRegistryPolyfill?.formAssociated) {
-    polyfillWindow.CustomElementRegistryPolyfill = {
-      formAssociated: new Set(),
-    };
-  }
+  const formAssociatedTags =
+    polyfillWindow.CustomElementRegistryPolyfill?.formAssociated ?? new Set();
 
   const NativeHTMLElement = window.HTMLElement;
   const nativeRegistry = window.customElements;
@@ -123,10 +120,10 @@ function getRuntime() {
       const formAssociated =
         standInClass?.formAssociated ??
         (elementClass.formAssociated ||
-          polyfillWindow.CustomElementRegistryPolyfill.formAssociated.has(tagName));
+          formAssociatedTags.has(tagName));
 
       if (formAssociated) {
-        polyfillWindow.CustomElementRegistryPolyfill.formAssociated.add(tagName);
+        formAssociatedTags.add(tagName);
       }
 
       if (formAssociated !== elementClass.formAssociated) {
@@ -257,6 +254,9 @@ function getRuntime() {
     if (isRegistryLike(scope.customElements)) {
       return scope.customElements;
     }
+    if (isRegistryLike(scope.customElementRegistry)) {
+      return scope.customElementRegistry;
+    }
     if (scope.nodeType === Node.ELEMENT_NODE && isRegistryLike(scope[HOST_REGISTRY])) {
       return scope[HOST_REGISTRY];
     }
@@ -280,9 +280,11 @@ function getRuntime() {
         continue;
       }
 
-      if (current instanceof ShadowRoot && current.host) {
-        current = current.host;
-        continue;
+      if (current instanceof ShadowRoot) {
+        // Shadow roots own their custom-element scope. If the root does not
+        // expose a LitSX registry, a native or third-party scoped-registry
+        // implementation owns element creation below this boundary.
+        return null;
       }
 
       break;
@@ -433,7 +435,7 @@ function getRuntime() {
   function createStandInElement(tagName) {
     return class ScopedCustomElementBase {
       static get formAssociated() {
-        return polyfillWindow.CustomElementRegistryPolyfill.formAssociated.has(tagName);
+        return formAssociatedTags.has(tagName);
       }
 
       constructor() {
@@ -796,24 +798,6 @@ function getRuntime() {
   };
 
   globalRegistry = new ShimmedCustomElementsRegistry();
-  if (nativeRegistry.h && typeof nativeRegistry.h.get === "function") {
-    globalRegistry.h = {
-      get(tagName) {
-        return globalRegistry._getDefinition(tagName) ?? nativeRegistry.h.get(tagName);
-      },
-      set(tagName, definition) {
-        globalRegistry._definitionsByTag.set(tagName, definition);
-        return this;
-      },
-      has(tagName) {
-        return globalRegistry._definitionsByTag.has(tagName) || nativeRegistry.h.has?.(tagName);
-      },
-      delete(tagName) {
-        return globalRegistry._definitionsByTag.delete(tagName);
-      },
-    };
-    globalRegistry.i = new Map();
-  }
   globalRegistry.get = function get(tagName) {
     const definition = this._getDefinition(tagName);
     if (definition) {
@@ -826,11 +810,17 @@ function getRuntime() {
     return nativeRegistry.upgrade?.(root);
   };
 
-  Object.defineProperty(window, "customElements", {
-    value: globalRegistry,
-    configurable: true,
-    writable: true,
-  });
+  // Keep the provider's registry object and internal state intact. Public
+  // global definitions that collide with a LitSX stand-in are routed through
+  // the document-level contextual registry, while ordinary definitions still
+  // go directly to the provider.
+  nativeRegistry.get = function get(tagName) {
+    return globalRegistry.get(tagName);
+  };
+  nativeRegistry.define = function define(tagName, elementClass, _options) {
+    const normalizedTagName = String(tagName).toLowerCase();
+    globalRegistry.define(normalizedTagName, elementClass);
+  };
 
   window[RUNTIME_KEY] = runtime;
   return runtime;

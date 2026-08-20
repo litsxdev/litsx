@@ -42,6 +42,7 @@
     "@rollup/plugin-node-resolve": "^16.0.3",
     "@rollup/plugin-terser": "^1.0.0",
     "@vitest/coverage-v8": "^4.1.10",
+    "@webcomponents/scoped-custom-element-registry": "^0.0.10",
     "diff": "^9.0.0",
     "eslint": "^9.39.5",
     "happy-dom": "^20.10.6",

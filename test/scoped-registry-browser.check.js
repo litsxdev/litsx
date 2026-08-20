@@ -91,12 +91,12 @@ describe("scoped registry browser fixture", () => {
     serverHandle?.stop();
   });
 
-  async function runProbe(name, argument) {
+  async function runProbe(name, argument, pathname = "") {
     const page = await browser.newPage();
     const errors = [];
     page.on("pageerror", (error) => errors.push(error.message));
     try {
-      await page.goto(baseUrl, { waitUntil: "networkidle" });
+      await page.goto(new URL(pathname, baseUrl).href, { waitUntil: "networkidle" });
       const result = await page.evaluate(
         async ({ probeName, probeArgument }) =>
           window.__repro[probeName](probeArgument),
@@ -166,6 +166,31 @@ describe("scoped registry browser fixture", () => {
       outerCtor: "OuterLight",
       shadowCtor: "MiddleShadow",
       shadowHasRoot: true,
+      shadowRegistryKind: "platform",
+      innerCtor: "InnerLight",
+      innerUsesLightDom: true,
+      innerRegistryLeaf: "MixedLeaf",
+      innerRegistryKind: "shim",
+      leafRoot: "ShadowRoot",
+      leafCtor: "MixedLeaf",
+      leafInitialized: "leaf-ready",
+      leafHtml: "leaf-ready",
+      composedEventDetail: "leaf-ready",
+    });
+  }, 30000);
+
+  it("delegates shadow scoping when the Web Components polyfill loads first", async () => {
+    const result = await runProbe(
+      "probeLightShadowInteroperability",
+      undefined,
+      "polyfill.html",
+    );
+
+    assert.deepStrictEqual(result, {
+      outerCtor: "OuterLight",
+      shadowCtor: "MiddleShadow",
+      shadowHasRoot: true,
+      shadowRegistryKind: "platform",
       innerCtor: "InnerLight",
       innerUsesLightDom: true,
       innerRegistryLeaf: "MixedLeaf",

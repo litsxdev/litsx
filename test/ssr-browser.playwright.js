@@ -1070,6 +1070,7 @@ export function defineSsrComponents() {
 }
 
 test("hydrates a real browser page rendered by @litsx/ssr", async ({
+  browser,
   page,
 }) => {
   const tempRoot = path.join(repoRoot, "test-results");
@@ -1085,10 +1086,12 @@ test("hydrates a real browser page rendered by @litsx/ssr", async ({
   await fs.writeFile(
     clientEntryPath,
     `
-import { defineSsrComponents } from "./components.client.tsx";
-
 // The SSR bootstrap imports this entry through hydratePage({ register }).
 // Entries register custom elements; they must not hydrate the document again.
+if (new URL(window.location.href).searchParams.has("scoped-polyfill")) {
+  await import("@webcomponents/scoped-custom-element-registry");
+}
+const { defineSsrComponents } = await import("./components.client.tsx");
 defineSsrComponents();
 `,
   );
@@ -1114,10 +1117,26 @@ defineSsrComponents();
   try {
     const url = server.resolvedUrls.local[0];
     const consoleErrors = [];
+    const pageErrors = [];
     page.on("console", (message) => {
       if (message.type() === "error") {
         consoleErrors.push(message.text());
       }
+    });
+    page.on("pageerror", (error) => pageErrors.push(error.stack || error.message));
+    await page.addInitScript(() => {
+      const captureSsrNode = () => {
+        const node = document
+          .querySelector("ssr-app-root")
+          ?.shadowRoot?.querySelector("#app-root");
+        if (node && !window.__litsxInitialSsrAppRoot) {
+          window.__litsxInitialSsrAppRoot = node;
+        }
+      };
+      new MutationObserver(captureSsrNode).observe(document, {
+        childList: true,
+        subtree: true,
+      });
     });
     await page.goto(url);
     await page.waitForFunction(() => window.__litsxClientConnectCalls === 1);
@@ -1129,10 +1148,15 @@ defineSsrComponents();
         rootText:
           root?.shadowRoot?.querySelector("#app-root")?.textContent ?? "",
         hasDeclarativeShadowDom: Boolean(root?.shadowRoot),
+        preservedSsrNode:
+          root?.shadowRoot?.querySelector("#app-root") ===
+          window.__litsxInitialSsrAppRoot,
       };
     }, LITSX_HYDRATION_PAYLOAD_PROPERTY);
     expect(consoleErrors).toEqual([]);
+    expect(pageErrors).toEqual([]);
     expect(browserResult.hasDeclarativeShadowDom).toBe(true);
+    expect(browserResult.preservedSsrNode).toBe(true);
     expect(browserResult.rootText).toContain("Real Browser");
     expect(browserResult.rootPayload).toEqual({
       props: {
@@ -1188,6 +1212,81 @@ defineSsrComponents();
       buttonCount: 1,
       buttonText: "leaf:Real Browser:4",
     });
+
+    const polyfillContext = await browser.newContext();
+    const polyfillPage = await polyfillContext.newPage();
+    const polyfillErrors = [];
+    polyfillPage.on("console", (message) => {
+      if (message.type() === "error") {
+        polyfillErrors.push(message.text());
+      }
+    });
+    polyfillPage.on("pageerror", (error) =>
+      polyfillErrors.push(error.stack || error.message),
+    );
+    await polyfillPage.addInitScript(() => {
+      const captureSsrNode = () => {
+        const node = document
+          .querySelector("ssr-app-root")
+          ?.shadowRoot?.querySelector("#app-root");
+        if (node && !window.__litsxInitialSsrAppRoot) {
+          window.__litsxInitialSsrAppRoot = node;
+        }
+      };
+      new MutationObserver(captureSsrNode).observe(document, {
+        childList: true,
+        subtree: true,
+      });
+    });
+
+    try {
+      await polyfillPage.goto(`${url}?scoped-polyfill=1`);
+      try {
+        await polyfillPage.waitForFunction(
+          () => window.__litsxClientConnectCalls === 1,
+          undefined,
+          { timeout: 5000 },
+        );
+      } catch (error) {
+        throw new Error(
+          `Polyfilled hydration did not connect: ${JSON.stringify(polyfillErrors)}`,
+          { cause: error },
+        );
+      }
+      const polyfillResult = await polyfillPage.evaluate(() => {
+        const root = document.querySelector("ssr-app-root");
+        const lightLayers = [];
+        const collectLightLayers = (searchRoot) => {
+          for (const element of searchRoot.querySelectorAll("ssr-light-layer")) {
+            lightLayers.push(element);
+          }
+          for (const element of searchRoot.querySelectorAll("*")) {
+            if (element.shadowRoot) {
+              collectLightLayers(element.shadowRoot);
+            }
+          }
+        };
+        collectLightLayers(document);
+        return {
+          preservedSsrNode:
+            root?.shadowRoot?.querySelector("#app-root") ===
+            window.__litsxInitialSsrAppRoot,
+          lightLayerCount: lightLayers.length,
+          lightLayersInitialized: lightLayers.every(
+            (element) => element.constructor.name !== "HTMLElement",
+          ),
+        };
+      });
+
+      expect(polyfillErrors).toEqual([]);
+      expect(polyfillResult).toEqual({
+        preservedSsrNode: true,
+        lightLayerCount: 2,
+        lightLayersInitialized: true,
+      });
+    } finally {
+      await polyfillContext.close();
+    }
   } finally {
     await server.close();
   }
