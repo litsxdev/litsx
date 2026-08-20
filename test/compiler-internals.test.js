@@ -230,14 +230,18 @@ describe("compiler internals", () => {
     assert.deepStrictEqual(result.map.sourcesContent, [source]);
   });
 
-  it("uses session-level typecheck sessions when a compilation session is project-backed", async () => {
+  it("uses a project TypeScript session when a compilation session is project-backed", async () => {
     const projectSession = {
       invalidate: vi.fn(),
       clearOverlayFiles: vi.fn(),
     };
-    createLitsxTypecheckSession.mockImplementation((args, options = {}) => ({
-      projectSession: options.projectSession || projectSession,
-    }));
+    ensureTypescriptModule.mockReturnValueOnce({
+      readConfigFile: vi.fn(() => ({ config: {} })),
+      parseJsonConfigFileContent: vi.fn(() => ({ errors: [], fileNames: [], options: {} })),
+      flattenDiagnosticMessageText: vi.fn((value) => String(value)),
+      sys: { readFile: vi.fn() },
+    });
+    createProjectTsSession.mockReturnValueOnce(projectSession);
 
     const mod = await import("../packages/compiler/src/index.js");
     const session = mod.createLitsxCompilationSession({
@@ -245,8 +249,10 @@ describe("compiler internals", () => {
     });
 
     try {
-      const wrapped = session.getTypecheckSession(["--project", "/virtual/tsconfig.json"]);
-      assert.strictEqual(wrapped.projectSession, session.typescriptSession);
+      assert.strictEqual(session.typescriptSession, projectSession);
+      expect(createProjectTsSession).toHaveBeenCalledWith(expect.objectContaining({
+        sessionKey: "project:/virtual/tsconfig.json",
+      }));
     } finally {
       session.dispose();
     }

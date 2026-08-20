@@ -64,7 +64,7 @@ describe("@litsx/compiler", () => {
   it("lowers dynamic noscript content through the LitSX SSR primitive", () => {
     const result = transformLitsxSync(
       `export const view = (title) => <main><noscript><h2>{title}</h2></noscript></main>;`,
-      { filename: "/virtual/Noscript.litsx", ssr: true, sourceMaps: false },
+      { filename: "/virtual/Noscript.tsx", ssr: true, sourceMaps: false },
     );
 
     assert.match(result.code, /import \{ __litsxNoscript \} from "@litsx\/core"/);
@@ -77,7 +77,7 @@ describe("@litsx/compiler", () => {
         export function Host() { return <noscript><ProductCard /></noscript>; }
         export function ProductCard() { return <article />; }
       `,
-      { filename: "/virtual/Noscript.litsx", ssr: true, sourceMaps: false },
+      { filename: "/virtual/Noscript.tsx", ssr: true, sourceMaps: false },
     );
 
     assert.match(result.code, /__litsxNoscript\(\(\) => html`<product-card><\/product-card>`\, \{\s*"product-card": ProductCard\s*\}\)/);
@@ -86,22 +86,22 @@ describe("@litsx/compiler", () => {
 
   it("keeps noscript-only constructors out of client fallback output", () => {
     const source = `
-      import { ProductCard } from "./ProductCard.litsx";
+      import { ProductCard } from "./ProductCard.tsx";
       export const view = () => <noscript><ProductCard /></noscript>;
     `;
     const client = transformLitsxSync(source, {
-      filename: "/virtual/Noscript.litsx",
+      filename: "/virtual/Noscript.tsx",
       sourceMaps: false,
     });
     const server = transformLitsxSync(source, {
-      filename: "/virtual/Noscript.litsx",
+      filename: "/virtual/Noscript.tsx",
       ssr: true,
       sourceMaps: false,
     });
 
-    assert.match(client.code, /ProductCard\.litsx/);
+    assert.match(client.code, /ProductCard\.tsx/);
     assert.doesNotMatch(client.code, /"product-card": ProductCard/);
-    assert.match(server.code, /ProductCard\.litsx/);
+    assert.match(server.code, /ProductCard\.tsx/);
     assert.match(server.code, /"product-card": ProductCard/);
   });
 
@@ -109,7 +109,7 @@ describe("@litsx/compiler", () => {
     assert.throws(
       () => transformLitsxSync(
         `export const view = () => <noscript><Components.ProductCard /></noscript>;`,
-        { filename: "/virtual/Noscript.litsx", ssr: true, sourceMaps: false },
+        { filename: "/virtual/Noscript.tsx", ssr: true, sourceMaps: false },
       ),
       /<noscript> fallback content does not support member-expression components/,
     );
@@ -208,7 +208,7 @@ describe("@litsx/compiler", () => {
     assert.doesNotMatch(result.code, /type\s+[A-Za-z0-9_]+/);
   }, 20000);
 
-  it("lowers authored local story hosts with expression props as property bindings", () => {
+  it("infers authored local story host bindings from their prop API", () => {
     const source = [
       "const VdsDrawerStory = ({ defaultOpen = false, heading = '', description = '' }) => {",
       "  return <div>{heading}{description}{String(defaultOpen)}</div>;",
@@ -232,7 +232,7 @@ describe("@litsx/compiler", () => {
     });
 
     assert.match(result.code, /class VdsDrawerStory extends LitElement/);
-    assert.match(result.code, /html`<vds-drawer-story \.defaultOpen=\$\{args\.defaultOpen\} \.heading=\$\{args\.heading\} \.description=\$\{args\.description\} class="story-shell" data-testid="\$\{args\.testId\}"><\/vds-drawer-story>`/);
+    assert.match(result.code, /html`<vds-drawer-story \?defaultOpen=\$\{args\.defaultOpen\} heading="\$\{args\.heading\}" description="\$\{args\.description\}" class="story-shell" data-testid="\$\{args\.testId\}"><\/vds-drawer-story>`/);
     assert.doesNotMatch(result.code, /defaultOpen="\$\{args\.defaultOpen\}"/);
   }, 20000);
 
@@ -261,7 +261,7 @@ describe("@litsx/compiler", () => {
     ].join("\n");
 
     const result = transformLitsxSync(source, {
-      filename: "/virtual/NavLink.litsx",
+      filename: "/virtual/NavLink.tsx",
       jsxTemplate: false,
     });
 
@@ -338,7 +338,7 @@ describe("@litsx/compiler", () => {
     ].join("\n");
 
     const result = transformLitsxSync(source, {
-      filename: "/virtual/components/feature-card.litsx",
+      filename: "/virtual/components/feature-card.tsx",
       sourceMaps: false,
     });
 
@@ -348,23 +348,20 @@ describe("@litsx/compiler", () => {
     );
   }, 20000);
 
-  it("rejects object-valued style bindings in .litsx JSX", () => {
+  it("lowers inline object-valued style bindings through the inferred DOM property", () => {
     const source = [
       "export function ProductCard() {",
       "  return <div style={{ color: 'red' }}>card</div>;",
       "}",
     ].join("\n");
 
-    assert.throws(
-      () =>
-        transformLitsxSync(source, {
-          filename: "/virtual/ProductCard.litsx",
-        }),
-      /LitSX does not support object-valued `style` bindings in `.litsx`/,
-    );
+    const result = transformLitsxSync(source, {
+      filename: "/virtual/ProductCard.tsx",
+    });
+    assert.match(result.code, /<div \.style=\$\{\{[\s\S]*color: 'red'[\s\S]*\}\}>card<\/div>/);
   }, 20000);
 
-  it("rejects aliased object-valued style bindings in .litsx JSX", () => {
+  it("lowers aliased object-valued style bindings through the inferred DOM property", () => {
     const source = [
       "export function ProductCard() {",
       "  const styles = { color: 'red' };",
@@ -372,13 +369,10 @@ describe("@litsx/compiler", () => {
       "}",
     ].join("\n");
 
-    assert.throws(
-      () =>
-        transformLitsxSync(source, {
-          filename: "/virtual/ProductCard.litsx",
-        }),
-      /Use a serialized string style value, or use `useStyle\(\.\.\.\)` for dynamic host style properties/,
-    );
+    const result = transformLitsxSync(source, {
+      filename: "/virtual/ProductCard.tsx",
+    });
+    assert.match(result.code, /<div \.style=\$\{styles\}>card<\/div>/);
   }, 20000);
 
   it("escapes backticks and literal interpolation markers in SSR template output", () => {
@@ -394,7 +388,7 @@ describe("@litsx/compiler", () => {
     ].join("\n");
 
     const result = transformLitsxSync(source, {
-      filename: "/virtual/DemoPage.litsx",
+      filename: "/virtual/DemoPage.tsx",
       sourceMaps: false,
     });
 
@@ -455,7 +449,7 @@ describe("@litsx/compiler", () => {
     ].join("\n");
 
     const result = transformLitsxSync(source, {
-      filename: "/virtual/resource-card.litsx",
+      filename: "/virtual/resource-card.tsx",
       jsxTemplate: false,
     });
 
@@ -1630,7 +1624,7 @@ describe("@litsx/compiler", () => {
       filename: "/virtual/Demo.tsx",
     });
 
-    assert.match(result.code, /\.itemRenderer=\$\{bindRendererContext\(typeof this === "undefined" \? null : this,\s*label => html`<litsx-button type="primary" label="\$\{label\}"><\/litsx-button>`,\s*\{\s*projected: true\s*\}\)\}/);
+    assert.match(result.code, /\.itemRenderer=\$\{bindRendererContext\(typeof this === "undefined" \? null : this,\s*label => html`<litsx-button type="primary" \.label=\$\{label\}><\/litsx-button>`,\s*\{\s*projected: true\s*\}\)\}/);
     assert.match(result.code, /return html`<section>\$\{renderRendererCall\(this\.itemRenderer, 'alpha'\)\}<\/section>`;/);
     assert.match(result.code, /"litsx-button": LitsxButton/);
   }, 20000);
@@ -1808,18 +1802,26 @@ describe("@litsx/compiler", () => {
 
   it("keeps prop-backed calls as ordinary values inside Lit property bindings", () => {
     const source = [
+      "declare class ChildElement extends HTMLElement {",
+      "  items: unknown;",
+      "  config: unknown;",
+      "  onNavigate: unknown;",
+      "}",
+      "declare global {",
+      "  interface HTMLElementTagNameMap { 'child-element': ChildElement; }",
+      "}",
       "export async function DirectPage({ resolveItems }) {",
-      "  return <child-element .items={resolveItems()} />;",
+      "  return <child-element items={resolveItems()} />;",
       "}",
       "export function Forward({ items, config, onNavigate }) {",
-      "  return <child-element .items={items} .config={config} .onNavigate={onNavigate} />;",
+      "  return <child-element items={items} config={config} onNavigate={onNavigate} />;",
       "}",
       "export function Results({ resolveItems, resolveConfig, createNavigateHandler }) {",
       "  return (",
       "    <child-element",
-      "      .items={resolveItems()}",
-      "      .config={resolveConfig()}",
-      "      .onNavigate={createNavigateHandler()}",
+      "      items={resolveItems()}",
+      "      config={resolveConfig()}",
+      "      onNavigate={createNavigateHandler()}",
       "    >",
       "      {resolveItems()}",
       "    </child-element>",
@@ -1828,7 +1830,7 @@ describe("@litsx/compiler", () => {
     ].join("\n");
 
     const result = transformLitsxSync(source, {
-      filename: "/virtual/Results.litsx",
+      filename: "/virtual/Results.tsx",
     });
 
     assert.match(result.code, /export async function DirectPage[\s\S]*\.items=\$\{resolveItems\(\)\}/);
@@ -1893,9 +1895,9 @@ describe("@litsx/compiler", () => {
     }
   }, 30_000);
 
-  it("maps generated render templates back to authored .litsx JSX", async () => {
+  it("maps generated render templates back to authored TSX", async () => {
     const source = [
-      'import Shell from "./components/shell.litsx";',
+      'import Shell from "./components/shell.tsx";',
       "",
       "export default function Layout(props) {",
       "  return (",
@@ -1905,13 +1907,13 @@ describe("@litsx/compiler", () => {
     ].join("\n");
 
     const result = await transformLitsx(source, {
-      filename: "/fixture/app/layout.litsx",
+      filename: "/fixture/app/layout.tsx",
       sourceMaps: true,
       ssr: false,
     });
 
     assert.ok(result.map, "expected compiler to emit a sourcemap");
-    assert.deepStrictEqual(result.map.sources, ["/fixture/app/layout.litsx"]);
+    assert.deepStrictEqual(result.map.sources, ["/fixture/app/layout.tsx"]);
     assert.deepStrictEqual(result.map.sourcesContent, [source]);
 
     const traceMap = new TraceMap(result.map);
@@ -1929,24 +1931,24 @@ describe("@litsx/compiler", () => {
       const expected = findPosition(source, originalNeedle);
       const actual = originalPositionFor(traceMap, generated);
 
-      assert.strictEqual(actual.source, "/fixture/app/layout.litsx");
+      assert.strictEqual(actual.source, "/fixture/app/layout.tsx");
       assert.strictEqual(actual.line, expected.line, generatedNeedle);
       assert.strictEqual(actual.column, expected.column + originalOffset, generatedNeedle);
     }
   }, 30_000);
 
-  it("preserves render template mappings through hooks, static styles, and SSR lowering", async () => {
+  it("preserves render template mappings through hooks, constructor styles, and SSR lowering", async () => {
     const source = [
-      'import { useState } from "@litsx/core";',
+      'import { css, useState } from "@litsx/core";',
       "export function Counter() {",
-      "  static styles = `:host { display: block; }`;",
       "  const [count] = useState(0);",
       "  return <button>{count}</button>;",
       "}",
+      "Counter.styles = css`:host { display: block; }`;",
     ].join("\n");
 
     const result = await transformLitsx(source, {
-      filename: "/fixture/app/counter.litsx",
+      filename: "/fixture/app/counter.tsx",
       sourceMaps: true,
       ssr: true,
     });
@@ -1956,14 +1958,14 @@ describe("@litsx/compiler", () => {
     const expected = findPosition(source, "return <button>");
     const actual = originalPositionFor(new TraceMap(result.map), generated);
 
-    assert.strictEqual(actual.source, "/fixture/app/counter.litsx");
+    assert.strictEqual(actual.source, "/fixture/app/counter.tsx");
     assert.strictEqual(actual.line, expected.line);
     assert.strictEqual(actual.column, expected.column);
 
     const generatedStyles = findPosition(result.code, "css`");
-    const authoredStyles = findPosition(source, "static styles");
+    const authoredStyles = findPosition(source, "Counter.styles");
     const stylesPosition = originalPositionFor(new TraceMap(result.map), generatedStyles);
-    assert.strictEqual(stylesPosition.source, "/fixture/app/counter.litsx");
+    assert.strictEqual(stylesPosition.source, "/fixture/app/counter.tsx");
     assert.strictEqual(stylesPosition.line, authoredStyles.line);
   }, 30_000);
 
@@ -1976,7 +1978,7 @@ describe("@litsx/compiler", () => {
     ].join("\n");
 
     const result = await transformLitsx(source, {
-      filename: "/fixture/app/collision.litsx",
+      filename: "/fixture/app/collision.tsx",
       sourceMaps: true,
     });
     const traceMap = new TraceMap(result.map);
@@ -1986,14 +1988,14 @@ describe("@litsx/compiler", () => {
     const markerPosition = originalPositionFor(traceMap, marker);
     const templatePosition = originalPositionFor(traceMap, template);
 
-    assert.strictEqual(markerPosition.source, "/fixture/app/collision.litsx");
+    assert.strictEqual(markerPosition.source, "/fixture/app/collision.tsx");
     assert.strictEqual(markerPosition.line, 1);
-    assert.strictEqual(templatePosition.source, "/fixture/app/collision.litsx");
+    assert.strictEqual(templatePosition.source, "/fixture/app/collision.tsx");
     assert.strictEqual(templatePosition.line, 3);
     assert.strictEqual(templatePosition.column, 10);
   }, 30_000);
 
-  it("emits original .litsx sourcesContent and preserves it through sourcemap chaining", async () => {
+  it("emits original TSX sourcesContent and preserves it through sourcemap chaining", async () => {
     const source = [
       "export function HomeHero(props) {",
       "  const { title, href } = props;",
@@ -2002,12 +2004,12 @@ describe("@litsx/compiler", () => {
     ].join("\n");
 
     const result = await transformLitsx(source, {
-      filename: "/app/components/home-hero.litsx",
+      filename: "/app/components/home-hero.tsx",
       sourceMaps: true,
     });
 
     assert.ok(result.map, "expected compiler to emit a sourcemap");
-    assert.deepStrictEqual(result.map.sources, ["/app/components/home-hero.litsx"]);
+    assert.deepStrictEqual(result.map.sources, ["/app/components/home-hero.tsx"]);
     assert.deepStrictEqual(result.map.sourcesContent, [source]);
 
     const rebundled = await babelCore.transformAsync(result.code, {
@@ -2020,14 +2022,14 @@ describe("@litsx/compiler", () => {
     });
 
     assert.ok(rebundled?.map, "expected chained transform to emit a sourcemap");
-    assert.deepStrictEqual(rebundled.map.sources, ["/app/components/home-hero.litsx"]);
+    assert.deepStrictEqual(rebundled.map.sources, ["/app/components/home-hero.tsx"]);
     assert.deepStrictEqual(rebundled.map.sourcesContent, [source]);
 
     const generated = findPosition(rebundled.code, "this.title");
     const actual = originalPositionFor(new TraceMap(rebundled.map), generated);
     const expected = findPosition(source, "{title}");
 
-    assert.strictEqual(actual.source, "/app/components/home-hero.litsx");
+    assert.strictEqual(actual.source, "/app/components/home-hero.tsx");
     assert.strictEqual(actual.line, expected.line);
     assert.ok(actual.column >= expected.column);
   }, 30_000);

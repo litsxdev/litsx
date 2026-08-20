@@ -526,10 +526,10 @@ const transforms = {
       if (attr.type === "JSXSpreadAttribute") {
         return;
       }
-      if (attr.name.name === NOSCRIPT_COMPONENT_ATTRIBUTE) {
+      const jsxName = stringifyJsxName(attr.name);
+      if (jsxName === NOSCRIPT_COMPONENT_ATTRIBUTE) {
         return;
       }
-      const jsxName = stringifyJsxName(attr.name);
       const rawName = decodeVirtualAttributeName(jsxName) ?? jsxName;
       const prefix = rawName[0];
 

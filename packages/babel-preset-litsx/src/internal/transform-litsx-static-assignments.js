@@ -25,7 +25,9 @@ function getComponentFunctionPath(statementPath, t) {
 
   if (declarationPath?.isFunctionDeclaration?.()) {
     const name = declarationPath.node.id?.name;
-    return isPascalCaseName(name) ? { name, path: declarationPath } : null;
+    return isPascalCaseName(name) && declarationPath.node.async !== true
+      ? { name, path: declarationPath }
+      : null;
   }
 
   if (!declarationPath?.isVariableDeclaration?.()) return null;
@@ -34,6 +36,7 @@ function getComponentFunctionPath(statementPath, t) {
     const initPath = declaratorPath.get("init");
     if (
       isPascalCaseName(name) &&
+      initPath.node.async !== true &&
       (initPath?.isArrowFunctionExpression?.() || initPath?.isFunctionExpression?.())
     ) {
       return { name, path: initPath };

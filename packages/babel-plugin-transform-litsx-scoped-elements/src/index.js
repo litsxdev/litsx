@@ -489,42 +489,52 @@ function getLightDomExports(fileName) {
   }
 
   const lightDomExports = new Set();
+  const exportedNamesByLocal = new Map();
   for (const node of ast.program?.body ?? []) {
     if (t.isExportNamedDeclaration(node)) {
       const declaration = node.declaration;
       if (
         (t.isFunctionDeclaration(declaration) || t.isClassDeclaration(declaration)) &&
-        declaration.id?.name &&
-        nodeHasLightDomHoist(declaration)
+        declaration.id?.name
       ) {
-        lightDomExports.add(declaration.id.name);
+        exportedNamesByLocal.set(declaration.id.name, declaration.id.name);
+      }
+      for (const specifier of node.specifiers ?? []) {
+        const localName = specifier.local?.name;
+        const exportedName = specifier.exported?.name ?? specifier.exported?.value;
+        if (localName && exportedName) exportedNamesByLocal.set(localName, exportedName);
       }
       continue;
     }
 
     if (
       t.isExportDefaultDeclaration(node) &&
-      nodeHasLightDomHoist(node.declaration)
+      (t.isFunctionDeclaration(node.declaration) || t.isClassDeclaration(node.declaration)) &&
+      node.declaration.id?.name
     ) {
-      lightDomExports.add("default");
+      exportedNamesByLocal.set(node.declaration.id.name, "default");
     }
+  }
+
+  for (const node of ast.program?.body ?? []) {
+    if (
+      !t.isExpressionStatement(node) ||
+      !t.isAssignmentExpression(node.expression, { operator: "=" }) ||
+      !t.isMemberExpression(node.expression.left) ||
+      node.expression.left.computed ||
+      !t.isIdentifier(node.expression.left.object) ||
+      !t.isIdentifier(node.expression.left.property, { name: "lightDom" }) ||
+      !t.isBooleanLiteral(node.expression.right, { value: true })
+    ) {
+      continue;
+    }
+
+    const exportedName = exportedNamesByLocal.get(node.expression.left.object.name);
+    if (exportedName) lightDomExports.add(exportedName);
   }
 
   LIGHT_DOM_EXPORTS_BY_FILE.set(normalizedFileName, lightDomExports);
   return lightDomExports;
-}
-
-function nodeHasLightDomHoist(node) {
-  const body = node?.body?.body;
-  if (!Array.isArray(body)) {
-    return false;
-  }
-
-  return body.some((statement) => (
-    t.isExpressionStatement(statement) &&
-    t.isCallExpression(statement.expression) &&
-    t.isIdentifier(statement.expression.callee, { name: "__litsx_static_lightDom" })
-  ));
 }
 
 function hasNamedImport(programPath, moduleName, importName) {

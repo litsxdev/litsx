@@ -820,6 +820,11 @@ the existing node and then invokes the ref directive. Native object refs receive
 that node through `.value` and are cleared with `undefined`; react-compat facades
 expose the same lifecycle as `.current` and `null`.
 
+If the first client render suspends, SSR-compiled hosts keep the declarative
+shadow DOM and its hydration markers in place until the resource settles. The
+retry hydrates that existing tree, so refs attach to the server node without
+duplicating or recreating it.
+
 This package does not patch or fork `@lit-labs/ssr`. See the repository's
 [native authoring contract](../../AUTHORING.md) for the corresponding JSX
 surface.

@@ -1374,12 +1374,7 @@ function createSsrProfileFiles(packageName, className) {
     "allowArbitraryExtensions": true,
     "checkJs": true,
     "jsx": "react-jsx",
-    "jsxImportSource": "@litsx/core",
-    "plugins": [
-      {
-        "name": "@litsx/typescript"
-      }
-    ]
+    "jsxImportSource": "@litsx/core"
   },
   "include": [
     "src",
@@ -1388,14 +1383,13 @@ function createSsrProfileFiles(packageName, className) {
   ]
 }
 `);
-  files.set("src/main.js", `// @ts-expect-error LitSX authored modules resolve through the LitSX/Vite pipeline.
-const { defineAppElements } = await import("./${packageName}.litsx");
+  files.set("src/main.js", `const { defineAppElements } = await import("./${packageName}");
 defineAppElements();
 
 document.body.dataset.hydrated = "true";
 `);
   files.set(`src/${packageName}.test.js`, `import { afterEach, describe, expect, it } from "vitest";
-import { ${className}, defineAppElements } from "./${packageName}.litsx";
+import { ${className}, defineAppElements } from "./${packageName}";
 
 const tagName = "${tagName}";
 
@@ -1422,8 +1416,9 @@ describe("${className}", () => {
   });
 });
 `);
-  files.set(`src/${packageName}.litsx`, `import { LitsxHero } from "./components/litsx-hero.litsx";
-import { StarterGuide } from "./components/starter-guide.litsx";
+  files.set(`src/${packageName}.tsx`, `import { css } from "@litsx/core";
+import { LitsxHero } from "./components/litsx-hero";
+import { StarterGuide } from "./components/starter-guide";
 
 export function ${className}({
   eyebrow = "SSR starter",
@@ -1431,20 +1426,6 @@ export function ${className}({
   primaryLabel = "SSR docs",
   secondaryLabel = "View on GitHub",
 }) {
-  static styles = \`
-    :host {
-      display: block;
-    }
-
-    .shell {
-      max-width: 960px;
-      margin: 0 auto;
-      padding-top: 28px;
-      padding-bottom: 28px;
-      position: relative;
-    }
-  \`;
-
   return (
     <main class="shell">
       <LitsxHero
@@ -1452,10 +1433,10 @@ export function ${className}({
         tagline={tagline}
         primaryLabel={primaryLabel}
         secondaryLabel={secondaryLabel}
-        @primary-action={() => {
+        on:primary-action={() => {
           window.open("https://litsx.dev/guides/ssr", "_blank", "noopener,noreferrer");
         }}
-        @secondary-action={() => {
+        on:secondary-action={() => {
           window.open("https://github.com/litsxdev/litsx", "_blank", "noopener,noreferrer");
         }}
       />
@@ -1463,6 +1444,20 @@ export function ${className}({
     </main>
   );
 }
+
+${className}.styles = css\`
+  :host {
+    display: block;
+  }
+
+  .shell {
+    max-width: 960px;
+    margin: 0 auto;
+    padding-top: 28px;
+    padding-bottom: 28px;
+    position: relative;
+  }
+\`;
 
 export function defineAppElements() {
   if (!customElements.get("${tagName}")) {
@@ -1482,7 +1477,7 @@ const server = await createSsrDevServer({
   elements(loader) {
     return {
       "${tagName}": async () =>
-        (await loader("./src/${packageName}.litsx")).${className},
+        (await loader("./src/${packageName}.tsx")).${className},
     };
   },
   render({ html }) {
@@ -1515,7 +1510,7 @@ export async function renderAppDocument() {
     elements(loader) {
       return {
         "${tagName}": async () =>
-          (await loader("./src/${packageName}.litsx")).${className},
+          (await loader("./src/${packageName}.tsx")).${className},
       };
     },
     render({ html }) {
@@ -1571,7 +1566,7 @@ Run \`npm run render\` when you want a prerendered document in \`dist/index.html
 - a shared \`index.html\` shell for dev SSR and static prerender output
 - the same hero and guide components as the standard app scaffold
 - SSR-specific copy, routes, and entrypoints
-- authored LitSX source in \`src/${packageName}.litsx\`
+- standard JSX authoring in \`src/${packageName}.tsx\`
 `);
 
   return files;

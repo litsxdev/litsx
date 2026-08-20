@@ -107,6 +107,7 @@ export function createComponentClass({
   needsCallbackRef = false,
   restProps = null,
   needsModuleIdMetadata = false,
+  needsHydrationSuspenseMixin = false,
   moduleId = null,
 }) {
   const classNode = t.classDeclaration(
@@ -188,6 +189,14 @@ export function createComponentClass({
       [classNode.superClass]
     );
     classNode._needsLightDomMixin = true;
+  }
+
+  if (needsHydrationSuspenseMixin) {
+    classNode.superClass = t.callExpression(
+      t.identifier("HydrationSuspenseMixin"),
+      [classNode.superClass]
+    );
+    classNode._needsHydrationSuspenseMixin = true;
   }
 
   classNode._needsCss = needsCss;

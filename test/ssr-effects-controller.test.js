@@ -35,7 +35,7 @@ describe("SsrEffectsController", () => {
     assert.strictEqual(count, 1);
     assert.strictEqual(setCount(2), 1);
     assert.strictEqual(host.requestUpdateCalls, 0);
-    assert.deepStrictEqual(ref, { current: "ready" });
+    assert.deepStrictEqual(ref, { value: "ready" });
     assert.strictEqual(memo, 2);
     assert.strictEqual(firstId, "ssr-7-0");
     assert.strictEqual(secondId, "ssr-7-1");

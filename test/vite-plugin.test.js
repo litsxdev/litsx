@@ -26,8 +26,8 @@ describe("@litsx/vite-plugin", () => {
     });
 
     assert.strictEqual(
-      resolver("/repo/src/components/ProductCard.litsx"),
-      "/src/components/ProductCard.litsx",
+      resolver("/repo/src/components/ProductCard.tsx"),
+      "/src/components/ProductCard.tsx",
     );
   });
 
@@ -36,14 +36,14 @@ describe("@litsx/vite-plugin", () => {
       root: "/repo",
       base: "/app/",
       manifest: {
-        "src/components/ProductCard.litsx": {
+        "src/components/ProductCard.tsx": {
           file: "assets/ProductCard.abcd1234.js",
         },
       },
     });
 
     assert.strictEqual(
-      resolver("/repo/src/components/ProductCard.litsx"),
+      resolver("/repo/src/components/ProductCard.tsx"),
       "/app/assets/ProductCard.abcd1234.js",
     );
   });
@@ -53,14 +53,14 @@ describe("@litsx/vite-plugin", () => {
       root: "/repo",
       base: "nested/app",
       manifest: {
-        "./src/components/ProductCard.litsx": {
+        "./src/components/ProductCard.tsx": {
           file: "assets/ProductCard.abcd1234.js",
         },
       },
     });
 
     assert.strictEqual(
-      resolver("/repo/src/components/ProductCard.litsx"),
+      resolver("/repo/src/components/ProductCard.tsx"),
       "/nested/app/assets/ProductCard.abcd1234.js",
     );
   });
@@ -71,7 +71,7 @@ describe("@litsx/vite-plugin", () => {
     });
 
     assert.strictEqual(
-      resolver("/external/ProductCard.litsx"),
+      resolver("/external/ProductCard.tsx"),
       null,
     );
   });
@@ -83,8 +83,8 @@ describe("@litsx/vite-plugin", () => {
     });
 
     assert.strictEqual(
-      resolver("file:///repo/src/components/ProductCard.litsx"),
-      "/src/components/ProductCard.litsx",
+      resolver("file:///repo/src/components/ProductCard.tsx"),
+      "/src/components/ProductCard.tsx",
     );
   });
 

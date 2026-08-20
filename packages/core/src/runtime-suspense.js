@@ -3,6 +3,7 @@ import { getCurrentSsrRuntimeState } from "./runtime-ssr-state.js";
 
 const SOFT_SUSPENSE = Symbol("litsx.softSuspense");
 const SUSPENSE_CAPTURE = Symbol("litsx.suspenseCapture");
+const HYDRATION_SUSPENSION = Symbol.for("litsx.hydrationSuspension");
 let currentSoftSuspenseCollector = null;
 let currentSuspenseCapture = null;
 
@@ -142,6 +143,26 @@ export function renderWithSoftSuspense(host, render) {
     if (capture && typeof capture.capture === "function") {
       capture.capture(thrown);
       return nothing;
+    }
+
+    if (host?._$needsHydration) {
+      const hydrationPromise = Promise.resolve(thrown);
+      host[HYDRATION_SUSPENSION] = hydrationPromise;
+      hydrationPromise.then(
+        () => {
+          if (host[HYDRATION_SUSPENSION] === hydrationPromise) {
+            host[HYDRATION_SUSPENSION] = null;
+          }
+          host?.requestUpdate?.();
+        },
+        (error) => {
+          if (host[HYDRATION_SUSPENSION] === hydrationPromise) {
+            host[HYDRATION_SUSPENSION] = null;
+          }
+          reportAsyncError(error);
+        },
+      );
+      throw hydrationPromise;
     }
 
     const state = getSoftSuspenseState(host);

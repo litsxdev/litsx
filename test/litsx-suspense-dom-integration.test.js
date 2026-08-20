@@ -187,7 +187,7 @@ describe("litsx suspense DOM integration", () => {
       host.pending = pending;
       host.requestUpdate();
       await host.updateComplete;
-      assert.strictEqual(calls.at(-1), null);
+      assert.strictEqual(calls.at(-1), undefined);
 
       host.pending = null;
       pending.resolve();
@@ -200,7 +200,7 @@ describe("litsx suspense DOM integration", () => {
     host.visible = false;
     host.requestUpdate();
     await host.updateComplete;
-    assert.strictEqual(calls.at(-1), null);
+    assert.strictEqual(calls.at(-1), undefined);
 
     host.visible = true;
     host.requestUpdate();
@@ -210,7 +210,7 @@ describe("litsx suspense DOM integration", () => {
     const callCountBeforeDisconnect = calls.length;
     host.remove();
     assert.strictEqual(calls.length, callCountBeforeDisconnect + 1);
-    assert.strictEqual(calls.at(-1), null);
+    assert.strictEqual(calls.at(-1), undefined);
   });
 
   it("restores descendant refs through nested explicit suspense boundaries", async () => {

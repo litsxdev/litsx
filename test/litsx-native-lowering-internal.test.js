@@ -125,7 +125,7 @@ describe("@litsx/babel-preset-litsx native lowering internals", () => {
     assert.doesNotMatch(code, /useCallbackRef\(this, \(\) => this,/);
   });
 
-  it("lowers native member and aliased refs through the LitSX preset", () => {
+  it("preserves native member and aliased refs for Lit directive lowering", () => {
     const source = [
       "const AddressForm = ({ formState }) => {",
       "  const localRef = formState.ref;",
@@ -140,14 +140,12 @@ describe("@litsx/babel-preset-litsx native lowering internals", () => {
 
     const { code } = transformWithNativePreset(source);
 
-    // Two native targets plus the component-instance ref channel that every
-    // authored component exposes by default.
-    assert.strictEqual((code.match(/useCallbackRef\(this,/g) || []).length, 3);
-    assert.match(code, /const _refValue = this\.formState\.ref;/);
-    assert.match(code, /const _refValue2 = localRef;/);
-    assert.doesNotMatch(code, /<form ref=/);
-    assert.doesNotMatch(code, /<input ref=/);
-    assert.doesNotMatch(code, /ref="\$\{/);
+    // The component instance keeps its own ref lifecycle channel, while refs
+    // authored on native elements remain available to the Lit ref directive.
+    assert.strictEqual((code.match(/useCallbackRef\(this,/g) || []).length, 1);
+    assert.doesNotMatch(code, /data-ref=/);
+    assert.match(code, /<form ref=\{this\.formState\.ref\}><\/form>/);
+    assert.match(code, /<input ref=\{localRef\} \/>/);
   });
 
   it("detects native ref props through defaulted destructuring and string keys", () => {
@@ -161,10 +159,10 @@ describe("@litsx/babel-preset-litsx native lowering internals", () => {
 
     assert.match(code, /class SearchPanel extends LitElement/);
     assert.match(code, /static properties = \{[\s\S]*title: \{[\s\S]*ref: \{[\s\S]*attribute: false/s);
-    assert.match(code, /prepareEffects\(this\);/);
-    assert.match(code, /useCallbackRef\(this, \(\) => this\.renderRoot\?\./);
-    assert.match(code, /\[this\.ref\]/);
-    assert.match(code, /return <input data-ref="_refElement" aria-label=\{this\.title\} \/>;/);
+    assert.doesNotMatch(code, /prepareEffects\(this\);/);
+    assert.doesNotMatch(code, /useCallbackRef\(this,/);
+    assert.doesNotMatch(code, /data-ref=/);
+    assert.match(code, /return <input ref=\{this\.ref\} aria-label=\{this\.title\} \/>;/);
     assert.doesNotMatch(code, /forwardedRef/);
   });
 

@@ -30,6 +30,11 @@
       "import": "./src/parser.js",
       "require": "./dist/parser.cjs",
       "default": "./src/parser.js"
+    },
+    "./parser": {
+      "import": "./src/parser.js",
+      "require": "./dist/parser.cjs",
+      "default": "./src/parser.js"
     }
   },
   "dependencies": {

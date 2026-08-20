@@ -164,7 +164,7 @@ describe("native static hoists internals", () => {
     assert.strictEqual(classNode._needsModuleIdMetadata, false);
   });
 
-  it("normalizes and consumes partial static IR without sharing mutable metadata", () => {
+  it("normalizes current static IR without restoring removed legacy metadata", () => {
     const expression = t.identifier("title");
     const partial = {
       properties: {
@@ -181,7 +181,7 @@ describe("native static hoists internals", () => {
 
     assert.notStrictEqual(normalized.properties.inferred[0].expression, expression);
     assert.strictEqual(normalized.properties.authored[0].expression, null);
-    assert.deepStrictEqual(normalized.properties.legacy, []);
+    assert.strictEqual(normalized.properties.legacy, undefined);
     assert.deepStrictEqual(normalized.elements.importedCandidates, [null, { tagName: "remote-card" }]);
     assert.notStrictEqual(normalized.elements.importedCandidates[1], partial.elements.importedCandidates[1]);
     assert.strictEqual(normalized.lightDom, true);

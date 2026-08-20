@@ -142,7 +142,7 @@ function getGeneratedStylesExpression(statement) {
       "Component.styles must be a Lit CSSResultGroup. Use css`...` from lit instead of a plain string, untagged template literal, or function.",
     );
   }
-  return t.cloneNode(argument, true);
+  return copySourceLocation(t.cloneNode(argument, true), argument);
 }
 
 function getStaticHoistExpression(statement, functionPath) {

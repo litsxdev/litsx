@@ -162,6 +162,10 @@ export declare function ShadowDomMixin<TBase extends LitsxConstructor>(
 ): LitsxConstructor<InstanceType<TBase> & ShadowDomHostInstance> &
   ShadowDomStatics;
 
+export declare function HydrationSuspenseMixin<TBase extends LitsxConstructor>(
+  Base: TBase
+): TBase;
+
 export interface LightDomHost {
   /**
    * LightDomMixin keeps Lit rendering in light DOM and resolves component-local

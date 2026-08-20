@@ -109,6 +109,7 @@ export function createTransformFunctionToClassPlugin(defaultPluginOptions = {}) 
         this.__litsxNeedsUnsafeCss = false;
         this.__litsxNeedsStaticHoistsMixin = false;
         this.__litsxNeedsLightDomMixin = false;
+        this.__litsxNeedsHydrationSuspenseMixin = false;
         this.__litsxNeedsCallbackRef = false;
         this.__litsxNeedsModuleIdMetadata = false;
         this.__litsxNeedsRendererCallImport = false;
@@ -320,6 +321,9 @@ function updateTransformState(state, classNode) {
   );
   state.__litsxNeedsLightDomMixin ||= Boolean(
     classNode._needsLightDomMixin
+  );
+  state.__litsxNeedsHydrationSuspenseMixin ||= Boolean(
+    classNode._needsHydrationSuspenseMixin
   );
   state.__litsxNeedsCallbackRef ||= Boolean(
     classNode._needsCallbackRef
@@ -676,6 +680,7 @@ function transformFunction(functionPath, programPath, className, options = {}) {
     needsCallbackRef,
     restProps,
     needsModuleIdMetadata: options?.ssr === true,
+    needsHydrationSuspenseMixin: options?.ssr === true,
     moduleId:
       options?.ssr === true
         ? normalizeFilePath(programPath.hub.file?.opts?.filename || "")

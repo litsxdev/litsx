@@ -3,12 +3,13 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 import babelCore from "@babel/core";
+import ts from "typescript";
 import { beforeAll, describe, it } from "vitest";
 
 import parser from "./helpers/litsx-parser.js";
 import { interopDefault } from "./helpers/interop-default.js";
 import { PLAYGROUND_TYPE_FILES } from "./helpers/playground-virtual-types.js";
-import { createLitsxTypecheckSession } from "../packages/typescript/src/typecheck.js";
+import { createProjectTsSession } from "../packages/typescript-session/src/index.js";
 
 const { transformFromAstSync } = babelCore;
 
@@ -1269,11 +1270,11 @@ describe("@litsx/babel-preset-litsx", () => {
 
     assert.strictEqual(
       createLitsxPresetPlugins({}, detectLitsxSourceFeatures(plainSource, {})).length,
-      6,
+      8,
     );
     assert.strictEqual(
       createLitsxPresetPlugins({}, detectLitsxSourceFeatures(featureSource, {})).length,
-      9,
+      11,
     );
   });
 
@@ -1412,7 +1413,7 @@ describe("@litsx/babel-preset-litsx", () => {
       }
     );
 
-    assert.match(result.code, /class TypedForm extends ShadowDomMixin\(LitElement\)/);
+    assert.match(result.code, /class TypedForm extends ShadowDomMixin\(HydrationSuspenseMixin\(LitElement\)\)/);
     assert.match(
       result.code,
       /static properties = \{[\s\S]*label: \{[\s\S]*type: String[\s\S]*count: \{[\s\S]*type: Number/s
@@ -1885,30 +1886,37 @@ describe("@litsx/babel-preset-litsx", () => {
         "import { renderToString } from '@litsx/ssr';",
         'import ProductPage from "@/pages/ProductPage.js";',
         "export async function renderPage(slug) {",
-        "  return renderToString(<ProductPage .slug={slug} />);",
+        "  return renderToString(<ProductPage slug={slug} />);",
         "}",
       ].join("\n");
 
-      const session = createLitsxTypecheckSession(["--project", tsconfigPath]);
-      try {
-        const result = transformFromAstSync(
-          parser.parse(source, { sourceType: "module" }),
-          source,
-          {
-            configFile: false,
-            babelrc: false,
-            filename: entryFilename,
-            presets: [[nativePreset, {
-              typescriptSession: session.projectSession,
-            }]],
-          },
-        );
+      const configFile = ts.readConfigFile(tsconfigPath, ts.sys.readFile);
+      const parsedCommandLine = ts.parseJsonConfigFileContent(
+        configFile.config,
+        ts.sys,
+        fixtureDirectory,
+        undefined,
+        tsconfigPath,
+      );
+      const session = createProjectTsSession({
+        typescript: ts,
+        parsedCommandLine,
+      });
+      const result = transformFromAstSync(
+        parser.parse(source, { sourceType: "module" }),
+        source,
+        {
+          configFile: false,
+          babelrc: false,
+          filename: entryFilename,
+          presets: [[nativePreset, {
+            typescriptSession: session,
+          }]],
+        },
+      );
 
-        assert.match(result.code, /renderToString\(__litsxServerComponentCall\(ProductPage, \{\s*slug: slug\s*\}\)\);/);
-        assert.doesNotMatch(result.code, /renderToString\(__litsxScopedTemplate/);
-      } finally {
-        session.projectSession.dispose?.();
-      }
+      assert.match(result.code, /renderToString\(__litsxServerComponentCall\(ProductPage, \{\s*slug: slug\s*\}\)\);/);
+      assert.doesNotMatch(result.code, /renderToString\(__litsxScopedTemplate/);
     } finally {
       fs.rmSync(fixtureDirectory, { recursive: true, force: true });
     }
@@ -2109,9 +2117,9 @@ describe("@litsx/babel-preset-litsx", () => {
   it("injects SSR light DOM rendering for authored light DOM components", () => {
     const source = [
       "export function LightChild() {",
-      "  static lightDom = true;",
       "  return <span>child</span>;",
       "}",
+      "LightChild.lightDom = true;",
       "export function Parent() {",
       "  return <LightChild />;",
       "}",
@@ -2139,21 +2147,21 @@ describe("@litsx/babel-preset-litsx", () => {
 
   it("injects SSR light DOM rendering for imported authored light DOM components", () => {
     const fixtureDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-ssr-light-dom-import-"));
-    const importedFilename = path.join(fixtureDirectory, "LightChild.litsx");
-    const entryFilename = path.join(fixtureDirectory, "Parent.litsx");
+    const importedFilename = path.join(fixtureDirectory, "LightChild.tsx");
+    const entryFilename = path.join(fixtureDirectory, "Parent.tsx");
 
     fs.writeFileSync(
       importedFilename,
       [
         "export function LightChild() {",
-        "  static lightDom = true;",
         "  return <span>child</span>;",
         "}",
+        "LightChild.lightDom = true;",
       ].join("\n"),
     );
 
     const source = [
-      'import { LightChild } from "./LightChild.litsx";',
+      'import { LightChild } from "./LightChild.tsx";',
       "export function Parent() {",
       "  return <LightChild />;",
       "}",

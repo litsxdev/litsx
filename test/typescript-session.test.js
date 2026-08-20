@@ -40,9 +40,9 @@ describe("@litsx/typescript-session", () => {
   it("normalizes file paths and dirname fallbacks", () => {
     assert.strictEqual(normalizeFilePath("C:\\demo\\file.ts"), "C:/demo/file.ts");
     assert.strictEqual(normalizeFilePath(""), "");
-    assert.strictEqual(normalizeFilePath("/virtual/./components/../page.litsx"), "/virtual/page.litsx");
-    assert.strictEqual(normalizeFilePath("/../page.litsx"), "/page.litsx");
-    assert.strictEqual(normalizeFilePath("../shared/../../page.litsx"), "../../page.litsx");
+    assert.strictEqual(normalizeFilePath("/virtual/./components/../page.tsx"), "/virtual/page.tsx");
+    assert.strictEqual(normalizeFilePath("/../page.tsx"), "/page.tsx");
+    assert.strictEqual(normalizeFilePath("../shared/../../page.tsx"), "../../page.tsx");
     assert.strictEqual(dirname("file.ts"), "/");
     assert.strictEqual(dirname("/root/demo/file.ts"), "/root/demo");
   });
@@ -90,12 +90,12 @@ describe("@litsx/typescript-session", () => {
   it("keeps in-memory session caches coherent across no-op overlays and relative imports", () => {
     const config = createInMemoryConfig();
     config.files[config.sourceFilename] = 'import { answer } from "./answer"; export const value = answer;';
-    config.files["/virtual/answer.litsx"] = "export const answer = 42;";
+    config.files["/virtual/answer.ts"] = "export const answer = 42;";
     const session = createInMemoryTsSession(config);
 
-    session.setOverlayFile("/virtual/answer.litsx", config.files["/virtual/answer.litsx"]);
-    session.setOverlayFile("/virtual/answer.litsx", config.files["/virtual/answer.litsx"]);
-    session.clearOverlayFile("/virtual/missing.litsx");
+    session.setOverlayFile("/virtual/answer.ts", config.files["/virtual/answer.ts"]);
+    session.setOverlayFile("/virtual/answer.ts", config.files["/virtual/answer.ts"]);
+    session.clearOverlayFile("/virtual/missing.ts");
 
     const program = session.getProgram(config.files[config.sourceFilename]);
     assert.deepStrictEqual(
@@ -144,16 +144,16 @@ describe("@litsx/typescript-session", () => {
       compilerOptions: {},
       files: {
         [sourceFilename]: "export {};",
-        "/virtual/components/card.litsx": "export const Card = 1;",
+        "/virtual/components/card.tsx": "export const Card = 1;",
         "/virtual/components/legacy.js": "export const legacy = 1;",
-        "/virtual/components/feature/index.litsx.jsx": "export const Feature = 1;",
+        "/virtual/components/feature/index.jsx": "export const Feature = 1;",
         "/virtual/absolute.ts": "export const absolute = 1;",
       },
     });
 
     session.getProgram("export {};");
     const resolved = session.host.resolveModuleNames(
-      ["./card", "./feature", "./card.litsx", "./legacy.js", "/virtual/absolute", "lit-html"],
+      ["./card", "./feature", "./card.tsx", "./legacy.js", "/virtual/absolute", "lit-html"],
       sourceFilename,
     );
     const literals = session.host.resolveModuleNameLiterals(
@@ -164,9 +164,9 @@ describe("@litsx/typescript-session", () => {
     assert.deepStrictEqual(
       resolved.map((entry) => entry?.resolvedFileName ?? null),
       [
-        "/virtual/components/card.litsx",
-        "/virtual/components/feature/index.litsx.jsx",
-        "/virtual/components/card.litsx",
+        "/virtual/components/card.tsx",
+        "/virtual/components/feature/index.jsx",
+        "/virtual/components/card.tsx",
         "/virtual/components/legacy.js",
         "/virtual/absolute.ts",
         null,
@@ -176,7 +176,7 @@ describe("@litsx/typescript-session", () => {
     assert.strictEqual(resolved[1].extension, ".jsx");
     assert.strictEqual(resolved[3].extension, ".js");
     assert.strictEqual(resolved[4].extension, ".ts");
-    assert.strictEqual(literals[0].resolvedModule.resolvedFileName, "/virtual/components/card.litsx");
+    assert.strictEqual(literals[0].resolvedModule.resolvedFileName, "/virtual/components/card.tsx");
   });
 
   it("creates standalone sessions that honor overlays and cached instances", () => {

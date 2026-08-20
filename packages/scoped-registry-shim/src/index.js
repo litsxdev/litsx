@@ -534,7 +534,12 @@ function getRuntime() {
     const definition = tagName ? registry._getDefinition(tagName) : null;
     const currentDefinition = definitionForElement.get(element) ?? null;
     const effectiveRegistry = registryForNode(element);
-    if (element.isConnected && effectiveRegistry && effectiveRegistry !== registry) {
+    if (
+      element.isConnected &&
+      effectiveRegistry &&
+      effectiveRegistry !== globalRegistry &&
+      effectiveRegistry !== registry
+    ) {
       return false;
     }
     if (
@@ -571,7 +576,7 @@ function getRuntime() {
         upgradeCreatedElement(current, currentRegistry);
       }
 
-      const childRegistry = current[HOST_REGISTRY] ?? registryForNode(current) ?? currentRegistry;
+      const childRegistry = current[HOST_REGISTRY] ?? currentRegistry ?? registryForNode(current);
       for (const child of current.children ?? []) {
         pending.push({ node: child, registry: childRegistry });
       }
@@ -600,13 +605,13 @@ function getRuntime() {
         continue;
       }
 
+      // `customize(..., true)` invokes the callback for a newly upgraded
+      // connected node, while already customized nodes receive it through the
+      // browser's stand-in lifecycle. Calling it again here re-enters light-DOM
+      // registry connection for the host itself and can recurse indefinitely.
       upgradeCreatedElement(current, currentRegistry);
-      const definition = definitionForElement.get(current);
-      if (definition?.connectedCallback && current.isConnected) {
-        definition.connectedCallback.call(current);
-      }
 
-      const childRegistry = current[HOST_REGISTRY] ?? registryForNode(current) ?? currentRegistry;
+      const childRegistry = current[HOST_REGISTRY] ?? currentRegistry ?? registryForNode(current);
       for (const child of current.children ?? []) {
         pending.push({ node: child, registry: childRegistry });
       }

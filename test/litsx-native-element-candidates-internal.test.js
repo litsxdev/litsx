@@ -787,18 +787,18 @@ describe("native element candidate internals", () => {
       `);
       programPath.hub = { file: { opts: { filename: rootFile } } };
 
-      const session = createLitsxTypecheckSession(["--project", tsconfigPath]);
+      const session = createLitsxCompilationSession({ projectPath: tsconfigPath });
       try {
         const imported = getImportedBindingModuleAnalysis(programPath, "ProductPage", {
           filename: rootFile,
-          typescriptSession: session.projectSession,
+          typescriptSession: session.typescriptSession,
         });
 
         assert.strictEqual(imported?.importedName, "default");
         assert.strictEqual(imported?.resolvedSource, pageFile);
         assert.strictEqual(imported?.moduleAnalysis?.filename, pageFile);
       } finally {
-        session.projectSession.dispose?.();
+        session.dispose();
       }
     } finally {
       fs.rmSync(tempDir, { recursive: true, force: true });

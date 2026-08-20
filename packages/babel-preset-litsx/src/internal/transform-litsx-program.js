@@ -182,6 +182,22 @@ export function finalizeProgram(programPath, state) {
     }
   }
 
+  if (state.__litsxNeedsHydrationSuspenseMixin) {
+    const bodyPathsWithInternal = programPath.get("body");
+    const internalImports = bodyPathsWithInternal.filter(
+      (n) => n.isImportDeclaration() && n.node.source.value === "@litsx/core/elements"
+    );
+
+    const internalImported = ensureNamedImportAcross(
+      internalImports,
+      "HydrationSuspenseMixin"
+    );
+
+    if (!internalImported) {
+      programPath.unshiftContainer("body", createLitsxInfrastructureImport("HydrationSuspenseMixin"));
+    }
+  }
+
   if (state.__litsxNeedsModuleIdMetadata) {
     const bodyPathsWithInternal = programPath.get("body");
     const internalImports = bodyPathsWithInternal.filter(

@@ -20,6 +20,7 @@ import {
   LITSX_SERVER_COMPONENT_CALL,
   LITSX_SERVER_COMPONENT,
   LITSX_SSR_CONTEXT,
+  HydrationSuspenseMixin,
   LightDomMixin,
   LitsxStaticHoistsMixin,
   ShadowDomMixin,
@@ -40,6 +41,22 @@ function defineTestElement(tagName, ctor) {
 }
 
 describe("litsx elements runtime", () => {
+  it("contains hydration-only suspensions at the generated host boundary", async () => {
+    const suspension = Promise.resolve();
+    class Base {
+      scheduleUpdate() {
+        throw suspension;
+      }
+    }
+    const Host = HydrationSuspenseMixin(Base);
+    const host = new Host();
+    host[Symbol.for("litsx.hydrationSuspension")] = suspension;
+
+    assert.strictEqual(await host.scheduleUpdate(), undefined);
+    host[Symbol.for("litsx.hydrationSuspension")] = null;
+    assert.throws(() => host.scheduleUpdate(), (error) => error === suspension);
+  });
+
   it("exposes SSR metadata symbols and scoped-template helpers", () => {
     const template = { strings: ["<div></div>"] };
     class DemoCard {}
@@ -454,7 +471,7 @@ describe("litsx elements runtime", () => {
 
       assert.strictEqual(host.registry?.constructor, FakeRegistry);
       assert.strictEqual(typeof host.registry?.get, "function");
-      assert.strictEqual(host.renderOptions.creationScope, undefined);
+      assert.strictEqual(host.renderOptions.creationScope, shadowRoot);
     } finally {
       globalThis.CustomElementRegistry = originalCustomElementRegistry;
       Element.prototype.attachShadow = originalAttachShadow;

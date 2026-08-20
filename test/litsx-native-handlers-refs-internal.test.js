@@ -73,7 +73,7 @@ describe("native handlers and refs internals", () => {
     );
   });
 
-  it("detects and lowers forwarded refs for standard elements only", () => {
+  it("detects forwarded refs and preserves native targets for Lit directive lowering", () => {
     const functionPath = getFunctionPath(`
       function Card({ ref }) {
         const forward = (node) => this.ref?.(node);
@@ -85,9 +85,10 @@ describe("native handlers and refs internals", () => {
     assert.strictEqual(hasExplicitRefForwarding(functionPath, "ref"), true);
     const statements = lowerForwardedElementRefs(functionPath, "ref");
 
-    assert.strictEqual(statements.length, 1);
-    assert.match(functionPath.toString(), /data-ref=/);
-    assert.match(functionPath.toString(), /<Widget ref=\{this\.ref\}/);
+    assert.strictEqual(statements.length, 0);
+    assert.doesNotMatch(functionPath.toString(), /data-ref=/);
+    assert.match(functionPath.toString(), /<input ref=\{this\.ref\}/);
+    assert.match(functionPath.toString(), /<Widget \.ref=\{this\.ref\}/);
     assert.deepStrictEqual(lowerForwardedElementRefs(functionPath, ""), []);
     assert.strictEqual(createComponentInstanceRefSyncStatement().expression.callee.name, "useCallbackRef");
   });

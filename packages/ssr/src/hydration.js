@@ -3,8 +3,10 @@ import {
   isCustomElementClass,
   isHydratableCustomElementClass,
   LITSX_HYDRATABLE_TAG,
+  LITSX_MODULE_ID,
 } from "@litsx/core/elements";
 import { withLitsxHydration } from "./hydration-state.js";
+
 
 const SSR_RESOURCE_SNAPSHOT_BRIDGE = Symbol.for(
   "litsx.ssr.resourceSnapshotBridge",
@@ -178,6 +180,22 @@ async function importClientModule(specifier) {
   return import(/* @vite-ignore */ specifier);
 }
 
+function isThenable(value) {
+  return value != null && typeof value.then === "function";
+}
+
+async function runHydrationRegistration(register) {
+  try {
+    return await register();
+  } catch (thrown) {
+    if (!isThenable(thrown)) {
+      throw thrown;
+    }
+    await thrown;
+    return undefined;
+  }
+}
+
 function getCustomElementRegistry() {
   return globalThis.customElements ?? null;
 }
@@ -202,6 +220,13 @@ function registerHydratableElement(ctor) {
 
   const existing = registry.get?.(tagName) ?? null;
   if (existing === ctor) {
+    return;
+  }
+  if (
+    existing &&
+    existing[LITSX_MODULE_ID] &&
+    existing[LITSX_MODULE_ID] === ctor[LITSX_MODULE_ID]
+  ) {
     return;
   }
 
@@ -620,11 +645,13 @@ async function hydrateImpl(
   applyHydrationPayload(hydrationRoots, hydrationData);
 
   if (typeof register === "function") {
-    await register();
+    await runHydrationRegistration(register);
   }
 
   const specifiers = readClientImports(root, options);
-  const modules = await Promise.all(specifiers.map((specifier) => moduleLoader(specifier)));
+  const modules = await Promise.all(specifiers.map((specifier) =>
+    runHydrationRegistration(() => moduleLoader(specifier))
+  ));
   modules.forEach((moduleNamespace) => {
     if (getCustomElementRegistry() && moduleNamespace && typeof moduleNamespace === "object") {
       registerHydrationModule(moduleNamespace);
@@ -684,11 +711,13 @@ async function hydrateRootImpl(
   applyHydrationPayload([match], hydrationData);
 
   if (typeof register === "function") {
-    await register();
+    await runHydrationRegistration(register);
   }
 
   const specifiers = readClientImports(root, options);
-  const modules = await Promise.all(specifiers.map((specifier) => moduleLoader(specifier)));
+  const modules = await Promise.all(specifiers.map((specifier) =>
+    runHydrationRegistration(() => moduleLoader(specifier))
+  ));
   modules.forEach((moduleNamespace) => {
     if (getCustomElementRegistry() && moduleNamespace && typeof moduleNamespace === "object") {
       registerHydrationModule(moduleNamespace);

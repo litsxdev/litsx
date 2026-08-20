@@ -4,6 +4,7 @@ import path from "node:path";
 import { beforeEach, describe, it, vi } from "vitest";
 import {
   LITSX_HYDRATABLE_TAG,
+  LITSX_MODULE_ID,
 } from "../packages/core/src/elements/index.js";
 import { useSsrResourceSnapshot } from "../packages/core/src/index.js";
 
@@ -150,6 +151,22 @@ describe("@litsx/ssr/hydration", () => {
     registerHydrationModule({ ProductCard });
     registerHydrationModule({ ProductCard });
 
+    assert.strictEqual(registry.define.mock.calls.length, 1);
+  });
+
+  it("accepts an equivalent constructor evaluated through the same authored module", async () => {
+    const { registerHydrationModule } = await import("../packages/ssr/src/hydration.js");
+    const registry = createCustomElementsRegistry();
+    globalThis.customElements = registry;
+    const ProductCardA = createHydratableComponent("product-card");
+    const ProductCardB = createHydratableComponent("product-card");
+    ProductCardA[LITSX_MODULE_ID] = "/src/product-card.tsx";
+    ProductCardB[LITSX_MODULE_ID] = "/src/product-card.tsx";
+
+    registerHydrationModule({ ProductCardA });
+    registerHydrationModule({ ProductCardB });
+
+    assert.strictEqual(registry.get("product-card"), ProductCardA);
     assert.strictEqual(registry.define.mock.calls.length, 1);
   });
 

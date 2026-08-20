@@ -3,18 +3,17 @@
 import assert from "node:assert";
 import { execFileSync } from "node:child_process";
 import { html } from "lit";
+import { hydrate } from "@lit-labs/ssr-client";
 import { ref } from "../packages/core/src/index.js";
 import { createReactRef, toLitRef } from "../packages/core/src/react-compat.js";
-import { hydrate } from "../packages/ssr/src/client.js";
 import { describe, it } from "vitest";
 
 const serverScript = [
   'import { html } from "lit";',
   'import { ref } from "./packages/core/src/index.js";',
-  'import { render } from "./packages/ssr/src/index.js";',
-  'let output = "";',
-  'for (const chunk of render(html`<input ${ref(() => {})}>`)) output += chunk;',
-  'process.stdout.write(output);',
+  'import { renderToString } from "./packages/ssr/src/index.js";',
+  'const result = await renderToString(html`<input ${ref(() => {})}>`);',
+  'process.stdout.write(result.html);',
 ].join("\n");
 
 describe("direct Lit ref SSR hydration", () => {

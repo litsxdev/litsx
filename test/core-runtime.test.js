@@ -1778,14 +1778,14 @@ describe("litsx effects controller", () => {
     const firstNode = { tagName: "FORM", version: 1 };
     const secondNode = { tagName: "FORM", version: 2 };
     const assignments = [];
-    let current = null;
+    let value;
     const ref = {
-      get current() {
-        return current;
+      get value() {
+        return value;
       },
-      set current(value) {
-        current = value;
-        assignments.push(value);
+      set value(nextValue) {
+        value = nextValue;
+        assignments.push(nextValue);
       },
     };
     let target = firstNode;
@@ -1793,25 +1793,25 @@ describe("litsx effects controller", () => {
     const commit = () => {
       prepareEffects(host);
       useCallbackRef(host, () => target, (value) => {
-        ref.current = value;
+        ref.value = value;
       }, [ref]);
       update(host);
     };
 
     commit();
-    assert.strictEqual(ref.current, firstNode);
+    assert.strictEqual(ref.value, firstNode);
 
     target = null;
     commit();
-    assert.strictEqual(ref.current, null);
+    assert.strictEqual(ref.value, undefined);
 
     target = secondNode;
     commit();
-    assert.strictEqual(ref.current, secondNode);
+    assert.strictEqual(ref.value, secondNode);
 
     commit();
-    assert.strictEqual(ref.current, secondNode);
-    assert.deepStrictEqual(assignments, [firstNode, null, secondNode]);
+    assert.strictEqual(ref.value, secondNode);
+    assert.deepStrictEqual(assignments, [firstNode, undefined, secondNode]);
   });
 
   it("cleans and republishes refs when either the target or ref channel changes", () => {
@@ -1837,7 +1837,7 @@ describe("litsx effects controller", () => {
     ref = secondRef;
     commit();
 
-    assert.deepStrictEqual(firstCalls, [firstNode, null, secondNode, null]);
+    assert.deepStrictEqual(firstCalls, [firstNode, undefined, secondNode, undefined]);
     assert.deepStrictEqual(secondCalls, [secondNode]);
   });
 
@@ -1854,7 +1854,7 @@ describe("litsx effects controller", () => {
     prepareEffects(host);
     update(host);
 
-    assert.deepStrictEqual(calls, [node, null]);
+    assert.deepStrictEqual(calls, [node, undefined]);
   });
 
   it("cleans callback refs on disconnect", () => {

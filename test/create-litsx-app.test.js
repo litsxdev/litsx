@@ -295,7 +295,7 @@ describe("create-litsx-app", () => {
     const packageJson = JSON.parse(result.files.get("package.json"));
     const jsconfig = result.files.get("jsconfig.json");
     const mainSource = result.files.get("src/main.js");
-    const appSource = result.files.get("src/my-litsx-app.litsx");
+    const appSource = result.files.get("src/my-litsx-app.tsx");
     const appTestSource = result.files.get("src/my-litsx-app.test.js");
     const indexHtml = result.files.get("index.html");
     const devSource = result.files.get("dev.mjs");
@@ -322,8 +322,9 @@ describe("create-litsx-app", () => {
     assert.match(mainSource, /defineAppElements/);
     assert.match(mainSource, /defineAppElements/);
     assert.match(appSource, /export function MyLitsxApp/);
-    assert.match(appSource, /import \{ LitsxHero \} from "\.\/components\/litsx-hero\.litsx";/);
-    assert.match(appSource, /import \{ StarterGuide \} from "\.\/components\/starter-guide\.litsx";/);
+    assert.match(appSource, /import \{ css \} from "@litsx\/core";/);
+    assert.match(appSource, /import \{ LitsxHero \} from "\.\/components\/litsx-hero";/);
+    assert.match(appSource, /import \{ StarterGuide \} from "\.\/components\/starter-guide";/);
     assert.match(appSource, /customElements\.define\("my-litsx-app", MyLitsxApp as any\)/);
     assert.match(appSource, /eyebrow = "SSR starter"/);
     assert.match(appSource, /SSR for authored web components\./);
@@ -331,13 +332,17 @@ describe("create-litsx-app", () => {
     assert.match(appSource, /https:\/\/litsx\.dev\/guides\/ssr/);
     assert.match(appSource, /<LitsxHero/);
     assert.match(appSource, /<StarterGuide/);
+    assert.match(appSource, /MyLitsxApp\.styles = css`/);
+    assert.match(appSource, /on:primary-action=/);
+    assert.match(appSource, /on:secondary-action=/);
+    assert.doesNotMatch(appSource, /static styles|\s@[a-z][\w-]*=/);
     assert.match(appTestSource, /renders the SSR starter shell in a real browser DOM/);
     assert.match(devSource, /import \{ createSsrDevServer \} from "@litsx\/ssr";/);
     assert.match(devSource, /template: "\.\/index\.html"/);
     assert.match(devSource, /clientEntry: "\.\/src\/main\.js"/);
     assert.doesNotMatch(devSource, /scopedTemplate/);
     assert.match(devSource, /elements\(loader\) \{/);
-    assert.match(devSource, /loader\("\.\/src\/my-litsx-app\.litsx"\)/);
+    assert.match(devSource, /loader\("\.\/src\/my-litsx-app\.tsx"\)/);
     assert.match(devSource, /return html`<my-litsx-app/);
     assert.match(devSource, /\.eyebrow=\$\{"SSR starter"\}/);
     assert.match(devSource, /\.primaryLabel=\$\{"SSR docs"\}/);
@@ -353,7 +358,7 @@ describe("create-litsx-app", () => {
     assert.match(renderSource, /template: "\.\/index\.html"/);
     assert.match(renderSource, /clientEntry: "\.\/src\/main\.js"/);
     assert.match(renderSource, /elements\(loader\) \{/);
-    assert.match(renderSource, /loader\("\.\/src\/my-litsx-app\.litsx"\)/);
+    assert.match(renderSource, /loader\("\.\/src\/my-litsx-app\.tsx"\)/);
     assert.match(readme, /--template ssr/);
     assert.match(readme, /renderDocument/);
     assert.match(readme, /renderDocument/);
@@ -362,6 +367,7 @@ describe("create-litsx-app", () => {
     assert.match(readme, /automatic hydration bootstrap through `clientEntry`/);
     assert.match(readme, /same hero and guide components as the standard app scaffold/);
     assert.match(readme, /shared `index\.html` shell/i);
+    assert.match(readme, /standard JSX authoring in `src\/my-litsx-app\.tsx`/);
   });
 
   it("emits standard static assignments without legacy hoists", () => {

@@ -9,6 +9,7 @@ import {
 
 const DEDUPE_MIXIN_MARK = Symbol("litsx.dedupeMixinMark");
 const HYDRATION_RENDER_BEFORE = Symbol("litsx.hydrationRenderBefore");
+const HYDRATION_SUSPENSION = Symbol.for("litsx.hydrationSuspension");
 const LIGHT_DOM_STYLE_ELEMENT = Symbol("litsx.lightDomStyleElement");
 const SHADOW_DOM_CREATION_SCOPE = Symbol("litsx.shadowDomCreationScope");
 const SHADOW_DOM_REGISTRY = Symbol("litsx.shadowDomRegistry");
@@ -661,6 +662,21 @@ export const ShadowDomMixin = dedupeMixin((Base) =>
         upgradeScopedRegistryTree(this.shadowRoot, this.registry);
       } else if (typeof this.registry?.upgrade === "function") {
         this.registry.upgrade(this.shadowRoot);
+      }
+    }
+  }
+);
+
+export const HydrationSuspenseMixin = dedupeMixin((Base) =>
+  class HydrationSuspenseHost extends Base {
+    scheduleUpdate(...args) {
+      try {
+        return super.scheduleUpdate(...args);
+      } catch (thrown) {
+        if (this[HYDRATION_SUSPENSION] !== thrown) {
+          throw thrown;
+        }
+        return Promise.resolve(thrown);
       }
     }
   }

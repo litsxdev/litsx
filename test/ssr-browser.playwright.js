@@ -12,13 +12,20 @@ function viteFsSpecifier(filePath) {
   return `/@fs/${filePath}`;
 }
 
+function isolatedViteOptions(tempDir) {
+  return {
+    cacheDir: path.join(tempDir, ".vite-cache"),
+    optimizeDeps: { noDiscovery: true },
+  };
+}
+
 test("restores an SSR resource snapshot before the first hydrated render", async ({ page }) => {
   const tempRoot = path.join(repoRoot, "test-results");
   await fs.mkdir(tempRoot, { recursive: true });
   const tempDir = await fs.mkdtemp(path.join(tempRoot, "litsx-resource-snapshot-"));
   const srcDir = path.join(tempDir, "src");
   await fs.mkdir(srcDir, { recursive: true });
-  await fs.writeFile(path.join(srcDir, "resource-card.litsx"), `
+  await fs.writeFile(path.join(srcDir, "resource-card.tsx"), `
 import { useSsrResourceSnapshot } from "@litsx/core";
 
 const messages = new Map();
@@ -53,12 +60,13 @@ export function defineResourceCard() {
 }
 `);
   await fs.writeFile(path.join(srcDir, "main.js"), `
-import { defineResourceCard } from "./resource-card.litsx";
+import { defineResourceCard } from "./resource-card.tsx";
 defineResourceCard();
 `);
 
   const server = await createSsrDevServer({
     root: tempDir,
+    vite: isolatedViteOptions(tempDir),
     clientEntry: "./src/main.js",
     logLevel: "silent",
     host: "127.0.0.1",
@@ -66,7 +74,7 @@ defineResourceCard();
     elements(loader) {
       return {
         "resource-card": async () => {
-          const module = await loader("./src/resource-card.litsx");
+          const module = await loader("./src/resource-card.tsx");
           return module.ResourceCard;
         },
       };
@@ -115,7 +123,7 @@ test("hydrates both useExpose signatures without executing imperative handles du
   const tempDir = await fs.mkdtemp(path.join(tempRoot, "litsx-ssr-expose-"));
   const srcDir = path.join(tempDir, "src");
   await fs.mkdir(srcDir, { recursive: true });
-  await fs.writeFile(path.join(srcDir, "expose-card.litsx"), `
+  await fs.writeFile(path.join(srcDir, "expose-card.tsx"), `
 import { useExpose, useOnConnect, useRef } from "@litsx/core";
 
 export function ExposeCard() {
@@ -140,7 +148,7 @@ export function ExposeCard() {
   }, []);
 
   useOnConnect(() => {
-    window.__forwardedExposeHandle = forwardedRef.current;
+    window.__forwardedExposeHandle = forwardedRef.value;
   }, []);
 
   return <p id="status">Expose ready</p>;
@@ -151,19 +159,20 @@ export function defineExposeCard() {
 }
 `);
   await fs.writeFile(path.join(srcDir, "main.js"), `
-import { defineExposeCard } from "./expose-card.litsx";
+import { defineExposeCard } from "./expose-card.tsx";
 defineExposeCard();
 `);
 
   const server = await createSsrDevServer({
     root: tempDir,
+    vite: isolatedViteOptions(tempDir),
     clientEntry: "./src/main.js",
     logLevel: "silent",
     host: "127.0.0.1",
     strictPort: false,
     elements(loader) {
       return {
-        "expose-card": async () => (await loader("./src/expose-card.litsx")).ExposeCard,
+        "expose-card": async () => (await loader("./src/expose-card.tsx")).ExposeCard,
       };
     },
     render({ html: serverHtml }) {
@@ -215,7 +224,7 @@ test("restores a native object ref after the first client render suspends", asyn
   const tempDir = await fs.mkdtemp(path.join(tempRoot, "litsx-ssr-suspended-ref-"));
   const srcDir = path.join(tempDir, "src");
   await fs.mkdir(srcDir, { recursive: true });
-  await fs.writeFile(path.join(srcDir, "suspended-form.litsx"), `
+  await fs.writeFile(path.join(srcDir, "suspended-form.tsx"), `
 import { useOnCommit, useRef } from "@litsx/core";
 
 let clientReady = typeof window === "undefined";
@@ -236,7 +245,7 @@ export function SuspendedForm() {
   const formRef = useRef(null);
   useColdClientResource();
   useOnCommit(() => {
-    window.__suspendedFormRef = formRef.current;
+    window.__suspendedFormRef = formRef.value;
     window.__suspendedFormCommitCount = (window.__suspendedFormCommitCount ?? 0) + 1;
   }, []);
   return <form ref={formRef} id="suspended-form"><input name="query" value="ready" /></form>;
@@ -247,12 +256,13 @@ export function defineSuspendedForm() {
 }
 `);
   await fs.writeFile(path.join(srcDir, "main.js"), `
-import { defineSuspendedForm } from "./suspended-form.litsx";
+import { defineSuspendedForm } from "./suspended-form.tsx";
 defineSuspendedForm();
 `);
 
   const server = await createSsrDevServer({
     root: tempDir,
+    vite: isolatedViteOptions(tempDir),
     clientEntry: "./src/main.js",
     logLevel: "silent",
     host: "127.0.0.1",
@@ -260,7 +270,7 @@ defineSuspendedForm();
     elements(loader) {
       return {
         "suspended-form": async () =>
-          (await loader("./src/suspended-form.litsx")).SuspendedForm,
+          (await loader("./src/suspended-form.tsx")).SuspendedForm,
       };
     },
     render({ html: serverHtml }) {
@@ -345,13 +355,13 @@ test("hydrates a compiled LitSX host containing a dynamic noscript fallback with
   const tempDir = await fs.mkdtemp(path.join(tempRoot, "litsx-ssr-noscript-hydration-"));
   const srcDir = path.join(tempDir, "src");
   await fs.mkdir(srcDir, { recursive: true });
-  await fs.writeFile(path.join(srcDir, "noscript-host.litsx"), `
+  await fs.writeFile(path.join(srcDir, "noscript-host.tsx"), `
 export function NoscriptHost() {
   const title = "Hydrated fallback";
-  return <main><noscript><NoscriptCard .title={title} /></noscript><p id="live-content">Live content</p></main>;
+  return <main><noscript><NoscriptCard title={title} /></noscript><p id="live-content">Live content</p></main>;
 }
 
-export function NoscriptCard({ title }) {
+export function NoscriptCard({ title = "" }) {
   return <section id="noscript-fallback"><h2>{title}</h2></section>;
 }
 
@@ -362,18 +372,19 @@ export function defineNoscriptHost() {
 }
 `);
   await fs.writeFile(path.join(srcDir, "main.js"), `
-import { defineNoscriptHost } from "./noscript-host.litsx";
+import { defineNoscriptHost } from "./noscript-host.tsx";
 defineNoscriptHost();
 `);
   const server = await createSsrDevServer({
     root: tempDir,
+    vite: isolatedViteOptions(tempDir),
     clientEntry: "./src/main.js",
     logLevel: "silent",
     host: "127.0.0.1",
     strictPort: false,
     elements(loader) {
       return {
-        "noscript-host": async () => (await loader("./src/noscript-host.litsx")).NoscriptHost,
+        "noscript-host": async () => (await loader("./src/noscript-host.tsx")).NoscriptHost,
       };
     },
     render({ html: serverHtml }) {
@@ -410,8 +421,23 @@ test("hydrates nested LitSX property bindings for arrays, objects, and callbacks
   const tempDir = await fs.mkdtemp(path.join(tempRoot, "litsx-nested-properties-"));
   const srcDir = path.join(tempDir, "src");
   await fs.mkdir(srcDir, { recursive: true });
-  await fs.writeFile(path.join(srcDir, "nested-properties.litsx"), `
+  await fs.writeFile(path.join(srcDir, "nested-properties.tsx"), `
 import { useOnConnect, useState } from "@litsx/core";
+
+type Item = { id: string; label: string };
+type Config = { pageSize: number };
+type NestedProps = {
+  items?: Item[];
+  config?: Config;
+  value?: number;
+  enabled?: boolean;
+  onNavigate?: (item: Item) => void;
+};
+type ParentProps = NestedProps & {
+  resolveItems?: (items: Item[]) => Item[];
+  resolveConfig?: (config: Config) => Config;
+  createNavigateHandler?: () => (item: Item) => void;
+};
 
 export function NestedPropertyGrandchild({
   items = [],
@@ -419,7 +445,7 @@ export function NestedPropertyGrandchild({
   value = 0,
   enabled = false,
   onNavigate = () => {},
-}) {
+}: NestedProps) {
   useOnConnect(() => {
     window.__nestedPropertyState = {
       itemIds: items.map((item) => item.id),
@@ -429,7 +455,7 @@ export function NestedPropertyGrandchild({
       callbackType: typeof onNavigate,
     };
   }, [items, config, enabled, onNavigate]);
-  return <button id="navigate" @click={() => onNavigate(items[0])}>{items[0]?.label}:{config.pageSize}:{value}:{String(enabled)}</button>;
+  return <button id="navigate" on:click={() => onNavigate(items[0])}>{items[0]?.label}:{config.pageSize}:{value}:{String(enabled)}</button>;
 }
 
 export function NestedPropertyChild({
@@ -438,14 +464,14 @@ export function NestedPropertyChild({
   value = 0,
   enabled = false,
   onNavigate = () => {},
-}) {
+}: NestedProps) {
   return (
     <NestedPropertyGrandchild
-      .items={items}
-      .config={config}
-      .value={value}
-      ?enabled={enabled}
-      .onNavigate={onNavigate}
+      items={items}
+      config={config}
+      value={value}
+      enabled={enabled}
+      onNavigate={onNavigate}
     />
   );
 }
@@ -458,17 +484,17 @@ export function NestedPropertyParent({
   createNavigateHandler = () => (item) => {
     window.__nestedNavigation = item.id;
   },
-}) {
+}: ParentProps) {
   const [revision, setRevision] = useState(0);
   return (
     <section>
-      <button id="refresh" @click={() => setRevision(revision + 1)}>Refresh</button>
+      <button id="refresh" on:click={() => setRevision(revision + 1)}>Refresh</button>
       <NestedPropertyChild
-        .items={resolveItems(items)}
-        .config={resolveConfig(config)}
-        .value={revision}
-        ?enabled={true}
-        .onNavigate={createNavigateHandler()}
+        items={resolveItems(items)}
+        config={resolveConfig(config)}
+        value={revision}
+        enabled={true}
+        onNavigate={createNavigateHandler()}
       />
     </section>
   );
@@ -481,12 +507,13 @@ export function defineNestedProperties() {
 }
 `);
   await fs.writeFile(path.join(srcDir, "main.js"), `
-import { defineNestedProperties } from "./nested-properties.litsx";
+import { defineNestedProperties } from "./nested-properties.tsx";
 defineNestedProperties();
 `);
 
   const server = await createSsrDevServer({
     root: tempDir,
+    vite: isolatedViteOptions(tempDir),
     clientEntry: "./src/main.js",
     logLevel: "silent",
     host: "127.0.0.1",
@@ -494,7 +521,7 @@ defineNestedProperties();
     elements(loader) {
       return {
         "nested-property-parent": async () =>
-          (await loader("./src/nested-properties.litsx")).NestedPropertyParent,
+          (await loader("./src/nested-properties.tsx")).NestedPropertyParent,
       };
     },
     render({ html: serverHtml }) {
@@ -586,42 +613,37 @@ defineNestedProperties();
 
 function createComponentsSource() {
   return `
-import { useOnConnect, useState } from "@litsx/core";
+import { css, useOnConnect, useState } from "@litsx/core";
 
-export function SsrLeafShadow({ label }) {
-  static styles = \`:host { display: inline-block; color: rgb(0, 96, 128); }\`;
-
+export function SsrLeafShadow({ label = "" }) {
   useOnConnect(() => {
     window.__litsxClientConnectCalls = (window.__litsxClientConnectCalls ?? 0) + 1;
   }, []);
   const [count, setCount] = useState(3);
-  return <button id="leaf-button" @click={() => setCount(count + 1)}>leaf:{label}:{count}</button>;
+  return <button id="leaf-button" on:click={() => setCount(count + 1)}>leaf:{label}:{count}</button>;
 }
+SsrLeafShadow.styles = css\`:host { display: inline-block; color: rgb(0, 96, 128); }\`;
 
-export function SsrLightLayer({ children, level }) {
-  static lightDom = true;
-
+export function SsrLightLayer({ children, level = 0 }) {
   return <section class="light-layer" data-level={level}>{children}</section>;
 }
+SsrLightLayer.lightDom = true;
 
-export function SsrShadowLayer({ children, level }) {
-  static styles = \`:host { display: contents; }\`;
-
+export function SsrShadowLayer({ children, level = 0 }) {
   return <section class="shadow-layer" data-level={level}>{children}</section>;
 }
+SsrShadowLayer.styles = css\`:host { display: contents; }\`;
 
 export function SsrAppRoot({ name = "demo" }) {
-  static styles = \`:host { display: block; }\`;
-
   const [title] = useState(name);
   return (
     <main id="app-root">
       <h1>{title}</h1>
-      <SsrShadowLayer .level={1}>
-        <SsrLightLayer .level={2}>
-          <SsrShadowLayer .level={3}>
-            <SsrLightLayer .level={4}>
-              <SsrLeafShadow .label={title} />
+      <SsrShadowLayer level={1}>
+        <SsrLightLayer level={2}>
+          <SsrShadowLayer level={3}>
+            <SsrLightLayer level={4}>
+              <SsrLeafShadow label={title} />
             </SsrLightLayer>
           </SsrShadowLayer>
         </SsrLightLayer>
@@ -629,6 +651,7 @@ export function SsrAppRoot({ name = "demo" }) {
     </main>
   );
 }
+SsrAppRoot.styles = css\`:host { display: block; }\`;
 
 export function defineSsrComponents() {
   if (!customElements.get("ssr-app-root")) {
@@ -640,7 +663,7 @@ export function defineSsrComponents() {
 
 function createSuspenseComponentsSource() {
   return `
-import { SuspenseBoundary, SuspenseList, useOnConnect, useRef, useState, type LitsxRenderable } from "@litsx/core";
+import { css, SuspenseBoundary, SuspenseList, useOnConnect, useRef, useState, type LitsxRenderable } from "@litsx/core";
 
 function createDeferred() {
   let resolve = null;
@@ -651,8 +674,8 @@ function createDeferred() {
 }
 
 function resolvePendingSteps(pendingStepsRef) {
-  pendingStepsRef.current ??= new Map();
-  return pendingStepsRef.current;
+  pendingStepsRef.value ??= new Map();
+  return pendingStepsRef.value;
 }
 
 function suspendUntil(pendingStepsRef, stepIndex, revealedCount) {
@@ -679,24 +702,6 @@ export const GuideCard = ({
   titleRenderer?: () => LitsxRenderable;
   contentRenderer?: () => LitsxRenderable;
 }) => {
-  static styles = \`
-    :host { display: block; }
-    .guide-card {
-      padding: 24px;
-      border: 1px solid rgba(21, 32, 51, 0.08);
-      border-radius: 24px;
-      background:
-        linear-gradient(180deg, rgba(255, 255, 255, 0.78), transparent 140px),
-        rgba(255, 250, 245, 0.96);
-      box-shadow: 0 18px 48px rgba(21, 32, 51, 0.08);
-      animation: guide-card-enter 280ms ease both;
-    }
-    @keyframes guide-card-enter {
-      from { opacity: 0; transform: translateY(14px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-  \`;
-
   return (
     <article class="guide-card">
       <p class="guide-card__eyebrow">{eyebrow}</p>
@@ -706,12 +711,25 @@ export const GuideCard = ({
   );
 };
 
-export const SuspenseGuideApp = () => {
-  static styles = \`
-    :host { display: block; padding: 24px; font-family: sans-serif; }
-    .guide-list { display: grid; gap: 18px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  \`;
+GuideCard.styles = css\`
+  :host { display: block; }
+  .guide-card {
+    padding: 24px;
+    border: 1px solid rgba(21, 32, 51, 0.08);
+    border-radius: 24px;
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.78), transparent 140px),
+      rgba(255, 250, 245, 0.96);
+    box-shadow: 0 18px 48px rgba(21, 32, 51, 0.08);
+    animation: guide-card-enter 280ms ease both;
+  }
+  @keyframes guide-card-enter {
+    from { opacity: 0; transform: translateY(14px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+\`;
 
+export const SuspenseGuideApp = () => {
   const delays = [180, 220, 240];
   const pendingStepsRef = useRef(null);
   const [revealedCount, setRevealedCount] = useState(0);
@@ -730,7 +748,7 @@ export const SuspenseGuideApp = () => {
     for (const deferred of resolvePendingSteps(pendingStepsRef).values()) {
       deferred.resolve?.();
     }
-    pendingStepsRef.current = new Map();
+    pendingStepsRef.value = new Map();
     setRevealedCount(0);
 
     const [firstDelay = 0, ...remainingDelays] = delays;
@@ -763,7 +781,7 @@ export const SuspenseGuideApp = () => {
       for (const deferred of resolvePendingSteps(pendingStepsRef).values()) {
         deferred.resolve?.();
       }
-      pendingStepsRef.current = new Map();
+      pendingStepsRef.value = new Map();
     };
   }, []);
 
@@ -784,9 +802,9 @@ export const SuspenseGuideApp = () => {
         <SuspenseBoundary fallback={null}>
           {renderGuideCard(0, () => (
               <GuideCard
-                .eyebrow={"Getting started"}
-                .titleRenderer={() => <><code>src/app.litsx</code>, then open <code>Getting Started</code></>}
-                .contentRenderer={() => <p>First card body</p>}
+                eyebrow={"Getting started"}
+                titleRenderer={() => <><code>src/app.tsx</code>, then open <code>Getting Started</code></>}
+                contentRenderer={() => <p>First card body</p>}
               />
           ))}
         </SuspenseBoundary>
@@ -794,9 +812,9 @@ export const SuspenseGuideApp = () => {
         <SuspenseBoundary fallback={null}>
           {renderGuideCard(1, () => (
               <GuideCard
-                .eyebrow={"Authored model"}
-                .titleRenderer={() => <>Read <code>Authored Model</code> while you learn LitSX bindings</>}
-                .contentRenderer={() => <p>Second card body</p>}
+                eyebrow={"Authored model"}
+                titleRenderer={() => <>Read <code>Authored Model</code> while you learn LitSX bindings</>}
+                contentRenderer={() => <p>Second card body</p>}
               />
           ))}
         </SuspenseBoundary>
@@ -804,9 +822,9 @@ export const SuspenseGuideApp = () => {
         <SuspenseBoundary fallback={null}>
           {renderGuideCard(2, () => (
               <GuideCard
-                .eyebrow={"Tooling flow"}
-                .titleRenderer={() => "Pair the tooling docs with your daily loop"}
-                .contentRenderer={() => (
+                eyebrow={"Tooling flow"}
+                titleRenderer={() => "Pair the tooling docs with your daily loop"}
+                contentRenderer={() => (
                   <ul>
                     <li><code>npm run dev</code></li>
                     <li><code>npm run lint</code></li>
@@ -819,6 +837,11 @@ export const SuspenseGuideApp = () => {
     </section>
   );
 };
+
+SuspenseGuideApp.styles = css\`
+  :host { display: block; padding: 24px; font-family: sans-serif; }
+  .guide-list { display: grid; gap: 18px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+\`;
 
 export function defineSsrComponents() {
   if (!customElements.get("suspense-guide-app")) {
@@ -838,14 +861,14 @@ test("hydrates a real browser page rendered by @litsx/ssr", async ({ page }) => 
   const srcDir = path.join(tempDir, "src");
   await fs.mkdir(srcDir, { recursive: true });
 
-  const clientComponentsPath = path.join(srcDir, "components.client.litsx");
+  const clientComponentsPath = path.join(srcDir, "components.client.tsx");
   const clientEntryPath = path.join(srcDir, "main.js");
   const componentsSource = createComponentsSource();
   await fs.writeFile(clientComponentsPath, componentsSource);
   await fs.writeFile(
     clientEntryPath,
     `
-import { defineSsrComponents } from "./components.client.litsx";
+import { defineSsrComponents } from "./components.client.tsx";
 
 // The SSR bootstrap imports this entry through hydratePage({ register }).
 // Entries register custom elements; they must not hydrate the document again.
@@ -854,6 +877,7 @@ defineSsrComponents();
   );
   const server = await createSsrDevServer({
     root: tempDir,
+    vite: isolatedViteOptions(tempDir),
     clientEntry: "./src/main.js",
     logLevel: "silent",
     host: "127.0.0.1",
@@ -861,7 +885,7 @@ defineSsrComponents();
     elements(loader) {
       return {
         "ssr-app-root": async () =>
-          (await loader("./src/components.client.litsx")).SsrAppRoot,
+          (await loader("./src/components.client.tsx")).SsrAppRoot,
       };
     },
     render({ html }) {
@@ -956,7 +980,7 @@ test("hydrates without DOM duplication when using only the public hydration modu
   const srcDir = path.join(tempDir, "src");
   await fs.mkdir(srcDir, { recursive: true });
 
-  const clientComponentsPath = path.join(srcDir, "components.client.litsx");
+  const clientComponentsPath = path.join(srcDir, "components.client.tsx");
   const clientEntryPath = path.join(srcDir, "main.js");
   const hydrationEntryPath = path.join(repoRoot, "packages/ssr/src/hydration.js");
   await fs.writeFile(clientComponentsPath, createComponentsSource());
@@ -970,7 +994,7 @@ import {
 // The page bootstrap owns hydratePage(). This entry uses the public module
 // registration API to define the hydratable exports it provides.
 await registerHydrationModules([
-  () => import("./components.client.litsx"),
+  () => import("./components.client.tsx"),
 ]);
 
 function collectButtons() {
@@ -1001,6 +1025,7 @@ window.__litsxSsrRegisterBrowserResult = {
 
   const server = await createSsrDevServer({
     root: tempDir,
+    vite: isolatedViteOptions(tempDir),
     clientEntry: "./src/main.js",
     logLevel: "silent",
     host: "127.0.0.1",
@@ -1008,7 +1033,7 @@ window.__litsxSsrRegisterBrowserResult = {
     elements(loader) {
       return {
         "ssr-app-root": async () =>
-          (await loader("./src/components.client.litsx")).SsrAppRoot,
+          (await loader("./src/components.client.tsx")).SsrAppRoot,
       };
     },
     render({ html }) {
@@ -1048,13 +1073,13 @@ test("reveals suspense-list guide cards after SSR hydration", async ({ page }) =
   const srcDir = path.join(tempDir, "src");
   await fs.mkdir(srcDir, { recursive: true });
 
-  const clientComponentsPath = path.join(srcDir, "components.client.litsx");
+  const clientComponentsPath = path.join(srcDir, "components.client.tsx");
   const clientEntryPath = path.join(srcDir, "main.js");
   await fs.writeFile(clientComponentsPath, createSuspenseComponentsSource());
   await fs.writeFile(
     clientEntryPath,
     `
-import { defineSsrComponents } from "./components.client.litsx";
+import { defineSsrComponents } from "./components.client.tsx";
 
 defineSsrComponents();
 
@@ -1114,6 +1139,7 @@ setTimeout(() => {
 
   const server = await createSsrDevServer({
     root: tempDir,
+    vite: isolatedViteOptions(tempDir),
     clientEntry: "./src/main.js",
     logLevel: "silent",
     host: "127.0.0.1",
@@ -1121,7 +1147,7 @@ setTimeout(() => {
     elements(loader) {
       return {
         "suspense-guide-app": async () =>
-          (await loader("./src/components.client.litsx")).SuspenseGuideApp,
+          (await loader("./src/components.client.tsx")).SuspenseGuideApp,
       };
     },
     render({ html }) {
