@@ -481,14 +481,12 @@ test("keeps dynamic noscript fallback markup inert with JavaScript and usable wi
     strictPort: false,
     render({ html: serverHtml }) {
       const title = "No JavaScript fallback";
-      return serverHtml`<main><noscript data-litsx-noscript=${__litsxNoscript(
-        () => html`
-          <section id="noscript-fallback">
-            <h2>${title}</h2>
-            <a href="/browse">Browse</a>
-          </section>
-        `,
-      )}></noscript></main>`;
+      // Keep the elements adjacent: this fixture asserts the exact fallback text.
+      const fallback = () => {
+        // prettier-ignore
+        return html`<section id="noscript-fallback"><h2>${title}</h2><a href="/browse">Browse</a></section>`;
+      };
+      return serverHtml`<main><noscript data-litsx-noscript=${__litsxNoscript(fallback)}></noscript></main>`;
     },
   });
   await server.listen();
