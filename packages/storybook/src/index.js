@@ -314,7 +314,12 @@ function collectNestedLocalComponentReferences(program) {
     }
 
     for (const [key, value] of Object.entries(node)) {
-      if (key === "loc" || key === "start" || key === "end" || key === "extra") {
+      if (
+        key === "loc" ||
+        key === "start" ||
+        key === "end" ||
+        key === "extra"
+      ) {
         continue;
       }
       if (Array.isArray(value)) {
@@ -612,16 +617,28 @@ export function litsxStoryRegistrationPlugin(options = {}) {
   };
 }
 
-export function withLitsxStorybookViteConfig(config = {}, options = {}) {
+export function withLitsxStorybookViteConfig(
+  config = {},
+  options = {},
+  vitePlugins = {},
+) {
   const compilerOptions = normalizeCompilerOptions(options);
+  const beforeLitsx = Array.isArray(vitePlugins.beforeLitsx)
+    ? vitePlugins.beforeLitsx
+    : [];
+  const afterLitsx = Array.isArray(vitePlugins.afterLitsx)
+    ? vitePlugins.afterLitsx
+    : [];
 
   return {
     ...config,
     optimizeDeps: withoutRollupOptimizeDepsOptions(config.optimizeDeps),
     plugins: [
       litsxStoryRegistrationPlugin(compilerOptions),
+      ...beforeLitsx,
       ...(config.plugins ?? []),
       litsx({ sourceMaps: true, ...compilerOptions }),
+      ...afterLitsx,
     ],
   };
 }
@@ -635,6 +652,7 @@ export function createLitsxStorybookConfig(options = {}) {
     addons = ["@storybook/addon-docs", "@storybook/addon-a11y"],
     storybook = {},
     compiler = {},
+    vitePlugins = {},
   } = options;
 
   return {
@@ -654,7 +672,7 @@ export function createLitsxStorybookConfig(options = {}) {
         typeof storybook.viteFinal === "function"
           ? await storybook.viteFinal(config)
           : config;
-      return withLitsxStorybookViteConfig(baseConfig, compiler);
+      return withLitsxStorybookViteConfig(baseConfig, compiler, vitePlugins);
     },
   };
 }

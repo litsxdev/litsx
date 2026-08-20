@@ -90,7 +90,7 @@ describe("@litsx/storybook", () => {
       "function VdsModalStory() {",
       "  return <VdsModal />;",
       "}",
-      "const LocalPanel = () => <VdsButton label=\"Nested\" />;",
+      'const LocalPanel = () => <VdsButton label="Nested" />;',
       "const NestedHost = () => <LocalPanel />;",
       "",
       "export const Default = {",
@@ -326,6 +326,37 @@ describe("@litsx/storybook", () => {
     assert.strictEqual(config.plugins[0].name, "litsx-story-registration");
     assert.strictEqual(config.plugins[1], existingPlugin);
     assert.strictEqual(config.plugins[2].name, "litsx");
+  });
+
+  it("supports generic Vite plugin phases around LitSX", async () => {
+    const beforePlugin = { name: "before-litsx" };
+    const existingPlugin = { name: "existing" };
+    const afterPlugin = { name: "after-litsx" };
+    const directConfig = withLitsxStorybookViteConfig(
+      { plugins: [existingPlugin] },
+      {},
+      {
+        beforeLitsx: [beforePlugin],
+        afterLitsx: [afterPlugin],
+      },
+    );
+
+    assert.deepStrictEqual(
+      directConfig.plugins.map((plugin) => plugin.name),
+      [
+        "litsx-story-registration",
+        "before-litsx",
+        "existing",
+        "litsx",
+        "after-litsx",
+      ],
+    );
+
+    const wrappedConfig = createLitsxStorybookConfig({
+      vitePlugins: { afterLitsx: [afterPlugin] },
+    });
+    const resolved = await wrappedConfig.viteFinal({ plugins: [] });
+    assert.strictEqual(resolved.plugins.at(-1), afterPlugin);
   });
 
   it("registers stories after existing transforms using authored source metadata", () => {

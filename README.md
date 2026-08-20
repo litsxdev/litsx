@@ -38,6 +38,7 @@ truth when updating the website documentation.
 - [`packages/authoring`](./packages/authoring): shared standard JSX semantics and internal generated-template helpers
 - [`packages/scoped-registry-shim`](./packages/scoped-registry-shim): internal shimmed scoped-registry runtime used by shadow hosts and renderer mounts
 - [`packages/vite-plugin`](./packages/vite-plugin): Vite integration
+- [`packages/unocss`](./packages/unocss): UnoCSS component-style integration with shared Shadow DOM preflight
 
 ### Babel toolchain
 

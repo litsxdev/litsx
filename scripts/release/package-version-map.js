@@ -2,7 +2,11 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
+const repoRoot = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "..",
+  "..",
+);
 
 export const packageDirsByName = new Map([
   ["@litsx/core", "packages/core"],
@@ -18,15 +22,27 @@ export const packageDirsByName = new Map([
   ["@litsx/prop-types", "packages/prop-types"],
   ["@litsx/babel-preset-litsx", "packages/babel-preset-litsx"],
   ["@litsx/babel-preset-react-compat", "packages/babel-preset-react-compat"],
-  ["@litsx/babel-plugin-transform-jsx-html-template", "packages/babel-plugin-transform-jsx-html-template"],
-  ["@litsx/babel-plugin-transform-litsx-scoped-elements", "packages/babel-plugin-transform-litsx-scoped-elements"],
-  ["@litsx/babel-plugin-litsx-proptypes", "packages/babel-plugin-litsx-proptypes"],
+  [
+    "@litsx/babel-plugin-transform-jsx-html-template",
+    "packages/babel-plugin-transform-jsx-html-template",
+  ],
+  [
+    "@litsx/babel-plugin-transform-litsx-scoped-elements",
+    "packages/babel-plugin-transform-litsx-scoped-elements",
+  ],
+  [
+    "@litsx/babel-plugin-litsx-proptypes",
+    "packages/babel-plugin-litsx-proptypes",
+  ],
   ["@litsx/babel-plugin-shared-hooks", "packages/babel-plugin-shared-hooks"],
   ["@litsx/typescript-session", "packages/typescript-session"],
+  ["@litsx/unocss", "packages/unocss"],
 ]);
 
 export function readPackageManifest(packageDir) {
-  return JSON.parse(fs.readFileSync(path.join(repoRoot, packageDir, "package.json"), "utf8"));
+  return JSON.parse(
+    fs.readFileSync(path.join(repoRoot, packageDir, "package.json"), "utf8"),
+  );
 }
 
 export function readPackageVersion(packageName) {
@@ -39,6 +55,9 @@ export function readPackageVersion(packageName) {
 
 export function createCaretVersionMap(packageNames) {
   return Object.fromEntries(
-    packageNames.map((packageName) => [packageName, `^${readPackageVersion(packageName)}`]),
+    packageNames.map((packageName) => [
+      packageName,
+      `^${readPackageVersion(packageName)}`,
+    ]),
   );
 }

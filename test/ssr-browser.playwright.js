@@ -4,7 +4,12 @@ import { expect, test } from "@playwright/test";
 import { createSsrDevServer } from "../packages/ssr/src/index.js";
 import { LITSX_HYDRATION_PAYLOAD_PROPERTY } from "../packages/ssr/src/hydration.js";
 import { __litsxNoscript } from "../packages/core/src/index.js";
+import {
+  createUnoCssVitePlugins,
+  withUnoCssViteCompiler,
+} from "../packages/unocss/src/vite.js";
 import { html } from "lit";
+import { presetWind4 } from "unocss";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 
@@ -19,13 +24,128 @@ function isolatedViteOptions(tempDir) {
   };
 }
 
-test("restores an SSR resource snapshot before the first hydrated render", async ({ page }) => {
+test("applies shared Wind4 styles after SSR hydration in shadow and light DOM", async ({
+  page,
+}) => {
   const tempRoot = path.join(repoRoot, "test-results");
   await fs.mkdir(tempRoot, { recursive: true });
-  const tempDir = await fs.mkdtemp(path.join(tempRoot, "litsx-resource-snapshot-"));
+  const tempDir = await fs.mkdtemp(path.join(tempRoot, "litsx-unocss-wind4-"));
   const srcDir = path.join(tempDir, "src");
   await fs.mkdir(srcDir, { recursive: true });
-  await fs.writeFile(path.join(srcDir, "resource-card.tsx"), `
+  await fs.writeFile(
+    path.join(srcDir, "wind-cards.tsx"),
+    `
+export function ShadowWindCard() {
+  return <article id="shadow-panel" class="p-4 rounded-lg bg-red-500">Shadow</article>;
+}
+
+export function LightWindCard() {
+  return <article id="light-panel" class="p-8 rounded-lg bg-blue-500">Light</article>;
+}
+LightWindCard.lightDom = true;
+
+export function defineWindCards() {
+  if (!customElements.get("shadow-wind-card")) {
+    customElements.define("shadow-wind-card", ShadowWindCard);
+  }
+  if (!customElements.get("light-wind-card")) {
+    customElements.define("light-wind-card", LightWindCard);
+  }
+}
+`,
+  );
+  await fs.writeFile(
+    path.join(srcDir, "main.js"),
+    `
+import { defineWindCards } from "./wind-cards.tsx";
+defineWindCards();
+`,
+  );
+
+  const unoOptions = { presets: [presetWind4()] };
+  const server = await createSsrDevServer({
+    root: tempDir,
+    vite: isolatedViteOptions(tempDir),
+    clientEntry: "./src/main.js",
+    logLevel: "silent",
+    host: "127.0.0.1",
+    strictPort: false,
+    litsx: withUnoCssViteCompiler(),
+    plugins: createUnoCssVitePlugins(unoOptions),
+    elements(loader) {
+      return {
+        "shadow-wind-card": async () =>
+          (await loader("./src/wind-cards.tsx")).ShadowWindCard,
+        "light-wind-card": async () =>
+          (await loader("./src/wind-cards.tsx")).LightWindCard,
+      };
+    },
+    render({ html: serverHtml }) {
+      return serverHtml`
+        <shadow-wind-card></shadow-wind-card>
+        <light-wind-card></light-wind-card>
+      `;
+    },
+  });
+  await server.listen();
+
+  try {
+    const consoleErrors = [];
+    const pageErrors = [];
+    page.on("console", (message) => {
+      if (message.type() === "error") consoleErrors.push(message.text());
+    });
+    page.on("pageerror", (error) => pageErrors.push(error.message));
+    await page.goto(server.resolvedUrls.local[0]);
+    await page.waitForFunction(
+      () =>
+        customElements.get("shadow-wind-card") !== undefined &&
+        customElements.get("light-wind-card") !== undefined,
+    );
+    const result = await page.evaluate(() => {
+      const shadowPanel = document
+        .querySelector("shadow-wind-card")
+        ?.shadowRoot?.querySelector("#shadow-panel");
+      const lightPanel = document.querySelector("light-wind-card #light-panel");
+      const shadowStyle = getComputedStyle(shadowPanel);
+      const lightStyle = getComputedStyle(lightPanel);
+      return {
+        shadowPadding: shadowStyle.padding,
+        shadowRadius: shadowStyle.borderRadius,
+        shadowBackground: shadowStyle.backgroundColor,
+        lightPadding: lightStyle.padding,
+        lightRadius: lightStyle.borderRadius,
+        lightBackground: lightStyle.backgroundColor,
+      };
+    });
+
+    expect(result.shadowPadding).toBe("16px");
+    expect(result.shadowRadius).not.toBe("0px");
+    expect(result.shadowBackground).not.toBe("rgba(0, 0, 0, 0)");
+    expect(result.lightPadding).toBe("32px");
+    expect(result.lightRadius).not.toBe("0px");
+    expect(result.lightBackground).not.toBe("rgba(0, 0, 0, 0)");
+    expect(consoleErrors).toEqual([]);
+    expect(pageErrors).toEqual([]);
+  } finally {
+    await server.close();
+    await fs.rm(tempDir, { recursive: true, force: true });
+  }
+});
+
+test("restores an SSR resource snapshot before the first hydrated render", async ({
+  page,
+}) => {
+  const tempRoot = path.join(repoRoot, "test-results");
+  await fs.mkdir(tempRoot, { recursive: true });
+  const tempDir = await fs.mkdtemp(
+    path.join(tempRoot, "litsx-resource-snapshot-"),
+  );
+  const srcDir = path.join(tempDir, "src");
+  await fs.mkdir(srcDir, { recursive: true });
+  await fs.writeFile(
+    path.join(srcDir, "resource-card.tsx"),
+    `
 import { useSsrResourceSnapshot } from "@litsx/core";
 
 const messages = new Map();
@@ -58,11 +178,15 @@ export function ResourceCard() {
 export function defineResourceCard() {
   if (!customElements.get("resource-card")) customElements.define("resource-card", ResourceCard);
 }
-`);
-  await fs.writeFile(path.join(srcDir, "main.js"), `
+`,
+  );
+  await fs.writeFile(
+    path.join(srcDir, "main.js"),
+    `
 import { defineResourceCard } from "./resource-card.tsx";
 defineResourceCard();
-`);
+`,
+  );
 
   const server = await createSsrDevServer({
     root: tempDir,
@@ -92,16 +216,24 @@ defineResourceCard();
     });
     const url = server.resolvedUrls.local[0];
     const documentSource = await (await fetch(url)).text();
-    expect(documentSource).toContain('"resources":{"library:i18n":{"title":"SSR resource"}}');
+    expect(documentSource).toContain(
+      '"resources":{"library:i18n":{"title":"SSR resource"}}',
+    );
     await page.goto(url);
     // Vite may perform one development reload after materializing the first
     // client asset graph. Assert against the settled hydration document.
     await page.waitForTimeout(1_000);
     await page.waitForLoadState("networkidle");
-    await page.waitForFunction(() => customElements.get("resource-card") !== undefined);
+    await page.waitForFunction(
+      () => customElements.get("resource-card") !== undefined,
+    );
     const result = await page.evaluate(() => ({
-      title: document.querySelector("resource-card")?.shadowRoot?.querySelector("#title")?.textContent,
-      titleCount: document.querySelector("resource-card")?.shadowRoot?.querySelectorAll("#title").length,
+      title: document
+        .querySelector("resource-card")
+        ?.shadowRoot?.querySelector("#title")?.textContent,
+      titleCount: document
+        .querySelector("resource-card")
+        ?.shadowRoot?.querySelectorAll("#title").length,
       restores: window.__resourceRestoreCount ?? 0,
       clientLoads: window.__resourceClientLoadCount ?? 0,
     }));
@@ -117,13 +249,17 @@ defineResourceCard();
   }
 });
 
-test("hydrates both useExpose signatures without executing imperative handles during SSR", async ({ page }) => {
+test("hydrates both useExpose signatures without executing imperative handles during SSR", async ({
+  page,
+}) => {
   const tempRoot = path.join(repoRoot, "test-results");
   await fs.mkdir(tempRoot, { recursive: true });
   const tempDir = await fs.mkdtemp(path.join(tempRoot, "litsx-ssr-expose-"));
   const srcDir = path.join(tempDir, "src");
   await fs.mkdir(srcDir, { recursive: true });
-  await fs.writeFile(path.join(srcDir, "expose-card.tsx"), `
+  await fs.writeFile(
+    path.join(srcDir, "expose-card.tsx"),
+    `
 import { useExpose, useOnConnect, useRef } from "@litsx/core";
 
 export function ExposeCard() {
@@ -157,11 +293,15 @@ export function ExposeCard() {
 export function defineExposeCard() {
   if (!customElements.get("expose-card")) customElements.define("expose-card", ExposeCard);
 }
-`);
-  await fs.writeFile(path.join(srcDir, "main.js"), `
+`,
+  );
+  await fs.writeFile(
+    path.join(srcDir, "main.js"),
+    `
 import { defineExposeCard } from "./expose-card.tsx";
 defineExposeCard();
-`);
+`,
+  );
 
   const server = await createSsrDevServer({
     root: tempDir,
@@ -172,7 +312,8 @@ defineExposeCard();
     strictPort: false,
     elements(loader) {
       return {
-        "expose-card": async () => (await loader("./src/expose-card.tsx")).ExposeCard,
+        "expose-card": async () =>
+          (await loader("./src/expose-card.tsx")).ExposeCard,
       };
     },
     render({ html: serverHtml }) {
@@ -193,8 +334,10 @@ defineExposeCard();
     await page.goto(url);
     await page.waitForFunction(() => {
       const element = document.querySelector("expose-card");
-      return typeof element?.focus === "function" &&
-        typeof window.__forwardedExposeHandle?.focus === "function";
+      return (
+        typeof element?.focus === "function" &&
+        typeof window.__forwardedExposeHandle?.focus === "function"
+      );
     });
     const result = await page.evaluate(() => {
       const element = document.querySelector("expose-card");
@@ -218,13 +361,19 @@ defineExposeCard();
   }
 });
 
-test("restores a native object ref after the first client render suspends", async ({ page }) => {
+test("restores a native object ref after the first client render suspends", async ({
+  page,
+}) => {
   const tempRoot = path.join(repoRoot, "test-results");
   await fs.mkdir(tempRoot, { recursive: true });
-  const tempDir = await fs.mkdtemp(path.join(tempRoot, "litsx-ssr-suspended-ref-"));
+  const tempDir = await fs.mkdtemp(
+    path.join(tempRoot, "litsx-ssr-suspended-ref-"),
+  );
   const srcDir = path.join(tempDir, "src");
   await fs.mkdir(srcDir, { recursive: true });
-  await fs.writeFile(path.join(srcDir, "suspended-form.tsx"), `
+  await fs.writeFile(
+    path.join(srcDir, "suspended-form.tsx"),
+    `
 import { useOnCommit, useRef } from "@litsx/core";
 
 let clientReady = typeof window === "undefined";
@@ -254,11 +403,15 @@ export function SuspendedForm() {
 export function defineSuspendedForm() {
   if (!customElements.get("suspended-form")) customElements.define("suspended-form", SuspendedForm);
 }
-`);
-  await fs.writeFile(path.join(srcDir, "main.js"), `
+`,
+  );
+  await fs.writeFile(
+    path.join(srcDir, "main.js"),
+    `
 import { defineSuspendedForm } from "./suspended-form.tsx";
 defineSuspendedForm();
-`);
+`,
+  );
 
   const server = await createSsrDevServer({
     root: tempDir,
@@ -293,15 +446,19 @@ defineSuspendedForm();
       return Boolean(form && window.__suspendedFormRef === form);
     });
 
-    expect(await page.evaluate(() => {
-      const host = document.querySelector("suspended-form");
-      const forms = host?.shadowRoot?.querySelectorAll("#suspended-form") ?? [];
-      return {
-        formCount: forms.length,
-        refMatches: forms.length === 1 && window.__suspendedFormRef === forms[0],
-        commits: window.__suspendedFormCommitCount ?? 0,
-      };
-    })).toEqual({
+    expect(
+      await page.evaluate(() => {
+        const host = document.querySelector("suspended-form");
+        const forms =
+          host?.shadowRoot?.querySelectorAll("#suspended-form") ?? [];
+        return {
+          formCount: forms.length,
+          refMatches:
+            forms.length === 1 && window.__suspendedFormRef === forms[0],
+          commits: window.__suspendedFormCommitCount ?? 0,
+        };
+      }),
+    ).toEqual({
       formCount: 1,
       refMatches: true,
       commits: 1,
@@ -313,7 +470,10 @@ defineSuspendedForm();
   }
 });
 
-test("keeps dynamic noscript fallback markup inert with JavaScript and usable without it", async ({ browser, page }) => {
+test("keeps dynamic noscript fallback markup inert with JavaScript and usable without it", async ({
+  browser,
+  page,
+}) => {
   const server = await createSsrDevServer({
     root: repoRoot,
     logLevel: "silent",
@@ -321,9 +481,14 @@ test("keeps dynamic noscript fallback markup inert with JavaScript and usable wi
     strictPort: false,
     render({ html: serverHtml }) {
       const title = "No JavaScript fallback";
-      return serverHtml`<main><noscript data-litsx-noscript=${__litsxNoscript(() => html`
-        <section id="noscript-fallback"><h2>${title}</h2><a href="/browse">Browse</a></section>
-      `)}></noscript></main>`;
+      return serverHtml`<main><noscript data-litsx-noscript=${__litsxNoscript(
+        () => html`
+          <section id="noscript-fallback">
+            <h2>${title}</h2>
+            <a href="/browse">Browse</a>
+          </section>
+        `,
+      )}></noscript></main>`;
     },
   });
   await server.listen();
@@ -338,24 +503,37 @@ test("keeps dynamic noscript fallback markup inert with JavaScript and usable wi
     await expect(page.locator("#noscript-fallback")).toHaveCount(0);
     expect(consoleErrors).toEqual([]);
 
-    const noScriptContext = await browser.newContext({ javaScriptEnabled: false });
+    const noScriptContext = await browser.newContext({
+      javaScriptEnabled: false,
+    });
     const noScriptPage = await noScriptContext.newPage();
     await noScriptPage.goto(url);
-    await expect(noScriptPage.locator("#noscript-fallback")).toHaveText("No JavaScript fallbackBrowse");
-    await expect(noScriptPage.locator("#noscript-fallback a")).toHaveAttribute("href", "/browse");
+    await expect(noScriptPage.locator("#noscript-fallback")).toHaveText(
+      "No JavaScript fallbackBrowse",
+    );
+    await expect(noScriptPage.locator("#noscript-fallback a")).toHaveAttribute(
+      "href",
+      "/browse",
+    );
     await noScriptContext.close();
   } finally {
     await server.close();
   }
 });
 
-test("hydrates a compiled LitSX host containing a dynamic noscript fallback without errors", async ({ page }) => {
+test("hydrates a compiled LitSX host containing a dynamic noscript fallback without errors", async ({
+  page,
+}) => {
   const tempRoot = path.join(repoRoot, "test-results");
   await fs.mkdir(tempRoot, { recursive: true });
-  const tempDir = await fs.mkdtemp(path.join(tempRoot, "litsx-ssr-noscript-hydration-"));
+  const tempDir = await fs.mkdtemp(
+    path.join(tempRoot, "litsx-ssr-noscript-hydration-"),
+  );
   const srcDir = path.join(tempDir, "src");
   await fs.mkdir(srcDir, { recursive: true });
-  await fs.writeFile(path.join(srcDir, "noscript-host.tsx"), `
+  await fs.writeFile(
+    path.join(srcDir, "noscript-host.tsx"),
+    `
 export function NoscriptHost() {
   const title = "Hydrated fallback";
   return <main><noscript><NoscriptCard title={title} /></noscript><p id="live-content">Live content</p></main>;
@@ -370,11 +548,15 @@ export function defineNoscriptHost() {
     customElements.define("noscript-host", NoscriptHost);
   }
 }
-`);
-  await fs.writeFile(path.join(srcDir, "main.js"), `
+`,
+  );
+  await fs.writeFile(
+    path.join(srcDir, "main.js"),
+    `
 import { defineNoscriptHost } from "./noscript-host.tsx";
 defineNoscriptHost();
-`);
+`,
+  );
   const server = await createSsrDevServer({
     root: tempDir,
     vite: isolatedViteOptions(tempDir),
@@ -384,7 +566,8 @@ defineNoscriptHost();
     strictPort: false,
     elements(loader) {
       return {
-        "noscript-host": async () => (await loader("./src/noscript-host.tsx")).NoscriptHost,
+        "noscript-host": async () =>
+          (await loader("./src/noscript-host.tsx")).NoscriptHost,
       };
     },
     render({ html: serverHtml }) {
@@ -399,11 +582,14 @@ defineNoscriptHost();
       if (message.type() === "error") consoleErrors.push(message.text());
     });
     await page.goto(server.resolvedUrls.local[0]);
-    await page.waitForFunction(() => customElements.get("noscript-host") !== undefined);
+    await page.waitForFunction(
+      () => customElements.get("noscript-host") !== undefined,
+    );
     const result = await page.evaluate(() => {
       const root = document.querySelector("noscript-host")?.shadowRoot;
       return {
-        fallbackElementCount: root?.querySelectorAll("#noscript-fallback").length ?? 0,
+        fallbackElementCount:
+          root?.querySelectorAll("#noscript-fallback").length ?? 0,
         liveText: root?.querySelector("#live-content")?.textContent ?? "",
       };
     });
@@ -415,13 +601,20 @@ defineNoscriptHost();
   }
 });
 
-test("hydrates nested LitSX property bindings for arrays, objects, and callbacks", async ({ browser, page }) => {
+test("hydrates nested LitSX property bindings for arrays, objects, and callbacks", async ({
+  browser,
+  page,
+}) => {
   const tempRoot = path.join(repoRoot, "test-results");
   await fs.mkdir(tempRoot, { recursive: true });
-  const tempDir = await fs.mkdtemp(path.join(tempRoot, "litsx-nested-properties-"));
+  const tempDir = await fs.mkdtemp(
+    path.join(tempRoot, "litsx-nested-properties-"),
+  );
   const srcDir = path.join(tempDir, "src");
   await fs.mkdir(srcDir, { recursive: true });
-  await fs.writeFile(path.join(srcDir, "nested-properties.tsx"), `
+  await fs.writeFile(
+    path.join(srcDir, "nested-properties.tsx"),
+    `
 import { useOnConnect, useState } from "@litsx/core";
 
 type Item = { id: string; label: string };
@@ -505,11 +698,15 @@ export function defineNestedProperties() {
     customElements.define("nested-property-parent", NestedPropertyParent);
   }
 }
-`);
-  await fs.writeFile(path.join(srcDir, "main.js"), `
+`,
+  );
+  await fs.writeFile(
+    path.join(srcDir, "main.js"),
+    `
 import { defineNestedProperties } from "./nested-properties.tsx";
 defineNestedProperties();
-`);
+`,
+  );
 
   const server = await createSsrDevServer({
     root: tempDir,
@@ -541,21 +738,27 @@ defineNestedProperties();
     const url = server.resolvedUrls.local[0];
     const ssrHtml = await (await fetch(url)).text();
     expect(ssrHtml.match(/<nested-property-child\b/g) ?? []).toHaveLength(1);
-    expect(ssrHtml.match(/<nested-property-grandchild\b/g) ?? []).toHaveLength(1);
+    expect(ssrHtml.match(/<nested-property-grandchild\b/g) ?? []).toHaveLength(
+      1,
+    );
 
     const ssrContext = await browser.newContext({ javaScriptEnabled: false });
     const ssrPage = await ssrContext.newPage();
     await ssrPage.goto(url);
-    expect(await ssrPage.evaluate(() => {
-      const parent = document.querySelector("nested-property-parent");
-      const children = parent?.shadowRoot?.querySelectorAll("nested-property-child") ?? [];
-      const child = children[0];
-      return {
-        childCount: children.length,
-        grandchildCount:
-          child?.shadowRoot?.querySelectorAll("nested-property-grandchild").length ?? 0,
-      };
-    })).toEqual({ childCount: 1, grandchildCount: 1 });
+    expect(
+      await ssrPage.evaluate(() => {
+        const parent = document.querySelector("nested-property-parent");
+        const children =
+          parent?.shadowRoot?.querySelectorAll("nested-property-child") ?? [];
+        const child = children[0];
+        return {
+          childCount: children.length,
+          grandchildCount:
+            child?.shadowRoot?.querySelectorAll("nested-property-grandchild")
+              .length ?? 0,
+        };
+      }),
+    ).toEqual({ childCount: 1, grandchildCount: 1 });
     await ssrContext.close();
 
     await page.goto(url, { waitUntil: "networkidle" });
@@ -568,40 +771,54 @@ defineNestedProperties();
       enabled: true,
       callbackType: "function",
     });
-    await page.locator("nested-property-parent").evaluate((parent) =>
-      parent.shadowRoot.querySelector("#refresh").click()
-    );
+    await page
+      .locator("nested-property-parent")
+      .evaluate((parent) =>
+        parent.shadowRoot.querySelector("#refresh").click(),
+      );
     await page.waitForFunction(() => {
       const parent = document.querySelector("nested-property-parent");
       const child = parent?.shadowRoot?.querySelector("nested-property-child");
-      const grandchild = child?.shadowRoot?.querySelector("nested-property-grandchild");
+      const grandchild = child?.shadowRoot?.querySelector(
+        "nested-property-grandchild",
+      );
       return grandchild?.value === 1;
     });
-    expect(await page.evaluate(() => {
-      const parent = document.querySelector("nested-property-parent");
-      const children = parent?.shadowRoot?.querySelectorAll("nested-property-child") ?? [];
-      const child = children[0];
-      const grandchildren = child?.shadowRoot?.querySelectorAll("nested-property-grandchild") ?? [];
-      const grandchild = grandchildren[0];
-      return {
-        childCount: children.length,
-        grandchildCount: grandchildren.length,
-        childMatchesParentScope:
-          child?.constructor === parent?.constructor?.elements?.["nested-property-child"],
-        grandchildMatchesChildScope:
-          grandchild?.constructor === child?.constructor?.elements?.["nested-property-grandchild"],
-      };
-    })).toEqual({
+    expect(
+      await page.evaluate(() => {
+        const parent = document.querySelector("nested-property-parent");
+        const children =
+          parent?.shadowRoot?.querySelectorAll("nested-property-child") ?? [];
+        const child = children[0];
+        const grandchildren =
+          child?.shadowRoot?.querySelectorAll("nested-property-grandchild") ??
+          [];
+        const grandchild = grandchildren[0];
+        return {
+          childCount: children.length,
+          grandchildCount: grandchildren.length,
+          childMatchesParentScope:
+            child?.constructor ===
+            parent?.constructor?.elements?.["nested-property-child"],
+          grandchildMatchesChildScope:
+            grandchild?.constructor ===
+            child?.constructor?.elements?.["nested-property-grandchild"],
+        };
+      }),
+    ).toEqual({
       childCount: 1,
       grandchildCount: 1,
       childMatchesParentScope: true,
       grandchildMatchesChildScope: true,
     });
-    const button = await page.locator("nested-property-parent").evaluateHandle((parent) =>
-      parent.shadowRoot.querySelector("nested-property-child")
-        .shadowRoot.querySelector("nested-property-grandchild")
-        .shadowRoot.querySelector("#navigate")
-    );
+    const button = await page
+      .locator("nested-property-parent")
+      .evaluateHandle((parent) =>
+        parent.shadowRoot
+          .querySelector("nested-property-child")
+          .shadowRoot.querySelector("nested-property-grandchild")
+          .shadowRoot.querySelector("#navigate"),
+      );
     await button.asElement()?.click();
     expect(await page.evaluate(() => window.__nestedNavigation)).toBe("first");
     expect(pageErrors).toEqual([]);
@@ -854,7 +1071,9 @@ export function defineSsrComponents() {
 `;
 }
 
-test("hydrates a real browser page rendered by @litsx/ssr", async ({ page }) => {
+test("hydrates a real browser page rendered by @litsx/ssr", async ({
+  page,
+}) => {
   const tempRoot = path.join(repoRoot, "test-results");
   await fs.mkdir(tempRoot, { recursive: true });
   const tempDir = await fs.mkdtemp(path.join(tempRoot, "litsx-ssr-browser-"));
@@ -909,7 +1128,8 @@ defineSsrComponents();
       const root = document.querySelector("ssr-app-root");
       return {
         rootPayload: root?.[hydrationPayloadProperty] ?? null,
-        rootText: root?.shadowRoot?.querySelector("#app-root")?.textContent ?? "",
+        rootText:
+          root?.shadowRoot?.querySelector("#app-root")?.textContent ?? "",
         hasDeclarativeShadowDom: Boolean(root?.shadowRoot),
       };
     }, LITSX_HYDRATION_PAYLOAD_PROPERTY);
@@ -935,7 +1155,9 @@ defineSsrComponents();
         }
       };
       collectButtons(document);
-      return buttons.length === 1 && buttons[0].textContent === "leaf:Real Browser:3";
+      return (
+        buttons.length === 1 && buttons[0].textContent === "leaf:Real Browser:3"
+      );
     });
     const clickResult = await page.evaluate(async () => {
       const root = document.querySelector("ssr-app-root");
@@ -973,16 +1195,23 @@ defineSsrComponents();
   }
 });
 
-test("hydrates without DOM duplication when using only the public hydration module-registration API", async ({ page }) => {
+test("hydrates without DOM duplication when using only the public hydration module-registration API", async ({
+  page,
+}) => {
   const tempRoot = path.join(repoRoot, "test-results");
   await fs.mkdir(tempRoot, { recursive: true });
-  const tempDir = await fs.mkdtemp(path.join(tempRoot, "litsx-ssr-browser-register-"));
+  const tempDir = await fs.mkdtemp(
+    path.join(tempRoot, "litsx-ssr-browser-register-"),
+  );
   const srcDir = path.join(tempDir, "src");
   await fs.mkdir(srcDir, { recursive: true });
 
   const clientComponentsPath = path.join(srcDir, "components.client.tsx");
   const clientEntryPath = path.join(srcDir, "main.js");
-  const hydrationEntryPath = path.join(repoRoot, "packages/ssr/src/hydration.js");
+  const hydrationEntryPath = path.join(
+    repoRoot,
+    "packages/ssr/src/hydration.js",
+  );
   await fs.writeFile(clientComponentsPath, createComponentsSource());
   await fs.writeFile(
     clientEntryPath,
@@ -1051,9 +1280,13 @@ window.__litsxSsrRegisterBrowserResult = {
       }
     });
     await page.goto(url);
-    await page.waitForFunction(() => Boolean(window.__litsxSsrRegisterBrowserResult));
+    await page.waitForFunction(() =>
+      Boolean(window.__litsxSsrRegisterBrowserResult),
+    );
 
-    const browserResult = await page.evaluate(() => window.__litsxSsrRegisterBrowserResult);
+    const browserResult = await page.evaluate(
+      () => window.__litsxSsrRegisterBrowserResult,
+    );
     expect(consoleErrors).toEqual([]);
     expect(browserResult.hasDeclarativeShadowDom).toBe(true);
     expect(browserResult.appRootCount).toBe(1);
@@ -1065,11 +1298,15 @@ window.__litsxSsrRegisterBrowserResult = {
   }
 });
 
-test("reveals suspense-list guide cards after SSR hydration", async ({ page }) => {
+test("reveals suspense-list guide cards after SSR hydration", async ({
+  page,
+}) => {
   test.setTimeout(60_000);
   const tempRoot = path.join(repoRoot, "test-results");
   await fs.mkdir(tempRoot, { recursive: true });
-  const tempDir = await fs.mkdtemp(path.join(tempRoot, "litsx-ssr-suspense-browser-"));
+  const tempDir = await fs.mkdtemp(
+    path.join(tempRoot, "litsx-ssr-suspense-browser-"),
+  );
   const srcDir = path.join(tempDir, "src");
   await fs.mkdir(srcDir, { recursive: true });
 
@@ -1165,11 +1402,17 @@ setTimeout(() => {
       }
     });
     await page.goto(url);
-    await page.waitForFunction(() => Boolean(window.__litsxSsrSuspenseGuideResult), null, {
-      timeout: 5000,
-    });
+    await page.waitForFunction(
+      () => Boolean(window.__litsxSsrSuspenseGuideResult),
+      null,
+      {
+        timeout: 5000,
+      },
+    );
 
-    const result = await page.evaluate(() => window.__litsxSsrSuspenseGuideResult);
+    const result = await page.evaluate(
+      () => window.__litsxSsrSuspenseGuideResult,
+    );
     expect(consoleErrors).toEqual([]);
     expect(result.boundaries).toHaveLength(3);
     expect(result.boundaries.map((entry) => entry.text)).toEqual([

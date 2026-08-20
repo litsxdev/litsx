@@ -21,6 +21,7 @@
     "packages/storybook",
     "packages/ssr",
     "packages/typescript-session",
+    "packages/unocss",
     "packages/vite-plugin"
   ],
   "devDependencies": {
@@ -50,6 +51,7 @@
     "prettier": "^3.9.5",
     "rollup": "^4.62.2",
     "typescript": "^6.0.0",
+    "unocss": "^66.8.0",
     "vite": "^8.1.5",
     "vite-plugin-babel": "^1.7.3",
     "vitest": "^4.1.10"
@@ -83,7 +85,7 @@
     "release:github": "node scripts/release/build-github-release.js",
     "release:github:backfill": "node scripts/release/backfill-github-releases.js",
     "release:publish": "yarn release:check && yarn release:smoke:scaffolds && yarn changeset:publish",
-    "release:test": "vitest run test/release-manifest.test.js test/create-litsx-app.test.js test/vite-plugin.test.js test/compiler.test.js test/compiler-authored-input.test.js test/ssr.test.js"
+    "release:test": "vitest run test/release-manifest.test.js test/create-litsx-app.test.js test/vite-plugin.test.js test/compiler.test.js test/compiler-authored-input.test.js test/ssr.test.js test/unocss-integration.test.js"
   },
   "author": "LitSX Team",
   "license": "Apache-2.0",

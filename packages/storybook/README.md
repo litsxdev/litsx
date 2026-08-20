@@ -16,6 +16,21 @@ import { createLitsxStorybookConfig } from "@litsx/storybook";
 export default createLitsxStorybookConfig();
 ```
 
+Vite integrations that must run on authored source or on LitSX's generated
+output can be placed explicitly around the compiler plugin:
+
+```js
+export default createLitsxStorybookConfig({
+  vitePlugins: {
+    beforeLitsx: [sourceAnalyzer()],
+    afterLitsx: [generatedCodeProcessor()],
+  },
+});
+```
+
+These phases are integration-neutral. LitSX does not assume which CSS engine,
+asset processor, or analyzer supplies either plugin.
+
 ## Storybook compatibility
 
 `@litsx/storybook` supports Storybook 10.4 and 10.5. The integration keeps
