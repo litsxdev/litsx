@@ -42,16 +42,12 @@ export {
   isLitsxComponentClass,
 } from "./elements/index.js";
 export {
-  STRUCTURAL_HOOK_ENTRIES,
+  STRUCTURAL_HOOKS,
+  applyStructuralHooks,
   defineHook,
-  HostMiddlewareMixin,
-  HostMiddlewareRuntime,
-  createHostMiddlewareRuntime,
   isStructuralHook,
-  resolveStructuralProps,
-  resolveStructuralEntry,
-  resolveStructuralStaticEntry,
-} from "./host-middleware-runtime.js";
+  readStructuralHook,
+} from "./structural-hooks-runtime.js";
 export {
   useElementInternals,
   useFormValidity,

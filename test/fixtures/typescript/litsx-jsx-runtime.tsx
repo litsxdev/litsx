@@ -1,4 +1,24 @@
-import { SuspenseBoundary, SuspenseList } from "@litsx/core";
+import { defineHook, SuspenseBoundary, SuspenseList } from "@litsx/core";
+
+interface I18nCapability {
+  i18n: {
+    translate(key: string): string;
+  };
+}
+
+const I18nMixin = <TBase extends new (...args: any[]) => object>(Base: TBase) =>
+  class extends Base implements I18nCapability {
+    i18n = {
+      translate: (key: string) => key,
+    };
+  };
+
+const useTranslatedLabel = defineHook({
+  mixin: I18nMixin,
+  use(host: I18nCapability, key: string) {
+    return host.i18n.translate(key);
+  },
+});
 
 type ButtonProps = {
   label: string;
@@ -7,6 +27,10 @@ type ButtonProps = {
 
 function ActionButton({ label, disabled }: ButtonProps) {
   return <button disabled={disabled}>{label}</button>;
+}
+
+function TranslatedButton() {
+  return <button>{useTranslatedLabel("save")}</button>;
 }
 
 export function Screen() {
@@ -30,6 +54,7 @@ export function Screen() {
         inert
         on:change={(event?: CustomEvent) => void event}
       />
+      <TranslatedButton />
       <button
         disabled
         ref={(node: HTMLButtonElement | undefined) => void node}

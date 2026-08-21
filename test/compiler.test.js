@@ -752,12 +752,15 @@ describe("@litsx/compiler", () => {
     const hookSource = [
       'import { defineHook } from "@litsx/core";',
       "const useLocale = defineHook({",
-      "  use(_host, _state, args) {",
-      "    return args[0];",
+      "  use(_host, locale) {",
+      "    return locale;",
       "  },",
       "});",
       "export function useMessage() {",
       "  return useLocale('en');",
+      "}",
+      "export function useGreeting() {",
+      "  return useMessage();",
       "}",
     ].join("\n");
     const compiledHookResult = transformLitsxSync(hookSource, {
@@ -765,9 +768,9 @@ describe("@litsx/compiler", () => {
       jsxTemplate: false,
     });
     const consumerSource = [
-      'import { useMessage } from "./use-message.js";',
+      'import { useGreeting } from "./use-message.js";',
       "export function Greeting() {",
-      "  const locale = useMessage();",
+      "  const locale = useGreeting();",
       "  return <div>{locale}</div>;",
       "}",
     ].join("\n");
@@ -780,19 +783,35 @@ describe("@litsx/compiler", () => {
       },
     });
 
-    assert.match(compiledHookResult.code, /useMessage\[Symbol\.for\("litsx\.structuralHookEntries"\)\] = \[/);
-    assert.match(compiledHookResult.code, /useMessage\[Symbol\.for\("litsx\.hook"\)\] = true;/);
-    assert.match(consumerResult.code, /extends HostMiddlewareMixin\(LitElement\)/);
-    assert.match(consumerResult.code, /static structuralEntries = \[\s*\.\.\.\(useMessage\[Symbol\.for\("litsx\.structuralHookEntries"\)\] \|\| \[\]\)/);
-    assert.match(consumerResult.code, /const locale = useMessage\(this\);/);
+    assert.match(
+      compiledHookResult.code,
+      /useMessage\[Symbol\.for\("litsx\.structuralHooks"\)\] = \[/,
+    );
+    assert.match(
+      compiledHookResult.code,
+      /useGreeting\[Symbol\.for\("litsx\.structuralHooks"\)\] = \[/,
+    );
+    assert.match(
+      compiledHookResult.code,
+      /useMessage\[Symbol\.for\("litsx\.hook"\)\] = true;/,
+    );
+    assert.match(
+      consumerResult.code,
+      /extends applyStructuralHooks\(LitElement, \[\s*\.\.\.\(useGreeting\[Symbol\.for\("litsx\.structuralHooks"\)\] \|\| \[\]\)\s*\]\)/,
+    );
+    assert.doesNotMatch(
+      consumerResult.code,
+      /HostMiddlewareMixin|structuralEntries/,
+    );
+    assert.match(consumerResult.code, /const locale = useGreeting\(this\);/);
   }, 20000);
 
   it("recognizes precompiled structural custom hooks through namespace imports", () => {
     const hookSource = [
       'import { defineHook } from "@litsx/core";',
       "const useLocale = defineHook({",
-      "  use(_host, _state, args) {",
-      "    return args[0];",
+      "  use(_host, locale) {",
+      "    return locale;",
       "  },",
       "});",
       "export function useMessage() {",
@@ -819,8 +838,14 @@ describe("@litsx/compiler", () => {
       },
     });
 
-    assert.match(consumerResult.code, /static structuralEntries = \[\s*\.\.\.\(MessageHooks\.useMessage\[Symbol\.for\("litsx\.structuralHookEntries"\)\] \|\| \[\]\)/);
-    assert.match(consumerResult.code, /const locale = MessageHooks\.useMessage\(this\);/);
+    assert.match(
+      consumerResult.code,
+      /extends applyStructuralHooks\(LitElement, \[\s*\.\.\.\(MessageHooks\.useMessage\[Symbol\.for\("litsx\.structuralHooks"\)\] \|\| \[\]\)\s*\]\)/,
+    );
+    assert.match(
+      consumerResult.code,
+      /const locale = MessageHooks\.useMessage\(this\);/,
+    );
   }, 20000);
 
   it("does not reprocess component classes already marked as compiled", () => {
@@ -848,12 +873,11 @@ describe("@litsx/compiler", () => {
 
   it("does not reprocess compiled structural component classes", () => {
     const source = [
-      'import { HostMiddlewareMixin } from "@litsx/core";',
+      'import { applyStructuralHooks } from "@litsx/core";',
       'import { LitElement } from "lit";',
-      "export class DemoComponent extends HostMiddlewareMixin(LitElement) {",
+      "export class DemoComponent extends applyStructuralHooks(LitElement, []) {",
       '  static [Symbol.for("litsx.component")] = true;',
       '  static [Symbol.for("litsx.hostTypeId")] = "litsx-host-type-demo";',
-      "  static structuralEntries = [];",
       "  render() {",
       "    return <div>demo</div>;",
       "  }",
@@ -865,9 +889,19 @@ describe("@litsx/compiler", () => {
       jsxTemplate: false,
     });
 
-    assert.strictEqual((result.code.match(/static \[Symbol\.for\("litsx\.component"\)\] = true;/g) || []).length, 1);
-    assert.strictEqual((result.code.match(/static structuralEntries = \[];/g) || []).length, 1);
-    assert.strictEqual((result.code.match(/HostMiddlewareMixin\(LitElement\)/g) || []).length, 1);
+    assert.strictEqual(
+      (
+        result.code.match(
+          /static \[Symbol\.for\("litsx\.component"\)\] = true;/g,
+        ) || []
+      ).length,
+      1,
+    );
+    assert.strictEqual(
+      (result.code.match(/applyStructuralHooks\(LitElement, \[]\)/g) || [])
+        .length,
+      1,
+    );
   }, 20000);
 
   it("threads host through local custom hooks that wrap imported runtime custom hooks", () => {

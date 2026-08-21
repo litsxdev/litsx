@@ -69,7 +69,7 @@ export declare const LITSX_COMPONENT: unique symbol;
 export declare const LITSX_EVENTS: unique symbol;
 export declare const LITSX_HOST_TYPE_ID: unique symbol;
 export declare const LITSX_HYDRATABLE_TAG: unique symbol;
-export declare const STRUCTURAL_HOOK_ENTRIES: unique symbol;
+export declare const STRUCTURAL_HOOKS: unique symbol;
 export interface LitsxHook {
   readonly [LITSX_HOOK]: true;
 }
@@ -435,323 +435,46 @@ export declare class SsrEffectsController {
   prepare(): void;
 }
 
-export type LitsxHostMiddlewareLifecycleMethod =
-  | "connectedCallback"
-  | "disconnectedCallback"
-  | "attributeChangedCallback"
-  | "formAssociatedCallback"
-  | "formDisabledCallback"
-  | "formResetCallback"
-  | "formStateRestoreCallback"
-  | "scheduleUpdate"
-  | "shouldUpdate"
-  | "willUpdate"
-  | "update"
-  | "updated"
-  | "firstUpdated"
-  | "getUpdateComplete";
-
-export type LitsxHostMiddlewareNext<TResult = unknown> = () => TResult;
-
-/**
- * Compiler-provided metadata for one authored structural-hook callsite.
- *
- * `callsitePath` is the stable public field. It can be used for resource
- * identity, diagnostics, SSR records, and debug tooling. Other fields are
- * informational unless documented by LitSX.
- */
-export interface LitsxStructuralMeta {
-  /**
-   * Stable authored expansion path for this structural callsite.
-   */
-  callsitePath: string[];
-  [key: string]: unknown;
-}
-
-/**
- * Lifecycle middleware for a structural hook.
- *
- * Middleware wraps the host lifecycle method in structural entry order.
- * `next()` invokes the next middleware and eventually the host base
- * implementation. Middleware may run logic before `next()`, after `next()`,
- * or both. Calling `next()` more than once is an error.
- */
-export interface LitsxStructuralState<TStaticState = undefined, TInstanceState = undefined> {
-  /**
-   * Class/type-phase state produced by `static(...)`.
-   */
-  static: TStaticState;
-  /**
-   * Per-host-instance state produced by `setup(...)`.
-   */
-  instance: TInstanceState;
-}
-
-export type LitsxHostMiddleware<
+export type LitsxStructuralHook<
+  TArgs extends unknown[] = unknown[],
   TResult = unknown,
-  TStaticState = undefined,
-  TInstanceState = undefined
-> = (
-  host: unknown,
-  state: LitsxStructuralState<TStaticState, TInstanceState>,
-  next: LitsxHostMiddlewareNext<TResult>,
-  args: unknown[],
-  meta: LitsxStructuralMeta,
-  entry: LitsxStructuralEntry
-) => TResult;
+> = (...args: TArgs) => TResult;
 
-export type LitsxHostMiddlewareMap<TStaticState = undefined, TInstanceState = undefined> = Partial<
-  Record<LitsxHostMiddlewareLifecycleMethod, LitsxHostMiddleware<unknown, TStaticState, TInstanceState>>
->;
+export type LitsxStructuralMixin<THost extends object = object> = (
+  Base: any,
+) => abstract new (...args: any[]) => THost;
 
-export interface LitsxHostAccessorDescriptor<TValue = unknown> {
-  get?: () => TValue;
-  set?: {
-    bivarianceHack(value: TValue): void;
-  }["bivarianceHack"];
-}
-
-export type LitsxHostAccessorMap = Record<string, LitsxHostAccessorDescriptor<unknown>>;
-export type LitsxStructuralPropMap = Record<string, unknown>;
-export type LitsxStructuralPropsNext = () => LitsxStructuralPropMap | null | undefined;
-export type LitsxStructuralAccessorsNext = () => LitsxHostAccessorMap | null | undefined;
-
-/**
- * Public structural-hook definition.
- *
- * Structural hooks are consumed like ordinary hooks:
- *
- * ```tsx
- * const value = useSomething(args);
- * ```
- *
- * The LitSX compiler rewrites that authored callsite to the host middleware
- * runtime. Component authors do not manually register structural entries.
- *
- * `setup(host, args, staticState, meta, entry)` creates persistent mutable
- * instance state for one structural callsite in one host instance. The state
- * is retained across updates and is exposed as `state.instance` to `use`,
- * accessors, and lifecycle middleware. Use it for cached resources,
- * host-linked handles, lifecycle coordination, or derived persistent data.
- *
- * `use(host, state, args, meta, entry)` is the render-time hook reader. It may call normal hooks and
- * structural hooks transitively, subject to the same static hook-order rules as
- * ordinary hooks. Dynamic structural-hook lookup is not supported: aliases,
- * object/array containers, runtime selection, and computed namespace access are
- * build-time errors.
- *
- * `middlewares` wraps host lifecycle methods through `next()`. The host
- * middleware runtime intentionally does not deduplicate entries: every authored
- * callsite gets its own state and middleware entry. Resource dedupe belongs in
- * hook-specific runtimes.
- *
- * `props(host, state, next)` publishes structural host
- * property metadata into the component's merged `static properties` surface as
- * a composition middleware.
- *
- * `accessors(host, state, next)` publishes host instance
- * accessors such as readonly platform-facing getters or low-level
- * form/control properties as a composition middleware. These accessors are
- * installed on the host instance itself as part of the structural runtime,
- * not through the imperative `useExpose()` method surface.
- */
 export interface LitsxStructuralDefinition<
+  THost extends object = object,
   TArgs extends unknown[] = unknown[],
   TResult = unknown,
-  TStaticState = undefined,
-  TInstanceState = undefined
 > {
-  /**
-   * Class/type structural phase. It does not participate in host instance
-   * lifecycle and is not wired through lifecycle middleware.
-   */
-  static?: (
-    ...argsAndMeta: [...TArgs, meta: LitsxStructuralMeta, entry: LitsxStructuralEntry]
-  ) => TStaticState;
-  props?:
-    | LitsxStructuralPropMap
-    | ((
-      host: unknown,
-      state: LitsxStructuralState<TStaticState, TInstanceState>,
-      next: LitsxStructuralPropsNext
-    ) => LitsxStructuralPropMap | null | undefined);
-  use?: (
-    host: unknown,
-    state: LitsxStructuralState<TStaticState, TInstanceState>,
-    args: TArgs,
-    meta: LitsxStructuralMeta,
-    entry: LitsxStructuralEntry
-  ) => TResult;
-  createState?: (
-    host: unknown,
-    args: TArgs,
-    staticState: TStaticState,
-    meta: LitsxStructuralMeta,
-    entry: LitsxStructuralEntry
-  ) => TInstanceState;
-  setup?: (
-    host: unknown,
-    args: TArgs,
-    staticState: TStaticState,
-    meta: LitsxStructuralMeta,
-    entry: LitsxStructuralEntry
-  ) => TInstanceState;
-  middlewares?: LitsxHostMiddlewareMap<TStaticState, TInstanceState>;
-  accessors?: (
-    host: unknown,
-    state: LitsxStructuralState<TStaticState, TInstanceState>,
-    next: LitsxStructuralAccessorsNext
-  ) => LitsxHostAccessorMap;
+  /** Host capability installed once per distinct mixin. */
+  mixin?: LitsxStructuralMixin<THost>;
+  /** Render-time reader invoked with the generated component host. */
+  use(host: THost, ...args: TArgs): TResult;
 }
 
-/**
- * Callable hook value returned by `defineHook`.
- *
- * The value is a normal callable hook from the author's point of view. LitSX
- * attaches hidden compiler/runtime metadata to the function; that metadata is
- * not public API. Calling this function without the LitSX transform is an error
- * because structural hooks require compiled host wiring.
- */
-export type LitsxStructuralHook<TArgs extends unknown[] = unknown[], TResult = unknown> = (
-  ...args: TArgs
-) => TResult;
-
-export interface LitsxStructuralEntry {
-  /**
-   * Backwards-compatible stable identifier for this authored callsite.
-   * Prefer `callsiteId` in newly generated code.
-   */
-  id: string;
-  /**
-   * Stable local index for runtime reads such as `runtime.read(index)`.
-   */
-  callsiteIndex: number;
-  /**
-   * Stable serializable identifier for diagnostics, SSR metadata, or hook-level
-   * resource runtimes. Entries are not deduplicated by this id.
-   */
-  callsiteId: string;
-  /**
-   * Stable authored expansion path for nested structural hook usage.
-   */
-  callsitePath: string[];
-  definition: LitsxStructuralDefinition | unknown;
-  args: unknown[];
-  meta: LitsxStructuralMeta;
-  state: unknown;
-  staticState?: unknown;
-  middlewares?: LitsxHostMiddlewareMap | null;
-}
-
-export interface LitsxStructuralEntryInput {
-  id?: string;
-  callsiteIndex?: number;
-  callsiteId?: string;
-  callsitePath?: string[];
-  path?: string[];
-  definition?: LitsxStructuralDefinition | unknown;
-  args?: unknown[];
-  meta?: Record<string, unknown>;
-  state?: unknown;
-  staticState?: unknown;
-  middlewares?: LitsxHostMiddlewareMap | null;
-}
-
-export declare class HostMiddlewareRuntime {
-  constructor(
-    host: unknown,
-    entries?: LitsxStructuralEntryInput[] | ((host: unknown) => LitsxStructuralEntryInput[])
-  );
-  readonly host: unknown;
-  readonly entries: LitsxStructuralEntry[];
-  getEntry(index: number): LitsxStructuralEntry | null;
-  ensureEntry(index: number, entry: LitsxStructuralEntryInput): LitsxStructuralEntry;
-  read(index: number, args?: unknown[] | null, meta?: Record<string, unknown> | null): unknown;
-  run(methodName: LitsxHostMiddlewareLifecycleMethod, base: () => unknown): unknown;
-  run(methodName: LitsxHostMiddlewareLifecycleMethod, args: unknown[], base: () => unknown): unknown;
-  connectedCallback(base: () => unknown): unknown;
-  connectedCallback(args: unknown[], base: () => unknown): unknown;
-  disconnectedCallback(base: () => unknown): unknown;
-  disconnectedCallback(args: unknown[], base: () => unknown): unknown;
-  attributeChangedCallback(args: unknown[], base: () => unknown): unknown;
-  formAssociatedCallback(args: unknown[], base: () => unknown): unknown;
-  formDisabledCallback(args: unknown[], base: () => unknown): unknown;
-  formResetCallback(base: () => unknown): unknown;
-  formResetCallback(args: unknown[], base: () => unknown): unknown;
-  formStateRestoreCallback(args: unknown[], base: () => unknown): unknown;
-  scheduleUpdate(base: () => unknown): unknown;
-  scheduleUpdate(args: unknown[], base: () => unknown): unknown;
-  shouldUpdate(args: unknown[], base: () => unknown): unknown;
-  willUpdate(args: unknown[], base: () => unknown): unknown;
-  update(args: unknown[], base: () => unknown): unknown;
-  updated(args: unknown[], base: () => unknown): unknown;
-  firstUpdated(args: unknown[], base: () => unknown): unknown;
-  getUpdateComplete(base: () => unknown): unknown;
-  getUpdateComplete(args: unknown[], base: () => unknown): unknown;
-}
-
-export type LitsxStructuralHostConstructor<TInstance = object> = abstract new (
-  ...args: any[]
-) => TInstance;
-
-export interface LitsxStructuralHostInstance {
-  __litsxHostMiddlewareRuntime: HostMiddlewareRuntime;
-  __litsxReadStructuralEntry(
-    index: number,
-    args?: unknown[] | null,
-    meta?: Record<string, unknown> | null
-  ): unknown;
-}
-
-/**
- * Define a structural hook.
- *
- * The locked public authoring surface is `defineHook({ static, setup,
- * middlewares, accessors, use })`. The returned value remains callable like a
- * normal hook, while the compiler/runtime metadata bridge is carried
- * internally on the function.
- */
+/** Define a hook that requests and reads a host capability. */
 export declare function defineHook<
+  THost extends object = object,
   TArgs extends unknown[] = unknown[],
   TResult = unknown,
-  TStaticState = undefined,
-  TInstanceState = undefined
 >(
-  definition: LitsxStructuralDefinition<TArgs, TResult, TStaticState, TInstanceState>
+  definition: LitsxStructuralDefinition<THost, TArgs, TResult>,
 ): LitsxStructuralHook<TArgs, TResult>;
 
-export declare function isStructuralHook(value: unknown): value is LitsxStructuralHook;
-export declare function resolveStructuralProps(
-  owner: unknown,
-  base?: Record<PropertyKey, unknown> | null
-): Record<PropertyKey, unknown>;
-
-export declare function resolveStructuralEntry(
+export declare function isStructuralHook(
+  value: unknown,
+): value is LitsxStructuralHook;
+export declare function readStructuralHook<TArgs extends unknown[], TResult>(
   host: unknown,
-  callsiteIndex: number,
-  callsiteId: string,
-  definition: unknown,
-  args?: unknown[],
-  meta?: Record<string, unknown>
-): unknown;
-
-export declare function resolveStructuralStaticEntry(
-  owner: unknown,
-  callsiteIndex: number,
-  callsiteId: string,
-  definition: unknown,
-  args?: unknown[],
-  meta?: Record<string, unknown>
-): unknown;
-
-export declare function HostMiddlewareMixin<TBase extends LitsxStructuralHostConstructor>(
-  Base: TBase
-): LitsxStructuralHostConstructor<InstanceType<TBase> & LitsxStructuralHostInstance>;
-
-export declare function createHostMiddlewareRuntime(
-  host: unknown,
-  entries?: LitsxStructuralEntryInput[] | ((host: unknown) => LitsxStructuralEntryInput[])
-): HostMiddlewareRuntime;
+  hook: LitsxStructuralHook<TArgs, TResult>,
+  args?: TArgs,
+): TResult;
+export declare function applyStructuralHooks<
+  TBase extends abstract new (...args: any[]) => object,
+>(Base: TBase, hooks?: readonly LitsxStructuralHook[]): TBase;
 
 export type LitsxFormSubmitValue = string | File | FormData | null;
 

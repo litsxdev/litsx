@@ -5,7 +5,6 @@ import { LitElement, html } from "lit";
 import { describe, it } from "vitest";
 import { connectLightDomRegistry } from "../packages/scoped-registry-shim/src/index.js";
 import {
-  HostMiddlewareMixin,
   prepareEffects,
   useOnConnect,
   useState,
@@ -1096,7 +1095,7 @@ describe("litsx elements runtime", () => {
     };
 
     try {
-      class ScopedChild extends HostMiddlewareMixin(LitElement) {}
+      class ScopedChild extends LitElement {}
 
       class ShadowBase extends HTMLElement {
         constructor() {
