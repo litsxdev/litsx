@@ -25,7 +25,11 @@ describe("release workflow", () => {
     assert.match(workflow, /run: corepack yarn changeset:version:next/);
     assert.match(
       workflow,
-      /run: corepack yarn changeset publish --tag next --no-git-tag/,
+      /run: corepack yarn changeset publish --no-git-tag/,
+    );
+    assert.doesNotMatch(
+      workflow,
+      /changeset publish --tag next/,
     );
   });
 
