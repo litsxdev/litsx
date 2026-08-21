@@ -22,12 +22,13 @@ jobs:
     name: Detect Ready Release
     if: |
       github.event_name == 'workflow_run' ||
-      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+      (github.event_name == 'workflow_dispatch' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/next'))
     runs-on: ubuntu-latest
     outputs:
       ready: ${{ steps.gate.outputs.ready }}
       has_changesets: ${{ steps.pending.outputs.has_changesets }}
       release_kind: ${{ steps.gate.outputs.release_kind }}
+      release_branch: ${{ steps.gate.outputs.release_branch }}
       snapshot_tag: ${{ steps.snapshot_tag.outputs.snapshot_tag }}
     steps:
       - name: Wait for required workflows
@@ -36,9 +37,11 @@ jobs:
         with:
           script: |
             if (context.eventName === "workflow_dispatch") {
-              if (context.ref === "refs/heads/main") {
+              const branch = context.ref.replace("refs/heads/", "");
+              if (branch === "main" || branch === "next") {
                 core.setOutput("ready", "true");
-                core.setOutput("release_kind", "stable");
+                core.setOutput("release_kind", branch === "main" ? "stable" : "next");
+                core.setOutput("release_branch", branch);
                 return;
               }
 
@@ -77,7 +80,11 @@ jobs:
             }
 
             core.setOutput("ready", "true");
-            core.setOutput("release_kind", branch === "main" ? "stable" : "snapshot");
+            core.setOutput(
+              "release_kind",
+              branch === "main" ? "stable" : branch === "next" ? "next" : "snapshot",
+            );
+            core.setOutput("release_branch", branch);
 
       - name: Compute branch snapshot tag
         id: snapshot_tag
@@ -124,6 +131,8 @@ jobs:
         run: |
           if find .changeset -maxdepth 1 -name '*.md' ! -name 'README.md' -print -quit | grep -q .; then
             echo "has_changesets=true" >> "$GITHUB_OUTPUT"
+          elif [ "${{ steps.gate.outputs.release_kind }}" = "stable" ] && [ -f .changeset/pre.json ]; then
+            echo "has_changesets=true" >> "$GITHUB_OUTPUT"
           else
             echo "has_changesets=false" >> "$GITHUB_OUTPUT"
           fi
@@ -141,7 +150,7 @@ jobs:
       id-token: write
     steps:
       - name: Create release app token
-        if: needs.plan.outputs.release_kind == 'stable'
+        if: needs.plan.outputs.release_kind != 'snapshot'
         id: app-token
         uses: actions/create-github-app-token@v3
         with:
@@ -155,7 +164,7 @@ jobs:
         with:
           ref: ${{ github.event_name == 'workflow_dispatch' && github.sha || github.event.workflow_run.head_sha }}
           fetch-depth: 0
-          token: ${{ needs.plan.outputs.release_kind == 'stable' && steps.app-token.outputs.token || github.token }}
+          token: ${{ needs.plan.outputs.release_kind != 'snapshot' && steps.app-token.outputs.token || github.token }}
           persist-credentials: false
 
       - name: Setup Node.js
@@ -177,6 +186,10 @@ jobs:
         if: needs.plan.outputs.has_changesets == 'true' && needs.plan.outputs.release_kind == 'stable'
         run: corepack yarn changeset:version
 
+      - name: Materialize next versions
+        if: needs.plan.outputs.has_changesets == 'true' && needs.plan.outputs.release_kind == 'next'
+        run: corepack yarn changeset:version:next
+
       - name: Materialize snapshot versions
         if: needs.plan.outputs.has_changesets == 'true' && needs.plan.outputs.release_kind == 'snapshot'
         env:
@@ -195,6 +208,12 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: corepack yarn release:publish
 
+      - name: Validate next packages
+        if: needs.plan.outputs.release_kind == 'next'
+        run: |
+          corepack yarn release:check
+          corepack yarn release:smoke:scaffolds
+
       - name: Validate snapshot packages
         if: needs.plan.outputs.release_kind == 'snapshot'
         run: |
@@ -208,7 +227,7 @@ jobs:
         run: corepack yarn changeset publish --tag ${{ needs.plan.outputs.snapshot_tag }}
 
       - name: Resolve release app bot user
-        if: needs.plan.outputs.release_kind == 'stable'
+        if: needs.plan.outputs.release_kind != 'snapshot'
         id: app-bot-user
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
@@ -216,7 +235,7 @@ jobs:
           echo "user_id=$(gh api "/users/${{ steps.app-token.outputs.app-slug }}[bot]" --jq .id)" >> "$GITHUB_OUTPUT"
 
       - name: Commit release version updates
-        if: needs.plan.outputs.release_kind == 'stable'
+        if: needs.plan.outputs.release_kind != 'snapshot'
         id: version_commit
         env:
           RELEASE_PUSH_TOKEN: ${{ steps.app-token.outputs.token }}
@@ -230,12 +249,22 @@ jobs:
             echo "created_commit=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          git commit -m "chore(release): version packages [skip ci]"
+          if [ "${{ needs.plan.outputs.release_kind }}" = "stable" ]; then
+            git commit -m "chore(release): version packages [skip ci]"
+          else
+            git commit -m "chore(release): version next packages [skip ci]"
+          fi
           echo "created_commit=true" >> "$GITHUB_OUTPUT"
 
       - name: Push release version commit
-        if: needs.plan.outputs.release_kind == 'stable' && steps.version_commit.outputs.created_commit == 'true'
-        run: git push origin HEAD:main
+        if: needs.plan.outputs.release_kind != 'snapshot' && steps.version_commit.outputs.created_commit == 'true'
+        run: git push origin HEAD:${{ needs.plan.outputs.release_branch }}
+
+      - name: Publish next packages
+        if: needs.plan.outputs.release_kind == 'next'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: corepack yarn changeset publish --tag next --no-git-tag
 
       - name: Create package tags
         if: needs.plan.outputs.release_kind == 'stable'
