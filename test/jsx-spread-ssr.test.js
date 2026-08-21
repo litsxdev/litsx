@@ -49,6 +49,15 @@ describe("jsxSpreadElement SSR", () => {
     assert.match(output, /Continue/);
   });
 
+  it("omits bindings overridden with undefined", () => {
+    const output = renderToString(jsxSpreadElement("button", [
+      { title: "earlier", disabled: true },
+      { title: undefined, disabled: undefined },
+    ]));
+    assert.doesNotMatch(output, /title=/);
+    assert.doesNotMatch(output, /disabled(?:=|\s|>)/);
+  });
+
   it("passes inferred custom-element properties into SSR rendering", () => {
     const tagName = "litsx-jsx-spread-ssr-element";
     if (!customElements.get(tagName)) {

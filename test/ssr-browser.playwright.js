@@ -138,14 +138,22 @@ window.__litsxImportedPropsHydrated = true;
     });
     page.on("pageerror", (error) => pageErrors.push(error.stack || error.message));
     await page.goto(server.resolvedUrls.local[0]);
-    await page.waitForFunction(async () => {
-      if (!window.__litsxImportedPropsHydrated) return false;
+    await page.waitForFunction(() => window.__litsxImportedPropsHydrated === true);
+    await page.evaluate(async () => {
       const root = document.querySelector("contract-root");
-      if (!root) return false;
       await root.updateComplete;
       const hosts = [...(root.shadowRoot?.querySelectorAll("contract-button") ?? [])];
       await Promise.all(hosts.map((host) => host.updateComplete));
-      return hosts.length === 10;
+      await new Promise((resolve) => requestAnimationFrame(() =>
+        requestAnimationFrame(resolve)
+      ));
+    });
+    await page.waitForFunction(() => {
+      const root = document.querySelector("contract-root");
+      const hosts = [...(root?.shadowRoot?.querySelectorAll("contract-button") ?? [])];
+      return hosts.length === 10 && hosts.every((host) =>
+        host.updateComplete?.then && typeof host.iconOnly === "boolean"
+      );
     });
 
     const result = await page.evaluate(() => {
@@ -190,8 +198,8 @@ window.__litsxImportedPropsHydrated = true;
       { caseName: "aria-attribute", iconOnly: false, ariaLabel: "Attribute label", iconAttribute: false, ariaAttribute: "Attribute label", branch: "label", sameHost: true, sameBranch: true },
       { caseName: "spread-literal", iconOnly: true, ariaLabel: "Literal spread", iconAttribute: true, ariaAttribute: "Literal spread", branch: "icon", sameHost: true, sameBranch: true },
       { caseName: "spread-runtime", iconOnly: true, ariaLabel: "Runtime spread", iconAttribute: true, ariaAttribute: "Runtime spread", branch: "icon", sameHost: true, sameBranch: true },
-      { caseName: "spread-false", iconOnly: false, ariaLabel: "", iconAttribute: false, ariaAttribute: null, branch: "label", sameHost: true, sameBranch: true },
-      { caseName: "spread-undefined", iconOnly: false, ariaLabel: "", iconAttribute: false, ariaAttribute: null, branch: "label", sameHost: true, sameBranch: true },
+      { caseName: "spread-false", iconOnly: false, ariaLabel: null, iconAttribute: false, ariaAttribute: null, branch: "label", sameHost: true, sameBranch: true },
+      { caseName: "spread-undefined", iconOnly: false, ariaLabel: "", iconAttribute: false, ariaAttribute: "", branch: "label", sameHost: true, sameBranch: true },
     ]);
     expect(consoleErrors).toEqual([]);
     expect(consoleWarnings.filter(

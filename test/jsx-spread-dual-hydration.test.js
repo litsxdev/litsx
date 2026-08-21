@@ -70,6 +70,19 @@ describe("JSX spread dual SSR/client hydration", () => {
     assert.ok(container._$litPart$);
   });
 
+  it("uses the client ElementPart template for SSR-compiled modules", () => {
+    const spec = {
+      tag: "button",
+      sources: [{ title: "compiled for SSR", disabled: true }],
+      options: { server: true },
+    };
+    const { container, originals } = hydrateSpec(spec);
+    const button = container.querySelector("button");
+    assert.strictEqual(button, originals[0]);
+    assert.strictEqual(button.title, "compiled for SSR");
+    assert.strictEqual(button.disabled, true);
+  });
+
   it("adopts matching SSR attributes without rewriting them", () => {
     const spec = { tag: "button", sources: [{ title: "adopted", "data-state": "ready" }] };
     const container = document.createElement("div");
@@ -168,5 +181,29 @@ describe("JSX spread dual SSR/client hydration", () => {
     assert.strictEqual(element.hasAttribute("enabled"), false);
     assert.strictEqual(element.label, "ok");
     assert.strictEqual(element.hasAttribute("standalone"), true);
+  });
+
+  it("lets component defaults handle undefined spread overrides", () => {
+    const tag = "litsx-spread-defaults";
+    class DefaultsElement extends LitElement {
+      static properties = {
+        enabled: { type: Boolean },
+        label: { type: String },
+      };
+      constructor() {
+        super();
+        this.enabled = false;
+        this.label = "default";
+      }
+    }
+    if (!customElements.get(tag)) customElements.define(tag, DefaultsElement);
+    const container = document.createElement("div");
+    render(jsxSpreadElement(tag, [
+      { enabled: true, label: "earlier" },
+      { enabled: undefined, label: null },
+    ], { component: DefaultsElement }), container);
+    const element = container.querySelector(tag);
+    assert.strictEqual(element.enabled, false);
+    assert.strictEqual(element.label, null);
   });
 });

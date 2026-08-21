@@ -248,7 +248,10 @@ function mergeSources(tagName, sources, component, element, namespace, reactComp
       if (descriptor) merged.set(descriptorKey(descriptor), { descriptor, value });
     }
   }
-  return [...merged.values()];
+  // An explicit `undefined` still wins over an earlier spread source, but it
+  // does not materialize a binding. This matches parameter destructuring:
+  // component defaults apply to undefined while null remains an explicit value.
+  return [...merged.values()].filter(({ value }) => value !== undefined);
 }
 
 function mergeSourcesReverse(tagName, sources, component, element, seen, namespace, reactCompatEvents = false) {
@@ -269,6 +272,7 @@ function mergeSourcesReverse(tagName, sources, component, element, seen, namespa
       const key = descriptorKey(descriptor);
       if (dedupe && seen.has(key)) continue;
       if (dedupe) seen.add(key);
+      if (value === undefined) continue;
       bindings.push({ descriptor, value });
     }
   }
@@ -465,8 +469,13 @@ export function jsxSpreadElement(tagName, sources, options = {}, children = noth
   const isVoid = options.void === true;
   const hasChildren = !isVoid && children !== nothing;
   const clientStrings = getClientStrings(tagName, isVoid, hasChildren);
-  const clientRuntime = options.server !== true && (
-    !isServer || globalThis[CLIENT_RUNTIME] === true
+  // `server: true` is a compiler hint carried by modules transformed through
+  // an SSR-configured Vite pipeline. Those same modules can execute in the
+  // browser during hydration, where the client runtime must still select the
+  // stable ElementPart template that matches the registered digest mapping.
+  const hasClientDom = typeof window !== "undefined" && typeof document !== "undefined";
+  const clientRuntime = (hasClientDom && globalThis[CLIENT_RUNTIME] === true) || (
+    options.server !== true && !isServer
   );
   if (clientRuntime) {
     const values = [jsxSpread(tagName, sources, options)];
