@@ -15,9 +15,35 @@ import {
 import { createLitsxCompilationSession, transformLitsx } from "../packages/compiler/src/index.js";
 
 describe("compiler authored input helpers", () => {
+  it("rejects the removed authored file extensions and binding syntax", () => {
+    assert.throws(
+      () => prepareLitsxAuthoredInput("export const View = () => <div />;", {
+        filename: "/virtual/View.litsx",
+      }),
+      /standard \.jsx or \.tsx extension/,
+    );
+    for (const source of [
+      "const view = <button @click={handler} />;",
+      "const view = <input .value={value} />;",
+      "const view = <input ?disabled={disabled} />;",
+      "function View() { static styles = `:host {}`; return <div />; }",
+      "function View() { staticProps({ title: String }); return <div />; }",
+      "function View() { staticStyles(`:host {}`); return <div />; }",
+      "function View() { __litsx_static_properties({ title: String }); return <div />; }",
+    ]) {
+      assert.throws(() => prepareLitsxAuthoredInput(source, {
+        filename: "/virtual/View.tsx",
+      }));
+    }
+  });
+
   it("normalizes parser plugins from filenames and JSX requirements", () => {
     assert.deepStrictEqual(
       ensureLitsxParserPlugins("/virtual/File.tsx"),
+      ["typescript"]
+    );
+    assert.deepStrictEqual(
+      ensureLitsxParserPlugins("/virtual/File.ts"),
       ["typescript"]
     );
     assert.deepStrictEqual(
@@ -65,7 +91,7 @@ describe("compiler authored input helpers", () => {
   it("collects generic module analysis facts from authored input", () => {
     const source = [
       'import type { StoryObj } from "storybook";',
-      'import { VdsButton } from "./vds-button.litsx";',
+      'import { VdsButton } from "./vds-button.tsx";',
       "const localMeta = { title: 'Components/Button' };",
       "const LocalStory = () => <VdsButton label={'Save'} />;",
       "export default localMeta;",
@@ -76,7 +102,7 @@ describe("compiler authored input helpers", () => {
     ].join("\n");
 
     const result = prepareLitsxAuthoredInput(source, {
-      filename: "/virtual/vds-button.stories.litsx",
+      filename: "/virtual/vds-button.stories.tsx",
     });
 
     assert.deepStrictEqual(result.moduleAnalysis.imports, [
@@ -86,7 +112,7 @@ describe("compiler authored input helpers", () => {
         specifiers: [{ importedName: "StoryObj", localName: "StoryObj", kind: "type" }],
       },
       {
-        source: "./vds-button.litsx",
+        source: "./vds-button.tsx",
         kind: "value",
         specifiers: [{ importedName: "VdsButton", localName: "VdsButton", kind: "value" }],
       },
@@ -106,7 +132,7 @@ describe("compiler authored input helpers", () => {
         localName: "VdsButton",
         tagName: "vds-button",
         source: "imported-authored-module",
-        importSource: "./vds-button.litsx",
+        importSource: "./vds-button.tsx",
       },
       {
         localName: "LocalStory",
@@ -165,7 +191,7 @@ describe("compiler authored input helpers", () => {
     );
   });
 
-  it("builds compiler config with virtualization sourcemaps and normalized output plugins", () => {
+  it("builds compiler config with standard parsing and normalized output plugins", () => {
     const source = "export const Example = () => <button class='cta'>Save</button>;";
     const result = createLitsxTransformConfig(source, {
       filename: "/virtual/Example.jsx",
@@ -174,7 +200,7 @@ describe("compiler authored input helpers", () => {
     });
 
     assert.ok(result.inputAst);
-    assert.strictEqual(result.babelOptions.inputSourceMap, undefined);
+    assert.ok(!Object.hasOwn(result.babelOptions, "inputSourceMap"));
     assert.strictEqual(result.babelOptions.sourceMaps, true);
     assert.ok(Array.isArray(result.babelOptions.plugins));
   });
@@ -218,6 +244,23 @@ describe("compiler authored input helpers", () => {
     assert.strictEqual(result.map, null);
   });
 
+  it("parses TypeScript-only imports in authored .ts modules", async () => {
+    const result = await transformLitsx(
+      [
+        'import type { ItemId } from "./item-id.js";',
+        'import { getItem, type Item } from "./items.js";',
+        "export const item: Item = getItem({} as ItemId);",
+      ].join("\n"),
+      {
+        filename: "/virtual/src/models/items.ts",
+        jsxTemplate: false,
+      }
+    );
+
+    assert.match(result.code, /import \{ getItem \} from "\.\/items\.js";/);
+    assert.match(result.code, /export const item = getItem\(\{\}\);/);
+  });
+
   it("creates project-backed compilation sessions and defaults getTypecheckSession to the project path", () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-compiler-project-"));
 
@@ -239,8 +282,7 @@ describe("compiler authored input helpers", () => {
       });
 
       try {
-        const typecheck = session.getTypecheckSession();
-        assert.strictEqual(typecheck.projectSession, session.typescriptSession);
+        assert.strictEqual(session.typescriptSession.kind, "project");
         assert.strictEqual(session.projectPath, tsconfigPath);
       } finally {
         session.dispose();

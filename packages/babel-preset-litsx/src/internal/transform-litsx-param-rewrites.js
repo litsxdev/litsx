@@ -86,10 +86,19 @@ function isSupportedImplicitChildrenReference(refPath, bindingInfo) {
 }
 
 function createThisMemberExpression(propName) {
-  return t.memberExpression(t.thisExpression(), t.identifier(propName));
+  const computed = !t.isValidIdentifier(propName);
+  return t.memberExpression(
+    t.thisExpression(),
+    computed ? t.stringLiteral(propName) : t.identifier(propName),
+    computed,
+  );
 }
 
 function createPropsObjectExpression(bindingInfo, propertyMap = new Map()) {
+  if (bindingInfo?.kind === "rest-alias" && bindingInfo.propertyName) {
+    return createThisMemberExpression(bindingInfo.propertyName);
+  }
+
   if (
     bindingInfo &&
     typeof bindingInfo !== "object" &&
@@ -132,22 +141,31 @@ export function transformJSXExpressions(jsxPath, bindings, state = null) {
 
   jsxPath.traverse({
     JSXExpressionContainer(expressionPath) {
-      if (
-        isDirectJsxChildExpression(expressionPath) &&
-        isImplicitChildrenExpression(expressionPath.node.expression, bindings)
-      ) {
-        expressionPath.replaceWith(createDefaultSlotElement());
-        return;
+      if (isDirectJsxChildExpression(expressionPath)) {
+        if (isImplicitChildrenExpression(expressionPath.node.expression, bindings)) {
+          expressionPath.replaceWith(createDefaultSlotElement());
+          return;
+        }
+
+        expressionPath.get("expression").traverse({
+          MemberExpression(memberPath) {
+            if (!isImplicitChildrenExpression(memberPath.node, bindings)) return;
+            memberPath.replaceWith(createDefaultSlotElement());
+            memberPath.skip();
+          },
+          Identifier(identifierPath) {
+            if (!isImplicitChildrenExpression(identifierPath.node, bindings)) return;
+            identifierPath.replaceWith(createDefaultSlotElement());
+            identifierPath.skip();
+          },
+        });
       }
 
       if (t.isIdentifier(expressionPath.node.expression)) {
         const name = expressionPath.node.expression.name;
         if (localNames.includes(name)) {
           const propName = bindings.get(name) || name;
-          expressionPath.node.expression = t.memberExpression(
-            t.thisExpression(),
-            t.identifier(propName)
-          );
+          expressionPath.node.expression = createThisMemberExpression(propName);
         }
       }
     },
@@ -238,7 +256,7 @@ export function replaceParamReferences(functionPath, bindings, propertyMap = new
       return t.cloneNode(aliasId);
     }
 
-    return t.memberExpression(t.thisExpression(), t.identifier(propName));
+    return createThisMemberExpression(propName);
   }
 
   bindings.forEach((bindingInfo, localName) => {
@@ -250,11 +268,29 @@ export function replaceParamReferences(functionPath, bindings, propertyMap = new
       if (!refPath.node) return;
 
       if (
+        bindingInfo?.kind === "rest-alias" &&
+        bindingInfo.propertyName &&
+        refPath.parentPath?.isMemberExpression() &&
+        refPath.parentKey === "object"
+      ) {
+        refPath.replaceWith(getReplacementForProp(bindingInfo.propertyName, refPath));
+        return;
+      }
+
+      if (
         bindingInfo &&
         typeof bindingInfo === "object" &&
         isPropsAliasBinding(bindingInfo) &&
         (!refPath.parentPath || !refPath.parentPath.isMemberExpression())
       ) {
+        if (
+          bindingInfo.kind === "rest-alias" &&
+          bindingInfo.propertyName &&
+          shouldCapturePropReference(refPath, functionPath)
+        ) {
+          refPath.replaceWith(getReplacementForProp(bindingInfo.propertyName, refPath));
+          return;
+        }
         if (shouldCapturePropReference(refPath, functionPath)) {
           return;
         }
@@ -360,6 +396,11 @@ export function replaceParamReferences(functionPath, bindings, propertyMap = new
       }
 
       if (localName === "props") {
+        if (isObjectDestructuringInitializer(refPath)) {
+          refPath.replaceWith(t.thisExpression());
+          return;
+        }
+
         const propsObject = createPropsObjectExpression(bindingInfo, propertyMap);
         if (propsObject) {
           refPath.replaceWith(propsObject);

@@ -66,7 +66,7 @@ describe("native refs internals", () => {
     assert.strictEqual(hasRefProp(noRef), false);
   });
 
-  it("lowers only standard forwarded element refs and leaves other ref shapes untouched", () => {
+  it("leaves native refs for the Lit directive and routes component refs as properties", () => {
     const functionPath = getFunctionPath(`
       function Card() {
         return (
@@ -82,16 +82,7 @@ describe("native refs internals", () => {
     `);
 
     const statements = lowerForwardedElementRefs(functionPath, "ref");
-    assert.strictEqual(statements.length, 2);
-
-    const callbackCalls = statements.map((statement) => statement.expression);
-    assert.ok(
-      callbackCalls.every(
-        (call) =>
-          call.callee.name === "useCallbackRef" &&
-          call.arguments[0].type === "ThisExpression"
-      )
-    );
+    assert.strictEqual(statements.length, 0);
 
     const attributes = functionPath.node.body.body[0].argument.children
       .filter((child) => child.type === "JSXElement")
@@ -100,18 +91,20 @@ describe("native refs internals", () => {
         attrs: element.openingElement.attributes,
       }));
 
-    const inputRef = attributes[0].attrs.find((attr) => attr.name.name === "data-ref");
-    const textareaRef = attributes[1].attrs.find((attr) => attr.name.name === "data-ref");
-    assert.ok(inputRef.value.value.startsWith("_refElement"));
-    assert.ok(textareaRef.value.value.startsWith("_refElement"));
-    assert.notStrictEqual(inputRef.value.value, textareaRef.value.value);
-
     assert.strictEqual(
-      attributes[2].attrs.some((attr) => attr.name.name === "ref"),
+      attributes[0].attrs.some((attr) => attr.name.name === "ref"),
       true
     );
     assert.strictEqual(
-      attributes[3].attrs.some((attr) => attr.name.name === "ref"),
+      attributes[1].attrs.some((attr) => attr.name.name === "ref"),
+      true
+    );
+    assert.strictEqual(
+      attributes[2].attrs.some((attr) => attr.name.name === ".ref"),
+      true
+    );
+    assert.strictEqual(
+      attributes[3].attrs.some((attr) => attr.name.name === ".ref"),
       true
     );
     assert.strictEqual(
@@ -135,7 +128,7 @@ describe("native refs internals", () => {
           if (typeof this.ref === "function") {
             this.ref(node);
           } else if (this.ref) {
-            this.ref.current = node;
+            this.ref.value = node;
           }
         };
         return <form ref={setFormNode} />;

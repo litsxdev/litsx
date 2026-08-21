@@ -1,10 +1,13 @@
 import { LitElement, html } from "lit";
 import { render as renderLightDom } from "lit/html.js";
 import { SuspenseBoundary } from "../../../packages/core/src/index.js";
-import { ShadowDomMixin } from "../../../packages/core/src/elements/index.js";
+import { LightDomMixin, ShadowDomMixin } from "../../../packages/core/src/elements/index.js";
 import { bindRendererContext } from "../../../packages/core/src/rendering.js";
 import { renderWithSoftSuspense } from "../../../packages/core/src/runtime-suspense.js";
-import { connectLightDomRegistry } from "../../../packages/scoped-registry-shim/src/index.js";
+import {
+  connectLightDomRegistry,
+  isLightDomRegistryRuntimeActive,
+} from "../../../packages/scoped-registry-shim/src/index.js";
 
 // This fixture still imports the historical shim package directly because it is
 // exercising fallback scoped-registry behavior in a real browser.
@@ -172,6 +175,383 @@ defineTestElement(withBoundaryTag, StoryWithBoundary);
 defineTestElement(withoutBoundaryTag, StoryWithoutBoundary);
 
 window.__repro = {
+  async probePlainLightDomCost() {
+    const hostTag = "probe-plain-light-host";
+    const registryBefore = window.customElements;
+
+    class PlainLightHost extends LightDomMixin(LitElement) {
+      render() {
+        return html`<span>plain</span>`;
+      }
+    }
+
+    defineTestElement(hostTag, PlainLightHost);
+    const host = document.createElement(hostTag);
+    document.body.appendChild(host);
+    await host.updateComplete;
+
+    return {
+      hostCtor: host.constructor.name,
+      usesLightDom: host.shadowRoot === null,
+      shimActive: isLightDomRegistryRuntimeActive(),
+      registryUnchanged: window.customElements === registryBefore,
+      text: host.textContent.trim(),
+    };
+  },
+
+  async probeLightDomInitialization() {
+    const childTag = "probe-light-init-child";
+    const hostTag = "probe-light-init-host";
+    const calls = [];
+
+    class InitChild extends LitElement {
+      static properties = {
+        value: { type: String },
+        enabled: { type: Boolean, reflect: true },
+      };
+
+      constructor() {
+        super();
+        calls.push("child:constructor");
+        this.value ??= "constructor-default";
+      }
+
+      connectedCallback() {
+        super.connectedCallback();
+        calls.push("child:connected");
+      }
+
+      disconnectedCallback() {
+        calls.push("child:disconnected");
+        super.disconnectedCallback();
+      }
+
+      render() {
+        return html`<span data-value=${this.value}>${this.value}</span>`;
+      }
+    }
+
+    class InitHost extends LightDomMixin(LitElement) {
+      static elements = { [childTag]: InitChild };
+
+      render() {
+        return html`<probe-light-init-child .value=${"bound-value"} .enabled=${true}></probe-light-init-child>`;
+      }
+    }
+
+    defineTestElement(hostTag, InitHost);
+    const host = document.createElement(hostTag);
+    document.body.appendChild(host);
+    await host.updateComplete;
+    const child = host.querySelector(childTag);
+    await child?.updateComplete;
+
+    const beforeReconnect = {
+      hostCtor: host.constructor.name,
+      hostUsesLightDom: host.shadowRoot === null,
+      childCtor: child?.constructor?.name ?? null,
+      value: child?.value ?? null,
+      enabled: child?.enabled ?? null,
+      enabledAttribute: child?.hasAttribute("enabled") ?? false,
+      renderedValue: child?.shadowRoot?.querySelector("span")?.textContent ?? null,
+      calls: [...calls],
+    };
+
+    host.remove();
+    document.body.appendChild(host);
+    await host.updateComplete;
+    await child?.updateComplete;
+
+    return {
+      beforeReconnect,
+      afterReconnect: {
+        sameChild: host.querySelector(childTag) === child,
+        registryRestored: host.registry?.get(childTag) === InitChild,
+        calls: [...calls],
+      },
+    };
+  },
+
+  async probeNestedLightScopes() {
+    const sharedTag = "probe-context-item";
+    const innerTag = "probe-context-inner";
+    const outerTag = "probe-context-outer";
+
+    class OuterItem extends HTMLElement {
+      constructor() {
+        super();
+        this.kind = "outer";
+      }
+    }
+
+    class InnerItem extends HTMLElement {
+      constructor() {
+        super();
+        this.kind = "inner";
+      }
+    }
+
+    class InnerHost extends LightDomMixin(LitElement) {
+      static elements = { [sharedTag]: InnerItem };
+      render() {
+        return html`<probe-context-item data-scope="inner"></probe-context-item>`;
+      }
+    }
+
+    class OuterHost extends LightDomMixin(LitElement) {
+      static elements = {
+        [sharedTag]: OuterItem,
+        [innerTag]: InnerHost,
+      };
+      render() {
+        return html`
+          <probe-context-item data-scope="outer"></probe-context-item>
+          <probe-context-inner></probe-context-inner>
+        `;
+      }
+    }
+
+    defineTestElement(outerTag, OuterHost);
+    const outer = document.createElement(outerTag);
+    document.body.appendChild(outer);
+    await outer.updateComplete;
+    const inner = outer.querySelector(innerTag);
+    await inner?.updateComplete;
+    const outerItem = outer.querySelector(`${sharedTag}[data-scope="outer"]`);
+    const innerItem = inner?.querySelector(sharedTag);
+
+    return {
+      outerHostCtor: outer.constructor.name,
+      innerHostCtor: inner?.constructor?.name ?? null,
+      outerItemCtor: outerItem?.constructor?.name ?? null,
+      innerItemCtor: innerItem?.constructor?.name ?? null,
+      outerKind: outerItem?.kind ?? null,
+      innerKind: innerItem?.kind ?? null,
+    };
+  },
+
+  async probeLightShadowInteroperability() {
+    const leafTag = "probe-mixed-leaf";
+    const innerLightTag = "probe-mixed-inner-light";
+    const shadowTag = "probe-mixed-shadow";
+    const outerLightTag = "probe-mixed-outer-light";
+
+    class MixedLeaf extends LitElement {
+      constructor() {
+        super();
+        this.initialized = "leaf-ready";
+      }
+      render() {
+        return html`<button @click=${() => this.dispatchEvent(new CustomEvent("mixed-ready", {
+          bubbles: true,
+          composed: true,
+          detail: this.initialized,
+        }))}>${this.initialized}</button>`;
+      }
+    }
+
+    class InnerLight extends LightDomMixin(LitElement) {
+      static elements = { [leafTag]: MixedLeaf };
+      render() {
+        return html`<probe-mixed-leaf></probe-mixed-leaf>`;
+      }
+    }
+
+    class MiddleShadow extends ShadowDomMixin(LitElement) {
+      static elements = { [innerLightTag]: InnerLight };
+      render() {
+        return html`<probe-mixed-inner-light></probe-mixed-inner-light>`;
+      }
+    }
+
+    class OuterLight extends LightDomMixin(LitElement) {
+      static elements = { [shadowTag]: MiddleShadow };
+      constructor() {
+        super();
+        this.addEventListener("mixed-ready", (event) => {
+          this.receivedDetail = event.detail;
+        });
+      }
+      render() {
+        return html`<probe-mixed-shadow></probe-mixed-shadow>`;
+      }
+    }
+
+    defineTestElement(outerLightTag, OuterLight);
+    const outer = document.createElement(outerLightTag);
+    document.body.appendChild(outer);
+    await outer.updateComplete;
+    const shadow = outer.querySelector(shadowTag);
+    await shadow?.updateComplete;
+    const inner = shadow?.shadowRoot?.querySelector(innerLightTag);
+    await inner?.updateComplete;
+    const leaf = inner?.querySelector(leafTag);
+    await leaf?.updateComplete;
+    leaf?.shadowRoot?.querySelector("button")?.click();
+
+    return {
+      outerCtor: outer.constructor.name,
+      shadowCtor: shadow?.constructor?.name ?? null,
+      shadowHasRoot: Boolean(shadow?.shadowRoot),
+      shadowRegistryKind:
+        typeof shadow?.registry?._getDefinition === "function" ? "shim" : "platform",
+      innerCtor: inner?.constructor?.name ?? null,
+      innerUsesLightDom: inner?.shadowRoot === null,
+      innerRegistryLeaf: inner?.registry?.get?.(leafTag)?.name ?? null,
+      innerRegistryKind: typeof inner?.registry?._getDefinition === "function" ? "shim" : "native",
+      leafRoot: leaf?.getRootNode?.()?.constructor?.name ?? null,
+      leafCtor: leaf?.constructor?.name ?? null,
+      leafInitialized: leaf?.initialized ?? null,
+      leafHtml: leaf?.shadowRoot?.textContent?.trim() ?? null,
+      composedEventDetail: outer.receivedDetail ?? null,
+    };
+  },
+
+  async probeShadowToLightInitialization() {
+    const leafTag = "probe-reverse-leaf";
+    const lightTag = "probe-reverse-light";
+    const shadowTag = "probe-reverse-shadow";
+
+    class ReverseLeaf extends HTMLElement {
+      constructor() {
+        super();
+        this.initialized = true;
+      }
+      connectedCallback() {
+        this.connected = true;
+      }
+    }
+
+    class ReverseLight extends LightDomMixin(LitElement) {
+      static elements = { [leafTag]: ReverseLeaf };
+      render() {
+        return html`<probe-reverse-leaf></probe-reverse-leaf>`;
+      }
+    }
+
+    class ReverseShadow extends ShadowDomMixin(LitElement) {
+      static elements = { [lightTag]: ReverseLight };
+      render() {
+        return html`<probe-reverse-light></probe-reverse-light>`;
+      }
+    }
+
+    defineTestElement(shadowTag, ReverseShadow);
+    const shadow = document.createElement(shadowTag);
+    document.body.appendChild(shadow);
+    await shadow.updateComplete;
+    const light = shadow.shadowRoot?.querySelector(lightTag);
+    await light?.updateComplete;
+    const leaf = light?.querySelector(leafTag);
+
+    return {
+      shadowCtor: shadow.constructor.name,
+      lightCtor: light?.constructor?.name ?? null,
+      lightUsesLightDom: light?.shadowRoot === null,
+      leafCtor: leaf?.constructor?.name ?? null,
+      leafInitialized: leaf?.initialized ?? false,
+      leafConnected: leaf?.connected ?? false,
+    };
+  },
+
+  async probeGlobalElementInteroperability() {
+    const globalTag = "probe-global-third-party";
+    const scopedTag = "probe-global-scoped-child";
+    const hostTag = "probe-global-light-host";
+    const calls = [];
+
+    class ThirdPartyElement extends HTMLElement {
+      constructor() {
+        super();
+        calls.push("global:constructor");
+      }
+      connectedCallback() {
+        calls.push("global:connected");
+      }
+    }
+    defineTestElement(globalTag, ThirdPartyElement);
+
+    class ScopedChild extends HTMLElement {
+      constructor() {
+        super();
+        this.initialized = true;
+      }
+    }
+
+    class GlobalLightHost extends LightDomMixin(LitElement) {
+      static elements = { [scopedTag]: ScopedChild };
+      render() {
+        return html`
+          <probe-global-third-party></probe-global-third-party>
+          <probe-global-scoped-child></probe-global-scoped-child>
+        `;
+      }
+    }
+
+    defineTestElement(hostTag, GlobalLightHost);
+    const host = document.createElement(hostTag);
+    document.body.appendChild(host);
+    await host.updateComplete;
+    const globalChild = host.querySelector(globalTag);
+    const scopedChild = host.querySelector(scopedTag);
+
+    return {
+      globalCtor: globalChild?.constructor?.name ?? null,
+      scopedCtor: scopedChild?.constructor?.name ?? null,
+      scopedInitialized: scopedChild?.initialized ?? false,
+      globalStillRegistered: customElements.get(globalTag)?.name ?? null,
+      calls,
+    };
+  },
+
+  async probeLateLightDefinition() {
+    const childTag = "probe-late-light-child";
+    const hostTag = "probe-late-light-host";
+
+    class LateHost extends LightDomMixin(LitElement) {
+      static elements = {};
+      render() {
+        return html`<probe-late-light-child .value=${"before-definition"}></probe-late-light-child>`;
+      }
+    }
+
+    defineTestElement(hostTag, LateHost);
+    const host = document.createElement(hostTag);
+    document.body.appendChild(host);
+    await host.updateComplete;
+    const pending = host.querySelector(childTag);
+    const before = {
+      ctor: pending?.constructor?.name ?? null,
+      value: pending?.value ?? null,
+    };
+
+    class LateChild extends LitElement {
+      static properties = { value: { type: String } };
+      constructor() {
+        super();
+        this.constructed = true;
+        this.value ??= "late-default";
+      }
+      render() {
+        return html`<i>${this.value}</i>`;
+      }
+    }
+
+    host.registry.define(childTag, LateChild);
+    await pending?.updateComplete;
+
+    return {
+      before,
+      after: {
+        sameNode: host.querySelector(childTag) === pending,
+        ctor: pending?.constructor?.name ?? null,
+        constructed: pending?.constructed ?? false,
+        value: pending?.value ?? null,
+        html: pending?.shadowRoot?.textContent?.trim() ?? null,
+      },
+    };
+  },
+
   async renderStory(kind) {
     if (kind === "with") {
       renderLightDom(
@@ -255,18 +635,16 @@ window.__repro = {
     const collisionShellTag = "probe-shell";
     const collisionLightTag = sameTag ? collisionPanelTag : "probe-light";
 
-    class ForcedNativeShadowHost extends LitElement {
-      createRenderRoot() {
-        if (this.shadowRoot) {
-          return this.shadowRoot;
-        }
-
+    class ForcedNativeShadowHost extends HTMLElement {
+      constructor() {
+        super();
         const elements = this.constructor.elements ?? {};
         const registry = new CustomElementRegistry();
         for (const [tagName, ctor] of Object.entries(elements)) {
           registry.define(tagName, ctor);
         }
 
+        this.registry = registry;
         this.registry = registry;
         const root = this.attachShadow({
           mode: "open",
@@ -281,7 +659,14 @@ window.__repro = {
           }
         }
 
-        return root;
+      }
+
+      connectedCallback() {
+        this.shadowRoot.innerHTML = this.renderMarkup();
+      }
+
+      get updateComplete() {
+        return Promise.resolve(true);
       }
     }
 
@@ -296,8 +681,8 @@ window.__repro = {
         [collisionCardTag]: ProbeCard,
       };
 
-      render() {
-        return html`<probe-card></probe-card>`;
+      renderMarkup() {
+        return `<probe-card></probe-card>`;
       }
     }
 
@@ -306,8 +691,8 @@ window.__repro = {
         [collisionPanelTag]: ProbePanel,
       };
 
-      render() {
-        return html`<probe-panel></probe-panel>`;
+      renderMarkup() {
+        return `<probe-panel></probe-panel>`;
       }
     }
 

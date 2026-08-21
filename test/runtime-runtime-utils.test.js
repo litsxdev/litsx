@@ -14,6 +14,9 @@ import {
   prepareEffects,
   resolveRuntimeHost,
 } from "../packages/core/src/runtime-controller.js";
+import { EffectsController } from "../packages/core/src/effects-controller.js";
+import { SsrEffectsController } from "../packages/core/src/ssr-effects-controller.js";
+import { LITSX_SSR_CONTEXT } from "../packages/core/src/elements/index.js";
 
 class TestHost {
   constructor() {
@@ -47,7 +50,7 @@ describe("runtime utility internals", () => {
     const functionRef = (value) => {
       calls.push(value);
     };
-    const objectRef = { current: "initial" };
+    const objectRef = { value: "initial" };
 
     assignRef(null, "ignored");
     assignRef("not-a-ref", "ignored");
@@ -56,8 +59,8 @@ describe("runtime utility internals", () => {
     cleanupRef(functionRef);
     cleanupRef(objectRef);
 
-    assert.deepStrictEqual(calls, ["value", null]);
-    assert.strictEqual(objectRef.current, null);
+    assert.deepStrictEqual(calls, ["value", undefined]);
+    assert.strictEqual(objectRef.value, undefined);
   });
 
   it("flushes scheduled work by priority and clears queues defensively", () => {
@@ -137,6 +140,29 @@ describe("runtime utility internals", () => {
     assert.strictEqual(resolveRuntimeHost(undefined), host);
     assert.strictEqual(directController, contextualController);
     assert.strictEqual(host.controllers.length, 1);
+  });
+
+  it("selects the SSR controller only for hosts marked with SSR context", () => {
+    const clientHost = new TestHost();
+    const ssrHost = {
+      requestUpdate() {},
+      [LITSX_SSR_CONTEXT]: {
+        idPrefix: "ssr",
+        currentInstanceId: "0",
+      },
+    };
+
+    const clientController = getController(clientHost);
+    const nextClientController = getController(clientHost);
+    const ssrController = getController(ssrHost);
+    const nextSsrController = getController(ssrHost);
+
+    assert.ok(clientController instanceof EffectsController);
+    assert.ok(!(clientController instanceof SsrEffectsController));
+    assert.strictEqual(clientController, nextClientController);
+    assert.ok(ssrController instanceof SsrEffectsController);
+    assert.strictEqual(ssrController, nextSsrController);
+    assert.strictEqual(ssrController.ssrContext, ssrHost[LITSX_SSR_CONTEXT]);
   });
 
   it("tracks sync and async transition lifecycles and resets pending state safely", async () => {

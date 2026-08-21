@@ -954,7 +954,7 @@ describe("@litsx/scoped-registry-shim shim runtime", () => {
     host.remove();
   });
 
-  it("falls back to shadowRoot.host.registry when the shadow root does not expose registry fields", () => {
+  it("does not leak a light-dom registry through an unowned shadow root", () => {
     const tagName = nextTag();
     const host = document.createElement("section");
     const shadowRoot = host.attachShadow({ mode: "open" });
@@ -974,13 +974,13 @@ describe("@litsx/scoped-registry-shim shim runtime", () => {
 
     const element = shadowRoot.querySelector(tagName);
     assert(element);
-    assert.strictEqual(Object.getPrototypeOf(element), ScopedElement.prototype);
-    assert.equal(element.connected, true);
+    assert.notStrictEqual(Object.getPrototypeOf(element), ScopedElement.prototype);
+    assert.notEqual(element.connected, true);
 
     host.remove();
   });
 
-  it("upgrades stand-ins that are created before they are connected to a scoped shadow root", () => {
+  it("does not retarget pending light-dom stand-ins across an unowned shadow boundary", () => {
     const tagName = nextTag();
     const host = document.createElement("section");
     const shadowRoot = host.attachShadow({ mode: "open" });
@@ -1001,8 +1001,8 @@ describe("@litsx/scoped-registry-shim shim runtime", () => {
     shadowRoot.appendChild(element);
     document.body.appendChild(host);
 
-    assert.strictEqual(Object.getPrototypeOf(element), ScopedElement.prototype);
-    assert.equal(element.connected, true);
+    assert.notStrictEqual(Object.getPrototypeOf(element), ScopedElement.prototype);
+    assert.notEqual(element.connected, true);
 
     host.remove();
   });

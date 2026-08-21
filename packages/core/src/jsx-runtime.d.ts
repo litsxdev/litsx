@@ -5,10 +5,13 @@ import type {
   LitsxDomAttributes,
   LitsxElementProps,
   LitsxErrorBoundaryElementProps,
+  LitsxEventDeclaration,
+  LitsxExplicitCustomEventAttributes,
   LitsxIntrinsicElements,
   LitsxJsxNode,
   LitsxRenderable,
   LitsxRef,
+  LitsxTypedCustomEventAttributes,
   LitsxSuspenseBoundaryElementProps,
   SuspenseBoundary,
   SuspenseBoundaryProps,
@@ -59,18 +62,29 @@ export namespace JSX {
   type LitsxBoundaryElementProps<TElement, TProps> =
     LitsxElementProps<TElement> & TProps;
 
-  type LitsxComponentAuthoredAttributes =
-    LitsxBaseAttributes & LitsxDomAttributes<EventTarget>;
+  type LitsxComponentEventMap<Component> =
+    Component extends { readonly events: LitsxEventDeclaration<infer Events, infer Complete> }
+      ? Complete extends true ? Events : {}
+      : {};
 
-  type LitsxComponentElementProps<TProps> =
-    TProps & LitsxComponentAuthoredAttributes;
+  type LitsxComponentAuthoredAttributes<TProps, TEvents extends Record<string, unknown>> =
+    LitsxBaseAttributes &
+    (keyof TEvents extends never
+      ? LitsxExplicitCustomEventAttributes
+      : Omit<LitsxDomAttributes<EventTarget>, `on:${Extract<keyof TEvents, string>}`> &
+        LitsxTypedCustomEventAttributes<TEvents>);
+
+  type LitsxNormalizeManagedProps<TProps> = 0 extends (1 & TProps) ? {} : TProps;
+
+  type LitsxComponentElementProps<TProps, TEvents extends Record<string, unknown> = {}> =
+    LitsxNormalizeManagedProps<TProps> &
+    LitsxComponentAuthoredAttributes<LitsxNormalizeManagedProps<TProps>, TEvents>;
 
   type LibraryManagedAttributes<Component, Props> =
     Component extends typeof ErrorBoundary ? LitsxErrorBoundaryElementProps :
     Component extends typeof SuspenseBoundary ? LitsxSuspenseBoundaryElementProps :
     Component extends typeof SuspenseList ? LitsxBoundaryElementProps<SuspenseList, SuspenseListProps> :
-    Component extends LitsxComponent<infer InferredProps> ? LitsxComponentElementProps<InferredProps> :
-    LitsxComponentElementProps<Props>;
+    LitsxComponentElementProps<Props, LitsxComponentEventMap<Component>>;
 }
 
 export type LitsxComponentProps<T> =

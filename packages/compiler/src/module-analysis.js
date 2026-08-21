@@ -80,7 +80,7 @@ function isLikelyAuthoredModuleSource(source) {
     source.startsWith("./") ||
     source.startsWith("../") ||
     source.startsWith("/")
-  ) && /\.(?:litsx(?:\.jsx)?|tsx|jsx|ts|mts|cts|mjs|cjs|js)$/.test(source);
+  ) && /\.(?:tsx|jsx|ts|mts|cts|mjs|cjs|js)$/.test(source);
 }
 
 function collectTopLevelDeclarations(program, declarations, declarationsByLocalName) {

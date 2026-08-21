@@ -63,39 +63,27 @@ function ensureNamedImport(importPath, importedName) {
   return true;
 }
 
-function pruneUnusedLitsxStaticImports(programPath) {
-  programPath.scope.crawl();
+function ensureNamedImportAcross(importPaths, importedName) {
+  if (
+    importPaths.some((importPath) =>
+      importPath.node.specifiers.some(
+        (specifier) =>
+          t.isImportSpecifier(specifier) &&
+          t.isIdentifier(specifier.imported, { name: importedName })
+      )
+    )
+  ) {
+    return true;
+  }
 
-  const bodyPaths = programPath.get("body");
-  const litsxImports = bodyPaths.filter(
-    (path) => path.isImportDeclaration() && path.node.source.value === "@litsx/core"
+  const target = importPaths.find(
+    (importPath) =>
+      !importPath.node.specifiers.some((specifier) =>
+        t.isImportNamespaceSpecifier(specifier)
+      )
   );
 
-  litsxImports.forEach((importPath) => {
-    const removableSpecifiers = importPath.get("specifiers").filter((specifierPath) => {
-      if (!specifierPath.isImportSpecifier()) return false;
-      if (!t.isIdentifier(specifierPath.node.imported)) return false;
-
-      const importedName = specifierPath.node.imported.name;
-      if (importedName !== "staticStyles" && importedName !== "staticProps") {
-        return false;
-      }
-
-      const localName = t.isIdentifier(specifierPath.node.local)
-        ? specifierPath.node.local.name
-        : importedName;
-      const binding = specifierPath.scope.getBinding(localName);
-      return !binding || binding.referencePaths.length === 0;
-    });
-
-    removableSpecifiers.forEach((specifierPath) => {
-      specifierPath.remove();
-    });
-
-    if (importPath.node.specifiers.length === 0) {
-      importPath.remove();
-    }
-  });
+  return target ? ensureNamedImport(target, importedName) : false;
 }
 
 export function finalizeProgram(programPath, state) {
@@ -140,16 +128,7 @@ export function finalizeProgram(programPath, state) {
     (n) => n.isImportDeclaration() && n.node.source.value === "lit"
   );
 
-  let litElementImported = false;
-
-  litImports.some((importPath) => {
-    if (ensureNamedImport(importPath, "LitElement")) {
-      litElementImported = true;
-      return true;
-    }
-
-    return false;
-  });
+  const litElementImported = ensureNamedImportAcross(litImports, "LitElement");
 
   if (!litElementImported) {
     programPath.unshiftContainer("body", createLitElementImport());
@@ -160,7 +139,7 @@ export function finalizeProgram(programPath, state) {
     const nextLitImports = nextBodyPaths.filter(
       (n) => n.isImportDeclaration() && n.node.source.value === "lit"
     );
-    nextLitImports.some((importPath) => ensureNamedImport(importPath, "css"));
+    ensureNamedImportAcross(nextLitImports, "css");
   }
 
   if (state.__litsxNeedsUnsafeCss) {
@@ -168,7 +147,7 @@ export function finalizeProgram(programPath, state) {
     const nextLitImports = nextBodyPaths.filter(
       (n) => n.isImportDeclaration() && n.node.source.value === "lit"
     );
-    nextLitImports.some((importPath) => ensureNamedImport(importPath, "unsafeCSS"));
+    ensureNamedImportAcross(nextLitImports, "unsafeCSS");
   }
 
   if (state.__litsxNeedsStaticHoistsMixin) {
@@ -177,15 +156,10 @@ export function finalizeProgram(programPath, state) {
       (n) => n.isImportDeclaration() && n.node.source.value === "@litsx/core/elements"
     );
 
-    let internalImported = false;
-    internalImports.some((importPath) => {
-      if (ensureNamedImport(importPath, "LitsxStaticHoistsMixin")) {
-        internalImported = true;
-        return true;
-      }
-
-      return false;
-    });
+    const internalImported = ensureNamedImportAcross(
+      internalImports,
+      "LitsxStaticHoistsMixin"
+    );
 
     if (!internalImported) {
       programPath.unshiftContainer("body", createLitsxInfrastructureImport("LitsxStaticHoistsMixin"));
@@ -198,9 +172,41 @@ export function finalizeProgram(programPath, state) {
       (n) => n.isImportDeclaration() && n.node.source.value === "@litsx/core/elements"
     );
 
+    const internalImported = ensureNamedImportAcross(
+      internalImports,
+      "LightDomMixin"
+    );
+
+    if (!internalImported) {
+      programPath.unshiftContainer("body", createLitsxInfrastructureImport("LightDomMixin"));
+    }
+  }
+
+  if (state.__litsxNeedsHydrationSuspenseMixin) {
+    const bodyPathsWithInternal = programPath.get("body");
+    const internalImports = bodyPathsWithInternal.filter(
+      (n) => n.isImportDeclaration() && n.node.source.value === "@litsx/core/elements"
+    );
+
+    const internalImported = ensureNamedImportAcross(
+      internalImports,
+      "HydrationSuspenseMixin"
+    );
+
+    if (!internalImported) {
+      programPath.unshiftContainer("body", createLitsxInfrastructureImport("HydrationSuspenseMixin"));
+    }
+  }
+
+  if (state.__litsxNeedsModuleIdMetadata) {
+    const bodyPathsWithInternal = programPath.get("body");
+    const internalImports = bodyPathsWithInternal.filter(
+      (n) => n.isImportDeclaration() && n.node.source.value === "@litsx/core/elements"
+    );
+
     let internalImported = false;
     internalImports.some((importPath) => {
-      if (ensureNamedImport(importPath, "LightDomMixin")) {
+      if (ensureNamedImport(importPath, "LITSX_MODULE_ID")) {
         internalImported = true;
         return true;
       }
@@ -209,7 +215,7 @@ export function finalizeProgram(programPath, state) {
     });
 
     if (!internalImported) {
-      programPath.unshiftContainer("body", createLitsxInfrastructureImport("LightDomMixin"));
+      programPath.unshiftContainer("body", createLitsxInfrastructureImport("LITSX_MODULE_ID"));
     }
   }
 
@@ -219,15 +225,10 @@ export function finalizeProgram(programPath, state) {
       (n) => n.isImportDeclaration() && n.node.source.value === "@litsx/core"
     );
 
-    let litsxImported = false;
-    litsxImports.some((importPath) => {
-      if (ensureNamedImport(importPath, "useCallbackRef")) {
-        litsxImported = true;
-        return true;
-      }
-
-      return false;
-    });
+    const litsxImported = ensureNamedImportAcross(
+      litsxImports,
+      "useCallbackRef"
+    );
 
     if (!litsxImported) {
       programPath.unshiftContainer("body", createLitsxImport("useCallbackRef"));
@@ -242,20 +243,14 @@ export function finalizeProgram(programPath, state) {
         n.node.source.value === "@litsx/core/rendering"
     );
 
-    let internalRuntimeImported = false;
-    internalRuntimeImports.some((importPath) => {
-      if (ensureNamedImport(importPath, "renderRendererCall")) {
-        internalRuntimeImported = true;
-        return true;
-      }
-
-      return false;
-    });
+    const internalRuntimeImported = ensureNamedImportAcross(
+      internalRuntimeImports,
+      "renderRendererCall"
+    );
 
     if (!internalRuntimeImported) {
       programPath.unshiftContainer("body", createLitsxInternalRuntimeImport("renderRendererCall"));
     }
   }
 
-  pruneUnusedLitsxStaticImports(programPath);
 }

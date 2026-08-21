@@ -1,12 +1,6 @@
 import type { ProjectGridProps } from "./project-grid-types";
 
 export function ProjectGrid(props: ProjectGridProps) {
-  static properties = {
-    selectedId: { attribute: "selected-id", reflect: true },
-    onSelect: { attribute: false },
-    page: { attribute: false },
-  };
-
   return (
     <section>
       <h2>{props.title}</h2>
@@ -14,7 +8,13 @@ export function ProjectGrid(props: ProjectGridProps) {
       <p>{props.page.items.length}</p>
       <p>{props.page.total}</p>
       <p>{props.selectedId}</p>
-      <button onClick={() => props.onSelect(props.page.items[0].id)}>select</button>
+      <button on:click={() => props.onSelect(props.page.items[0].id)}>select</button>
     </section>
   );
 }
+
+ProjectGrid.properties = {
+  selectedId: { attribute: "selected-id", reflect: true },
+  onSelect: { attribute: false },
+  page: { attribute: false },
+};

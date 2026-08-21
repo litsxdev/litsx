@@ -11,23 +11,33 @@ export type LitsxStorybookConfigOptions = {
   stories?: string[];
   addons?: string[];
   storybook?: {
-    experimental_indexers?: (existingIndexers: unknown[]) => Promise<unknown[]> | unknown[];
-    viteFinal?: (config: Record<string, unknown>) => Promise<Record<string, unknown>> | Record<string, unknown>;
+    experimental_indexers?: (
+      existingIndexers: unknown[],
+    ) => Promise<unknown[]> | unknown[];
+    viteFinal?: (
+      config: Record<string, unknown>,
+    ) => Promise<Record<string, unknown>> | Record<string, unknown>;
     [key: string]: unknown;
   };
   compiler?: LitsxStorybookCompilerOptions;
+  vitePlugins?: LitsxStorybookVitePluginPhases;
+};
+
+export type LitsxStorybookVitePluginPhases = {
+  beforeLitsx?: unknown[];
+  afterLitsx?: unknown[];
 };
 
 export declare const litsxStoriesIndexer: {
   test: RegExp;
   createIndex(
     fileName: string,
-    context?: { makeTitle?: (...args: unknown[]) => unknown }
+    context?: { makeTitle?: (...args: unknown[]) => unknown },
   ): Promise<unknown>;
 };
 
 export declare function litsxStoryRegistrationPlugin(
-  options?: LitsxStorybookCompilerOptions
+  options?: LitsxStorybookCompilerOptions,
 ): {
   name: string;
   enforce: "pre";
@@ -36,9 +46,10 @@ export declare function litsxStoryRegistrationPlugin(
 
 export declare function withLitsxStorybookViteConfig(
   config?: Record<string, unknown>,
-  options?: LitsxStorybookCompilerOptions
+  options?: LitsxStorybookCompilerOptions,
+  vitePlugins?: LitsxStorybookVitePluginPhases,
 ): Record<string, unknown>;
 
 export declare function createLitsxStorybookConfig(
-  options?: LitsxStorybookConfigOptions
+  options?: LitsxStorybookConfigOptions,
 ): Record<string, unknown>;

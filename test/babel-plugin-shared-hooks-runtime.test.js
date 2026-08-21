@@ -109,7 +109,7 @@ describe("@litsx/babel-plugin-shared-hooks createRuntimeHooksTransform", () => {
       pluginName: "test-shared-hooks-runtime-structural",
       runtimeModule: "@litsx/core",
       importSources: ["@litsx/core"],
-      helperNames: ["defineHook", "resolveStructuralEntry"],
+      helperNames: ["defineHook", "readStructuralHook"],
       structuralHookResolver() {
         return false;
       },
@@ -119,8 +119,8 @@ describe("@litsx/babel-plugin-shared-hooks createRuntimeHooksTransform", () => {
       import { defineHook } from "@litsx/core";
 
       const useLocale = defineHook({
-        use(_host, _state, args) {
-          return args[0];
+        use(_host, locale) {
+          return locale;
         }
       });
 
@@ -129,7 +129,10 @@ describe("@litsx/babel-plugin-shared-hooks createRuntimeHooksTransform", () => {
       }
     `;
 
-    const ast = parser.parse(source, { sourceType: "module", plugins: ["typescript"] });
+    const ast = parser.parse(source, {
+      sourceType: "module",
+      plugins: ["typescript"],
+    });
     const result = transformFromAstSync(ast, source, {
       configFile: false,
       babelrc: false,
@@ -137,7 +140,10 @@ describe("@litsx/babel-plugin-shared-hooks createRuntimeHooksTransform", () => {
     });
     const code = result.code;
 
-    assert.match(code, /useMessage\[Symbol\.for\("litsx\.structuralHookEntries"\)\] = \[/);
+    assert.match(
+      code,
+      /useMessage\[Symbol\.for\("litsx\.structuralHooks"\)\] = \[/,
+    );
     assert.match(code, /useMessage\[Symbol\.for\("litsx\.hook"\)\] = true;/);
     assert.doesNotMatch(code, /defineStructuralHookEntries\(/);
     assert.doesNotMatch(code, /getStructuralHookEntries\(/);

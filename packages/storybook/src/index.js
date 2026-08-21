@@ -1,9 +1,10 @@
 import fs from "node:fs/promises";
+import path from "node:path";
 import { prepareLitsxAuthoredInput } from "@litsx/compiler/authored-input";
 import { transformLitsxSync } from "@litsx/compiler";
 import { litsx } from "@litsx/vite-plugin";
 
-const STORY_FILE_PATTERN = /\.stories\.litsx(?:\?.*)?$/;
+const STORY_FILE_PATTERN = /\.stories\.[cm]?[jt]sx?(?:\?.*)?$/;
 
 function normalizeTagName(tagName) {
   return typeof tagName === "string" && tagName.includes("-") ? tagName : null;
@@ -16,29 +17,26 @@ function toKebabCase(value) {
     .toLowerCase();
 }
 
-function resolveImportedAuthoredTagName(
-  moduleAnalysis,
-  localName,
-  fallbackTagName,
-) {
+function findImportedValueSpecifier(moduleAnalysis, localName) {
   for (const entry of moduleAnalysis?.imports ?? []) {
     for (const specifier of entry.specifiers ?? []) {
       if (
         specifier?.kind === "value" &&
         specifier.localName === localName &&
-        typeof specifier.importedName === "string" &&
-        specifier.importedName !== "default" &&
-        specifier.importedName !== "*"
+        typeof specifier.importedName === "string"
       ) {
-        return toKebabCase(specifier.importedName);
+        return { ...specifier, importSource: entry.source };
       }
     }
   }
 
-  return fallbackTagName;
+  return null;
 }
 
-function collectStoryRegistrations(moduleAnalysis = null) {
+function collectStoryRegistrations(
+  moduleAnalysis = null,
+  { nestedLocalNames = new Set() } = {},
+) {
   if (!moduleAnalysis || !Array.isArray(moduleAnalysis.jsxReferences)) {
     return [];
   }
@@ -48,19 +46,27 @@ function collectStoryRegistrations(moduleAnalysis = null) {
 
   for (const entry of moduleAnalysis.jsxReferences) {
     if (
+      entry?.source === "local-declaration" &&
+      nestedLocalNames.has(entry.localName)
+    ) {
+      continue;
+    }
+    if (
       entry?.source !== "imported-authored-module" &&
       entry?.source !== "local-declaration"
     ) {
       continue;
     }
 
-    const rawTagName =
+    const importedSpecifier =
       entry?.source === "imported-authored-module"
-        ? resolveImportedAuthoredTagName(
-            moduleAnalysis,
-            entry.localName,
-            entry.tagName,
-          )
+        ? findImportedValueSpecifier(moduleAnalysis, entry.localName)
+        : null;
+    const rawTagName =
+      importedSpecifier &&
+      importedSpecifier.importedName !== "default" &&
+      importedSpecifier?.importedName !== "*"
+        ? toKebabCase(importedSpecifier.importedName)
         : entry.tagName;
     const tagName = normalizeTagName(rawTagName);
     const constructorName = entry?.localName;
@@ -69,24 +75,92 @@ function collectStoryRegistrations(moduleAnalysis = null) {
     }
 
     seen.add(tagName);
-    registrations.push({ tagName, constructorName });
+    registrations.push({
+      tagName,
+      constructorName,
+      importedSpecifier,
+    });
   }
 
   return registrations;
 }
 
-function createRegistrationSource(moduleAnalysis = null) {
-  const registrations = collectStoryRegistrations(moduleAnalysis);
+function createRegistrationSource(moduleAnalysis = null, options = {}) {
+  const registrations = collectStoryRegistrations(moduleAnalysis, options);
   if (registrations.length === 0) {
     return "";
   }
 
-  return `\n\n${registrations
-    .map(
-      ({ tagName, constructorName }) =>
-        `if (!customElements.get("${tagName}")) customElements.define("${tagName}", ${constructorName});`,
-    )
-    .join("\n")}\n`;
+  const imports = [];
+  const definitions = [];
+  registrations.forEach(
+    ({ tagName, constructorName, importedSpecifier }, index) => {
+      let bindingName = constructorName;
+      if (importedSpecifier?.importSource) {
+        bindingName = `__litsxStoryElement${index}`;
+        const source = JSON.stringify(importedSpecifier.importSource);
+        imports.push(
+          importedSpecifier.importedName === "default"
+            ? `import ${bindingName} from ${source};`
+            : `import { ${importedSpecifier.importedName} as ${bindingName} } from ${source};`,
+        );
+      }
+      definitions.push(
+        `if (!customElements.get("${tagName}")) customElements.define("${tagName}", ${bindingName});`,
+      );
+    },
+  );
+
+  return `\n\n${[...imports, ...definitions].join("\n")}\n`;
+}
+
+const AUTHORED_MODULE_SUFFIXES = [
+  ".tsx",
+  ".jsx",
+  ".litsx",
+  "/index.tsx",
+  "/index.jsx",
+  "/index.litsx",
+];
+
+async function fileExists(filename) {
+  try {
+    await fs.access(filename);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function resolveAuthoredStoryReferences(moduleAnalysis, filename) {
+  if (!Array.isArray(moduleAnalysis?.jsxReferences)) {
+    return moduleAnalysis;
+  }
+
+  const references = await Promise.all(
+    moduleAnalysis.jsxReferences.map(async (reference) => {
+      if (
+        reference?.source !== "imported-js-module" ||
+        typeof reference.importSource !== "string" ||
+        !reference.importSource.startsWith(".")
+      ) {
+        return reference;
+      }
+
+      const importPath = path.resolve(
+        path.dirname(filename.split("?", 1)[0]),
+        reference.importSource,
+      );
+      for (const suffix of AUTHORED_MODULE_SUFFIXES) {
+        if (await fileExists(`${importPath}${suffix}`)) {
+          return { ...reference, source: "imported-authored-module" };
+        }
+      }
+      return reference;
+    }),
+  );
+
+  return { ...moduleAnalysis, jsxReferences: references };
 }
 
 function withoutRollupOptimizeDepsOptions(optimizeDeps = {}) {
@@ -195,13 +269,84 @@ function getTopLevelLocalBindings(program) {
   return bindings;
 }
 
-function resolveExportValue(node, bindings) {
+function collectNestedLocalComponentReferences(program) {
+  const localNames = new Set(
+    [...getTopLevelLocalBindings(program).keys()].filter((name) =>
+      /^[A-Z]/.test(name),
+    ),
+  );
+  const nestedLocalNames = new Set();
+  const topLevelLocalNames = new Set();
+
+  const visit = (node, ownerName = null) => {
+    if (!node || typeof node !== "object") {
+      return;
+    }
+
+    if (
+      node.type === "VariableDeclarator" &&
+      node.id?.type === "Identifier" &&
+      /^[A-Z]/.test(node.id.name) &&
+      (node.init?.type === "ArrowFunctionExpression" ||
+        node.init?.type === "FunctionExpression")
+    ) {
+      visit(node.init, node.id.name);
+      return;
+    }
+
+    const nextOwner =
+      node.type === "FunctionDeclaration" &&
+      node.id?.type === "Identifier" &&
+      /^[A-Z]/.test(node.id.name)
+        ? node.id.name
+        : ownerName;
+
+    if (
+      node.type === "JSXOpeningElement" &&
+      node.name?.type === "JSXIdentifier" &&
+      localNames.has(node.name.name)
+    ) {
+      if (nextOwner) {
+        nestedLocalNames.add(node.name.name);
+      } else {
+        topLevelLocalNames.add(node.name.name);
+      }
+    }
+
+    for (const [key, value] of Object.entries(node)) {
+      if (
+        key === "loc" ||
+        key === "start" ||
+        key === "end" ||
+        key === "extra"
+      ) {
+        continue;
+      }
+      if (Array.isArray(value)) {
+        value.forEach((child) => visit(child, nextOwner));
+      } else {
+        visit(value, nextOwner);
+      }
+    }
+  };
+
+  visit(program);
+  return new Set(
+    [...nestedLocalNames].filter((name) => !topLevelLocalNames.has(name)),
+  );
+}
+
+function resolveExportValue(node, bindings, seen = new Set()) {
   if (!node) {
     return null;
   }
 
   if (node.type === "Identifier") {
-    return bindings.get(node.name) ?? null;
+    if (seen.has(node.name)) {
+      return null;
+    }
+    seen.add(node.name);
+    return resolveExportValue(bindings.get(node.name) ?? null, bindings, seen);
   }
 
   return node;
@@ -285,7 +430,8 @@ function validateLitsxStoryModule(source, filename, compilerOptions = {}) {
             getNodeStartLoc(declarator.id ?? declarator),
           );
         }
-        if (!declarator.init || declarator.init.type !== "ObjectExpression") {
+        const value = resolveExportValue(declarator.init, bindings);
+        if (!value || value.type !== "ObjectExpression") {
           throw createStorybookValidationError(
             filename,
             `named export "${declarator.id.name}" must be a plain object literal.`,
@@ -294,7 +440,7 @@ function validateLitsxStoryModule(source, filename, compilerOptions = {}) {
         }
 
         validateObjectExpressionShape(
-          declarator.init,
+          value,
           filename,
           `named export "${declarator.id.name}"`,
         );
@@ -335,6 +481,23 @@ function validateLitsxStoryModule(source, filename, compilerOptions = {}) {
       filename,
       "default export is required and must define the story meta object.",
     );
+  }
+
+  return {
+    nestedLocalNames: collectNestedLocalComponentReferences(program),
+  };
+}
+
+async function readAuthoredStorySource(transformedSource, id) {
+  const filename = id.split("?", 1)[0];
+  if (!filename || filename.startsWith("\0")) {
+    return transformedSource;
+  }
+
+  try {
+    return await fs.readFile(filename, "utf8");
+  } catch {
+    return transformedSource;
   }
 }
 
@@ -384,7 +547,7 @@ async function validateStorybookCsfWithLoader(
 }
 
 export const litsxStoriesIndexer = {
-  test: /\.stories\.litsx$/,
+  test: /\.stories\.[cm]?[jt]sx?$/,
   async createIndex(fileName, { makeTitle } = {}) {
     const source = await fs.readFile(fileName, "utf8");
     validateLitsxStoryModule(source, fileName);
@@ -408,50 +571,74 @@ export function litsxStoryRegistrationPlugin(options = {}) {
 
   return {
     name: "litsx-story-registration",
-    enforce: "pre",
-    async transform(source, id) {
-      if (!STORY_FILE_PATTERN.test(id)) {
-        return null;
-      }
+    enforce: "post",
+    transform: {
+      order: "post",
+      async handler(source, id) {
+        if (!STORY_FILE_PATTERN.test(id)) {
+          return null;
+        }
 
-      validateLitsxStoryModule(source, id, compilerOptions);
-      const result = transformLitsxSync(source, {
-        ...compilerOptions,
-        filename: id,
-        sourceMaps: false,
-      });
-      await validateStorybookCsfWithLoader(
-        result.code,
-        id,
-        null,
-        storybookCsfLoader,
-      );
-      const registrationSource = createRegistrationSource(
-        result.metadata?.litsxModuleAnalysis,
-      );
+        const authoredSource = await readAuthoredStorySource(source, id);
+        const storyAnalysis = validateLitsxStoryModule(
+          authoredSource,
+          id,
+          compilerOptions,
+        );
+        const result = transformLitsxSync(authoredSource, {
+          ...compilerOptions,
+          filename: id,
+          sourceMaps: false,
+        });
+        await validateStorybookCsfWithLoader(
+          result.code,
+          id,
+          null,
+          storybookCsfLoader,
+        );
+        const resolvedModuleAnalysis = await resolveAuthoredStoryReferences(
+          result.metadata?.litsxModuleAnalysis,
+          id,
+        );
+        const registrationSource = createRegistrationSource(
+          resolvedModuleAnalysis,
+          storyAnalysis,
+        );
+        if (!registrationSource) {
+          return null;
+        }
 
-      if (!registrationSource) {
-        return null;
-      }
-
-      return {
-        code: `${source}${registrationSource}`,
-        map: null,
-      };
+        return {
+          code: `${source}${registrationSource}`,
+          map: null,
+        };
+      },
     },
   };
 }
 
-export function withLitsxStorybookViteConfig(config = {}, options = {}) {
+export function withLitsxStorybookViteConfig(
+  config = {},
+  options = {},
+  vitePlugins = {},
+) {
   const compilerOptions = normalizeCompilerOptions(options);
+  const beforeLitsx = Array.isArray(vitePlugins.beforeLitsx)
+    ? vitePlugins.beforeLitsx
+    : [];
+  const afterLitsx = Array.isArray(vitePlugins.afterLitsx)
+    ? vitePlugins.afterLitsx
+    : [];
 
   return {
     ...config,
     optimizeDeps: withoutRollupOptimizeDepsOptions(config.optimizeDeps),
     plugins: [
       litsxStoryRegistrationPlugin(compilerOptions),
+      ...beforeLitsx,
       ...(config.plugins ?? []),
       litsx({ sourceMaps: true, ...compilerOptions }),
+      ...afterLitsx,
     ],
   };
 }
@@ -459,12 +646,13 @@ export function withLitsxStorybookViteConfig(config = {}, options = {}) {
 export function createLitsxStorybookConfig(options = {}) {
   const {
     stories = [
-      "../src/**/*.stories.@(js|jsx|ts|tsx|litsx|mdx)",
+      "../src/**/*.stories.@(js|jsx|ts|tsx|mdx)",
       "../src/**/*.docs.mdx",
     ],
     addons = ["@storybook/addon-docs", "@storybook/addon-a11y"],
     storybook = {},
     compiler = {},
+    vitePlugins = {},
   } = options;
 
   return {
@@ -484,7 +672,7 @@ export function createLitsxStorybookConfig(options = {}) {
         typeof storybook.viteFinal === "function"
           ? await storybook.viteFinal(config)
           : config;
-      return withLitsxStorybookViteConfig(baseConfig, compiler);
+      return withLitsxStorybookViteConfig(baseConfig, compiler, vitePlugins);
     },
   };
 }

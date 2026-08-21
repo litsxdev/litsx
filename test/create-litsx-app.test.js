@@ -12,16 +12,20 @@ import {
   renderProjectFiles,
 } from "../packages/create-litsx-app/src/index.js";
 import { publishedPackageVersions } from "../packages/create-litsx-app/src/published-package-versions.js";
+import { transformLitsxSync } from "../packages/compiler/src/index.js";
 const tempDirs = [];
 
-function getStaticStyleSources(render) {
+function getComponentStyleSources(render) {
   const sources = [];
+  const templates = render === renderProjectFiles
+    ? ["app", "component", "design-system", "ssr"]
+    : ["app", "component", "design-system"];
 
-  for (const template of ["app", "component", "design-system"]) {
+  for (const template of templates) {
     const { files } = render("/tmp/my-litsx-app", { template });
 
     for (const [name, source] of files) {
-      if (name.endsWith(".litsx") && source.includes("static styles =")) {
+      if (name.endsWith(".tsx") && source.includes(".styles = css`")) {
         sources.push({ template, name, source });
       }
     }
@@ -46,23 +50,21 @@ describe("create-litsx-app", () => {
     assert.strictEqual(result.visualTests, false);
 
     const packageJson = JSON.parse(result.files.get("package.json"));
-    const jsconfig = result.files.get("jsconfig.json");
+    const tsconfig = result.files.get("tsconfig.json");
     const eslintConfig = result.files.get("eslint.config.js");
-    const prettierConfig = result.files.get("prettier.config.js");
-    const vscodeSettings = result.files.get(".vscode/settings.json");
     const viteConfig = result.files.get("vite.config.js");
     const vitestConfig = result.files.get("vitest.config.js");
     const mainSource = result.files.get("src/main.js");
     const vendorTypes = result.files.get("src/vendor.d.ts");
     const styleTypes = result.files.get("src/styles.d.ts");
-    const appSource = result.files.get("src/my-litsx-app.litsx");
+    const appSource = result.files.get("src/my-litsx-app.tsx");
     const appTestSource = result.files.get("src/my-litsx-app.test.js");
     const titleLogo = result.files.get("public/title.svg");
     const wordmarkLogo = result.files.get("public/litsx-wordmark.svg");
-    const buttonSource = result.files.get("src/components/litsx-button.litsx");
-    const guideCardSource = result.files.get("src/components/guide-card.litsx");
-    const heroSource = result.files.get("src/components/litsx-hero.litsx");
-    const starterGuideSource = result.files.get("src/components/starter-guide.litsx");
+    const buttonSource = result.files.get("src/components/litsx-button.tsx");
+    const guideCardSource = result.files.get("src/components/guide-card.tsx");
+    const heroSource = result.files.get("src/components/litsx-hero.tsx");
+    const starterGuideSource = result.files.get("src/components/starter-guide.tsx");
 
     assert.ok(packageJson.dependencies["@litsx/core"]);
     assert.strictEqual(
@@ -71,35 +73,33 @@ describe("create-litsx-app", () => {
     );
     assert.ok(!("@open-wc/scoped-elements" in packageJson.dependencies));
     assert.ok(packageJson.dependencies.lit);
-    assert.ok(packageJson.devDependencies["@litsx/typescript"]);
+    assert.ok(!packageJson.devDependencies["@litsx/typescript"]);
     assert.ok(packageJson.devDependencies["@litsx/vite-plugin"]);
     assert.ok(packageJson.devDependencies["@vitest/browser"]);
     assert.ok(packageJson.devDependencies["@vitest/browser-playwright"]);
     assert.ok(packageJson.devDependencies["@litsx/eslint-plugin"]);
     assert.ok(packageJson.devDependencies.playwright);
     assert.ok(packageJson.devDependencies.prettier);
-    assert.ok(packageJson.devDependencies["prettier-plugin-litsx"]);
+    assert.ok(!packageJson.devDependencies["prettier-plugin-litsx"]);
     assert.ok(packageJson.devDependencies.eslint);
     assert.ok(packageJson.devDependencies.vitest);
     assert.strictEqual(packageJson.scripts.lint, "eslint .");
     assert.strictEqual(packageJson.scripts.test, "vitest run");
     assert.strictEqual(packageJson.scripts["test:watch"], "vitest");
     assert.strictEqual(packageJson.scripts.format, "prettier --write .");
-    assert.strictEqual(packageJson.scripts.typecheck, "litsx-tsc -p jsconfig.json --noEmit");
-    assert.match(jsconfig, /"module": "ESNext"/);
-    assert.match(jsconfig, /"moduleResolution": "Bundler"/);
-    assert.match(jsconfig, /"allowArbitraryExtensions": true/);
-    assert.match(jsconfig, /"allowJs": true/);
-    assert.match(jsconfig, /"checkJs": true/);
-    assert.match(jsconfig, /"jsxImportSource": "@litsx\/core"/);
+    assert.strictEqual(packageJson.scripts.typecheck, "tsc -p tsconfig.json --noEmit");
+    assert.match(tsconfig, /"module": "ESNext"/);
+    assert.match(tsconfig, /"moduleResolution": "Bundler"/);
+    assert.doesNotMatch(tsconfig, /allowArbitraryExtensions/);
+    assert.match(tsconfig, /"allowJs": true/);
+    assert.match(tsconfig, /"checkJs": true/);
+    assert.match(tsconfig, /"jsxImportSource": "@litsx\/core"/);
+    assert.match(tsconfig, /"strict": true/);
     assert.match(eslintConfig, /@litsx\/eslint-plugin/);
     assert.match(eslintConfig, /recommended-flat/);
-    assert.match(prettierConfig, /prettier-plugin-litsx/);
-    assert.match(prettierConfig, /parser: "litsx"/);
-    assert.match(prettierConfig, /parser: "litsx-jsx"/);
-    assert.match(vscodeSettings, /"js\/ts\.tsdk\.path": "node_modules\/typescript\/lib"/);
-    assert.match(vscodeSettings, /"typescript\.tsserver\.useSyntaxServer": "never"/);
-    assert.match(jsconfig, /"name": "@litsx\/typescript"/);
+    assert.ok(!result.files.has("prettier.config.js"));
+    assert.ok(!result.files.has(".vscode/settings.json"));
+    assert.ok(!result.files.has(".vscode/extensions.json"));
     assert.doesNotMatch(JSON.stringify(packageJson.devDependencies), /@litsx\/babel-parser/);
     assert.match(viteConfig, /@litsx\/vite-plugin/);
     assert.match(viteConfig, /plugins: \[litsx\(\{ sourceMaps: true \}\)\]/);
@@ -111,11 +111,11 @@ describe("create-litsx-app", () => {
     assert.match(vitestConfig, /"@litsx\/core\/rendering"/);
     assert.match(vitestConfig, /browser: "chromium"/);
     assert.match(mainSource, /import "@webcomponents\/scoped-custom-element-registry";/);
-    assert.match(mainSource, /import \{ MyLitsxApp \} from "\.\/my-litsx-app\.litsx";/);
+    assert.match(mainSource, /import \{ MyLitsxApp \} from "\.\/my-litsx-app";/);
     assert.match(appTestSource, /import \{ afterEach, describe, expect, it \} from "vitest";/);
     assert.match(appTestSource, /const tagName = "test-my-litsx-app";/);
-    assert.match(jsconfig, /"@webcomponents\/scoped-custom-element-registry"/);
-    assert.match(jsconfig, /"\.\/src\/vendor\.d\.ts"/);
+    assert.match(tsconfig, /"@webcomponents\/scoped-custom-element-registry"/);
+    assert.match(tsconfig, /"\.\/src\/vendor\.d\.ts"/);
     assert.match(vendorTypes, /export \{\};/);
     assert.match(styleTypes, /declare module "\*\.css"/);
     assert.match(appTestSource, /await element\.updateComplete;/);
@@ -131,9 +131,9 @@ describe("create-litsx-app", () => {
     assert.ok(!packageJson.devDependencies["@storybook/addon-a11y"]);
     assert.ok(!result.files.has(".storybook/main.js"));
     assert.ok(!result.files.has(".storybook/preview.js"));
-    assert.ok(!result.files.has("src/stories/litsx-button.stories.litsx"));
-    assert.ok(!result.files.has("src/stories/litsx-hero.stories.litsx"));
-    assert.ok(!result.files.has("src/stories/starter-guide.stories.litsx"));
+    assert.ok(!result.files.has("src/stories/litsx-button.stories.tsx"));
+    assert.ok(!result.files.has("src/stories/litsx-hero.stories.tsx"));
+    assert.ok(!result.files.has("src/stories/starter-guide.stories.tsx"));
     assert.ok(!result.files.has("src/stories/starter-guide.docs.mdx"));
     assert.match(appSource, /<LitsxHero/);
     assert.match(appSource, /<StarterGuide/);
@@ -150,47 +150,50 @@ describe("create-litsx-app", () => {
     assert.match(buttonSource, /type = "secondary"/);
     assert.match(buttonSource, /label = ""/);
     assert.match(buttonSource, /class=\{type === "primary" \? "primary" : ""\}/);
+    assert.match(buttonSource, /LitsxButton\.styles = css`/);
     assert.doesNotMatch(buttonSource, /onClick/);
-    assert.match(guideCardSource, /import type \{ LitsxRenderable \} from "@litsx\/core";/);
+    assert.match(guideCardSource, /import \{ css, type LitsxRenderable \} from "@litsx\/core";/);
     assert.match(guideCardSource, /type GuideCardProps = \{/);
     assert.match(guideCardSource, /titleRenderer = \(\) => null/);
     assert.match(guideCardSource, /contentRenderer = \(\) => null/);
+    assert.match(guideCardSource, /GuideCard\.styles = css`/);
     assert.match(heroSource, /Web components with a sharper authoring experience/);
-    assert.match(heroSource, /import \{ LitsxButton \} from "\.\/litsx-button\.litsx";/);
+    assert.match(heroSource, /import \{ LitsxButton \} from "\.\/litsx-button";/);
     assert.match(heroSource, /type LitsxHeroProps = \{/);
     assert.match(heroSource, /\}: LitsxHeroProps\) => \{/);
     assert.match(heroSource, /src="\/title\.svg"/);
     assert.match(heroSource, /src="\/flame_512\.png"/);
     assert.match(heroSource, /class="LitsxHero"/);
     assert.match(heroSource, /primaryLabel = "Getting Started"/);
-    assert.match(heroSource, /import \{ useEmit \} from "@litsx\/core";/);
+    assert.match(heroSource, /import \{ css, useEmit \} from "@litsx\/core";/);
     assert.match(heroSource, /const emit = useEmit\(\);/);
     assert.match(heroSource, /emit\("primary-action"\)/);
     assert.match(heroSource, /emit\("secondary-action"\)/);
     assert.match(heroSource, /<LitsxButton/);
     assert.match(heroSource, /type="primary"/);
     assert.match(heroSource, /type="secondary"/);
-    assert.match(heroSource, /@click=\{\(\) => emit\("primary-action"\)\}/);
-    assert.match(heroSource, /@click=\{\(\) => emit\("secondary-action"\)\}/);
-    assert.match(appSource, /@primary-action=\{/);
-    assert.match(appSource, /@secondary-action=\{/);
+    assert.match(heroSource, /on:click=\{\(\) => emit\("primary-action"\)\}/);
+    assert.match(heroSource, /on:click=\{\(\) => emit\("secondary-action"\)\}/);
+    assert.match(heroSource, /LitsxHero\.styles = css`/);
+    assert.match(appSource, /on:primary-action=\{/);
+    assert.match(appSource, /on:secondary-action=\{/);
     assert.match(appSource, /https:\/\/litsx\.dev\/getting-started/);
     assert.match(starterGuideSource, /<SuspenseList/);
     assert.match(starterGuideSource, /type DeferredStep = \{/);
-    assert.match(starterGuideSource, /import \{ SuspenseBoundary, SuspenseList, useOnConnect, useRef, useState \} from "@litsx\/core";/);
+    assert.match(starterGuideSource, /import \{ css, SuspenseBoundary, SuspenseList, useOnConnect, useRef, useState \} from "@litsx\/core";/);
     assert.match(starterGuideSource, /const pendingStepsRef = useRef<Map<number, DeferredStep> \| null>\(null\);/);
     assert.match(
       starterGuideSource,
-      /function resolvePendingSteps\(pendingStepsRef: \{ current: Map<number, DeferredStep> \| null \| undefined \}\) \{/,
+      /function resolvePendingSteps\(pendingStepsRef: \{ value: Map<number, DeferredStep> \| null \| undefined \}\) \{/,
     );
-    assert.match(starterGuideSource, /pendingStepsRef\.current \?\?= new Map<number, DeferredStep>\(\);/);
+    assert.match(starterGuideSource, /pendingStepsRef\.value \?\?= new Map<number, DeferredStep>\(\);/);
     assert.match(starterGuideSource, /const pendingSteps = resolvePendingSteps\(pendingStepsRef\);/);
     assert.match(starterGuideSource, /const promise = new Promise<void>\(\(nextResolve\) => \{/);
     assert.match(starterGuideSource, /const delays: number\[\] = \[180, 220, 240\];/);
     assert.match(starterGuideSource, /let intervalId: ReturnType<typeof setInterval> \| undefined;/);
     assert.match(
       starterGuideSource,
-      /function suspendUntil\(\s*pendingStepsRef: \{ current: Map<number, DeferredStep> \| null \| undefined \},\s*stepIndex: number,\s*revealedCount: number,\s*\)/,
+      /function suspendUntil\(\s*pendingStepsRef: \{ value: Map<number, DeferredStep> \| null \| undefined \},\s*stepIndex: number,\s*revealedCount: number,\s*\)/,
     );
     assert.match(starterGuideSource, /const pendingSteps = resolvePendingSteps\(pendingStepsRef\);/);
     assert.match(starterGuideSource, /suspendUntil\(pendingStepsRef, 0, revealedCount\)/);
@@ -199,23 +202,25 @@ describe("create-litsx-app", () => {
     assert.match(starterGuideSource, /useState\(0\)/);
     assert.match(starterGuideSource, /useOnConnect\(\(\) => \{/);
     assert.match(starterGuideSource, /for \(const deferred of resolvePendingSteps\(pendingStepsRef\)\.values\(\)\) \{/);
-    assert.match(starterGuideSource, /pendingStepsRef\.current = new Map<number, DeferredStep>\(\);/);
+    assert.match(starterGuideSource, /pendingStepsRef\.value = new Map<number, DeferredStep>\(\);/);
     assert.match(starterGuideSource, /setRevealedCount\(0\);/);
     assert.match(starterGuideSource, /tail="hidden"/);
     assert.match(starterGuideSource, /const \[intervalDelay = 0\] = remainingDelays/);
     assert.match(starterGuideSource, /setInterval\(\(\) => \{/);
+    assert.match(starterGuideSource, /StarterGuide\.styles = css`/);
+    for (const source of [appSource, buttonSource, guideCardSource, heroSource, starterGuideSource]) {
+      assert.doesNotMatch(source, /static styles|\s@[a-z][\w-]*=|\s\.[A-Za-z][\w-]*=/);
+    }
   });
 
   it("renders the app profile without storybook baggage", () => {
     const result = renderProjectFiles("/tmp/my-litsx-app", { template: "app" });
     const packageJson = JSON.parse(result.files.get("package.json"));
-    const appSource = result.files.get("src/my-litsx-app.litsx");
+    const appSource = result.files.get("src/my-litsx-app.tsx");
     const mainSource = result.files.get("src/main.js");
     const readme = result.files.get("README.md");
     const eslintConfig = result.files.get("eslint.config.js");
-    const prettierConfig = result.files.get("prettier.config.js");
-    const jsconfig = result.files.get("jsconfig.json");
-    const vscodeSettings = result.files.get(".vscode/settings.json");
+    const tsconfig = result.files.get("tsconfig.json");
     const appTestSource = result.files.get("src/my-litsx-app.test.js");
 
     assert.strictEqual(result.template, "app");
@@ -226,14 +231,14 @@ describe("create-litsx-app", () => {
     assert.strictEqual(packageJson.scripts.lint, "eslint .");
     assert.strictEqual(packageJson.scripts.format, "prettier --write .");
     assert.ok(!result.files.has(".storybook/main.js"));
-    assert.ok(!result.files.has("src/stories/starter-guide.stories.litsx"));
+    assert.ok(!result.files.has("src/stories/starter-guide.stories.tsx"));
     assert.match(mainSource, /import "@webcomponents\/scoped-custom-element-registry";/);
     assert.match(appSource, /<LitsxHero/);
     assert.match(appSource, /<StarterGuide/);
-    assert.match(appSource, /static styles = /);
+    assert.match(appSource, /MyLitsxApp\.styles = css`/);
     assert.match(appSource, /Application starter/);
-    assert.match(appSource, /@primary-action=\{/);
-    assert.match(appSource, /@secondary-action=\{/);
+    assert.match(appSource, /on:primary-action=\{/);
+    assert.match(appSource, /on:secondary-action=\{/);
     assert.doesNotMatch(appSource, /ButtonCard/);
     assert.match(readme, /First Run/);
     assert.match(readme, /LitsxHero/);
@@ -242,10 +247,9 @@ describe("create-litsx-app", () => {
     assert.match(readme, /npm run test/);
     assert.match(readme, /npm run typecheck/);
     assert.match(eslintConfig, /recommended-flat/);
-    assert.match(prettierConfig, /prettier-plugin-litsx/);
-    assert.match(jsconfig, /"moduleResolution": "Bundler"/);
-    assert.match(jsconfig, /"allowArbitraryExtensions": true/);
-    assert.match(vscodeSettings, /"typescript\.tsserver\.useSyntaxServer": "never"/);
+    assert.ok(!result.files.has("prettier.config.js"));
+    assert.match(tsconfig, /"moduleResolution": "Bundler"/);
+    assert.doesNotMatch(tsconfig, /allowArbitraryExtensions/);
     assert.match(appTestSource, /querySelector\("litsx-hero"\)/);
     assert.match(appTestSource, /querySelector\("starter-guide"\)/);
   });
@@ -253,11 +257,11 @@ describe("create-litsx-app", () => {
   it("renders the component profile with library structure but without storybook", () => {
     const result = renderProjectFiles("/tmp/my-litsx-app", { template: "component" });
     const packageJson = JSON.parse(result.files.get("package.json"));
-    const componentSource = result.files.get("src/my-litsx-app.litsx");
+    const componentSource = result.files.get("src/my-litsx-app.tsx");
     const mainSource = result.files.get("src/main.js");
     const readme = result.files.get("README.md");
-    const heroSource = result.files.get("src/components/litsx-hero.litsx");
-    const starterGuideSource = result.files.get("src/components/starter-guide.litsx");
+    const heroSource = result.files.get("src/components/litsx-hero.tsx");
+    const starterGuideSource = result.files.get("src/components/starter-guide.tsx");
 
     assert.strictEqual(result.template, "component");
     assert.strictEqual(result.visualTests, false);
@@ -266,14 +270,14 @@ describe("create-litsx-app", () => {
     assert.ok(!("@open-wc/scoped-elements" in packageJson.dependencies));
     assert.strictEqual(packageJson.scripts.lint, "eslint .");
     assert.strictEqual(packageJson.scripts.test, "vitest run");
-    assert.ok(result.files.has("src/components/starter-guide.litsx"));
+    assert.ok(result.files.has("src/components/starter-guide.tsx"));
     assert.ok(result.files.has("src/my-litsx-app.test.js"));
     assert.ok(!result.files.has(".storybook/main.js"));
-    assert.ok(!result.files.has("src/stories/starter-guide.stories.litsx"));
+    assert.ok(!result.files.has("src/stories/starter-guide.stories.tsx"));
     assert.match(mainSource, /import "@webcomponents\/scoped-custom-element-registry";/);
     assert.match(componentSource, /<LitsxHero/);
     assert.match(componentSource, /<StarterGuide/);
-    assert.match(componentSource, /static styles = /);
+    assert.match(componentSource, /MyLitsxApp\.styles = css`/);
     assert.match(componentSource, /Design system starter/);
     assert.doesNotMatch(heroSource, /`\);/);
     assert.doesNotMatch(starterGuideSource, /`\);/);
@@ -286,15 +290,108 @@ describe("create-litsx-app", () => {
     assert.match(readme, /npm run test/);
   });
 
-  it("does not emit legacy hoist closers in any authored template", () => {
-    for (const { template, name, source } of getStaticStyleSources(renderProjectFiles)) {
+  it("renders the ssr profile with productized SSR entrypoints", () => {
+    const result = renderProjectFiles("/tmp/my-litsx-app", { template: "ssr" });
+    const packageJson = JSON.parse(result.files.get("package.json"));
+    const jsconfig = result.files.get("jsconfig.json");
+    const mainSource = result.files.get("src/main.js");
+    const appSource = result.files.get("src/my-litsx-app.tsx");
+    const appTestSource = result.files.get("src/my-litsx-app.test.js");
+    const indexHtml = result.files.get("index.html");
+    const devSource = result.files.get("dev.mjs");
+    const renderSource = result.files.get("render.mjs");
+    const readme = result.files.get("README.md");
+
+    assert.strictEqual(result.template, "ssr");
+    assert.ok(packageJson.dependencies["@litsx/ssr"]);
+    assert.ok(packageJson.devDependencies["@litsx/compiler"]);
+    assert.ok(packageJson.devDependencies["@lit-labs/ssr"]);
+    assert.strictEqual(packageJson.scripts.dev, "node dev.mjs");
+    assert.strictEqual(packageJson.scripts.build, "node render.mjs");
+    assert.strictEqual(packageJson.scripts.render, "node render.mjs");
+    assert.ok(!("preview" in packageJson.scripts));
+    assert.ok(result.files.has("index.html"));
+    assert.ok(!result.files.has("vite.config.js"));
+    assert.match(indexHtml, /<!--app-head-->/);
+    assert.match(indexHtml, /<!--app-html-->/);
+    assert.match(indexHtml, /<!--app-bootstrap-->/);
+    assert.match(jsconfig, /"include": \[/);
+    assert.match(jsconfig, /"dev\.mjs"/);
+    assert.match(jsconfig, /"render\.mjs"/);
+    assert.doesNotMatch(mainSource, /hydratePage/);
+    assert.match(mainSource, /defineAppElements/);
+    assert.match(mainSource, /defineAppElements/);
+    assert.match(appSource, /export function MyLitsxApp/);
+    assert.match(appSource, /import \{ css \} from "@litsx\/core";/);
+    assert.match(appSource, /import \{ LitsxHero \} from "\.\/components\/litsx-hero";/);
+    assert.match(appSource, /import \{ StarterGuide \} from "\.\/components\/starter-guide";/);
+    assert.match(appSource, /customElements\.define\("my-litsx-app", MyLitsxApp as any\)/);
+    assert.match(appSource, /eyebrow = "SSR starter"/);
+    assert.match(appSource, /SSR for authored web components\./);
+    assert.match(appSource, /primaryLabel = "SSR docs"/);
+    assert.match(appSource, /https:\/\/litsx\.dev\/guides\/ssr/);
+    assert.match(appSource, /<LitsxHero/);
+    assert.match(appSource, /<StarterGuide/);
+    assert.match(appSource, /MyLitsxApp\.styles = css`/);
+    assert.match(appSource, /on:primary-action=/);
+    assert.match(appSource, /on:secondary-action=/);
+    assert.doesNotMatch(appSource, /static styles|\s@[a-z][\w-]*=/);
+    assert.match(appTestSource, /renders the SSR starter shell in a real browser DOM/);
+    assert.match(devSource, /import \{ createSsrDevServer \} from "@litsx\/ssr";/);
+    assert.match(devSource, /template: "\.\/index\.html"/);
+    assert.match(devSource, /clientEntry: "\.\/src\/main\.js"/);
+    assert.doesNotMatch(devSource, /scopedTemplate/);
+    assert.match(devSource, /elements\(loader\) \{/);
+    assert.match(devSource, /loader\("\.\/src\/my-litsx-app\.tsx"\)/);
+    assert.match(devSource, /return html`<my-litsx-app/);
+    assert.match(devSource, /\.eyebrow=\$\{"SSR starter"\}/);
+    assert.match(devSource, /\.primaryLabel=\$\{"SSR docs"\}/);
+    assert.doesNotMatch(devSource, /LitSX SSR status/);
+    assert.match(renderSource, /import \{ renderDocument \} from "@litsx\/ssr";/);
+    assert.doesNotMatch(renderSource, /createServer/);
+    assert.doesNotMatch(renderSource, /@litsx\/vite-plugin/);
+    assert.doesNotMatch(renderSource, /install-global-dom-shim/);
+    assert.doesNotMatch(renderSource, /__litsxScopedTemplate/);
+    assert.match(renderSource, /const outputDir = path\.join\(exampleDir, "dist"\);/);
+    assert.match(renderSource, /const outputPath = path\.join\(outputDir, "index\.html"\);/);
+    assert.match(renderSource, /renderDocument\(\{/);
+    assert.match(renderSource, /template: "\.\/index\.html"/);
+    assert.match(renderSource, /clientEntry: "\.\/src\/main\.js"/);
+    assert.match(renderSource, /elements\(loader\) \{/);
+    assert.match(renderSource, /loader\("\.\/src\/my-litsx-app\.tsx"\)/);
+    assert.match(readme, /--template ssr/);
+    assert.match(readme, /renderDocument/);
+    assert.match(readme, /renderDocument/);
+    assert.match(readme, /createSsrDevServer/);
+    assert.match(readme, /dist\/index\.html/);
+    assert.match(readme, /automatic hydration bootstrap through `clientEntry`/);
+    assert.match(readme, /same hero and guide components as the standard app scaffold/);
+    assert.match(readme, /shared `index\.html` shell/i);
+    assert.match(readme, /standard JSX authoring in `src\/my-litsx-app\.tsx`/);
+  });
+
+  it("emits standard static assignments without legacy hoists", () => {
+    for (const { template, name, source } of getComponentStyleSources(renderProjectFiles)) {
       assert.doesNotMatch(
         source,
-        /`\);/,
-        `src ${template} ${name} still contains a legacy \`); hoist closer`,
+        /static styles|`\);/,
+        `src ${template} ${name} still contains legacy static-hoist syntax`,
       );
     }
   });
+
+  it("compiles every generated TSX module through the public compiler", () => {
+    for (const template of ["app", "component", "design-system"]) {
+      const { files } = renderProjectFiles("/tmp/my-litsx-app", { template });
+      for (const [name, source] of files) {
+        if (!name.endsWith(".tsx")) continue;
+        assert.doesNotThrow(
+          () => transformLitsxSync(source, { filename: `/tmp/my-litsx-app/${name}` }),
+          `${template}:${name}`,
+        );
+      }
+    }
+  }, 30_000);
 
   it("adds visual testing assets when requested", () => {
     const result = renderProjectFiles("/tmp/my-litsx-app", {
@@ -307,9 +404,9 @@ describe("create-litsx-app", () => {
     const visualTest = result.files.get("tests/visual/storybook.spec.js");
     const storybookMain = result.files.get(".storybook/main.js");
     const previewSource = result.files.get(".storybook/preview.js");
-    const buttonStory = result.files.get("src/stories/litsx-button.stories.litsx");
-    const heroStory = result.files.get("src/stories/litsx-hero.stories.litsx");
-    const starterGuideStory = result.files.get("src/stories/starter-guide.stories.litsx");
+    const buttonStory = result.files.get("src/stories/litsx-button.stories.tsx");
+    const heroStory = result.files.get("src/stories/litsx-hero.stories.tsx");
+    const starterGuideStory = result.files.get("src/stories/starter-guide.stories.tsx");
     const starterGuideDocs = result.files.get("src/stories/starter-guide.docs.mdx");
 
     assert.strictEqual(result.visualTests, true);
@@ -351,7 +448,7 @@ describe("create-litsx-app", () => {
     assert.match(starterGuideStory, /component: "starter-guide"/);
     assert.match(starterGuideStory, /render: \(\) => <StarterGuide \/>/);
     assert.match(starterGuideDocs, /import \{ Meta, Canvas \} from "@storybook\/addon-docs\/blocks";/);
-    assert.match(starterGuideDocs, /import \* as StarterGuideStories from "\.\/starter-guide\.stories\.litsx";/);
+    assert.match(starterGuideDocs, /import \* as StarterGuideStories from "\.\/starter-guide\.stories";/);
     assert.match(starterGuideDocs, /<Meta of=\{StarterGuideStories\} \/>/);
     assert.match(starterGuideDocs, /<Canvas of=\{StarterGuideStories\.Default\} \/>/);
   });
@@ -363,7 +460,7 @@ describe("create-litsx-app", () => {
     const result = createProject(targetDir, { template: "design-system", visualTests: true });
 
     assert.ok(fs.existsSync(path.join(targetDir, "package.json")));
-    assert.ok(fs.existsSync(path.join(targetDir, "jsconfig.json")));
+    assert.ok(fs.existsSync(path.join(targetDir, "tsconfig.json")));
     assert.ok(fs.existsSync(path.join(targetDir, "eslint.config.js")));
     assert.ok(fs.existsSync(path.join(targetDir, "vite.config.js")));
     assert.ok(!fs.existsSync(path.join(targetDir, "tools", "litsx-vite-plugin.js")));
@@ -372,15 +469,15 @@ describe("create-litsx-app", () => {
     assert.ok(fs.existsSync(path.join(targetDir, "playwright.config.js")));
     assert.ok(fs.existsSync(path.join(targetDir, "Dockerfile.visual")));
     assert.ok(fs.existsSync(path.join(targetDir, "tests", "visual", "storybook.spec.js")));
-    assert.ok(fs.existsSync(path.join(targetDir, "src", `${result.packageName}.litsx`)));
+    assert.ok(fs.existsSync(path.join(targetDir, "src", `${result.packageName}.tsx`)));
     assert.ok(fs.existsSync(path.join(targetDir, "src", "vendor.d.ts")));
     assert.ok(fs.existsSync(path.join(targetDir, "src", "styles.d.ts")));
-    assert.ok(fs.existsSync(path.join(targetDir, "src", "components", "litsx-hero.litsx")));
-    assert.ok(fs.existsSync(path.join(targetDir, "src", "components", "litsx-button.litsx")));
-    assert.ok(fs.existsSync(path.join(targetDir, "src", "components", "starter-guide.litsx")));
-    assert.ok(fs.existsSync(path.join(targetDir, "src", "stories", "litsx-button.stories.litsx")));
-    assert.ok(fs.existsSync(path.join(targetDir, "src", "stories", "litsx-hero.stories.litsx")));
-    assert.ok(fs.existsSync(path.join(targetDir, "src", "stories", "starter-guide.stories.litsx")));
+    assert.ok(fs.existsSync(path.join(targetDir, "src", "components", "litsx-hero.tsx")));
+    assert.ok(fs.existsSync(path.join(targetDir, "src", "components", "litsx-button.tsx")));
+    assert.ok(fs.existsSync(path.join(targetDir, "src", "components", "starter-guide.tsx")));
+    assert.ok(fs.existsSync(path.join(targetDir, "src", "stories", "litsx-button.stories.tsx")));
+    assert.ok(fs.existsSync(path.join(targetDir, "src", "stories", "litsx-hero.stories.tsx")));
+    assert.ok(fs.existsSync(path.join(targetDir, "src", "stories", "starter-guide.stories.tsx")));
     assert.ok(fs.existsSync(path.join(targetDir, "src", "stories", "starter-guide.docs.mdx")));
     assert.ok(fs.existsSync(path.join(targetDir, "src", "styles", "tokens.css")));
     assert.ok(fs.existsSync(path.join(targetDir, "public", "title.svg")));
@@ -439,14 +536,14 @@ describe("create-litsx-app", () => {
     const packageJson = {
       dependencies: {
         "@litsx/core": "^0.1.0",
+        "@litsx/ssr": "^0.1.0",
         lit: "^3.2.1",
       },
       devDependencies: {
+        "@litsx/compiler": "^0.1.0",
         "@litsx/eslint-plugin": "^0.1.0",
         "@litsx/storybook": "^0.1.0",
-        "@litsx/typescript": "^0.1.0",
         "@litsx/vite-plugin": "^0.1.0",
-        "prettier-plugin-litsx": "^0.1.0",
         vite: "^7.1.0",
       },
     };
@@ -454,12 +551,12 @@ describe("create-litsx-app", () => {
     applyLocalWorkspaceOverrides(packageJson);
 
     assert.strictEqual(packageJson.dependencies["@litsx/core"], "workspace:^");
+    assert.strictEqual(packageJson.dependencies["@litsx/ssr"], "workspace:^");
     assert.strictEqual(packageJson.dependencies.lit, "^3.2.1");
+    assert.strictEqual(packageJson.devDependencies["@litsx/compiler"], "workspace:^");
     assert.strictEqual(packageJson.devDependencies["@litsx/eslint-plugin"], "workspace:^");
     assert.strictEqual(packageJson.devDependencies["@litsx/storybook"], "workspace:^");
-    assert.strictEqual(packageJson.devDependencies["@litsx/typescript"], "workspace:^");
     assert.strictEqual(packageJson.devDependencies["@litsx/vite-plugin"], "workspace:^");
-    assert.strictEqual(packageJson.devDependencies["prettier-plugin-litsx"], "workspace:^");
     assert.strictEqual(packageJson.devDependencies.vite, "^7.1.0");
   });
 });

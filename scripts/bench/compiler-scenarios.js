@@ -45,14 +45,14 @@ function writeJson(filePath, value) {
 function createSimpleScenario() {
   return {
     name: "simple-jsx",
-    filename: "/virtual/Simple.litsx",
+    filename: "/virtual/Simple.tsx",
     source: [
       "export const Simple = ({ label = 'Save' }) => {",
       "  return <button class=\"cta\" @click={save}>{label}</button>;",
       "};",
     ].join("\n"),
     options: {
-      filename: "/virtual/Simple.litsx",
+      filename: "/virtual/Simple.tsx",
       jsxTemplate: false,
     },
   };
@@ -61,7 +61,7 @@ function createSimpleScenario() {
 function createTypedScenario() {
   return {
     name: "typed-props",
-    filename: "/virtual/Typed.litsx",
+    filename: "/virtual/Typed.tsx",
     source: [
       "type ButtonProps = {",
       "  label: string;",
@@ -73,7 +73,7 @@ function createTypedScenario() {
       "};",
     ].join("\n"),
     options: {
-      filename: "/virtual/Typed.litsx",
+      filename: "/virtual/Typed.tsx",
       jsxTemplate: false,
     },
   };
@@ -101,7 +101,7 @@ function createImportedRendererScenario() {
     include: ["src/**/*"],
   });
 
-  const buttonFile = path.join(componentsDir, "litsx-button.litsx");
+  const buttonFile = path.join(componentsDir, "litsx-button.tsx");
   fs.writeFileSync(
     buttonFile,
     [
@@ -116,7 +116,7 @@ function createImportedRendererScenario() {
   fs.writeFileSync(
     deepFile,
     [
-      "import { LitsxButton } from '@/components/litsx-button.litsx';",
+      "import { LitsxButton } from '@/components/litsx-button.tsx';",
       "export const wrapHeader = () => renderHeader();",
       "function renderHeader() {",
       "  return <LitsxButton label='Bench' />;",
@@ -134,7 +134,7 @@ function createImportedRendererScenario() {
     "utf8"
   );
 
-  const rootFile = path.join(srcDir, "demo.litsx");
+  const rootFile = path.join(srcDir, "demo.tsx");
   const source = [
     "import { wrapHeader } from './renderers.js';",
     "export const Demo = () => {",

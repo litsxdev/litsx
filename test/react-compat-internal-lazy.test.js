@@ -42,9 +42,9 @@ describe("react compat internal lazy", () => {
 
     assert.match(
       code,
-      /import \{[^}]*ShadowDomMixin[^}]*\} from "@litsx\/core\/elements";/
+      /import \{[^}]*LightDomMixin[^}]*\} from "@litsx\/core\/elements";/
     );
-    assert.match(code, /class Screen extends ShadowDomMixin\(LitElement\)/);
+    assert.match(code, /class Screen extends LightDomMixin\(LitElement\)/);
     assert.match(
       code,
       /import \{[^}]*ensureLazyElement[^}]*\} from "@litsx\/core";/
@@ -104,7 +104,7 @@ describe("react compat internal lazy", () => {
 
     const code = run(source);
 
-    assert.match(code, /class Screen extends ShadowDomMixin\(LitElement\)/);
+    assert.match(code, /class Screen extends LightDomMixin\(LitElement\)/);
     assert.match(
       code,
       /import \{[^}]*ensureLazyElement[^}]*\} from "@litsx\/core";/
@@ -625,7 +625,7 @@ describe("react compat internal lazy", () => {
     assert.match(code, /ensureLazyElement\(this,\s*"fancy-button",\s*FancyButton\);/);
   });
 
-  it("rejects light DOM classes that would need scoped lazy components", () => {
+  it("creates a contextual registry for light DOM classes with lazy components", () => {
     const source = [
       "import { lazy } from 'react';",
       "import { LightDomMixin } from '@litsx/core/elements';",
@@ -640,10 +640,10 @@ describe("react compat internal lazy", () => {
       "}",
     ].join("\n");
 
-    assert.throws(
-      () => run(source),
-      /does not support scoped elements in light DOM/
-    );
+    const code = run(source);
+    assert.match(code, /class Screen extends LightDomMixin\(LitElement\)/);
+    assert.match(code, /static elements = \{\};/);
+    assert.match(code, /ensureLazyElement\(this, "fancy-button", FancyButton\)/);
   });
 
   it("rewrites special member attributes and preserves registration before the return", () => {
@@ -742,7 +742,7 @@ describe("react compat internal lazy", () => {
     assert.doesNotMatch(code, /ensureLazyElement\(/);
   });
 
-  it("rejects extending existing elements imports when a light-dom class needs lazy elements", () => {
+  it("reuses light-dom imports when a class needs lazy elements", () => {
     const source = [
       "import React from 'react';",
       "import { LightDomMixin } from '@litsx/core/elements';",
@@ -757,9 +757,9 @@ describe("react compat internal lazy", () => {
       "}",
     ].join("\n");
 
-    assert.throws(
-      () => run(source),
-      /does not support scoped elements in light DOM/
-    );
+    const code = run(source);
+    assert.strictEqual((code.match(/LightDomMixin/g) || []).length, 2);
+    assert.match(code, /static elements = \{\};/);
+    assert.match(code, /ensureLazyElement\(this, "fancy-button", FancyButton\)/);
   });
 });

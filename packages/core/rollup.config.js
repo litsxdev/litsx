@@ -14,6 +14,7 @@ export default createPackageRollupConfig({
     "elements/index": "src/elements/index.js",
     rendering: "src/rendering.js",
     context: "src/context.js",
+    "react-compat": "src/react-compat.js",
   },
   esmOutputs: true,
   copyDeclarations: true,

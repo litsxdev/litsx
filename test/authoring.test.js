@@ -11,12 +11,17 @@ import {
   createVirtualLitsxJsxSource,
   encodeVirtualAttributeName,
   decodeVirtualAttributeName,
-  decodeVirtualStaticHoistName,
-  looksLikeLitsxJsx,
+  looksLikeGeneratedLitsxJsxBindings,
   mapOriginalPositionToVirtual,
   mapVirtualPositionToOriginal,
+  isNativeDomEventHandlerPropertyName,
+  isStandardDomEventPropName,
+  resolveExplicitJsxEventName,
+  resolveStandardJsxEventName,
   remapVirtualText,
   remapTextSpanToOriginal,
+  toStandardJsxEventPropName,
+  toExplicitJsxEventAttributeName,
 } from "../packages/authoring/src/index.js";
 import {
   getLitsxVirtualizationMetadata,
@@ -25,6 +30,43 @@ import {
 import parser from "./helpers/litsx-parser.js";
 
 describe("@litsx/authoring", () => {
+  it("normalizes standard JSX event names consistently", () => {
+    assert.deepStrictEqual(
+      resolveStandardJsxEventName("onPrimaryAction", { customElement: true }),
+      { name: "primary-action", capture: false },
+    );
+    assert.deepStrictEqual(
+      resolveStandardJsxEventName("onURLChangeCapture", { customElement: true }),
+      { name: "url-change", capture: true },
+    );
+    assert.deepStrictEqual(
+      resolveStandardJsxEventName("onAnimationEnd", { customElement: true }),
+      { name: "animationend", capture: false },
+    );
+    assert.strictEqual(isStandardDomEventPropName("onAnimationEnd"), true);
+    assert.strictEqual(isStandardDomEventPropName("onPrimaryAction"), false);
+    assert.strictEqual(toStandardJsxEventPropName("primary-action"), "onPrimaryAction");
+    assert.strictEqual(toStandardJsxEventPropName("primary-action-capture"), null);
+    assert.strictEqual(toStandardJsxEventPropName("menu:open"), null);
+    const special = createVirtualLitsxJsxSource("<widget-box @menu:open={handler} @state.change={handler} />");
+    assert.match(special.code, /__litsx_event_encoded_/);
+    assert.deepStrictEqual(
+      special.replacements.map((entry) => decodeVirtualAttributeName(entry.replacement)),
+      ["@menu:open", "@state.change"],
+    );
+  });
+
+  it("recognizes explicit JSX event channels and native handler properties", () => {
+    assert.strictEqual(resolveExplicitJsxEventName("on:menu-open"), "menu-open");
+    assert.strictEqual(resolveExplicitJsxEventName("onMenuOpen"), null);
+    assert.strictEqual(resolveExplicitJsxEventName("on:menuOpen"), null);
+    assert.strictEqual(toExplicitJsxEventAttributeName("menu-open"), "on:menu-open");
+    assert.strictEqual(toExplicitJsxEventAttributeName("menu:open"), null);
+    assert.strictEqual(isNativeDomEventHandlerPropertyName("onclick"), true);
+    assert.strictEqual(isNativeDomEventHandlerPropertyName("onchange"), true);
+    assert.strictEqual(isNativeDomEventHandlerPropertyName("onClick"), false);
+  });
+
   it("virtualizes lit-flavoured jsx attribute prefixes into ts-safe names", () => {
     const source = `
       const view = (
@@ -96,6 +138,15 @@ describe("@litsx/authoring", () => {
     const invalidIssues = collectImplicitChildrenProjectionIssues(invalidAst);
     assert.strictEqual(invalidIssues.length, 1);
     assert.strictEqual(invalidIssues[0].code, 91021);
+
+    const conditionalAst = parser.parse(`
+      export function Panel({ loading, children }) {
+        if (loading) return <section>{loading ? <span /> : children}</section>;
+        return <aside>{children ?? <span />}</aside>;
+      }
+    `, { sourceType: "module" });
+
+    assert.deepStrictEqual(collectImplicitChildrenProjectionIssues(conditionalAst), []);
   });
 
   it("supports tsx sources through the litsx parser", () => {
@@ -131,7 +182,7 @@ describe("@litsx/authoring", () => {
     assert.match(result.code, /__litsx_bool_disabled/);
   });
 
-  it("virtualizes mixed authored attributes across single-line and multi-line tags without touching standard attrs", () => {
+  it("virtualizes mixed generated bindings across single-line and multi-line tags without touching standard attrs", () => {
     const source = `
       const view = (
         <section class="shell" data-kind="demo">
@@ -168,7 +219,7 @@ describe("@litsx/authoring", () => {
     );
   });
 
-  it("virtualizes authored attrs on sibling JSX tags that appear after text nodes", () => {
+  it("virtualizes generated bindings on sibling JSX tags that appear after text nodes", () => {
     const source = `
       const view = (
         <div class="stack">
@@ -213,122 +264,6 @@ describe("@litsx/authoring", () => {
       result.replacements.map((entry) => entry.originalName),
       [".value", "@input", "?disabled"],
     );
-  });
-
-  it("keeps editor-oriented static hoists length-stable for source parsing", () => {
-    const source = `
-      export function Card() {
-        static properties = { active: { reflect: true } };
-        static styles = \`:host { display: block; }\`;
-        return <button @click={handleClick}>ready</button>;
-      }
-    `;
-
-    const result = createVirtualLitsxJsxSource(source, {
-      strategy: "editor",
-    });
-
-    assert.match(result.code, /const \$properties = \{/);
-    assert.match(result.code, /const \$styles = `/);
-    assert.match(result.code, /eclick/);
-    assert.strictEqual(result.code.length, source.length);
-  });
-
-  it("virtualizes static hoist assignments into internal compiler calls", () => {
-    const source = `
-      export function Card() {
-        static properties = { active: { reflect: true } };
-        static styles = \`:host { display: block; }\`;
-        return <div />;
-      }
-    `;
-
-    const result = createVirtualLitsxJsxSource(source, {
-      plugins: ["typescript"],
-    });
-
-    assert.match(result.code, /__litsx_static_properties\(\{ active: \{ reflect: true \} \}\);/);
-    assert.match(result.code, /__litsx_static_styles\(`:host \{ display: block; \}`\);/);
-  });
-
-  it("does not rewrite valid class static fields while still virtualizing authored function hoists", () => {
-    const source = `
-      class ExistingElement extends LitElement {
-        static properties = { active: { type: Boolean } };
-        static styles = css\`:host { display: block; }\`;
-        static analyticsTag = "existing";
-      }
-
-      export function Card() {
-        static properties = { open: { reflect: true } };
-        static styles = \`:host { color: red; }\`;
-        static analyticsTag = "card";
-        return <div />;
-      }
-    `;
-
-    const result = createVirtualLitsxJsxSource(source, {
-      plugins: ["typescript"],
-    });
-
-    assert.match(result.code, /class ExistingElement extends LitElement \{/);
-    assert.match(result.code, /static properties = \{\s*active: \{\s*type: Boolean\s*\}\s*\};/);
-    assert.match(result.code, /static styles = css`:host \{ display: block; \}`;/);
-    assert.match(result.code, /static analyticsTag = "existing";/);
-    assert.match(result.code, /__litsx_static_properties\(\{ open: \{ reflect: true \} \}\);/);
-    assert.match(result.code, /__litsx_static_styles\(`:host \{ color: red; \}`\);/);
-    assert.match(result.code, /__litsx_static_analyticsTag\("card"\);/);
-  });
-
-  it("keeps class static fields untouched in editor mode", () => {
-    const source = `
-      class ExistingElement extends LitElement {
-        static properties = { active: { type: Boolean } };
-        static styles = css\`:host { display: block; }\`;
-        static customThing = buildThing();
-      }
-    `;
-
-    const result = createVirtualLitsxJsxSource(source, {
-      strategy: "editor",
-      plugins: ["typescript"],
-    });
-
-    assert.equal(result.code, source);
-    assert.deepStrictEqual(result.replacements, []);
-  });
-
-  it("does not virtualize removed authored mixin syntax", () => {
-    const source = `
-      mixin Selectable() {
-        static styles = \`:host { display: block; }\`;
-        return <div />;
-      }
-    `;
-
-    const result = createVirtualLitsxJsxSource(source, {
-      plugins: ["typescript"],
-    });
-
-    assert.match(result.code, /\bmixin Selectable\(\)/);
-    assert.doesNotMatch(result.code, /__litsx_mixin/);
-    assert.match(result.code, /__litsx_static_styles/);
-  });
-
-  it("virtualizes hoist-only authored sources that use the current static syntax", () => {
-    const source = `
-      export function Card() {
-        static properties = { active: { reflect: true } };
-        static styles = \`:host { display: block; }\`;
-      }
-    `;
-
-    const result = createVirtualLitsxJsxSource(source, {
-      plugins: ["typescript"],
-    });
-
-    assert.match(result.code, /__litsx_static_properties\(\{ active: \{ reflect: true \} \}\);/);
-    assert.match(result.code, /__litsx_static_styles\(`:host \{ display: block; \}`\);/);
   });
 
   it("does not rewrite lit-like string keys inside spread expressions", () => {
@@ -439,9 +374,7 @@ describe("@litsx/authoring", () => {
     const clickVirtualStart = result.code.indexOf("__litsx_event_click");
 
     assert.equal(decodeVirtualAttributeName("not_virtual"), null);
-    assert.equal(decodeVirtualStaticHoistName("styles"), null);
     assert.equal(remapVirtualText(42), 42);
-    assert.equal(decodeVirtualStaticHoistName("__litsx_static_styles"), "static styles");
 
     assert.equal(mapOriginalPositionToVirtual(source.indexOf("@click") + 2, replacements), source.indexOf("@click"));
     assert.deepStrictEqual(
@@ -479,7 +412,7 @@ describe("@litsx/authoring", () => {
     );
   });
 
-  it("scans authored attributes with quoted and bare values without breaking virtualization", () => {
+  it("scans generated bindings with quoted and bare values without breaking virtualization", () => {
     const source = `
       const view = <button @click="handleClick" .value='text' ?disabled=busy data-kind=plain />;
     `;
@@ -494,7 +427,7 @@ describe("@litsx/authoring", () => {
     assert.match(result.code, /data-kind=plain/);
   });
 
-  it("survives malformed closing tags and stray less-than comparisons around authored JSX", () => {
+  it("survives malformed closing tags and stray less-than comparisons around generated JSX", () => {
     const source = `
       const comparison = count < limit ? (
         <section>
@@ -509,7 +442,7 @@ describe("@litsx/authoring", () => {
     assert.match(result.code, /__litsx_event_click/);
   });
 
-  it("parses with virtualization metadata and restores authored JSX attribute names", () => {
+  it("parses with virtualization metadata and restores generated Lit binding names", () => {
     const parsed = parseWithLitsxVirtualization(
       (virtualCode) => ({
         type: "File",
@@ -635,44 +568,21 @@ describe("@litsx/authoring", () => {
     assert.equal(ast, null);
   });
 
-  it("virtualizes static hoist assignments after comments and leaves unrelated carets untouched", () => {
-    const source = `
-      export function Card() {
-        // comment before macro
-        static properties = { active: { reflect: true } };
-        /*
-         * block comment before macro
-         */
-        static styles = \`:host { display: block; }\`;
-        const next = count ^ scale;
-        return <div />;
-      }
-    `;
-
-    const result = createVirtualLitsxJsxSource(source, {
-      strategy: "editor",
-    });
-
-    assert.match(result.code, /const \$properties = \{/);
-    assert.match(result.code, /const \$styles = `/);
-    assert.match(result.code, /count \^ scale/);
-  });
-
-  it("covers helper exports and top-level macro detection edge cases", () => {
+  it("covers generated binding helper exports and detection edge cases", () => {
     assert.equal(encodeVirtualAttributeName("@click"), "__litsx_event_click");
     assert.equal(encodeVirtualAttributeName(".value"), "__litsx_prop_value");
     assert.equal(encodeVirtualAttributeName("?disabled"), "__litsx_bool_disabled");
     assert.equal(encodeVirtualAttributeName("class"), "class");
     assert.equal(
-      remapVirtualText("__litsx_static_styles __litsx_event_click"),
-      "static styles @click",
+      remapVirtualText("__litsx_static_styles_value __litsx_event_click"),
+      "__litsx_static_styles_value @click",
     );
 
-    assert.equal(looksLikeLitsxJsx("  static styles = `:host {}`;"), true);
-    assert.equal(looksLikeLitsxJsx("value ^ styles"), false);
+    assert.equal(looksLikeGeneratedLitsxJsxBindings("  static styles = `:host {}`;"), false);
+    assert.equal(looksLikeGeneratedLitsxJsxBindings("value ^ styles"), false);
   });
 
-  it("virtualizes authored attributes nested inside comments, templates, and closures in JSX expressions", () => {
+  it("virtualizes generated bindings nested inside comments, templates, and closures in JSX expressions", () => {
     const source = `
       const view = (
         <Boundary
@@ -719,7 +629,7 @@ describe("@litsx/authoring", () => {
     assert.match(result.code, /<svg:foreignObject __litsx_bool_hidden=\{busy\} \/>/);
   });
 
-  it("sanitizes editor virtual names with punctuation-heavy authored attribute names", () => {
+  it("sanitizes editor virtual names with punctuation-heavy generated binding names", () => {
     const source = `
       const view = <demo-card @my:event={notify} .aria-label={label} ?data-ready={ready} />;
     `;
@@ -751,29 +661,29 @@ describe("@litsx/authoring", () => {
     assert.equal(result.code, source);
   });
 
-  it("detects LitSX-authored JSX before virtualization", () => {
-    assert.strictEqual(looksLikeLitsxJsx(`<button @click={handleClick}></button>`), true);
-    assert.strictEqual(looksLikeLitsxJsx(`const view = <button class="cta"></button>;`), false);
+  it("detects generated Lit binding IR before virtualization", () => {
+    assert.strictEqual(looksLikeGeneratedLitsxJsxBindings(`<button @click={handleClick}></button>`), true);
+    assert.strictEqual(looksLikeGeneratedLitsxJsxBindings(`const view = <button class="cta"></button>;`), false);
     assert.strictEqual(
-      looksLikeLitsxJsx(`<button\n  data-label="save"\n  ?disabled={busy}\n></button>`),
+      looksLikeGeneratedLitsxJsxBindings(`<button\n  data-label="save"\n  ?disabled={busy}\n></button>`),
       true,
     );
     assert.strictEqual(
-      looksLikeLitsxJsx(`const sample = "<button @click={fn}></button>";`),
+      looksLikeGeneratedLitsxJsxBindings(`const sample = "<button @click={fn}></button>";`),
       false,
     );
-    assert.strictEqual(looksLikeLitsxJsx(`function Card(){\n  static styles = \`:host { display: block; }\`;\n}`), true);
-    assert.strictEqual(looksLikeLitsxJsx(`function Card(){\n  static properties = {};\n  return null;\n}`), true);
+    assert.strictEqual(looksLikeGeneratedLitsxJsxBindings(`function Card(){\n  static styles = \`:host { display: block; }\`;\n}`), false);
+    assert.strictEqual(looksLikeGeneratedLitsxJsxBindings(`function Card(){\n  static properties = {};\n  return null;\n}`), false);
   });
 
-  it("decodes virtual attribute names back to authored syntax", () => {
+  it("decodes virtual attribute names back to generated Lit binding syntax", () => {
     assert.strictEqual(decodeVirtualAttributeName("__litsx_event_click"), "@click");
     assert.strictEqual(decodeVirtualAttributeName("__litsx_prop_value"), ".value");
     assert.strictEqual(decodeVirtualAttributeName("__litsx_bool_disabled"), "?disabled");
     assert.strictEqual(decodeVirtualAttributeName("class"), null);
   });
 
-  it("remaps authored attribute names in virtualized text", () => {
+  it("remaps generated binding names in virtualized text", () => {
     const text = "type Props = { __litsx_event_click: () => void; __litsx_prop_value: string; };";
     assert.strictEqual(
       remapVirtualText(text),
@@ -880,7 +790,7 @@ describe("@litsx/authoring", () => {
     );
   });
 
-  it("remaps spans to the correct authored attribute when multiple replacements share a tag", () => {
+  it("remaps spans to the correct generated binding when multiple replacements share a tag", () => {
     const source = `
       const view = (
         <>

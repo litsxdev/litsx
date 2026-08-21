@@ -1,7 +1,8 @@
-import { beforeAll, afterAll } from 'vitest';
+import { beforeAll, afterAll } from "vitest";
 import assert from "assert";
-import { nothing } from "lit";
+import { css as litCss, nothing } from "lit";
 import {
+  css,
   collectSoftSuspenseThenables,
   EffectsController,
   ensureLazyElement,
@@ -29,7 +30,8 @@ import {
   useFormValidity,
   useFormValue,
   usePrevious,
-  resolveStructuralProps,
+  applyStructuralHooks,
+  readStructuralHook,
   useStableCallback,
   useStyle,
   useReducedState,
@@ -41,9 +43,11 @@ import {
   useExpose,
   useExternalStore,
   renderWithSoftSuspense,
-  resolveStructuralEntry,
 } from "../packages/core/src/index.js";
-import { LITSX_COMPONENT, LITSX_HOST_TYPE_ID } from "../packages/core/src/elements/index.js";
+import {
+  LITSX_COMPONENT,
+  LITSX_HOST_TYPE_ID,
+} from "../packages/core/src/elements/index.js";
 import { LITSX_HOOK } from "../packages/core/src/index.js";
 import { withSuspenseCapture } from "../packages/core/src/runtime-suspense.js";
 
@@ -65,10 +69,12 @@ function createValiditySnapshot(flags = {}) {
   const snapshot = {
     ...DEFAULT_VALIDITY,
     ...Object.fromEntries(
-      Object.entries(flags).map(([key, value]) => [key, value === true])
+      Object.entries(flags).map(([key, value]) => [key, value === true]),
     ),
   };
-  snapshot.valid = !Object.entries(snapshot).some(([key, value]) => key !== "valid" && value === true);
+  snapshot.valid = !Object.entries(snapshot).some(
+    ([key, value]) => key !== "valid" && value === true,
+  );
   return snapshot;
 }
 
@@ -123,7 +129,9 @@ class TestHost extends EventTarget {
         },
         setValidity: (flags = {}, message = "", anchor = null) => {
           this.__internalsValidity = createValiditySnapshot(flags);
-          this.__internalsValidationMessage = this.__internalsValidity.valid ? "" : message;
+          this.__internalsValidationMessage = this.__internalsValidity.valid
+            ? ""
+            : message;
           this.__internalsValidityCalls.push([
             this.__internalsValidity,
             this.__internalsValidationMessage,
@@ -195,6 +203,10 @@ describe("litsx effects controller", () => {
       controller.hostUpdated();
     }
   }
+
+  it("re-exports Lit's css tag without wrapping it", () => {
+    assert.strictEqual(css, litCss);
+  });
 
   it("runs effects registered with [] only once", () => {
     const host = new TestHost();
@@ -271,15 +283,19 @@ describe("litsx effects controller", () => {
     const controller = host.controllers[0];
     let unsubscribed = 0;
 
-    controller.imperatives.push({ ref: { current: { value: 1 } } }, null);
+    controller.imperatives.push({ ref: { value: { value: 1 } } }, null);
     controller.externalStores.push(
-      { unsubscribe: () => { unsubscribed += 1; } },
+      {
+        unsubscribe: () => {
+          unsubscribed += 1;
+        },
+      },
       { unsubscribe: null },
     );
     controller.hostDisconnected();
 
     assert.equal(unsubscribed, 1);
-    assert.strictEqual(controller.imperatives[0].ref.current, null);
+    assert.strictEqual(controller.imperatives[0].ref.value, undefined);
     assert.equal(controller.externalStores.length, 0);
   });
 
@@ -351,7 +367,11 @@ describe("litsx effects controller", () => {
     const emit = useEmit(host);
 
     const firstResult = emit("change", { value: "alpha" });
-    const secondResult = emit("change", { value: "beta" }, { composed: false, cancelable: true });
+    const secondResult = emit(
+      "change",
+      { value: "beta" },
+      { composed: false, cancelable: true },
+    );
 
     assert.strictEqual(firstResult, true);
     assert.strictEqual(secondResult, true);
@@ -382,275 +402,79 @@ describe("litsx effects controller", () => {
     assert.strictEqual(firstEmit, secondEmit);
   });
 
-  it("manages form-associated value state through useFormValue", () => {
-    const host = new TestHost();
+  it("provides FACE capabilities through one deduplicated structural mixin", () => {
+    const FaceHost = applyStructuralHooks(TestHost, [
+      useElementInternals,
+      useFormValue,
+      useFormValidity,
+    ]);
+    const host = new FaceHost();
+
+    assert.strictEqual(FaceHost.formAssociated, true);
+    assert.strictEqual(host.__attachInternalsCalls, 1);
+
+    prepareEffects(host);
+    const internals = readStructuralHook(host, useElementInternals);
+    const value = readStructuralHook(host, useFormValue, ["draft"]);
+    const validity = readStructuralHook(host, useFormValidity);
+
+    assert.strictEqual(internals.internals, host.__internals);
+    assert.strictEqual(value.value, "draft");
+    assert.strictEqual(validity.supported, true);
+    assert.strictEqual(host.form, null);
+    assert.deepStrictEqual(host.validity, createValiditySnapshot());
+  });
+
+  it("runs FACE lifecycle behavior from the capability mixin", () => {
+    const FaceHost = applyStructuralHooks(TestHost, [useFormValue]);
+    const host = new FaceHost();
     const form = { tagName: "FORM" };
 
     prepareEffects(host);
-    let control = resolveStructuralEntry(
-      host,
-      0,
-      "form-value",
-      useFormValue,
-      ["draft"],
-      { callsitePath: ["form-value"] },
-    );
-
-    assert.strictEqual(control.value, "draft");
-    assert.strictEqual(control.defaultValue, "draft");
-    assert.strictEqual(control.form, null);
-    assert.strictEqual(host.form, null);
-    assert.strictEqual(control.disabled, false);
-    assert.deepStrictEqual(host.__internalsCalls, [["draft", "draft"]]);
-
+    let control = readStructuralHook(host, useFormValue, ["draft"]);
     control.setValue("ready");
     control.setDefaultValue("fallback");
-    control.setFormValue("submit:ready", "restore:ready");
 
-    assert.strictEqual(host.updates, 2);
-    assert.deepStrictEqual(host.__internalsCalls.at(-2), ["ready", "ready"]);
-    assert.deepStrictEqual(host.__internalsCalls.at(-1), ["submit:ready", "restore:ready"]);
-
-    prepareEffects(host);
-    control = resolveStructuralEntry(
-      host,
-      0,
-      "form-value",
-      useFormValue,
-      ["draft"],
-      { callsitePath: ["form-value"] },
-    );
-
-    assert.strictEqual(control.value, "ready");
-    assert.strictEqual(control.defaultValue, "fallback");
-
-    host.__litsxHostMiddlewareRuntime.formAssociatedCallback([form], () => undefined);
-    host.__litsxHostMiddlewareRuntime.formDisabledCallback([true], () => undefined);
+    host.formAssociatedCallback(form);
+    host.formDisabledCallback(true);
+    host.formStateRestoreCallback("restored", "restore");
 
     prepareEffects(host);
-    control = resolveStructuralEntry(
-      host,
-      0,
-      "form-value",
-      useFormValue,
-      ["draft"],
-      { callsitePath: ["form-value"] },
-    );
-
+    control = readStructuralHook(host, useFormValue, ["ignored"]);
     assert.strictEqual(control.form, form);
-    assert.strictEqual(host.form, form);
     assert.strictEqual(control.disabled, true);
-
-    host.__litsxHostMiddlewareRuntime.formStateRestoreCallback(["restored", "restore"], () => undefined);
-
-    prepareEffects(host);
-    control = resolveStructuralEntry(
-      host,
-      0,
-      "form-value",
-      useFormValue,
-      ["draft"],
-      { callsitePath: ["form-value"] },
-    );
-
     assert.strictEqual(control.value, "restored");
-    assert.strictEqual(control.restoreState, "restored");
     assert.strictEqual(control.restoreMode, "restore");
-    assert.deepStrictEqual(host.__internalsCalls.at(-1), ["restored", "restored"]);
 
-    host.__litsxHostMiddlewareRuntime.formResetCallback(() => undefined);
-
+    host.formResetCallback();
     prepareEffects(host);
-    control = resolveStructuralEntry(
-      host,
-      0,
-      "form-value",
-      useFormValue,
-      ["draft"],
-      { callsitePath: ["form-value"] },
-    );
-
+    control = readStructuralHook(host, useFormValue, ["ignored"]);
     assert.strictEqual(control.value, "fallback");
-    assert.strictEqual(control.defaultValue, "fallback");
     assert.strictEqual(control.restoreState, null);
-    assert.strictEqual(control.restoreMode, null);
-    assert.deepStrictEqual(host.__internalsCalls.at(-1), ["fallback", "fallback"]);
-  });
-
-  it("shares cached element internals across FACE hooks", () => {
-    const host = new TestHost();
-
-    prepareEffects(host);
-    const handle = resolveStructuralEntry(
-      host,
-      0,
-      "element-internals",
-      useElementInternals,
-      [],
-      { callsitePath: ["element-internals"] },
-    );
-    const control = resolveStructuralEntry(
-      host,
-      1,
-      "form-validity",
-      useFormValidity,
-      [],
-      { callsitePath: ["form-validity"] },
-    );
-
-    assert.strictEqual(handle.supported, true);
-    assert.strictEqual(handle.internals, host.__internals);
-    assert.strictEqual(control.supported, true);
-    assert.strictEqual(host.__attachInternalsCalls, 1);
-    assert.strictEqual(host.form, null);
-    assert.deepStrictEqual(host.validity, createValiditySnapshot());
-    assert.strictEqual(host.validationMessage, "");
-    assert.strictEqual(host.willValidate, true);
-  });
-
-  it("does not surface FACE readonly host accessors as reactive structural props", () => {
-    class FacePropsHost {}
-
-    FacePropsHost.structuralEntries = [
-      {
-        callsiteIndex: 0,
-        callsiteId: "element-internals",
-        definition: useElementInternals,
-        args: [],
-        meta: { callsitePath: ["element-internals"] },
-      },
-      {
-        callsiteIndex: 1,
-        callsiteId: "form-value",
-        definition: useFormValue,
-        args: ["draft"],
-        meta: { callsitePath: ["form-value"] },
-      },
-      {
-        callsiteIndex: 2,
-        callsiteId: "form-validity",
-        definition: useFormValidity,
-        args: [],
-        meta: { callsitePath: ["form-validity"] },
-      },
-    ];
-
-    assert.deepStrictEqual(resolveStructuralProps(FacePropsHost), {});
-    assert.deepStrictEqual(
-      resolveStructuralProps(FacePropsHost, {
-        value: { type: String },
-      }),
-      {
-        value: { type: String },
-      },
-    );
-  });
-
-  it("manages FACE validity state through useFormValidity", () => {
-    const host = new TestHost();
-    const anchor = { tagName: "INPUT" };
-
-    prepareEffects(host);
-    let control = resolveStructuralEntry(
-      host,
-      0,
-      "form-validity",
-      useFormValidity,
-      [],
-      { callsitePath: ["form-validity"] },
-    );
-
-    assert.strictEqual(control.supported, true);
-    assert.strictEqual(control.willValidate, true);
-    assert.deepStrictEqual(control.validity, createValiditySnapshot());
-    assert.strictEqual(control.validationMessage, "");
-    assert.strictEqual(host.willValidate, true);
-    assert.deepStrictEqual(host.validity, createValiditySnapshot());
-    assert.strictEqual(host.validationMessage, "");
-
-    control.setValidity({ valueMissing: true }, "Required", anchor);
-
-    assert.strictEqual(host.updates, 1);
-    assert.deepStrictEqual(host.__internalsValidityCalls.at(-1), [
-      createValiditySnapshot({ valueMissing: true }),
-      "Required",
-      anchor,
+    assert.deepStrictEqual(host.__internalsCalls.at(-1), [
+      "fallback",
+      "fallback",
     ]);
-
-    prepareEffects(host);
-    control = resolveStructuralEntry(
-      host,
-      0,
-      "form-validity",
-      useFormValidity,
-      [],
-      { callsitePath: ["form-validity"] },
-    );
-
-    assert.strictEqual(control.validity.valid, false);
-    assert.strictEqual(control.validity.valueMissing, true);
-    assert.strictEqual(control.validationMessage, "Required");
-    assert.strictEqual(host.validity.valid, false);
-    assert.strictEqual(host.validity.valueMissing, true);
-    assert.strictEqual(host.validationMessage, "Required");
-    assert.strictEqual(control.checkValidity(), false);
-    assert.strictEqual(control.reportValidity(), false);
-    assert.strictEqual(host.__internalsCheckCalls, 1);
-    assert.strictEqual(host.__internalsReportCalls, 1);
-    assert.strictEqual(host.updates, 1);
-
-    host.__internalsDisabled = true;
-    host.__litsxHostMiddlewareRuntime.formDisabledCallback([true], () => undefined);
-
-    prepareEffects(host);
-    control = resolveStructuralEntry(
-      host,
-      0,
-      "form-validity",
-      useFormValidity,
-      [],
-      { callsitePath: ["form-validity"] },
-    );
-
-    assert.strictEqual(control.willValidate, false);
-    assert.strictEqual(host.willValidate, false);
-    assert.strictEqual(host.updates, 2);
   });
 
-  it("resyncs FACE validity snapshots from live internals on render", () => {
-    const host = new TestHost();
+  it("keeps FACE hooks usable when ElementInternals is unavailable", () => {
+    class UnsupportedHost extends TestHost {
+      attachInternals = undefined;
+    }
+    const FaceHost = applyStructuralHooks(UnsupportedHost, [
+      useFormValue,
+      useFormValidity,
+    ]);
+    const host = new FaceHost();
 
     prepareEffects(host);
-    let control = resolveStructuralEntry(
-      host,
-      0,
-      "form-validity",
-      useFormValidity,
-      [],
-      { callsitePath: ["form-validity"] },
-    );
+    const value = readStructuralHook(host, useFormValue, ["draft"]);
+    const validity = readStructuralHook(host, useFormValidity);
 
-    control.setValidity({ valueMissing: true }, "Required");
-
-    host.__internalsValidity = createValiditySnapshot();
-    host.__internalsValidationMessage = "";
-
-    prepareEffects(host);
-    control = resolveStructuralEntry(
-      host,
-      0,
-      "form-validity",
-      useFormValidity,
-      [],
-      { callsitePath: ["form-validity"] },
-    );
-
-    assert.strictEqual(control.validity.valid, true);
-    assert.strictEqual(control.validity.valueMissing, false);
-    assert.strictEqual(control.validationMessage, "");
-    assert.strictEqual(host.validity.valid, true);
-    assert.strictEqual(host.validity.valueMissing, false);
-    assert.strictEqual(host.validationMessage, "");
+    assert.strictEqual(value.value, "draft");
+    assert.strictEqual(validity.supported, false);
+    assert.strictEqual(validity.checkValidity(), true);
+    assert.strictEqual(validity.reportValidity(), true);
   });
 
   it("returns the previous render value", () => {
@@ -764,7 +588,12 @@ describe("litsx effects controller", () => {
     };
 
     prepareEffects(host);
-    const [firstValue, dispatch] = useReducedState(host, reducer, 2, (value) => value * 2);
+    const [firstValue, dispatch] = useReducedState(
+      host,
+      reducer,
+      2,
+      (value) => value * 2,
+    );
     update(host);
 
     assert.strictEqual(firstValue, 4);
@@ -777,7 +606,12 @@ describe("litsx effects controller", () => {
     assert.strictEqual(host.updates, 1);
 
     prepareEffects(host);
-    const [secondValue] = useReducedState(host, reducer, 2, (value) => value * 100);
+    const [secondValue] = useReducedState(
+      host,
+      reducer,
+      2,
+      (value) => value * 100,
+    );
     update(host);
 
     assert.strictEqual(secondValue, 7);
@@ -924,7 +758,11 @@ describe("litsx effects controller", () => {
     const host = new TestHost();
 
     prepareEffects(host);
-    let [value, run, meta] = useAsyncState(host, 1, (current, step) => current + step);
+    let [value, run, meta] = useAsyncState(
+      host,
+      1,
+      (current, step) => current + step,
+    );
     assert.strictEqual(value, 1);
     assert.strictEqual(meta.pending, false);
     assert.strictEqual(meta.error, null);
@@ -934,7 +772,11 @@ describe("litsx effects controller", () => {
     update(host);
 
     prepareEffects(host);
-    [value, run, meta] = useAsyncState(host, 1, (current, step) => current + step);
+    [value, run, meta] = useAsyncState(
+      host,
+      1,
+      (current, step) => current + step,
+    );
     assert.strictEqual(value, 3);
     assert.strictEqual(meta.pending, false);
     assert.strictEqual(meta.error, null);
@@ -949,7 +791,7 @@ describe("litsx effects controller", () => {
 
     prepareEffects(host);
     let [value, run, meta] = useAsyncState(host, 1, (current, step) =>
-      pendingResult.then(() => current + step)
+      pendingResult.then(() => current + step),
     );
     assert.strictEqual(value, 1);
     assert.strictEqual(meta.pending, false);
@@ -958,7 +800,7 @@ describe("litsx effects controller", () => {
 
     prepareEffects(host);
     [value, run, meta] = useAsyncState(host, 1, (current, step) =>
-      pendingResult.then(() => current + step)
+      pendingResult.then(() => current + step),
     );
     assert.strictEqual(meta.pending, true);
 
@@ -969,7 +811,7 @@ describe("litsx effects controller", () => {
 
     prepareEffects(host);
     [value, , meta] = useAsyncState(host, 1, (current, step) =>
-      pendingResult.then(() => current + step)
+      pendingResult.then(() => current + step),
     );
     assert.strictEqual(value, 5);
     assert.strictEqual(meta.pending, false);
@@ -981,12 +823,16 @@ describe("litsx effects controller", () => {
     const failure = new Error("save failed");
 
     prepareEffects(host);
-    let [value, run, meta] = useAsyncState(host, 2, async (current, shouldFail) => {
-      if (shouldFail) {
-        throw failure;
-      }
-      return current + 1;
-    });
+    let [value, run, meta] = useAsyncState(
+      host,
+      2,
+      async (current, shouldFail) => {
+        if (shouldFail) {
+          throw failure;
+        }
+        return current + 1;
+      },
+    );
 
     await assert.rejects(() => run(true), failure);
     update(host);
@@ -1065,13 +911,13 @@ describe("litsx effects controller", () => {
 
     prepareEffects(host);
     let [value, run, meta] = useAsyncState(host, 10, (current) =>
-      pendingResult.then(() => current + 5)
+      pendingResult.then(() => current + 5),
     );
     const completion = run();
 
     prepareEffects(host);
     [value, run, meta] = useAsyncState(host, 10, (current) =>
-      pendingResult.then(() => current + 5)
+      pendingResult.then(() => current + 5),
     );
     assert.strictEqual(meta.pending, true);
 
@@ -1080,7 +926,7 @@ describe("litsx effects controller", () => {
 
     prepareEffects(host);
     [value, run, meta] = useAsyncState(host, 10, (current) =>
-      pendingResult.then(() => current + 5)
+      pendingResult.then(() => current + 5),
     );
     assert.strictEqual(value, 10);
     assert.strictEqual(meta.error, null);
@@ -1091,7 +937,7 @@ describe("litsx effects controller", () => {
 
     prepareEffects(host);
     [value, , meta] = useAsyncState(host, 10, (current) =>
-      pendingResult.then(() => current + 5)
+      pendingResult.then(() => current + 5),
     );
     assert.strictEqual(value, 10);
     assert.strictEqual(meta.error, null);
@@ -1120,7 +966,7 @@ describe("litsx effects controller", () => {
     let [optimisticItems, addOptimistic, resetOptimistic] = useOptimistic(
       host,
       baseItems,
-      (currentItems, optimisticItem) => [...currentItems, optimisticItem]
+      (currentItems, optimisticItem) => [...currentItems, optimisticItem],
     );
     assert.deepStrictEqual(optimisticItems, ["base"]);
 
@@ -1132,7 +978,7 @@ describe("litsx effects controller", () => {
     [optimisticItems, addOptimistic, resetOptimistic] = useOptimistic(
       host,
       baseItems,
-      (currentItems, optimisticItem) => [...currentItems, optimisticItem]
+      (currentItems, optimisticItem) => [...currentItems, optimisticItem],
     );
     assert.deepStrictEqual(optimisticItems, ["base", "temp-1", "temp-2"]);
 
@@ -1143,7 +989,7 @@ describe("litsx effects controller", () => {
     [optimisticItems] = useOptimistic(
       host,
       baseItems,
-      (currentItems, optimisticItem) => [...currentItems, optimisticItem]
+      (currentItems, optimisticItem) => [...currentItems, optimisticItem],
     );
     assert.deepStrictEqual(optimisticItems, ["base"]);
   });
@@ -1156,7 +1002,7 @@ describe("litsx effects controller", () => {
     let [optimisticItems, addOptimistic] = useOptimistic(
       host,
       baseItems,
-      (currentItems, optimisticItem) => [...currentItems, optimisticItem]
+      (currentItems, optimisticItem) => [...currentItems, optimisticItem],
     );
     assert.deepStrictEqual(optimisticItems, ["base"]);
 
@@ -1167,7 +1013,7 @@ describe("litsx effects controller", () => {
     [optimisticItems, addOptimistic] = useOptimistic(
       host,
       baseItems,
-      (currentItems, optimisticItem) => [...currentItems, optimisticItem]
+      (currentItems, optimisticItem) => [...currentItems, optimisticItem],
     );
     assert.deepStrictEqual(optimisticItems, ["base", "temp-1"]);
 
@@ -1177,7 +1023,7 @@ describe("litsx effects controller", () => {
     [optimisticItems] = useOptimistic(
       host,
       baseItems,
-      (currentItems, optimisticItem) => [...currentItems, optimisticItem]
+      (currentItems, optimisticItem) => [...currentItems, optimisticItem],
     );
     assert.deepStrictEqual(optimisticItems, ["server"]);
     assert.deepStrictEqual(baseItems, ["server"]);
@@ -1190,7 +1036,7 @@ describe("litsx effects controller", () => {
     const [optimisticItems, , resetOptimistic] = useOptimistic(
       host,
       ["base"],
-      (currentItems, optimisticItem) => [...currentItems, optimisticItem]
+      (currentItems, optimisticItem) => [...currentItems, optimisticItem],
     );
 
     assert.deepStrictEqual(optimisticItems, ["base"]);
@@ -1307,10 +1153,12 @@ describe("litsx effects controller", () => {
   it("accepts option-only host content calls and trims the resulting text", () => {
     const host = new TestHost();
     host.textContent = "  hello world  ";
-    host.childNodes = [{
-      nodeType: 3,
-      textContent: "  hello world  ",
-    }];
+    host.childNodes = [
+      {
+        nodeType: 3,
+        textContent: "  hello world  ",
+      },
+    ];
 
     prepareEffects(host);
     const content = useHostContent({ trim: true });
@@ -1375,7 +1223,7 @@ describe("litsx effects controller", () => {
 
     host.disconnect();
 
-    assert.strictEqual(values.at(-1), null);
+    assert.strictEqual(values.at(-1), undefined);
     assert.strictEqual(host.focus, undefined);
   });
 
@@ -1422,11 +1270,15 @@ describe("litsx effects controller", () => {
         return "first";
       },
     }));
-    useExpose(host, () => ({
-      focus() {
-        return "second";
-      },
-    }), includeOverride ? ["override"] : ["base"]);
+    useExpose(
+      host,
+      () => ({
+        focus() {
+          return "second";
+        },
+      }),
+      includeOverride ? ["override"] : ["base"],
+    );
     update(host);
 
     assert.strictEqual(host.focus(), "second");
@@ -1439,11 +1291,15 @@ describe("litsx effects controller", () => {
       },
     }));
     if (includeOverride) {
-      useExpose(host, () => ({
-        focus() {
-          return "second";
-        },
-      }), ["override"]);
+      useExpose(
+        host,
+        () => ({
+          focus() {
+            return "second";
+          },
+        }),
+        ["override"],
+      );
     }
     update(host);
 
@@ -1475,16 +1331,24 @@ describe("litsx effects controller", () => {
     let runs = 0;
 
     prepareEffects(host);
-    useAfterUpdate(host, () => {
-      runs += 1;
-      return undefined;
-    }, null);
+    useAfterUpdate(
+      host,
+      () => {
+        runs += 1;
+        return undefined;
+      },
+      null,
+    );
     update(host);
 
     prepareEffects(host);
-    useAfterUpdate(host, () => {
-      runs += 1;
-    }, null);
+    useAfterUpdate(
+      host,
+      () => {
+        runs += 1;
+      },
+      null,
+    );
     update(host);
 
     host.controllers[0].hostUpdate();
@@ -1633,7 +1497,7 @@ describe("litsx effects controller", () => {
     prepareEffects(host);
     const ref = useRef(null, 123);
 
-    assert.strictEqual(ref.current, 123);
+    assert.strictEqual(ref.value, 123);
     assert.strictEqual(host.controllers.length, 1);
   });
 
@@ -1653,14 +1517,14 @@ describe("litsx effects controller", () => {
     const firstRef = useRef(host, "alpha");
     update(host);
 
-    firstRef.current = "beta";
+    firstRef.value = "beta";
 
     prepareEffects(host);
     const secondRef = useRef(host, "gamma");
     update(host);
 
     assert.strictEqual(firstRef, secondRef);
-    assert.strictEqual(secondRef.current, "beta");
+    assert.strictEqual(secondRef.value, "beta");
   });
 
   it("keeps DOM targets when using callback refs without an imperative override", () => {
@@ -1669,12 +1533,143 @@ describe("litsx effects controller", () => {
     let current = null;
 
     prepareEffects(host);
-    useCallbackRef(host, () => node, (value) => {
-      current = value;
-    }, []);
+    useCallbackRef(
+      host,
+      () => node,
+      (value) => {
+        current = value;
+      },
+      [],
+    );
     update(host);
 
     assert.strictEqual(current, node);
+  });
+
+  it("publishes a callback ref when its target appears after a suspended commit", async () => {
+    const host = new TestHost();
+    const pending = deferred();
+    const node = { tagName: "FORM" };
+    const calls = [];
+    const ref = (value) => calls.push(value);
+    let target = null;
+    let ready = false;
+
+    const render = () =>
+      renderWithSoftSuspense(host, () => {
+        prepareEffects(host);
+        useCallbackRef(host, () => target, ref, [ref]);
+        if (!ready) throw pending.promise;
+        return "ready";
+      });
+
+    assert.strictEqual(render(), nothing);
+    update(host);
+    assert.deepStrictEqual(calls, []);
+
+    ready = true;
+    pending.resolve();
+    await pending.promise;
+    await Promise.resolve();
+    target = node;
+
+    assert.strictEqual(render(), "ready");
+    update(host);
+    assert.deepStrictEqual(calls, [node]);
+  });
+
+  it("restores object refs after repeated suspended commits without duplicate assignments", () => {
+    const host = new TestHost();
+    const firstNode = { tagName: "FORM", version: 1 };
+    const secondNode = { tagName: "FORM", version: 2 };
+    const assignments = [];
+    let value;
+    const ref = {
+      get value() {
+        return value;
+      },
+      set value(nextValue) {
+        value = nextValue;
+        assignments.push(nextValue);
+      },
+    };
+    let target = firstNode;
+
+    const commit = () => {
+      prepareEffects(host);
+      useCallbackRef(
+        host,
+        () => target,
+        (value) => {
+          ref.value = value;
+        },
+        [ref],
+      );
+      update(host);
+    };
+
+    commit();
+    assert.strictEqual(ref.value, firstNode);
+
+    target = null;
+    commit();
+    assert.strictEqual(ref.value, undefined);
+
+    target = secondNode;
+    commit();
+    assert.strictEqual(ref.value, secondNode);
+
+    commit();
+    assert.strictEqual(ref.value, secondNode);
+    assert.deepStrictEqual(assignments, [firstNode, undefined, secondNode]);
+  });
+
+  it("cleans and republishes refs when either the target or ref channel changes", () => {
+    const host = new TestHost();
+    const firstNode = { tagName: "FORM", version: 1 };
+    const secondNode = { tagName: "FORM", version: 2 };
+    const firstCalls = [];
+    const secondCalls = [];
+    const firstRef = (value) => firstCalls.push(value);
+    const secondRef = (value) => secondCalls.push(value);
+    let target = firstNode;
+    let ref = firstRef;
+
+    const commit = () => {
+      prepareEffects(host);
+      useCallbackRef(host, () => target, ref, [ref]);
+      update(host);
+    };
+
+    commit();
+    target = secondNode;
+    commit();
+    ref = secondRef;
+    commit();
+
+    assert.deepStrictEqual(firstCalls, [
+      firstNode,
+      undefined,
+      secondNode,
+      undefined,
+    ]);
+    assert.deepStrictEqual(secondCalls, [secondNode]);
+  });
+
+  it("cleans an imperative ref when its hook is absent from the committed render", () => {
+    const host = new TestHost();
+    const node = { tagName: "FORM" };
+    const calls = [];
+    const ref = (value) => calls.push(value);
+
+    prepareEffects(host);
+    useCallbackRef(host, () => node, ref, [ref]);
+    update(host);
+
+    prepareEffects(host);
+    update(host);
+
+    assert.deepStrictEqual(calls, [node, undefined]);
   });
 
   it("cleans callback refs on disconnect", () => {
@@ -1683,15 +1678,20 @@ describe("litsx effects controller", () => {
     const calls = [];
 
     prepareEffects(host);
-    useCallbackRef(host, () => node, (value) => {
-      calls.push(value);
-    }, []);
+    useCallbackRef(
+      host,
+      () => node,
+      (value) => {
+        calls.push(value);
+      },
+      [],
+    );
     update(host);
 
     host.disconnect();
 
     assert.strictEqual(calls[0], node);
-    assert.strictEqual(calls.at(-1), null);
+    assert.strictEqual(calls.at(-1), undefined);
   });
 
   it("cleans the previous callback ref when the callback changes", () => {
@@ -1711,7 +1711,7 @@ describe("litsx effects controller", () => {
 
     assert.deepStrictEqual(calls, [
       ["first", node],
-      ["first", null],
+      ["first", undefined],
       ["second", node],
     ]);
   });
@@ -1719,47 +1719,66 @@ describe("litsx effects controller", () => {
   it("keeps callback refs bound to their DOM targets when useExpose is also used", () => {
     const host = new TestHost();
     const node = { tagName: "INPUT" };
-    const ref = { current: null };
+    const ref = { value: undefined };
 
     prepareEffects(host);
-    useCallbackRef(host, () => node, (value) => {
-      ref.current = value;
-    }, [ref]);
-    useExpose(host, () => ({
-      focus() {
-        return "focus";
+    useCallbackRef(
+      host,
+      () => node,
+      (value) => {
+        ref.value = value;
       },
-    }), []);
+      [ref],
+    );
+    useExpose(
+      host,
+      () => ({
+        focus() {
+          return "focus";
+        },
+      }),
+      [],
+    );
     update(host);
 
-    assert.strictEqual(ref.current, node);
+    assert.strictEqual(ref.value, node);
     assert.strictEqual(host.focus(), "focus");
   });
 
   it("lets ref-targeted useExpose override a forwarded DOM target on that ref channel", () => {
     const host = new TestHost();
     const node = { tagName: "INPUT" };
-    const ref = { current: null };
+    const ref = { value: undefined };
 
     prepareEffects(host);
-    useCallbackRef(host, () => node, (value) => {
-      ref.current = value;
-    }, [ref]);
-    useExpose(host, ref, () => ({
-      focus() {
-        return "focus";
+    useCallbackRef(
+      host,
+      () => node,
+      (value) => {
+        ref.value = value;
       },
-    }), [ref]);
+      [ref],
+    );
+    useExpose(
+      host,
+      ref,
+      () => ({
+        focus() {
+          return "focus";
+        },
+      }),
+      [ref],
+    );
     update(host);
 
-    assert.strictEqual(typeof ref.current.focus, "function");
-    assert.strictEqual(ref.current.focus(), "focus");
+    assert.strictEqual(typeof ref.value.focus, "function");
+    assert.strictEqual(ref.value.focus(), "focus");
     assert.strictEqual(host.focus, undefined);
   });
 
   it("lets later ref-targeted useExpose calls override the same method on one ref channel", () => {
     const host = new TestHost();
-    const ref = { current: null };
+    const ref = { value: undefined };
 
     prepareEffects(host);
     useExpose(host, ref, () => ({
@@ -1774,7 +1793,7 @@ describe("litsx effects controller", () => {
     }));
     update(host);
 
-    assert.strictEqual(ref.current.focus(), "second");
+    assert.strictEqual(ref.value.focus(), "second");
 
     prepareEffects(host);
     useExpose(host, ref, () => ({
@@ -1784,7 +1803,7 @@ describe("litsx effects controller", () => {
     }));
     update(host);
 
-    assert.strictEqual(ref.current.focus(), "first");
+    assert.strictEqual(ref.value.focus(), "first");
   });
 
   it("observes host content reactively", () => {
@@ -1919,8 +1938,14 @@ describe("litsx effects controller", () => {
     const firstHost = new TestHost();
     const secondHost = new TestHost();
 
-    assert.strictEqual(useStableId(firstHost, "litsx-stable-demo"), "litsx-stable-demo");
-    assert.strictEqual(useStableId(secondHost, "litsx-stable-demo"), "litsx-stable-demo");
+    assert.strictEqual(
+      useStableId(firstHost, "litsx-stable-demo"),
+      "litsx-stable-demo",
+    );
+    assert.strictEqual(
+      useStableId(secondHost, "litsx-stable-demo"),
+      "litsx-stable-demo",
+    );
     assert.notStrictEqual(
       useStableId(firstHost, "litsx-stable-demo"),
       useStableId(firstHost, "litsx-stable-other"),
@@ -1944,7 +1969,7 @@ describe("litsx effects controller", () => {
 
     assert.throws(
       () => useHostTypeId(host),
-      /LitSX-compiled component host with stable host-type metadata/
+      /LitSX-compiled component host with stable host-type metadata/,
     );
   });
 
@@ -1952,7 +1977,10 @@ describe("litsx effects controller", () => {
     const hook = () => "value";
     hook[LITSX_HOOK] = true;
     assert.strictEqual(isLitsxHook(hook), true);
-    assert.strictEqual(isLitsxHook(() => "other"), false);
+    assert.strictEqual(
+      isLitsxHook(() => "other"),
+      false,
+    );
   });
 
   it("detects LitSX component classes from published metadata", () => {
@@ -1979,7 +2007,7 @@ describe("litsx effects controller", () => {
     const registered = ensureLazyElement(
       host,
       "fancy-button",
-      FancyButtonElement
+      FancyButtonElement,
     );
 
     assert.strictEqual(registered, FancyButtonElement);
@@ -2016,8 +2044,14 @@ describe("litsx effects controller", () => {
   it("returns null for lazy elements when the host has no usable registry", () => {
     class FancyButtonElement {}
 
-    assert.strictEqual(ensureLazyElement({}, "fancy-button", FancyButtonElement), null);
-    assert.strictEqual(ensureLazyElement(null, "fancy-button", FancyButtonElement), null);
+    assert.strictEqual(
+      ensureLazyElement({}, "fancy-button", FancyButtonElement),
+      null,
+    );
+    assert.strictEqual(
+      ensureLazyElement(null, "fancy-button", FancyButtonElement),
+      null,
+    );
   });
 
   it("resolves scoped registries from the host root when nested boundaries do not carry registry directly", () => {
@@ -2059,19 +2093,22 @@ describe("litsx effects controller", () => {
     try {
       assert.throws(
         () => ensureLazyElement(host, "", () => Promise.resolve(null)),
-        /non-empty tag name/
+        /non-empty tag name/,
       );
       assert.throws(
         () => ensureLazyElement(host, "fancy-button", 123),
-        /loader, constructor, or nullish value/
+        /loader, constructor, or nullish value/,
       );
 
       const invalidLoader = () => Promise.resolve({});
-      assert.strictEqual(ensureLazyElement(host, "fancy-button", invalidLoader), null);
+      assert.strictEqual(
+        ensureLazyElement(host, "fancy-button", invalidLoader),
+        null,
+      );
       await new Promise((resolve) => setTimeout(resolve, 0));
       assert.throws(
         () => ensureLazyElement(host, "fancy-button", invalidLoader),
-        /custom element constructor/
+        /custom element constructor/,
       );
     } finally {
       process.off("unhandledRejection", onUnhandledRejection);
@@ -2080,8 +2117,14 @@ describe("litsx effects controller", () => {
 
   it("validates host-dependent runtime helpers when no active host is available", () => {
     const host = new TestHost();
-    assert.throws(() => useExternalStore(host, null, () => 1), /subscribe function/);
-    assert.throws(() => useExternalStore(host, () => () => {}, null), /getSnapshot function/);
+    assert.throws(
+      () => useExternalStore(host, null, () => 1),
+      /subscribe function/,
+    );
+    assert.throws(
+      () => useExternalStore(host, () => () => {}, null),
+      /getSnapshot function/,
+    );
   });
 
   it("applies and removes host styles for direct and computed values", () => {
@@ -2139,7 +2182,7 @@ describe("litsx effects controller", () => {
 
     assert.strictEqual(
       ensureLazyElement(host, "fancy-button", class OtherElement {}),
-      FancyButtonElement
+      FancyButtonElement,
     );
     assert.strictEqual(ensureLazyElement(host, "empty-state", null), null);
     assert.strictEqual(ensureLazyElement(host, "empty-state", undefined), null);
@@ -2167,7 +2210,7 @@ describe("litsx effects controller", () => {
       host,
       subscribeA,
       () => snapshot,
-      () => "server-alpha"
+      () => "server-alpha",
     );
     update(host);
     assert.strictEqual(value, "server-alpha");
@@ -2180,7 +2223,7 @@ describe("litsx effects controller", () => {
       host,
       subscribeB,
       () => snapshot,
-      () => "server-beta"
+      () => "server-beta",
     );
     update(host);
 
@@ -2203,7 +2246,10 @@ describe("litsx effects controller", () => {
       assert.strictEqual(ensureLazyElement(host, "fancy-button", loader), null);
       await new Promise((resolve) => setTimeout(resolve, 0));
 
-      assert.throws(() => ensureLazyElement(host, "fancy-button", loader), /lazy failed/);
+      assert.throws(
+        () => ensureLazyElement(host, "fancy-button", loader),
+        /lazy failed/,
+      );
       assert.strictEqual(host.updates, 1);
     } finally {
       process.off("unhandledRejection", onUnhandledRejection);
@@ -2215,11 +2261,11 @@ describe("litsx effects controller", () => {
 
     assert.throws(
       () => useExternalStore(host, null, () => "value"),
-      /subscribe function/
+      /subscribe function/,
     );
     assert.throws(
       () => useExternalStore(host, () => () => {}, null),
-      /getSnapshot function/
+      /getSnapshot function/,
     );
   });
 
@@ -2247,7 +2293,7 @@ describe("litsx effects controller", () => {
         host,
         subscribe,
         () => current,
-        () => "server"
+        () => "server",
       );
       assert.strictEqual(first, "server");
       update(host);
@@ -2328,7 +2374,10 @@ describe("litsx effects controller", () => {
     update(host);
 
     assert.strictEqual(host.styleAssignments.get("--panel-gap"), "20px");
-    assert.strictEqual(host.styleAssignments.get("--panel-accent"), "royalblue");
+    assert.strictEqual(
+      host.styleAssignments.get("--panel-accent"),
+      "royalblue",
+    );
   });
 
   it("supports computed style values with dependencies", () => {
@@ -2337,20 +2386,30 @@ describe("litsx effects controller", () => {
     let computes = 0;
 
     prepareEffects(host);
-    useStyle(host, "--panel-gap", () => {
-      computes += 1;
-      return `${gap}px`;
-    }, [gap]);
+    useStyle(
+      host,
+      "--panel-gap",
+      () => {
+        computes += 1;
+        return `${gap}px`;
+      },
+      [gap],
+    );
     update(host);
 
     assert.strictEqual(host.styleAssignments.get("--panel-gap"), "12px");
     assert.strictEqual(computes, 1);
 
     prepareEffects(host);
-    useStyle(host, "--panel-gap", () => {
-      computes += 1;
-      return `${gap}px`;
-    }, [gap]);
+    useStyle(
+      host,
+      "--panel-gap",
+      () => {
+        computes += 1;
+        return `${gap}px`;
+      },
+      [gap],
+    );
     update(host);
 
     assert.strictEqual(host.styleAssignments.get("--panel-gap"), "12px");
@@ -2359,10 +2418,15 @@ describe("litsx effects controller", () => {
     gap = 20;
 
     prepareEffects(host);
-    useStyle(host, "--panel-gap", () => {
-      computes += 1;
-      return `${gap}px`;
-    }, [gap]);
+    useStyle(
+      host,
+      "--panel-gap",
+      () => {
+        computes += 1;
+        return `${gap}px`;
+      },
+      [gap],
+    );
     update(host);
 
     assert.strictEqual(host.styleAssignments.get("--panel-gap"), "20px");
@@ -2432,10 +2496,12 @@ describe("litsx soft suspense runtime", () => {
     const pending = deferred();
     const captured = [];
 
-    const value = withSuspenseCapture({ capture: (thenable) => captured.push(thenable) }, () =>
-      renderWithSoftSuspense(host, () => {
-        throw pending.promise;
-      })
+    const value = withSuspenseCapture(
+      { capture: (thenable) => captured.push(thenable) },
+      () =>
+        renderWithSoftSuspense(host, () => {
+          throw pending.promise;
+        }),
     );
 
     assert.strictEqual(value, nothing);
@@ -2451,7 +2517,7 @@ describe("litsx soft suspense runtime", () => {
     const value = collectSoftSuspenseThenables(collected, () =>
       renderWithSoftSuspense(host, () => {
         throw pending.promise;
-      })
+      }),
     );
 
     assert.strictEqual(value, nothing);

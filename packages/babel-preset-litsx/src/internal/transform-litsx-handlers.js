@@ -1,5 +1,26 @@
 let t;
 
+function getEventAttributeName(nameNode) {
+  if (t.isJSXNamespacedName(nameNode)) {
+    if (nameNode.namespace.name !== "on") return null;
+    return toHandlerAttributeName(nameNode.name.name);
+  }
+  if (!t.isJSXIdentifier(nameNode)) return null;
+  const name = nameNode.name;
+  if (/^on[A-Z]/.test(name)) return name;
+  if (!name.startsWith("@") || name.length === 1) return null;
+  return toHandlerAttributeName(name.slice(1));
+}
+
+function toHandlerAttributeName(eventName) {
+  const segment = String(eventName)
+    .split(/[^A-Za-z0-9]+/)
+    .filter(Boolean)
+    .map((part) => part[0].toUpperCase() + part.slice(1))
+    .join("");
+  return segment ? `on${segment}` : null;
+}
+
 export function setHandlersBabelTypes(types) {
   t = types;
 }
@@ -127,10 +148,8 @@ function hoistEventHandlers(functionPath, usedNames) {
       if (attrPath.getFunctionParent() !== functionPath) return;
 
       const { node } = attrPath;
-      if (!t.isJSXIdentifier(node.name)) return;
-
-      const attrName = node.name.name;
-      if (!/^on[A-Z]/.test(attrName)) return;
+      const attrName = getEventAttributeName(node.name);
+      if (!attrName) return;
 
       const valuePath = attrPath.get("value");
       if (!valuePath.isJSXExpressionContainer()) return;
@@ -170,6 +189,69 @@ function isNativeIntrinsicJsxElement(nameNode) {
   return t.isJSXIdentifier(nameNode) && /^[a-z]/.test(nameNode.name);
 }
 
+function unwrapStyleExpression(node) {
+  let current = node;
+
+  while (current) {
+    if (t.isTSAsExpression?.(current) || t.isTSTypeAssertion?.(current)) {
+      current = current.expression;
+      continue;
+    }
+
+    if (t.isTSNonNullExpression?.(current) || t.isParenthesizedExpression?.(current)) {
+      current = current.expression;
+      continue;
+    }
+
+    break;
+  }
+
+  return current;
+}
+
+function resolvesToStyleObjectExpression(expressionPath) {
+  if (!expressionPath?.node) {
+    return false;
+  }
+
+  const expression = unwrapStyleExpression(expressionPath.node);
+  if (!expression) {
+    return false;
+  }
+
+  if (t.isObjectExpression(expression)) {
+    return true;
+  }
+
+  if (t.isIdentifier(expression)) {
+    const binding = expressionPath.scope.getBinding(expression.name);
+    const initPath = binding?.path?.isVariableDeclarator?.() ? binding.path.get("init") : null;
+    return resolvesToStyleObjectExpression(initPath);
+  }
+
+  if (t.isConditionalExpression(expression)) {
+    return (
+      resolvesToStyleObjectExpression(expressionPath.get("consequent")) ||
+      resolvesToStyleObjectExpression(expressionPath.get("alternate"))
+    );
+  }
+
+  if (t.isLogicalExpression(expression)) {
+    return (
+      resolvesToStyleObjectExpression(expressionPath.get("left")) ||
+      resolvesToStyleObjectExpression(expressionPath.get("right"))
+    );
+  }
+
+  if (t.isSequenceExpression(expression)) {
+    const expressions = expressionPath.get("expressions");
+    const lastExpression = expressions[expressions.length - 1];
+    return resolvesToStyleObjectExpression(lastExpression);
+  }
+
+  return false;
+}
+
 export function collectNativeClassNameWarnings(functionPath, warn, options = {}) {
   if (typeof warn !== "function" || options.suppressNativeClassNameWarning === true) {
     return;
@@ -195,6 +277,31 @@ export function collectNativeClassNameWarnings(functionPath, warn, options = {})
         line: node.loc?.start?.line ?? null,
         column: node.loc?.start?.column ?? null,
       });
+    },
+  });
+}
+
+export function assertNoObjectStyleAttributes(functionPath) {
+  functionPath.traverse({
+    JSXAttribute(attrPath) {
+      if (attrPath.getFunctionParent() !== functionPath) return;
+
+      const openingElement = attrPath.parentPath;
+      if (!openingElement?.isJSXOpeningElement()) return;
+      if (!isNativeIntrinsicJsxElement(openingElement.node.name)) return;
+
+      const { node } = attrPath;
+      if (!t.isJSXIdentifier(node.name, { name: "style" })) return;
+
+      const valuePath = attrPath.get("value");
+      if (!valuePath.isJSXExpressionContainer()) return;
+
+      const expressionPath = valuePath.get("expression");
+      if (!resolvesToStyleObjectExpression(expressionPath)) return;
+
+      throw attrPath.buildCodeFrameError(
+        "LitSX does not support object-valued `style` bindings in `.litsx`. Use a serialized string style value, or use `useStyle(...)` for dynamic host style properties."
+      );
     },
   });
 }

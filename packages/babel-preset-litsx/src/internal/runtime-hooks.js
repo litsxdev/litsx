@@ -15,8 +15,5 @@ export function isLitsxRuntimeImportSource(source) {
 }
 
 export function isLitsxRuntimeHookName(name) {
-  return typeof name === "string" && (
-    /^use[A-Z0-9]/.test(name) ||
-    name === "resolveStructuralProps"
-  );
+  return typeof name === "string" && /^use[A-Z0-9]/.test(name);
 }

@@ -16,8 +16,8 @@ describe("jsxSpreadElement", () => {
 
     render(
       view([
-        { title: "first", onClick: onFirst, disabled: true },
-        { title: "second", onClick: onSecond },
+        { title: "first", "on:click": onFirst, disabled: true },
+        { title: "second", "on:click": onSecond },
       ]),
       container
     );
@@ -41,7 +41,7 @@ describe("jsxSpreadElement", () => {
 
   it("uses properties for component props and supports style, ref, and inner HTML", () => {
     const container = document.createElement("div");
-    const ref = { current: null };
+    const ref = { value: undefined };
 
     render(
       jsxSpreadElement("article", [{
@@ -56,7 +56,7 @@ describe("jsxSpreadElement", () => {
     const article = container.querySelector("article");
     assert.deepStrictEqual(article.payload, { ready: true });
     assert.strictEqual(article.style.color, "red");
-    assert.strictEqual(ref.current, article);
+    assert.strictEqual(ref.value, article);
     assert.strictEqual(article.querySelector("strong").textContent, "ready");
   });
 
@@ -85,6 +85,123 @@ describe("jsxSpreadElement", () => {
     assert.strictEqual(element.getAttribute("data-id"), "ready");
   });
 
+  it("routes undeclared component inputs into a reactive rest-props bag", async () => {
+    const tag = "jsx-spread-rest-props";
+    if (!customElements.get(tag)) {
+      customElements.define(tag, class extends LitElement {
+        static [Symbol.for("litsx.restProps")] = { property: "__litsxRestProps" };
+        static properties = {
+          variant: { type: String },
+          __litsxRestProps: { type: Object, attribute: false },
+        };
+
+        render() {
+          return jsxSpreadElement("button", [this.__litsxRestProps], { reactCompatEvents: true }, this.variant);
+        }
+      });
+    }
+    const container = document.createElement("div");
+    document.body.append(container);
+    const onClick = () => {};
+    const onclick = () => {};
+    const payload = { id: 1 };
+
+    render(jsxSpreadElement(tag, [{
+      variant: "primary",
+      "aria-label": "Save",
+      ".payload": payload,
+      "?disabled": true,
+      onClick,
+      ".onclick": onclick,
+    }], { component: customElements.get(tag), reactCompatEvents: true }), container);
+
+    let host = container.querySelector(tag);
+    await host.updateComplete;
+    let button = host.shadowRoot.querySelector("button");
+    assert.strictEqual(host.variant, "primary");
+    assert.strictEqual(host.onclick, onclick);
+    assert.strictEqual(host.hasAttribute("aria-label"), false);
+    assert.deepStrictEqual(host.__litsxRestProps, {
+      "aria-label": "Save",
+      payload: { id: 1 },
+      disabled: true,
+      onClick,
+    });
+    assert.strictEqual(button.getAttribute("aria-label"), "Save");
+    assert.deepStrictEqual(button.payload, { id: 1 });
+    assert.strictEqual(button.disabled, true);
+
+    render(jsxSpreadElement(tag, [{ variant: "secondary", title: "Next" }], {
+      component: customElements.get(tag),
+      reactCompatEvents: true,
+    }), container);
+    host = container.querySelector(tag);
+    await host.updateComplete;
+    assert.deepStrictEqual(host.__litsxRestProps, { title: "Next" });
+    button = host.shadowRoot.querySelector("button");
+    assert.strictEqual(button.getAttribute("aria-label"), null);
+    assert.strictEqual(button.disabled, false);
+    assert.strictEqual(button.title, "Next");
+  });
+
+  it("distinguishes onX callback props from explicit custom events", () => {
+    const tag = "jsx-spread-custom-events";
+    if (!customElements.get(tag)) {
+      customElements.define(tag, class extends LitElement {
+        static properties = {
+          onCallback: { attribute: false },
+        };
+      });
+    }
+    const container = document.createElement("div");
+    const onCallback = () => {};
+    let primaryActions = 0;
+    let urlChanges = 0;
+    let animations = 0;
+    let nativeClicks = 0;
+
+    render(jsxSpreadElement(tag, [{
+      onCallback,
+      onclick: () => { nativeClicks += 1; },
+      "on:primary-action": () => { primaryActions += 1; },
+      "on:url-change": () => { urlChanges += 1; },
+      "on:animationend": () => { animations += 1; },
+    }]), container);
+
+    const element = container.querySelector(tag);
+    assert.strictEqual(element.onCallback, onCallback);
+    assert.strictEqual(element.hasAttribute("onclick"), false);
+    element.dispatchEvent(new Event("click"));
+    element.dispatchEvent(new CustomEvent("primary-action"));
+    element.dispatchEvent(new CustomEvent("url-change"));
+    element.dispatchEvent(new Event("animationend"));
+    assert.strictEqual(nativeClicks, 1);
+    assert.strictEqual(primaryActions, 1);
+    assert.strictEqual(urlChanges, 1);
+    assert.strictEqual(animations, 1);
+  });
+
+  it("supports listener objects and event options through on:event spreads", () => {
+    const container = document.createElement("div");
+    let calls = 0;
+    const listener = {
+      capture: true,
+      once: true,
+      passive: true,
+      handleEvent() { calls += 1; },
+    };
+
+    render(jsxSpreadElement("button", [{ "on:click": listener }]), container);
+    const button = container.querySelector("button");
+    button.click();
+    button.click();
+    assert.strictEqual(calls, 1);
+    assert.throws(
+      () => render(jsxSpreadElement("button", [{ "on:menuOpen": listener }]), container),
+      /must use lowercase kebab-case/,
+    );
+  });
+
   it("keeps normalized aliases and stable refs correct across updates", () => {
     const container = document.createElement("div");
     const refValues = [];
@@ -97,5 +214,25 @@ describe("jsxSpreadElement", () => {
 
     assert.strictEqual(element.className, "second");
     assert.deepStrictEqual(refValues, [element]);
+  });
+
+  it("serializes boolean-valued HTML attributes instead of toggling their presence", () => {
+    const container = document.createElement("div");
+    const view = (value) => jsxSpreadElement("div", [{
+      draggable: value,
+      spellCheck: value,
+      contentEditable: value,
+    }]);
+
+    render(view(false), container);
+    const element = container.querySelector("div");
+    assert.strictEqual(element.getAttribute("draggable"), "false");
+    assert.strictEqual(element.getAttribute("spellcheck"), "false");
+    assert.strictEqual(element.getAttribute("contenteditable"), "false");
+
+    render(view(true), container);
+    assert.strictEqual(element.getAttribute("draggable"), "true");
+    assert.strictEqual(element.getAttribute("spellcheck"), "true");
+    assert.strictEqual(element.getAttribute("contenteditable"), "true");
   });
 });

@@ -19,23 +19,15 @@ const VOID_HTML_TAGS = new Set([
   "wbr",
 ]);
 const ATTRIBUTE_PASSTHROUGH_NAMES = new Set([
-  "class",
-  "className",
-  "id",
-  "slot",
-  "style",
-  "part",
-  "exportparts",
-  "role",
-  "title",
-  "tabindex",
-  "tabIndex",
+  "class", "className", "id", "slot", "style", "part", "exportparts",
+  "role", "title", "tabindex", "tabIndex",
 ]);
 const DANGEROUS_OBJECT_KEYS = new Set([
   "__proto__",
   "constructor",
   "prototype",
 ]);
+const NOSCRIPT_COMPONENT_ATTRIBUTE = "data-litsx-noscript-component";
 
 export function setTemplateTypes(types) {
   t = types;
@@ -65,6 +57,7 @@ export function collectLitAttributeSourcemapMetadata(node, mappings = [], option
           ? ` ${generatedName}=`
           : ` ${generatedName}`,
         generatedOffset: 1,
+        generatedScope: "html-template",
         source: sourceLocation?.filename ?? options.sourceFileName ?? null,
         line: sourceLocation?.start?.line ?? null,
         column: sourceLocation?.start?.column ?? null,
@@ -115,22 +108,31 @@ function copySourceLocation(target, startNode, endNode = startNode) {
   return target;
 }
 
+function escapeTemplateLiteralRawSegment(value) {
+  return value
+    .replace(/\\/g, "\\\\")
+    .replace(/`/g, "\\`")
+    .replace(/\$\{/g, "\\${");
+}
+
 function addString(strings, keys, string, startNode = null, endNode = startNode) {
   const trimmedString = trimString(string);
   if (!trimmedString) {
     return;
   }
 
+  const escapedRawString = escapeTemplateLiteralRawSegment(trimmedString);
+
   if (strings.length <= keys.length) {
     const templateElement = t.templateElement(
-      { raw: trimmedString, cooked: trimmedString },
+      { raw: escapedRawString, cooked: trimmedString },
       false
     );
     copySourceLocation(templateElement, startNode, endNode);
     strings.push(templateElement);
   } else {
     const last = strings[strings.length - 1];
-    last.value.raw += trimmedString;
+    last.value.raw += escapedRawString;
     last.value.cooked = (last.value.cooked ?? "") + trimmedString;
     if (startNode?.loc && !last.loc) {
       copySourceLocation(last, startNode, endNode);
@@ -233,6 +235,7 @@ function toKebab(name) {
 function getTag(node) {
   if (t.isJSXIdentifier(node.name)) {
     const originalName = node.name.name;
+    const routedComponentName = node.__litsxRestComponentName;
     const isCapitalized =
       originalName.charAt(0) === originalName.charAt(0).toUpperCase() &&
       originalName.charAt(0) !== originalName.charAt(0).toLowerCase();
@@ -240,8 +243,12 @@ function getTag(node) {
     return {
       name: isCapitalized ? toKebab(originalName) : originalName,
       isComponent: false,
-      isAuthoredComponentTag: isCapitalized,
-      componentExpression: isCapitalized ? t.identifier(originalName) : null,
+      isAuthoredComponentTag: isCapitalized || Boolean(routedComponentName),
+      componentExpression: routedComponentName
+        ? t.identifier(routedComponentName)
+        : isCapitalized
+          ? t.identifier(originalName)
+          : null,
     };
   }
 
@@ -255,6 +262,71 @@ function getTag(node) {
 
 function isVoidHtmlTagName(name) {
   return VOID_HTML_TAGS.has(String(name).toLowerCase());
+}
+
+function isNoscriptElement(node) {
+  return t.isJSXIdentifier(node?.openingElement?.name, { name: "noscript" });
+}
+
+function collectNoscriptScopedElements(node) {
+  const elements = new Map();
+
+  function visit(current) {
+    if (!current || typeof current !== "object") {
+      return;
+    }
+
+    if (t.isJSXElement(current)) {
+      const { name, isComponent, isAuthoredComponentTag } = getTag(current.openingElement);
+      if (isComponent) {
+        throw new Error(
+          "LitSX <noscript> fallback content does not support member-expression components.",
+        );
+      }
+      if (isAuthoredComponentTag) {
+        elements.set(name, createComponentCallee(current.openingElement.name));
+      }
+      const metadata = current.openingElement.attributes.find((attribute) =>
+        attribute.type === "JSXAttribute" && attribute.name.name === NOSCRIPT_COMPONENT_ATTRIBUTE,
+      );
+      if (metadata?.value?.type === "JSXExpressionContainer") {
+        elements.set(name, metadata.value.expression);
+      }
+    }
+
+    const visitorKeys = t.VISITOR_KEYS?.[current.type] ?? [];
+    for (const key of visitorKeys) {
+      const value = current[key];
+      if (Array.isArray(value)) {
+        value.forEach(visit);
+      } else {
+        visit(value);
+      }
+    }
+  }
+
+  node.children.forEach(visit);
+  return elements;
+}
+
+function createNoscriptFallback(node, opts) {
+  const elements = collectNoscriptScopedElements(node);
+  opts.__litsxNeedsNoscriptRuntime = true;
+  const children = t.jsxFragment(
+    t.jsxOpeningFragment(),
+    t.jsxClosingFragment(),
+    node.children,
+  );
+  const fallbackTemplate = createTaggedTemplate(children, opts, "html");
+  const args = [t.arrowFunctionExpression([], fallbackTemplate)];
+  if (opts.ssr === true && elements.size > 0) {
+    args.push(t.objectExpression(
+      [...elements].map(([tagName, ctor]) =>
+        t.objectProperty(t.stringLiteral(tagName), ctor),
+      ),
+    ));
+  }
+  return t.callExpression(t.identifier("__litsxNoscript"), args);
 }
 
 function createComponent(node, opts = {}) {
@@ -326,19 +398,16 @@ function createComponentCallee(nameNode) {
   return t.identifier(stringifyJsxName(nameNode));
 }
 
-function shouldLowerAuthoredComponentAttributeAsProperty(attr, rawName) {
+function shouldLowerAuthoredComponentAttributeAsProperty(attr, rawName, opts) {
   if (
-    rawName.startsWith(".") ||
-    rawName.startsWith("?") ||
-    rawName.startsWith("@") ||
-    rawName.startsWith("data-") ||
-    rawName.startsWith("aria-") ||
+    opts?.componentAttributeFallback === false ||
+    rawName.startsWith(".") || rawName.startsWith("?") || rawName.startsWith("@") ||
+    rawName.startsWith("data-") || rawName.startsWith("aria-") ||
     ATTRIBUTE_PASSTHROUGH_NAMES.has(rawName) ||
     !/^[$_a-zA-Z][$_a-zA-Z0-9]*$/.test(rawName)
   ) {
     return false;
   }
-
   return !attr.value || attr.value.type === "JSXExpressionContainer";
 }
 
@@ -355,7 +424,7 @@ function getAttributeValue(attr, opts) {
   return t.cloneNode(attr.value, true);
 }
 
-function createSpreadElementCall(node, opts, name, isAuthoredComponentTag, componentExpression) {
+function createSpreadElementCall(node, opts, name, isAuthoredComponentTag, componentExpression, namespace, childOptions) {
   const sources = [];
   let adjacentProperties = [];
   const flushAdjacentProperties = () => {
@@ -371,7 +440,8 @@ function createSpreadElementCall(node, opts, name, isAuthoredComponentTag, compo
       return;
     }
 
-    const rawName = decodeVirtualAttributeName(attr.name.name) ?? attr.name.name;
+    const jsxName = stringifyJsxName(attr.name);
+    const rawName = decodeVirtualAttributeName(jsxName) ?? jsxName;
     const key = /^[$_a-zA-Z][$_a-zA-Z0-9]*$/.test(rawName)
       ? t.identifier(rawName)
       : t.stringLiteral(rawName);
@@ -402,29 +472,50 @@ function createSpreadElementCall(node, opts, name, isAuthoredComponentTag, compo
           : t.booleanLiteral(isAuthoredComponentTag || name.includes("-"))
       ),
       t.objectProperty(t.identifier("void"), t.booleanLiteral(isVoid)),
+      ...(namespace === "svg"
+        ? [t.objectProperty(t.identifier("namespace"), t.stringLiteral("svg"))]
+        : []),
+      ...(opts?.reactCompatEvents === true
+        ? [t.objectProperty(t.identifier("reactCompatEvents"), t.booleanLiteral(true))]
+        : []),
+      ...(opts?.reactCompatRefs === true
+        ? [t.objectProperty(
+          t.identifier("refAdapter"),
+          t.identifier(opts?.reactRefAdapterName || "toLitRef")
+        )]
+        : []),
     ]),
   ];
-  if (hasChildren) args.push(createJsxReplacement(children, opts));
+  if (hasChildren) args.push(createJsxReplacement(children, childOptions));
   return t.callExpression(t.identifier(helperName), args);
 }
 
 const transforms = {
   JSXElement({ node, strings, keys }, opts) {
     const { name, isComponent, isAuthoredComponentTag, componentExpression } = getTag(node.openingElement);
+    const inheritedNamespace = opts?.jsxNamespace ?? (opts?.tag === "svg" ? "svg" : "html");
+    const namespace = inheritedNamespace === "svg" || name === "svg" ? "svg" : "html";
+    const childOptions = namespace === "svg" && name === "foreignObject"
+      ? { ...opts, jsxNamespace: "html" }
+      : { ...opts, jsxNamespace: namespace };
 
     if (isComponent) {
       addKey(strings, keys, createComponent(node, opts));
       return;
     }
 
+    const isNoscript = isNoscriptElement(node);
     const hasSpreadAttributes = node.openingElement.attributes.some(
       (attr) => attr.type === "JSXSpreadAttribute"
     );
-    if (hasSpreadAttributes) {
+    const routeComponentRestProps = opts?.componentRestProps === true &&
+      isAuthoredComponentTag && node.openingElement.__litsxRouteRestProps === true &&
+      node.openingElement.attributes.length > 0;
+    if ((hasSpreadAttributes || routeComponentRestProps) && !isNoscript) {
       addKey(
         strings,
         keys,
-        createSpreadElementCall(node, opts, name, isAuthoredComponentTag, componentExpression)
+        createSpreadElementCall(node, opts, name, isAuthoredComponentTag, componentExpression, namespace, childOptions)
       );
       return;
     }
@@ -435,18 +526,50 @@ const transforms = {
       if (attr.type === "JSXSpreadAttribute") {
         return;
       }
-      const rawName = decodeVirtualAttributeName(attr.name.name) ?? attr.name.name;
+      const jsxName = stringifyJsxName(attr.name);
+      if (jsxName === NOSCRIPT_COMPONENT_ATTRIBUTE) {
+        return;
+      }
+      const rawName = decodeVirtualAttributeName(jsxName) ?? jsxName;
       const prefix = rawName[0];
 
-      if (isAuthoredComponentTag && shouldLowerAuthoredComponentAttributeAsProperty(attr, rawName)) {
-        addString(strings, keys, ` .${rawName}=`, attr);
-
-        if (attr.value) {
-          addKey(strings, keys, lowerEmbeddedJsx(attr.value.expression, opts));
-        } else {
-          addKey(strings, keys, t.booleanLiteral(true));
+      if (rawName === "ref") {
+        const value = attr.value?.type === "JSXExpressionContainer"
+          ? lowerEmbeddedJsx(attr.value.expression, opts)
+          : attr.value
+            ? t.cloneNode(attr.value, true)
+            : t.identifier("undefined");
+        if (isAuthoredComponentTag || name.includes("-")) {
+          addString(strings, keys, " .ref=", attr);
+          addKey(
+            strings,
+            keys,
+            opts?.reactCompatRefs === true
+              ? t.callExpression(t.identifier(opts?.reactRefAdapterName || "toLitRef"), [value])
+              : value,
+          );
+          return;
         }
+        const adaptedValue = opts?.reactCompatRefs === true
+          ? t.callExpression(t.identifier(opts?.reactRefAdapterName || "toLitRef"), [value])
+          : value;
+        addString(strings, keys, " ", attr);
+        addKey(strings, keys, t.callExpression(
+          t.identifier(opts?.refDirectiveName || "ref"),
+          [adaptedValue]
+        ));
+        return;
+      }
 
+      if (isAuthoredComponentTag && shouldLowerAuthoredComponentAttributeAsProperty(attr, rawName, opts)) {
+        addString(strings, keys, ` .${rawName}=`, attr);
+        addKey(
+          strings,
+          keys,
+          attr.value
+            ? lowerEmbeddedJsx(attr.value.expression, opts)
+            : t.booleanLiteral(true),
+        );
         return;
       }
 
@@ -456,7 +579,14 @@ const transforms = {
 
         if (attr.value) {
           if (attr.value.type === "JSXExpressionContainer") {
-            addKey(strings, keys, lowerEmbeddedJsx(attr.value.expression, opts));
+            const expression = lowerEmbeddedJsx(attr.value.expression, opts);
+            addKey(
+              strings,
+              keys,
+              rawName === ".ref" && opts?.reactCompatRefs === true
+                ? t.callExpression(t.identifier(opts?.reactRefAdapterName || "toLitRef"), [expression])
+                : expression,
+            );
           } else if (attr.value.type === "StringLiteral") {
             addKey(strings, keys, t.stringLiteral(attr.value.value));
           } else {
@@ -482,6 +612,12 @@ const transforms = {
       }
     });
 
+    if (isNoscript) {
+      addString(strings, keys, ' data-litsx-noscript="', node.openingElement);
+      addKey(strings, keys, createNoscriptFallback(node, opts));
+      addString(strings, keys, '"', node.openingElement);
+    }
+
     addString(strings, keys, ">", node.openingElement);
 
     if (node.openingElement.selfClosing) {
@@ -493,7 +629,13 @@ const transforms = {
       return;
     }
 
-    node.children.forEach((child) => transforms[child.type]({ node: child, strings, keys }, opts));
+    if (isNoscript) {
+      // parse5 intentionally treats <noscript> contents as raw text while
+      // compiling hydratable Lit templates. Keep dynamic fallback content out
+      // of that template and hand it to the SSR-only primitive instead.
+    } else {
+      node.children.forEach((child) => transforms[child.type]({ node: child, strings, keys }, childOptions));
+    }
 
     if (!node.closingElement) return;
     addString(strings, keys, `</${stringifyJsxName(node.closingElement.name)}>`, node.closingElement);

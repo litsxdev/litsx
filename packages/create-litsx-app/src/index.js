@@ -7,8 +7,7 @@ const LOCAL_WORKSPACE_PACKAGE_NAMES = [
   "@litsx/core",
   "@litsx/eslint-plugin",
   "@litsx/storybook",
-  "prettier-plugin-litsx",
-  "@litsx/typescript",
+  "@litsx/ssr",
   "@litsx/vite-plugin",
 ];
 export function inferPackageManager(userAgent = "") {
@@ -111,7 +110,7 @@ function createBasePackageJson(packageName) {
       "test:watch": "vitest",
       lint: "eslint .",
       format: "prettier --write .",
-      typecheck: "litsx-tsc -p jsconfig.json --noEmit",
+      typecheck: "tsc -p tsconfig.json --noEmit",
       preview: "vite preview",
     },
     dependencies: {
@@ -121,19 +120,37 @@ function createBasePackageJson(packageName) {
     },
     devDependencies: {
       "@litsx/eslint-plugin": publishedPackageVersions["@litsx/eslint-plugin"],
-      "@litsx/typescript": publishedPackageVersions["@litsx/typescript"],
       "@litsx/vite-plugin": publishedPackageVersions["@litsx/vite-plugin"],
       "@vitest/browser": "^4.1.5",
       "@vitest/browser-playwright": "^4.1.5",
       "eslint": "^9.0.0",
       "playwright": "^1.54.1",
       "prettier": "^3.8.3",
-      "prettier-plugin-litsx": publishedPackageVersions["prettier-plugin-litsx"],
       "typescript": "^6.0.0",
       "vite": "^8.0.3",
       "vitest": "^4.1.5"
     }
   };
+}
+
+function createSsrPackageJson(packageName) {
+  const packageJson = createBasePackageJson(packageName);
+
+  packageJson.scripts.dev = "node dev.mjs";
+  packageJson.scripts.build = "node render.mjs";
+  packageJson.scripts.render = "node render.mjs";
+  delete packageJson.scripts.preview;
+
+  Object.assign(packageJson.dependencies, {
+    "@litsx/ssr": publishedPackageVersions["@litsx/ssr"],
+  });
+
+  Object.assign(packageJson.devDependencies, {
+    "@lit-labs/ssr": "^4.0.0",
+    "@litsx/compiler": publishedPackageVersions["@litsx/compiler"],
+  });
+
+  return packageJson;
 }
 
 function addVisualTestingPackageBits(packageJson) {
@@ -211,23 +228,19 @@ function createBaseFiles(packageName, className, includeStorybook) {
   const files = new Map();
 
   files.set("package.json", "");
-  files.set("jsconfig.json", `{
+  files.set("tsconfig.json", `{
   "compilerOptions": {
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "allowJs": true,
-    "allowArbitraryExtensions": true,
     "checkJs": true,
     "jsx": "react-jsx",
     "jsxImportSource": "@litsx/core",
+    "noEmit": true,
+    "strict": true,
     "paths": {
       "@webcomponents/scoped-custom-element-registry": ["./src/vendor.d.ts"]
-    },
-    "plugins": [
-      {
-        "name": "@litsx/typescript"
-      }
-    ]
+    }
   },
   "include": ${JSON.stringify(includeStorybook ? ["src", ".storybook"] : ["src"], null, 2)}
 }
@@ -288,35 +301,6 @@ export default [
   litsx.configs["recommended-flat"],
 ];
 `);
-  files.set("prettier.config.js", `export default {
-  plugins: ["prettier-plugin-litsx"],
-  overrides: [
-    {
-      files: "*.litsx",
-      options: {
-        parser: "litsx",
-      },
-    },
-    {
-      files: "*.litsx.jsx",
-      options: {
-        parser: "litsx-jsx",
-      },
-    },
-  ],
-};
-`);
-  files.set(".vscode/settings.json", `{
-  "js/ts.tsdk.path": "node_modules/typescript/lib",
-  "typescript.tsserver.useSyntaxServer": "never"
-}
-`);
-  files.set(".vscode/extensions.json", `{
-  "recommendations": [
-    "litsx.vscode-litsx"
-  ]
-}
-`);
   files.set("public/title.svg", `<svg class="litsx-logo" width="144" height="40" viewBox="0 0 144 40" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="LitSX">
   <defs>
     <linearGradient id="sxGradient" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -326,12 +310,12 @@ export default [
     </linearGradient>
   </defs>
   <style>
-    .litsx-wordmark {
+    .tsx-wordmark {
       fill: #1a1a1a;
     }
 
     @media (prefers-color-scheme: dark) {
-      .litsx-wordmark {
+      .tsx-wordmark {
         fill: #f3f4f6;
       }
     }
@@ -370,12 +354,12 @@ export default [
       <stop offset="100%" stop-color="#9b5cff"/>
     </linearGradient>
     <style>
-      .litsx-wordmark-text {
+      .tsx-wordmark-text {
         fill: #1a1a1a;
       }
 
       @media (prefers-color-scheme: dark) {
-        .litsx-wordmark-text {
+        .tsx-wordmark-text {
           fill: #f3f4f6;
         }
       }
@@ -417,7 +401,7 @@ export default [
   files.set("src/styles.d.ts", `declare module "*.css";
 `);
   files.set("src/main.js", `import "@webcomponents/scoped-custom-element-registry";
-import { ${className} } from "./${packageName}.litsx";
+import { ${className} } from "./${packageName}";
 import "./styles/tokens.css";
 
 customElements.define(
@@ -430,7 +414,7 @@ if (!app) throw new Error("Missing #app mount point");
 app.innerHTML = "<app-root></app-root>";
 `);
   files.set(`src/${packageName}.test.js`, `import { afterEach, describe, expect, it } from "vitest";
-import { ${className} } from "./${packageName}.litsx";
+import { ${className} } from "./${packageName}";
 
 const tagName = "test-${packageName}";
 
@@ -474,11 +458,31 @@ describe("${className}", () => {
 function createAppProfileFiles(packageName, className) {
   const files = createComponentProfileFiles(packageName, className);
 
-  files.set(`src/${packageName}.litsx`, `import { LitsxHero } from "./components/litsx-hero.litsx";
-import { StarterGuide } from "./components/starter-guide.litsx";
+  files.set(`src/${packageName}.tsx`, `import { css } from "@litsx/core";
+import { LitsxHero } from "./components/litsx-hero";
+import { StarterGuide } from "./components/starter-guide";
 
 export const ${className} = () => {
-  static styles = \`
+  return (
+    <main class="shell">
+      <LitsxHero
+        eyebrow={"Application starter"}
+        tagline={"Web components with a sharper authoring experience. Less ceremony. More signal."}
+        primaryLabel={"Getting Started"}
+        secondaryLabel={"View on GitHub"}
+        on:primary-action={() => {
+          window.open("https://litsx.dev/getting-started", "_blank", "noopener,noreferrer");
+        }}
+        on:secondary-action={() => {
+          window.open("https://github.com/litsxdev/litsx", "_blank", "noopener,noreferrer");
+        }}
+      />
+      <StarterGuide />
+    </main>
+  );
+};
+
+${className}.styles = css\`
     :host { display: block; }
     .shell {
       max-width: 960px;
@@ -488,25 +492,6 @@ export const ${className} = () => {
       position: relative;
     }
   \`;
-
-  return (
-    <main class="shell">
-      <LitsxHero
-        eyebrow={"Application starter"}
-        tagline={"Web components with a sharper authoring experience. Less ceremony. More signal."}
-        primaryLabel={"Getting Started"}
-        secondaryLabel={"View on GitHub"}
-        @primary-action={() => {
-          window.open("https://litsx.dev/getting-started", "_blank", "noopener,noreferrer");
-        }}
-        @secondary-action={() => {
-          window.open("https://github.com/litsxdev/litsx", "_blank", "noopener,noreferrer");
-        }}
-      />
-      <StarterGuide />
-    </main>
-  );
-};
 `);
   files.set("README.md", `# ${packageName}
 
@@ -516,7 +501,7 @@ Generated with \`create-litsx-app --template app\`.
 
 1. \`npm install\`
 2. \`npm run dev\`
-3. Open the local Vite URL and edit \`src/${packageName}.litsx\`
+3. Open the local Vite URL and edit \`src/${packageName}.tsx\`
 
 ## Scripts
 
@@ -530,10 +515,10 @@ Generated with \`create-litsx-app --template app\`.
 
 ## What This Template Shows
 
-- authored LitSX JSX
-- routed onboarding actions with \`@primary-action\` and \`@secondary-action\`
+- standard TSX compiled by LitSX
+- routed onboarding actions with \`on:primary-action\` and \`on:secondary-action\`
 - a home-style starter layout with \`LitsxHero\` and \`StarterGuide\`
-- component-owned styling with \`static styles = ...\`
+- component-owned styling with \`Component.styles = css\`...\`\`
 `);
 
   return files;
@@ -542,11 +527,31 @@ Generated with \`create-litsx-app --template app\`.
 function createComponentProfileFiles(packageName, className) {
   const files = createBaseFiles(packageName, className, false);
 
-  files.set(`src/${packageName}.litsx`, `import { LitsxHero } from "./components/litsx-hero.litsx";
-import { StarterGuide } from "./components/starter-guide.litsx";
+  files.set(`src/${packageName}.tsx`, `import { css } from "@litsx/core";
+import { LitsxHero } from "./components/litsx-hero";
+import { StarterGuide } from "./components/starter-guide";
 
 export const ${className} = () => {
-  static styles = \`
+  return (
+    <main class="shell">
+      <LitsxHero
+        eyebrow={"Design system starter"}
+        tagline={"Web components with a sharper authoring experience. Less ceremony. More signal."}
+        primaryLabel={"Getting Started"}
+        secondaryLabel={"View on GitHub"}
+        on:primary-action={() => {
+          window.open("https://litsx.dev/getting-started", "_blank", "noopener,noreferrer");
+        }}
+        on:secondary-action={() => {
+          window.open("https://github.com/litsxdev/litsx", "_blank", "noopener,noreferrer");
+        }}
+      />
+      <StarterGuide />
+    </main>
+  );
+};
+
+${className}.styles = css\`
     :host { display: block; }
     .shell {
       max-width: 960px;
@@ -556,27 +561,8 @@ export const ${className} = () => {
       position: relative;
     }
   \`;
-
-  return (
-    <main class="shell">
-      <LitsxHero
-        eyebrow={"Design system starter"}
-        tagline={"Web components with a sharper authoring experience. Less ceremony. More signal."}
-        primaryLabel={"Getting Started"}
-        secondaryLabel={"View on GitHub"}
-        @primary-action={() => {
-          window.open("https://litsx.dev/getting-started", "_blank", "noopener,noreferrer");
-        }}
-        @secondary-action={() => {
-          window.open("https://github.com/litsxdev/litsx", "_blank", "noopener,noreferrer");
-        }}
-      />
-      <StarterGuide />
-    </main>
-  );
-};
 `);
-  files.set("src/components/guide-card.litsx", `import type { LitsxRenderable } from "@litsx/core";
+  files.set("src/components/guide-card.tsx", `import { css, type LitsxRenderable } from "@litsx/core";
 
 type GuideCardProps = {
   eyebrow?: string;
@@ -589,7 +575,16 @@ export const GuideCard = ({
   titleRenderer = () => null,
   contentRenderer = () => null,
 }: GuideCardProps) => {
-  static styles = \`
+  return (
+    <article class="guide-card">
+      <p class="guide-card__eyebrow">{eyebrow}</p>
+      <h2>{titleRenderer()}</h2>
+      {contentRenderer()}
+    </article>
+  );
+};
+
+GuideCard.styles = css\`
     :host { display: block; }
     .guide-card {
       padding: 24px;
@@ -636,17 +631,10 @@ export const GuideCard = ({
       to { opacity: 1; transform: translateY(0); }
     }
   \`;
-
-  return (
-    <article class="guide-card">
-      <p class="guide-card__eyebrow">{eyebrow}</p>
-      <h2>{titleRenderer()}</h2>
-      {contentRenderer()}
-    </article>
-  );
-};
 `);
-  files.set("src/components/litsx-button.litsx", `type LitsxButtonProps = {
+  files.set("src/components/litsx-button.tsx", `import { css } from "@litsx/core";
+
+type LitsxButtonProps = {
   type?: "primary" | "secondary";
   label?: string;
 };
@@ -655,7 +643,10 @@ export const LitsxButton = ({
   type = "secondary",
   label = "",
 }: LitsxButtonProps) => {
-  static styles = \`
+  return <button class={type === "primary" ? "primary" : ""}>{label}</button>;
+};
+
+LitsxButton.styles = css\`
     :host { display: block; flex-shrink: 0; padding: 6px; }
     button {
       display: inline-block;
@@ -711,12 +702,9 @@ export const LitsxButton = ({
         0 10px 22px color-mix(in srgb, var(--litsx-c-brand-1) 18%, transparent);
     }
   \`;
-
-  return <button class={type === "primary" ? "primary" : ""}>{label}</button>;
-};
 `);
-  files.set("src/components/litsx-hero.litsx", `import { useEmit } from "@litsx/core";
-import { LitsxButton } from "./litsx-button.litsx";
+  files.set("src/components/litsx-hero.tsx", `import { css, useEmit } from "@litsx/core";
+import { LitsxButton } from "./litsx-button";
 
 type LitsxHeroProps = {
   eyebrow?: string;
@@ -732,7 +720,30 @@ export const LitsxHero = ({
   secondaryLabel = "View on GitHub",
 }: LitsxHeroProps) => {
   const emit = useEmit();
-  static styles = \`
+  return (
+    <section class="LitsxHero">
+      <div class="container">
+        <div class="main">
+          <p class="eyebrow">{eyebrow}</p>
+          <h1 class="heading"><img class="heading-mark" src="/title.svg" alt="LitSX" /></h1>
+          <p class="tagline">{tagline}</p>
+          <div class="actions">
+            <LitsxButton type="primary" label={primaryLabel} on:click={() => emit("primary-action")} />
+            <LitsxButton type="secondary" label={secondaryLabel} on:click={() => emit("secondary-action")} />
+          </div>
+        </div>
+        <div class="image">
+          <div class="image-container">
+            <div class="image-bg"></div>
+            <img class="image-src" src="/flame_512.png" alt="" />
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+};
+
+LitsxHero.styles = css\`
     :host {
       display: block;
     }
@@ -934,32 +945,9 @@ export const LitsxHero = ({
       }
     }
   \`;
-
-  return (
-    <section class="LitsxHero">
-      <div class="container">
-        <div class="main">
-          <p class="eyebrow">{eyebrow}</p>
-          <h1 class="heading"><img class="heading-mark" src="/title.svg" alt="LitSX" /></h1>
-          <p class="tagline">{tagline}</p>
-          <div class="actions">
-            <LitsxButton type="primary" label={primaryLabel} @click={() => emit("primary-action")} />
-            <LitsxButton type="secondary" label={secondaryLabel} @click={() => emit("secondary-action")} />
-          </div>
-        </div>
-        <div class="image">
-          <div class="image-container">
-            <div class="image-bg"></div>
-            <img class="image-src" src="/flame_512.png" alt="" />
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-};
 `);
-  files.set("src/components/starter-guide.litsx", `import { SuspenseBoundary, SuspenseList, useOnConnect, useRef, useState } from "@litsx/core";
-import { GuideCard } from "./guide-card.litsx";
+  files.set("src/components/starter-guide.tsx", `import { css, SuspenseBoundary, SuspenseList, useOnConnect, useRef, useState } from "@litsx/core";
+import { GuideCard } from "./guide-card";
 
 type DeferredStep = {
   promise: Promise<void>;
@@ -974,13 +962,13 @@ function createDeferred() {
   return { promise, resolve } satisfies DeferredStep;
 }
 
-function resolvePendingSteps(pendingStepsRef: { current: Map<number, DeferredStep> | null | undefined }) {
-  pendingStepsRef.current ??= new Map<number, DeferredStep>();
-  return pendingStepsRef.current;
+function resolvePendingSteps(pendingStepsRef: { value: Map<number, DeferredStep> | null | undefined }) {
+  pendingStepsRef.value ??= new Map<number, DeferredStep>();
+  return pendingStepsRef.value;
 }
 
 function suspendUntil(
-  pendingStepsRef: { current: Map<number, DeferredStep> | null | undefined },
+  pendingStepsRef: { value: Map<number, DeferredStep> | null | undefined },
   stepIndex: number,
   revealedCount: number,
 ) {
@@ -1017,7 +1005,7 @@ export const StarterGuide = () => {
     for (const deferred of resolvePendingSteps(pendingStepsRef).values()) {
       deferred.resolve?.();
     }
-    pendingStepsRef.current = new Map<number, DeferredStep>();
+    pendingStepsRef.value = new Map<number, DeferredStep>();
     setRevealedCount(0);
 
     const [firstDelay = 0, ...remainingDelays] = delays;
@@ -1050,30 +1038,9 @@ export const StarterGuide = () => {
       for (const deferred of resolvePendingSteps(pendingStepsRef).values()) {
         deferred.resolve?.();
       }
-      pendingStepsRef.current = new Map<number, DeferredStep>();
+      pendingStepsRef.value = new Map<number, DeferredStep>();
     };
   }, []);
-
-  static styles = \`
-    :host {
-      display: block;
-    }
-
-    .guide {
-      margin-top: 32px;
-    }
-
-    .guide-list {
-      display: grid;
-      gap: 18px;
-    }
-
-    @media (min-width: 860px) {
-      .guide-list {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-      }
-    }
-  \`;
 
   return (
     <section class="guide" aria-label="Getting started with LitSX">
@@ -1085,9 +1052,9 @@ export const StarterGuide = () => {
             suspendUntil(pendingStepsRef, 0, revealedCount);
             return (
               <GuideCard
-                .eyebrow={"Getting started"}
-                .titleRenderer={() => <><code>src/${packageName}.litsx</code>, then open <code>Getting Started</code></>}
-                .contentRenderer={() => (
+                eyebrow={"Getting started"}
+                titleRenderer={() => <><code>src/${packageName}.tsx</code>, then open <code>Getting Started</code></>}
+                contentRenderer={() => (
                   <p>
                     That host is the authored entry surface for the scaffold. Keep layout and flow there,
                     and move reusable UI into focused components under <code>src/components</code>. The
@@ -1107,14 +1074,13 @@ export const StarterGuide = () => {
             suspendUntil(pendingStepsRef, 1, revealedCount);
             return (
               <GuideCard
-                .eyebrow={"Authored model"}
-                .titleRenderer={() => <>Read <code>Authored Model</code> while you learn LitSX bindings</>}
-                .contentRenderer={() => (
+                eyebrow={"Authored model"}
+                titleRenderer={() => <>Read <code>Authored Model</code> while you learn LitSX bindings</>}
+                contentRenderer={() => (
                   <p>
-                    Reach for <code>@click</code>, <code>.value</code>, <code>?disabled</code> and
-                    <code> static styles = ...</code> directly in authored JSX so component intent stays close
-                    to markup. The <a href="https://github.com/litsxdev/litsx" target="_blank" rel="noreferrer">repository overview</a> explains
-                    why LitSX source is not just generic TSX with helper imports.
+                    Use ordinary component prop names, <code>on:event</code> for listeners and
+                    <code>Component.styles</code> with <code>css</code> for component CSS. The source remains
+                    standard TSX while LitSX compiles it to Lit templates and web components.
                   </p>
                 )}
               />
@@ -1129,9 +1095,9 @@ export const StarterGuide = () => {
             suspendUntil(pendingStepsRef, 2, revealedCount);
             return (
               <GuideCard
-                .eyebrow={"Tooling flow"}
-                .titleRenderer={() => "Pair the tooling docs with your daily loop"}
-                .contentRenderer={() => (
+                eyebrow={"Tooling flow"}
+                titleRenderer={() => "Pair the tooling docs with your daily loop"}
+                contentRenderer={() => (
                   <ul>
                     <li><code>npm run dev</code> while reading the <a href="https://github.com/litsxdev/litsx/tree/main/packages/vite-plugin" target="_blank" rel="noreferrer">Vite plugin</a> package docs</li>
                     <li><code>npm run lint</code> next to the <a href="https://github.com/litsxdev/litsx/tree/main/packages/eslint-plugin-litsx" target="_blank" rel="noreferrer">ESLint plugin</a> package docs</li>
@@ -1147,6 +1113,27 @@ export const StarterGuide = () => {
     </section>
   );
 };
+
+StarterGuide.styles = css\`
+    :host {
+      display: block;
+    }
+
+    .guide {
+      margin-top: 32px;
+    }
+
+    .guide-list {
+      display: grid;
+      gap: 18px;
+    }
+
+    @media (min-width: 860px) {
+      .guide-list {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+    }
+  \`;
 `);
   files.set("src/styles/tokens.css", `:root {
   --litsx-c-brand-1: #f05a28;
@@ -1194,7 +1181,7 @@ Generated with \`create-litsx-app --template component\`.
 ## Included
 
 - LitSX + Lit runtime
-- Official \`@litsx/vite-plugin\` integration for authored LitSX source
+- Official \`@litsx/vite-plugin\` integration for standard TSX source
 - Official \`@litsx/eslint-plugin\` linting preset
 - A starter component-library structure under \`src/components\`
 - Shared hero, guide and button primitives without Storybook overhead
@@ -1217,7 +1204,7 @@ export const parameters = {
   layout: "centered",
 };
 `);
-  files.set("src/stories/litsx-button.stories.litsx", `import { LitsxButton } from "../components/litsx-button.litsx";
+  files.set("src/stories/litsx-button.stories.tsx", `import { LitsxButton } from "../components/litsx-button";
 
 type LitsxButtonStoryArgs = {
   label?: string;
@@ -1242,7 +1229,7 @@ export const Primary = {
   args: { label: "Getting Started", type: "primary" },
 };
 `);
-  files.set("src/stories/litsx-hero.stories.litsx", `import { LitsxHero } from "../components/litsx-hero.litsx";
+  files.set("src/stories/litsx-hero.stories.tsx", `import { LitsxHero } from "../components/litsx-hero";
 
 const meta = {
   title: "Marketing/LitsxHero",
@@ -1255,10 +1242,10 @@ const meta = {
   } = {}) => (
     <div style="max-width: 960px; margin: 0 auto;">
       <LitsxHero
-        .eyebrow={eyebrow}
-        .tagline={tagline}
-        .primaryLabel={primaryLabel}
-        .secondaryLabel={secondaryLabel}
+        eyebrow={eyebrow}
+        tagline={tagline}
+        primaryLabel={primaryLabel}
+        secondaryLabel={secondaryLabel}
       />
     </div>
   ),
@@ -1267,7 +1254,7 @@ const meta = {
 export default meta;
 export const Default = {};
 `);
-  files.set("src/stories/starter-guide.stories.litsx", `import { StarterGuide } from "../components/starter-guide.litsx";
+  files.set("src/stories/starter-guide.stories.tsx", `import { StarterGuide } from "../components/starter-guide";
 
 const meta = {
   title: "Getting Started/StarterGuide",
@@ -1279,7 +1266,7 @@ export default meta;
 export const Default = {};
 `);
   files.set("src/stories/starter-guide.docs.mdx", `import { Meta, Canvas } from "@storybook/addon-docs/blocks";
-import * as StarterGuideStories from "./starter-guide.stories.litsx";
+import * as StarterGuideStories from "./starter-guide.stories";
 
 <Meta of={StarterGuideStories} />
 
@@ -1293,7 +1280,7 @@ The \`StarterGuide\` component demonstrates LitSX suspense primitives in a way t
 
 - ordered reveal with \`SuspenseList\`
 - focused loading states with \`SuspenseBoundary\`
-- component-owned styling with \`static styles = ...\`
+- component-owned styling with \`Component.styles = css\`...\`\`
 - onboarding copy that points directly at the generated project structure
 `);
   files.set("README.md", `# ${packageName}
@@ -1314,7 +1301,7 @@ Generated with \`create-litsx-app --template design-system\`.
 ## Included
 
 - LitSX + Lit runtime
-- Official \`@litsx/vite-plugin\` integration for authored LitSX source
+- Official \`@litsx/vite-plugin\` integration for standard TSX source
 - Official \`@litsx/eslint-plugin\` linting preset
 - Storybook for web components with MDX docs
 - Starter hero, guide and button primitives with matching stories
@@ -1323,8 +1310,272 @@ Generated with \`create-litsx-app --template design-system\`.
   return files;
 }
 
+function createSsrProfileFiles(packageName, className) {
+  const files = createAppProfileFiles(packageName, className);
+  const tagName = packageName;
+
+  files.delete("vite.config.js");
+  files.set("index.html", `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>LitSX SSR Starter</title>
+    <style>
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: linear-gradient(180deg, #f6efe8, #fdfaf6);
+        color: #1d231f;
+        font-family: ui-sans-serif, system-ui, sans-serif;
+      }
+
+      .page {
+        max-width: 720px;
+        margin: 0 auto;
+        padding: 64px 24px 96px;
+      }
+
+      .status {
+        margin-bottom: 16px;
+        color: #6d776f;
+        font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      body[data-hydrated="true"] .status::after {
+        content: "hydrated";
+        color: #146b43;
+      }
+
+      body:not([data-hydrated="true"]) .status::after {
+        content: "server rendered";
+        color: #8a4c00;
+      }
+    </style>
+    <!--app-head-->
+  </head>
+  <body>
+    <main class="page">
+      <div class="status">LitSX SSR status: </div>
+      <!--app-html-->
+    </main>
+    <!--app-bootstrap-->
+  </body>
+</html>
+`);
+
+  files.set("jsconfig.json", `{
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "allowJs": true,
+    "allowArbitraryExtensions": true,
+    "checkJs": true,
+    "jsx": "react-jsx",
+    "jsxImportSource": "@litsx/core"
+  },
+  "include": [
+    "src",
+    "dev.mjs",
+    "render.mjs"
+  ]
+}
+`);
+  files.set("src/main.js", `const { defineAppElements } = await import("./${packageName}");
+defineAppElements();
+
+document.body.dataset.hydrated = "true";
+`);
+  files.set(`src/${packageName}.test.js`, `import { afterEach, describe, expect, it } from "vitest";
+import { ${className}, defineAppElements } from "./${packageName}";
+
+const tagName = "${tagName}";
+
+defineAppElements();
+
+describe("${className}", () => {
+  let host = null;
+
+  afterEach(() => {
+    host?.remove();
+    host = null;
+  });
+
+  it("renders the SSR starter shell in a real browser DOM", async () => {
+    host = document.createElement(tagName);
+    document.body.append(host);
+
+    await host.updateComplete;
+
+    const root = host.shadowRoot;
+
+    expect(root?.querySelector("main.shell")).toBeTruthy();
+    expect(root?.textContent ?? "").toContain("SSR for authored web components");
+  });
+});
+`);
+  files.set(`src/${packageName}.tsx`, `import { css } from "@litsx/core";
+import { LitsxHero } from "./components/litsx-hero";
+import { StarterGuide } from "./components/starter-guide";
+
+export function ${className}({
+  eyebrow = "SSR starter",
+  tagline = "SSR for authored web components. Render the document on the server, then hydrate the same authored tree in the browser.",
+  primaryLabel = "SSR docs",
+  secondaryLabel = "View on GitHub",
+}) {
+  return (
+    <main class="shell">
+      <LitsxHero
+        eyebrow={eyebrow}
+        tagline={tagline}
+        primaryLabel={primaryLabel}
+        secondaryLabel={secondaryLabel}
+        on:primary-action={() => {
+          window.open("https://litsx.dev/guides/ssr", "_blank", "noopener,noreferrer");
+        }}
+        on:secondary-action={() => {
+          window.open("https://github.com/litsxdev/litsx", "_blank", "noopener,noreferrer");
+        }}
+      />
+      <StarterGuide />
+    </main>
+  );
+}
+
+${className}.styles = css\`
+  :host {
+    display: block;
+  }
+
+  .shell {
+    max-width: 960px;
+    margin: 0 auto;
+    padding-top: 28px;
+    padding-bottom: 28px;
+    position: relative;
+  }
+\`;
+
+export function defineAppElements() {
+  if (!customElements.get("${tagName}")) {
+    customElements.define("${tagName}", ${className} as any);
+  }
+}
+`);
+  files.set("dev.mjs", `import { createSsrDevServer } from "@litsx/ssr";
+
+const server = await createSsrDevServer({
+  root: new URL(".", import.meta.url).pathname,
+  template: "./index.html",
+  clientEntry: "./src/main.js",
+  host: "127.0.0.1",
+  port: 5177,
+  logLevel: "info",
+  elements(loader) {
+    return {
+      "${tagName}": async () =>
+        (await loader("./src/${packageName}.tsx")).${className},
+    };
+  },
+  render({ html }) {
+    return html\`<${tagName}
+      .eyebrow=\${"SSR starter"}
+      .tagline=\${"SSR for authored web components. Render the document on the server, then hydrate the same authored tree in the browser."}
+      .primaryLabel=\${"SSR docs"}
+      .secondaryLabel=\${"View on GitHub"}
+    ></${tagName}>\`;
+  },
+});
+
+await server.listen();
+server.printUrls();
+`);
+  files.set("render.mjs", `import fs from "node:fs/promises";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { renderDocument } from "@litsx/ssr";
+
+const exampleDir = path.dirname(fileURLToPath(import.meta.url));
+const outputDir = path.join(exampleDir, "dist");
+const outputPath = path.join(outputDir, "index.html");
+
+export async function renderAppDocument() {
+  const result = await renderDocument({
+    root: exampleDir,
+    template: "./index.html",
+    clientEntry: "./src/main.js",
+    elements(loader) {
+      return {
+        "${tagName}": async () =>
+          (await loader("./src/${packageName}.tsx")).${className},
+      };
+    },
+    render({ html }) {
+      return html\`<${tagName}
+        .eyebrow=\${"SSR starter"}
+        .tagline=\${"SSR for authored web components. Render the document on the server, then hydrate the same authored tree in the browser."}
+        .primaryLabel=\${"SSR docs"}
+        .secondaryLabel=\${"View on GitHub"}
+      ></${tagName}>\`;
+    },
+  });
+
+  await fs.mkdir(outputDir, { recursive: true });
+  await fs.writeFile(outputPath, result.document);
+  return result;
+}
+
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  const result = await renderAppDocument();
+  console.log(\`wrote \${outputPath}\`);
+  console.log(\`client imports: \${result.clientImports.join(", ")}\`);
+  console.log(\`hydration roots: \${result.hydrationData?.roots.length ?? 0}\`);
+}
+`);
+  files.set("README.md", `# ${packageName}
+
+Generated with \`create-litsx-app --template ssr\`.
+
+## First Run
+
+1. \`npm install\`
+2. \`npm run dev\`
+3. Open the local URL printed by the SSR dev server
+
+Run \`npm run render\` when you want a prerendered document in \`dist/index.html\`.
+
+## Scripts
+
+- \`npm run dev\`
+- \`npm run build\`
+- \`npm run render\`
+- \`npm run test\`
+- \`npm run lint\`
+- \`npm run format\`
+- \`npm run typecheck\`
+
+## What This Template Shows
+
+- document-first server rendering with \`renderDocument(...)\`
+- authored prerender/build flow with \`renderDocument({...})\`
+- local SSR development with \`createSsrDevServer(...)\`
+- automatic hydration bootstrap through \`clientEntry\`
+- a shared \`index.html\` shell for dev SSR and static prerender output
+- the same hero and guide components as the standard app scaffold
+- SSR-specific copy, routes, and entrypoints
+- standard JSX authoring in \`src/${packageName}.tsx\`
+`);
+
+  return files;
+}
+
 function createPackageJson(packageName, template, options = {}) {
-  const packageJson = createBasePackageJson(packageName);
+  const packageJson = template === "ssr"
+    ? createSsrPackageJson(packageName)
+    : createBasePackageJson(packageName);
 
   if (template === "design-system") {
     packageJson.scripts.storybook = "storybook dev -p 6006";
@@ -1349,8 +1600,8 @@ export function renderProjectFiles(targetDir, options = {}) {
   const template = options.template ?? "app";
   const visualTests = Boolean(options.visualTests);
 
-  if (!["app", "component", "design-system"].includes(template)) {
-    throw new Error(`Unknown template "${template}". Expected "app", "component" or "design-system".`);
+  if (!["app", "component", "design-system", "ssr"].includes(template)) {
+    throw new Error(`Unknown template "${template}". Expected "app", "component", "design-system" or "ssr".`);
   }
 
   const packageName = toPackageName(path.basename(targetDir));
@@ -1363,7 +1614,9 @@ export function renderProjectFiles(targetDir, options = {}) {
     ? createAppProfileFiles(packageName, className)
     : template === "component"
       ? createComponentProfileFiles(packageName, className)
-      : createDesignSystemProfileFiles(packageName, className);
+      : template === "design-system"
+        ? createDesignSystemProfileFiles(packageName, className)
+        : createSsrProfileFiles(packageName, className);
 
   if (visualTests) {
     addVisualTestingFiles(files);

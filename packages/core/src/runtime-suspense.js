@@ -1,7 +1,9 @@
 import { nothing } from "lit";
+import { getCurrentSsrRuntimeState } from "./runtime-ssr-state.js";
 
 const SOFT_SUSPENSE = Symbol("litsx.softSuspense");
 const SUSPENSE_CAPTURE = Symbol("litsx.suspenseCapture");
+const HYDRATION_SUSPENSION = Symbol.for("litsx.hydrationSuspension");
 let currentSoftSuspenseCollector = null;
 let currentSuspenseCapture = null;
 
@@ -33,17 +35,28 @@ function getSoftSuspenseState(host) {
 }
 
 export function withSuspenseCapture(capture, render) {
-  const previousCapture = currentSuspenseCapture;
-  currentSuspenseCapture = capture ?? null;
+  const runtimeState = getCurrentSsrRuntimeState();
+  const previousCapture = runtimeState
+    ? runtimeState.suspenseCapture ?? null
+    : currentSuspenseCapture;
+  if (runtimeState) {
+    runtimeState.suspenseCapture = capture ?? null;
+  } else {
+    currentSuspenseCapture = capture ?? null;
+  }
   try {
     return render();
   } finally {
-    currentSuspenseCapture = previousCapture;
+    if (runtimeState) {
+      runtimeState.suspenseCapture = previousCapture;
+    } else {
+      currentSuspenseCapture = previousCapture;
+    }
   }
 }
 
 export function getCurrentSuspenseCapture() {
-  return currentSuspenseCapture;
+  return getCurrentSsrRuntimeState()?.suspenseCapture ?? currentSuspenseCapture;
 }
 
 export function setHostSuspenseCapture(host, capture) {
@@ -73,13 +86,49 @@ function getHostSuspenseCapture(host) {
 export function collectSoftSuspenseThenables(collector, render) {
   // SSR renderers wrap each render pass with this collector so rootless
   // suspensions are awaitable instead of being serialized as empty output.
-  const previousCollector = currentSoftSuspenseCollector;
-  currentSoftSuspenseCollector = collector;
-  try {
-    return render();
-  } finally {
-    currentSoftSuspenseCollector = previousCollector;
+  const runtimeState = getCurrentSsrRuntimeState();
+  const previousCollector = runtimeState
+    ? runtimeState.softSuspenseCollector ?? null
+    : currentSoftSuspenseCollector;
+  if (runtimeState) {
+    runtimeState.softSuspenseCollector = collector;
+  } else {
+    currentSoftSuspenseCollector = collector;
   }
+  const restoreCollector = () => {
+    if (runtimeState) {
+      runtimeState.softSuspenseCollector = previousCollector;
+    } else {
+      currentSoftSuspenseCollector = previousCollector;
+    }
+  };
+  let result;
+  try {
+    result = render();
+  } catch (error) {
+    restoreCollector();
+    throw error;
+  }
+
+  if (isThenable(result)) {
+    return Promise.resolve(result).finally(restoreCollector);
+  }
+
+  restoreCollector();
+  return result;
+}
+
+export function collectSuspenseThenable(thenable) {
+  const collector =
+    getCurrentSsrRuntimeState()?.softSuspenseCollector ??
+    currentSoftSuspenseCollector;
+  if (!collector || !isThenable(thenable)) {
+    return null;
+  }
+
+  const promise = Promise.resolve(thenable);
+  collector.add(promise);
+  return promise;
 }
 
 export function renderWithSoftSuspense(host, render) {
@@ -96,12 +145,28 @@ export function renderWithSoftSuspense(host, render) {
       return nothing;
     }
 
-    const state = getSoftSuspenseState(host);
-    const promise = Promise.resolve(thrown);
-
-    if (currentSoftSuspenseCollector) {
-      currentSoftSuspenseCollector.add(promise);
+    if (host?._$needsHydration) {
+      const hydrationPromise = Promise.resolve(thrown);
+      host[HYDRATION_SUSPENSION] = hydrationPromise;
+      hydrationPromise.then(
+        () => {
+          if (host[HYDRATION_SUSPENSION] === hydrationPromise) {
+            host[HYDRATION_SUSPENSION] = null;
+          }
+          host?.requestUpdate?.();
+        },
+        (error) => {
+          if (host[HYDRATION_SUSPENSION] === hydrationPromise) {
+            host[HYDRATION_SUSPENSION] = null;
+          }
+          reportAsyncError(error);
+        },
+      );
+      throw hydrationPromise;
     }
+
+    const state = getSoftSuspenseState(host);
+    const promise = collectSuspenseThenable(thrown) ?? Promise.resolve(thrown);
 
     if (state.pendingThenable === thrown) {
       return nothing;

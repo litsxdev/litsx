@@ -4,6 +4,7 @@ import traverseModule from "@babel/traverse";
 import { beforeAll } from "vitest";
 import parser from "./helpers/litsx-parser.js";
 import {
+  assertNoObjectStyleAttributes,
   collectNativeClassNameWarnings,
   createHandlerClassMember,
   processHandlers,
@@ -98,6 +99,18 @@ describe("native handlers internals", () => {
     assert.deepStrictEqual(handlerInfos.map((entry) => entry.name), []);
   });
 
+  it("creates identifier-safe methods for explicit custom event handlers", () => {
+    const functionPath = getFunctionPath(`
+      function Card() {
+        return <action-button on:primary-action={() => save()} />;
+      }
+    `);
+
+    const handlerInfos = processHandlers(functionPath, new Set());
+
+    assert.deepStrictEqual(handlerInfos.map((entry) => entry.name), ["handlePrimaryAction"]);
+  });
+
   it("collects className warnings only for native intrinsic JSX and preserves missing locations", () => {
     const source = `
       function Card() {
@@ -128,6 +141,55 @@ describe("native handlers internals", () => {
     assert.strictEqual(warnings[0].tagName, "button");
     assert.strictEqual(warnings[0].line, null);
     assert.strictEqual(warnings[0].column, null);
+  });
+
+  it("suppresses className warnings on request and rejects object-valued native styles", () => {
+    const functionPath = getFunctionPath(`
+      function Card({ enabled }) {
+        const style = enabled ? ({ color: "red" } as const) : null;
+        return <button className="cta" style={style} />;
+      }
+    `, ["jsx", "typescript"]);
+
+    const warnings = [];
+    collectNativeClassNameWarnings(functionPath, (warning) => warnings.push(warning), {
+      suppressNativeClassNameWarning: true,
+    });
+    assert.deepStrictEqual(warnings, []);
+    assert.throws(
+      () => assertNoObjectStyleAttributes(functionPath),
+      /does not support object-valued `style` bindings/,
+    );
+  });
+
+  it("accepts string styles and skips non-native style attributes", () => {
+    const functionPath = getFunctionPath(`
+      function Card() {
+        return <><button style="color: red" /><FancyButton style={{ color: "red" }} /></>;
+      }
+    `);
+
+    assert.doesNotThrow(() => assertNoObjectStyleAttributes(functionPath));
+  });
+
+  it("detects object styles through direct, logical, conditional, and sequence expressions", () => {
+    const sources = [
+      `function Card() { return <button style={{ color: "red" }} />; }`,
+      `function Card() { return <button style={enabled && { color: "red" }} />; }`,
+      `function Card() { return <button style={enabled ? "color: red" : { color: "red" }} />; }`,
+      `function Card() { return <button style={(track(), { color: "red" })} />; }`,
+    ];
+
+    for (const source of sources) {
+      assert.throws(
+        () => assertNoObjectStyleAttributes(getFunctionPath(source)),
+        /does not support object-valued `style` bindings/,
+      );
+    }
+
+    assert.doesNotThrow(() => assertNoObjectStyleAttributes(getFunctionPath(
+      `function Card() { return <button style={unknownStyle} />; }`,
+    )));
   });
 
   it("builds handler class members with async and generator flags", () => {

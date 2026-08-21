@@ -7,7 +7,7 @@ export function AsyncPanel(props: ResourcePanelProps) {
       <p>{props.id}</p>
       <p>{props.ready ? "ready" : "pending"}</p>
       <p>{props.payload.items.length}</p>
-      <button onClick={() => props.onResolve(props.id)}>resolve</button>
+      <button on:click={() => props.onResolve(props.id)}>resolve</button>
     </section>
   );
 }

@@ -12,7 +12,7 @@ const template = templateFlagIndex >= 0 ? args[templateFlagIndex + 1] : undefine
 const visualTests = args.includes("--visual-tests");
 
 if (helpRequested || !targetDirArg) {
-  console.error("Usage: create-litsx-app <project-directory> [--template app|component|design-system] [--visual-tests]");
+  console.error("Usage: create-litsx-app <project-directory> [--template app|component|design-system|ssr] [--visual-tests]");
   process.exit(helpRequested ? 0 : 1);
 }
 

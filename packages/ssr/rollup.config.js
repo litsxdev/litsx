@@ -5,7 +5,6 @@ const packageDir = fileURLToPath(new URL(".", import.meta.url));
 
 export default createPackageRollupConfig({
   packageDir,
-  input: { index: "src/index.js", client: "src/client.js" },
   esmOutputs: true,
   copyDeclarations: true,
 });

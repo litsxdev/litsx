@@ -3,14 +3,16 @@
 import assert from "node:assert";
 import { execFileSync } from "node:child_process";
 import { LitElement, nothing, render } from "lit";
+import { hydrate as hydrateLit } from "@lit-labs/ssr-client";
 import { afterEach, describe, it } from "vitest";
 import { jsxSpreadElement } from "../packages/core/src/jsx-spread.js";
-import { hydrate } from "../packages/ssr/src/client.js";
+import { createReactRef, toLitRef } from "../packages/core/src/react-compat.js";
+import { withLitsxHydrationSync } from "../packages/ssr/src/hydration-state.js";
 
 const workspace = process.cwd();
 const serverScript = String.raw`
   import { jsxSpreadElement } from "./packages/core/src/jsx-spread.js";
-  import { render } from "./packages/ssr/src/index.js";
+  import { renderToString } from "./packages/ssr/src/index.js";
   import { nothing } from "lit";
   const spec = JSON.parse(process.argv[1]);
   const build = (node) => {
@@ -22,13 +24,13 @@ const serverScript = String.raw`
       ? jsxSpreadElement(node.tag, node.sources, node.options)
       : jsxSpreadElement(node.tag, node.sources, node.options, build(node.children));
   };
-  let output = "";
-  for (const chunk of render(build(spec))) {
-    if (typeof chunk !== "string") throw new Error("unexpected async fixture");
-    output += chunk;
-  }
-  process.stdout.write(output);
+  const result = await renderToString(build(spec));
+  process.stdout.write(result.html);
 `;
+
+function hydrateTemplate(value, container) {
+  return withLitsxHydrationSync(() => hydrateLit(value, container));
+}
 
 function serverMarkup(spec) {
   return execFileSync(process.execPath, ["--input-type=module", "-e", serverScript, JSON.stringify(spec)], {
@@ -51,7 +53,7 @@ function hydrateSpec(serverSpec, clientSpec = serverSpec) {
   const container = document.createElement("div");
   container.innerHTML = serverMarkup(serverSpec);
   const originals = [...container.querySelectorAll("*")];
-  hydrate(clientView(clientSpec), container);
+  hydrateTemplate(clientView(clientSpec), container);
   return { container, originals };
 }
 
@@ -80,7 +82,7 @@ describe("JSX spread dual SSR/client hydration", () => {
       return originalSetAttribute.call(this, name, value);
     };
     try {
-      hydrate(clientView(spec), container);
+      hydrateTemplate(clientView(spec), container);
     } finally {
       Element.prototype.setAttribute = originalSetAttribute;
     }
@@ -122,7 +124,7 @@ describe("JSX spread dual SSR/client hydration", () => {
     const original = container.querySelector("input");
     original.value = "typed-before-hydration";
     original.focus();
-    hydrate(clientView(spec), container);
+    hydrateTemplate(clientView(spec), container);
     assert.strictEqual(container.querySelector("input"), original);
     assert.strictEqual(document.activeElement, original);
     assert.strictEqual(original.value, "client");
@@ -130,20 +132,27 @@ describe("JSX spread dual SSR/client hydration", () => {
 
   it("attaches events and refs and renders dangerous HTML without extra topology", () => {
     let clicks = 0;
-    const ref = { current: null };
+    const ref = createReactRef();
     const server = { tag: "button", sources: [{ dangerouslySetInnerHTML: { __html: "<strong>ready</strong>" } }] };
-    const client = { ...server, sources: [{ ...server.sources[0], onClick: () => { clicks += 1; }, ref }] };
+    const client = {
+      ...server,
+      options: { refAdapter: toLitRef },
+      sources: [{ ...server.sources[0], "on:click": () => { clicks += 1; }, ref }],
+    };
     const container = document.createElement("div");
     const markup = serverMarkup(server);
     assert.doesNotMatch(markup, /onclick=|onClick=|\sref=/);
     container.innerHTML = markup;
     const original = container.querySelector("button");
-    hydrate(clientView(client), container);
+    hydrateTemplate(clientView(client), container);
     original.click();
     assert.strictEqual(container.querySelector("button"), original);
     assert.strictEqual(original.textContent, "ready");
     assert.strictEqual(clicks, 1);
     assert.strictEqual(ref.current, original);
+
+    render(jsxSpreadElement("button", [{}]), container);
+    assert.strictEqual(ref.current, null);
   });
 
   it("infers third-party properties before boolean attributes", () => {

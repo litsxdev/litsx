@@ -1,3 +1,5 @@
+import { css } from "@litsx/core";
+
 function MyComponent() {
   // Estilo dinámico: cambia según la propiedad `color`
   useStyle("--dynamic-color", this.color);
@@ -7,20 +9,19 @@ function MyComponent() {
     console.log("Title or color updated:", this.title, this.color);
   }, [this.title, this.color]);
 
-  // Estilos estáticos
-  static styles = `
-    :host {
-      display: block;
-    }
-
-    p {
-      color: var(--dynamic-color, black);
-    }
-  `;
-
   return (
     <div>
       <p>Hello World</p>
     </div>
   );
 }
+
+MyComponent.styles = css`
+  :host {
+    display: block;
+  }
+
+  p {
+    color: var(--dynamic-color, black);
+  }
+`;

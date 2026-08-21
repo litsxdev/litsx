@@ -5,10 +5,10 @@ export function assignRef(ref, value) {
     return;
   }
   if (typeof ref === "object") {
-    ref.current = value;
+    ref.value = value;
   }
 }
 
 export function cleanupRef(ref) {
-  assignRef(ref, null);
+  assignRef(ref, undefined);
 }

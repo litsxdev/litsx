@@ -1,0 +1,437 @@
+import assert from "node:assert";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { afterEach } from "vitest";
+import { describe, it } from "vitest";
+import { transformLitsxSync } from "../packages/compiler/src/index.js";
+
+const tempDirs = [];
+
+afterEach(() => {
+  while (tempDirs.length > 0) {
+    fs.rmSync(tempDirs.pop(), { recursive: true, force: true });
+  }
+});
+
+describe("standard JSX authoring", () => {
+  it("infers Lit bindings from a typed component API", () => {
+    const source = `
+      type ChildProps = {
+        active: boolean;
+        label: string;
+        count: number;
+        items: string[];
+        onSelect: (value: string) => void;
+        payload: unknown;
+      };
+
+      function Child({ active, label, count, items, onSelect, payload }: ChildProps) {
+        return <button>{label}:{count}:{items.length}:{String(active)}:{String(payload)}</button>;
+      }
+
+      function Parent(props: ChildProps) {
+        return <Child
+          active={props.active}
+          label={props.label}
+          count={props.count}
+          items={props.items}
+          onSelect={props.onSelect}
+          payload={props.payload}
+        />;
+      }
+    `;
+
+    const { code } = transformLitsxSync(source, {
+      filename: "/tmp/litsx-standard-bindings.tsx",
+    });
+
+    assert.match(code, /<child[^>]*\?active=\$\{this\.active\}/);
+    assert.match(code, /<child[^>]*label="\$\{this\.label\}"/);
+    assert.match(code, /<child[^>]*count="\$\{this\.count\}"/);
+    assert.match(code, /<child[^>]*\.items=\$\{this\.items\}/);
+    assert.match(code, /<child[^>]*\.onSelect=\$\{this\.onSelect\}/);
+    assert.match(code, /<child[^>]*\.payload=\$\{this\.payload\}/);
+  });
+
+  it("uses explicit native DOM listeners with live values and booleans", () => {
+    const source = `
+      function Form({ value, disabled, onChange, onClick, onAnimationEnd }) {
+        return <section>
+          <label className="field" htmlFor="query">Query</label>
+          <input id="query" value={value} disabled={disabled} on:input={onChange} />
+          <button on:click={onClick} on:animationend={onAnimationEnd}>Save</button>
+          <button onclick={onClick}>Native property</button>
+        </section>;
+      }
+    `;
+
+    const { code } = transformLitsxSync(source, {
+      filename: "/tmp/litsx-standard-dom.jsx",
+    });
+
+    assert.match(code, /<label class="field" for="query">/);
+    assert.match(code, /<input id="query" \.value=\$\{this\.value\} \?disabled=\$\{this\.disabled\} @input=\$\{this\.onChange\}>/);
+    assert.match(code, /<button @click=\$\{this\.onClick\} @animationend=\$\{this\.onAnimationEnd\}>Save<\/button>/);
+    assert.match(code, /<button \.onclick=\$\{this\.onClick\}>Native property<\/button>/);
+  });
+
+  it("infers bindings from imported component types", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-standard-import-"));
+    const childFile = path.join(root, "child.tsx");
+    const parentFile = path.join(root, "parent.tsx");
+    tempDirs.push(root);
+
+    fs.writeFileSync(childFile, `
+      export interface ChildProps {
+        enabled: boolean;
+        name: string;
+        config: { mode: string };
+        onCommit: (value: string) => void;
+      }
+      export function Child(props: ChildProps) {
+        return <div>{props.name}</div>;
+      }
+    `);
+
+    const source = `
+      import { Child } from "./child.tsx";
+      export function Parent({ enabled, name, config, onCommit }) {
+        return <Child
+          enabled={enabled}
+          name={name}
+          config={config}
+          onCommit={onCommit}
+        />;
+      }
+    `;
+    fs.writeFileSync(parentFile, source);
+
+    const { code } = transformLitsxSync(source, { filename: parentFile });
+
+    assert.match(code, /<child[^>]*\?enabled=\$\{this\.enabled\}/);
+    assert.match(code, /<child[^>]*name="\$\{this\.name\}"/);
+    assert.match(code, /<child[^>]*\.config=\$\{this\.config\}/);
+    assert.match(code, /<child[^>]*\.onCommit=\$\{this\.onCommit\}/);
+  });
+
+  it("uses published intrinsic custom-element props without runtime metadata", () => {
+    const source = `
+      export {};
+      type ThirdPartyWidgetProps = {
+        active: boolean;
+        label: string;
+        payload: { id: string };
+        onCommit: (id: string) => void;
+      };
+      declare global {
+        namespace JSX {
+          interface IntrinsicElements {
+            "third-party-widget": ThirdPartyWidgetProps;
+          }
+        }
+      }
+
+      function Screen({ active, label, payload, onCommit }: ThirdPartyWidgetProps) {
+        return <third-party-widget
+          active={active}
+          label={label}
+          payload={payload}
+          onCommit={onCommit}
+        />;
+      }
+    `;
+
+    const { code } = transformLitsxSync(source, {
+      filename: "/tmp/litsx-standard-custom-intrinsic.tsx",
+    });
+
+    assert.match(code, /<third-party-widget[^>]*\.active=\$\{this\.active\}/);
+    assert.match(code, /label="\$\{this\.label\}"/);
+    assert.match(code, /\.payload=\$\{this\.payload\}/);
+    assert.match(code, /\.onCommit=\$\{this\.onCommit\}/);
+    assert.doesNotMatch(code, /@commit=/);
+  });
+
+  it("keeps onX callbacks as properties and uses on:event for custom events", () => {
+    const source = `
+      type ActionProps = {
+        onCallback: (value: string) => void;
+      };
+      function Action(props: ActionProps) {
+        return <button>{String(props.onCallback)}</button>;
+      }
+      function Screen({ onCallback, onPrimaryAction, onURLChange, onAnimationEnd }) {
+        return <section>
+          <Action
+            onCallback={onCallback}
+            onPrimaryAction={onPrimaryAction}
+            onURLChange={onURLChange}
+            onAnimationEnd={onAnimationEnd}
+            on:primary-action={onPrimaryAction}
+            on:url-change={{ handleEvent: onURLChange, capture: true }}
+            on:animationend={onAnimationEnd}
+          />
+          <third-party-action
+            onclick={onCallback}
+            on:primary-action={onPrimaryAction}
+            on:url-change={onURLChange}
+            on:animationend={onAnimationEnd}
+          />
+          <third-party-action
+            on:primary-action-capture={onPrimaryAction}
+            on:menu-open={onURLChange}
+          />
+        </section>;
+      }
+    `;
+
+    const { code } = transformLitsxSync(source, {
+      filename: "/tmp/litsx-standard-custom-events.tsx",
+    });
+
+    assert.match(code, /<action[^>]*\.onCallback=\$\{this\.onCallback\}/);
+    assert.match(code, /<action[^>]*\.onPrimaryAction=\$\{this\.onPrimaryAction\}/);
+    assert.match(code, /<action[^>]*\.onURLChange=\$\{this\.onURLChange\}/);
+    assert.match(code, /<action[^>]*\.onAnimationEnd=\$\{this\.onAnimationEnd\}/);
+    assert.match(code, /@primary-action=\$\{this\.onPrimaryAction\}/);
+    assert.match(code, /@url-change=\$\{\{[\s\S]*handleEvent: this\.onURLChange,[\s\S]*capture: true/);
+    assert.match(code, /<action[^>]*@animationend=\$\{this\.onAnimationEnd\}/);
+    assert.match(code, /<third-party-action[^>]*\.onclick=\$\{this\.onCallback\}/);
+    assert.match(code, /<third-party-action[^>]*@primary-action=\$\{this\.onPrimaryAction\}/);
+    assert.match(code, /<third-party-action[^>]*@url-change=\$\{this\.onURLChange\}/);
+    assert.match(code, /<third-party-action[^>]*@animationend=\$\{this\.onAnimationEnd\}/);
+    assert.match(code, /@primary-action-capture=\$\{this\.onPrimaryAction\}/);
+    assert.match(code, /@menu-open=\$\{this\.onURLChange\}/);
+
+    assert.throws(
+      () => transformLitsxSync(
+        "function Invalid({ handler }) { return <div on:menuOpen={handler} />; }",
+        { filename: "/tmp/litsx-invalid-event-name.jsx" },
+      ),
+      /must use lowercase kebab-case/,
+    );
+  });
+
+  it("uses a published HTMLElementTagNameMap custom-element API", () => {
+    const source = `
+      export {};
+      class ThirdPartySwitch extends HTMLElement {
+        active = false;
+        label = "";
+        payload: { id: string } | null = null;
+      }
+      declare global {
+        interface HTMLElementTagNameMap {
+          "third-party-switch": ThirdPartySwitch;
+        }
+      }
+
+      function Screen({ active, label, payload }: {
+        active: boolean;
+        label: string;
+        payload: { id: string };
+      }) {
+        return <third-party-switch active={active} label={label} payload={payload} />;
+      }
+    `;
+
+    const { code } = transformLitsxSync(source, {
+      filename: "/tmp/litsx-standard-custom-element-map.tsx",
+    });
+
+    assert.match(code, /<third-party-switch[^>]*\.active=\$\{this\.active\}/);
+    assert.match(code, /label="\$\{this\.label\}"/);
+    assert.match(code, /\.payload=\$\{this\.payload\}/);
+  });
+
+  it("infers and registers namespace component elements across .tsx modules", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-standard-namespace-"));
+    const childFile = path.join(root, "controls.tsx");
+    const parentFile = path.join(root, "screen.tsx");
+    tempDirs.push(root);
+
+    fs.writeFileSync(childFile, `
+      export type ToggleProps = {
+        enabled?: boolean;
+        tone: "quiet" | "loud";
+        model: { id: string } | null;
+      };
+      export function Toggle(props: ToggleProps) {
+        return <button>{props.tone}</button>;
+      }
+      export function OtherComponent({ label }: { label: string }) {
+        return <span>{label}</span>;
+      }
+    `);
+
+    const source = `
+      import * as Controls from "./controls.tsx";
+      export function Screen({ enabled, tone, model }) {
+        return <>
+          <Controls.Toggle
+            enabled={enabled}
+            tone={tone}
+            model={model}
+            data-state="ready"
+          />
+          <Controls.OtherComponent label={tone} />
+        </>;
+      }
+    `;
+    fs.writeFileSync(parentFile, source);
+
+    const { code } = transformLitsxSync(source, { filename: parentFile });
+
+    assert.match(code, /static elements = \{[\s\S]*"controls-toggle": Controls\.Toggle/);
+    assert.match(code, /"controls-other-component": Controls\.OtherComponent/);
+    assert.match(code, /<controls-toggle[^>]*\?enabled=\$\{this\.enabled\}/);
+    assert.match(code, /tone="\$\{this\.tone\}"/);
+    assert.match(code, /\.model=\$\{this\.model\}/);
+    assert.match(code, /data-state="ready"/);
+    assert.match(code, /<controls-other-component label="\$\{this\.tone\}"><\/controls-other-component>/);
+    assert.doesNotMatch(code, /Controls\.Toggle\(\{/);
+  });
+
+  it("distinguishes HTML boolean attributes from boolean-valued enumerated attributes", () => {
+    const source = `
+      type SurfaceProps = {
+        style: Partial<CSSStyleDeclaration>;
+        onPointerDown: (event: PointerEvent) => void;
+        editable: boolean;
+        draggable: boolean;
+        hidden: boolean;
+        spellCheck: boolean;
+        readOnly: boolean;
+      };
+      function Surface({ style, onPointerDown, editable, draggable, hidden, spellCheck, readOnly }: SurfaceProps) {
+        return <section>
+          <div
+            style={style}
+            contentEditable={editable}
+            draggable={draggable}
+            hidden={hidden}
+            on:pointerdown={{ handleEvent: onPointerDown, capture: true }}
+            aria-live="polite"
+          />
+          <textarea spellCheck={spellCheck} readOnly={readOnly} />
+          <div draggable spellCheck contentEditable hidden="until-found" />
+        </section>;
+      }
+    `;
+
+    const { code } = transformLitsxSync(source, {
+      filename: "/tmp/litsx-standard-dom-advanced.tsx",
+    });
+
+    assert.match(code, /\.style=\$\{this\.style\}/);
+    assert.match(code, /contenteditable="\$\{this\.editable\}"/);
+    assert.match(code, /draggable="\$\{this\.draggable\}"/);
+    assert.match(code, /\?hidden=\$\{this\.hidden\}/);
+    assert.match(code, /spellcheck="\$\{this\.spellCheck\}"/);
+    assert.match(code, /\?readonly=\$\{this\.readOnly\}/);
+    assert.match(code, /draggable="\$\{true\}" spellcheck="\$\{true\}" contenteditable="\$\{true\}" hidden="until-found"/);
+    assert.doesNotMatch(code, /[?.](?:draggable|spellcheck)=/);
+    assert.match(code, /@pointerdown=\$\{\{[\s\S]*handleEvent: this\.onPointerDown,[\s\S]*capture: true/);
+    assert.match(code, /aria-live="polite"/);
+  });
+
+  it("accepts component static configuration through standard assignments", () => {
+    const source = `
+      import { css } from "@litsx/core";
+
+      function Card({ title, payload }) {
+        return <article>{title}:{String(payload)}</article>;
+      }
+      Card.properties = {
+        title: { reflect: true },
+        payload: { type: Object, attribute: false },
+      };
+      Card.styles = css\`:host { display: block; }\`;
+      Card.shadowRootOptions = { mode: "open", delegatesFocus: true };
+
+      function Plain({ label }) {
+        return <p>{label}</p>;
+      }
+      Plain.lightDom = true;
+    `;
+
+    const { code } = transformLitsxSync(source, {
+      filename: "/tmp/litsx-standard-statics.jsx",
+    });
+
+    assert.match(code, /class Card extends LitsxStaticHoistsMixin\(LitElement\)/);
+    assert.match(code, /static get properties\(\)/);
+    assert.match(code, /title: \{[\s\S]*type: String[\s\S]*reflect: true/);
+    assert.match(code, /payload: \{[\s\S]*type: Object,[\s\S]*attribute: false/);
+    assert.match(code, /static get styles\(\)/);
+    assert.match(code, /css`:host \{ display: block; \}`/);
+    assert.match(code, /import \{[^}]*css[^}]*\} from "@litsx\/core"/);
+    assert.doesNotMatch(code, /import \{[^}]*css[^}]*\} from "lit"/);
+    assert.match(code, /static get shadowRootOptions\(\)/);
+    assert.match(code, /class Plain extends LightDomMixin\(LitElement\)/);
+    assert.doesNotMatch(code, /Card\.properties\s*=/);
+    assert.doesNotMatch(code, /Plain\.lightDom\s*=/);
+  });
+
+  it("preserves Lit CSSResultGroup assignments and rejects plain style strings", () => {
+    const source = `
+      import { css } from "lit";
+      const sharedStyles = css\`:host { box-sizing: border-box; }\`;
+
+      function Card() {
+        return <article />;
+      }
+      Card.styles = [sharedStyles, css\`article { display: block; }\`];
+    `;
+
+    const { code } = transformLitsxSync(source, {
+      filename: "/tmp/litsx-standard-css-results.tsx",
+    });
+
+    assert.match(code, /\[sharedStyles, css`article \{ display: block; \}`\]/);
+    assert.doesNotMatch(code, /unsafeCSS\(sharedStyles\)/);
+
+    assert.throws(
+      () => transformLitsxSync(`
+        function InvalidStyles() { return <div />; }
+        InvalidStyles.styles = \`:host { display: block; }\`;
+      `, { filename: "/tmp/litsx-invalid-standard-styles.tsx" }),
+      /must be a Lit CSSResultGroup[\s\S]*css`\.\.\.`/,
+    );
+  });
+
+  it("leaves React propTypes assignments outside LitSX static configuration", () => {
+    const source = `
+      import PropTypes from "prop-types";
+      function Card({ title }) {
+        return <article>{title}</article>;
+      }
+      Card.propTypes = { title: PropTypes.string };
+    `;
+
+    const { code } = transformLitsxSync(source, {
+      filename: "/tmp/litsx-standard-proptypes.jsx",
+      jsxTemplate: false,
+    });
+
+    assert.match(code, /Card\.propTypes = \{/);
+    assert.doesNotMatch(code, /static get propTypes/);
+  });
+
+  it("does not enable React key reconciliation in the native pipeline", () => {
+    const source = `
+      function Row({ item }) { return <li>{item.label}</li>; }
+      function List({ items }) {
+        return <ul>{items.map(item => <Row key={item.id} item={item} />)}</ul>;
+      }
+    `;
+
+    const { code } = transformLitsxSync(source, {
+      filename: "/tmp/litsx-native-key.tsx",
+    });
+
+    assert.doesNotMatch(code, /lit\/directives\/(?:repeat|keyed)\.js/);
+    assert.match(code, /<row \.key=\$\{item\.id\}/);
+  });
+});

@@ -2,43 +2,65 @@ import assert from "node:assert";
 import { html } from "lit";
 import { describe, it } from "vitest";
 import { jsxSpreadElement } from "../packages/core/src/jsx-spread.js";
-import { createDigestRewriter, render, rewriteRenderResult } from "../packages/ssr/src/index.js";
+import { renderToStream, renderToString } from "../packages/ssr/src/index.js";
+import { createSpreadDigestRewriter } from "../packages/ssr/src/spread-template-digests.js";
 
-async function collect(result) {
+async function readStream(stream) {
+  const reader = stream.getReader();
   let output = "";
-  for (const chunk of result) {
-    output += typeof chunk === "string" ? chunk : await collect(await chunk);
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) return output;
+    output += value;
   }
-  return output;
 }
 
-describe("@litsx/ssr", () => {
-  it("rewrites spread template digests while retaining Lit SSR output", async () => {
-    const output = await collect(render(html`<main>${jsxSpreadElement("button", [{ title: "ready" }])}</main>`));
-    assert.match(output, /<main>/);
-    assert.match(output, /<button[^>]*title="ready"/);
-    assert.doesNotMatch(output, /@__litsx_spread/);
+describe("@litsx/ssr JSX spread integration", () => {
+  it("rewrites spread template digests through renderToString", async () => {
+    const result = await renderToString(
+      html`<main>${jsxSpreadElement("button", [{ title: "ready" }])}</main>`,
+    );
+    assert.match(result.html, /<main>/);
+    assert.match(result.html, /<button[^>]*title="ready"/);
+    assert.doesNotMatch(result.html, /@__litsx_spread/);
   });
 
   it("rewrites markers split at every possible streaming boundary", () => {
     const source = "before<!--lit-part server-digest-->inside<!--/lit-part-->after";
     const expected = "before<!--lit-part client-digest-->inside<!--/lit-part-->after";
     for (let size = 1; size <= source.length; size += 1) {
-      const rewriter = createDigestRewriter(new Map([["server-digest", "client-digest"]]));
+      const rewriter = createSpreadDigestRewriter(
+        new Map([["server-digest", "client-digest"]]),
+      );
       let output = "";
-      for (let offset = 0; offset < source.length; offset += size) output += rewriter.write(source.slice(offset, offset + size));
+      for (let offset = 0; offset < source.length; offset += size) {
+        output += rewriter.write(source.slice(offset, offset + size));
+      }
       output += rewriter.end();
       assert.strictEqual(output, expected, `chunk size ${size}`);
     }
   });
 
-  it("preserves async RenderResult ordering", async () => {
-    const mappings = globalThis[Symbol.for("@litsx/ssr/spread-digest-mappings")] ??= new Map();
-    mappings.set("async-server", "async-client");
-    const nested = ["<!--lit-part async-server-->inside<!--/lit-part-->"];
-    const output = await collect(rewriteRenderResult([
-      "before", Promise.resolve(nested), "after",
-    ]));
-    assert.strictEqual(output, "before<!--lit-part async-client-->inside<!--/lit-part-->after");
+  it("preserves async ordering while reconciling spreads through renderToStream", async () => {
+    const asyncSpread = Promise.resolve(
+      jsxSpreadElement("span", [{ title: "stream" }], {}, "inside"),
+    );
+    const value = html`<div>before${asyncSpread}after</div>`;
+    const stringResult = await renderToString(value);
+    const { stream, allReady } = await renderToStream(value);
+    const streamed = await readStream(stream);
+    await allReady;
+
+    assert.strictEqual(streamed, stringResult.html);
+    assert.match(streamed, /<span[^>]*title="stream"/);
+    assert.doesNotMatch(streamed, /@__litsx_spread/);
+
+    const beforeIndex = streamed.indexOf("before");
+    const spreadIndex = streamed.indexOf('title="stream"');
+    const insideIndex = streamed.indexOf("inside");
+    const afterIndex = streamed.indexOf("after");
+    assert.ok(beforeIndex < spreadIndex);
+    assert.ok(spreadIndex < insideIndex);
+    assert.ok(insideIndex < afterIndex);
   });
 });

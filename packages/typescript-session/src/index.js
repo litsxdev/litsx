@@ -6,21 +6,8 @@ const SESSION_CACHE_LIMIT = 50;
 const DISK_SOURCE_TEXT_CACHE = new Map();
 const DISK_SOURCE_FILE_CACHE = new Map();
 const DISK_FILE_CACHE_LIMIT = 500;
-const EXTRA_FILE_EXTENSIONS = [
-  {
-    extension: ".litsx",
-    isMixedContent: false,
-    scriptKind: 4,
-  },
-  {
-    extension: ".litsx.jsx",
-    isMixedContent: false,
-    scriptKind: 2,
-  },
-];
+const EXTRA_FILE_EXTENSIONS = [];
 const SUPPORTED_SOURCE_EXTENSIONS = [
-  ".litsx.jsx",
-  ".litsx",
   ".tsx",
   ".ts",
   ".jsx",
@@ -60,7 +47,27 @@ function trimCacheToLimit(cache, limit) {
 
 function normalizeFilePath(value) {
   if (!value) return "";
-  return String(value).replace(/\\/g, "/").replace(/\/+/g, "/");
+  const normalized = String(value).replace(/\\/g, "/").replace(/\/+/g, "/");
+  const isAbsolute = normalized.startsWith("/");
+  const segments = [];
+
+  for (const segment of normalized.split("/")) {
+    if (!segment || segment === ".") {
+      continue;
+    }
+    if (segment === "..") {
+      if (segments.length > 0 && segments.at(-1) !== "..") {
+        segments.pop();
+      } else if (!isAbsolute) {
+        segments.push(segment);
+      }
+      continue;
+    }
+    segments.push(segment);
+  }
+
+  const result = segments.join("/");
+  return isAbsolute ? `/${result}` : result;
 }
 
 function dirname(filePath) {
@@ -74,14 +81,6 @@ function dirname(filePath) {
 
 function inferScriptKind(ts, filePath) {
   const normalized = normalizeFilePath(filePath);
-
-  if (normalized.endsWith(".litsx")) {
-    return ts.ScriptKind.TSX;
-  }
-
-  if (normalized.endsWith(".litsx.jsx")) {
-    return ts.ScriptKind.JSX;
-  }
 
   if (normalized.endsWith(".tsx")) {
     return ts.ScriptKind.TSX;
@@ -105,11 +104,11 @@ function inferScriptKind(ts, filePath) {
 function getModuleExtension(ts, fileName) {
   const normalized = normalizeFilePath(fileName);
 
-  if (normalized.endsWith(".litsx.jsx") || normalized.endsWith(".jsx")) {
+  if (normalized.endsWith(".jsx")) {
     return ts.Extension.Jsx;
   }
 
-  if (normalized.endsWith(".litsx") || normalized.endsWith(".tsx")) {
+  if (normalized.endsWith(".tsx")) {
     return ts.Extension.Tsx;
   }
 

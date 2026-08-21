@@ -7,11 +7,14 @@
 
 Official Vite integration for LitSX.
 
+The plugin compiles the standard source language defined by the repository's
+[native authoring contract](../../AUTHORING.md).
+
 This package is the recommended default for:
 
 - Vite apps
 - Storybook using the Vite builder
-- any Vite-based toolchain that needs to compile authored LitSX source
+- any Vite-based toolchain that needs to compile JSX/TSX components through LitSX
 
 Internally it uses [`@litsx/compiler`](../compiler/README.md), so callers do not need to wire Babel parser setup, sourcemap chaining, or Lit template sourcemap patching manually.
 
@@ -34,15 +37,15 @@ export default defineConfig({
 });
 ```
 
-This transforms authored `.jsx` and `.tsx` modules before the rest of the Vite pipeline.
+This transforms standard `.jsx` and `.tsx` modules before the rest of the Vite pipeline.
 
 ## What the Plugin Handles
 
 The plugin applies the supported LitSX compilation pipeline through `@litsx/compiler`, including:
 
-- LitSX authored-syntax virtualization
+- standard JSX binding inference and `on:event` lowering
 - LitSX Babel plugin ordering
-- virtualization sourcemap chaining
+- authored-source sourcemap chaining
 - final Lit-style attribute sourcemap patching
 
 That means Vite consumers do not need to know about:
@@ -62,9 +65,38 @@ Returns a Vite plugin with:
 
 Default behavior:
 
-- transforms `.jsx`, `.tsx`, `.litsx`, and `.litsx.jsx`
+- transforms `.jsx` and `.tsx`
 - returns `{ code, map }`
 - delegates compilation to `@litsx/compiler`
+
+### `createLitsxViteAssetResolver(options?)`
+
+Creates an `assetResolver(moduleId)` function suitable for passing to
+`@litsx/ssr`.
+
+Use it when SSR output needs stable client module URLs:
+
+```js
+import { createLitsxViteAssetResolver, litsx } from "@litsx/vite-plugin";
+import { renderToString } from "@litsx/ssr";
+
+const assetResolver = createLitsxViteAssetResolver({
+  root: process.cwd(),
+  manifest,
+  base: "/",
+});
+
+const result = await renderToString(<ProductCard .product={product} />, {
+  assetResolver,
+});
+```
+
+Behavior:
+
+- in dev, resolves source module ids under `root` to browser-facing paths
+- in build, resolves those module ids through the Vite manifest when available
+- falls back to the incoming `moduleId` when it cannot make the path
+  project-relative
 
 ## Options
 
@@ -77,7 +109,7 @@ Controls which module ids are transformed.
 Default behavior:
 
 ```js
-/\.(jsx|tsx|litsx)$/
+/\.[jt]sx$/
 ```
 
 Examples:
@@ -91,7 +123,7 @@ litsx({
 ```js
 litsx({
   include(id) {
-    return id.endsWith(".jsx") || id.endsWith(".tsx") || id.endsWith(".litsx");
+    return id.endsWith(".jsx") || id.endsWith(".tsx");
   },
 });
 ```
@@ -130,11 +162,46 @@ Forwarded to `@litsx/babel-plugin-transform-jsx-html-template`.
 
 ### `authoringPlugins?: unknown[]`
 
-Extra Babel plugins applied after LitSX virtualization/parsing and before the built-in LitSX lowering pipeline.
+Extra Babel plugins applied after standard JSX/TSX parsing and before the built-in LitSX lowering pipeline.
 
 ### `outputPlugins?: unknown[]`
 
 Extra Babel plugins appended after the built-in LitSX transform pipeline.
+
+### `reactCompat?: boolean | object`
+
+Selects the optional React compatibility pipeline. `true` uses its defaults: light DOM, final Lit template lowering, and React `key` compatibility enabled.
+
+The object form accepts the compatibility options that select React-specific behavior:
+
+| Option | Type | Default |
+| --- | --- | --- |
+| `domMode` | `"light" \| "shadow"` | `"light"` |
+| `reactKeys` | `boolean` | `true` |
+| `transformDependencies` | `string[]` | `[]` |
+
+`jsxTemplate` and `jsxTemplateOptions` remain top-level `litsx(...)` options because final template generation belongs to the compiler integration, not specifically to React compatibility.
+
+For example, this keeps React-compatible light DOM while compiling a React-authored hook package with the application:
+
+```js
+export default defineConfig({
+  plugins: [
+    litsx({
+      reactCompat: {
+        transformDependencies: ["resize-hooks"],
+      },
+    }),
+  ],
+});
+```
+
+Allowlisted dependency modules are transformed even when they use `.js` or `.ts`, excluded from
+Vite dependency prebundling, and added to `ssr.noExternal`. The compiler follows custom-hook imports
+inside each selected package, lowers supported React hooks, and reports the exact unsupported hook
+boundary instead of leaving a React dispatcher call in the output.
+
+Use `reactCompat: { domMode: "shadow" }` when migrated application components should use shadow roots. The option applies equally to Vite's client and SSR transformation pipelines. See the [`@litsx/babel-preset-react-compat` option reference](../babel-preset-react-compat/README.md#options) for detailed semantics and limitations.
 
 ## Storybook Example
 
@@ -174,6 +241,7 @@ It does not:
 - own docs-site-specific module resolution
 - provide Rollup or esbuild plugins
 - replace runtime dependencies such as `lit` or `litsx`
+- render HTML by itself; pair it with `@litsx/ssr` for scoped server rendering
 
 ## Stability
 

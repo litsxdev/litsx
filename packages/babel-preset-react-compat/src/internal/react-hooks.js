@@ -212,7 +212,10 @@ function createReducerRuntimeCall(state, argNodes) {
 function createImperativeRuntimeCall(state, _refNode, factoryNode, depNodes) {
   const args = [
     cloneHostExpression(state),
-    t.cloneNode(_refNode, true),
+    t.callExpression(
+      t.identifier(state.reactRefAdapterLocal || "toLitRef"),
+      [t.cloneNode(_refNode, true)],
+    ),
     t.cloneNode(factoryNode, true),
   ];
 
@@ -221,6 +224,29 @@ function createImperativeRuntimeCall(state, _refNode, factoryNode, depNodes) {
   }
 
   return t.callExpression(t.identifier("useExpose"), args);
+}
+
+function ensureReactRefAdapterImport(programPath, state) {
+  if (!state.imperativeNeeded) return;
+  const moduleName = "@litsx/core/react-compat";
+  const existing = programPath.get("body").find(
+    (child) => child.isImportDeclaration() && child.node.source.value === moduleName
+  );
+  const present = existing?.node.specifiers.some(
+    (specifier) => t.isImportSpecifier(specifier) &&
+      t.isIdentifier(specifier.imported, { name: "toLitRef" }) &&
+      t.isIdentifier(specifier.local, { name: state.reactRefAdapterLocal })
+  );
+  if (present) return;
+  const specifier = t.importSpecifier(
+    t.identifier(state.reactRefAdapterLocal),
+    t.identifier("toLitRef"),
+  );
+  if (existing) existing.node.specifiers.push(specifier);
+  else programPath.unshiftContainer(
+    "body",
+    t.importDeclaration([specifier], t.stringLiteral(moduleName)),
+  );
 }
 
 function createExternalStoreRuntimeCall(state, subscribeNode, getSnapshotNode, getServerSnapshotNode) {
@@ -266,6 +292,9 @@ function transformCustomHookDefinition(binding, state) {
 
   const hostId = ensureHostParamIdentifier(fnPath, state);
   state.processedCustomHooks.add(fnPath.node);
+  if (binding.identifier?.name) {
+    state.compiledCustomHookNames.add(binding.identifier.name);
+  }
 
   pushHostExpression(state, hostId);
 
@@ -276,6 +305,56 @@ function transformCustomHookDefinition(binding, state) {
   });
 
   popHostExpression(state);
+}
+
+function attachCompiledCustomHookMetadata(programPath, state) {
+  for (const hookName of state.compiledCustomHookNames || []) {
+    const binding = programPath.scope.getBinding(hookName);
+    if (!binding?.path?.node) continue;
+    let alreadyMarked = false;
+    for (const statement of programPath.node.body) {
+      const expression = statement?.type === "ExpressionStatement" ? statement.expression : null;
+      const left = expression?.type === "AssignmentExpression" ? expression.left : null;
+      if (
+        left?.type === "MemberExpression" &&
+        left.computed === true &&
+        left.object?.type === "Identifier" &&
+        left.object.name === hookName &&
+        left.property?.type === "CallExpression" &&
+        left.property.callee?.type === "MemberExpression" &&
+        left.property.callee.object?.type === "Identifier" &&
+        left.property.callee.object.name === "Symbol" &&
+        left.property.callee.property?.type === "Identifier" &&
+        left.property.callee.property.name === "for" &&
+        left.property.arguments?.[0]?.type === "StringLiteral" &&
+        left.property.arguments[0].value === "litsx.hook"
+      ) {
+        alreadyMarked = true;
+        break;
+      }
+    }
+    if (alreadyMarked) continue;
+
+    const statement = t.expressionStatement(
+      t.assignmentExpression(
+        "=",
+        t.memberExpression(
+          t.identifier(hookName),
+          t.callExpression(
+            t.memberExpression(t.identifier("Symbol"), t.identifier("for")),
+            [t.stringLiteral("litsx.hook")],
+          ),
+          true,
+        ),
+        t.booleanLiteral(true),
+      ),
+    );
+    if (binding.path.isFunctionDeclaration()) {
+      binding.path.insertAfter(statement);
+    } else if (binding.path.isVariableDeclarator()) {
+      binding.path.getStatementParent()?.insertAfter(statement);
+    }
+  }
 }
 
 function processHookCall(callPath, state) {
@@ -417,8 +496,11 @@ function processHookCall(callPath, state) {
       const depsResult = parseDependencies(args[1]);
       if (!depsResult.ok) return false;
 
-      const parent = callPath.parentPath;
-      if (!parent.isExpressionStatement()) return false;
+      let expressionPath = callPath;
+      while (expressionPath.parentPath?.isSequenceExpression()) {
+        expressionPath = expressionPath.parentPath;
+      }
+      if (!expressionPath.parentPath?.isExpressionStatement()) return false;
 
       state.runtimeNeeded = true;
       if (hookType === "useLayoutEffect") {
@@ -434,7 +516,7 @@ function processHookCall(callPath, state) {
         depsResult.deps
       );
 
-      parent.replaceWith(t.expressionStatement(runtimeCall));
+      callPath.replaceWith(runtimeCall);
       if (callee.isIdentifier()) {
         state.hookLocals.add(callee.node.name);
       }
@@ -763,7 +845,7 @@ function ensureRuntimeImport(programPath, state) {
   }
 }
 
-export default declare((api) => {
+export default declare((api, options = {}) => {
   api.assertVersion(7);
   t = api.types;
 
@@ -781,6 +863,7 @@ export default declare((api) => {
           state.customHookHostParams = new WeakMap();
           state.customHookLocals = new Set();
           state.customHookNamespaces = new Set();
+          state.compiledCustomHookNames = new Set();
           state.runtimeNeeded = false;
           state.effectNeeded = false;
           state.layoutNeeded = false;
@@ -794,11 +877,16 @@ export default declare((api) => {
           state.transitionNeeded = false;
           state.deferredNeeded = false;
           state.startTransitionNeeded = false;
+          state.reactRefAdapterLocal = path.scope.hasBinding("toLitRef")
+            ? path.scope.generateUidIdentifier("toLitRef").name
+            : "toLitRef";
         },
         exit(path, state) {
           processDeclaredCustomHooks(path, state);
+          attachCompiledCustomHookMetadata(path, state);
           removeHookImports(path, state);
           ensureRuntimeImport(path, state);
+          ensureReactRefAdapterImport(path, state);
         },
       },
       ImportDeclaration(path, state) {
@@ -833,7 +921,10 @@ export default declare((api) => {
           return;
         }
 
-        if (IGNORED_CUSTOM_HOOK_SOURCES.has(source)) {
+        if (
+          IGNORED_CUSTOM_HOOK_SOURCES.has(source) ||
+          options.transformImportedCustomHooks === false
+        ) {
           return;
         }
 

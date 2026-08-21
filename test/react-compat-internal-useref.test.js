@@ -7,7 +7,7 @@ import { reactUseRef as plugin } from "../packages/babel-preset-react-compat/src
 const { transformFromAstSync } = babelCore;
 
 describe("react compat internal useRef", () => {
-  it("creates a getter and data-ref attribute for useRef bindings", () => {
+  it("creates Lit-backed React refs and preserves JSX refs for final lowering", () => {
     const source = `
       import { LitElement, html } from 'lit';
       import { useRef, useEffect } from 'react';
@@ -37,22 +37,11 @@ describe("react compat internal useRef", () => {
       plugins: [plugin],
     });
 
-    assert.match(code, /get _inputRefElement\(\)/);
-    assert.match(
-      code,
-      /return this\.renderRoot\?\.\s*querySelector\("\[data-ref=\\"_inputRefElement\\"\]"\) \?\? this\.querySelector\("\[data-ref=\\"_inputRefElement\\"\]"\);/
-    );
-    assert.match(code, /data-ref="_inputRefElement"/);
+    assert.match(code, /import \{ useReactRef as useRef \} from "@litsx\/core\/react-compat";/);
     assert.match(code, /const inputRef = useRef\(this, null\);/);
-    assert.match(code, /useCallbackRef\(this, \(\) => this\._inputRefElement, node => inputRef\.current = node\);/);
     assert.doesNotMatch(code, /const inputRef\s*=\s*this\.inputRef/);
-    assert.doesNotMatch(code, /ref={inputRef}/);
-    const getterIndex = code.indexOf("get _inputRefElement()");
-    const renderIndex = code.indexOf("render()");
-    assert(
-      getterIndex > -1 && renderIndex > -1 && getterIndex < renderIndex,
-      "getter should be declared before render"
-    );
+    assert.match(code, /ref=\{inputRef\}/);
+    assert.doesNotMatch(code, /data-ref|querySelector|useCallbackRef/);
   });
 
   it("removes the useRef import once transformed", () => {
@@ -88,7 +77,7 @@ describe("react compat internal useRef", () => {
       /import\s+\{[^}]*\buseRef\b[^}]*\}\s+from ['"]react['"]/,
       "useRef should be removed from the React import"
     );
-    assert.match(code, /import \{ useRef, useCallbackRef \} from "@litsx\/core";|import \{ useCallbackRef, useRef \} from "@litsx\/core";/);
+    assert.match(code, /useReactRef as useRef/);
     assert.match(code, /useEffect/, "other React imports should remain");
   });
 
@@ -119,21 +108,9 @@ describe("react compat internal useRef", () => {
       plugins: [plugin],
     });
 
-    assert.match(code, /get _firstRefElement\(\)/);
-    assert.match(code, /get _secondRefElement\(\)/);
-    assert.match(code, /data-ref="_firstRefElement"/);
-    assert.match(code, /data-ref="_secondRefElement"/);
-    assert.doesNotMatch(code, /ref={firstRef}/);
-    assert.doesNotMatch(code, /ref={secondRef}/);
-    const firstGetterIndex = code.indexOf("get _firstRefElement()");
-    const secondGetterIndex = code.indexOf("get _secondRefElement()");
-    const renderIndex = code.indexOf("render()");
-    assert(
-      firstGetterIndex > -1 && secondGetterIndex > -1 && renderIndex > -1,
-      "expected getters and render method"
-    );
-    assert(firstGetterIndex < renderIndex, "first getter should be before render");
-    assert(secondGetterIndex < renderIndex, "second getter should be before render");
+    assert.match(code, /ref=\{firstRef\}/);
+    assert.match(code, /ref=\{secondRef\}/);
+    assert.doesNotMatch(code, /data-ref|querySelector|useCallbackRef/);
   });
 
   it("supports TypeScript generic arguments in useRef", () => {
@@ -196,7 +173,7 @@ describe("react compat internal useRef", () => {
       plugins: [plugin],
     });
 
-    assert.match(code, /import \{ useRef \} from "@litsx\/core";/);
+    assert.match(code, /useReactRef as useRef/);
     assert.match(code, /const latest = useRef\(this, 0\);/);
     assert.doesNotMatch(code, /import \{ useRef \} from 'react';|import \{ useRef \} from "react";/);
   });
@@ -219,14 +196,14 @@ describe("react compat internal useRef", () => {
       plugins: [plugin],
     });
 
-    assert.match(code, /import \{ useRef \} from "@litsx\/core";/);
+    assert.match(code, /useReactRef as useRef/);
     assert.match(code, /export function useLatest\(_[A-Za-z0-9]+, value\)/);
     assert.match(code, /const ref = useRef\(_[A-Za-z0-9]+\);/);
     assert.match(code, /ref\.current = value;/);
     assert.doesNotMatch(code, /import \{ useRef \} from 'react';|import \{ useRef \} from "react";/);
   });
 
-  it("transforms inline callback refs into useCallbackRef", () => {
+  it("leaves raw Lit templates to Lit's native ref directive authoring", () => {
     const source = [
       "import { LitElement, html } from 'lit';",
       "class CallbackRef extends LitElement {",
@@ -247,13 +224,8 @@ describe("react compat internal useRef", () => {
       generatorOpts: { decoratorsBeforeExport: true },
     });
 
-    assert.match(code, /import \{ useCallbackRef \} from "@litsx\/core";/);
-    assert.match(
-      code,
-      /useCallbackRef\(this, \(\) => this\._ref\d*, node => this\.register\(node\)\);/
-    );
-    assert.match(code, /data-ref="_ref\d*"/);
-    assert.doesNotMatch(code, /ref=\{/);
+    assert.match(code, /html`<button ref="\$\{node => this\.register\(node\)\}">/);
+    assert.doesNotMatch(code, /data-ref|querySelector|useCallbackRef/);
   });
 
   it("handles optional chaining on ref usage", () => {
@@ -277,10 +249,10 @@ describe("react compat internal useRef", () => {
     });
 
     assert.match(code, /buttonRef\?\.current\?\.focus\?\.\(\)/);
-    assert.match(code, /data-ref="_buttonRefElement"/);
+    assert.match(code, /ref="\$\{buttonRef\}"/);
   });
 
-  it("replaces template literal refs with data-ref attributes", () => {
+  it("does not reinterpret raw Lit template attributes", () => {
     const source = [
       "import { LitElement, html } from 'lit';",
       "import { useRef } from 'react';",
@@ -299,8 +271,8 @@ describe("react compat internal useRef", () => {
       plugins: [plugin],
     });
 
-    assert.match(code, /data-ref=\"_listRefElement\"/);
-    assert.doesNotMatch(code, /ref="\$\{listRef\}"/);
+    assert.match(code, /ref="\$\{listRef\}"/);
+    assert.doesNotMatch(code, /data-ref|querySelector/);
   });
 
   it("keeps a mutable ref object when a JSX ref is also used opaquely", () => {
@@ -323,13 +295,11 @@ describe("react compat internal useRef", () => {
       plugins: [plugin],
     });
 
-    assert.match(code, /import \{ useRef, useCallbackRef \} from "@litsx\/core";|import \{ useCallbackRef, useRef \} from "@litsx\/core";/);
+    assert.match(code, /useReactRef as useRef/);
     assert.match(code, /const inputRef = useRef\(this, null\);/);
-    assert.match(code, /useCallbackRef\(this, \(\) => this\._inputRefElement, node => inputRef\.current = node\);/);
-    assert.match(code, /data-ref="_inputRefElement"/);
+    assert.match(code, /ref=\{inputRef\}/);
     assert.match(code, /this\.track\(inputRef\);/);
-    assert.match(code, /get _inputRefElement\(\)/);
-    assert.doesNotMatch(code, /get inputRef\(\)/);
+    assert.doesNotMatch(code, /data-ref|querySelector|useCallbackRef/);
   });
 
   it("keeps a mutable ref object when a JSX ref also writes to current", () => {
@@ -353,9 +323,9 @@ describe("react compat internal useRef", () => {
     });
 
     assert.match(code, /const inputRef = useRef\(this, null\);/);
-    assert.match(code, /useCallbackRef\(this, \(\) => this\._inputRefElement, node => inputRef\.current = node\);/);
     assert.match(code, /inputRef\.current = this\.fallbackNode;/);
-    assert.match(code, /data-ref="_inputRefElement"/);
+    assert.match(code, /ref="\$\{inputRef\}"/);
+    assert.doesNotMatch(code, /data-ref|querySelector|useCallbackRef/);
     assert.doesNotMatch(code, /this\.inputRef/);
   });
 

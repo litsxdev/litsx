@@ -4,13 +4,20 @@ import transformLitsxDomRefs from "./internal/transform-litsx-dom-refs.js";
 import transformLitsxHooks from "./internal/transform-litsx-hooks.js";
 import transformLitsxComponents from "./internal/transform-litsx-components.js";
 import transformLitsxRendererProps from "./internal/transform-litsx-renderer-props.js";
+import transformTypescriptNamespaceCollisions from "./internal/transform-typescript-namespace-collisions.js";
+import transformLitsxJsxBindings from "./internal/transform-litsx-jsx-bindings.js";
+import transformLitsxStaticAssignments from "./internal/transform-litsx-static-assignments.js";
 import transformLitsxBoundaries from "./internal/transform-litsx-boundaries.js";
+import transformLitsxServerComponents from "./internal/transform-litsx-server-components.js";
+import transformLitsxSsrRoots from "./internal/transform-litsx-ssr-roots.js";
 
 const NATIVE_TRANSFORM_OPTION_KEYS = [
+  "ssr",
   "defaultDomMode",
   "typeResolutionMode",
   "inMemoryFiles",
   "compilerOptions",
+  "transformDependencies",
   "typescriptSession",
   "suppressNativeClassNameWarning",
   "__litsxCompilationSession",
@@ -19,7 +26,7 @@ const NATIVE_TRANSFORM_OPTION_KEYS = [
 const HOOK_FEATURE_PATTERN = /\bdefineHook\b/;
 const REF_FEATURE_PATTERN = /\buseRef\b|\bref\s*=/;
 const SCOPED_ELEMENTS_PATTERN = /<\s*(?:[A-Z][\w.]*(?=[\s/>])|[a-z][\w]*-[\w-]*(?=[\s/>]))/;
-const LIGHT_DOM_PATTERN = /\^lightDom\b|static\s+lightDom\s*=\s*true\b/;
+const LIGHT_DOM_PATTERN = /\b[A-Z][\w$]*\.lightDom\s*=\s*true\b/;
 const BOUNDARY_PATTERN = /\b(?:ErrorBoundary|SuspenseBoundary)\b/;
 
 function escapeRegExp(value) {
@@ -247,25 +254,38 @@ function shouldIncludeFeaturePlugin(sourceFeatures, key) {
 }
 
 export function createLitsxPresetPlugins(options = {}, sourceFeatures = null) {
-  const plugins = [];
+  const normalizedTransformOptions = normalizeTransformLitsxOptions(options);
+  const plugins = [transformTypescriptNamespaceCollisions];
 
   if (shouldIncludeFeaturePlugin(sourceFeatures, "boundaries")) {
     plugins.push([
       transformLitsxBoundaries,
-      options.transformLitsxBoundaries || {},
+      {
+        ...normalizedTransformOptions,
+        ...(options.transformLitsxBoundaries || {}),
+      },
     ]);
   }
 
   plugins.push(
     [transformLitsxRendererProps, options.transformLitsxRendererProps || {}],
-    [transformLitsxComponents, normalizeTransformLitsxOptions(options)],
+    transformLitsxStaticAssignments,
+    [transformLitsxJsxBindings, normalizedTransformOptions],
+    [
+      transformLitsxServerComponents,
+      {
+        ...normalizedTransformOptions,
+        ...(options.transformLitsxServerComponents || {}),
+      },
+    ],
+    [transformLitsxComponents, normalizedTransformOptions],
   );
 
   if (shouldIncludeFeaturePlugin(sourceFeatures, "hooks")) {
     plugins.push([
       transformLitsxHooks,
       {
-        ...normalizeTransformLitsxOptions(options),
+        ...normalizedTransformOptions,
         ...(options.transformLitsxHooks || {}),
       },
     ]);
@@ -276,15 +296,32 @@ export function createLitsxPresetPlugins(options = {}, sourceFeatures = null) {
   }
 
   if (shouldIncludeFeaturePlugin(sourceFeatures, "scopedElements")) {
-    plugins.push([transformLitsxScopedElements, options.transformLitsxScopedElements || {}]);
+    plugins.push([
+      transformLitsxScopedElements,
+      {
+        ...normalizedTransformOptions,
+        ...(options.transformLitsxScopedElements || {}),
+      },
+    ]);
   }
 
+  plugins.push([
+    transformLitsxSsrRoots,
+    {
+      ...normalizedTransformOptions,
+      ...(options.transformLitsxSsrRoots || {}),
+    },
+  ]);
+
   if (options.jsxTemplate !== false) {
-    if (options.jsxTemplateOptions && Object.keys(options.jsxTemplateOptions).length > 0) {
-      plugins.push([transformJsxHtmlTemplate, options.jsxTemplateOptions]);
-    } else {
-      plugins.push(transformJsxHtmlTemplate);
-    }
+    plugins.push([transformJsxHtmlTemplate, {
+      ...normalizedTransformOptions,
+      componentAttributeFallback: false,
+      componentRestProps: true,
+      importedComponentRestProps: false,
+      reactCompatRefs: false,
+      ...(options.jsxTemplateOptions || {}),
+    }]);
   }
 
   return plugins;

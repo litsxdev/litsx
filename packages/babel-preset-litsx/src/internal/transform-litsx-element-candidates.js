@@ -2,7 +2,6 @@ import helperPluginUtils from "@babel/helper-plugin-utils";
 import * as babelParser from "@babel/parser";
 import babelTraverse from "@babel/traverse";
 import jsxSyntaxPlugin from "@babel/plugin-syntax-jsx";
-import { parseWithLitsxVirtualization } from "@litsx/authoring/parser";
 import fs from "node:fs";
 import path from "node:path";
 import { normalizeFilePath } from "@litsx/typescript-session";
@@ -15,11 +14,9 @@ import {
 const { declare } = helperPluginUtils;
 const traverse = babelTraverse.default || babelTraverse;
 const IMPORT_RESOLUTION_EXTENSIONS = [
-  ".litsx",
-  ".litsx.jsx",
+  ".tsx",
   ".jsx",
   ".js",
-  ".tsx",
   ".ts",
 ];
 const DEFAULT_MODULE_RESOLUTION_OPTIONS = {
@@ -33,6 +30,15 @@ const DEFAULT_MODULE_RESOLUTION_OPTIONS = {
   allowSyntheticDefaultImports: true,
 };
 let t;
+
+const NOSCRIPT_COMPONENT_ATTRIBUTE = "data-litsx-noscript-component";
+
+function isInsideNoscriptFallback(path) {
+  return Boolean(path.findParent((parent) =>
+    parent.isJSXElement?.() &&
+    t.isJSXIdentifier(parent.node.openingElement.name, { name: "noscript" }),
+  ));
+}
 
 export function setElementCandidatesBabelTypes(nextTypes) {
   t = nextTypes;
@@ -708,7 +714,7 @@ function getOrCreateModuleAnalysis(filename, context) {
 
   let programPath = null;
   try {
-    const ast = parseWithLitsxVirtualization(babelParser.parse, source, {
+    const ast = babelParser.parse(source, {
       sourceType: "module",
       plugins: getParserPluginsForModule(normalizedFilename, source),
     });
@@ -842,14 +848,14 @@ function resolveExportedHelper(moduleAnalysis, exportedName, context, seen = new
 
 function getParserPluginsForModule(filename, source) {
   if (/\.(?:[cm]?ts|tsx|litsx)$/i.test(filename)) {
-    return ["typescript"];
+    return ["jsx", "typescript"];
   }
 
   if (/\b(?:as|satisfies)\s+[^;,)]+/.test(source)) {
-    return ["typescript"];
+    return ["jsx", "typescript"];
   }
 
-  return [];
+  return ["jsx"];
 }
 
 function isSymbolForMarker(node, markerKey) {
@@ -943,6 +949,7 @@ function resolveImportedElementRequirement(candidateName, moduleAnalysis, contex
       originalName: candidateName,
       tagName: candidateName.replace(/([a-z])([A-Z])/g, "$1-$2").toLowerCase(),
       rootFilename,
+      lightDom: importedBindingHasLightDomHoist(importInfo, context),
     };
   }
 
@@ -988,6 +995,7 @@ function resolveImportedElementRequirement(candidateName, moduleAnalysis, contex
     originalName: candidateName,
     tagName: candidateName.replace(/([a-z])([A-Z])/g, "$1-$2").toLowerCase(),
     rootFilename,
+    lightDom: helperPathHasLightDomHoist(moduleAnalysis.helperPaths.get(candidateName)),
   };
 }
 
@@ -1035,10 +1043,48 @@ function resolveDirectImportRequirement(candidateName, moduleAnalysis, context, 
   };
 }
 
+function helperPathHasLightDomHoist(helperPath) {
+  const body = helperPath?.node?.body?.body;
+  if (!Array.isArray(body)) {
+    return false;
+  }
+
+  return body.some((statement) => (
+    t.isExpressionStatement(statement) &&
+    t.isCallExpression(statement.expression) &&
+    t.isIdentifier(statement.expression.callee, { name: "__litsx_static_lightDom" })
+  ));
+}
+
+function importedBindingHasLightDomHoist(importInfo, context) {
+  if (!importInfo?.resolvedSource || importInfo.importedName === "*") {
+    return false;
+  }
+
+  const importedModule = getOrCreateModuleAnalysis(importInfo.resolvedSource, context);
+  if (!importedModule) {
+    return false;
+  }
+
+  const exportInfo = importedModule.exportBindings.get(importInfo.importedName);
+  const localName = exportInfo?.localName ?? (
+    importInfo.importedName === "default" ? "default" : importInfo.importedName
+  );
+
+  if (exportInfo?.path) {
+    return helperPathHasLightDomHoist(exportInfo.path);
+  }
+
+  return helperPathHasLightDomHoist(importedModule.helperPaths.get(localName));
+}
+
 function collectCandidateResult(functionPath, programPath, options = {}) {
   const result = createEmptyCandidateResult();
   if (!programPath || !functionPath?.node) return result;
-  programPath.scope.crawl();
+  // Babel's recrawl currently treats a legal TypeScript type/value namespace
+  // pair (for example `import type { Row }; function Row() {}`) as a duplicate
+  // block-scoped declaration. The initial program scope already contains the
+  // bindings needed by this analysis, so avoid invalidating it here.
   const compilationSession = options.__litsxCompilationSession || null;
 
   const rootFilename = normalizeFilePath(
@@ -1141,6 +1187,13 @@ function collectCandidateResult(functionPath, programPath, options = {}) {
       JSXOpeningElement(jsxPath) {
         const candidate = validateComponentName(jsxPath.node.name, jsxPath, scanContext);
         if (candidate) {
+          if (isInsideNoscriptFallback(jsxPath)) {
+            jsxPath.node.attributes.push(t.jsxAttribute(
+              t.jsxIdentifier(NOSCRIPT_COMPONENT_ATTRIBUTE),
+              t.jsxExpressionContainer(t.identifier(candidate)),
+            ));
+            return;
+          }
           if (moduleAnalysis.filename === context.rootFilename) {
             const directImportRequirement = resolveDirectImportRequirement(
               candidate,
@@ -1261,7 +1314,6 @@ export function importedBindingNeedsRendererContext(programPath, localName, opti
     return false;
   }
 
-  programPath.scope.crawl();
   const compilationSession = options.__litsxCompilationSession || null;
   const rootFilename = normalizeFilePath(
     options.filename || programPath.hub.file?.opts?.filename || ""
@@ -1428,6 +1480,65 @@ export function importedBindingNeedsRendererContext(programPath, localName, opti
   }
 
   return scanFunction(resolvedHelper.path, resolvedHelper.moduleAnalysis);
+}
+
+export function getImportedBindingModuleAnalysis(programPath, localName, options = {}) {
+  if (!programPath?.node || !localName) {
+    return null;
+  }
+
+  programPath.scope.crawl();
+  const compilationSession = options.__litsxCompilationSession || null;
+  const rootFilename = normalizeFilePath(
+    options.filename || programPath.hub.file?.opts?.filename || ""
+  );
+  const moduleAnalysisCache =
+    compilationSession?.importedModuleAnalysisCache ||
+    programPath.getData("__litsxImportedModuleAnalyses") ||
+    new Map();
+  programPath.setData("__litsxImportedModuleAnalyses", moduleAnalysisCache);
+  const resolvedImportCache =
+    compilationSession?.resolvedImportCache ||
+    programPath.getData("__litsxResolvedImports") ||
+    new Map();
+  programPath.setData("__litsxResolvedImports", resolvedImportCache);
+
+  const binding = programPath.scope.getBinding(localName);
+  if (!binding?.path?.node) {
+    return null;
+  }
+
+  if (
+    !binding.path.isImportSpecifier?.() &&
+    !binding.path.isImportDefaultSpecifier?.() &&
+    !binding.path.isImportNamespaceSpecifier?.()
+  ) {
+    return null;
+  }
+
+  const sourceValue = binding.path.parent?.source?.value ?? null;
+  const context = {
+    rootFilename,
+    moduleAnalysisCache,
+    resolvedImportCache,
+    ...createCompilerContextResolver(options),
+  };
+  const resolvedSource = resolveImportSource(rootFilename, sourceValue, context);
+  if (!resolvedSource) {
+    return null;
+  }
+
+  return {
+    localName,
+    sourceValue,
+    resolvedSource,
+    importedName: binding.path.isImportDefaultSpecifier()
+      ? "default"
+      : binding.path.isImportNamespaceSpecifier()
+        ? "*"
+        : binding.path.node.imported?.name ?? binding.path.node.imported?.value ?? null,
+    moduleAnalysis: getOrCreateModuleAnalysis(resolvedSource, context),
+  };
 }
 
 export default declare((api) => {

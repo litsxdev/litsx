@@ -1,5 +1,71 @@
 import fs from "fs/promises";
 import { createLitsxCompilationSession } from "@litsx/compiler";
+import path from "node:path";
+
+function normalizeSlashes(value) {
+  return String(value).replaceAll("\\", "/");
+}
+
+function normalizeBase(base = "/") {
+  if (!base) {
+    return "/";
+  }
+
+  const prefixed = base.startsWith("/") ? base : `/${base}`;
+  return prefixed.endsWith("/") ? prefixed : `${prefixed}/`;
+}
+
+function toProjectRelativeModuleId(moduleId, root) {
+  if (typeof moduleId !== "string" || !moduleId) {
+    return null;
+  }
+
+  const normalizedRoot = normalizeSlashes(path.resolve(root));
+  const normalizedModuleId = normalizeSlashes(
+    moduleId.startsWith("file://")
+      ? new URL(moduleId).pathname
+      : path.resolve(moduleId),
+  );
+
+  if (!normalizedModuleId.startsWith(normalizedRoot)) {
+    return null;
+  }
+
+  return normalizeSlashes(path.relative(normalizedRoot, normalizedModuleId));
+}
+
+/**
+ * Create an asset resolver suitable for `@litsx/ssr` results in Vite
+ * environments.
+ *
+ * In dev it converts source module ids under `root` into browser-facing module
+ * URLs such as `/src/components/ProductCard.litsx`. In build it can map those
+ * module ids through a Vite manifest to the emitted asset file.
+ */
+export function createLitsxViteAssetResolver({
+  root = process.cwd(),
+  manifest = null,
+  base = "/",
+} = {}) {
+  const normalizedBase = normalizeBase(base);
+
+  return (moduleId) => {
+    const relativeModuleId = toProjectRelativeModuleId(moduleId, root);
+    if (!relativeModuleId) {
+      return null;
+    }
+
+    if (manifest && typeof manifest === "object") {
+      const manifestEntry = manifest[relativeModuleId] ?? manifest[`./${relativeModuleId}`];
+      const file = manifestEntry?.file;
+      if (typeof file === "string" && file) {
+        return `${normalizedBase}${file}`.replace(/\/{2,}/g, "/");
+      }
+    }
+
+    return `${normalizedBase}${relativeModuleId}`.replace(/\/{2,}/g, "/");
+  };
+}
 
 const LIT_DEDUPE_PACKAGES = [
   "lit",
@@ -9,7 +75,37 @@ const LIT_DEDUPE_PACKAGES = [
   "@lit/context",
 ];
 
-function shouldTransform(id, include) {
+function getNodeModulesPackageName(id) {
+  const filename = String(id || "").split("?", 1)[0].replaceAll("\\", "/");
+  const marker = "/node_modules/";
+  const markerIndex = filename.lastIndexOf(marker);
+  if (markerIndex === -1) return null;
+  const segments = filename.slice(markerIndex + marker.length).split("/");
+  if (segments[0]?.startsWith("@")) {
+    return segments.length >= 2 ? `${segments[0]}/${segments[1]}` : null;
+  }
+  return segments[0] || null;
+}
+
+function getTransformDependencies(options = {}) {
+  const value = options.reactCompat;
+  if (!value || typeof value !== "object") return [];
+  return Array.from(new Set(
+    (value.transformDependencies || [])
+      .filter((entry) => typeof entry === "string" && entry.length > 0),
+  ));
+}
+
+function shouldTransform(id, include, transformDependencies = []) {
+  const packageName = getNodeModulesPackageName(id);
+  if (
+    packageName &&
+    transformDependencies.includes(packageName) &&
+    /\.[cm]?[jt]sx?(?:\?|$)/.test(id)
+  ) {
+    return true;
+  }
+
   if (typeof include === "function") {
     return include(id);
   }
@@ -18,7 +114,7 @@ function shouldTransform(id, include) {
     return include.test(id);
   }
 
-  return /\.(jsx|tsx|litsx)$/.test(id) || id.endsWith(".litsx.jsx");
+  return /\.[jt]sx$/.test(id);
 }
 
 function formatWarningLocation(warning) {
@@ -108,11 +204,29 @@ function withoutRollupOptimizeDepsOptions(optimizeDeps = {}) {
   return nextOptimizeDeps;
 }
 
+function mergeArray(existing, additions) {
+  return Array.from(new Set([
+    ...(Array.isArray(existing) ? existing : []),
+    ...additions,
+  ]));
+}
+
+function mergeNoExternal(existing, additions) {
+  if (existing === true) return true;
+  const entries = existing == null || existing === false
+    ? []
+    : Array.isArray(existing)
+      ? existing
+      : [existing];
+  return mergeArray(entries, additions);
+}
+
 export function litsx(options = {}) {
   const {
     include,
     ...compilerOptions
   } = options;
+  const transformDependencies = getTransformDependencies(options);
   let session = null;
   const warnedEntries = new Set();
 
@@ -130,7 +244,7 @@ export function litsx(options = {}) {
     return {
       name: "litsx-optimize-deps",
       async load(filePath) {
-        if (!shouldTransform(filePath, include)) {
+        if (!shouldTransform(filePath, include, transformDependencies)) {
           return null;
         }
 
@@ -158,6 +272,7 @@ export function litsx(options = {}) {
       const rolldownOptions = optimizeDeps.rolldownOptions ?? {};
       const existingPlugins = rolldownOptions.plugins ?? [];
       const existingResolve = userConfig.resolve ?? {};
+      const existingSsr = userConfig.ssr ?? {};
 
       return {
         resolve: {
@@ -166,15 +281,26 @@ export function litsx(options = {}) {
         },
         optimizeDeps: {
           ...optimizeDeps,
+          ...(transformDependencies.length > 0
+            ? { exclude: mergeArray(optimizeDeps.exclude, transformDependencies) }
+            : {}),
           rolldownOptions: {
             ...rolldownOptions,
             plugins: [...existingPlugins, createOptimizeDepsRolldownPlugin()],
           },
         },
+        ...(transformDependencies.length > 0
+          ? {
+              ssr: {
+                ...existingSsr,
+                noExternal: mergeNoExternal(existingSsr.noExternal, transformDependencies),
+              },
+            }
+          : {}),
       };
     },
     async transform(code, id) {
-      if (!shouldTransform(id, include)) {
+      if (!shouldTransform(id, include, transformDependencies)) {
         return null;
       }
 

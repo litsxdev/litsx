@@ -7,11 +7,15 @@
 
 Build-facing LitSX compilation facade.
 
-Use this package when you need to compile authored LitSX source programmatically and want the correct compilation pipeline applied by default:
+The compiler consumes the standard source language defined by the repository's
+[native authoring contract](../../AUTHORING.md).
 
-- LitSX-authored source virtualization and AST remapping
+Use this package when you need to compile standard JSX/TSX to Lit elements and templates programmatically and want the correct pipeline applied by default:
+
+- standard Babel JSX/TSX parsing and authored-source analysis
+- generated Lit-template IR reparsing and AST remapping between compiler passes
 - LitSX Babel transforms in the supported order
-- virtualization sourcemap chaining
+- sourcemap chaining across compiler passes
 - final Lit template sourcemap patching
 
 For Vite apps and Storybook setups using the Vite builder, prefer [`@litsx/vite-plugin`](../vite-plugin/README.md).
@@ -28,12 +32,13 @@ Typical consumers also need the runtime packages used by their compiled output, 
 
 ## What It Solves
 
-LitSX authored JSX is not plain JSX. The compilation path needs to handle:
+The compilation path handles:
 
-- Lit-style attributes such as `@click`, `.value`, and `?disabled`
-- LitSX macros and authored syntax that are virtualized before parsing
+- ordinary JSX props with destination-aware Lit binding inference
+- explicit `on:event` listeners and component static assignments
+- compiler-generated Lit binding forms such as `@click`, `.value`, and `?disabled`
 - Babel plugin ordering
-- sourcemap composition across virtualization and template lowering
+- sourcemap composition across generated-template reparsing and template lowering
 
 You can wire those pieces together manually, but this package exists so callers do not need to know about:
 
@@ -43,7 +48,7 @@ You can wire those pieces together manually, but this package exists so callers 
 
 If you do want to wire Babel directly, `@litsx/babel-preset-litsx` is the canonical source of truth for the native LitSX plugin order.
 
-For advanced integrations that need to share LitSX virtualization and authored-input preparation without using the full compiler facade, `@litsx/compiler` also exports low-level helpers such as `prepareLitsxAuthoredInput(...)` and `ensureLitsxParserPlugins(...)`.
+For advanced integrations that need authored-input preparation without using the full compiler facade, `@litsx/compiler` also exports low-level helpers such as `prepareLitsxAuthoredInput(...)` and `ensureLitsxParserPlugins(...)`. Generated-template virtualization remains an internal compiler concern, not an authored-source parser.
 
 ## Basic Usage
 
@@ -52,7 +57,7 @@ import { transformLitsx } from "@litsx/compiler";
 
 const source = `
   export const Counter = ({ label = "Save" }) => {
-    return <button @click={save}>{label}</button>;
+    return <button on:click={save}>{label}</button>;
   };
 `;
 
@@ -107,6 +112,9 @@ Additional Babel parser plugins. If omitted, `.tsx` filenames automatically enab
 ### `sourceMaps?: boolean`
 
 When `true`, emits a final sourcemap aligned to the original authored source.
+The emitted map keeps the original authored filename in `sources` and the
+original authored `.litsx` text in `sourcesContent`, so downstream bundlers can
+chain the map without replacing DevTools source views with transformed JS.
 
 When `false` or omitted:
 
@@ -138,9 +146,17 @@ const result = await transformLitsx(source, {
 
 ### `authoringPlugins?: unknown[]`
 
-Additional Babel plugins applied after LitSX virtualization/parsing and before the built-in LitSX lowering pipeline.
+Additional Babel plugins applied after standard JSX/TSX parsing and before the built-in LitSX lowering pipeline.
 
 Use this when you need to introduce extra authored syntax or conventions on top of LitSX source without patching the core preset ordering.
+
+### `reactCompat?: boolean | object`
+
+Selects `@litsx/babel-preset-react-compat` instead of the native preset. `true` uses the compatibility defaults (`domMode: "light"` and `reactKeys: true`). The object form accepts `domMode`, `reactKeys`, and `transformDependencies`; see the [complete react-compat option reference](../babel-preset-react-compat/README.md#options).
+
+`jsxTemplate` and `jsxTemplateOptions` remain top-level compiler options. They control the compiler's shared final output pass after either the native or react-compat feature pipeline has run.
+
+Build-tool integrations must ensure that every package named by `transformDependencies` is passed to the compiler in both client and SSR pipelines. `@litsx/vite-plugin` handles transformation, dependency-optimization exclusion, and SSR externalization automatically.
 
 ### `outputPlugins?: unknown[]`
 
@@ -150,11 +166,15 @@ Use this for bounded, consumer-specific post-processing on already-lowered outpu
 
 ## Output Contract
 
-The compiler always parses authored source through the standard Babel parser plus LitSX's virtualization/remap layer, and always applies the supported LitSX transform chain internally.
+The compiler parses authored standard JSX/TSX directly through Babel. Internal generated templates may use Lit binding prefixes during lowering, but those prefixes are not part of the authored language.
+
+In particular, application source uses ordinary prop names, `on:event`,
+`ref={...}`, and top-level `Component.styles`/`Component.properties`
+assignments. `.prop`, `?attr`, and `@event` only describe the Lit template output
+chosen by the compiler.
 
 When `sourceMaps: true`, the returned map includes:
 
-- the authored-to-virtual sourcemap from attribute virtualization
 - the transform chain sourcemap from Babel
 - the final patching needed for Lit-style attributes after JSX has been lowered to `html\`\``
 

@@ -1,0 +1,101 @@
+# UnoCSS integration design validation
+
+Date: 2026-08-20
+UnoCSS: 66.8.0
+
+## Result
+
+LitSX does not need an UnoCSS-specific compiler phase. The existing generic
+`outputPlugins` hook can attach one shared utility `CSSResult` to every
+generated LitSX component class in a module. The Vite adapter runs UnoCSS's
+Shadow DOM mode after LitSX and imports one project-level virtual `CSSResult`
+containing the resolved preflight.
+
+The integration verifies:
+
+- existing `Component.styles` composition
+- components without authored styles
+- multiple components per module with one CSS literal
+- native and react-compat compilation
+- Shadow DOM and light DOM classes
+- client and SSR Vite builds
+- real Lit SSR rendering with the generated CSS
+- sourcemaps
+- composition and idempotence with other output plugins
+- modules without LitSX components
+- generic pre/post-LitSX plugin ordering in Storybook
+- one preflight module shared by independently compiled component modules
+- SSR serialization of the shared preflight inside each declarative shadow root
+- token-dependent Wind4 theme variables
+- external `uno.config` resolution
+- development snapshots and invalidation when new tokens appear
+- shared output across multiple build entrypoints
+- computed styles after SSR hydration in real Chromium for Shadow and Light DOM
+
+## Granularity
+
+UnoCSS's official Shadow DOM transform replaces the first
+`@unocss-placeholder` in a module. The adapter therefore emits one stylesheet
+per module and references it from every component declared by that module.
+
+This keeps one CSS copy in the JavaScript module. Components in the same file
+receive the union of the utilities used by their siblings. Keeping one primary
+component per source file produces component-level granularity without a new
+compiler contract.
+
+## Size measurement
+
+For the fixture utilities:
+
+```text
+px-4 bg-red-500 text-white p-8 shadow-lg
+```
+
+`presetWind3` generated:
+
+| Output                       |     Raw |  Gzip |
+| ---------------------------- | ------: | ----: |
+| Shared preflight             | 2,158 B | 409 B |
+| Utilities without preflights |   520 B | 259 B |
+| Utilities with preflights    | 2,679 B | 585 B |
+
+Generating the two fixture components independently produced 4,858 raw bytes.
+The shared module stylesheet produced 2,679 raw bytes, saving 2,179 bytes by
+deduplicating the preflight within that module.
+
+With the virtual module implementation, independently compiled component
+modules contain only their utility subsets and reference the same 2,158-byte
+preflight module. For the complete fixture utility set that is 2,678 raw CSS
+bytes rather than embedding the preflight in every module.
+
+The adapter collects the token set through UnoCSS's own resolved context and
+attaches a generated preflight `CSSResult` alongside each module's utility-only
+sheet. Build output is materialized once after module transformation, when all
+entrypoint tokens are known, so production shares one project-level virtual
+module. During Vite serve, each importing component module resolves a distinct
+preflight snapshot after its own tokens have been extracted. This avoids an
+early ESM evaluation retaining a stale `CSSResult` when a lazy module later
+introduces a Wind4 theme variable. Development invalidates those snapshots when
+UnoCSS sees new tokens or reloads configuration. Preset preflights are removed
+from the independently generated shadow utility styles only after UnoCSS has
+resolved the complete preset configuration; merely passing `preflights: []`
+is insufficient because UnoCSS merges preset entries.
+
+SSR must still serialize styles into each declarative shadow root. Repeated
+preflight compresses well over the wire, but it still affects generated HTML
+and parsing cost. A follow-up can measure large repeated SSR trees before
+choosing whether to keep the full Wind preflight or generate a smaller
+design-system preflight.
+
+## Generic LitSX surface
+
+The compiler surface was sufficient:
+
+- `outputPlugins` augments generated component classes.
+- compiler options already flow through client and SSR Vite transforms.
+- result metadata records the applied style integration.
+
+Storybook did need generic ordering for build-tool plugins. Its configuration
+now accepts `vitePlugins.beforeLitsx` and `vitePlugins.afterLitsx`. These phases
+are useful to any source analyzer or generated-output processor and contain no
+UnoCSS-specific behavior.

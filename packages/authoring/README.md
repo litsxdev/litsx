@@ -1,59 +1,22 @@
 # `@litsx/authoring`
 
-[![npm](https://img.shields.io/badge/npm-@litsx%2Fauthoring-CB3837)](https://www.npmjs.com/package/@litsx/authoring)
-[![Release](https://img.shields.io/badge/release-public-2ea44f)](../../RELEASING.md)
-[![Module](https://img.shields.io/badge/module-ESM%20%2B%20CJS-0366d6)](./package.json)
-[![Provenance](https://img.shields.io/badge/npm_provenance-enabled-2ea44f)](../../RELEASING.md)
+Shared authoring semantics used by the LitSX compiler and lint tooling.
 
-Shared authored-JSX language utilities for LitSX.
+The public source-language contract lives in [`../../AUTHORING.md`](../../AUTHORING.md).
+This package implements shared analysis for that contract; it does not define a
+second authoring dialect.
 
-This package is the source of truth for the authored syntax layer reused across:
+Application source is standard `.jsx` or `.tsx`. This package centralizes:
 
-- parser adapters
-- Babel transforms
-- TypeScript tooling
-- editor-facing utilities
+- `on:event` parsing and event-name normalization
+- standard `onX` callback and native DOM event-property classification
+- component and implicit-children semantic analysis
+- internal encoding used between LitSX compiler passes
 
-## What It Owns
+The internal encoding may contain Lit binding prefixes, but it is not public
+authored syntax and must never be presented as application source in diagnostics,
+examples, or website documentation.
 
-`@litsx/authoring` is where LitSX-specific authored syntax gets normalized or virtualized before downstream tools consume it.
-
-That includes:
-
-- virtual attribute handling for `.prop`, `@event`, and `?attr`
-- authored-source remapping metadata
-- helper utilities shared by the parser and transform toolchain
-
-## Why It Exists
-
-LitSX authored JSX is not plain JSX. The toolchain needs a shared definition of:
-
-- which authored forms are valid
-- how those forms are virtualized for parsing
-- how source positions are mapped back to the original authored input
-
-Without a shared package, parser, compiler, and tooling layers would drift.
-
-## Intended Audience
-
-This is primarily an infrastructure package for:
-
-- LitSX maintainers
-- tooling authors extending the LitSX compilation stack
-
-It is not the recommended entrypoint for application builds.
-
-For public compilation surfaces, prefer:
-
-- [`@litsx/compiler`](../compiler/README.md)
-- [`@litsx/vite-plugin`](../vite-plugin/README.md)
-
-## Package Role in the Toolchain
-
-Typical flow:
-
-1. `@litsx/authoring` virtualizes authored syntax and records remapping metadata
-2. a parser adapter or internal tool calls `@babel/parser` over that virtual source
-3. the compiler/plugin layer restores authored positions and performs Babel transforms
-
-That separation keeps authored-syntax knowledge centralized while build integration stays in the public facade packages.
+The `@litsx/authoring/internal/parser` export exists only to reparse generated
+compiler IR. Application files and imported source dependencies are parsed with
+the standard Babel JSX/TypeScript parser and cannot use that encoding.

@@ -25,21 +25,13 @@ The release pipeline currently publishes these workspace packages:
 - `@litsx/compiler`
 - `@litsx/core`
 - `create-litsx-app`
-- `@litsx/eslint-plugin-litsx`
-- `prettier-plugin-litsx`
+- `@litsx/eslint-plugin`
 - `@litsx/prop-types`
 - `@litsx/scoped-registry-shim`
-- `@litsx/typescript`
 - `@litsx/typescript-session`
 - `@litsx/vite-plugin`
 
 The source of truth for this set is [scripts/release/release-packages.js](/Users/rafabernad/Workspace/litsx/scripts/release/release-packages.js).
-
-## Private packages
-
-These workspace packages stay private and outside npm publication:
-
-- `@litsx/shiki-languages`
 
 ## Contributor workflow
 

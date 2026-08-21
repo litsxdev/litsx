@@ -1,5 +1,13 @@
 import fs from "node:fs";
 import path from "node:path";
+import { packageDirsByName, readPackageVersion } from "./package-version-map.js";
+
+const dependencyFields = [
+  "dependencies",
+  "devDependencies",
+  "optionalDependencies",
+  "peerDependencies",
+];
 
 function rewriteSrcTarget(target) {
   if (typeof target !== "string") {
@@ -33,6 +41,33 @@ function rewriteManifestValue(value) {
   return Object.fromEntries(
     Object.entries(value).map(([key, entryValue]) => [key, rewriteManifestValue(entryValue)])
   );
+}
+
+function rewriteWorkspaceDependencies(manifest) {
+  const rewrittenManifest = { ...manifest };
+
+  for (const field of dependencyFields) {
+    const dependencies = manifest[field];
+    if (!dependencies || typeof dependencies !== "object") {
+      continue;
+    }
+
+    rewrittenManifest[field] = Object.fromEntries(
+      Object.entries(dependencies).map(([packageName, versionRange]) => {
+        if (
+          typeof versionRange !== "string" ||
+          !versionRange.startsWith("workspace:") ||
+          !packageDirsByName.has(packageName)
+        ) {
+          return [packageName, versionRange];
+        }
+
+        return [packageName, `^${readPackageVersion(packageName)}`];
+      }),
+    );
+  }
+
+  return rewrittenManifest;
 }
 
 function normalizeConditionalExportTarget(exportTarget, fileExists) {
@@ -77,7 +112,7 @@ export function createReleaseManifest(manifest, options = {}) {
     : rewriteManifestValue(manifest.exports);
 
   const releaseManifest = {
-    ...manifest,
+    ...rewriteWorkspaceDependencies(manifest),
     module: rewriteSrcTarget(manifest.module),
     types: rewriteSrcTarget(manifest.types),
     exports: rewrittenExports,

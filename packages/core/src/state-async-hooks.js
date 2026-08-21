@@ -22,22 +22,22 @@ export function useAsyncStateImpl(
   const stateRef = useRef(host, state);
   const latestRunRef = useRef(host, 0);
 
-  if (initialStateRef.current === INITIAL_ASYNC_STATE) {
-    initialStateRef.current = state;
+  if (initialStateRef.value === INITIAL_ASYNC_STATE) {
+    initialStateRef.value = state;
   }
 
-  stateRef.current = state;
+  stateRef.value = state;
 
   const run = useEvent(host, (...args) => {
-    const runId = latestRunRef.current + 1;
-    latestRunRef.current = runId;
+    const runId = latestRunRef.value + 1;
+    latestRunRef.value = runId;
     setError(null);
 
     let result;
     try {
-      result = beginTransition(() => action(stateRef.current, ...args));
+      result = beginTransition(() => action(stateRef.value, ...args));
     } catch (nextError) {
-      if (runId === latestRunRef.current) {
+      if (runId === latestRunRef.value) {
         setError(nextError);
       }
       return Promise.reject(nextError);
@@ -45,15 +45,15 @@ export function useAsyncStateImpl(
 
     return Promise.resolve(result).then(
       (nextState) => {
-        if (runId === latestRunRef.current) {
-          stateRef.current = nextState;
+        if (runId === latestRunRef.value) {
+          stateRef.value = nextState;
           setError(null);
           setState(nextState);
         }
         return nextState;
       },
       (nextError) => {
-        if (runId === latestRunRef.current) {
+        if (runId === latestRunRef.value) {
           setError(nextError);
         }
         return Promise.reject(nextError);
@@ -62,10 +62,10 @@ export function useAsyncStateImpl(
   });
 
   const reset = useEvent(host, () => {
-    latestRunRef.current += 1;
-    stateRef.current = initialStateRef.current;
+    latestRunRef.value += 1;
+    stateRef.value = initialStateRef.value;
     setError(null);
-    setState(initialStateRef.current);
+    setState(initialStateRef.value);
   });
 
   return [state, run, { pending, error, reset }];
@@ -79,25 +79,25 @@ export function useOptimisticImpl(host, state, updateFn, useRef, useState) {
   const queueRef = useRef(host, []);
   const [, forceRender] = useState(host, 0);
 
-  if (!Object.is(baseStateRef.current, state)) {
-    baseStateRef.current = state;
-    queueRef.current = [];
+  if (!Object.is(baseStateRef.value, state)) {
+    baseStateRef.value = state;
+    queueRef.value = [];
   }
 
   const addOptimistic = useEvent(host, (optimisticValue) => {
-    queueRef.current = [...queueRef.current, optimisticValue];
+    queueRef.value = [...queueRef.value, optimisticValue];
     forceRender((version) => version + 1);
   });
 
   const resetOptimistic = useEvent(host, () => {
-    if (queueRef.current.length === 0) {
+    if (queueRef.value.length === 0) {
       return;
     }
-    queueRef.current = [];
+    queueRef.value = [];
     forceRender((version) => version + 1);
   });
 
-  const optimisticState = queueRef.current.reduce(
+  const optimisticState = queueRef.value.reduce(
     (currentState, optimisticValue) => reducer(currentState, optimisticValue),
     state
   );

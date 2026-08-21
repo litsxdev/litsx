@@ -9,6 +9,22 @@ Runtime helpers that back the Lit<sup>SX</sup> Babel transforms. The module bund
 
 The package also exposes `@litsx/core/jsx-runtime` and `@litsx/core/jsx-dev-runtime` entrypoints so editors and TypeScript can treat LitSX as a first-class JSX runtime via `jsxImportSource: "@litsx/core"`.
 
+SSR support used by [`@litsx/ssr`](../ssr/README.md) also lives here: scoped-template metadata, scoped custom-element lookup for nested `static elements`, and the SSR-safe effects controller selected when a host is rendered with SSR context. Most applications should use `@litsx/ssr` rather than importing those internals directly.
+
+Library runtimes that own a global resolved-resource cache can use
+`useSsrResourceSnapshot({ key, capture, restore })`. During SSR, `capture()` is
+deferred until the final render pass has completed; during hydration,
+`restore(snapshot)` runs synchronously and once before registration and client
+module loading can trigger the first render. The hook is inert without an
+active SSR request or hydration resource payload, and `@litsx/core` never
+imports `@litsx/ssr`.
+
+This is infrastructure for libraries such as i18n or data runtimes. Application
+code should not add manual snapshot adapters or hydration bootstrap calls.
+
+For authored syntax and binding rules, see the repository's
+[native authoring contract](../../AUTHORING.md).
+
 ## What it provides
 
 - `EffectsController`: a Lit `ReactiveController` implementation that tracks hook registrations, dependency arrays, effect queues, transitions, refs, and external-store subscriptions per host instance.
@@ -23,28 +39,115 @@ The package also exposes `@litsx/core/jsx-runtime` and `@litsx/core/jsx-dev-runt
   - `useTransition`, `startTransition`, `useDeferredValue`
 - Host and ref primitives:
   - `useHost`, `useHostContent`, `useTextContent`, `useSlot`
-  - `useRef`, `useCallbackRef`, `useExpose`, `useId`, `useStableId`
+  - `createRef`, `ref`, `useRef`, `useCallbackRef`, `useExpose`, `useId`, `useStableId`
   - `useMemoValue`, `useStableCallback`, `useEvent`, `useEmit`, `usePrevious`
   - `useExternalStore`, `useStyle`
 - Async and error primitives:
   - `ErrorBoundary`, `SuspenseBoundary`, `SuspenseList`
   - `ensureLazyElement(...)` for host-registry-aware lazy custom element registration
-- Structural host middleware infrastructure:
-  - `HostMiddlewareRuntime`
-  - `HostMiddlewareMixin`
-  - `createHostMiddlewareRuntime(...)`
+- SSR request execution context:
+  - `createExecutionContextKey(...)`
+  - `getCurrentExecutionContext()`
+- Component styling:
+  - `css` is the original Lit template tag re-exported for the common
+    `Component.styles = css\`...\``authoring pattern. Lit directives remain
+available from their normal Lit entrypoints;`createRef`and`ref` are also
+    re-exported because JSX refs lower directly to Lit's ref directive.
+- Structural host capabilities:
+  - `defineHook({ mixin, use })`
+  - compiler-injected `applyStructuralHooks(...)`
+  - stable mixin deduplication in first-use order
 - JSX compatibility helpers:
   - `jsxSpreadElement(tagName, sources, options?, children?)` merges JSX prop sources in authored order. It uses an `ElementPart` in the browser and regular Lit parts during SSR.
-  - Explicit `.prop`, `?boolean`, and `@event` keys override inference; otherwise the destination constructor, reactive component API, and native DOM properties determine the binding channel.
+  - Compiled components with an object-rest parameter publish `Symbol.for("litsx.restProps")` metadata. `jsxSpreadElement` uses it to keep declared reactive props on the component host while routing undeclared inputs through one compact reactive object for forwarding to an inner element.
+  - `on:event` is the explicit JSX event channel. The destination constructor, reactive component API, and native DOM properties determine whether ordinary JSX names become Lit property, boolean-attribute, or attribute bindings.
+  - `onX` names are ordinary component properties/callbacks. React-style `onClick` event conversion belongs exclusively to react-compat. Native handler properties such as `onclick` remain available and are assigned as properties.
   - Hydratable spread output should be rendered with `@litsx/ssr` and hydrated with `@litsx/ssr/client` so the two template shapes are reconciled without replacing DOM nodes.
 
+## Ref semantics
+
+Native LitSX refs follow Lit's contract: object refs expose `.value`, and refs are
+cleared with `undefined`. JSX keeps the standard `ref={...}` shape while the
+compiler lowers intrinsic-element refs to Lit's element-part directive:
+
+```tsx
+const inputRef = useRef<HTMLInputElement>();
+
+useOnCommit(() => inputRef.value?.focus(), []);
+return <input ref={inputRef} />;
+```
+
+Component refs travel through the `.ref` property until they reach their final
+host, forwarded element, or `useExpose` handle. Object refs, callback refs,
+spreads, SSR, and hydration share the same `.value`/`undefined` lifecycle. The
+React compatibility preset supplies `.current`/`null` facades without changing
+the native runtime contract.
+
+SSR serializes the element and Lit's hydration markers, never the ref object or
+callback. On the client, Lit reconnects its element part to the existing server
+node and only then publishes that node through the ref. Hydration therefore does
+not recreate an element merely to populate its ref.
+
+## Typed component events
+
+Give `useEmit` an event map to type both emission and JSX consumers:
+
+```tsx
+type ButtonEvents = {
+  "primary-action": { id: string };
+  "url-change": URL;
+};
+
+export function ActionButton() {
+  const emit = useEmit<ButtonEvents>();
+  return (
+    <button on:click={() => emit("primary-action", { id: "save" })}>
+      Save
+    </button>
+  );
+}
+
+const view = <ActionButton on:primary-action={(event) => event.detail.id} />;
+```
+
+The compiler publishes the inferred contract as `ActionButton.events` and under
+`Symbol.for("litsx.events")`. This lets TypeScript, editor tooling, spreads, and
+downstream packages consume the same event API without inspecting source. A
+literal event name makes the inferred contract complete; a dynamic name keeps it
+open so consumers may still use unknown `on:event` listeners.
+
+Libraries can declare the contract explicitly when inference is not possible:
+
+```ts
+import type { LitsxEventDeclaration } from "@litsx/core";
+
+export declare class ActionButton extends HTMLElement {
+  static readonly events: LitsxEventDeclaration<ButtonEvents, true>;
+}
+```
+
+Public declarative events use lowercase kebab-case and preserve their exact name:
+`primary-action` becomes `on:primary-action`. The value can also be a listener
+object with `capture`, `once`, or `passive` options. Event names outside the
+canonical JSX channel, such as `menu:open` or `state.change`, remain available
+through `addEventListener()`.
+
 All helpers accept the Lit element instance as the first argument. The Babel transforms insert it automatically, but you can also call the runtime manually.
+
+## Styling
+
+In `.litsx`, the JSX `style` attribute is string-based. LitSX does not support
+React-style object bindings such as `style={{ color: "red" }}`.
+
+- Use `style="color: red"` or `style={styleText}` when you need an inline style attribute.
+- Use `useStyle(...)` when the value belongs on the component host as a dynamic
+  host style property or CSS custom property.
 
 ## Usage
 
 ```js
-import { LitElement, html } from 'lit';
-import { prepareEffects, useAfterUpdate, useOnCommit } from '@litsx/core';
+import { LitElement, html } from "lit";
+import { prepareEffects, useAfterUpdate, useOnCommit } from "@litsx/core";
 
 class ClockDisplay extends LitElement {
   static properties = {
@@ -54,14 +157,25 @@ class ClockDisplay extends LitElement {
   render() {
     prepareEffects(this);
 
-    useOnCommit(this, () => {
-      this.classList.add('hydrated');
-    }, []);
+    useOnCommit(
+      this,
+      () => {
+        this.classList.add("hydrated");
+      },
+      [],
+    );
 
-    useAfterUpdate(this, () => {
-      const handle = setInterval(() => this.requestUpdate(), this.delay ?? 1000);
-      return () => clearInterval(handle);
-    }, [this.delay]);
+    useAfterUpdate(
+      this,
+      () => {
+        const handle = setInterval(
+          () => this.requestUpdate(),
+          this.delay ?? 1000,
+        );
+        return () => clearInterval(handle);
+      },
+      [this.delay],
+    );
 
     return html`<time>${new Date().toLocaleTimeString()}</time>`;
   }
@@ -94,6 +208,44 @@ Layout work runs immediately during `hostUpdated()`, while passive effects are d
 
 The helpers are framework agnostic: they only assume that the host object exposes Lit’s controller lifecycle (`addController`, `hostUpdated`, `hostDisconnected`).
 
+## SSR Execution Context
+
+During LitSX SSR, `@litsx/ssr` creates one execution context for each public
+render request. That execution context:
+
+- stays stable across suspense retries for the same request
+- is shared by nested server-component calls in that request
+- is not modeled through DOM providers or context elements
+- returns `null` when no SSR request is active
+
+Create an opaque key once:
+
+```js
+import {
+  createExecutionContextKey,
+  getCurrentExecutionContext,
+} from "@litsx/core";
+
+const USER_KEY = createExecutionContextKey("user");
+```
+
+Write and read during SSR:
+
+```js
+export async function ProductPage() {
+  getCurrentExecutionContext()?.set(USER_KEY, { id: "123" });
+  return <AppRoot />;
+}
+
+function readUser() {
+  return getCurrentExecutionContext()?.get(USER_KEY) ?? null;
+}
+```
+
+`@litsx/ssr` creates this execution context internally. It is separate from the
+SSR metadata config passed as `options.context` to `renderToString(...)`,
+`renderDocument(...)`, or `renderToStream(...)`.
+
 ## Stable Callsite Identity
 
 `useStableId()` returns an identifier for the authored callsite. The LitSX transform rewrites:
@@ -110,205 +262,94 @@ When cache identity should follow the component definition rather than one speci
 
 Do not use `useStableId()` when you need unique DOM ids for multiple instances of the same component. Every instance of the same authored callsite receives the same value by design. Use `useId()` for instance-local DOM ids and accessibility relationships. `useId()` follows hook order within a host instance; `useStableId()` follows the authored callsite.
 
-## Structural Hooks And Host Middleware
+## Structural hooks and host capabilities
 
-LitSX also includes plumbing for structural hooks that need to participate in the host lifecycle. This is separate from `EffectsController`.
-
-- `EffectsController` remains the render-time hook controller.
-- `HostMiddlewareRuntime` is the structural host layer for lifecycle middleware.
-- `HostMiddlewareMixin` is the reusable host mixin shape used by generated components that contain structural hooks.
-- `defineHook()` marks a hook definition as structural.
-- `resolveStructuralEntry()` is the compiler-facing runtime resolver used for generated structural hook callsites.
-
-Authored structural hooks are declared with `defineHook()`:
-
-```js
-import { defineHook } from "@litsx/core";
-
-const useLocale = defineHook({
-  static(locale, meta) {
-    return { key: locale, path: meta.callsitePath };
-  },
-  setup(_host, args, staticState, meta) {
-    const [locale] = args;
-    return { locale, connected: false, key: staticState.key };
-  },
-  accessors(host, state, next) {
-    return {
-      ...next(),
-      value: {
-        get: () => state.instance.locale,
-      },
-    };
-  },
-  use(_host, state, args, meta) {
-    const [locale] = args;
-    return `${state.static.key}:${state.instance.locale}`;
-  },
-  middlewares: {
-    connectedCallback(_host, state, next, _args, meta) {
-      state.instance.connected = true;
-      return next();
-    },
-  },
-});
-```
-
-The phases are explicit:
-
-- `static(...args, meta)` runs in the class/type phase and never participates in host instance lifecycle.
-- `setup(host, args, staticState, meta, entry)` creates per-host-instance state.
-- `props(host, state, next)` computes structural Lit property metadata as composition middleware.
-- `middlewares` wraps host lifecycle methods through `(host, state, next, args, meta, entry)` and is instance-phase only.
-- `accessors(host, state, next)` installs host instance accessors as composition middleware for readonly platform-facing getters or low-level control properties.
-- `use(host, state, args, meta, entry)` is the render-time hook API consumed by authored code.
-
-When the `args` tuple and reader return are typed, `defineHook()` preserves those types for authored calls:
+Structural hooks let function-authored components request capabilities that
+must exist on their generated element class. The hook reads the capability;
+a standard class mixin implements it.
 
 ```ts
-const useLocale = defineHook<[locale: string], string, { key: string }, { connected: boolean }>({
-  static(locale) {
-    return { key: locale.toUpperCase() };
-  },
-  setup(_host, _args, _staticState) {
-    return { connected: false };
-  },
-  use(_host, state, args) {
-    const [locale] = args;
-    return `${state.static.key}:${state.instance.connected}:${locale}`;
-  },
-});
+import { defineHook } from "@litsx/core";
 
-const locale: string = useLocale("en");
-```
+const I18nMixin = (Base) =>
+  class extends Base {
+    #i18n = createI18nController(this);
 
-The LitSX transform rewrites static calls to structural hook identifiers:
+    get i18n() {
+      return this.#i18n;
+    }
+  };
 
-```jsx
-const locale = useLocale("en");
-```
-
-into a compiler-facing runtime resolution:
-
-```js
-const locale = resolveStructuralEntry(
-  this,
-  0,
-  "litsx-structural-...",
-  useLocale,
-  ["en"],
-  { callsitePath: ["litsx-structural-..."] },
-);
-```
-
-Static-only hooks lower through `resolveStructuralStaticEntry(...)` and a generated `static structuralStaticEntries` table. They do not wrap the generated host with `HostMiddlewareMixin(...)` and do not pay lifecycle middleware overhead. Mixed hooks with `setup(...)` or `middlewares` lower through the instance structural runtime.
-
-Existing LitSX static hoists such as `static styles`, `static properties`, `static shadowRootOptions`, `static elements`, and `static lightDom` remain class/type-phase work. `static expose` still materializes as real static class methods. None of these hoists are modeled as instance lifecycle middleware.
-
-The hook can be declared in the same module or imported from another authored module with a statically discoverable `defineHook()` export:
-
-```js
-import { useLocale } from "./locale-hooks.litsx";
-import * as resources from "./resource-hooks.litsx";
-
-const locale = useLocale("en");
-const catalog = resources.useCatalog("checkout");
-```
-
-Generated component classes are wrapped with `HostMiddlewareMixin(...)` so lifecycle middleware is composed with the host lifecycle. For direct structural hook calls whose definitions are in scope, the transform also emits a static `structuralEntries` table so lifecycle middleware is available before the first render; render-time reads still refresh args through `resolveStructuralEntry(...)`.
-
-Structural hooks can also be used transitively through local or imported custom hooks and inside another structural hook's `use(...)` reader:
-
-```js
-const useCatalog = defineHook({
-  use(_host, _state, args) {
-    const [name] = args;
-    return useLocaleResource(name);
+export const useI18n = defineHook({
+  mixin: I18nMixin,
+  use(host) {
+    return host.i18n;
   },
 });
 ```
 
-The transform is intentionally static: dynamic hook lookup is not structural-hook syntax. Aliasing a structural hook, storing it in an object or array, choosing it at runtime, or reading a namespace import through a computed property is a build-time error with a code-frame diagnostic. LitSX needs a direct authored callsite such as `useLocale("en")` or `hooks.useLocale("en")` so it can assign reliable callsite identity.
+Component authoring remains ordinary function and JSX syntax:
 
-This phase emits static entries for direct structural hook callsites when the hook definition can be referenced from the generated component module. Custom hooks that contain structural hooks also receive compiled structural metadata on `STRUCTURAL_HOOK_ENTRIES`, so importing and calling that custom hook lets the consuming host include those entries in its static plan.
-
-The import analysis is static and intentionally conservative: authored modules are inspected for `defineHook()` exports and for exported custom hooks that call structural hooks. Relative imports, TypeScript `paths`/`baseUrl`, and TypeScript module resolution are supported when the compiler session/options are available. The runtime API carries `callsitePath` metadata so nested authored paths remain stable as the compiler grows.
-
-Conceptually, each authored structural-hook callsite becomes one entry:
-
-```js
-{
-  callsiteIndex: 0,
-  callsiteId: "litsx-stable-example",
-  callsitePath: ["HostComponent", "useThing"],
-  definition,
-  args: [loaders],
-  meta: { callsitePath: ["HostComponent", "useThing"] },
-  state: { static: staticState, instance: instanceState },
-  middlewares,
+```tsx
+export function SaveButton() {
+  const i18n = useI18n();
+  return <button>{i18n.t("save")}</button>;
 }
 ```
 
-Entries are **not deduplicated** by the host middleware runtime. Each entry is one authored callsite. Even if two callsites use the same hook definition and the same arguments, they remain separate entries with separate state and separate `runtime.read(index)` results.
-
-The identity split is:
-
-- `callsiteIndex`: stable local index for generated reads such as `runtime.read(0)`
-- `callsiteId`: stable serializable identity for diagnostics, SSR metadata, or hook-specific resource keys
-- `callsitePath`: stable authored expansion path for nested structural usage
-- `id`: compatibility alias for the stable callsite id
-
-Resource dedupe belongs below this layer, inside the hook or resource runtime that knows the domain semantics. For example, an i18n runtime can dedupe catalog loads by locale and loader identity, while the host middleware runtime still preserves separate authored callsites.
-
-Lifecycle middleware is composed in entry order, with the host base implementation as the final link. `next()` is the functional equivalent of `super.method()`:
+The compiler lowers the reader call and installs the required capability:
 
 ```js
-runtime.connectedCallback(() => super.connectedCallback());
-
-runtime.attributeChangedCallback(
-  [name, oldValue, newValue],
-  () => super.attributeChangedCallback(name, oldValue, newValue),
-);
-
-runtime.formDisabledCallback(
-  [disabled],
-  () => super.formDisabledCallback(disabled),
-);
-
-runtime.shouldUpdate(
-  [changedProperties],
-  () => super.shouldUpdate(changedProperties),
-);
-```
-
-Middleware can run work before and after `next()`:
-
-```js
-connectedCallback(host, state, next) {
-  state.instance.connected = true;
-  const result = next();
-  state.instance.afterBase = true;
-  return result;
+class SaveButton extends applyStructuralHooks(LitElement, [
+  ...(useI18n[Symbol.for("litsx.structuralHooks")] || [useI18n]),
+]) {
+  render() {
+    const i18n = readStructuralHook(this, useI18n, []);
+    return html`<button>${i18n.t("save")}</button>`;
+  }
 }
 ```
 
-Async lifecycle methods can `await next()`. Calling `next()` twice from the same middleware is treated as an error.
+`applyStructuralHooks()` resolves the mixin carried by each hook, deduplicates
+by mixin identity, and preserves the order in which distinct capabilities first
+appear in authored hook calls. Two different hooks may deliberately share one
+mixin. Repeating either hook does not add another class to the inheritance
+chain.
 
-The runtime currently supports middleware for:
+Mixins use ordinary class semantics. Lifecycle work overrides the relevant
+method and delegates with `super`; properties, accessors, controllers, private
+state, and static fields belong to the class capability itself. The removed
+`static`, `setup`, `props`, `accessors`, and `middlewares` structural
+hook fields are not accepted.
 
-- `connectedCallback`
-- `disconnectedCallback`
-- `attributeChangedCallback`
-- `formAssociatedCallback`
-- `formDisabledCallback`
-- `formResetCallback`
-- `formStateRestoreCallback`
-- `scheduleUpdate`
-- `shouldUpdate`
-- `willUpdate`
-- `update`
-- `updated`
-- `firstUpdated`
-- `getUpdateComplete`
+```js
+const FormAssociatedMixin = (Base) =>
+  class extends Base {
+    static formAssociated = true;
 
-It intentionally does not cover `render` or `createRenderRoot` in this phase.
+    formResetCallback() {
+      this.formControl.reset();
+      return super.formResetCallback?.();
+    }
+  };
+```
+
+Custom hooks propagate structural requirements without exposing their
+implementation. For example, a compiled `useTranslatedLabel()` that calls
+`useI18n()` receives hidden metadata equivalent to:
+
+```js
+useTranslatedLabel[Symbol.for("litsx.structuralHooks")] = [
+  ...(useI18n[Symbol.for("litsx.structuralHooks")] || [useI18n]),
+];
+```
+
+A consuming component therefore installs `I18nMixin` even when it only calls
+`useTranslatedLabel()`. This metadata is generated output, never authored
+syntax. It works through local hooks, imports, namespace imports, re-exports,
+and compiled packages.
+
+Structural dependency discovery is intentionally static. Call hooks directly as
+`useI18n()` or `hooks.useI18n()`. Runtime hook selection, aliases, containers,
+and computed namespace access cannot produce a deterministic class mixin plan
+and are compile-time errors.

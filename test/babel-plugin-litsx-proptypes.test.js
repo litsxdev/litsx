@@ -87,13 +87,13 @@ describe("@litsx/babel-plugin-litsx-proptypes", function () {
       import PropTypes from "prop-types";
 
       export function SearchCard(props) {
-        static properties = {
-          title: { reflect: true },
-          onSelect: { attribute: false },
-        };
-
         return <article>{props.title}</article>;
       }
+
+      SearchCard.properties = {
+        title: { reflect: true },
+        onSelect: { attribute: false },
+      };
 
       SearchCard.propTypes = {
         title: PropTypes.string,
@@ -306,14 +306,14 @@ describe("@litsx/babel-plugin-litsx-proptypes", function () {
       import PropTypes from "prop-types";
 
       export function SearchCard(props) {
-        static properties = {
-          ...sharedProperties,
-          subtitle: { reflect: true },
-          title: { reflect: true },
-        };
-
         return <article>{props.title}</article>;
       }
+
+      SearchCard.properties = {
+        ...sharedProperties,
+        subtitle: { reflect: true },
+        title: { reflect: true },
+      };
 
       SearchCard.propTypes = {
         title: PropTypes.string,
@@ -378,13 +378,13 @@ describe("@litsx/babel-plugin-litsx-proptypes", function () {
       import PropTypes from "prop-types";
 
       export function SearchCard(props) {
-        static properties = {
-          title: forwardedTitle,
-          [dynamicKey]: runtimeDescriptor,
-        };
-
         return <article>{props.title}</article>;
       }
+
+      SearchCard.properties = {
+        title: forwardedTitle,
+        [dynamicKey]: runtimeDescriptor,
+      };
 
       SearchCard.propTypes = {
         title: PropTypes.string,

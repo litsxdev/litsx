@@ -118,14 +118,33 @@ async function assertBuiltStoryRuntime(fixtureDir) {
       `http://127.0.0.1:${address.port}/iframe.html?id=components-litsxbutton--primary&viewMode=story`,
       { waitUntil: "networkidle" },
     );
-    await page.waitForFunction(() => {
-      const element = document.querySelector("litsx-button");
-      return Boolean(
-        customElements.get("litsx-button") &&
-        element?.shadowRoot?.querySelector("button")?.textContent?.trim() ===
-          "Getting Started",
+    try {
+      await page.waitForFunction(() => {
+        const element = document.querySelector("litsx-button");
+        const renderRoot = element?.shadowRoot ?? element;
+        return Boolean(
+          customElements.get("litsx-button") &&
+          renderRoot?.querySelector("button")?.textContent?.trim() ===
+            "Getting Started",
+        );
+      });
+    } catch (error) {
+      const runtimeState = await page.evaluate(() => {
+        const element = document.querySelector("litsx-button");
+        return {
+          url: location.href,
+          title: document.title,
+          bodyText: document.body.textContent?.trim().slice(0, 500),
+          registered: Boolean(customElements.get("litsx-button")),
+          element: element?.outerHTML,
+          shadowText: element?.shadowRoot?.textContent?.trim().slice(0, 500),
+        };
+      });
+      throw new Error(
+        `Storybook story did not render:\n${JSON.stringify(runtimeState, null, 2)}\n${runtimeErrors.join("\n")}`,
+        { cause: error },
       );
-    });
+    }
 
     if (runtimeErrors.length > 0) {
       throw new Error(
@@ -152,14 +171,33 @@ for (const version of versions) {
   );
   const fixtureDir = path.join(tempRoot, "generated-design-system");
   const cacheDir = path.join(os.tmpdir(), "litsx-storybook-npm-cache");
+  let passed = false;
 
   try {
     createProject(fixtureDir, { template: "design-system" });
     const packagePath = path.join(fixtureDir, "package.json");
     const packageJson = JSON.parse(fs.readFileSync(packagePath, "utf8"));
 
-    packageJson.devDependencies["@litsx/storybook"] =
-      `file:${path.join(repoRoot, "packages", "storybook")}`;
+    const localLitsxPackages = {
+      "@litsx/authoring": "authoring",
+      "@litsx/babel-plugin-shared-hooks": "babel-plugin-shared-hooks",
+      "@litsx/babel-plugin-transform-jsx-html-template":
+        "babel-plugin-transform-jsx-html-template",
+      "@litsx/babel-plugin-transform-litsx-scoped-elements":
+        "babel-plugin-transform-litsx-scoped-elements",
+      "@litsx/babel-preset-litsx": "babel-preset-litsx",
+      "@litsx/compiler": "compiler",
+      "@litsx/core": "core",
+      "@litsx/eslint-plugin": "eslint-plugin-litsx",
+      "@litsx/scoped-registry-shim": "scoped-registry-shim",
+      "@litsx/storybook": "storybook",
+      "@litsx/typescript-session": "typescript-session",
+      "@litsx/vite-plugin": "vite-plugin",
+    };
+    for (const [packageName, directory] of Object.entries(localLitsxPackages)) {
+      packageJson.devDependencies[packageName] =
+        `file:${path.join(repoRoot, "packages", directory)}`;
+    }
     for (const packageName of [
       "storybook",
       "@storybook/addon-a11y",
@@ -184,8 +222,13 @@ for (const version of versions) {
     }
     console.log(`\n[storybook ${version}] validate registered story runtime`);
     await assertBuiltStoryRuntime(fixtureDir);
+    passed = true;
   } finally {
-    fs.rmSync(tempRoot, { recursive: true, force: true });
+    if (passed) {
+      fs.rmSync(tempRoot, { recursive: true, force: true });
+    } else {
+      console.error(`Storybook fixture preserved for inspection: ${tempRoot}`);
+    }
   }
 }
 

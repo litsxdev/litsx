@@ -1,11 +1,20 @@
 import { adoptStyles } from "@lit/reactive-element";
 import { nothing } from "lit";
+import { isTemplateResult } from "lit/directive-helpers.js";
 import { render as renderLightDom } from "lit/html.js";
 import { Directive, PartType, directive } from "lit/directive.js";
 import {
   createLightDomRegistry,
+  upgradeScopedRegistryTree,
   withLightDomCreationContext,
 } from "@litsx/scoped-registry-shim";
+import {
+  __isLitsxScopedTemplate,
+  __isLitsxServerComponentCall,
+  LITSX_SSR_CONTEXT,
+} from "./elements/index.js";
+import { withSuspenseCapture } from "./runtime-suspense.js";
+import { getCurrentSsrCustomElementInstanceStack } from "./runtime-ssr-state.js";
 
 /**
  * Rendering helpers used by LitSX transforms when authored JSX passes renderer
@@ -23,20 +32,63 @@ const RENDERER_MOUNT_ROOT = Symbol("litsx.rendererMountRoot");
 const RENDERER_MOUNT_ELEMENTS = Symbol("litsx.rendererMountElements");
 const RENDERER_SHADOW_CONTAINER = Symbol("litsx.rendererShadowContainer");
 const PROJECTED_LIGHT_DOM_ATTRIBUTE = "data-litsx-projected-root";
-let rendererRegistryAttachKey;
-let rendererRegistryAttachShadowRef;
-let rendererRegistryCtorRef;
-let rendererRegistryNativeSupport;
 
-function getElementAttachShadowRef() {
-  return typeof Element !== "undefined" ? Element.prototype.attachShadow : undefined;
-}
+const RENDERER_SSR_VALUE_ERROR =
+  "SSR renderer props must return a renderable TemplateResult, not a server component call or scoped template.";
 
 function isShadowRootContainer(value) {
   return (
     (typeof ShadowRoot !== "undefined" && value instanceof ShadowRoot) ||
     value?.[RENDERER_SHADOW_CONTAINER] === true
   );
+}
+
+function resolveStrictSyncSsrRenderableValue(value) {
+  if (__isLitsxServerComponentCall(value) || __isLitsxScopedTemplate(value)) {
+    throw new Error(RENDERER_SSR_VALUE_ERROR);
+  }
+
+  if (isTemplateResult(value)) {
+    return {
+      ...value,
+      values: value.values.map((entry) => resolveStrictSyncSsrRenderableValue(entry)),
+    };
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((entry) => resolveStrictSyncSsrRenderableValue(entry));
+  }
+
+  return value;
+}
+
+// Renderer props remain a synchronous projection mechanism in SSR.
+// They may return normal renderable values such as TemplateResult trees,
+// but not async server-component calls or scoped-template envelopes.
+function resolveRendererSsrValue(value) {
+  return resolveStrictSyncSsrRenderableValue(value);
+}
+
+function resolveRendererSsrValueWithContext(value, ssrContext) {
+  if (!ssrContext) {
+    return value;
+  }
+
+  if (isTemplateResult(value)) {
+    const values = value.values.map((entry) =>
+      resolveRendererSsrValueWithContext(entry, ssrContext)
+    );
+    return {
+      ...value,
+      values,
+    };
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((entry) => resolveRendererSsrValueWithContext(entry, ssrContext));
+  }
+
+  return resolveRendererSsrValue(value);
 }
 
 function captureCreationScope(host) {
@@ -80,73 +132,36 @@ function hasSameElementDefinitions(previousElements, nextElements) {
   return nextEntries.every(([tagName, ctor]) => previousElements?.[tagName] === ctor);
 }
 
-function getRendererRegistryAttachKey() {
-  if (
-    rendererRegistryAttachKey !== undefined &&
-    rendererRegistryAttachShadowRef === getElementAttachShadowRef() &&
-    rendererRegistryCtorRef === globalThis.CustomElementRegistry &&
-    rendererRegistryNativeSupport !== undefined
-  ) {
-    return rendererRegistryAttachKey;
-  }
-
-  if (
-    typeof document === "undefined" ||
-    typeof CustomElementRegistry !== "function" ||
-    typeof Element === "undefined"
-  ) {
-    rendererRegistryAttachKey = null;
-    rendererRegistryAttachShadowRef = getElementAttachShadowRef();
-    rendererRegistryCtorRef = globalThis.CustomElementRegistry;
-    rendererRegistryNativeSupport = false;
+function createPlatformScopedRegistry() {
+  if (typeof CustomElementRegistry !== "function") {
     return null;
   }
 
-  let registry;
   try {
-    registry = new CustomElementRegistry();
+    return new CustomElementRegistry();
   } catch {
-    rendererRegistryAttachKey = null;
-    rendererRegistryAttachShadowRef = getElementAttachShadowRef();
-    rendererRegistryCtorRef = globalThis.CustomElementRegistry;
-    rendererRegistryNativeSupport = false;
     return null;
   }
+}
 
-  for (const key of ["registry", "customElements", "customElementRegistry"]) {
-    const host = document.createElement("div");
-    try {
-      const shadowRoot = host.attachShadow({
-        mode: "open",
-        [key]: registry,
-      });
-      if (shadowRoot?.[key] === registry) {
-        const supportKey = `litsx-renderer-support-${Math.random().toString(36).slice(2)}`;
-        class SupportElement extends HTMLElement {}
-        try {
-          registry.define(supportKey, SupportElement);
-          shadowRoot.innerHTML = `<${supportKey}></${supportKey}>`;
-          const upgraded = shadowRoot.querySelector(supportKey);
-          rendererRegistryNativeSupport = Object.getPrototypeOf(upgraded) === SupportElement.prototype;
-        } catch {
-          rendererRegistryNativeSupport = false;
-        }
-
-        rendererRegistryAttachKey = rendererRegistryNativeSupport ? key : null;
-        rendererRegistryAttachShadowRef = getElementAttachShadowRef();
-        rendererRegistryCtorRef = globalThis.CustomElementRegistry;
-        return rendererRegistryAttachKey;
-      }
-    } catch {
-      // Try the next known attach option.
-    }
+function attachRendererShadowRoot(host, registry) {
+  if (!registry) {
+    return host.attachShadow({ mode: "open" });
   }
 
-  rendererRegistryAttachKey = null;
-  rendererRegistryAttachShadowRef = getElementAttachShadowRef();
-  rendererRegistryCtorRef = globalThis.CustomElementRegistry;
-  rendererRegistryNativeSupport = false;
-  return null;
+  const hasCurrentApi =
+    typeof ShadowRoot !== "undefined" &&
+    "customElementRegistry" in ShadowRoot.prototype;
+  if (hasCurrentApi) {
+    return host.attachShadow({ mode: "open", customElementRegistry: registry });
+  }
+
+  // The published Web Components polyfill predates the current option name.
+  return host.attachShadow({
+    mode: "open",
+    customElements: registry,
+    registry,
+  });
 }
 
 function defineScopedElements(registry, elements = {}) {
@@ -181,26 +196,16 @@ function assignShadowRootRegistry(shadowRoot, registry) {
 }
 
 function createRendererMount(host, context) {
-  const attachKey = getRendererRegistryAttachKey();
   const elements = getContextualElements(context) ?? {};
   const hasScopedElements = Object.keys(elements).length > 0;
   const mountHost = host.ownerDocument.createElement("div");
   mountHost.style.display = "contents";
 
-  let registry = null;
-  const useNativeScopedRegistry =
-    hasScopedElements &&
-    Boolean(attachKey) &&
-    typeof CustomElementRegistry === "function";
-
-  const shadowRoot = mountHost.attachShadow({
-    mode: "open",
-    ...(useNativeScopedRegistry ? { [attachKey]: new CustomElementRegistry() } : {}),
-  });
+  let registry = hasScopedElements ? createPlatformScopedRegistry() : null;
+  const shadowRoot = attachRendererShadowRoot(mountHost, registry);
   shadowRoot[RENDERER_SHADOW_CONTAINER] = true;
 
-  if (useNativeScopedRegistry) {
-    registry = shadowRoot[attachKey] ?? null;
+  if (registry) {
     defineScopedElements(registry, elements);
     assignShadowRootRegistry(shadowRoot, registry);
   } else if (hasScopedElements) {
@@ -369,6 +374,22 @@ export function invokeRenderer(renderer, ...args) {
   };
 }
 
+export function resolveRenderedValueForSsr(rendered) {
+  if (!rendered) {
+    return nothing;
+  }
+
+  const currentSsrEntry = getCurrentSsrCustomElementInstanceStack()?.at(-1) ?? null;
+  const currentSsrHost = currentSsrEntry?.element ?? currentSsrEntry ?? null;
+  const ssrContext = currentSsrHost?.[LITSX_SSR_CONTEXT]?.context ?? null;
+
+  return resolveRendererSsrValueWithContext(rendered.value ?? nothing, ssrContext);
+}
+
+export function withRendererSsrSuspenseCapture(capture, render) {
+  return withSuspenseCapture(capture ?? null, render);
+}
+
 export function renderWithRendererContext(render, container, value, context, options = {}) {
   const resolvedRenderMode = isShadowRootContainer(container) ? "shadow" : "light";
 
@@ -443,6 +464,10 @@ export function syncRendererHost(
     rendered?.context ?? null,
     { creationContextHost },
   );
+  const contextualRegistry = rendered?.context?.host?.registry ?? null;
+  if (typeof contextualRegistry?._getDefinition === "function") {
+    upgradeScopedRegistryTree(rendererRoot ?? host, contextualRegistry);
+  }
   host[RENDERER_HOST_INITIALIZED] = true;
 }
 
@@ -456,19 +481,27 @@ class RendererCallDirective extends Directive {
   }
 
   render() {
-    return nothing;
+    const [renderer, ...args] = arguments;
+    const rendered = invokeRenderer(renderer, ...args);
+    const currentSsrEntry = getCurrentSsrCustomElementInstanceStack()?.at(-1) ?? null;
+    const currentSsrHost = currentSsrEntry?.element ?? currentSsrEntry ?? null;
+    const ssrContext = currentSsrHost?.[LITSX_SSR_CONTEXT]?.context ?? null;
+
+    return resolveRendererSsrValueWithContext(rendered.value, ssrContext);
   }
 
   update(part, [renderer, ...args]) {
     if (!this._host) {
-      const documentRef =
-        part?.options?.host?.ownerDocument ??
-        globalThis.document;
+      const documentRef = part?.options?.host?.ownerDocument ?? null;
       if (!documentRef || typeof documentRef.createElement !== "function") {
         return nothing;
       }
 
       this._host = documentRef.createElement("div");
+      if (!this._host || typeof this._host !== "object") {
+        return nothing;
+      }
+      this._host.style ??= {};
       this._host.style.display = "contents";
     }
 

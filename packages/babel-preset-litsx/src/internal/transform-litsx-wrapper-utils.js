@@ -9,6 +9,16 @@ function isCapitalizedComponentName(name) {
   return first === first.toUpperCase() && first !== first.toLowerCase();
 }
 
+function isAsyncFunctionLike(node) {
+  return Boolean(
+    node &&
+    node.async === true &&
+    (t.isFunctionDeclaration(node) ||
+      t.isFunctionExpression(node) ||
+      t.isArrowFunctionExpression(node))
+  );
+}
+
 export function setWrapperUtilsBabelTypes(nextTypes) {
   t = nextTypes;
 }
@@ -125,6 +135,19 @@ export function handlePotentialComponentExport({
       declaration.declarations.length === 1 &&
       t.isArrowFunctionExpression(declaration.declarations[0].init))
   ) {
+    if (
+      t.isFunctionDeclaration(declaration) && isAsyncFunctionLike(declaration)
+    ) {
+      return false;
+    }
+
+    if (
+      t.isVariableDeclaration(declaration) &&
+      isAsyncFunctionLike(declaration.declarations[0]?.init)
+    ) {
+      return false;
+    }
+
     const funcPath = exportPath.get("declaration");
     const declarationPath = funcPath.isVariableDeclaration()
       ? funcPath.get("declarations.0.init")

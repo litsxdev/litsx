@@ -1,3 +1,8 @@
+// `css` is the canonical LitSX component-style authoring primitive. Re-export
+// the original Lit binding so component modules can keep their common imports
+// on one line without introducing a parallel styling abstraction.
+export { css } from "lit";
+
 export {
   ErrorBoundary,
   ErrorBoundaryElement,
@@ -17,25 +22,32 @@ export {
   renderWithSoftSuspense,
 } from "./runtime-suspense.js";
 export {
+  __getLitsxNoscriptFactory,
+  __litsxNoscript,
+} from "./noscript.js";
+export {
+  createExecutionContextKey,
+  getCurrentExecutionContext,
+} from "./execution-context.js";
+export { useSsrResourceSnapshot } from "./ssr-resource-snapshot.js";
+export {
   LITSX_HOOK,
   isLitsxHook,
 } from "./hook-metadata.js";
 export {
   LITSX_COMPONENT,
+  LITSX_HYDRATABLE_TAG,
+  LITSX_EVENTS,
   LITSX_HOST_TYPE_ID,
   isLitsxComponentClass,
 } from "./elements/index.js";
 export {
-  STRUCTURAL_HOOK_ENTRIES,
+  STRUCTURAL_HOOKS,
+  applyStructuralHooks,
   defineHook,
-  HostMiddlewareMixin,
-  HostMiddlewareRuntime,
-  createHostMiddlewareRuntime,
   isStructuralHook,
-  resolveStructuralProps,
-  resolveStructuralEntry,
-  resolveStructuralStaticEntry,
-} from "./host-middleware-runtime.js";
+  readStructuralHook,
+} from "./structural-hooks-runtime.js";
 export {
   useElementInternals,
   useFormValidity,
@@ -82,3 +94,4 @@ export {
 } from "./state-hooks.js";
 
 export { jsxSpreadElement } from "./jsx-spread.js";
+export { createRef, ref } from "lit/directives/ref.js";

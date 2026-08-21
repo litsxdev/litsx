@@ -96,7 +96,7 @@ export const PLAYGROUND_TYPE_FILES = {
         value: T
       ): void;
 
-      declare function __litsx_static_styles<T = unknown>(
+      declare function __litsx_static_styles_value<T = unknown>(
         value: T
       ): void;
 

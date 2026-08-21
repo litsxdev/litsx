@@ -1,8 +1,7 @@
 {
   "name": "@litsx/ssr",
   "version": "0.1.0",
-  "description": "Hydratable SSR integration for LitSX",
-  "author": "LitSX Team",
+  "description": "Scoped SSR runtime for LitSX",
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./src/index.js",
@@ -14,11 +13,11 @@
       "require": "./dist/index.cjs",
       "default": "./src/index.js"
     },
-    "./client": {
-      "types": "./src/client.d.ts",
-      "import": "./src/client.js",
-      "require": "./dist/client.cjs",
-      "default": "./src/client.js"
+    "./hydration": {
+      "types": "./src/hydration.d.ts",
+      "import": "./src/hydration.js",
+      "require": "./dist/hydration.cjs",
+      "default": "./src/hydration.js"
     }
   },
   "files": [
@@ -26,15 +25,15 @@
     "src",
     "README.md"
   ],
-  "keywords": [
-    "litsx",
-    "lit",
-    "ssr",
-    "hydration"
-  ],
+  "scripts": {
+    "build": "../../node_modules/.bin/rollup --config rollup.config.js",
+    "prepack": "yarn build"
+  },
   "license": "Apache-2.0",
-  "homepage": "https://litsx.dev/",
-  "bugs": { "url": "https://github.com/litsxdev/litsx/issues" },
+  "homepage": "https://github.com/litsxdev/litsx/tree/main/packages/ssr",
+  "bugs": {
+    "url": "https://github.com/litsxdev/litsx/issues"
+  },
   "publishConfig": {
     "access": "public",
     "provenance": true
@@ -44,15 +43,23 @@
     "url": "https://github.com/litsxdev/litsx.git",
     "directory": "packages/ssr"
   },
-  "dependencies": {
-    "@lit-labs/ssr": "^4.1.0",
-    "@lit-labs/ssr-client": "^1.1.8"
-  },
   "peerDependencies": {
-    "lit": ">=3"
+    "lit": ">=3",
+    "vite": "^7.3.2 || ^8.0.0"
   },
-  "scripts": {
-    "build": "../../node_modules/.bin/rollup --config rollup.config.js",
-    "prepack": "yarn build"
+  "peerDependenciesMeta": {
+    "vite": {
+      "optional": true
+    }
+  },
+  "dependencies": {
+    "@lit-labs/ssr": "^4.0.0",
+    "@lit-labs/ssr-client": "^1.1.7",
+    "@litsx/compiler": "workspace:*",
+    "@litsx/core": "workspace:*",
+    "@litsx/vite-plugin": "workspace:*"
+  },
+  "devDependencies": {
+    "lit": "^3.2.1"
   }
 }

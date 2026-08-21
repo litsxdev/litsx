@@ -925,6 +925,7 @@ export function extractProperties(functionPath, programPath, options = {}) {
   const bindings = new Map();
   const defaults = new Map();
   const nestedInitializers = [];
+  let restProps = null;
   const forwardRefOptions = options.forwardRef;
 
   function isSpecialRefPropName(name) {
@@ -963,7 +964,9 @@ export function extractProperties(functionPath, programPath, options = {}) {
     if (!entry) {
       entry = {
         node: t.objectProperty(
-          t.identifier(propName),
+          t.isValidIdentifier(propName)
+            ? t.identifier(propName)
+            : t.stringLiteral(propName),
           createPropertyValue(normalizedConfig, options.defaultType !== false)
         ),
       };
@@ -1048,24 +1051,21 @@ export function extractProperties(functionPath, programPath, options = {}) {
     pattern.properties.forEach((prop) => {
       if (t.isRestElement(prop) && t.isIdentifier(prop.argument)) {
         const restName = prop.argument.name;
-        if (typeMap.size === 0) {
-          ensureProperty(restName, createPropertyConfig(t.identifier("Object")));
-          registerBinding(restName, restName);
-          return;
-        }
+        const internalName = "__litsxRestProps";
         const restProperties = new Map(
           Array.from(typeMap.entries()).filter(
             ([propName]) => !explicitlyDestructuredNames.has(propName)
           )
         );
-        // Keep the authored rest binding in the public metadata for backwards
-        // compatibility while also exposing its statically known members.
-        ensureProperty(restName, createPropertyConfig(t.identifier("Object")));
-        restProperties.forEach((propertyConfig, propName) => {
-          ensureProperty(propName, propertyConfig);
-        });
+        const entry = ensureProperty(
+          internalName,
+          createPropertyConfig(t.identifier("Object"), { attribute: false })
+        );
+        ensureAttributeFalse(entry);
+        restProps = { propertyName: internalName };
         registerBinding(restName, {
           kind: "rest-alias",
+          propertyName: internalName,
           properties: restProperties,
         });
         return;
@@ -1147,7 +1147,7 @@ export function extractProperties(functionPath, programPath, options = {}) {
       if (!propertyMap.has(propName) && warn) {
         warn({
           code: 91018,
-          message: `Falling back to String for prop "${propName}" inferred from opaque props access. Prefer destructuring, TypeScript types, or static properties = ... for stronger property metadata.`,
+          message: `Falling back to String for prop "${propName}" inferred from opaque props access. Prefer destructuring, TypeScript types, or Component.properties = ... for stronger property metadata.`,
           propName,
           localName: bindingName,
           line: memberPath.node.loc?.start?.line ?? null,
@@ -1157,6 +1157,75 @@ export function extractProperties(functionPath, programPath, options = {}) {
 
       ensureProperty(propName, createPropertyConfig(t.identifier("String")));
     });
+  }
+
+  function inferOpaquePropsObjectDestructuring(bindingName) {
+    if (!bindingName) return;
+
+    const opaquePropsAliases = new Set([bindingName]);
+    let changed = true;
+
+    while (changed) {
+      changed = false;
+
+      functionPath.traverse({
+        VariableDeclarator(path) {
+          if (path.getFunctionParent() !== functionPath) return;
+
+          const { id, init } = path.node;
+          if (!t.isIdentifier(init) || !opaquePropsAliases.has(init.name)) {
+            return;
+          }
+
+          if (t.isIdentifier(id)) {
+            if (!opaquePropsAliases.has(id.name)) {
+              opaquePropsAliases.add(id.name);
+              registerBinding(id.name, bindingName);
+              changed = true;
+            }
+            return;
+          }
+
+          if (!t.isObjectPattern(id)) {
+            return;
+          }
+
+          id.properties.forEach((property) => {
+            if (!t.isObjectProperty(property)) return;
+
+            const keyName = t.isIdentifier(property.key)
+              ? property.key.name
+              : t.isStringLiteral(property.key)
+                ? property.key.value
+                : null;
+
+            if (!keyName) return;
+
+            let localName = null;
+            let propertyConfig = createPropertyConfig(t.identifier("String"));
+
+            if (t.isIdentifier(property.value)) {
+              localName = property.value.name;
+            } else if (t.isAssignmentPattern(property.value) && t.isIdentifier(property.value.left)) {
+              localName = property.value.left.name;
+              propertyConfig = createPropertyConfig(inferTypeFromDefault(property.value.right));
+              recordDefault(keyName, property.value.right);
+            } else if (property.shorthand && t.isIdentifier(property.key)) {
+              localName = property.key.name;
+            } else if (t.isObjectPattern(property.value)) {
+              propertyConfig = createPropertyConfig(t.identifier("Object"));
+              addNestedInitializer(property.value, keyName, null);
+            } else if (t.isArrayPattern(property.value)) {
+              propertyConfig = createPropertyConfig(t.identifier("Array"));
+              addNestedInitializer(property.value, keyName, null);
+            }
+
+            ensureProperty(keyName, propertyConfig);
+            registerBinding(localName || keyName, keyName);
+          });
+        },
+      });
+    }
   }
 
   function tryRegisterTypedAliasBinding(identifier) {
@@ -1235,6 +1304,7 @@ export function extractProperties(functionPath, programPath, options = {}) {
 
       if (param.name === "props") {
         inferOpaquePropsMemberAccess(param.name);
+        inferOpaquePropsObjectDestructuring(param.name);
       }
 
       return;
@@ -1249,9 +1319,15 @@ export function extractProperties(functionPath, programPath, options = {}) {
     }
 
     if (t.isAssignmentPattern(param)) {
+      if (t.isObjectPattern(param.left)) {
+        handleObjectPattern(param.left);
+        return;
+      }
+
       if (t.isIdentifier(param.left) && tryRegisterTypedAliasBinding(param.left)) {
         if (param.left.name === "props") {
           inferOpaquePropsMemberAccess(param.left.name);
+          inferOpaquePropsObjectDestructuring(param.left.name);
         }
         return;
       }
@@ -1272,5 +1348,5 @@ export function extractProperties(functionPath, programPath, options = {}) {
   const properties = Array.from(propertyMap.values()).map((entry) => entry.node);
   const propertyNames = new Set(propertyMap.keys());
 
-  return { properties, propertyNames, bindings, defaults, nestedInitializers };
+  return { properties, propertyNames, bindings, defaults, nestedInitializers, restProps };
 }

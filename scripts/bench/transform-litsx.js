@@ -3,7 +3,6 @@ import path from "node:path";
 import { performance } from "node:perf_hooks";
 import babelCore from "@babel/core";
 import * as babelParser from "@babel/parser";
-import { parseWithLitsxVirtualization } from "../../packages/authoring/src/parser.js";
 import nativePreset from "../../packages/babel-preset-litsx/src/index.js";
 
 const { transformFromAstSync } = babelCore;
@@ -40,14 +39,14 @@ const inlineCases = [
         Required<Pick<BaseProps, "onSelect">>;
 
       export function Card(props: CardProps) {
-        staticProps<CardProps>({
-          active: { reflect: true },
-          payload: { attribute: false },
-          onSelect: { attribute: false },
-        });
-
         return <article>{props.title}</article>;
       }
+
+      Card.properties = {
+        active: { reflect: true },
+        payload: { attribute: false },
+        onSelect: { attribute: false },
+      };
     `,
   },
 ];
@@ -69,9 +68,9 @@ const fixtureCases = [
 const cases = [...inlineCases, ...fixtureCases];
 
 function parseSource(source) {
-  return parseWithLitsxVirtualization(babelParser.parse, source, {
+  return babelParser.parse(source, {
     sourceType: "module",
-    plugins: ["typescript"],
+    plugins: ["jsx", "typescript"],
   });
 }
 
