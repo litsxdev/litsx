@@ -1,11 +1,13 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { expect, test } from "@playwright/test";
+import { createServer } from "vite";
 import { createSsrDevServer } from "../packages/ssr/src/index.js";
 import { LITSX_HYDRATION_PAYLOAD_PROPERTY } from "../packages/ssr/src/hydration.js";
 import { __litsxNoscript } from "../packages/core/src/index.js";
 import {
   createUnoCssVitePlugins,
+  litsxUnoCss,
   withUnoCssViteCompiler,
 } from "../packages/unocss/src/vite.js";
 import { html } from "lit";
@@ -44,6 +46,32 @@ export function LightWindCard() {
 }
 LightWindCard.lightDom = true;
 
+const buttonSizes = {
+  sm: "h-8 px-3",
+  md: "h-10 px-4",
+  lg: "h-12 px-6",
+};
+
+const buttonAppearances = {
+  default: "bg-slate-200",
+  primary: "bg-blue-600",
+  danger: "bg-red-600",
+};
+
+export function DynamicWindButton({ size = "md", appearance = "default" }) {
+  return (
+    <button
+      class={\`\${buttonSizes[size]} \${buttonAppearances[appearance]} \${
+        size === "sm" ? "rounded-sm" : "rounded-xl"
+      } data-[size=lg]:border-4 data-[appearance=danger]:opacity-50\`}
+      data-size={size}
+      data-appearance={appearance}
+    >
+      {size}-{appearance}
+    </button>
+  );
+}
+
 export function defineWindCards() {
   if (!customElements.get("shadow-wind-card")) {
     customElements.define("shadow-wind-card", ShadowWindCard);
@@ -51,12 +79,16 @@ export function defineWindCards() {
   if (!customElements.get("light-wind-card")) {
     customElements.define("light-wind-card", LightWindCard);
   }
+  if (!customElements.get("dynamic-wind-button")) {
+    customElements.define("dynamic-wind-button", DynamicWindButton);
+  }
 }
 `,
   );
   await fs.writeFile(
     path.join(srcDir, "main.js"),
     `
+import "@webcomponents/scoped-custom-element-registry";
 import { defineWindCards } from "./wind-cards.tsx";
 defineWindCards();
 `,
@@ -78,12 +110,17 @@ defineWindCards();
           (await loader("./src/wind-cards.tsx")).ShadowWindCard,
         "light-wind-card": async () =>
           (await loader("./src/wind-cards.tsx")).LightWindCard,
+        "dynamic-wind-button": async () =>
+          (await loader("./src/wind-cards.tsx")).DynamicWindButton,
       };
     },
     render({ html: serverHtml }) {
       return serverHtml`
         <shadow-wind-card></shadow-wind-card>
         <light-wind-card></light-wind-card>
+        <dynamic-wind-button size="sm" appearance="default"></dynamic-wind-button>
+        <dynamic-wind-button size="md" appearance="primary"></dynamic-wind-button>
+        <dynamic-wind-button size="lg" appearance="danger"></dynamic-wind-button>
       `;
     },
   });
@@ -100,7 +137,8 @@ defineWindCards();
     await page.waitForFunction(
       () =>
         customElements.get("shadow-wind-card") !== undefined &&
-        customElements.get("light-wind-card") !== undefined,
+        customElements.get("light-wind-card") !== undefined &&
+        customElements.get("dynamic-wind-button") !== undefined,
     );
     const result = await page.evaluate(() => {
       const shadowPanel = document
@@ -109,6 +147,22 @@ defineWindCards();
       const lightPanel = document.querySelector("light-wind-card #light-panel");
       const shadowStyle = getComputedStyle(shadowPanel);
       const lightStyle = getComputedStyle(lightPanel);
+      const buttons = [...document.querySelectorAll("dynamic-wind-button")].map(
+        (host) => {
+          const button = host.shadowRoot?.querySelector("button");
+          const style = getComputedStyle(button);
+          return {
+            size: host.getAttribute("size"),
+            appearance: host.getAttribute("appearance"),
+            height: style.height,
+            paddingLeft: style.paddingLeft,
+            background: style.backgroundColor,
+            borderRadius: style.borderRadius,
+            borderWidth: style.borderWidth,
+            opacity: style.opacity,
+          };
+        },
+      );
       return {
         shadowPadding: shadowStyle.padding,
         shadowRadius: shadowStyle.borderRadius,
@@ -116,6 +170,7 @@ defineWindCards();
         lightPadding: lightStyle.padding,
         lightRadius: lightStyle.borderRadius,
         lightBackground: lightStyle.backgroundColor,
+        buttons,
       };
     });
 
@@ -125,8 +180,151 @@ defineWindCards();
     expect(result.lightPadding).toBe("32px");
     expect(result.lightRadius).not.toBe("0px");
     expect(result.lightBackground).not.toBe("rgba(0, 0, 0, 0)");
+    expect(result.buttons).toEqual([
+      {
+        size: "sm",
+        appearance: "default",
+        height: "32px",
+        paddingLeft: "12px",
+        background: expect.stringMatching(/^oklab\(/),
+        borderRadius: "4px",
+        borderWidth: "0px",
+        opacity: "1",
+      },
+      {
+        size: "md",
+        appearance: "primary",
+        height: "40px",
+        paddingLeft: "16px",
+        background: expect.stringMatching(/^oklab\(/),
+        borderRadius: "12px",
+        borderWidth: "0px",
+        opacity: "1",
+      },
+      {
+        size: "lg",
+        appearance: "danger",
+        height: "48px",
+        paddingLeft: "24px",
+        background: expect.stringMatching(/^oklab\(/),
+        borderRadius: "12px",
+        borderWidth: "4px",
+        opacity: "0.5",
+      },
+    ]);
     expect(consoleErrors).toEqual([]);
     expect(pageErrors).toEqual([]);
+  } finally {
+    await server.close();
+    await fs.rm(tempDir, { recursive: true, force: true });
+  }
+});
+
+test("updates the Wind4 preflight when a later client module adds theme tokens", async ({
+  page,
+}) => {
+  const tempRoot = path.join(repoRoot, "test-results");
+  await fs.mkdir(tempRoot, { recursive: true });
+  const tempDir = await fs.mkdtemp(
+    path.join(tempRoot, "litsx-unocss-wind4-serve-order-"),
+  );
+  const srcDir = path.join(tempDir, "src");
+  await fs.mkdir(srcDir, { recursive: true });
+  await fs.writeFile(
+    path.join(tempDir, "index.html"),
+    `<main id="app"></main><script type="module" src="/src/main.js"></script>`,
+  );
+  await fs.writeFile(
+    path.join(srcDir, "early.tsx"),
+    `
+export function EarlyCard() {
+  return <article class="p-4">Early</article>;
+}
+`,
+  );
+  await fs.writeFile(
+    path.join(srcDir, "late.tsx"),
+    `
+export function LateCard() {
+  return <article id="late-card" class="text-white rounded-lg">Late</article>;
+}
+`,
+  );
+  await fs.writeFile(
+    path.join(srcDir, "main.js"),
+    `
+import { EarlyCard } from "./early.tsx";
+
+customElements.define("early-card", EarlyCard);
+document.querySelector("#app").append(document.createElement("early-card"));
+
+await new Promise((resolve) => requestAnimationFrame(resolve));
+const { LateCard } = await import("./late.tsx");
+customElements.define("late-card", LateCard);
+const lateCard = document.createElement("late-card");
+document.querySelector("#app").append(lateCard);
+await lateCard.updateComplete;
+await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+window.__litsxLateCardReady = true;
+`,
+  );
+
+  const server = await createServer({
+    configFile: false,
+    root: tempDir,
+    cacheDir: path.join(tempDir, ".vite-cache"),
+    logLevel: "silent",
+    server: {
+      host: "127.0.0.1",
+      strictPort: false,
+    },
+    resolve: {
+      alias: [
+        {
+          find: /^lit$/,
+          replacement: path.resolve(repoRoot, "node_modules/lit/index.js"),
+        },
+        {
+          find: "@litsx/core/elements",
+          replacement: path.resolve(
+            repoRoot,
+            "packages/core/src/elements/index.js",
+          ),
+        },
+        {
+          find: "@litsx/core",
+          replacement: path.resolve(repoRoot, "packages/core/src/index.js"),
+        },
+      ],
+    },
+    plugins: litsxUnoCss({ unocss: { presets: [presetWind4()] } }),
+  });
+  await server.listen();
+
+  try {
+    await page.goto(server.resolvedUrls.local[0]);
+    await page.waitForFunction(() => window.__litsxLateCardReady === true);
+    const result = await page.evaluate(() => {
+      const host = document.querySelector("late-card");
+      const card = host?.shadowRoot?.querySelector("#late-card");
+      return {
+        radius: getComputedStyle(card).borderRadius,
+        variable: getComputedStyle(card)
+          .getPropertyValue("--colors-white")
+          .trim(),
+        className: card?.className ?? "",
+        preflight: host?.constructor?.styles?.[0]?.cssText ?? "",
+        utilities: host?.constructor?.styles?.[1]?.cssText ?? "",
+      };
+    });
+
+    expect(result.utilities).toContain("var(--colors-white)");
+    expect(result.utilities).toContain("var(--radius-lg)");
+    expect(result.preflight).toContain("--colors-white:");
+    expect(result.preflight).toContain("--radius-lg:");
+    expect(result.variable).not.toBe("");
+    expect(result.className).toBe("text-white rounded-lg");
+    expect(result.radius).not.toBe("0px");
   } finally {
     await server.close();
     await fs.rm(tempDir, { recursive: true, force: true });
@@ -1138,7 +1336,9 @@ await hydratePage({ register: () => import("/src/main.js") });
         consoleErrors.push(message.text());
       }
     });
-    page.on("pageerror", (error) => pageErrors.push(error.stack || error.message));
+    page.on("pageerror", (error) =>
+      pageErrors.push(error.stack || error.message),
+    );
     await page.addInitScript(() => {
       const captureSsrNode = () => {
         const root = document.querySelector("ssr-app-root");
@@ -1149,7 +1349,8 @@ await hydratePage({ register: () => import("/src/main.js") });
         const findLeafButton = (searchRoot) => {
           for (const element of searchRoot?.querySelectorAll?.("*") ?? []) {
             if (element.id === "leaf-button") return element;
-            const nested = element.shadowRoot && findLeafButton(element.shadowRoot);
+            const nested =
+              element.shadowRoot && findLeafButton(element.shadowRoot);
             if (nested) return nested;
           }
           return null;
@@ -1295,7 +1496,9 @@ await hydratePage({ register: () => import("/src/main.js") });
         const root = document.querySelector("ssr-app-root");
         const lightLayers = [];
         const collectLightLayers = (searchRoot) => {
-          for (const element of searchRoot.querySelectorAll("ssr-light-layer")) {
+          for (const element of searchRoot.querySelectorAll(
+            "ssr-light-layer",
+          )) {
             lightLayers.push(element);
           }
           for (const element of searchRoot.querySelectorAll("*")) {

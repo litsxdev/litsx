@@ -39,7 +39,7 @@ function count(source, needle) {
 
 async function buildFixture(
   source,
-  { ssr = false, preset = presetWind3() } = {},
+  { ssr = false, preset = presetWind3(), unoCss = {} } = {},
 ) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-unocss-"));
   const entry = path.join(directory, "entry.tsx");
@@ -53,6 +53,7 @@ async function buildFixture(
         unocss: {
           presets: [preset],
           preflights: [],
+          ...unoCss,
         },
       }),
       build: {
@@ -481,6 +482,87 @@ export function WindCard() {
     assert.match(chunk.code, /padding:calc\(var\(--spacing\) \* 4\)/);
   });
 
+  it("extracts module utilities from constants, maps and JSX ternaries", async () => {
+    const chunk = await buildFixture(
+      `
+const sizes = {
+  sm: "h-8 px-3",
+  md: "h-10 px-4",
+  lg: "h-12 px-6",
+};
+
+export function DynamicButton({ size = "md", primary = false }) {
+  const classes = sizes[size];
+  return (
+    <button class={primary ? \`bg-blue-600 \${classes}\` : \`bg-red-600 \${classes}\`}>
+      Dynamic
+    </button>
+  );
+}
+`,
+      { preset: presetWind4() },
+    );
+
+    assert.match(chunk.code, /\.h-8\{/);
+    assert.match(chunk.code, /\.h-10\{/);
+    assert.match(chunk.code, /\.h-12\{/);
+    assert.match(chunk.code, /\.px-3\{/);
+    assert.match(chunk.code, /\.px-4\{/);
+    assert.match(chunk.code, /\.px-6\{/);
+    assert.match(chunk.code, /\.bg-blue-600\{/);
+    assert.match(chunk.code, /\.bg-red-600\{/);
+  });
+
+  it("generates Wind4 arbitrary data variants in module styles", async () => {
+    const chunk = await buildFixture(
+      `
+export function VariantButton() {
+  return (
+    <button
+      class="data-[size=lg]:h-12 data-[appearance=primary]:bg-blue-600"
+      data-size="lg"
+      data-appearance="primary"
+    >
+      Variant
+    </button>
+  );
+}
+`,
+      { preset: presetWind4() },
+    );
+
+    assert.match(chunk.code, /data-\\\\\[size\\\\=lg\\\\\]/);
+    assert.match(chunk.code, /height:calc\(var\(--spacing\) \* 12\)/);
+    assert.match(chunk.code, /data-\\\\\[appearance\\\\=primary\\\\\]/);
+    assert.match(
+      chunk.code,
+      /background-color:color-mix\([^;]*--colors-blue-600/,
+    );
+  });
+
+  it("includes configured safelist utilities in module styles", async () => {
+    const chunk = await buildFixture(
+      `
+export function SafelistedButton({ size }) {
+  return <button class={\`h-\${size}\`}>Safelisted</button>;
+}
+`,
+      {
+        preset: presetWind4(),
+        unoCss: {
+          safelist: ["h-12", "data-[appearance=primary]:bg-blue-600"],
+        },
+      },
+    );
+
+    assert.match(chunk.code, /\.h-12\{/);
+    assert.match(chunk.code, /data-\\\\\[appearance\\\\=primary\\\\\]/);
+    assert.match(
+      chunk.code,
+      /background-color:color-mix\([^;]*--colors-blue-600/,
+    );
+  });
+
   it("uses the resolved external uno.config for utilities and preflight", async () => {
     const code = await buildExternalConfigFixture();
 
@@ -642,6 +724,67 @@ export { WindCard } from "./card.tsx";
       assert.match(rendered.html, /--radius-lg:/);
       assert.match(rendered.html, /--colors-red-500:/);
       assert.match(rendered.html, /--colors-blue-500:/);
+    } finally {
+      await server.close();
+      fs.rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("updates the development preflight when a later module introduces Wind4 theme tokens", async () => {
+    const directory = fs.mkdtempSync(
+      path.join(os.tmpdir(), "litsx-unocss-wind4-serve-order-"),
+    );
+    fs.writeFileSync(
+      path.join(directory, "early.tsx"),
+      `
+export function EarlyCard() {
+  return <article class="p-4">Early</article>;
+}
+`,
+      "utf8",
+    );
+    fs.writeFileSync(
+      path.join(directory, "late.tsx"),
+      `
+export function LateCard() {
+  return <article class="text-white">Late</article>;
+}
+`,
+      "utf8",
+    );
+
+    const server = await createServer({
+      configFile: false,
+      root: directory,
+      logLevel: "silent",
+      appType: "custom",
+      server: { middlewareMode: true },
+      resolve: {
+        alias: [
+          {
+            find: /^lit$/,
+            replacement: path.resolve("node_modules/lit/index.js"),
+          },
+          {
+            find: "@litsx/core/elements",
+            replacement: path.resolve("packages/core/src/elements/index.js"),
+          },
+          {
+            find: "@litsx/core",
+            replacement: path.resolve("packages/core/src/index.js"),
+          },
+        ],
+      },
+      plugins: litsxUnoCss({ unocss: { presets: [presetWind4()] } }),
+    });
+
+    try {
+      const early = await server.ssrLoadModule("/early.tsx");
+      assert.doesNotMatch(early.EarlyCard.styles[0].cssText, /--colors-white:/);
+
+      const late = await server.ssrLoadModule("/late.tsx");
+      assert.match(late.LateCard.styles[0].cssText, /--colors-white:/);
+      assert.match(late.LateCard.styles[1].cssText, /var\(--colors-white\)/);
     } finally {
       await server.close();
       fs.rmSync(directory, { recursive: true, force: true });

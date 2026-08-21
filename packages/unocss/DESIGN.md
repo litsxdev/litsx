@@ -28,7 +28,7 @@ The integration verifies:
 - SSR serialization of the shared preflight inside each declarative shadow root
 - token-dependent Wind4 theme variables
 - external `uno.config` resolution
-- development invalidation when new tokens appear
+- development snapshots and invalidation when new tokens appear
 - shared output across multiple build entrypoints
 - computed styles after SSR hydration in real Chromium for Shadow and Light DOM
 
@@ -68,15 +68,18 @@ modules contain only their utility subsets and reference the same 2,158-byte
 preflight module. For the complete fixture utility set that is 2,678 raw CSS
 bytes rather than embedding the preflight in every module.
 
-The adapter now collects the aggregate token set through UnoCSS's own resolved
-context, generates preflight once in a project-level virtual module, and
-attaches that shared `CSSResult` alongside each module's utility-only sheet.
-Build output is materialized after module transformation, when all entrypoint
-tokens are known. Development invalidates the virtual module when UnoCSS sees
-new tokens or reloads configuration. Preset preflights are removed from the
-independently generated shadow utility styles only after UnoCSS has resolved
-the complete preset configuration; merely passing `preflights: []` is
-insufficient because UnoCSS merges preset entries.
+The adapter collects the token set through UnoCSS's own resolved context and
+attaches a generated preflight `CSSResult` alongside each module's utility-only
+sheet. Build output is materialized once after module transformation, when all
+entrypoint tokens are known, so production shares one project-level virtual
+module. During Vite serve, each importing component module resolves a distinct
+preflight snapshot after its own tokens have been extracted. This avoids an
+early ESM evaluation retaining a stale `CSSResult` when a lazy module later
+introduces a Wind4 theme variable. Development invalidates those snapshots when
+UnoCSS sees new tokens or reloads configuration. Preset preflights are removed
+from the independently generated shadow utility styles only after UnoCSS has
+resolved the complete preset configuration; merely passing `preflights: []`
+is insufficient because UnoCSS merges preset entries.
 
 SSR must still serialize styles into each declarative shadow root. Repeated
 preflight compresses well over the wire, but it still affects generated HTML

@@ -97,9 +97,9 @@ function createUnoCssTokenCollector(context) {
     },
     async handleHotUpdate(hotContext) {
       // Collect new tokens directly from the changed authored module. Relying
-      // only on the following transform pass leaves the shared preflight stale
-      // until Vite happens to evaluate that module again, which is observable
-      // in SSR middleware and other lazy module graphs.
+      // only on the following transform pass leaves the existing preflight
+      // snapshots stale until Vite happens to evaluate that module again,
+      // which is observable in SSR middleware and other lazy module graphs.
       await extract(await hotContext.read(), hotContext.file);
     },
   };
@@ -108,28 +108,50 @@ function createUnoCssTokenCollector(context) {
 function createUnoCssPreflightVitePlugin(context, state) {
   let command = "serve";
   let server;
+  let nextServeModuleId = 0;
+  const serveModuleIds = new Map();
+  const serveResolvedIds = new Set();
+
+  function resolveServePreflightId(importer) {
+    if (!importer) {
+      return RESOLVED_PREFLIGHT_MODULE_ID;
+    }
+    let resolvedId = serveModuleIds.get(importer);
+    if (!resolvedId) {
+      nextServeModuleId += 1;
+      resolvedId = `${RESOLVED_PREFLIGHT_MODULE_ID}?module=${nextServeModuleId}`;
+      serveModuleIds.set(importer, resolvedId);
+      serveResolvedIds.add(resolvedId);
+    }
+    return resolvedId;
+  }
+
+  function isResolvedPreflightId(id) {
+    return id === RESOLVED_PREFLIGHT_MODULE_ID || serveResolvedIds.has(id);
+  }
 
   function invalidatePreflightModule() {
     if (!server) {
       return;
     }
-    const module = server.moduleGraph.getModuleById(
-      RESOLVED_PREFLIGHT_MODULE_ID,
-    );
-    if (!module) {
+    const modules = [RESOLVED_PREFLIGHT_MODULE_ID, ...serveModuleIds.values()]
+      .map((id) => server.moduleGraph.getModuleById(id))
+      .filter(Boolean);
+    if (modules.length === 0) {
       return;
     }
-    server.moduleGraph.invalidateModule(module);
+    const timestamp = Date.now();
+    for (const module of modules) {
+      server.moduleGraph.invalidateModule(module);
+    }
     server.ws.send({
       type: "update",
-      updates: [
-        {
-          acceptedPath: module.url,
-          path: module.url,
-          timestamp: Date.now(),
-          type: "js-update",
-        },
-      ],
+      updates: modules.map((module) => ({
+        acceptedPath: module.url,
+        path: module.url,
+        timestamp,
+        type: "js-update",
+      })),
     });
   }
 
@@ -144,13 +166,21 @@ function createUnoCssPreflightVitePlugin(context, state) {
     configureServer(viteServer) {
       server = viteServer;
     },
-    resolveId(id) {
-      return id === UNO_CSS_PREFLIGHT_MODULE_ID
+    resolveId(id, importer) {
+      if (id !== UNO_CSS_PREFLIGHT_MODULE_ID) {
+        return null;
+      }
+      // A build is finalized only after every module has contributed tokens,
+      // so one shared virtual module is both correct and compact. During
+      // serve, an ESM module that was evaluated early cannot observe a later
+      // replacement CSSResult. Resolve one preflight instance per importing
+      // component module so its load happens after that module's extraction.
+      return command === "build"
         ? RESOLVED_PREFLIGHT_MODULE_ID
-        : null;
+        : resolveServePreflightId(importer);
     },
     async load(id) {
-      if (id !== RESOLVED_PREFLIGHT_MODULE_ID) {
+      if (!isResolvedPreflightId(id)) {
         return null;
       }
       if (command === "build") {
