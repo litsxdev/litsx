@@ -27,6 +27,7 @@
     "calm-spreads-hydrate",
     "complete-ssr-support",
     "few-guests-thank",
+    "fix-next-pre-publish",
     "fix-ssr-resource-hook-abi",
     "forwarded-server-refs",
     "fresh-noscripts-render",
