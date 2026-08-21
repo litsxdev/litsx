@@ -113,8 +113,23 @@ export function defineWindCards() {
     path.join(srcDir, "main.js"),
     `
 import "@webcomponents/scoped-custom-element-registry";
+import "virtual:uno.css";
 import { defineWindCards } from "./wind-cards.tsx";
+import { mountGlobalLightDom } from "./global-light.tsx";
 defineWindCards();
+mountGlobalLightDom();
+`,
+  );
+  await fs.writeFile(
+    path.join(srcDir, "global-light.tsx"),
+    `
+export function mountGlobalLightDom() {
+  const element = document.createElement("main");
+  element.id = "global-light-panel";
+  element.className = "p-6 rounded-lg bg-green-500 text-white";
+  element.textContent = "Global light DOM";
+  document.body.append(element);
+}
 `,
   );
 
@@ -162,15 +177,18 @@ defineWindCards();
       () =>
         customElements.get("shadow-wind-card") !== undefined &&
         customElements.get("light-wind-card") !== undefined &&
-        customElements.get("dynamic-wind-button") !== undefined,
+        customElements.get("dynamic-wind-button") !== undefined &&
+        document.querySelector("#global-light-panel") !== null,
     );
     const result = await page.evaluate(() => {
       const shadowPanel = document
         .querySelector("shadow-wind-card")
         ?.shadowRoot?.querySelector("#shadow-panel");
       const lightPanel = document.querySelector("light-wind-card #light-panel");
+      const globalLightPanel = document.querySelector("#global-light-panel");
       const shadowStyle = getComputedStyle(shadowPanel);
       const lightStyle = getComputedStyle(lightPanel);
+      const globalLightStyle = getComputedStyle(globalLightPanel);
       const buttons = [...document.querySelectorAll("dynamic-wind-button")].map(
         (host) => {
           const button = host.shadowRoot?.querySelector("button");
@@ -194,6 +212,9 @@ defineWindCards();
         lightPadding: lightStyle.padding,
         lightRadius: lightStyle.borderRadius,
         lightBackground: lightStyle.backgroundColor,
+        globalLightPadding: globalLightStyle.padding,
+        globalLightRadius: globalLightStyle.borderRadius,
+        globalLightBackground: globalLightStyle.backgroundColor,
         buttons,
       };
     });
@@ -204,6 +225,9 @@ defineWindCards();
     expect(result.lightPadding).toBe("32px");
     expect(result.lightRadius).not.toBe("0px");
     expect(result.lightBackground).not.toBe("rgba(0, 0, 0, 0)");
+    expect(result.globalLightPadding).toBe("24px");
+    expect(result.globalLightRadius).not.toBe("0px");
+    expect(result.globalLightBackground).not.toBe("rgba(0, 0, 0, 0)");
     expect(result.buttons).toEqual([
       {
         size: "sm",
@@ -244,6 +268,96 @@ defineWindCards();
   }
 });
 
+test("scopes light DOM utilities at nested component boundaries", async ({
+  page,
+}) => {
+  const tempRoot = path.join(repoRoot, "test-results");
+  await fs.mkdir(tempRoot, { recursive: true });
+  const tempDir = await fs.mkdtemp(path.join(tempRoot, "litsx-unocss-scope-"));
+  const srcDir = path.join(tempDir, "src");
+  await fs.mkdir(srcDir, { recursive: true });
+  await fs.writeFile(
+    path.join(tempDir, "index.html"),
+    '<main id="outside" class="p-8"></main><parent-card></parent-card><script type="module" src="/src/main.js"></script>',
+  );
+  await fs.writeFile(
+    path.join(srcDir, "child.tsx"),
+    `
+export function ChildCard({ probeClass = "" }) {
+  return <section><div id="probe" class={probeClass}></div><div id="owned" class="p-2"></div></section>;
+}
+ChildCard.lightDom = true;
+`,
+  );
+  await fs.writeFile(
+    path.join(srcDir, "parent.tsx"),
+    `
+import { ChildCard } from "./child";
+export function ParentCard() {
+  return <section><div id="parent-owned" class="p-8"></div><ChildCard probeClass="p-8" /></section>;
+}
+ParentCard.lightDom = true;
+ParentCard.elements = { "child-card": ChildCard };
+`,
+  );
+  await fs.writeFile(
+    path.join(srcDir, "main.js"),
+    `
+import { ParentCard } from "./parent.tsx";
+customElements.define("parent-card", ParentCard);
+`,
+  );
+  const server = await createServer({
+    configFile: false,
+    root: tempDir,
+    logLevel: "silent",
+    ...isolatedViteOptions(tempDir),
+    plugins: litsxUnoCss({ unocss: { presets: [presetWind4()] } }),
+  });
+  await server.listen();
+
+  try {
+    const pageErrors = [];
+    page.on("pageerror", (error) => pageErrors.push(error.message));
+    await page.goto(server.resolvedUrls.local[0]);
+    await page.waitForSelector("parent-card child-card #owned");
+    const result = await page.evaluate(() => {
+      const parent = document.querySelector("parent-card");
+      const child = parent.querySelector("child-card");
+      return {
+        parentScope: parent.getAttribute("data-litsx-style-scope"),
+        childScope: child.getAttribute("data-litsx-style-scope"),
+        parentPadding: getComputedStyle(parent.querySelector("#parent-owned"))
+          .padding,
+        childOwnedPadding: getComputedStyle(child.querySelector("#owned"))
+          .padding,
+        childProbePadding: getComputedStyle(child.querySelector("#probe"))
+          .padding,
+        outsidePadding: getComputedStyle(document.querySelector("#outside"))
+          .padding,
+        scopeRules: [
+          ...document.querySelectorAll("style[data-litsx-light-dom-style]"),
+        ]
+          .map((style) => style.textContent)
+          .filter((css) => css.includes("@scope")),
+      };
+    });
+
+    expect(result.parentScope).toMatch(/^[a-z0-9]+$/);
+    expect(result.childScope).toMatch(/^[a-z0-9]+$/);
+    expect(result.childScope).not.toBe(result.parentScope);
+    expect(result.parentPadding).toBe("32px");
+    expect(result.childOwnedPadding).toBe("8px");
+    expect(result.childProbePadding).toBe("0px");
+    expect(result.outsidePadding).toBe("0px");
+    expect(result.scopeRules).toHaveLength(2);
+    expect(pageErrors).toEqual([]);
+  } finally {
+    await server.close();
+    await fs.rm(tempDir, { recursive: true, force: true });
+  }
+});
+
 test("updates the Wind4 preflight when a later client module adds theme tokens", async ({
   page,
 }) => {
@@ -277,6 +391,7 @@ export function LateCard() {
   await fs.writeFile(
     path.join(srcDir, "main.js"),
     `
+import "virtual:uno.css";
 import { EarlyCard } from "./early.tsx";
 
 customElements.define("early-card", EarlyCard);
@@ -287,6 +402,11 @@ const { LateCard } = await import("./late.tsx");
 customElements.define("late-card", LateCard);
 const lateCard = document.createElement("late-card");
 document.querySelector("#app").append(lateCard);
+const lateGlobal = document.createElement("article");
+lateGlobal.id = "late-global-card";
+lateGlobal.className = "text-white rounded-lg";
+lateGlobal.textContent = "Late global";
+document.querySelector("#app").append(lateGlobal);
 await lateCard.updateComplete;
 await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 window.__litsxLateCardReady = true;
@@ -328,9 +448,15 @@ window.__litsxLateCardReady = true;
   try {
     await page.goto(server.resolvedUrls.local[0]);
     await page.waitForFunction(() => window.__litsxLateCardReady === true);
+    await page.waitForFunction(
+      () =>
+        getComputedStyle(document.querySelector("#late-global-card"))
+          .borderRadius !== "0px",
+    );
     const result = await page.evaluate(() => {
       const host = document.querySelector("late-card");
       const card = host?.shadowRoot?.querySelector("#late-card");
+      const globalCard = document.querySelector("#late-global-card");
       return {
         radius: getComputedStyle(card).borderRadius,
         variable: getComputedStyle(card)
@@ -339,6 +465,8 @@ window.__litsxLateCardReady = true;
         className: card?.className ?? "",
         preflight: host?.constructor?.styles?.[0]?.cssText ?? "",
         utilities: host?.constructor?.styles?.[1]?.cssText ?? "",
+        globalRadius: getComputedStyle(globalCard).borderRadius,
+        globalColor: getComputedStyle(globalCard).color,
       };
     });
 
@@ -349,6 +477,8 @@ window.__litsxLateCardReady = true;
     expect(result.variable).not.toBe("");
     expect(result.className).toBe("text-white rounded-lg");
     expect(result.radius).not.toBe("0px");
+    expect(result.globalRadius).not.toBe("0px");
+    expect(result.globalColor).not.toBe("rgb(0, 0, 0)");
   } finally {
     await server.close();
     await fs.rm(tempDir, { recursive: true, force: true });

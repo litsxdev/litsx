@@ -665,6 +665,14 @@ function transformFunction(functionPath, programPath, className, options = {}) {
     createHandlerClassMember,
   });
 
+  const lightDomStyleStrategy =
+    options.lightDomStyles?.strategy ?? options.lightDomStyles ?? "scoped";
+  if (!["scoped", "global", "none"].includes(lightDomStyleStrategy)) {
+    throw functionPath.buildCodeFrameError(
+      `lightDomStyles must be "scoped", "global", or "none"; received ${JSON.stringify(lightDomStyleStrategy)}.`,
+    );
+  }
+
   const classNode = createComponentClass({
     className,
     tagName: resolvedName.replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase(),
@@ -675,6 +683,7 @@ function transformFunction(functionPath, programPath, className, options = {}) {
     eventMetadata,
     needsStaticHoistsMixin,
     lightDomRequested,
+    lightDomStyleStrategy,
     needsCss,
     needsUnsafeCss,
     needsCallbackRef,

@@ -160,6 +160,17 @@ Default: `true`
 
 Forwarded to `@litsx/babel-plugin-transform-jsx-html-template`.
 
+### `defaultDomMode?: "shadow" | "light"`
+
+Selects shadow or light DOM for native components. The default is `"shadow"`.
+
+### `lightDomStyles?: "scoped" | "global" | "none" | { strategy: ... }`
+
+Forwards the compiler's generic light-DOM style route to style integrations.
+`scoped` emits a stable component boundary, `global` targets an
+integration-owned document sheet, and `none` disables automatic generated
+styles. Authored `Component.styles` remain active.
+
 ### `authoringPlugins?: unknown[]`
 
 Extra Babel plugins applied after standard JSX/TSX parsing and before the built-in LitSX lowering pipeline.
@@ -171,6 +182,9 @@ Extra Babel plugins appended after the built-in LitSX transform pipeline.
 ### `reactCompat?: boolean | object`
 
 Selects the optional React compatibility pipeline. `true` uses its defaults: light DOM, final Lit template lowering, and React `key` compatibility enabled.
+
+The compatibility pipeline forces generated light-DOM styles through the
+`global` route, preserving React's document-level CSS semantics.
 
 The object form accepts the compatibility options that select React-specific behavior:
 

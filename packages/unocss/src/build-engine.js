@@ -61,8 +61,9 @@ export function createUnoCssBuildEngine(options = {}) {
     options.preflightGenerator ?? options.generator;
   const ownedTokens = new Set();
   const tokenStore = () =>
-    (typeof options.tokens === "function" ? options.tokens() : options.tokens) ??
-    ownedTokens;
+    (typeof options.tokens === "function"
+      ? options.tokens()
+      : options.tokens) ?? ownedTokens;
   const dependencyImporters = new Map();
   const importerDependencies = new Map();
   const moduleTokens = new Map();
@@ -102,16 +103,14 @@ export function createUnoCssBuildEngine(options = {}) {
     importerDependencies.set(id, normalized);
     for (const dependency of normalized) {
       let importers = dependencyImporters.get(dependency);
-      if (!importers) dependencyImporters.set(dependency, (importers = new Set()));
+      if (!importers)
+        dependencyImporters.set(dependency, (importers = new Set()));
       importers.add(id);
     }
   }
 
   function isIncluded(code, id) {
-    return !(
-      typeof options.filter === "function" &&
-      !options.filter(code, id)
-    );
+    return !(typeof options.filter === "function" && !options.filter(code, id));
   }
 
   async function collect(code, id = "") {
@@ -159,7 +158,9 @@ export function createUnoCssBuildEngine(options = {}) {
 
     for (const match of matches) {
       const payload = decodeUnoCssGuardPayload(match[1]);
-      let candidates = payload.candidates || [];
+      let candidates = payload.moduleCandidates
+        ? [...(moduleTokens.get(id) || extracted)]
+        : payload.candidates || [];
       for (const dependency of payload.dependencies || []) {
         dependencies.add(dependency);
       }
@@ -186,19 +187,32 @@ export function createUnoCssBuildEngine(options = {}) {
         }
       }
 
+      if (payload.emit === "none") {
+        transformed = transformed.replace(match[0], "");
+        continue;
+      }
       await scan(
         candidates.join(" "),
         `${id}?litsx-unocss-guard=${match.index}`,
       );
+      if (payload.emit === "global") {
+        transformed = transformed.replace(match[0], "");
+        continue;
+      }
       const candidateSet = new Set(candidates);
-      const candidatesKey = [...candidateSet].sort().join("\0");
+      const candidatesKey = JSON.stringify([
+        payload.scope || "",
+        [...candidateSet].sort(),
+      ]);
       let cssText = generatedCss.get(candidatesKey);
       if (cssText === undefined) {
         const generated = await uno.generate(candidateSet, {
           preflights: false,
           safelist: false,
         });
-        cssText = generated.css;
+        cssText = payload.scope
+          ? `@scope (${payload.scope}) to ([data-litsx-style-scope]) {\n${generated.css}\n}`
+          : generated.css;
         generatedCss.set(candidatesKey, cssText);
       }
       transformed = transformed.replace(
@@ -246,6 +260,16 @@ export function createUnoCssBuildEngine(options = {}) {
     return result.getLayers(uniquePreflightLayers(preflightGenerator));
   }
 
+  async function generateGlobalCss() {
+    const uno = await generator();
+    const generated = await uno.generate(new Set(tokenStore()), {
+      preflights: false,
+      safelist: true,
+    });
+    const preflight = await generatePreflight();
+    return [preflight, generated.css].filter(Boolean).join("\n");
+  }
+
   function getImporters(file) {
     return [
       ...(dependencyImporters.get(normalizeDependency(file)) || new Set()),
@@ -261,10 +285,19 @@ export function createUnoCssBuildEngine(options = {}) {
     materializeModule,
     captureResolvedConfig,
     generatePreflight,
+    generateGlobalCss,
     createPreflightModuleSource: createUnoCssPreflightModuleSource,
     finalizePreflight(code, placeholder = UNO_CSS_PREFLIGHT_BUILD_PLACEHOLDER) {
       return generatePreflight().then((css) =>
         code.replaceAll(placeholder, escapeUnoCssTemplateCss(css)),
+      );
+    },
+    finalizeGlobalCss(
+      code,
+      placeholder = "__LITSX_UNOCSS_GLOBAL_CSS_PLACEHOLDER__",
+    ) {
+      return generateGlobalCss().then((css) =>
+        code.replaceAll(placeholder, css),
       );
     },
     getImporters,

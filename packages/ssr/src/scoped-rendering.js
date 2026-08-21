@@ -8,6 +8,7 @@ import {
   __getLitsxForwardedRefId,
   isHydratableCustomElementClass,
   LITSX_LIGHT_DOM,
+  LITSX_LIGHT_DOM_STYLE_SCOPE,
   LITSX_MODULE_ID,
   LITSX_SSR_CONTEXT,
 } from "@litsx/core/elements";
@@ -560,6 +561,10 @@ export class ScopedLitElementRenderer extends LitElementRenderer {
     this._litsxNoscriptFallback = isRenderingNoscriptFallback();
     ensureSsrElementShape(this.element);
     this.element.constructor.finalize?.();
+    const lightDomStyleScope = this.element.constructor?.[LITSX_LIGHT_DOM_STYLE_SCOPE];
+    if (typeof lightDomStyleScope === "string" && lightDomStyleScope.length > 0) {
+      this.element.setAttribute("data-litsx-style-scope", lightDomStyleScope);
+    }
     if (this._litsxNoscriptFallback) {
       const render = this.element.render.bind(this.element);
       this.element.render = () => makeRendererValueServerOnly(render());

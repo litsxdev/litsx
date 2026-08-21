@@ -9,6 +9,8 @@ import {
 } from "./protocol.js";
 
 const COMPONENT_SYMBOL = "litsx.component";
+const LIGHT_DOM_SCOPE_SYMBOL = "litsx.lightDomStyleScope";
+const LIGHT_DOM_SCOPE_ATTRIBUTE = "data-litsx-style-scope";
 
 function isSymbolFor(node, name, t) {
   return Boolean(
@@ -30,6 +32,47 @@ function isLitsxComponentClass(classPath, t) {
       member?.computed === true &&
       isSymbolFor(member.key, COMPONENT_SYMBOL, t),
     );
+  });
+}
+
+function containsLightDomMixin(node, t) {
+  if (!t.isCallExpression(node)) return false;
+  if (t.isIdentifier(node.callee, { name: "LightDomMixin" })) return true;
+  return node.arguments.some((argument) => containsLightDomMixin(argument, t));
+}
+
+function getStaticRuntimeMetadataString(classPath, symbolKey, t) {
+  for (const memberPath of classPath.get("body.body")) {
+    const member = memberPath.node;
+    if (
+      member?.static === true &&
+      member?.computed === true &&
+      isSymbolFor(member.key, symbolKey, t) &&
+      t.isStringLiteral(member.value)
+    ) {
+      return member.value.value;
+    }
+  }
+  return null;
+}
+
+function scopeGuardMarkers(classPath, scope, t) {
+  const pattern = new RegExp(UNO_CSS_GUARD_PATTERN.source, "g");
+  classPath.traverse({
+    TemplateElement(templatePath) {
+      const raw = templatePath.node.value?.raw;
+      if (typeof raw !== "string" || !raw.includes("__LITSX_UNOCSS_GUARD_")) {
+        return;
+      }
+      const nextRaw = raw.replace(pattern, (_match, encoded) =>
+        createUnoCssGuardMarker({
+          ...decodeUnoCssGuardPayload(encoded),
+          scope,
+        }),
+      );
+      templatePath.node.value.raw = nextRaw;
+      templatePath.node.value.cooked = nextRaw;
+    },
   });
 }
 
@@ -200,7 +243,50 @@ function getStylesAssignment(path, t) {
     : t.isIdentifier(expression.left.property)
       ? expression.left.property.name
       : null;
-  return name === "styles" ? path.get("expression.right") : null;
+  return name === "styles"
+    ? {
+        componentName: expression.left.object.name,
+        stylePath: path.get("expression.right"),
+      }
+    : null;
+}
+
+function collectLightDomComponents(programPath, t, defaultDomMode) {
+  const names = new Set();
+  if (defaultDomMode === "light") {
+    for (const statementPath of programPath.get("body")) {
+      if (
+        statementPath.isFunctionDeclaration() &&
+        statementPath.node.id?.name
+      ) {
+        names.add(statementPath.node.id.name);
+      }
+      if (statementPath.isVariableDeclaration()) {
+        for (const declaration of statementPath.node.declarations) {
+          if (
+            t.isIdentifier(declaration.id) &&
+            /^[A-Z]/.test(declaration.id.name)
+          ) {
+            names.add(declaration.id.name);
+          }
+        }
+      }
+    }
+  }
+  for (const statementPath of programPath.get("body")) {
+    if (!statementPath.isExpressionStatement()) continue;
+    const expression = statementPath.node.expression;
+    if (
+      t.isAssignmentExpression(expression, { operator: "=" }) &&
+      t.isMemberExpression(expression.left) &&
+      t.isIdentifier(expression.left.object) &&
+      t.isIdentifier(expression.left.property, { name: "lightDom" }) &&
+      t.isBooleanLiteral(expression.right, { value: true })
+    ) {
+      names.add(expression.left.object.name);
+    }
+  }
+  return names;
 }
 
 /**
@@ -208,7 +294,7 @@ function getStylesAssignment(path, t) {
  * The replacement is already a CSSResult, so no non-Lit value can leak into
  * the native component lowering or the browser runtime.
  */
-export function createUnoCssAuthoringPlugin() {
+export function createUnoCssAuthoringPlugin(options = {}) {
   return function litsxUnoCssAuthoringPlugin(api) {
     api.assertVersion?.(7);
     const t = api.types;
@@ -217,11 +303,20 @@ export function createUnoCssAuthoringPlugin() {
       visitor: {
         Program: {
           exit(programPath, state) {
-            const assignmentPaths = programPath
+            const assignments = programPath
               .get("body")
               .map((path) => getStylesAssignment(path, t))
               .filter(Boolean);
-            if (assignmentPaths.length === 0) return;
+            if (assignments.length === 0) return;
+            const strategy =
+              options.lightDomStyles?.strategy ??
+              options.lightDomStyles ??
+              "scoped";
+            const lightDomComponents = collectLightDomComponents(
+              programPath,
+              t,
+              options.defaultDomMode,
+            );
 
             const filename = state.filename || state.file.opts.filename;
             const resolver = createStaticGuardResolver({
@@ -248,15 +343,19 @@ export function createUnoCssAuthoringPlugin() {
               return cssIdentifier;
             };
 
-            const consume = (stylePath, replacementPath = stylePath) => {
+            const consume = (
+              stylePath,
+              replacementPath = stylePath,
+              emit = "component",
+            ) => {
               const node = stylePath.node;
               if (t.isArrayExpression(node)) {
                 for (const elementPath of stylePath.get("elements")) {
                   if (!elementPath.node) continue;
                   if (elementPath.isSpreadElement()) {
-                    consume(elementPath.get("argument"), elementPath);
+                    consume(elementPath.get("argument"), elementPath, emit);
                   } else {
-                    consume(elementPath);
+                    consume(elementPath, elementPath, emit);
                   }
                 }
                 return;
@@ -287,6 +386,7 @@ export function createUnoCssAuthoringPlugin() {
                     candidates: result.candidates,
                     descriptor: result.descriptor,
                     dependencies: result.dependencies,
+                    emit,
                   },
                   ensureCssIdentifier(),
                   t,
@@ -294,8 +394,12 @@ export function createUnoCssAuthoringPlugin() {
               );
             };
 
-            for (const assignmentPath of assignmentPaths)
-              consume(assignmentPath);
+            for (const { componentName, stylePath } of assignments) {
+              const isLightDom = lightDomComponents.has(componentName);
+              const emit =
+                isLightDom && strategy !== "scoped" ? strategy : "component";
+              consume(stylePath, stylePath, emit);
+            }
           },
         },
       },
@@ -346,6 +450,22 @@ export function createUnoCssOutputPlugin(options = {}) {
               return;
             }
 
+            const componentInfos = componentClasses.map((classPath) => ({
+              classPath,
+              lightDomScope: getStaticRuntimeMetadataString(
+                classPath,
+                LIGHT_DOM_SCOPE_SYMBOL,
+                t,
+              ),
+              lightDom: containsLightDomMixin(classPath.node.superClass, t),
+            }));
+            const hasShadowComponents = componentInfos.some(
+              ({ lightDom }) => !lightDom,
+            );
+            const hasScopedLightComponents = componentInfos.some(
+              ({ lightDomScope }) => Boolean(lightDomScope),
+            );
+
             const importedCssIdentifier = findImportedCssIdentifier(
               programPath,
               t,
@@ -358,26 +478,11 @@ export function createUnoCssOutputPlugin(options = {}) {
             const preflightIdentifier = preflightModule
               ? programPath.scope.generateUidIdentifier("litsxUnoCssPreflight")
               : null;
-            const stylesDeclaration = t.variableDeclaration("const", [
-              t.variableDeclarator(
-                t.cloneNode(stylesIdentifier),
-                t.taggedTemplateExpression(
-                  t.cloneNode(cssIdentifier),
-                  t.templateLiteral(
-                    [
-                      t.templateElement(
-                        { raw: placeholder, cooked: placeholder },
-                        true,
-                      ),
-                    ],
-                    [],
-                  ),
-                ),
-              ),
-            ]);
-
             const insertedNodes = [];
-            if (!importedCssIdentifier) {
+            if (
+              !importedCssIdentifier &&
+              (hasShadowComponents || hasScopedLightComponents)
+            ) {
               insertedNodes.push(
                 t.importDeclaration(
                   [
@@ -390,7 +495,10 @@ export function createUnoCssOutputPlugin(options = {}) {
                 ),
               );
             }
-            if (preflightIdentifier) {
+            if (
+              preflightIdentifier &&
+              (hasShadowComponents || hasScopedLightComponents)
+            ) {
               insertedNodes.push(
                 t.importDeclaration(
                   [
@@ -403,11 +511,77 @@ export function createUnoCssOutputPlugin(options = {}) {
                 ),
               );
             }
-            insertedNodes.push(stylesDeclaration);
+            if (hasShadowComponents) {
+              insertedNodes.push(
+                t.variableDeclaration("const", [
+                  t.variableDeclarator(
+                    t.cloneNode(stylesIdentifier),
+                    t.taggedTemplateExpression(
+                      t.cloneNode(cssIdentifier),
+                      t.templateLiteral(
+                        [
+                          t.templateElement(
+                            { raw: placeholder, cooked: placeholder },
+                            true,
+                          ),
+                        ],
+                        [],
+                      ),
+                    ),
+                  ),
+                ]),
+              );
+            }
             insertAfterImports(programPath, insertedNodes);
 
             const components = [];
-            for (const classPath of componentClasses) {
+            for (const {
+              classPath,
+              lightDomScope,
+              lightDom,
+            } of componentInfos) {
+              if (lightDomScope) {
+                const scope = `[${LIGHT_DOM_SCOPE_ATTRIBUTE}="${lightDomScope}"]`;
+                scopeGuardMarkers(classPath, scope, t);
+                const scopedIdentifier =
+                  programPath.scope.generateUidIdentifier(
+                    "litsxUnoCssScopedStyles",
+                  );
+                const scopedMarker = createUnoCssGuardMarker({
+                  moduleCandidates: true,
+                  scope,
+                });
+                const scopedDeclaration = t.variableDeclaration("const", [
+                  t.variableDeclarator(
+                    t.cloneNode(scopedIdentifier),
+                    t.taggedTemplateExpression(
+                      t.cloneNode(cssIdentifier),
+                      t.templateLiteral(
+                        [
+                          t.templateElement(
+                            { raw: scopedMarker, cooked: scopedMarker },
+                            true,
+                          ),
+                        ],
+                        [],
+                      ),
+                    ),
+                  ),
+                ]);
+                classPath.insertBefore(scopedDeclaration);
+                appendStyleReference(
+                  classPath,
+                  scopedIdentifier,
+                  preflightIdentifier,
+                  t,
+                );
+                if (classPath.node.id?.name)
+                  components.push(classPath.node.id.name);
+                continue;
+              }
+              if (lightDom) {
+                continue;
+              }
               appendStyleReference(
                 classPath,
                 stylesIdentifier,
@@ -436,17 +610,32 @@ export function createUnoCssOutputPlugin(options = {}) {
 
 /** Add the UnoCSS output contribution without replacing existing integrations. */
 export function withUnoCssCompiler(options = {}, integrationOptions = {}) {
+  const reactCompatDomMode = options.reactCompat
+    ? typeof options.reactCompat === "object"
+      ? (options.reactCompat.domMode ?? "light")
+      : "light"
+    : null;
+  const resolvedIntegrationOptions = {
+    ...integrationOptions,
+    defaultDomMode: reactCompatDomMode ?? options.defaultDomMode,
+    lightDomStyles: options.reactCompat
+      ? "global"
+      : options.lightDomStyles ?? integrationOptions.lightDomStyles,
+  };
   return {
     ...options,
+    ...(resolvedIntegrationOptions.lightDomStyles
+      ? { lightDomStyles: resolvedIntegrationOptions.lightDomStyles }
+      : {}),
     authoringPlugins: [
       ...(Array.isArray(options.authoringPlugins)
         ? options.authoringPlugins
         : []),
-      createUnoCssAuthoringPlugin(integrationOptions),
+      createUnoCssAuthoringPlugin(resolvedIntegrationOptions),
     ],
     outputPlugins: [
       ...(Array.isArray(options.outputPlugins) ? options.outputPlugins : []),
-      createUnoCssOutputPlugin(integrationOptions),
+      createUnoCssOutputPlugin(resolvedIntegrationOptions),
     ],
   };
 }

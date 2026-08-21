@@ -147,6 +147,13 @@ These are primarily useful to compiler and build-tool integrations. Application 
 
 React compatibility defaults to light DOM so migrated component trees preserve React's DOM nesting and global CSS behavior. Scoped JSX dependencies still compile to `static elements` and resolve through the nearest contextual light DOM registry. The registry shim activates only for components that actually need that map; a plain light DOM component does not activate it.
 
+React compatibility also forces the generic `lightDomStyles` route to
+`"global"`. This preserves React's document-level CSS cascade instead of
+silently introducing per-component style boundaries. Style integrations such
+as `@litsx/unocss` must therefore publish React-compatible utilities through
+their global stylesheet. The setting is harmless with `domMode: "shadow"`,
+because shadow components still receive their required local styles.
+
 Use shadow DOM when the migrated tree intentionally wants style and DOM encapsulation:
 
 ```json

@@ -39,6 +39,7 @@ export {
   LITSX_HYDRATABLE_TAG,
   LITSX_EVENTS,
   LITSX_HOST_TYPE_ID,
+  LITSX_LIGHT_DOM_STYLE_SCOPE,
   isLitsxComponentClass,
 } from "./elements/index.js";
 export {

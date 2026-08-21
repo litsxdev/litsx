@@ -883,6 +883,12 @@ describe("@litsx/babel-preset-react-compat", () => {
     const code = run(source);
     assert.match(code, /class LightForm extends LightDomMixin\(LitElement\)/);
     assert.match(code, /static elements = \{\s*"fancy-button": FancyButton\s*\}/);
+    assert.doesNotMatch(code, /litsx\.lightDomStyleScope/);
+
+    const forcedGlobalCode = run(source, {
+      preset: { lightDomStyles: "scoped" },
+    });
+    assert.doesNotMatch(forcedGlobalCode, /litsx\.lightDomStyleScope/);
 
     const shadowCode = run(source, { preset: { domMode: "shadow" } });
     assert.match(shadowCode, /class LightForm extends ShadowDomMixin\(LitElement\)/);

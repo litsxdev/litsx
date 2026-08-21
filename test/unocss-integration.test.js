@@ -335,10 +335,7 @@ describe("@litsx/unocss integration", () => {
     );
 
     assert.strictEqual(manifest.dependencies.vite, undefined);
-    assert.strictEqual(
-      manifest.dependencies["@litsx/vite-plugin"],
-      undefined,
-    );
+    assert.strictEqual(manifest.dependencies["@litsx/vite-plugin"], undefined);
     assert.strictEqual(manifest.peerDependenciesMeta.vite.optional, true);
     assert.strictEqual(
       manifest.peerDependenciesMeta["@litsx/vite-plugin"].optional,
@@ -462,6 +459,24 @@ export function RollupCard() {
     assert.match(moduleSource, /export const unoPreflightStyles = css`/);
   });
 
+  it("generates one global light DOM sheet from the shared token store", async () => {
+    const integration = await createUnoCssIntegration({
+      presets: [presetWind4()],
+    });
+    await integration.scan(
+      '<main class="p-4 bg-blue-600 text-white">Light DOM</main>',
+      "/virtual/page.html",
+    );
+
+    const css = await integration.generateGlobalCss();
+
+    assert.match(css, /--colors-blue-600:/);
+    assert.match(css, /--colors-white:/);
+    assert.match(css, /\.p-4\{/);
+    assert.match(css, /\.bg-blue-600\{/);
+    assert.match(css, /\.text-white\{/);
+  });
+
   it("tracks static guard dependencies without a Vite module graph", async () => {
     const directory = fs.mkdtempSync(
       path.join(os.tmpdir(), "litsx-unocss-engine-"),
@@ -490,11 +505,7 @@ Button.styles = [BUTTON];
       assert.match(first.code, /background-color/);
       assert.deepStrictEqual(integration.invalidate(styles), [entry]);
 
-      fs.writeFileSync(
-        styles,
-        'export const BUTTON = "bg-green-600";',
-        "utf8",
-      );
+      fs.writeFileSync(styles, 'export const BUTTON = "bg-green-600";', "utf8");
       const second = await integration.materializeModule(compiled.code, entry);
       assert.match(second.code, /--un-bg-opacity/);
       assert.notStrictEqual(second.code, first.code);
@@ -623,8 +634,7 @@ Button.styles = [BUTTON];
 
     assert(names.indexOf("existing") < names.indexOf("litsx"));
     assert(
-      names.indexOf("litsx") <
-        names.indexOf("litsx:unocss-guard-materializer"),
+      names.indexOf("litsx") < names.indexOf("litsx:unocss-guard-materializer"),
     );
     assert.strictEqual(names.includes("unocss:shadow-dom"), false);
   });
@@ -645,7 +655,89 @@ LightCard.lightDom = true;
       result.code,
       /class LightCard extends LightDomMixin\(LitElement\)/,
     );
-    assert.match(result.code, /static styles = _litsxUnoCssStyles;/);
+    assert.match(result.code, /litsx\.lightDomStyleScope/);
+    assert.match(result.code, /static styles = _litsxUnoCssScopedStyles;/);
+    assert.doesNotMatch(result.code, /@unocss-placeholder/);
+  });
+
+  it("routes generated light DOM styles through scoped, global and none modes", async () => {
+    const source = `
+export function LightCard() {
+  return <article class="p-4 text-blue-600">Light</article>;
+}
+LightCard.lightDom = true;
+`;
+    const compile = (strategy) =>
+      transformLitsxSync(
+        source,
+        withUnoCssCompiler({
+          filename: `/virtual/light-card-${strategy}.tsx`,
+          lightDomStyles: strategy,
+        }),
+      );
+    const scoped = compile("scoped");
+    const global = compile("global");
+    const none = compile("none");
+    const integrationGlobal = transformLitsxSync(
+      source,
+      withUnoCssCompiler(
+        { filename: "/virtual/light-card-integration-global.tsx" },
+        { lightDomStyles: "global" },
+      ),
+    );
+    const integration = await createUnoCssIntegration({
+      presets: [presetWind4()],
+      preflights: [],
+    });
+    const materialized = await integration.materializeModule(
+      scoped.code,
+      "/virtual/light-card-scoped.tsx",
+    );
+
+    assert.match(materialized.code, /@scope \(\[data-litsx-style-scope=/);
+    assert.match(materialized.code, /\.p-4\{/);
+    assert.match(materialized.code, /\.text-blue-600\{/);
+    assert.doesNotMatch(global.code, /static styles|lightDomStyleScope/);
+    assert.doesNotMatch(none.code, /static styles|lightDomStyleScope/);
+    assert.doesNotMatch(
+      integrationGlobal.code,
+      /static styles|lightDomStyleScope/,
+    );
+  });
+
+  it("routes component-owned light DOM guards through the selected mode", () => {
+    const source = `
+const sizes = { lg: "m-9" };
+export function LightCard({ size = "lg" }) {
+  return <article class={sizes[size]}>Light</article>;
+}
+LightCard.lightDom = true;
+LightCard.styles = [sizes];
+`;
+    const compilePayloads = (strategy) => {
+      const result = transformLitsxSync(
+        source,
+        withUnoCssCompiler({
+          filename: `/virtual/guarded-light-${strategy}.tsx`,
+          lightDomStyles: strategy,
+        }),
+      );
+      return [
+        ...result.code.matchAll(new RegExp(UNO_CSS_GUARD_PATTERN.source, "g")),
+      ].map((match) => decodeUnoCssGuardPayload(match[1]));
+    };
+    const scoped = compilePayloads("scoped");
+    const global = compilePayloads("global");
+    const none = compilePayloads("none");
+
+    assert(scoped.length >= 2);
+    assert(
+      scoped.every((payload) =>
+        payload.scope?.includes("data-litsx-style-scope"),
+      ),
+    );
+    assert(global.some((payload) => payload.emit === "global"));
+    assert(none.some((payload) => payload.emit === "none"));
   });
 
   it("works through the optional react-compat pipeline", () => {
@@ -666,12 +758,21 @@ export function CompatButton({ active }) {
         reactCompat: true,
       }),
     );
+    const shadowResult = transformLitsxSync(
+      source,
+      withUnoCssCompiler({
+        filename: "/virtual/compat-button-shadow.tsx",
+        reactCompat: { domMode: "shadow" },
+      }),
+    );
 
-    assert.strictEqual(count(result.code, UNO_CSS_PLACEHOLDER), 1);
+    assert.strictEqual(count(result.code, UNO_CSS_PLACEHOLDER), 0);
     assert.match(result.code, /class CompatButton/);
-    assert.match(result.code, /static styles = _litsxUnoCssStyles;/);
+    assert.doesNotMatch(result.code, /static styles|lightDomStyleScope/);
     assert.match(result.code, /bg-green-500/);
     assert.match(result.code, /bg-gray-500/);
+    assert.strictEqual(count(shadowResult.code, UNO_CSS_PLACEHOLDER), 1);
+    assert.match(shadowResult.code, /static styles = _litsxUnoCssStyles;/);
   });
 
   it("consumes local object, tuple, nested, template and finite-map guards before runtime", () => {
@@ -898,6 +999,96 @@ BadImport.styles = [BUTTON_SIZES];
     assert.strictEqual(count(chunk.code, "unoPreflightStyles = css`"), 1);
   });
 
+  it("emits a global light DOM stylesheet beside shadow component styles", async () => {
+    const directory = fs.mkdtempSync(
+      path.join(os.tmpdir(), "litsx-unocss-light-dom-build-"),
+    );
+    const entry = path.join(directory, "entry.tsx");
+    fs.writeFileSync(
+      entry,
+      `
+import "virtual:uno.css";
+import { ShadowCard } from "./shadow-card.tsx";
+import { LightCard } from "./light-card.tsx";
+
+document.body.innerHTML = '<main class="p-6 bg-blue-600 text-white">Global</main>';
+customElements.define("shadow-card", ShadowCard);
+customElements.define("light-card", LightCard);
+`,
+      "utf8",
+    );
+    fs.writeFileSync(
+      path.join(directory, "shadow-card.tsx"),
+      `
+export function ShadowCard() {
+  return <article class="p-4 rounded-lg bg-red-500">Shadow</article>;
+}
+`,
+      "utf8",
+    );
+    fs.writeFileSync(
+      path.join(directory, "light-card.tsx"),
+      `
+export function LightCard() {
+  return <article class="m-7 bg-green-600">Light</article>;
+}
+LightCard.lightDom = true;
+`,
+      "utf8",
+    );
+
+    try {
+      const result = await build({
+        configFile: false,
+        root: directory,
+        logLevel: "silent",
+        plugins: litsxUnoCss({
+          litsx: { lightDomStyles: "global" },
+          unocss: { presets: [presetWind4()] },
+        }),
+        build: {
+          write: false,
+          minify: false,
+          lib: { entry, formats: ["es"], fileName: "entry" },
+          rollupOptions: {
+            external(id) {
+              return (
+                id === "lit" ||
+                id.startsWith("lit/") ||
+                id.startsWith("@litsx/")
+              );
+            },
+          },
+        },
+      });
+      const outputs = Array.isArray(result)
+        ? result.flatMap((item) => item.output)
+        : result.output;
+      const css = outputs
+        .filter(
+          (item) => item.type === "asset" && item.fileName.endsWith(".css"),
+        )
+        .map((item) => String(item.source))
+        .join("\n");
+      const js = outputs
+        .filter((item) => item.type === "chunk")
+        .map((item) => item.code)
+        .join("\n");
+
+      assert.match(css, /--colors-blue-600:/);
+      assert.match(css, /\.p-6\{/);
+      assert.match(css, /\.bg-blue-600\{/);
+      assert.match(css, /\.text-white\{/);
+      assert.match(css, /\.m-7\{/);
+      assert.match(css, /\.bg-green-600\{/);
+      assert.match(js, /\.bg-red-500\{/);
+      assert.doesNotMatch(js, /@scope \(\[data-litsx-style-scope=/);
+      assert.doesNotMatch(css, /LITSX_UNOCSS_LIGHT_DOM_BUILD_PLACEHOLDER/);
+    } finally {
+      fs.rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   it("generates Wind4 on-demand theme variables from the project token set", async () => {
     const chunk = await buildFixture(
       `
@@ -1078,6 +1269,63 @@ export function SafelistedButton({ size }) {
       // A single CSSResult exists in the module graph, but valid declarative
       // Shadow DOM must serialize its CSS once inside each rendered root.
       assert.strictEqual(count(rendered.html, "/* layer: preflights */"), 2);
+    } finally {
+      await server.close();
+      fs.rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("serializes the stable light DOM scope for hydration in SSR", async () => {
+    const directory = fs.mkdtempSync(
+      path.join(os.tmpdir(), "litsx-unocss-light-ssr-"),
+    );
+    const entry = path.join(directory, "entry.tsx");
+    fs.writeFileSync(
+      entry,
+      `
+export function LightCard() {
+  return <article class="p-4 bg-blue-600">Light</article>;
+}
+LightCard.lightDom = true;
+`,
+      "utf8",
+    );
+    const server = await createServer({
+      configFile: false,
+      root: directory,
+      logLevel: "silent",
+      appType: "custom",
+      server: { middlewareMode: true },
+      resolve: {
+        alias: [
+          {
+            find: /^lit$/,
+            replacement: path.resolve("node_modules/lit/index.js"),
+          },
+          {
+            find: "@litsx/core/elements",
+            replacement: path.resolve("packages/core/src/elements/index.js"),
+          },
+          {
+            find: "@litsx/core",
+            replacement: path.resolve("packages/core/src/index.js"),
+          },
+        ],
+      },
+      plugins: litsxUnoCss({ unocss: { presets: [presetWind4()] } }),
+    });
+
+    try {
+      const module = await server.ssrLoadModule("/entry.tsx");
+      const rendered = await renderToString(html`<light-card></light-card>`, {
+        elements: { "light-card": module.LightCard },
+      });
+
+      assert.match(rendered.html, /data-litsx-style-scope="[a-z0-9]+"/);
+      assert.doesNotMatch(
+        rendered.html,
+        /declarative-shadow-root|shadowrootmode/,
+      );
     } finally {
       await server.close();
       fs.rmSync(directory, { recursive: true, force: true });

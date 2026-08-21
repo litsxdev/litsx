@@ -36,6 +36,53 @@ retaining an already evaluated, stale virtual module. External `uno.config`
 files are followed and the development snapshots are invalidated when tokens
 or configuration change.
 
+## Light DOM routing
+
+LitSX exposes one generic compiler option for generated light-DOM styles:
+
+```js
+litsxUnoCss({
+  litsx: {
+    lightDomStyles: "scoped", // "scoped" | "global" | "none"
+  },
+});
+```
+
+- `scoped` is the default. Each light-DOM component receives a stable
+  short opaque `data-litsx-style-scope` identity and its utility rules are
+  emitted in a CSS `@scope` with a nested-component boundary. The full
+  component host identity remains available as runtime metadata without being
+  repeated in HTML and CSS. Parent utilities therefore do not select matching
+  classes inside nested light-DOM components.
+- `global` omits component-local generated utility sheets. Import
+  `virtual:uno.css` once from the browser entry to apply the shared project
+  utilities and preflight.
+- `none` omits automatic UnoCSS sheets for light-DOM components. An explicit
+  `virtual:uno.css` import remains an explicit request for global UnoCSS and is
+  independent of this automatic component route.
+
+Authored `Component.styles` values are preserved in every mode. Shadow-DOM
+components always keep component-local utility sheets because document CSS
+cannot cross a shadow boundary.
+
+The React compatibility pipeline always selects `global`: migrated React trees
+expect document-level CSS rather than per-component selector boundaries. Add
+`import "virtual:uno.css"` to the browser entry when using react-compat with
+UnoCSS.
+
+Projects that also use utilities in ordinary document light DOM can import the
+global sheet once from their browser entry:
+
+```js
+import "virtual:uno.css";
+```
+
+That module uses the same resolved UnoCSS configuration, extractor, token
+store, safelist and preflight generator as the component styles. It does not
+create a second UnoCSS instance. Production finalizes the CSS after collecting
+the complete module graph; Vite development invalidates the sheet when later
+modules or configuration introduce new tokens.
+
 ## Build-tool-neutral integration
 
 Custom Rollup, webpack, esbuild and framework adapters can use the root API
@@ -54,10 +101,13 @@ const unocss = await createUnoCssIntegration({
   presets: [presetWind4()],
 });
 
-const compiled = await transformLitsx(source, withUnoCssCompiler(
+const compiled = await transformLitsx(
+  source,
+  withUnoCssCompiler(
   { filename: id },
   { preflightModule: UNO_CSS_PREFLIGHT_MODULE_ID },
-));
+  ),
+);
 
 const module = await unocss.materializeModule(compiled.code, id);
 const preflightCss = await unocss.generatePreflight();
@@ -212,9 +262,15 @@ per-module snapshots described above. During SSR the preflight must still be
 serialized inside every declarative shadow root; a document-level stylesheet
 cannot cross a shadow boundary.
 
-Light DOM components use the same generated `CSSResult`; `LightDomMixin`
-installs it in the component host. The adapter intentionally does not expose
-UnoCSS's `virtual:uno.css`, because the official integration cannot run global
-and shadow-dom modes from the same instance. A project-wide light-DOM sheet is
-therefore a separate integration concern; it is not required for LitSX light
-DOM components themselves.
+In `scoped` mode, `LightDomMixin` installs the generated `CSSResult` in the
+component host. SSR serializes the stable scope attribute so hydration uses the
+same boundary without replacing the host. A document-level stylesheet is
+still required when utility styling must be visible before a client-only
+light-DOM component has initialized. The optional `virtual:uno.css` import also
+covers page shells, third-party light DOM and other markup outside LitSX hosts.
+
+The global sheet is a normal Vite CSS asset in production. SSR frameworks
+should link the CSS emitted for the browser entry in the document head, just
+as they would for any other imported stylesheet. Shadow roots continue to
+receive their shared preflight `CSSResult`, because a document stylesheet
+cannot cross a shadow boundary.

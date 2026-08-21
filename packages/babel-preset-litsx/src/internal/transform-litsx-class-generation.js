@@ -102,6 +102,7 @@ export function createComponentClass({
   eventMetadata,
   needsStaticHoistsMixin,
   lightDomRequested,
+  lightDomStyleStrategy = "scoped",
   needsCss,
   needsUnsafeCss,
   needsCallbackRef = false,
@@ -145,6 +146,12 @@ export function createComponentClass({
     classNode.body.body.unshift(componentMarkerProperty);
     classNode.body.body.unshift(hydratableTagProperty);
     classNode.body.body.unshift(hostTypeIdProperty);
+    if (lightDomRequested && lightDomStyleStrategy === "scoped") {
+      classNode.body.body.unshift(createStaticRuntimeMetadataProperty(
+        "litsx.lightDomStyleScope",
+        t.stringLiteral(hostTypeId.replace(/^litsx-host-type-/, "")),
+      ));
+    }
   }
 
   if (eventMetadata?.events?.length > 0 || eventMetadata?.complete === false) {

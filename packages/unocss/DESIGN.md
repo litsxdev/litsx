@@ -1,6 +1,6 @@
 # UnoCSS integration design validation
 
-Date: 2026-08-20
+Date: 2026-08-21
 UnoCSS: 66.8.0
 
 ## Result
@@ -33,6 +33,10 @@ The integration verifies:
 - development snapshots and invalidation when new tokens appear
 - shared output across multiple build entrypoints
 - computed styles after SSR hydration in real Chromium for Shadow and Light DOM
+- nested light-DOM utility isolation with stable compiler-generated scopes
+- the standard `virtual:uno.css` global sheet from the same context used for
+  component Shadow DOM styles
+- initial and lazy-module global light-DOM utilities in real Chromium
 - exact-export static guards, including aliases, barrels and transitive values
 - removal of authoring guards from runtime `CSSResultGroup` values
 - per-guard utility generation and helper dependency invalidation in HMR
@@ -52,10 +56,12 @@ that marker, and replaces it in the same materialization pass. Each guard
 therefore remains owned by the component whose styles declaration names it; no
 module-wide export scanning or user-code execution is involved.
 
-This keeps one CSS copy in the JavaScript module. Components in the same file
-receive the union of the utilities used by their siblings. Keeping one primary
-component per source file produces component-level granularity without a new
-compiler contract.
+Shadow components keep one CSS copy in the JavaScript module. Scoped light-DOM
+components receive a component-owned marker whose rules are wrapped in CSS
+`@scope`; the nearest nested LitSX scope is the end boundary. Components in the
+same file still receive the module candidate union, while selector reach is
+isolated at runtime. Keeping one primary component per source file gives both
+candidate and selector granularity.
 
 ## Size measurement
 
@@ -95,6 +101,14 @@ from the independently generated shadow utility styles only after UnoCSS has
 resolved the complete preset configuration; merely passing `preflights: []`
 is insufficient because UnoCSS merges preset entries.
 
+When an application imports `virtual:uno.css`, the adapter composes UnoCSS's
+official global build and development plugins onto that same resolved context.
+The global sheet and LitSX component sheets therefore share configuration,
+tokens, safelist and preflight resolution without running two UnoCSS instances.
+The official development hash handshake also closes the startup race where the
+global CSS module can load before a later static or dynamic module contributes
+its tokens.
+
 SSR must still serialize styles into each declarative shadow root. Repeated
 preflight compresses well over the wire, but it still affects generated HTML
 and parsing cost. A follow-up can measure large repeated SSR trees before
@@ -103,7 +117,13 @@ design-system preflight.
 
 ## Generic LitSX surface
 
-The generic compiler surface was sufficient:
+The generic compiler surface now also defines the light-DOM routing policy:
+
+- `lightDomStyles: "scoped"` emits a stable scope identity and is the default.
+- `lightDomStyles: "global"` routes integration output to a document sheet.
+- `lightDomStyles: "none"` suppresses automatic light-DOM integration output.
+
+The remaining generic hooks were sufficient:
 
 - `authoringPlugins` consumes extension-owned values before native lowering.
 - `outputPlugins` augments generated component classes.
@@ -125,6 +145,7 @@ tool:
 - exact-export guard resolution and dependency tracking
 - utility-only CSS generation
 - resolved preflight generation
+- complete global CSS generation for non-Vite adapters
 - virtual preflight module source and final placeholder replacement
 - dependency invalidation lookup
 

@@ -14,6 +14,7 @@ import transformLitsxSsrRoots from "./internal/transform-litsx-ssr-roots.js";
 const NATIVE_TRANSFORM_OPTION_KEYS = [
   "ssr",
   "defaultDomMode",
+  "lightDomStyles",
   "typeResolutionMode",
   "inMemoryFiles",
   "compilerOptions",

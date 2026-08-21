@@ -1,4 +1,7 @@
-import UnoCSS from "unocss/vite";
+import UnoCSS, {
+  GlobalModeBuildPlugin,
+  GlobalModeDevPlugin,
+} from "unocss/vite";
 import { litsx } from "@litsx/vite-plugin";
 import {
   createUnoCssBuildEngine,
@@ -177,7 +180,7 @@ export function createUnoCssVitePlugins(options = {}) {
     ...options,
     configResolved(config) {
       userConfigResolved?.(config);
-      engine.captureResolvedConfig(config);
+      engine.captureResolvedConfig(config, { detachPreflights: false });
     },
     mode: "shadow-dom",
   });
@@ -203,12 +206,17 @@ export function createUnoCssVitePlugins(options = {}) {
   const contextPlugins = normalizedPlugins.filter(
     (plugin) => plugin.name !== "unocss:shadow-dom",
   );
+  const globalPlugins = [
+    ...GlobalModeBuildPlugin(context),
+    ...GlobalModeDevPlugin(context),
+  ];
 
   return [
     createUnoCssTokenCollector(engine),
     createUnoCssGuardMaterializer(engine),
     createUnoCssPreflightVitePlugin(context, engine),
     ...contextPlugins,
+    ...globalPlugins,
   ];
 }
 

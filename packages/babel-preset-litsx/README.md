@@ -27,11 +27,18 @@ It wires the native lowering stages in the supported order, then optionally runs
 - `jsxTemplate?: boolean`
 - `jsxTemplateOptions?: object`
 - `defaultDomMode?: "shadow" | "light"`
+- `lightDomStyles?: "scoped" | "global" | "none"`
 - `typeResolutionMode?: "auto" | "in-memory"`
 - `inMemoryFiles?: Record<string, string>`
 - `transformLitsx?: object`
 
 `transformLitsx` is merged on top of the native transform options when you need to override the underlying component-lowering stage directly.
+
+`lightDomStyles` gives style integrations a generic light-DOM routing contract.
+`scoped` (the default) emits a stable component scope, `global` routes generated
+styles to an integration-owned document stylesheet, and `none` disables
+automatic generated styles for light-DOM components. Authored
+`Component.styles` values remain intact in every mode.
 
 ## Notes
 

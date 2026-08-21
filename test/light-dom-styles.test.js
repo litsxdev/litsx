@@ -3,7 +3,10 @@
 import assert from "assert";
 import { css, html, LitElement } from "lit";
 import { describe, it } from "vitest";
-import { LightDomMixin } from "../packages/core/src/elements/index.js";
+import {
+  LightDomMixin,
+  LITSX_LIGHT_DOM_STYLE_SCOPE,
+} from "../packages/core/src/elements/index.js";
 
 let tagCounter = 0;
 
@@ -17,6 +20,7 @@ describe("LightDomMixin styles", () => {
     const tagName = nextTag();
 
     class LightStyledPanel extends LightDomMixin(LitElement) {
+      static [LITSX_LIGHT_DOM_STYLE_SCOPE] = "light-styled-panel";
       static styles = css`
         :host {
           display: block;
@@ -42,7 +46,13 @@ describe("LightDomMixin styles", () => {
     document.body.appendChild(element);
     await element.updateComplete;
 
-    const styleElement = element.querySelector("style[data-litsx-light-dom-style]");
+    assert.strictEqual(
+      element.getAttribute("data-litsx-style-scope"),
+      "light-styled-panel",
+    );
+    const styleElement = element.querySelector(
+      "style[data-litsx-light-dom-style]",
+    );
     assert(styleElement, "expected a light DOM style element to be injected");
     assert.match(styleElement.textContent, /\.panel\s*\{/);
   });
@@ -77,13 +87,15 @@ describe("LightDomMixin styles", () => {
     document.body.appendChild(element);
     await element.updateComplete;
 
-    const styleElement = element.querySelector("style[data-litsx-light-dom-style]");
+    const styleElement = element.querySelector(
+      "style[data-litsx-light-dom-style]",
+    );
     assert(styleElement, "expected a light DOM style element to be injected");
     assert.match(styleElement.textContent, /:host\s*\{/);
     assert.match(styleElement.textContent, /\.panel\s*\{/);
     assert.strictEqual(
       element.querySelectorAll("style[data-litsx-light-dom-style]").length,
-      1
+      1,
     );
   });
 });

@@ -330,6 +330,54 @@ describe("@litsx/compiler", () => {
     assert.ok(ids.every((id) => id.startsWith("litsx-host-type-")));
   }, 20000);
 
+  it("emits a stable style scope only for scoped light DOM components", () => {
+    const source = [
+      "export function LightCard() {",
+      "  return <div>light</div>;",
+      "}",
+      "LightCard.lightDom = true;",
+    ].join("\n");
+    const filename = "/virtual/components/light-card.tsx";
+    const scoped = transformLitsxSync(source, { filename });
+    const scopedAgain = transformLitsxSync(source, { filename });
+    const global = transformLitsxSync(source, {
+      filename,
+      lightDomStyles: "global",
+    });
+    const none = transformLitsxSync(source, {
+      filename,
+      lightDomStyles: { strategy: "none" },
+    });
+    const scopePattern = /\[Symbol\.for\("litsx\.lightDomStyleScope"\)\] = "([^"]+)"/;
+    const hostTypePattern = /\[Symbol\.for\("litsx\.hostTypeId"\)\] = "([^"]+)"/;
+
+    assert.match(scoped.code, scopePattern);
+    assert.strictEqual(
+      scoped.code.match(scopePattern)?.[1],
+      scopedAgain.code.match(scopePattern)?.[1],
+    );
+    assert.strictEqual(
+      scoped.code.match(scopePattern)?.[1],
+      scoped.code.match(hostTypePattern)?.[1].replace("litsx-host-type-", ""),
+    );
+    assert.doesNotMatch(scoped.code.match(scopePattern)?.[1] ?? "", /litsx-host-type-/);
+    assert.doesNotMatch(global.code, scopePattern);
+    assert.doesNotMatch(none.code, scopePattern);
+  }, 20000);
+
+  it("rejects unknown light DOM style strategies", () => {
+    assert.throws(
+      () => transformLitsxSync(
+        "export function Card() { return <div />; } Card.lightDom = true;",
+        {
+          filename: "/virtual/components/card.tsx",
+          lightDomStyles: "isolated",
+        },
+      ),
+      /lightDomStyles must be "scoped", "global", or "none"/,
+    );
+  });
+
   it("emits hydratable tag metadata for generated component classes", () => {
     const source = [
       "export function FeatureCard() {",

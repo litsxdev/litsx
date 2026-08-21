@@ -68,6 +68,7 @@ export declare const LITSX_HOOK: unique symbol;
 export declare const LITSX_COMPONENT: unique symbol;
 export declare const LITSX_EVENTS: unique symbol;
 export declare const LITSX_HOST_TYPE_ID: unique symbol;
+export declare const LITSX_LIGHT_DOM_STYLE_SCOPE: unique symbol;
 export declare const LITSX_HYDRATABLE_TAG: unique symbol;
 export declare const STRUCTURAL_HOOKS: unique symbol;
 export interface LitsxHook {
@@ -104,6 +105,7 @@ export interface LitsxHydratableComponentStatic extends LitsxComponentStatic {
 }
 export interface LitsxHostTypeIdStatic extends LitsxComponentStatic {
   readonly [LITSX_HOST_TYPE_ID]: string;
+  readonly [LITSX_LIGHT_DOM_STYLE_SCOPE]?: string;
 }
 export declare function isLitsxHook(value: unknown): value is LitsxHook;
 export declare function isLitsxComponentClass(

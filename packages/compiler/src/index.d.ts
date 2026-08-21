@@ -15,6 +15,10 @@ export type TransformLitsxOptions = {
   jsxTemplateOptions?: object;
   authoringPlugins?: unknown[];
   outputPlugins?: unknown[];
+  defaultDomMode?: "shadow" | "light";
+  lightDomStyles?: "scoped" | "global" | "none" | {
+    strategy: "scoped" | "global" | "none";
+  };
   requireJsx?: boolean;
   reactCompat?: boolean | {
     transformDependencies?: string[];

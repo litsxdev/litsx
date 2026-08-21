@@ -15,6 +15,7 @@ declare module "@litsx/core" {
 export type LitsxUnoCssOptions = {
   placeholder?: string;
   preflightModule?: string;
+  lightDomStyles?: TransformLitsxOptions["lightDomStyles"];
 };
 
 export declare const UNO_CSS_PLACEHOLDER: "@unocss-placeholder";
@@ -24,13 +25,16 @@ export declare const UNO_CSS_PREFLIGHT_EXPORT: "unoPreflightStyles";
 export declare const UNO_CSS_GUARD_PATTERN: RegExp;
 /** @internal Build-tool bridge for component-owned guard materialization. */
 export declare function decodeUnoCssGuardPayload(value: string): {
-  candidates: string[];
+  candidates?: string[];
   descriptor?: {
     file: string;
     exportName?: string;
     localName?: string;
   } | null;
   dependencies?: string[];
+  emit?: "component" | "global" | "none";
+  moduleCandidates?: boolean;
+  scope?: string;
 };
 
 export type UnoCssBuildEngineOptions = {
@@ -72,14 +76,14 @@ export interface UnoCssBuildEngine {
     options?: { detachPreflights?: boolean },
   ): void;
   generatePreflight(): Promise<string>;
+  generateGlobalCss(): Promise<string>;
   createPreflightModuleSource(cssText: string): string;
   finalizePreflight(code: string, placeholder?: string): Promise<string>;
+  finalizeGlobalCss(code: string, placeholder?: string): Promise<string>;
   getImporters(file: string): string[];
   invalidate(file: string): string[];
   forgetModule(id: string): void;
-  setGenerator(
-    generator: UnoCssBuildEngineOptions["generator"],
-  ): void;
+  setGenerator(generator: UnoCssBuildEngineOptions["generator"]): void;
   setPreflightGenerator(
     generator: NonNullable<UnoCssBuildEngineOptions["preflightGenerator"]>,
   ): void;

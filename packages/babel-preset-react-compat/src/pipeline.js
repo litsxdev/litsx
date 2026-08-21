@@ -34,6 +34,7 @@ export function normalizeReactCompatOptions(options = {}) {
     transformLitsx: normalizeTransformLitsxOptions({
       ...options,
       defaultDomMode: domMode,
+      lightDomStyles: "global",
       suppressNativeClassNameWarning: true,
       transformLitsx: {
         ...(options.transformLitsx || {}),

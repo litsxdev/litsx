@@ -5,6 +5,7 @@ export type LitsxConstructor<TInstance = object> = abstract new (
 export declare const LITSX_COMPONENT: unique symbol;
 export declare const LITSX_EVENTS: unique symbol;
 export declare const LITSX_HOST_TYPE_ID: unique symbol;
+export declare const LITSX_LIGHT_DOM_STYLE_SCOPE: unique symbol;
 export declare const LITSX_HYDRATABLE_TAG: unique symbol;
 export declare const LITSX_SCOPED_TEMPLATE: unique symbol;
 export declare const LITSX_MODULE_ID: unique symbol;
@@ -41,6 +42,7 @@ export interface LitsxHydratableCustomElementStatic {
 
 export interface LitsxHostTypeIdStatic extends LitsxComponentStatic {
   readonly [LITSX_HOST_TYPE_ID]: string;
+  readonly [LITSX_LIGHT_DOM_STYLE_SCOPE]?: string;
 }
 
 export declare function isLitsxComponentClass(

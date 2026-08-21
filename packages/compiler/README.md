@@ -144,6 +144,25 @@ const result = await transformLitsx(source, {
 });
 ```
 
+### `defaultDomMode?: "shadow" | "light"`
+
+Selects the generated render root for native components. The default is
+`"shadow"`; an explicit `Component.lightDom = true` still selects light DOM for
+that component.
+
+### `lightDomStyles?: "scoped" | "global" | "none" | { strategy: ... }`
+
+Controls how generic style integrations route automatically generated styles
+for light-DOM components:
+
+- `scoped` is the default and emits a stable per-component scope.
+- `global` lets the integration contribute those styles to a document sheet.
+- `none` disables automatic component style generation.
+
+This option does not remove authored `Component.styles`. Integrations decide
+how their generated output implements the selected route; `@litsx/unocss`
+supports all three modes.
+
 ### `authoringPlugins?: unknown[]`
 
 Additional Babel plugins applied after standard JSX/TSX parsing and before the built-in LitSX lowering pipeline.
@@ -153,6 +172,10 @@ Use this when you need to introduce extra authored syntax or conventions on top 
 ### `reactCompat?: boolean | object`
 
 Selects `@litsx/babel-preset-react-compat` instead of the native preset. `true` uses the compatibility defaults (`domMode: "light"` and `reactKeys: true`). The object form accepts `domMode`, `reactKeys`, and `transformDependencies`; see the [complete react-compat option reference](../babel-preset-react-compat/README.md#options).
+
+React-compatible compilation forces `lightDomStyles: "global"` so migrated
+components preserve React's document-level CSS cascade. Shadow-mode components
+still receive their required local integration styles.
 
 `jsxTemplate` and `jsxTemplateOptions` remain top-level compiler options. They control the compiler's shared final output pass after either the native or react-compat feature pipeline has run.
 

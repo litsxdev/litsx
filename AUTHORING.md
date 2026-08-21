@@ -71,6 +71,12 @@ Use the `css` export from `@litsx/core` for component styles. It is Lit's real
 `css` tag, so editors can recognize and decorate the template and Lit receives a
 `CSSResult`, not an untyped string.
 
+Build integrations can route generated light-DOM styles with
+`lightDomStyles: "scoped" | "global" | "none"`. The default `scoped` mode
+creates a stable component boundary; `global` is intended for an
+integration-owned document stylesheet, and `none` leaves only explicitly
+authored styles. This is a compiler option, not additional authoring syntax.
+
 ## Props and bindings
 
 Authors always write ordinary JSX names. The compiler chooses the Lit binding

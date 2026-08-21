@@ -14,6 +14,7 @@ const SHADOW_DOM_CREATION_SCOPE = Symbol("litsx.shadowDomCreationScope");
 const SHADOW_DOM_REGISTRY = Symbol("litsx.shadowDomRegistry");
 export const LITSX_COMPONENT = Symbol.for("litsx.component");
 export const LITSX_HOST_TYPE_ID = Symbol.for("litsx.hostTypeId");
+export const LITSX_LIGHT_DOM_STYLE_SCOPE = Symbol.for("litsx.lightDomStyleScope");
 export const LITSX_HYDRATABLE_TAG = Symbol.for("litsx.hydratableTag");
 export const LITSX_SCOPED_TEMPLATE = Symbol.for("litsx.scopedTemplate");
 export const LITSX_MODULE_ID = Symbol.for("litsx.moduleId");
@@ -586,6 +587,10 @@ export const LightDomMixin = dedupeMixin((Base) =>
     }
 
     connectedCallback(...args) {
+      const styleScope = this.constructor[LITSX_LIGHT_DOM_STYLE_SCOPE];
+      if (typeof styleScope === "string" && styleScope.length > 0) {
+        this.setAttribute("data-litsx-style-scope", styleScope);
+      }
       if (typeof super.connectedCallback === "function") {
         super.connectedCallback(...args);
       }
