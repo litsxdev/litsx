@@ -1,5 +1,21 @@
 # @litsx/babel-plugin-litsx-proptypes
 
+## 1.0.0-next.0
+
+### Major Changes
+
+- 83d757e: Stabilize the complete public LitSX package graph as the 1.0 release line.
+
+  This release establishes standard JSX and TSX authoring, SSR and hydration,
+  React compatibility, scoped custom-element registration, structural hooks,
+  Storybook and Vite integration, and Shadow DOM and Light DOM UnoCSS support as
+  the stable public contract.
+
+### Patch Changes
+
+- Updated dependencies [83d757e]
+  - @litsx/prop-types@1.0.0-next.0
+
 ## 0.2.4
 
 ### Patch Changes

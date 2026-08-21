@@ -1,6 +1,6 @@
 {
   "name": "@litsx/babel-preset-litsx",
-  "version": "0.15.0",
+  "version": "1.0.0-next.0",
   "description": "Canonical native Babel preset for LitSX-authored source",
   "author": "LitSX Team",
   "type": "module",
@@ -96,11 +96,11 @@
     "@babel/parser": "^7.29.3",
     "@babel/plugin-syntax-jsx": "^7.28.6",
     "@babel/traverse": "^7.28.5",
-    "@litsx/authoring": "^0.5.0",
-    "@litsx/babel-plugin-shared-hooks": "^0.8.0",
-    "@litsx/babel-plugin-transform-jsx-html-template": "^0.3.6",
-    "@litsx/babel-plugin-transform-litsx-scoped-elements": "^0.4.9",
-    "@litsx/typescript-session": "^0.2.3"
+    "@litsx/authoring": "^1.0.0-next.0",
+    "@litsx/babel-plugin-shared-hooks": "^1.0.0-next.0",
+    "@litsx/babel-plugin-transform-jsx-html-template": "^1.0.0-next.0",
+    "@litsx/babel-plugin-transform-litsx-scoped-elements": "^1.0.0-next.0",
+    "@litsx/typescript-session": "^1.0.0-next.0"
   },
   "scripts": {
     "build": "../../node_modules/.bin/rollup --config rollup.config.js",

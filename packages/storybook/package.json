@@ -1,6 +1,6 @@
 {
   "name": "@litsx/storybook",
-  "version": "0.1.2",
+  "version": "1.0.0-next.0",
   "description": "Official Storybook integration helpers for LitSX-authored stories",
   "author": "LitSX Team",
   "type": "module",
@@ -47,8 +47,8 @@
     "vite": "^7.3.2 || ^8.0.0"
   },
   "dependencies": {
-    "@litsx/compiler": "^0.10.0",
-    "@litsx/vite-plugin": "^0.3.2"
+    "@litsx/compiler": "^1.0.0-next.0",
+    "@litsx/vite-plugin": "^1.0.0-next.0"
   },
   "devDependencies": {
     "@storybook/web-components-vite": "10.5.6",

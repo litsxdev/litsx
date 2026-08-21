@@ -1,6 +1,6 @@
 {
   "name": "@litsx/eslint-plugin",
-  "version": "0.3.7",
+  "version": "1.0.0-next.0",
   "description": "Official ESLint rules for standard LitSX JSX and TSX",
   "author": "LitSX Team",
   "type": "module",

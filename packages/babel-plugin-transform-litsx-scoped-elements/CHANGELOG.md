@@ -1,5 +1,48 @@
 # @litsx/babel-plugin-transform-litsx-scoped-elements
 
+## 1.0.0-next.0
+
+### Major Changes
+
+- 83d757e: Stabilize the complete public LitSX package graph as the 1.0 release line.
+
+  This release establishes standard JSX and TSX authoring, SSR and hydration,
+  React compatibility, scoped custom-element registration, structural hooks,
+  Storybook and Vite integration, and Shadow DOM and Light DOM UnoCSS support as
+  the stable public contract.
+
+### Minor Changes
+
+- 92e1dbe: Add phase 1 SSR support for generic custom elements across the LitSX SSR and
+  compiler pipelines.
+
+  LitSX now recognizes hydratable non-Lit custom element constructors, carries
+  their SSR metadata through compiled scoped-element registries and SSR root
+  rewrites, and supports host-only SSR plus hydration payload collection for
+  generic `HTMLElement` roots.
+
+  `@litsx/ssr` also exposes a new `renderCustomElementSsr(...)` hook so consumer
+  frameworks can take over SSR for hydratable non-Lit custom elements, contribute
+  client imports, preloads, head tags, and opaque adapter artifacts, while
+  preserving LitSX root metadata and hydration orchestration.
+
+### Patch Changes
+
+- 53939a2: Add SSR-safe dynamic fallback rendering for the LitSX `<noscript>` intrinsic.
+- 31ae393: Replace the deprecated `@litsx/babel-parser` runtime import with the
+  `@litsx/authoring/parser` + `@babel/parser` pipeline and declare the runtime
+  dependencies needed by the published scoped-elements transform package.
+- Updated dependencies [92e1dbe]
+- Updated dependencies [60b2e98]
+- Updated dependencies [354dac9]
+- Updated dependencies [0ae3bc9]
+- Updated dependencies [83d757e]
+- Updated dependencies [accc7aa]
+- Updated dependencies [c9ae368]
+  - @litsx/babel-plugin-shared-hooks@1.0.0-next.0
+  - @litsx/typescript-session@1.0.0-next.0
+  - @litsx/authoring@1.0.0-next.0
+
 ## 0.4.9
 
 ### Patch Changes

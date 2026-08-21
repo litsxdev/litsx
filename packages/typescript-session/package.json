@@ -1,6 +1,6 @@
 {
   "name": "@litsx/typescript-session",
-  "version": "0.2.4",
+  "version": "1.0.0-next.0",
   "description": "Shared TypeScript session utilities for LitSX compiler and tooling",
   "author": "LitSX Team",
   "type": "module",
