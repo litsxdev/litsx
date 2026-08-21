@@ -48,12 +48,18 @@ jobs:
         run: |
           if find .changeset -maxdepth 1 -name '*.md' ! -name 'README.md' -print -quit | grep -q .; then
             echo "has_changesets=true" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.ref }}" != "refs/heads/next" ] && [ "${{ github.base_ref }}" != "next" ] && [ -f .changeset/pre.json ]; then
+            echo "has_changesets=true" >> "$GITHUB_OUTPUT"
           else
             echo "has_changesets=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Materialize release versions
-        if: steps.pending.outputs.has_changesets == 'true'
+      - name: Materialize next versions
+        if: steps.pending.outputs.has_changesets == 'true' && (github.ref == 'refs/heads/next' || github.base_ref == 'next')
+        run: corepack yarn changeset:version:next
+
+      - name: Materialize stable versions
+        if: steps.pending.outputs.has_changesets == 'true' && github.ref != 'refs/heads/next' && github.base_ref != 'next'
         run: corepack yarn changeset:version
 
       - name: Refresh lockfile after versioning
