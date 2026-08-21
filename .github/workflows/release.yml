@@ -3,7 +3,6 @@ name: Release
 on:
   workflow_run:
     workflows:
-      - Test
       - Release Validate
     types:
       - completed
@@ -49,34 +48,53 @@ jobs:
               return;
             }
 
-            const requiredWorkflows = ["Test", "Release Validate"];
             const { owner, repo } = context.repo;
             const branch = context.payload.workflow_run.head_branch;
             const headSha = context.payload.workflow_run.head_sha;
             const eventName = context.payload.workflow_run.event;
-            if (!branch || eventName !== "push") {
+            const validationConclusion = context.payload.workflow_run.conclusion;
+            if (!branch || eventName !== "push" || validationConclusion !== "success") {
               core.setOutput("ready", "false");
               return;
             }
 
-            for (const workflowName of requiredWorkflows) {
+            const maxAttempts = 120;
+            const delayMs = 10_000;
+            let testRun = null;
+
+            for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
               const { data } = await github.rest.actions.listWorkflowRunsForRepo({
                 owner,
                 repo,
                 branch,
                 event: eventName,
-                status: "completed",
                 per_page: 100,
               });
 
-              const run = data.workflow_runs.find((candidate) =>
-                candidate.name === workflowName && candidate.head_sha === headSha,
+              testRun = data.workflow_runs.find(
+                (candidate) => candidate.name === "Test" && candidate.head_sha === headSha,
               );
 
-              if (!run || run.conclusion !== "success") {
+              if (testRun?.status === "completed") {
+                break;
+              }
+
+              if (attempt === maxAttempts) {
+                core.setFailed(`Timed out waiting for Test on ${headSha}`);
                 core.setOutput("ready", "false");
                 return;
               }
+
+              core.info(
+                `Waiting for Test on ${headSha} (${testRun?.status || "not found"}, attempt ${attempt}/${maxAttempts})`,
+              );
+              await new Promise((resolve) => setTimeout(resolve, delayMs));
+            }
+
+            if (testRun.conclusion !== "success") {
+              core.info(`Test concluded with ${testRun.conclusion}; release is not ready`);
+              core.setOutput("ready", "false");
+              return;
             }
 
             core.setOutput("ready", "true");

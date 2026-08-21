@@ -29,6 +29,22 @@ describe("release workflow", () => {
     );
   });
 
+  it("coordinates one release run after release validation and waits for Test", () => {
+    const trigger = workflow.slice(
+      workflow.indexOf("on:\n"),
+      workflow.indexOf("permissions:\n"),
+    );
+
+    assert.match(trigger, /workflows:\n\s+- Release Validate/);
+    assert.doesNotMatch(trigger, /\s+- Test/);
+    assert.match(
+      workflow,
+      /candidate\.name === "Test" && candidate\.head_sha === headSha/,
+    );
+    assert.match(workflow, /testRun\?\.status === "completed"/);
+    assert.match(workflow, /Timed out waiting for Test/);
+  });
+
   it("checks out persistent release channels with the bypass-enabled app token", () => {
     assert.match(
       publishJob,
