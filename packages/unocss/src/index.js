@@ -1,7 +1,14 @@
-const DEFAULT_PLACEHOLDER = "@unocss-placeholder";
+import { createStaticGuardResolver } from "./static-guards.js";
+import {
+  createUnoCssGuardMarker,
+  decodeUnoCssGuardPayload,
+  UNO_CSS_GUARD_PATTERN,
+  UNO_CSS_PLACEHOLDER,
+  UNO_CSS_PREFLIGHT_EXPORT,
+  UNO_CSS_PREFLIGHT_MODULE_ID,
+} from "./protocol.js";
+
 const COMPONENT_SYMBOL = "litsx.component";
-export const UNO_CSS_PREFLIGHT_MODULE_ID = "virtual:@litsx/unocss/preflight";
-export const UNO_CSS_PREFLIGHT_EXPORT = "unoPreflightStyles";
 
 function isSymbolFor(node, name, t) {
   return Boolean(
@@ -165,6 +172,137 @@ function programHasPlaceholder(programPath, placeholder) {
   return found;
 }
 
+function guardTemplate(payload, cssIdentifier, t) {
+  const marker = createUnoCssGuardMarker(payload);
+  return t.taggedTemplateExpression(
+    t.cloneNode(cssIdentifier),
+    t.templateLiteral(
+      [t.templateElement({ raw: marker, cooked: marker }, true)],
+      [],
+    ),
+  );
+}
+
+function getStylesAssignment(path, t) {
+  if (!path.isExpressionStatement()) return null;
+  const expression = path.node.expression;
+  if (!t.isAssignmentExpression(expression, { operator: "=" })) return null;
+  if (
+    !t.isMemberExpression(expression.left) ||
+    !t.isIdentifier(expression.left.object) ||
+    !/^[A-Z]/.test(expression.left.object.name)
+  )
+    return null;
+  const name = expression.left.computed
+    ? t.isStringLiteral(expression.left.property)
+      ? expression.left.property.value
+      : null
+    : t.isIdentifier(expression.left.property)
+      ? expression.left.property.name
+      : null;
+  return name === "styles" ? path.get("expression.right") : null;
+}
+
+/**
+ * Consume static utility guards from authored Component.styles assignments.
+ * The replacement is already a CSSResult, so no non-Lit value can leak into
+ * the native component lowering or the browser runtime.
+ */
+export function createUnoCssAuthoringPlugin() {
+  return function litsxUnoCssAuthoringPlugin(api) {
+    api.assertVersion?.(7);
+    const t = api.types;
+    return {
+      name: "litsx-unocss-authoring-guards",
+      visitor: {
+        Program: {
+          exit(programPath, state) {
+            const assignmentPaths = programPath
+              .get("body")
+              .map((path) => getStylesAssignment(path, t))
+              .filter(Boolean);
+            if (assignmentPaths.length === 0) return;
+
+            const filename = state.filename || state.file.opts.filename;
+            const resolver = createStaticGuardResolver({
+              source: state.file.code || "",
+              filename,
+              ast: state.file.ast,
+            });
+            let cssIdentifier = findImportedCssIdentifier(programPath, t);
+            const ensureCssIdentifier = () => {
+              if (cssIdentifier) return cssIdentifier;
+              cssIdentifier =
+                programPath.scope.generateUidIdentifier("litsxUnoCssGuard");
+              insertAfterImports(programPath, [
+                t.importDeclaration(
+                  [
+                    t.importSpecifier(
+                      t.cloneNode(cssIdentifier),
+                      t.identifier("css"),
+                    ),
+                  ],
+                  t.stringLiteral("@litsx/core"),
+                ),
+              ]);
+              return cssIdentifier;
+            };
+
+            const consume = (stylePath, replacementPath = stylePath) => {
+              const node = stylePath.node;
+              if (t.isArrayExpression(node)) {
+                for (const elementPath of stylePath.get("elements")) {
+                  if (!elementPath.node) continue;
+                  if (elementPath.isSpreadElement()) {
+                    consume(elementPath.get("argument"), elementPath);
+                  } else {
+                    consume(elementPath);
+                  }
+                }
+                return;
+              }
+
+              let result;
+              try {
+                result = t.isIdentifier(node)
+                  ? resolver.resolveLocal(node.name)
+                  : resolver.resolveNode(node);
+              } catch (error) {
+                throw stylePath.buildCodeFrameError(
+                  `@litsx/unocss could not statically resolve this Component.styles guard: ${error.message}. ` +
+                    "Guards must be finite static strings, arrays, objects, or resolvable local exports.",
+                );
+              }
+
+              if (result.kind === "runtime" || result.kind === "external")
+                return;
+              if (result.kind !== "static") {
+                throw stylePath.buildCodeFrameError(
+                  "@litsx/unocss did not consume this Component.styles value; it would not be a valid Lit CSSResultGroup at runtime.",
+                );
+              }
+              replacementPath.replaceWith(
+                guardTemplate(
+                  {
+                    candidates: result.candidates,
+                    descriptor: result.descriptor,
+                    dependencies: result.dependencies,
+                  },
+                  ensureCssIdentifier(),
+                  t,
+                ),
+              );
+            };
+
+            for (const assignmentPath of assignmentPaths)
+              consume(assignmentPath);
+          },
+        },
+      },
+    };
+  };
+}
+
 /**
  * Create the low-level Babel output plugin used by the UnoCSS adapter.
  *
@@ -176,7 +314,7 @@ export function createUnoCssOutputPlugin(options = {}) {
   const placeholder =
     typeof options.placeholder === "string" && options.placeholder
       ? options.placeholder
-      : DEFAULT_PLACEHOLDER;
+      : UNO_CSS_PLACEHOLDER;
   const preflightModule =
     typeof options.preflightModule === "string" && options.preflightModule
       ? options.preflightModule
@@ -300,6 +438,12 @@ export function createUnoCssOutputPlugin(options = {}) {
 export function withUnoCssCompiler(options = {}, integrationOptions = {}) {
   return {
     ...options,
+    authoringPlugins: [
+      ...(Array.isArray(options.authoringPlugins)
+        ? options.authoringPlugins
+        : []),
+      createUnoCssAuthoringPlugin(integrationOptions),
+    ],
     outputPlugins: [
       ...(Array.isArray(options.outputPlugins) ? options.outputPlugins : []),
       createUnoCssOutputPlugin(integrationOptions),
@@ -307,4 +451,14 @@ export function withUnoCssCompiler(options = {}, integrationOptions = {}) {
   };
 }
 
-export const UNO_CSS_PLACEHOLDER = DEFAULT_PLACEHOLDER;
+export {
+  createUnoCssBuildEngine,
+  createUnoCssIntegration,
+} from "./build-engine.js";
+export {
+  decodeUnoCssGuardPayload,
+  UNO_CSS_GUARD_PATTERN,
+  UNO_CSS_PLACEHOLDER,
+  UNO_CSS_PREFLIGHT_EXPORT,
+  UNO_CSS_PREFLIGHT_MODULE_ID,
+} from "./protocol.js";

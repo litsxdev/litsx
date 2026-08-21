@@ -1,98 +1,19 @@
 import UnoCSS from "unocss/vite";
-import { createGenerator } from "unocss";
 import { litsx } from "@litsx/vite-plugin";
 import {
-  UNO_CSS_PREFLIGHT_EXPORT,
+  createUnoCssBuildEngine,
   UNO_CSS_PREFLIGHT_MODULE_ID,
   withUnoCssCompiler,
 } from "./index.js";
+import { UNO_CSS_PREFLIGHT_BUILD_PLACEHOLDER } from "./protocol.js";
 
 const RESOLVED_PREFLIGHT_MODULE_ID = `\0${UNO_CSS_PREFLIGHT_MODULE_ID}`;
-const PREFLIGHT_BUILD_PLACEHOLDER =
-  "__LITSX_UNOCSS_PREFLIGHT_BUILD_PLACEHOLDER__";
-
-function escapeTemplateCss(cssText) {
-  return cssText
-    .replace(/\\/g, "\\\\")
-    .replace(/`/g, "\\`")
-    .replace(/\$\{/g, "\\${");
-}
-
-function createPreflightModuleSource(cssText) {
-  return [
-    'import { css } from "@litsx/core";',
-    `export const ${UNO_CSS_PREFLIGHT_EXPORT} = css\`${escapeTemplateCss(cssText)}\`;`,
-  ].join("\n");
-}
-
-function createResolvedPreflightConfig(config, preflights) {
-  const {
-    configResolved: _configResolved,
-    presets: _presets,
-    ...resolvedConfig
-  } = config;
-
-  return {
-    ...resolvedConfig,
-    // The resolved config already contains the rules, theme and variants from
-    // every preset. Resolving those presets again would duplicate them.
-    presets: [],
-    preflights,
-  };
-}
-
-function uniquePreflightLayers(generator) {
-  return [
-    ...new Set(
-      generator.config.preflights.map(
-        (preflight) => preflight.layer || "preflights",
-      ),
-    ),
-  ];
-}
-
-function createSharedPreflightState() {
-  let preflightGeneratorPromise;
-
-  return {
-    captureResolvedConfig(config) {
-      const preflights = [...config.preflights];
-      preflightGeneratorPromise = createGenerator(
-        createResolvedPreflightConfig(config, preflights),
-      );
-      // The official shadow-dom transform keeps generating module utilities,
-      // but the shared virtual module owns all resolved preflight layers.
-      config.preflights = [];
-    },
-    async generate(context) {
-      await context.ready;
-      await context.flushTasks();
-      const generator = await preflightGeneratorPromise;
-      if (!generator) {
-        return "";
-      }
-      const result = await generator.generate(new Set(context.tokens), {
-        preflights: true,
-        safelist: true,
-      });
-      return result.getLayers(uniquePreflightLayers(generator));
-    },
-  };
-}
-
-function createUnoCssTokenCollector(context) {
-  async function extract(code, id) {
-    await context.ready;
-    if (context.filter(code, id)) {
-      await context.extract(code, id);
-    }
-  }
-
+function createUnoCssTokenCollector(engine) {
   return {
     name: "litsx:unocss-token-collector",
     enforce: "pre",
     async transform(code, id) {
-      await extract(code, id);
+      await engine.collect(code, id);
       return null;
     },
     async handleHotUpdate(hotContext) {
@@ -100,12 +21,57 @@ function createUnoCssTokenCollector(context) {
       // only on the following transform pass leaves the existing preflight
       // snapshots stale until Vite happens to evaluate that module again,
       // which is observable in SSR middleware and other lazy module graphs.
-      await extract(await hotContext.read(), hotContext.file);
+      await engine.collect(await hotContext.read(), hotContext.file);
     },
   };
 }
 
-function createUnoCssPreflightVitePlugin(context, state) {
+function createUnoCssGuardMaterializer(engine) {
+  let server;
+
+  return {
+    name: "litsx:unocss-guard-materializer",
+    enforce: "pre",
+    configureServer(viteServer) {
+      server = viteServer;
+    },
+    async transform(code, id) {
+      let result;
+      try {
+        result = await engine.materializeModule(code, id);
+      } catch (error) {
+        this.error(error.message);
+      }
+      if (!result) return null;
+      for (const dependency of result.dependencies) {
+        this.addWatchFile(dependency);
+      }
+      return { code: result.code, map: result.map };
+    },
+    async handleHotUpdate(context) {
+      const importers = engine.invalidate(context.file);
+      if (importers.length === 0 || !server) return;
+      const modules = new Set();
+      for (const importer of importers) {
+        const importerFile = importer.split("?", 1)[0];
+        server.moduleGraph.onFileChange?.(importerFile);
+        const byId = server.moduleGraph.getModuleById(importer);
+        if (byId) modules.add(byId);
+        for (const module of server.moduleGraph.getModulesByFile?.(
+          importerFile,
+        ) || []) {
+          modules.add(module);
+        }
+      }
+      for (const module of modules) {
+        server.moduleGraph.invalidateModule(module);
+      }
+      return [...new Set([...context.modules, ...modules])];
+    },
+  };
+}
+
+function createUnoCssPreflightVitePlugin(context, engine) {
   let command = "serve";
   let server;
   let nextServeModuleId = 0;
@@ -184,17 +150,20 @@ function createUnoCssPreflightVitePlugin(context, state) {
         return null;
       }
       if (command === "build") {
-        return createPreflightModuleSource(PREFLIGHT_BUILD_PLACEHOLDER);
+        return engine.createPreflightModuleSource(
+          UNO_CSS_PREFLIGHT_BUILD_PLACEHOLDER,
+        );
       }
-      return createPreflightModuleSource(await state.generate(context));
+      return engine.createPreflightModuleSource(
+        await engine.generatePreflight(),
+      );
     },
     async renderChunk(code) {
-      if (!code.includes(PREFLIGHT_BUILD_PLACEHOLDER)) {
+      if (!code.includes(UNO_CSS_PREFLIGHT_BUILD_PLACEHOLDER)) {
         return null;
       }
-      const css = escapeTemplateCss(await state.generate(context));
       return {
-        code: code.replaceAll(PREFLIGHT_BUILD_PLACEHOLDER, css),
+        code: await engine.finalizePreflight(code),
         map: null,
       };
     },
@@ -202,13 +171,13 @@ function createUnoCssPreflightVitePlugin(context, state) {
 }
 
 export function createUnoCssVitePlugins(options = {}) {
-  const state = createSharedPreflightState();
+  let engine;
   const userConfigResolved = options.configResolved;
   const unoPlugins = UnoCSS({
     ...options,
     configResolved(config) {
       userConfigResolved?.(config);
-      state.captureResolvedConfig(config);
+      engine.captureResolvedConfig(config);
     },
     mode: "shadow-dom",
   });
@@ -223,10 +192,23 @@ export function createUnoCssVitePlugins(options = {}) {
     throw new Error("Unable to access the resolved UnoCSS plugin context.");
   }
 
+  engine = createUnoCssBuildEngine({
+    generator: () => context.uno,
+    tokens: () => context.tokens,
+    ready: () => context.ready,
+    flushTasks: () => context.flushTasks(),
+    filter: (code, id) => context.filter(code, id),
+    extract: (code, id) => context.extract(code, id),
+  });
+  const contextPlugins = normalizedPlugins.filter(
+    (plugin) => plugin.name !== "unocss:shadow-dom",
+  );
+
   return [
-    createUnoCssTokenCollector(context),
-    createUnoCssPreflightVitePlugin(context, state),
-    ...normalizedPlugins,
+    createUnoCssTokenCollector(engine),
+    createUnoCssGuardMaterializer(engine),
+    createUnoCssPreflightVitePlugin(context, engine),
+    ...contextPlugins,
   ];
 }
 
@@ -239,10 +221,10 @@ export function withUnoCssViteCompiler(options = {}, integrationOptions = {}) {
 }
 
 /**
- * Compose LitSX and UnoCSS in the order required by shadow-dom mode.
+ * Compose LitSX and the UnoCSS Vite context in the required extraction order.
  *
- * LitSX first emits the shared component stylesheet placeholder. UnoCSS then
- * extracts utilities from the generated module and replaces that placeholder.
+ * LitSX first emits the shared component stylesheet placeholder. The neutral
+ * engine then extracts utilities through UnoCSS and replaces that placeholder.
  */
 export function litsxUnoCss(options = {}) {
   const {

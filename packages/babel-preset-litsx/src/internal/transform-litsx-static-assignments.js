@@ -1,4 +1,5 @@
 import jsxSyntaxPlugin from "@babel/plugin-syntax-jsx";
+import { createImportedStaticStyleClassifier } from "./static-style-validation.js";
 
 function isPascalCaseName(name) {
   return typeof name === "string" && /^[A-Z]/.test(name);
@@ -13,6 +14,73 @@ function getAssignedStaticName(node, t) {
   }
   if (node.computed && t.isStringLiteral(node.property)) {
     return { componentName: node.object.name, staticName: node.property.value };
+  }
+  return null;
+}
+
+function unwrapTypeExpression(node, t) {
+  while (
+    t.isTSAsExpression?.(node) ||
+    t.isTSSatisfiesExpression?.(node) ||
+    t.isTSNonNullExpression?.(node) ||
+    t.isParenthesizedExpression?.(node)
+  ) node = node.expression;
+  return node;
+}
+
+function findDefiniteNonRuntimeStyle(
+  node,
+  scope,
+  t,
+  seen = new Set(),
+  importedClassifier = null,
+) {
+  node = unwrapTypeExpression(node, t);
+  if (!node) return null;
+  if (t.isStringLiteral(node) || t.isTemplateLiteral(node) || t.isObjectExpression(node)) return node;
+  if (t.isArrayExpression(node)) {
+    for (const element of node.elements) {
+      if (!element) continue;
+      const invalid = findDefiniteNonRuntimeStyle(
+        t.isSpreadElement(element) ? element.argument : element,
+        scope,
+        t,
+        seen,
+        importedClassifier,
+      );
+      if (invalid) return invalid;
+    }
+    return null;
+  }
+  if (t.isConditionalExpression(node) || t.isLogicalExpression(node)) {
+    return findDefiniteNonRuntimeStyle(
+      node.consequent ?? node.left,
+      scope,
+      t,
+      seen,
+      importedClassifier,
+    ) || findDefiniteNonRuntimeStyle(
+      node.alternate ?? node.right,
+      scope,
+      t,
+      seen,
+      importedClassifier,
+    );
+  }
+  if (t.isIdentifier(node) && !seen.has(node.name)) {
+    const binding = scope.getBinding(node.name);
+    const init = binding?.path?.isVariableDeclarator?.() ? binding.path.node.init : null;
+    if (init) {
+      seen.add(node.name);
+      return findDefiniteNonRuntimeStyle(
+        init,
+        binding.path.scope,
+        t,
+        seen,
+        importedClassifier,
+      );
+    }
+    if (importedClassifier?.(binding?.path)) return node;
   }
   return null;
 }
@@ -83,7 +151,10 @@ export default function transformLitsxStaticAssignments(api) {
     inherits: jsxSyntaxPlugin.default || jsxSyntaxPlugin,
     visitor: {
       Program: {
-        enter(programPath) {
+        enter(programPath, state) {
+          const importedStyleClassifier = createImportedStaticStyleClassifier(
+            state.filename || state.file.opts.filename,
+          );
           const components = new Map();
           for (const statementPath of programPath.get("body")) {
             const component = getComponentFunctionPath(statementPath, t);
@@ -102,14 +173,20 @@ export default function transformLitsxStaticAssignments(api) {
             // host configuration. Leave them for react-compat (or userland).
             if (assigned.staticName === "propTypes" || assigned.staticName === "events") continue;
 
-            if (
-              assigned.staticName === "styles" &&
-              (t.isStringLiteral(expression.right) || t.isTemplateLiteral(expression.right))
-            ) {
-              throw statementPath.buildCodeFrameError(
-                `${assigned.componentName}.styles must be a Lit CSSResultGroup. ` +
-                "Use css`...` from lit instead of a plain string or untagged template literal.",
+            if (assigned.staticName === "styles") {
+              const invalidStyle = findDefiniteNonRuntimeStyle(
+                expression.right,
+                statementPath.scope,
+                t,
+                new Set(),
+                importedStyleClassifier,
               );
+              if (invalidStyle) {
+                throw statementPath.buildCodeFrameError(
+                  `${assigned.componentName}.styles must be a Lit CSSResultGroup. ` +
+                  "Use css`...` from lit, or enable an authoring integration that consumes static style guards.",
+                );
+              }
             }
 
             const assignments = assignmentsByComponent.get(assigned.componentName) || [];

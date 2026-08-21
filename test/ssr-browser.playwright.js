@@ -35,35 +35,58 @@ test("applies shared Wind4 styles after SSR hydration in shadow and light DOM", 
   const srcDir = path.join(tempDir, "src");
   await fs.mkdir(srcDir, { recursive: true });
   await fs.writeFile(
-    path.join(srcDir, "wind-cards.tsx"),
+    path.join(srcDir, "wind-classes.ts"),
     `
-export function ShadowWindCard() {
-  return <article id="shadow-panel" class="p-4 rounded-lg bg-red-500">Shadow</article>;
-}
+export const shadowCardClasses = "p-4 rounded-lg bg-red-500";
+export const lightCardClasses = "p-8 rounded-lg bg-blue-500";
 
-export function LightWindCard() {
-  return <article id="light-panel" class="p-8 rounded-lg bg-blue-500">Light</article>;
-}
-LightWindCard.lightDom = true;
-
-const buttonSizes = {
+export const buttonSizes = {
   sm: "h-8 px-3",
   md: "h-10 px-4",
   lg: "h-12 px-6",
 };
 
-const buttonAppearances = {
+export const buttonAppearances = {
   default: "bg-slate-200",
   primary: "bg-blue-600",
   danger: "bg-red-600",
 };
 
+export const buttonStates = {
+  compact: "rounded-sm",
+  regular: "rounded-xl",
+  variants: "data-[size=lg]:border-4 data-[appearance=danger]:opacity-50",
+};
+`,
+  );
+  await fs.writeFile(
+    path.join(srcDir, "wind-cards.tsx"),
+    `
+import {
+  buttonAppearances,
+  buttonSizes,
+  buttonStates,
+  lightCardClasses,
+  shadowCardClasses,
+} from "./wind-classes";
+
+export function ShadowWindCard() {
+  return <article id="shadow-panel" class={shadowCardClasses}>Shadow</article>;
+}
+ShadowWindCard.styles = [shadowCardClasses];
+
+export function LightWindCard() {
+  return <article id="light-panel" class={lightCardClasses}>Light</article>;
+}
+LightWindCard.lightDom = true;
+LightWindCard.styles = [lightCardClasses];
+
 export function DynamicWindButton({ size = "md", appearance = "default" }) {
   return (
     <button
       class={\`\${buttonSizes[size]} \${buttonAppearances[appearance]} \${
-        size === "sm" ? "rounded-sm" : "rounded-xl"
-      } data-[size=lg]:border-4 data-[appearance=danger]:opacity-50\`}
+        size === "sm" ? buttonStates.compact : buttonStates.regular
+      } \${buttonStates.variants}\`}
       data-size={size}
       data-appearance={appearance}
     >
@@ -71,6 +94,7 @@ export function DynamicWindButton({ size = "md", appearance = "default" }) {
     </button>
   );
 }
+DynamicWindButton.styles = [buttonSizes, buttonAppearances, buttonStates];
 
 export function defineWindCards() {
   if (!customElements.get("shadow-wind-card")) {
