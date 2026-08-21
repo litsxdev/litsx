@@ -282,6 +282,8 @@ jobs:
         if: needs.plan.outputs.release_kind == 'next'
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        # Changesets reads the `next` dist-tag from active pre mode. Passing
+        # the same tag explicitly is rejected as a custom tag.
         run: corepack yarn changeset publish --no-git-tag
 
       - name: Create package tags

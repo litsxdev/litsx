@@ -27,6 +27,10 @@ describe("release workflow", () => {
       workflow,
       /run: corepack yarn changeset publish --no-git-tag/,
     );
+    assert.doesNotMatch(
+      workflow,
+      /changeset publish --tag next/,
+    );
   });
 
   it("coordinates one release run after release validation and waits for Test", () => {
