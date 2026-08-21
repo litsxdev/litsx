@@ -1,6 +1,6 @@
 {
   "name": "@litsx/compiler",
-  "version": "1.0.0-next.0",
+  "version": "1.0.0-next.1",
   "description": "Build-facing LitSX compilation facade with correct parser and sourcemap handling",
   "author": "LitSX Team",
   "type": "module",
@@ -52,9 +52,9 @@
     "@babel/parser": "^7.29.3",
     "@babel/plugin-transform-typescript": "^7.28.5",
     "@babel/types": "^7.29.0",
-    "@litsx/authoring": "^1.0.0-next.0",
-    "@litsx/babel-plugin-transform-jsx-html-template": "^1.0.0-next.0",
-    "@litsx/babel-preset-litsx": "^1.0.0-next.0",
+    "@litsx/authoring": "^1.0.0-next.1",
+    "@litsx/babel-plugin-transform-jsx-html-template": "^1.0.0-next.1",
+    "@litsx/babel-preset-litsx": "^1.0.0-next.1",
     "@litsx/babel-preset-react-compat": "^1.0.0-next.0",
     "@litsx/typescript-session": "^1.0.0-next.0",
     "source-map-js": "^1.2.1"

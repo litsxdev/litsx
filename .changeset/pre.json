@@ -26,6 +26,7 @@
     "calm-properties-compose",
     "calm-spreads-hydrate",
     "complete-ssr-support",
+    "fair-buttons-hydrate",
     "few-guests-thank",
     "fix-next-pre-publish",
     "fix-ssr-resource-hook-abi",
