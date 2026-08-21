@@ -10,6 +10,24 @@ function renderToString(value) {
 }
 
 describe("jsxSpreadElement SSR", () => {
+  it("honors an explicit server template after client hydration state was loaded", () => {
+    const clientRuntime = Symbol.for("@litsx/ssr/client-runtime");
+    const previous = globalThis[clientRuntime];
+    globalThis[clientRuntime] = true;
+    try {
+      const output = renderToString(jsxSpreadElement(
+        "button",
+        [{ "data-case": "server", disabled: true }],
+        { server: true },
+      ));
+      assert.match(output, /data-case="server"/);
+      assert.match(output, /disabled(?:=""|\s|>)/);
+    } finally {
+      if (previous === undefined) delete globalThis[clientRuntime];
+      else globalThis[clientRuntime] = previous;
+    }
+  });
+
   it("serializes inferred native bindings and ordered overrides", () => {
     const output = renderToString(
       jsxSpreadElement(
@@ -59,6 +77,50 @@ describe("jsxSpreadElement SSR", () => {
     assert.match(output, /server/);
     assert.match(output, /true/);
     assert.doesNotMatch(output, /payload="/);
+  });
+
+  it("keeps declared property names and attribute aliases coherent during SSR", () => {
+    const tagName = "litsx-jsx-spread-ssr-alias";
+    if (!customElements.get(tagName)) {
+      customElements.define(tagName, class extends LitElement {
+        static properties = {
+          iconOnly: {
+            type: Boolean,
+            reflect: true,
+            attribute: "icon-only",
+          },
+          ariaLabel: {
+            type: String,
+            reflect: true,
+            attribute: "aria-label",
+          },
+        };
+
+        render() {
+          return this.iconOnly
+            ? html`<span data-branch="icon">${this.ariaLabel}</span>`
+            : html`<span data-branch="label">Label</span>`;
+        }
+      });
+    }
+    const component = customElements.get(tagName);
+
+    const propertyOutput = renderToString(jsxSpreadElement(tagName, [{
+      iconOnly: true,
+      ariaLabel: "Open menu",
+    }], { component }));
+    assert.match(propertyOutput, /icon-only(?:=""|\s|>)/);
+    assert.match(propertyOutput, /aria-label="Open menu"/);
+    assert.match(propertyOutput, /data-branch="icon"/);
+    assert.doesNotMatch(propertyOutput, /icononly|arialabel/);
+
+    const attributeOutput = renderToString(jsxSpreadElement(tagName, [{
+      "icon-only": false,
+      "aria-label": "Text label",
+    }], { component }));
+    assert.doesNotMatch(attributeOutput, /\sicon-only(?:=|\s|>)/);
+    assert.match(attributeOutput, /aria-label="Text label"/);
+    assert.match(attributeOutput, /data-branch="label"/);
   });
 
   it("routes undeclared SSR component inputs through rest props", () => {

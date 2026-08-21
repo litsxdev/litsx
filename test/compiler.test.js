@@ -232,8 +232,60 @@ describe("@litsx/compiler", () => {
     });
 
     assert.match(result.code, /class VdsDrawerStory extends LitElement/);
-    assert.match(result.code, /html`<vds-drawer-story \?defaultOpen=\$\{args\.defaultOpen\} heading="\$\{args\.heading\}" description="\$\{args\.description\}" class="story-shell" data-testid="\$\{args\.testId\}"><\/vds-drawer-story>`/);
+    assert.match(result.code, /html`<vds-drawer-story \.defaultOpen=\$\{args\.defaultOpen\} heading="\$\{args\.heading\}" description="\$\{args\.description\}" class="story-shell" data-testid="\$\{args\.testId\}"><\/vds-drawer-story>`/);
     assert.doesNotMatch(result.code, /defaultOpen="\$\{args\.defaultOpen\}"/);
+  }, 20000);
+
+  it("preserves imported component property and attribute contracts across direct props and spreads", () => {
+    const buttonTypes = [
+      "export type ButtonProps = {",
+      "  label?: string;",
+      "  iconOnly?: boolean;",
+      "  ariaLabel?: string;",
+      "};",
+      "export declare const ContractButton: (props: ButtonProps) => unknown;",
+    ].join("\n");
+    const source = [
+      'import { ContractButton } from "./contract-button";',
+      "export function Consumer({ dynamicValue, dynamicLabel, runtimeProps }) {",
+      "  return <section>",
+      "    <ContractButton iconOnly={true} />",
+      "    <ContractButton iconOnly={false} />",
+      '    <ContractButton icon-only="" />',
+      "    <ContractButton icon-only />",
+      "    <ContractButton icon-only={dynamicValue} />",
+      "    <ContractButton ariaLabel={dynamicLabel} />",
+      "    <ContractButton aria-label={dynamicLabel} />",
+      "    <ContractButton {...{ iconOnly: true }} />",
+      "    <ContractButton {...runtimeProps} />",
+      "  </section>;",
+      "}",
+    ].join("\n");
+
+    for (const ssr of [false, true]) {
+      const result = transformLitsxSync(source, {
+        filename: "/virtual/consumer.tsx",
+        sourceMaps: false,
+        ssr,
+        inMemoryFiles: {
+          "/virtual/contract-button.tsx": buttonTypes,
+        },
+      });
+
+      assert.match(result.code, /<contract-button \.iconOnly=\$\{true\}><\/contract-button>/);
+      assert.match(result.code, /<contract-button \.iconOnly=\$\{false\}><\/contract-button>/);
+      assert.match(result.code, /jsxSpreadElement\("contract-button", \[\{\s*"icon-only": ""/);
+      assert.match(result.code, /jsxSpreadElement\("contract-button", \[\{\s*"icon-only": true/);
+      assert.match(result.code, /jsxSpreadElement\("contract-button", \[\{\s*"icon-only": this\.dynamicValue/);
+      assert.match(result.code, /<contract-button \.ariaLabel=\$\{this\.dynamicLabel\}><\/contract-button>/);
+      assert.match(result.code, /<contract-button aria-label="\$\{this\.dynamicLabel\}"><\/contract-button>/);
+      assert.match(result.code, /jsxSpreadElement\("contract-button", \[\{\s*iconOnly: true/);
+      assert.match(result.code, /jsxSpreadElement\("contract-button", \[this\.runtimeProps\]/);
+      assert.match(result.code, /component: ContractButton/);
+      if (ssr) assert.match(result.code, /server: true/);
+      else assert.doesNotMatch(result.code, /server: true/);
+      assert.doesNotMatch(result.code, /\?iconOnly|\.icon-only|\barialabel\b/);
+    }
   }, 20000);
 
   it("materializes bare props references instead of reading a synthetic this.props", () => {

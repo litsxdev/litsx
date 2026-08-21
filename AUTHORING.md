@@ -84,9 +84,11 @@ from the destination API:
 
 | Authored value or target contract | Generated Lit binding |
 | --- | --- |
-| declared `boolean` / `{ type: Boolean }` | boolean attribute part |
-| declared `string`, `number`, bigint, or enum | attribute part |
+| component boolean prop or camelCase public prop | property part |
+| lowercase scalar prop whose public attribute has the same name | attribute part |
 | object, array, function, `unknown`, or `{ attribute: false }` | property part |
+| explicit declared Boolean attribute alias such as `icon-only` | boolean attribute part |
+| explicit declared non-Boolean attribute alias such as `aria-label` | attribute part |
 | `data-*`, `aria-*`, and ordinary HTML attributes | attribute part |
 | native `value` on `input`, `textarea`, or `select` | property part |
 | native HTML boolean attribute such as `disabled` | boolean attribute part |
@@ -98,6 +100,27 @@ type falls back to an attribute for a literal string and a property for an
 expression. Published libraries should therefore expose their component props in
 their declarations; consumers do not need private compiler metadata for the
 ordinary typed case.
+
+Binding resolution follows one precedence order in browser and SSR output:
+
+1. An ordinary component prop name addresses the JavaScript API. Boolean,
+   camelCase, object-valued, function-valued, and opaque dynamic props use a
+   property part, so `iconOnly` can never become the unrelated `icononly`
+   attribute.
+2. An explicitly authored hyphenated attribute name is matched in reverse
+   against `Component.properties[*].attribute`. A Boolean declaration uses
+   presence semantics (`icon-only=""` is present); other declarations use an
+   attribute part (`aria-label="..."`). Spread keys use the same reverse lookup
+   for every declared attribute alias, including lowercase HTML-style aliases.
+3. `data-*`, `aria-*`, and standard HTML names retain their platform attribute
+   semantics. Native live properties and HTML boolean/enumerated attributes use
+   the rules below.
+4. A spread applies the same resolver at runtime after the destination
+   constructor has been finalized. Sources retain JSX order and the final value
+   for a resolved binding wins.
+
+Lit's `.property`, `?boolean`, and `@event` prefixes can appear in generated
+templates and take precedence there, but they are not authored LitSX syntax.
 
 HTML keeps its own semantics:
 
@@ -157,9 +180,13 @@ component props stay in one forwarding bag rather than expanding broad types
 such as `React.ComponentProps<"button">` into hundreds of reactive host props.
 
 SSR uses regular Lit parts and records a compact mapping that
-`@litsx/ssr/client` reconciles during hydration. Applications that render
-hydratable spreads must pair `render` from `@litsx/ssr` with `hydrate` from
-`@litsx/ssr/client`.
+`@litsx/ssr/hydration` reconciles during hydration. The SSR compiler marks this
+template path explicitly, so importing client hydration helpers in the same
+process cannot make a server render fall back to an `ElementPart`. Deterministic
+spread expressions are evaluated during both renders and do not need a separate
+hydration payload; request-only state still uses the normal LitSX resource/root
+payload mechanisms. Applications that render hydratable spreads must pair the
+LitSX SSR render APIs with `hydratePage()`.
 
 `children` and React's `key` are not projected as DOM attributes by spread
 handling.

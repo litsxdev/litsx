@@ -28,6 +28,7 @@ const DANGEROUS_OBJECT_KEYS = new Set([
   "prototype",
 ]);
 const NOSCRIPT_COMPONENT_ATTRIBUTE = "data-litsx-noscript-component";
+const RUNTIME_COMPONENT_BINDING_ATTRIBUTE = "litsx-runtime-component-binding";
 
 export function setTemplateTypes(types) {
   t = types;
@@ -41,6 +42,10 @@ export function collectLitAttributeSourcemapMetadata(node, mappings = [], option
   if (t.isJSXElement(node)) {
     for (const attr of node.openingElement.attributes) {
       if (attr.type !== "JSXAttribute") {
+        continue;
+      }
+
+      if (t.isJSXIdentifier(attr.name, { name: RUNTIME_COMPONENT_BINDING_ATTRIBUTE })) {
         continue;
       }
 
@@ -236,6 +241,13 @@ function getTag(node) {
   if (t.isJSXIdentifier(node.name)) {
     const originalName = node.name.name;
     const routedComponentName = node.__litsxRestComponentName;
+    const runtimeComponentAttribute = node.attributes?.find((attribute) =>
+      t.isJSXAttribute(attribute) &&
+      t.isJSXIdentifier(attribute.name, { name: RUNTIME_COMPONENT_BINDING_ATTRIBUTE })
+    );
+    const runtimeComponentExpression = runtimeComponentAttribute?.value?.type === "JSXExpressionContainer"
+      ? runtimeComponentAttribute.value.expression
+      : null;
     const isCapitalized =
       originalName.charAt(0) === originalName.charAt(0).toUpperCase() &&
       originalName.charAt(0) !== originalName.charAt(0).toLowerCase();
@@ -243,8 +255,10 @@ function getTag(node) {
     return {
       name: isCapitalized ? toKebab(originalName) : originalName,
       isComponent: false,
-      isAuthoredComponentTag: isCapitalized || Boolean(routedComponentName),
-      componentExpression: routedComponentName
+      isAuthoredComponentTag: isCapitalized || Boolean(routedComponentName) || Boolean(runtimeComponentExpression),
+      componentExpression: runtimeComponentExpression
+        ? t.cloneNode(runtimeComponentExpression, true)
+        : routedComponentName
         ? t.identifier(routedComponentName)
         : isCapitalized
           ? t.identifier(originalName)
@@ -441,6 +455,7 @@ function createSpreadElementCall(node, opts, name, isAuthoredComponentTag, compo
     }
 
     const jsxName = stringifyJsxName(attr.name);
+    if (jsxName === RUNTIME_COMPONENT_BINDING_ATTRIBUTE) return;
     const rawName = decodeVirtualAttributeName(jsxName) ?? jsxName;
     const key = /^[$_a-zA-Z][$_a-zA-Z0-9]*$/.test(rawName)
       ? t.identifier(rawName)
@@ -472,6 +487,9 @@ function createSpreadElementCall(node, opts, name, isAuthoredComponentTag, compo
           : t.booleanLiteral(isAuthoredComponentTag || name.includes("-"))
       ),
       t.objectProperty(t.identifier("void"), t.booleanLiteral(isVoid)),
+      ...(opts?.ssr === true
+        ? [t.objectProperty(t.identifier("server"), t.booleanLiteral(true))]
+        : []),
       ...(namespace === "svg"
         ? [t.objectProperty(t.identifier("namespace"), t.stringLiteral("svg"))]
         : []),
@@ -509,7 +527,13 @@ const transforms = {
       (attr) => attr.type === "JSXSpreadAttribute"
     );
     const routeComponentRestProps = opts?.componentRestProps === true &&
-      isAuthoredComponentTag && node.openingElement.__litsxRouteRestProps === true &&
+      isAuthoredComponentTag && (
+        node.openingElement.__litsxRouteRestProps === true ||
+        node.openingElement.attributes.some((attribute) =>
+          t.isJSXAttribute(attribute) &&
+          t.isJSXIdentifier(attribute.name, { name: RUNTIME_COMPONENT_BINDING_ATTRIBUTE })
+        )
+      ) &&
       node.openingElement.attributes.length > 0;
     if ((hasSpreadAttributes || routeComponentRestProps) && !isNoscript) {
       addKey(
@@ -527,7 +551,7 @@ const transforms = {
         return;
       }
       const jsxName = stringifyJsxName(attr.name);
-      if (jsxName === NOSCRIPT_COMPONENT_ATTRIBUTE) {
+      if (jsxName === NOSCRIPT_COMPONENT_ATTRIBUTE || jsxName === RUNTIME_COMPONENT_BINDING_ATTRIBUTE) {
         return;
       }
       const rawName = decodeVirtualAttributeName(jsxName) ?? jsxName;

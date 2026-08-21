@@ -815,8 +815,13 @@ Use these entrypoints as a pair whenever compiled JSX can contain spreads. In
 the browser, a spread uses an `ElementPart` so LitSX can inspect the live target
 and route each value as an attribute, boolean, property, event, style, or ref.
 During SSR the same values must be expressed as ordinary Lit parts. `render()`
-records a bounded digest mapping and `hydrate()` consumes it to reconcile those
+records a bounded digest mapping and `hydratePage()` consumes it to reconcile those
 two template shapes without replacing the server DOM.
+
+SSR-compiled spread calls select the ordinary-part path explicitly. This remains
+server output even when client hydration modules have been imported in the same
+process. Deterministic spread values are evaluated on both sides; they are not
+copied into the hydration payload merely because they came from a spread.
 
 Refs themselves are never serialized into HTML. SSR emits only the element and
 Lit hydration markers. During hydration Lit attaches the client element part to

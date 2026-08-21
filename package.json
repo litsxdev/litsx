@@ -65,6 +65,8 @@
     "test:ssr:browser": "playwright test --config=playwright.ssr.config.js",
     "test:transforms": "LITSX_VITEST_TRANSFORMS=1 vitest run",
     "bench:transform-litsx": "node scripts/bench/transform-litsx.js",
+    "bench:ssr": "LITSX_PROFILE=1 node scripts/bench/ssr-complex-pages.js",
+    "validate:ssr-performance": "LITSX_PROFILE=1 node scripts/bench/ssr-complex-pages.js --check",
     "coverage": "vitest run --coverage && yarn coverage:packages",
     "coverage:packages": "node scripts/test/check-package-coverage.js",
     "coverage:packages:check": "node scripts/test/check-package-coverage.js --enforce",
@@ -87,7 +89,7 @@
     "release:github": "node scripts/release/build-github-release.js",
     "release:github:backfill": "node scripts/release/backfill-github-releases.js",
     "release:publish": "yarn release:check && yarn release:smoke:scaffolds && yarn changeset:publish",
-    "release:test": "vitest run test/release-manifest.test.js test/create-litsx-app.test.js test/vite-plugin.test.js test/compiler.test.js test/compiler-authored-input.test.js test/ssr.test.js test/unocss-integration.test.js"
+    "release:test": "vitest run test/release-manifest.test.js test/create-litsx-app.test.js test/vite-plugin.test.js test/compiler.test.js test/compiler-authored-input.test.js test/ssr.test.js test/unocss-integration.test.js && yarn validate:ssr-performance"
   },
   "author": "LitSX Team",
   "license": "Apache-2.0",

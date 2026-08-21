@@ -61,6 +61,7 @@ const REACT_BOUNDARY_ATTRIBUTES = new Map([
   ["Suspense", new Set(["fallback", "key"])],
   ["SuspenseList", new Set(["revealOrder", "tail", "key"])],
 ]);
+const RUNTIME_COMPONENT_BINDING_ATTRIBUTE = "litsx-runtime-component-binding";
 
 function isPascalCaseName(name) {
   return typeof name === "string" && /^[A-Z]/.test(name);
@@ -76,6 +77,17 @@ function getRootJsxIdentifier(name, t) {
   let current = name;
   while (t.isJSXMemberExpression(current)) current = current.object;
   return t.isJSXIdentifier(current) ? current.name : null;
+}
+
+function jsxNameToExpression(name, t) {
+  if (t.isJSXIdentifier(name)) return t.identifier(name.name);
+  if (t.isJSXMemberExpression(name)) {
+    return t.memberExpression(
+      jsxNameToExpression(name.object, t),
+      t.identifier(name.property.name),
+    );
+  }
+  return null;
 }
 
 function getReactBoundaryKind(path, tagNode, t) {
@@ -468,6 +480,9 @@ function transformOpeningElement(path, state, t) {
       ? getGlobalElementType(typeResolver, tagName, tsTagNode, svg) ||
         getIntrinsicElementPropsType(typeResolver, tagName, tsTagNode)
       : null;
+  let routeRuntimeComponentBinding = component && path.node.attributes.some(
+    (attribute) => t.isJSXSpreadAttribute(attribute)
+  );
 
   for (const attribute of path.node.attributes) {
     const rawName = getAttributeName(attribute, t);
@@ -509,20 +524,29 @@ function transformOpeningElement(path, state, t) {
       if (rawName.startsWith("data-") || rawName.startsWith("aria-")) {
         continue;
       }
+      // PascalCase JSX names address the component's public prop API. Boolean,
+      // object-valued, opaque dynamic, and camelCase names must remain
+      // properties: a Lit boolean attribute is not equivalent when the public
+      // attribute has another name (for example iconOnly / icon-only).
+      // Explicit kebab-case names address the attribute API and need constructor
+      // metadata at runtime to preserve declared boolean-presence semantics.
+      if (rawName.includes("-")) {
+        path.node.__litsxRouteRestProps = true;
+        routeRuntimeComponentBinding = true;
+        continue;
+      }
       const localKind = localPropertyKinds?.get(rawName);
-      if (localKind) {
-        if (localKind === "boolean") renameAttribute(attribute, `?${rawName}`, t);
-        if (localKind === "property") renameAttribute(attribute, `.${rawName}`, t);
-        continue;
-      }
-      if (propertyType) {
-        const kind = classifyDeclaredProperty(propertyType, typeResolver.checker);
-        if (kind === "boolean") renameAttribute(attribute, `?${rawName}`, t);
-        if (kind === "property") renameAttribute(attribute, `.${rawName}`, t);
-        continue;
-      }
-      if (!t.isStringLiteral(attribute.value)) {
-        renameAttribute(attribute, `.${rawName}`, t);
+      const declaredKind = propertyType
+        ? classifyDeclaredProperty(propertyType, typeResolver.checker)
+        : null;
+      const effectiveKind = localKind ?? declaredKind;
+      const camelCaseProperty = /[A-Z]/.test(rawName);
+      const booleanProperty = effectiveKind === "boolean";
+      const objectProperty = effectiveKind === "property";
+      const opaqueDynamicProperty = effectiveKind == null &&
+        !t.isStringLiteral(attribute.value);
+      if (booleanProperty || objectProperty || camelCaseProperty || opaqueDynamicProperty) {
+        attribute.name = t.jsxIdentifier(`.${rawName}`);
       }
       continue;
     }
@@ -614,6 +638,16 @@ function transformOpeningElement(path, state, t) {
     }
 
     if (htmlAttributeName !== rawName) renameAttribute(attribute, htmlAttributeName, t);
+  }
+
+  if (routeRuntimeComponentBinding) {
+    const componentExpression = jsxNameToExpression(tagNode, t);
+    if (componentExpression) {
+      path.node.attributes.push(t.jsxAttribute(
+        t.jsxIdentifier(RUNTIME_COMPONENT_BINDING_ATTRIBUTE),
+        t.jsxExpressionContainer(componentExpression),
+      ));
+    }
   }
 }
 

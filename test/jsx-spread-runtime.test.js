@@ -85,6 +85,62 @@ describe("jsxSpreadElement", () => {
     assert.strictEqual(element.getAttribute("data-id"), "ready");
   });
 
+  it("finalizes imported constructors and distinguishes property names from declared attribute aliases", () => {
+    class ImportedButtonApi extends LitElement {
+      static properties = {
+        iconOnly: { type: Boolean, attribute: "icon-only" },
+        ariaLabel: { type: String, attribute: "aria-label" },
+        formAction: { type: String, attribute: "formaction" },
+        formNoValidate: { type: Boolean, attribute: "formnovalidate" },
+      };
+    }
+
+    assert.strictEqual(
+      Object.prototype.hasOwnProperty.call(ImportedButtonApi, "elementProperties"),
+      false,
+    );
+
+    const container = document.createElement("div");
+    render(jsxSpreadElement("section", [{
+      iconOnly: true,
+      ariaLabel: "Property label",
+    }], { component: ImportedButtonApi }), container);
+
+    let element = container.querySelector("section");
+    assert.strictEqual(
+      Object.prototype.hasOwnProperty.call(ImportedButtonApi, "elementProperties"),
+      true,
+    );
+    assert.strictEqual(element.iconOnly, true);
+    assert.strictEqual(element.ariaLabel, "Property label");
+    assert.strictEqual(element.hasAttribute("icon-only"), false);
+    assert.strictEqual(element.hasAttribute("aria-label"), false);
+
+    render(jsxSpreadElement("section", [{
+      "icon-only": "",
+      "aria-label": "Attribute label",
+      formaction: "/save",
+      formnovalidate: "",
+    }], { component: ImportedButtonApi }), container);
+    element = container.querySelector("section");
+    assert.strictEqual(element.getAttribute("icon-only"), "");
+    assert.strictEqual(element.getAttribute("aria-label"), "Attribute label");
+    assert.strictEqual(element.getAttribute("formaction"), "/save");
+    assert.strictEqual(element.getAttribute("formnovalidate"), "");
+
+    render(jsxSpreadElement("section", [{
+      "icon-only": false,
+      "aria-label": null,
+      formaction: null,
+      formnovalidate: false,
+    }], { component: ImportedButtonApi }), container);
+    element = container.querySelector("section");
+    assert.strictEqual(element.hasAttribute("icon-only"), false);
+    assert.strictEqual(element.hasAttribute("aria-label"), false);
+    assert.strictEqual(element.hasAttribute("formaction"), false);
+    assert.strictEqual(element.hasAttribute("formnovalidate"), false);
+  });
+
   it("routes undeclared component inputs into a reactive rest-props bag", async () => {
     const tag = "jsx-spread-rest-props";
     if (!customElements.get(tag)) {

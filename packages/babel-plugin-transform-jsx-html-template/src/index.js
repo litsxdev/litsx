@@ -10,6 +10,7 @@ import {
 } from "./template.js";
 
 let t;
+const RUNTIME_COMPONENT_BINDING_ATTRIBUTE = "litsx-runtime-component-binding";
 
 function isRestPropsMetadataKey(node) {
   return t.isCallExpression(node) &&
@@ -133,9 +134,13 @@ function containsRoutedComponentProps(node) {
   if (!node || typeof node !== "object") return false;
   if (t.isJSXElement(node)) {
     const name = node.openingElement.name;
+    const hasRuntimeComponentBinding = node.openingElement.attributes.some((attribute) =>
+      t.isJSXAttribute(attribute) &&
+      t.isJSXIdentifier(attribute.name, { name: RUNTIME_COMPONENT_BINDING_ATTRIBUTE })
+    );
     if (
       t.isJSXIdentifier(name) &&
-      node.openingElement.__litsxRouteRestProps === true &&
+      (node.openingElement.__litsxRouteRestProps === true || hasRuntimeComponentBinding) &&
       node.openingElement.attributes.length > 0
     ) {
       return true;

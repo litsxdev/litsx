@@ -815,13 +815,18 @@ export function remapTextSpanToOriginal(span, replacements = []) {
 
   let originalStart = span.start;
   let originalEnd = span.start + span.length;
+  let virtualOffset = 0;
 
   for (const replacement of replacements) {
     const originalLength = replacement.end - replacement.start;
     const replacementLength = replacement.replacement.length;
     const delta = originalLength - replacementLength;
-    const virtualStart = mapOriginalPositionToVirtual(replacement.start, replacements);
+    // Replacements are ordered and non-overlapping. Carrying the length delta
+    // forward is equivalent to remapping every replacement start from scratch,
+    // but keeps AST position restoration linear in the replacement count.
+    const virtualStart = replacement.start + virtualOffset;
     const virtualEnd = virtualStart + replacementLength;
+    virtualOffset += replacementLength - originalLength;
 
     if (virtualEnd <= span.start) {
       originalStart += delta;

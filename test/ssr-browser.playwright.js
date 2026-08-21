@@ -26,6 +26,184 @@ function isolatedViteOptions(tempDir) {
   };
 }
 
+test("hydrates imported camelCase props, declared attribute aliases, and spreads without changing branches", async ({
+  page,
+}) => {
+  const tempRoot = path.join(repoRoot, "test-results");
+  await fs.mkdir(tempRoot, { recursive: true });
+  const tempDir = await fs.mkdtemp(path.join(tempRoot, "litsx-imported-props-"));
+  const srcDir = path.join(tempDir, "src");
+  await fs.mkdir(srcDir, { recursive: true });
+
+  await fs.writeFile(path.join(srcDir, "contract-button.tsx"), `
+export type ContractButtonProps = {
+  label?: string;
+  iconOnly?: boolean;
+  ariaLabel?: string | null;
+};
+
+export function ContractButton({
+  label = "",
+  iconOnly = false,
+  ariaLabel = "",
+}: ContractButtonProps) {
+  return <>{iconOnly
+    ? <span data-branch="icon">Icon:{ariaLabel || label}</span>
+    : <span data-branch="label">Label:{ariaLabel || label}</span>}</>;
+}
+
+ContractButton.properties = {
+  iconOnly: { type: Boolean, reflect: true, attribute: "icon-only" },
+  ariaLabel: { type: String, reflect: true, attribute: "aria-label" },
+};
+`);
+  await fs.writeFile(path.join(srcDir, "contract-root.tsx"), `
+import { ContractButton } from "./contract-button";
+
+const runtimeProps = { iconOnly: true, ariaLabel: "Runtime spread" };
+
+export function ContractRoot() {
+  const dynamicValue = true;
+  const dynamicLabel = "Attribute label";
+  return (
+    <main>
+      <ContractButton data-case="camel-true" label="Open" iconOnly={true} />
+      <ContractButton data-case="camel-false" label="Closed" iconOnly={false} />
+      <ContractButton data-case="attribute-static" label="Static" icon-only="" />
+      <ContractButton data-case="attribute-dynamic" label="Dynamic" icon-only={dynamicValue} />
+      <ContractButton data-case="aria-camel" ariaLabel="Camel label" />
+      <ContractButton data-case="aria-attribute" aria-label={dynamicLabel} />
+      <ContractButton data-case="spread-literal" {...{ iconOnly: true, ariaLabel: "Literal spread" }} />
+      <ContractButton data-case="spread-runtime" {...runtimeProps} />
+      <ContractButton data-case="spread-false" {...{ iconOnly: false, ariaLabel: null }} />
+      <ContractButton data-case="spread-undefined" {...{ iconOnly: undefined, ariaLabel: undefined }} />
+    </main>
+  );
+}
+`);
+  await fs.writeFile(path.join(srcDir, "main.js"), `
+const components = await import("./contract-root.tsx");
+const button = await import("./contract-button.tsx");
+const { registerHydrationModules } = await import("@litsx/ssr/hydration");
+await registerHydrationModules([components, button]);
+`);
+
+  const server = await createSsrDevServer({
+    root: tempDir,
+    vite: isolatedViteOptions(tempDir),
+    clientEntry: "./src/main.js",
+    bootstrap: {
+      content: `
+const captureBranches = () => {
+  const root = document.querySelector("contract-root");
+  const hosts = [...(root?.shadowRoot?.querySelectorAll("contract-button") ?? [])];
+  window.__litsxImportedPropHosts = hosts;
+  window.__litsxImportedPropBranches = hosts.map((host) =>
+    host.shadowRoot?.querySelector("[data-branch]") ?? null
+  );
+  window.__litsxImportedPropSsr = hosts.map((host) => ({
+    caseName: host.getAttribute("data-case"),
+    iconAttribute: host.hasAttribute("icon-only"),
+    branch: host.shadowRoot?.querySelector("[data-branch]")?.getAttribute("data-branch") ?? null,
+  }));
+};
+captureBranches();
+const { hydratePage } = await import("@litsx/ssr/hydration");
+await hydratePage({ register: () => import("/src/main.js") });
+window.__litsxImportedPropsHydrated = true;
+`,
+    },
+    logLevel: "silent",
+    host: "127.0.0.1",
+    strictPort: false,
+    elements(loader) {
+      return {
+        "contract-root": async () =>
+          (await loader("./src/contract-root.tsx")).ContractRoot,
+      };
+    },
+    render({ html: serverHtml }) {
+      return serverHtml`<contract-root></contract-root>`;
+    },
+  });
+  await server.listen();
+
+  try {
+    const consoleErrors = [];
+    const consoleWarnings = [];
+    const pageErrors = [];
+    page.on("console", (message) => {
+      if (message.type() === "error") consoleErrors.push(message.text());
+      if (message.type() === "warning") consoleWarnings.push(message.text());
+    });
+    page.on("pageerror", (error) => pageErrors.push(error.stack || error.message));
+    await page.goto(server.resolvedUrls.local[0]);
+    await page.waitForFunction(async () => {
+      if (!window.__litsxImportedPropsHydrated) return false;
+      const root = document.querySelector("contract-root");
+      if (!root) return false;
+      await root.updateComplete;
+      const hosts = [...(root.shadowRoot?.querySelectorAll("contract-button") ?? [])];
+      await Promise.all(hosts.map((host) => host.updateComplete));
+      return hosts.length === 10;
+    });
+
+    const result = await page.evaluate(() => {
+      const root = document.querySelector("contract-root");
+      const hosts = [...root.shadowRoot.querySelectorAll("contract-button")];
+      return {
+        ssr: window.__litsxImportedPropSsr,
+        hydrated: hosts.map((host, index) => {
+          const branch = host.shadowRoot.querySelector("[data-branch]");
+          return {
+            caseName: host.getAttribute("data-case"),
+            iconOnly: host.iconOnly,
+            ariaLabel: host.ariaLabel ?? null,
+            iconAttribute: host.hasAttribute("icon-only"),
+            ariaAttribute: host.getAttribute("aria-label"),
+            branch: branch?.getAttribute("data-branch"),
+            sameHost: host === window.__litsxImportedPropHosts[index],
+            sameBranch: branch === window.__litsxImportedPropBranches[index],
+          };
+        }),
+      };
+    });
+
+    expect(result.ssr).toEqual([
+      { caseName: "camel-true", iconAttribute: true, branch: "icon" },
+      { caseName: "camel-false", iconAttribute: false, branch: "label" },
+      { caseName: "attribute-static", iconAttribute: true, branch: "icon" },
+      { caseName: "attribute-dynamic", iconAttribute: true, branch: "icon" },
+      { caseName: "aria-camel", iconAttribute: false, branch: "label" },
+      { caseName: "aria-attribute", iconAttribute: false, branch: "label" },
+      { caseName: "spread-literal", iconAttribute: true, branch: "icon" },
+      { caseName: "spread-runtime", iconAttribute: true, branch: "icon" },
+      { caseName: "spread-false", iconAttribute: false, branch: "label" },
+      { caseName: "spread-undefined", iconAttribute: false, branch: "label" },
+    ]);
+    expect(result.hydrated).toEqual([
+      { caseName: "camel-true", iconOnly: true, ariaLabel: "", iconAttribute: true, ariaAttribute: "", branch: "icon", sameHost: true, sameBranch: true },
+      { caseName: "camel-false", iconOnly: false, ariaLabel: "", iconAttribute: false, ariaAttribute: "", branch: "label", sameHost: true, sameBranch: true },
+      { caseName: "attribute-static", iconOnly: true, ariaLabel: "", iconAttribute: true, ariaAttribute: "", branch: "icon", sameHost: true, sameBranch: true },
+      { caseName: "attribute-dynamic", iconOnly: true, ariaLabel: "", iconAttribute: true, ariaAttribute: "", branch: "icon", sameHost: true, sameBranch: true },
+      { caseName: "aria-camel", iconOnly: false, ariaLabel: "Camel label", iconAttribute: false, ariaAttribute: "Camel label", branch: "label", sameHost: true, sameBranch: true },
+      { caseName: "aria-attribute", iconOnly: false, ariaLabel: "Attribute label", iconAttribute: false, ariaAttribute: "Attribute label", branch: "label", sameHost: true, sameBranch: true },
+      { caseName: "spread-literal", iconOnly: true, ariaLabel: "Literal spread", iconAttribute: true, ariaAttribute: "Literal spread", branch: "icon", sameHost: true, sameBranch: true },
+      { caseName: "spread-runtime", iconOnly: true, ariaLabel: "Runtime spread", iconAttribute: true, ariaAttribute: "Runtime spread", branch: "icon", sameHost: true, sameBranch: true },
+      { caseName: "spread-false", iconOnly: false, ariaLabel: "", iconAttribute: false, ariaAttribute: null, branch: "label", sameHost: true, sameBranch: true },
+      { caseName: "spread-undefined", iconOnly: false, ariaLabel: "", iconAttribute: false, ariaAttribute: null, branch: "label", sameHost: true, sameBranch: true },
+    ]);
+    expect(consoleErrors).toEqual([]);
+    expect(consoleWarnings.filter(
+      (message) => !message.startsWith("Lit is in dev mode."),
+    )).toEqual([]);
+    expect(pageErrors).toEqual([]);
+  } finally {
+    await server.close();
+    await fs.rm(tempDir, { recursive: true, force: true });
+  }
+});
+
 test("applies shared Wind4 styles after SSR hydration in shadow and light DOM", async ({
   page,
 }) => {

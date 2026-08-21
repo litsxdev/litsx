@@ -85,17 +85,47 @@ function resolveConstructor(tagName, component, element) {
   return element?.constructor ?? globalThis.customElements?.get?.(tagName);
 }
 
+function getComponentProperties(tagName, component, element) {
+  const constructor = resolveConstructor(tagName, component, element);
+  constructor?.finalize?.();
+  const properties = constructor?.elementProperties;
+  return properties && typeof properties.has === "function" ? properties : null;
+}
+
+function getDeclaredComponentBinding(tagName, name, component, element) {
+  const properties = getComponentProperties(tagName, component, element);
+  if (!properties) return null;
+  if (properties.has(name)) {
+    return { kind: "property", name, options: properties.get(name) };
+  }
+
+  const normalizedName = String(name).toLowerCase();
+  for (const [propertyName, options] of properties) {
+    if (typeof propertyName !== "string" || options?.attribute === false) continue;
+    const attributeName = typeof options?.attribute === "string"
+      ? options.attribute
+      : propertyName.toLowerCase();
+    if (attributeName.toLowerCase() === normalizedName) {
+      return {
+        kind: options?.type === Boolean ? "boolean" : "attribute",
+        name: attributeName,
+        options,
+        propertyName,
+      };
+    }
+  }
+  return null;
+}
+
 function hasComponentProperty(tagName, name, component, element) {
   if (element && name in element) return true;
   const constructor = resolveConstructor(tagName, component, element);
-  const properties = constructor?.elementProperties;
+  const properties = getComponentProperties(tagName, component, element);
   return Boolean((properties && typeof properties.has === "function" && properties.has(name)) || (constructor?.prototype && name in constructor.prototype));
 }
 
 function hasDeclaredComponentProperty(tagName, name, component, element) {
-  const constructor = resolveConstructor(tagName, component, element);
-  const properties = constructor?.elementProperties;
-  return Boolean(properties && typeof properties.has === "function" && properties.has(name));
+  return getDeclaredComponentBinding(tagName, name, component, element) != null;
 }
 
 function routeComponentRestProps(tagName, sources, component, element) {
@@ -160,6 +190,14 @@ function inferDescriptor(tagName, rawName, value, component, element, namespace,
   if (name === "ref") return { kind: "ref", name };
   if (name === "dangerouslySetInnerHTML") return { kind: "inner-html", name };
   if (name === "style" && value && typeof value === "object") return { kind: "style", name };
+  const declaredBinding = !nativeHtml
+    ? getDeclaredComponentBinding(tagName, propertyName, component, element)
+    : null;
+  if (declaredBinding) {
+    return declaredBinding.kind === "property"
+      ? { kind: "property", name: declaredBinding.name }
+      : { kind: declaredBinding.kind, name: declaredBinding.name };
+  }
   if (isAttributeName(name)) return { kind: "attribute", name };
   if (nativeHtml && BOOLEAN_ATTRIBUTE_NAMES.has(name)) return { kind: "boolean", name };
   if (nativeHtml && BOOLEAN_VALUE_ATTRIBUTE_NAMES.has(name)) return { kind: "attribute", name, booleanValue: true };
@@ -268,6 +306,7 @@ function serverBindingValue(descriptor, value) {
     return ifDefined(value == null || value === false ? undefined : value === true ? "" : value);
   }
   if (descriptor.kind === "style") return styleMap(value || {});
+  if (descriptor.kind === "boolean") return booleanAttributeValue(value);
   if (descriptor.kind === "ref") return ref(value);
   if (descriptor.kind === "event" && descriptor.capture && value != null) return { handleEvent: value, capture: true };
   return value;
@@ -320,6 +359,10 @@ function serializedValue(value) {
   return value == null || value === false ? null : value === true ? "" : String(value);
 }
 
+function booleanAttributeValue(value) {
+  return value !== false && value != null;
+}
+
 function eventOptions(descriptor, value) {
   const listener = value && typeof value === "object" ? value : null;
   return {
@@ -345,7 +388,7 @@ function applyBinding(element, descriptor, value, previous, adoptAttributes) {
     if (next == null) element.removeAttribute(descriptor.name);
     else if (element.getAttribute(descriptor.name) !== next) element.setAttribute(descriptor.name, next);
   } else if (descriptor.kind === "boolean") {
-    if (!adoptAttributes) element.toggleAttribute(descriptor.name, Boolean(value));
+    if (!adoptAttributes) element.toggleAttribute(descriptor.name, booleanAttributeValue(value));
   } else if (descriptor.kind === "property") {
     if (element[descriptor.name] !== value) element[descriptor.name] = value;
   } else if (descriptor.kind === "event") {
@@ -422,7 +465,10 @@ export function jsxSpreadElement(tagName, sources, options = {}, children = noth
   const isVoid = options.void === true;
   const hasChildren = !isVoid && children !== nothing;
   const clientStrings = getClientStrings(tagName, isVoid, hasChildren);
-  if (!isServer || globalThis[CLIENT_RUNTIME] === true) {
+  const clientRuntime = options.server !== true && (
+    !isServer || globalThis[CLIENT_RUNTIME] === true
+  );
+  if (clientRuntime) {
     const values = [jsxSpread(tagName, sources, options)];
     if (hasChildren) values.push(children);
     return html(clientStrings, ...values);

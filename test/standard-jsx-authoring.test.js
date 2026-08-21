@@ -46,7 +46,7 @@ describe("standard JSX authoring", () => {
       filename: "/tmp/litsx-standard-bindings.tsx",
     });
 
-    assert.match(code, /<child[^>]*\?active=\$\{this\.active\}/);
+    assert.match(code, /<child[^>]*\.active=\$\{this\.active\}/);
     assert.match(code, /<child[^>]*label="\$\{this\.label\}"/);
     assert.match(code, /<child[^>]*count="\$\{this\.count\}"/);
     assert.match(code, /<child[^>]*\.items=\$\{this\.items\}/);
@@ -109,7 +109,7 @@ describe("standard JSX authoring", () => {
 
     const { code } = transformLitsxSync(source, { filename: parentFile });
 
-    assert.match(code, /<child[^>]*\?enabled=\$\{this\.enabled\}/);
+    assert.match(code, /<child[^>]*\.enabled=\$\{this\.enabled\}/);
     assert.match(code, /<child[^>]*name="\$\{this\.name\}"/);
     assert.match(code, /<child[^>]*\.config=\$\{this\.config\}/);
     assert.match(code, /<child[^>]*\.onCommit=\$\{this\.onCommit\}/);
@@ -285,7 +285,7 @@ describe("standard JSX authoring", () => {
 
     assert.match(code, /static elements = \{[\s\S]*"controls-toggle": Controls\.Toggle/);
     assert.match(code, /"controls-other-component": Controls\.OtherComponent/);
-    assert.match(code, /<controls-toggle[^>]*\?enabled=\$\{this\.enabled\}/);
+    assert.match(code, /<controls-toggle[^>]*\.enabled=\$\{this\.enabled\}/);
     assert.match(code, /tone="\$\{this\.tone\}"/);
     assert.match(code, /\.model=\$\{this\.model\}/);
     assert.match(code, /data-state="ready"/);
