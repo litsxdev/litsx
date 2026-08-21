@@ -1664,11 +1664,17 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@litsx/unocss@workspace:packages/unocss"
   dependencies:
+    "@babel/parser": "npm:^7.29.3"
     "@litsx/compiler": "npm:^0.10.0"
-    "@litsx/vite-plugin": "npm:^0.3.2"
   peerDependencies:
+    "@litsx/vite-plugin": ^0.3.2
     unocss: ">=66"
     vite: ^7.3.2 || ^8.0.0
+  peerDependenciesMeta:
+    "@litsx/vite-plugin":
+      optional: true
+    vite:
+      optional: true
   languageName: unknown
   linkType: soft
 

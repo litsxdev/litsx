@@ -6,10 +6,12 @@ UnoCSS: 66.8.0
 ## Result
 
 LitSX does not need an UnoCSS-specific compiler phase. The existing generic
-`outputPlugins` hook can attach one shared utility `CSSResult` to every
-generated LitSX component class in a module. The Vite adapter runs UnoCSS's
-Shadow DOM mode after LitSX and imports one project-level virtual `CSSResult`
-containing the resolved preflight.
+`authoringPlugins` hook consumes component-owned static guards before native
+lowering, while `outputPlugins` attaches the module utility `CSSResult`. The
+build-tool-neutral engine extracts and materializes module utilities and
+imports one project-level virtual `CSSResult` containing the resolved
+preflight. The Vite adapter maps this engine onto the official UnoCSS context,
+virtual modules and HMR.
 
 The integration verifies:
 
@@ -31,12 +33,24 @@ The integration verifies:
 - development snapshots and invalidation when new tokens appear
 - shared output across multiple build entrypoints
 - computed styles after SSR hydration in real Chromium for Shadow and Light DOM
+- exact-export static guards, including aliases, barrels and transitive values
+- removal of authoring guards from runtime `CSSResultGroup` values
+- per-guard utility generation and helper dependency invalidation in HMR
 
 ## Granularity
 
-UnoCSS's official Shadow DOM transform replaces the first
-`@unocss-placeholder` in a module. The adapter therefore emits one stylesheet
-per module and references it from every component declared by that module.
+The build engine replaces the first `@unocss-placeholder` in a module with a
+stylesheet generated from the ordinary JSX candidates extracted from that
+module. Every component declared by the module references that shared
+stylesheet.
+
+An explicit static value in `Component.styles` follows a more precise path.
+The authoring plugin resolves only that symbol/export, replaces it with an
+internal CSSResult marker, and records its candidates and source descriptor.
+The build engine refreshes the exact export, generates utility-only CSS for
+that marker, and replaces it in the same materialization pass. Each guard
+therefore remains owned by the component whose styles declaration names it; no
+module-wide export scanning or user-code execution is involved.
 
 This keeps one CSS copy in the JavaScript module. Components in the same file
 receive the union of the utilities used by their siblings. Keeping one primary
@@ -89,8 +103,9 @@ design-system preflight.
 
 ## Generic LitSX surface
 
-The compiler surface was sufficient:
+The generic compiler surface was sufficient:
 
+- `authoringPlugins` consumes extension-owned values before native lowering.
 - `outputPlugins` augments generated component classes.
 - compiler options already flow through client and SSR Vite transforms.
 - result metadata records the applied style integration.
@@ -99,3 +114,21 @@ Storybook did need generic ordering for build-tool plugins. Its configuration
 now accepts `vitePlugins.beforeLitsx` and `vitePlugins.afterLitsx`. These phases
 are useful to any source analyzer or generated-output processor and contain no
 UnoCSS-specific behavior.
+
+## Build-tool boundary
+
+`createUnoCssBuildEngine()` owns the behavior that must be identical in every
+tool:
+
+- candidate extraction and per-module token ownership
+- ordinary placeholder materialization
+- exact-export guard resolution and dependency tracking
+- utility-only CSS generation
+- resolved preflight generation
+- virtual preflight module source and final placeholder replacement
+- dependency invalidation lookup
+
+`@litsx/unocss/vite` owns only Vite policy: official config/context discovery,
+plugin ordering, virtual-id allocation, `moduleGraph` invalidation and HMR
+messages. Rollup, webpack or esbuild adapters can map their lifecycle directly
+onto the same engine without importing `vite` or `@litsx/vite-plugin`.

@@ -1,4 +1,4 @@
-import type { LitElement, ReactiveElement, TemplateResult } from "lit";
+import type { CSSResultGroup, LitElement, ReactiveElement, TemplateResult } from "lit";
 import type { DirectiveResult } from "lit/directive.js";
 export { css } from "lit";
 export { createRef, ref } from "lit/directives/ref.js";
@@ -89,6 +89,16 @@ export interface LitsxComponentStatic<Events extends Record<string, unknown> = R
   readonly [LITSX_EVENTS]?: LitsxEventDeclaration<Events, boolean>;
   readonly events?: LitsxEventDeclaration<Events, boolean>;
 }
+
+/**
+ * Extension point for compile-time-only Component.styles sources. Packages
+ * augment this registry without widening Lit's runtime CSSResultGroup.
+ */
+export interface LitsxStyleSourceRegistry {}
+export type LitsxAuthoringStyle =
+  | CSSResultGroup
+  | LitsxStyleSourceRegistry[keyof LitsxStyleSourceRegistry]
+  | readonly LitsxAuthoringStyle[];
 export interface LitsxHydratableComponentStatic extends LitsxComponentStatic {
   readonly [LITSX_HYDRATABLE_TAG]: string;
 }
@@ -316,6 +326,7 @@ export type LitsxComponent<
   Events extends Record<string, unknown> = Record<string, unknown>,
 > = ((props: Props) => LitsxRenderable) & {
   readonly events?: LitsxEventDeclaration<Events, boolean>;
+  styles?: LitsxAuthoringStyle;
 };
 
 export interface SuspenseBoundaryProps {

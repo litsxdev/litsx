@@ -16,6 +16,7 @@
     "./litsx-jsx-runtime-errors.tsx",
     "./litsx-static-hoists.tsx",
     "./litsx-styling.ts",
-    "./litsx-styling-errors.ts"
+    "./litsx-styling-errors.ts",
+    "./litsx-unocss-guards.tsx"
   ]
 }

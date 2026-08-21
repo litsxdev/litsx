@@ -4,11 +4,15 @@ import os from "node:os";
 import path from "node:path";
 import { describe, it } from "vitest";
 import { build, createServer } from "vite";
+import { rollup } from "rollup";
 import { presetWind3, presetWind4 } from "unocss";
 import { html } from "lit";
 
 import { transformLitsxSync } from "../packages/compiler/src/index.js";
 import {
+  createUnoCssIntegration,
+  decodeUnoCssGuardPayload,
+  UNO_CSS_GUARD_PATTERN,
   UNO_CSS_PLACEHOLDER,
   UNO_CSS_PREFLIGHT_MODULE_ID,
   withUnoCssCompiler,
@@ -87,6 +91,52 @@ async function buildFixture(
     );
     assert(chunk, "expected Vite to emit an entry chunk");
     return chunk;
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+}
+
+async function buildGuardFixture(files, entryName = "entry.tsx") {
+  const directory = fs.mkdtempSync(
+    path.join(os.tmpdir(), "litsx-unocss-guards-"),
+  );
+  for (const [name, source] of Object.entries(files)) {
+    const filename = path.join(directory, name);
+    fs.mkdirSync(path.dirname(filename), { recursive: true });
+    fs.writeFileSync(filename, source, "utf8");
+  }
+  try {
+    const result = await build({
+      configFile: false,
+      root: directory,
+      logLevel: "silent",
+      plugins: litsxUnoCss({
+        unocss: { presets: [presetWind4()], preflights: [] },
+      }),
+      build: {
+        write: false,
+        minify: false,
+        lib: {
+          entry: path.join(directory, entryName),
+          formats: ["es"],
+          fileName: "entry",
+        },
+        rollupOptions: {
+          external(id) {
+            return (
+              id === "lit" || id.startsWith("lit/") || id.startsWith("@litsx/")
+            );
+          },
+        },
+      },
+    });
+    const outputs = Array.isArray(result)
+      ? result.flatMap((item) => item.output)
+      : result.output;
+    return outputs
+      .filter((item) => item.type === "chunk")
+      .map((item) => item.code)
+      .join("\n");
   } finally {
     fs.rmSync(directory, { recursive: true, force: true });
   }
@@ -276,6 +326,183 @@ export { InfoCard } from "./card.tsx";
 }
 
 describe("@litsx/unocss integration", () => {
+  it("keeps Vite dependencies optional for root integrations", () => {
+    const manifest = JSON.parse(
+      fs.readFileSync(
+        new URL("../packages/unocss/package.json", import.meta.url),
+        "utf8",
+      ),
+    );
+
+    assert.strictEqual(manifest.dependencies.vite, undefined);
+    assert.strictEqual(
+      manifest.dependencies["@litsx/vite-plugin"],
+      undefined,
+    );
+    assert.strictEqual(manifest.peerDependenciesMeta.vite.optional, true);
+    assert.strictEqual(
+      manifest.peerDependenciesMeta["@litsx/vite-plugin"].optional,
+      true,
+    );
+  });
+
+  it("materializes ordinary module utilities without a Vite plugin", async () => {
+    const id = "/virtual/standalone-components.tsx";
+    const compiled = transformLitsxSync(
+      MULTI_COMPONENT_SOURCE,
+      withUnoCssCompiler({ filename: id }),
+    );
+    const integration = await createUnoCssIntegration({
+      presets: [presetWind3()],
+      preflights: [],
+    });
+
+    const result = await integration.materializeModule(compiled.code, id);
+
+    assert(result);
+    assert.doesNotMatch(result.code, /@unocss-placeholder/);
+    assert.match(result.code, /\.bg-red-500\{/);
+    assert.match(result.code, /\.p-8\{/);
+    assert.deepStrictEqual(result.dependencies, []);
+  });
+
+  it("integrates through a plain Rollup adapter built from the neutral engine", async () => {
+    const directory = fs.mkdtempSync(
+      path.join(os.tmpdir(), "litsx-unocss-rollup-"),
+    );
+    const entry = path.join(directory, "entry.tsx");
+    const preflightId = "virtual:rollup-unocss-preflight";
+    const resolvedPreflightId = `\0${preflightId}`;
+    const finalPlaceholder = "__ROLLUP_UNOCSS_PREFLIGHT__";
+    fs.writeFileSync(
+      entry,
+      `
+export function RollupCard() {
+  return <article class="rounded-lg bg-blue-600 p-5 text-white">Card</article>;
+}
+`,
+      "utf8",
+    );
+
+    try {
+      const integration = await createUnoCssIntegration({
+        presets: [presetWind4()],
+      });
+      const bundle = await rollup({
+        input: entry,
+        external(id) {
+          return (
+            id === "lit" || id.startsWith("lit/") || id.startsWith("@litsx/")
+          );
+        },
+        plugins: [
+          {
+            name: "test:litsx-unocss-neutral-adapter",
+            resolveId(id) {
+              return id === preflightId ? resolvedPreflightId : null;
+            },
+            load(id) {
+              return id === resolvedPreflightId
+                ? integration.createPreflightModuleSource(finalPlaceholder)
+                : null;
+            },
+            async transform(code, id) {
+              if (id !== entry) return null;
+              const compiled = transformLitsxSync(
+                code,
+                withUnoCssCompiler(
+                  { filename: id },
+                  { preflightModule: preflightId },
+                ),
+              );
+              return integration.materializeModule(compiled.code, id);
+            },
+            async renderChunk(code) {
+              return {
+                code: await integration.finalizePreflight(
+                  code,
+                  finalPlaceholder,
+                ),
+                map: null,
+              };
+            },
+          },
+        ],
+      });
+      const generated = await bundle.generate({ format: "es" });
+      const code = generated.output
+        .filter((item) => item.type === "chunk")
+        .map((item) => item.code)
+        .join("\n");
+
+      assert.match(code, /\.rounded-lg\{/);
+      assert.match(code, /\.bg-blue-600\{/);
+      assert.match(code, /--colors-blue-600:/);
+      assert.doesNotMatch(code, /ROLLUP_UNOCSS_PREFLIGHT|unocss-placeholder/);
+      await bundle.close();
+    } finally {
+      fs.rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("owns preflight generation without build-tool lifecycle hooks", async () => {
+    const integration = await createUnoCssIntegration({
+      presets: [presetWind4()],
+    });
+    await integration.scan(
+      '<button class="bg-blue-600 text-white">Save</button>',
+      "/virtual/button.html",
+    );
+
+    const preflight = await integration.generatePreflight();
+    const moduleSource = integration.createPreflightModuleSource(preflight);
+
+    assert.match(preflight, /--colors-blue-600/);
+    assert.match(preflight, /--colors-white/);
+    assert.match(moduleSource, /export const unoPreflightStyles = css`/);
+  });
+
+  it("tracks static guard dependencies without a Vite module graph", async () => {
+    const directory = fs.mkdtempSync(
+      path.join(os.tmpdir(), "litsx-unocss-engine-"),
+    );
+    const styles = path.join(directory, "styles.ts");
+    const entry = path.join(directory, "entry.tsx");
+    fs.writeFileSync(styles, 'export const BUTTON = "bg-red-600";', "utf8");
+    const source = `
+import { BUTTON } from "./styles";
+export function Button() { return <button class={BUTTON}>Save</button>; }
+Button.styles = [BUTTON];
+`;
+    fs.writeFileSync(entry, source, "utf8");
+
+    try {
+      const compiled = transformLitsxSync(
+        source,
+        withUnoCssCompiler({ filename: entry }),
+      );
+      const integration = await createUnoCssIntegration({
+        presets: [presetWind4()],
+        preflights: [],
+      });
+      const first = await integration.materializeModule(compiled.code, entry);
+
+      assert.match(first.code, /background-color/);
+      assert.deepStrictEqual(integration.invalidate(styles), [entry]);
+
+      fs.writeFileSync(
+        styles,
+        'export const BUTTON = "bg-green-600";',
+        "utf8",
+      );
+      const second = await integration.materializeModule(compiled.code, entry);
+      assert.match(second.code, /--un-bg-opacity/);
+      assert.notStrictEqual(second.code, first.code);
+    } finally {
+      fs.rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   it("attaches one shared stylesheet to every component in a module", () => {
     const result = transformLitsxSync(
       MULTI_COMPONENT_SOURCE,
@@ -395,7 +622,11 @@ describe("@litsx/unocss integration", () => {
     const names = config.plugins.map((plugin) => plugin.name);
 
     assert(names.indexOf("existing") < names.indexOf("litsx"));
-    assert(names.indexOf("litsx") < names.indexOf("unocss:shadow-dom"));
+    assert(
+      names.indexOf("litsx") <
+        names.indexOf("litsx:unocss-guard-materializer"),
+    );
+    assert.strictEqual(names.includes("unocss:shadow-dom"), false);
   });
 
   it("also contributes styles to light DOM components", () => {
@@ -441,6 +672,207 @@ export function CompatButton({ active }) {
     assert.match(result.code, /static styles = _litsxUnoCssStyles;/);
     assert.match(result.code, /bg-green-500/);
     assert.match(result.code, /bg-gray-500/);
+  });
+
+  it("consumes local object, tuple, nested, template and finite-map guards before runtime", () => {
+    const source = `
+import { css } from "@litsx/core";
+const BASE = "inline-flex items-center";
+const SIZES = {
+  sm: \`\${BASE} h-8 px-3\`,
+  lg: \`\${BASE} h-12 px-6\`,
+} as const;
+const VARIANTS = ["bg-blue-600", ["data-[busy=true]:opacity-50"]] as const;
+export function GuardedButton({ size }) {
+  return <button class={SIZES[size]}>Save</button>;
+}
+GuardedButton.styles = [[SIZES, ...VARIANTS], css\`:host { display: block; }\`];
+`;
+    const result = transformLitsxSync(
+      source,
+      withUnoCssCompiler({ filename: "/virtual/guarded-button.tsx" }),
+    );
+
+    assert.match(result.code, /__LITSX_UNOCSS_GUARD_/);
+    assert.match(result.code, /display: block/);
+    assert.doesNotMatch(
+      result.code,
+      /__litsxResolveStaticValue\(\[\[SIZES, VARIANTS\]/,
+    );
+    const runtimeStyles = result.code.match(
+      /static get styles\(\) \{([\s\S]*?)static \[Symbol/,
+    )?.[1];
+    assert(runtimeStyles);
+    assert.doesNotMatch(runtimeStyles, /\b(?:SIZES|VARIANTS)\b/);
+  });
+
+  it("resolves named aliases, reexports, barrels and transitive export dependencies", async () => {
+    const code = await buildGuardFixture({
+      "base.ts": `export const BASE = "inline-flex items-center";`,
+      "button.ts": `
+import { BASE } from "./base";
+export const BUTTON = {
+  sm: \`\${BASE} h-8 px-3 text-sm\`,
+  lg: \`\${BASE} h-12 px-6 text-lg\`,
+};
+export const CARD = { base: "rounded-xl shadow-xl" };
+`,
+      "index.ts": `export { BUTTON as BUTTON_CLASSES, CARD } from "./button";`,
+      "entry.tsx": `
+import { css } from "@litsx/core";
+import { BUTTON_CLASSES as SIZES } from "./index";
+export function GuardedButton({ size = "sm" }) {
+  return <button class={SIZES[size]}>Save</button>;
+}
+GuardedButton.styles = [SIZES, css\`:host{display:inline-block}\`];
+`,
+    });
+
+    assert.match(code, /\.h-8\{/);
+    assert.match(code, /\.px-6\{/);
+    assert.match(code, /\.inline-flex\{/);
+    assert.doesNotMatch(code, /\.shadow-xl\{/);
+    assert.doesNotMatch(code, /__LITSX_UNOCSS_GUARD_/);
+  });
+
+  it("generates arbitrary variants owned by an imported guard", async () => {
+    const code = await buildGuardFixture({
+      "states.ts": `
+export const STATES = {
+  large: "data-[size=lg]:h-12",
+  primary: "data-[appearance=primary]:bg-blue-600",
+};
+`,
+      "entry.tsx": `
+import { STATES } from "./states";
+export function Action() {
+  return <button class={STATES.primary} data-appearance="primary">Save</button>;
+}
+Action.styles = [STATES];
+`,
+    });
+
+    assert(code.includes(".data-\\\\[size"));
+    assert(code.includes(".data-\\\\[appearance"));
+    assert.match(code, /background-color/);
+  });
+
+  it("diagnoses non-static guards and protects against dependency cycles", () => {
+    assert.throws(
+      () =>
+        transformLitsxSync(
+          `
+const DYNAMIC = makeStyles();
+export function Bad() { return <div />; }
+Bad.styles = [DYNAMIC];
+`,
+          withUnoCssCompiler({ filename: "/virtual/bad.tsx" }),
+        ),
+      /could not statically resolve.*unsupported CallExpression/s,
+    );
+
+    const directory = fs.mkdtempSync(
+      path.join(os.tmpdir(), "litsx-unocss-cycle-"),
+    );
+    const entry = path.join(directory, "entry.tsx");
+    fs.writeFileSync(
+      path.join(directory, "a.ts"),
+      `import { B } from "./b"; export const A = B;`,
+    );
+    fs.writeFileSync(
+      path.join(directory, "b.ts"),
+      `import { A } from "./a"; export const B = A;`,
+    );
+    fs.writeFileSync(
+      entry,
+      `
+import { A } from "./a";
+export function Cyclic() { return <div />; }
+Cyclic.styles = [A];
+`,
+    );
+    try {
+      assert.throws(
+        () =>
+          transformLitsxSync(
+            fs.readFileSync(entry, "utf8"),
+            withUnoCssCompiler({ filename: entry }),
+          ),
+        /cyclic (?:static|export) dependency/,
+      );
+    } finally {
+      fs.rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps export ownership across multiple guards, components and shared guards", () => {
+    const source = `
+const BUTTON = { base: "inline-flex", danger: "bg-red-600" };
+const CARD = { base: "rounded-xl", raised: "shadow-xl" };
+export function First() { return <button class={BUTTON.base}>First</button>; }
+First.styles = [BUTTON, CARD.raised ? "ring-2" : "ring-1"];
+export function Second() { return <article class={CARD.base}>Second</article>; }
+Second.styles = [CARD, BUTTON];
+`;
+    const result = transformLitsxSync(
+      source,
+      withUnoCssCompiler({ filename: "/virtual/ownership.tsx" }),
+    );
+    const payloads = [
+      ...result.code.matchAll(new RegExp(UNO_CSS_GUARD_PATTERN.source, "g")),
+    ].map((match) => decodeUnoCssGuardPayload(match[1]).candidates);
+
+    assert.deepStrictEqual(payloads[0], ["inline-flex", "bg-red-600"]);
+    assert.deepStrictEqual(payloads[1].sort(), ["ring-1", "ring-2"]);
+    assert.deepStrictEqual(payloads[2], ["rounded-xl", "shadow-xl"]);
+    assert.deepStrictEqual(payloads[3], ["inline-flex", "bg-red-600"]);
+  });
+
+  it("rejects definite static guards when the UnoCSS authoring integration is absent", () => {
+    assert.throws(
+      () =>
+        transformLitsxSync(
+          `
+const SIZES = { sm: "h-8" };
+export function Bad() { return <div />; }
+Bad.styles = [SIZES];
+`,
+          { filename: "/virtual/no-unocss.tsx" },
+        ),
+      /enable an authoring integration that consumes static style guards/,
+    );
+
+    const directory = fs.mkdtempSync(
+      path.join(os.tmpdir(), "litsx-unocss-disabled-"),
+    );
+    const entry = path.join(directory, "entry.tsx");
+    fs.writeFileSync(
+      path.join(directory, "barrel.ts"),
+      `export { SIZES as BUTTON_SIZES } from "./sizes";`,
+    );
+    fs.writeFileSync(
+      path.join(directory, "sizes.ts"),
+      `export const SIZES = { sm: "h-8", lg: "h-12" };`,
+    );
+    fs.writeFileSync(
+      entry,
+      `
+import { BUTTON_SIZES } from "./barrel";
+export function BadImport() { return <div />; }
+BadImport.styles = [BUTTON_SIZES];
+`,
+    );
+    try {
+      assert.throws(
+        () =>
+          transformLitsxSync(fs.readFileSync(entry, "utf8"), {
+            filename: entry,
+          }),
+        /enable an authoring integration that consumes static style guards/,
+      );
+    } finally {
+      fs.rmSync(directory, { recursive: true, force: true });
+    }
   });
 
   it("generates real utility CSS after LitSX and removes the placeholder", async () => {
@@ -856,6 +1288,77 @@ export function WindCard() {
       }
       assert.match(after.WindCard.styles[0].cssText, /--colors-blue-500:/);
       assert.match(after.WindCard.styles[0].cssText, /--spacing:/);
+    } finally {
+      await server.close();
+      fs.rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("re-resolves imported guards and removes obsolete utility rules during HMR", async () => {
+    const directory = fs.mkdtempSync(
+      path.join(os.tmpdir(), "litsx-unocss-guard-hmr-"),
+    );
+    const helper = path.join(directory, "button.styles.ts");
+    const entry = path.join(directory, "entry.tsx");
+    fs.writeFileSync(
+      helper,
+      `export const BUTTON = { base: "bg-red-500 h-8" };`,
+      "utf8",
+    );
+    fs.writeFileSync(
+      entry,
+      `
+import { BUTTON } from "./button.styles";
+export function WindButton() { return <button class={BUTTON.base}>Save</button>; }
+WindButton.styles = [BUTTON];
+`,
+      "utf8",
+    );
+    const server = await createServer({
+      configFile: false,
+      root: directory,
+      logLevel: "silent",
+      appType: "custom",
+      server: { middlewareMode: true },
+      resolve: {
+        alias: [
+          {
+            find: /^lit$/,
+            replacement: path.resolve("node_modules/lit/index.js"),
+          },
+          {
+            find: "@litsx/core/elements",
+            replacement: path.resolve("packages/core/src/elements/index.js"),
+          },
+          {
+            find: "@litsx/core",
+            replacement: path.resolve("packages/core/src/index.js"),
+          },
+        ],
+      },
+      plugins: litsxUnoCss({ unocss: { presets: [presetWind4()] } }),
+    });
+
+    try {
+      const before = await server.ssrLoadModule("/entry.tsx");
+      assert.match(before.WindButton.styles[1][0].cssText, /\.bg-red-500\{/);
+
+      fs.writeFileSync(
+        helper,
+        `export const BUTTON = { base: "bg-blue-500 h-12" };`,
+        "utf8",
+      );
+      server.watcher.emit("change", helper);
+      let cssText = "";
+      for (let attempt = 0; attempt < 200; attempt += 1) {
+        const after = await server.ssrLoadModule("/entry.tsx");
+        cssText = after.WindButton.styles[1][0].cssText;
+        if (cssText.includes(".bg-blue-500{")) break;
+        await new Promise((resolve) => setTimeout(resolve, 25));
+      }
+      assert.match(cssText, /\.bg-blue-500\{/);
+      assert.match(cssText, /\.h-12\{/);
+      assert.doesNotMatch(cssText, /\.bg-red-500\{|\.h-8\{/);
     } finally {
       await server.close();
       fs.rmSync(directory, { recursive: true, force: true });
