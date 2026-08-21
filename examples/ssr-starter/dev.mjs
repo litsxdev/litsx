@@ -10,7 +10,7 @@ const server = await createSsrDevServer({
   elements(loader) {
     return {
       "demo-app": async () =>
-        (await loader("./src/components.litsx")).DemoApp,
+        (await loader("./src/components.tsx")).DemoApp,
     };
   },
   render({ html }) {

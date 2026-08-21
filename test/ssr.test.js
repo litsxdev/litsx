@@ -193,7 +193,7 @@ describe("@litsx/ssr", () => {
 
   it("renders LitSX elements in noscript fallback content through an SSR-only scoped registry", async () => {
     class NoscriptCard extends LitElement {
-      static [LITSX_MODULE_ID] = "/src/NoscriptCard.litsx";
+      static [LITSX_MODULE_ID] = "/src/NoscriptCard.tsx";
 
       render() {
         return html`<section id="noscript-card">SSR card</section>`;
@@ -206,7 +206,7 @@ describe("@litsx/ssr", () => {
     )}></noscript>`);
 
     assert.match(result.html, /<noscript><noscript-card><template shadowroot="open" shadowrootmode="open"><section id="noscript-card">SSR card<\/section><\/template><\/noscript-card><\/noscript>/);
-    assert.doesNotMatch(result.html, /data-litsx-root|\/src\/NoscriptCard\.litsx/);
+    assert.doesNotMatch(result.html, /data-litsx-root|\/src\/NoscriptCard\.tsx/);
     assert.deepStrictEqual(result.clientImports, []);
   });
 
@@ -251,7 +251,7 @@ describe("@litsx/ssr", () => {
 
   it("renders scoped LitSX elements with nested declarative shadow DOM", async () => {
     class ProductImage extends LitElement {
-      static [LITSX_MODULE_ID] = "/src/ProductImage.litsx";
+      static [LITSX_MODULE_ID] = "/src/ProductImage.tsx";
 
       render() {
         prepareEffects(this);
@@ -262,7 +262,7 @@ describe("@litsx/ssr", () => {
     }
 
     class ProductCard extends LitElement {
-      static [LITSX_MODULE_ID] = "/src/ProductCard.litsx";
+      static [LITSX_MODULE_ID] = "/src/ProductCard.tsx";
       static styles = css`
         :host {
           display: block;
@@ -325,16 +325,16 @@ describe("@litsx/ssr", () => {
     assert.match(result.html, /data-image-id="litsx-1-0"/);
     assert.match(result.html, /src="\/shoe\.png"/);
     assert.deepStrictEqual(result.clientImports, [
-      "/assets/ProductCard.litsx.js",
-      "/assets/ProductImage.litsx.js",
+      "/assets/ProductCard.tsx.js",
+      "/assets/ProductImage.tsx.js",
     ]);
     assert.strictEqual(
       result.renderClientImports(),
-      '<script type="module" src="/assets/ProductCard.litsx.js"></script><script type="module" src="/assets/ProductImage.litsx.js"></script>',
+      '<script type="module" src="/assets/ProductCard.tsx.js"></script><script type="module" src="/assets/ProductImage.tsx.js"></script>',
     );
     assert.strictEqual(
       result.renderModulePreloads(),
-      '<link rel="modulepreload" href="/assets/ProductCard.litsx.js"><link rel="modulepreload" href="/assets/ProductImage.litsx.js">',
+      '<link rel="modulepreload" href="/assets/ProductCard.tsx.js"><link rel="modulepreload" href="/assets/ProductImage.tsx.js">',
     );
     assert.deepStrictEqual(result.hydrationData, {
       version: 1,
@@ -342,13 +342,13 @@ describe("@litsx/ssr", () => {
         {
           id: "litsx-root-0",
           tagName: "product-card",
-          moduleId: "/src/ProductCard.litsx",
+          moduleId: "/src/ProductCard.tsx",
         },
       ],
     });
     assert.deepStrictEqual(result.hydrationData.clientImports, [
-      "/assets/ProductCard.litsx.js",
-      "/assets/ProductImage.litsx.js",
+      "/assets/ProductCard.tsx.js",
+      "/assets/ProductImage.tsx.js",
     ]);
     assert.deepStrictEqual(result.hydrationData.payload, {
       roots: {
@@ -371,17 +371,17 @@ describe("@litsx/ssr", () => {
     });
     assert.strictEqual(
       result.renderClientImportsData(),
-      '<script type="application/json" id="__LITSX_CLIENT_IMPORTS__">["/assets/ProductCard.litsx.js","/assets/ProductImage.litsx.js"]</script>',
+      '<script type="application/json" id="__LITSX_CLIENT_IMPORTS__">["/assets/ProductCard.tsx.js","/assets/ProductImage.tsx.js"]</script>',
     );
     assert.strictEqual(
       result.renderHydrationData(),
-      '<script type="application/json" id="__LITSX_HYDRATION__">{"version":1,"roots":[{"id":"litsx-root-0","tagName":"product-card","moduleId":"/src/ProductCard.litsx"}],"payload":{"roots":{"litsx-root-0":{"props":{"product":{"name":"Trail Shoe","image":"/shoe.png"}}}},"instances":{"litsx-root-0:0":{"rootId":"litsx-root-0","instanceId":"0","state":[1]}}},"clientImports":["/assets/ProductCard.litsx.js","/assets/ProductImage.litsx.js"]}</script>',
+      '<script type="application/json" id="__LITSX_HYDRATION__">{"version":1,"roots":[{"id":"litsx-root-0","tagName":"product-card","moduleId":"/src/ProductCard.tsx"}],"payload":{"roots":{"litsx-root-0":{"props":{"product":{"name":"Trail Shoe","image":"/shoe.png"}}}},"instances":{"litsx-root-0:0":{"rootId":"litsx-root-0","instanceId":"0","state":[1]}}},"clientImports":["/assets/ProductCard.tsx.js","/assets/ProductImage.tsx.js"]}</script>',
     );
   });
 
   it("preserves host string attributes as render props inside hydratable shadow DOM", async () => {
     class NavLink extends LitElement {
-      static [LITSX_MODULE_ID] = "/src/NavLink.litsx";
+      static [LITSX_MODULE_ID] = "/src/NavLink.tsx";
       static properties = {
         href: { type: String },
         label: { type: String },
@@ -394,7 +394,7 @@ describe("@litsx/ssr", () => {
     }
 
     class RouteCard extends LitElement {
-      static [LITSX_MODULE_ID] = "/src/RouteCard.litsx";
+      static [LITSX_MODULE_ID] = "/src/RouteCard.tsx";
       static properties = {
         title: { type: String },
         body: { type: String },
@@ -450,7 +450,7 @@ describe("@litsx/ssr", () => {
 
   it("streams the same HTML and metadata as renderToString", async () => {
     class ProductCard extends LitElement {
-      static [LITSX_MODULE_ID] = "/src/ProductCard.litsx";
+      static [LITSX_MODULE_ID] = "/src/ProductCard.tsx";
 
       render() {
         prepareEffects(this);
@@ -492,7 +492,7 @@ describe("@litsx/ssr", () => {
     let renderPasses = 0;
 
     class AsyncCard extends LitElement {
-      static [LITSX_MODULE_ID] = "/src/AsyncCard.litsx";
+      static [LITSX_MODULE_ID] = "/src/AsyncCard.tsx";
 
       render() {
         return renderWithSoftSuspense(this, () => {
@@ -530,7 +530,7 @@ describe("@litsx/ssr", () => {
       {
         id: "litsx-root-0",
         tagName: "async-card",
-        moduleId: "/src/AsyncCard.litsx",
+        moduleId: "/src/AsyncCard.tsx",
       },
     ]);
   });
@@ -629,7 +629,7 @@ describe("@litsx/ssr", () => {
 
   it("renders a full HTML document around the SSR fragment", async () => {
     class ProductCard extends LitElement {
-      static [LITSX_MODULE_ID] = "/src/ProductCard.litsx";
+      static [LITSX_MODULE_ID] = "/src/ProductCard.tsx";
 
       render() {
         prepareEffects(this);
@@ -661,7 +661,7 @@ describe("@litsx/ssr", () => {
     assert.match(result.document, /register: \(\) => import\("\/src\/main\.js"\)/);
     assert.doesNotMatch(result.document, /\\u003E/);
     assert.match(result.document, /<script type="application\/json" id="__LITSX_HYDRATION__">/);
-    assert.match(result.document, /<link rel="modulepreload" href="\/src\/ProductCard\.litsx">/);
+    assert.match(result.document, /<link rel="modulepreload" href="\/src\/ProductCard\.tsx">/);
     assert.match(result.document, /<product-card\b[^>]*data-litsx-root="litsx-root-0"/);
     assert.strictEqual(result.html.includes("Doc Shoe"), true);
     assert.strictEqual(result.document.includes(result.html), true);
@@ -711,7 +711,7 @@ describe("@litsx/ssr", () => {
 
   it("renders authored document config through renderToString", async () => {
     class ProductCard extends LitElement {
-      static [LITSX_MODULE_ID] = "/src/ProductCard.litsx";
+      static [LITSX_MODULE_ID] = "/src/ProductCard.tsx";
 
       render() {
         prepareEffects(this);
@@ -730,12 +730,12 @@ describe("@litsx/ssr", () => {
 
     assert.match(result.html, /<product-card\b[^>]*data-litsx-root="litsx-root-0"/);
     assert.match(result.html, /Authored String/);
-    assert.deepStrictEqual(result.clientImports, ["/src/ProductCard.litsx"]);
+    assert.deepStrictEqual(result.clientImports, ["/src/ProductCard.tsx"]);
   });
 
   it("renders explicit authored-entry configs through createEntry", async () => {
     class ProductCard extends LitElement {
-      static [LITSX_MODULE_ID] = "/src/ProductCard.litsx";
+      static [LITSX_MODULE_ID] = "/src/ProductCard.tsx";
 
       render() {
         prepareEffects(this);
@@ -754,7 +754,7 @@ describe("@litsx/ssr", () => {
 
     assert.match(result.html, /<product-card\b[^>]*data-litsx-root="litsx-root-0"/);
     assert.match(result.html, /Explicit Authored/);
-    assert.deepStrictEqual(result.clientImports, ["/src/ProductCard.litsx"]);
+    assert.deepStrictEqual(result.clientImports, ["/src/ProductCard.tsx"]);
   });
 
   it("requires createEntry for authored SSR configs", async () => {
@@ -771,7 +771,7 @@ describe("@litsx/ssr", () => {
 
   it("renders authored document config through renderToStream", async () => {
     class ProductCard extends LitElement {
-      static [LITSX_MODULE_ID] = "/src/ProductCard.litsx";
+      static [LITSX_MODULE_ID] = "/src/ProductCard.tsx";
 
       render() {
         prepareEffects(this);
@@ -801,7 +801,7 @@ describe("@litsx/ssr", () => {
     const metadata = await streamed.allReady;
     assert.match(htmlOutput, /<product-card\b[^>]*data-litsx-root="litsx-root-0"/);
     assert.match(htmlOutput, /Authored Stream/);
-    assert.deepStrictEqual(metadata.clientImports, ["/src/ProductCard.litsx"]);
+    assert.deepStrictEqual(metadata.clientImports, ["/src/ProductCard.tsx"]);
   });
 
   it("still accepts a raw bootstrap override", async () => {
@@ -834,7 +834,7 @@ describe("@litsx/ssr", () => {
 
   it("lets callers provide their own document template", async () => {
     class ProductCard extends LitElement {
-      static [LITSX_MODULE_ID] = "/src/ProductCard.litsx";
+      static [LITSX_MODULE_ID] = "/src/ProductCard.tsx";
 
       render() {
         return html`<article>${this.product.name}</article>`;
@@ -889,7 +889,7 @@ describe("@litsx/ssr", () => {
 
   it("lets framework consumers assemble a custom document shell from fragment primitives", async () => {
     class ProductCard extends LitElement {
-      static [LITSX_MODULE_ID] = "/src/ProductCard.litsx";
+      static [LITSX_MODULE_ID] = "/src/ProductCard.tsx";
 
       render() {
         return html`<article>${this.product.name}</article>`;
@@ -929,7 +929,7 @@ describe("@litsx/ssr", () => {
 
     assert.match(document, /<title>Framework Shell<\/title>/);
     assert.match(document, /<meta name="framework" content="nextsx-like">/);
-    assert.match(document, /<link rel="modulepreload" href="\/assets\/ProductCard\.litsx\.js">/);
+    assert.match(document, /<link rel="modulepreload" href="\/assets\/ProductCard\.tsx\.js">/);
     assert.match(document, /<script type="application\/json" id="__LITSX_HYDRATION__">/);
     assert.match(document, /<product-card\b[^>]*data-litsx-root="litsx-root-0"/);
     assert.match(bootstrap, /import \{ hydratePage \} from "@litsx\/ssr\/hydration";/);
@@ -938,7 +938,7 @@ describe("@litsx/ssr", () => {
 
   it("builds reusable document context from a fragment result", async () => {
     class ProductCard extends LitElement {
-      static [LITSX_MODULE_ID] = "/src/ProductCard.litsx";
+      static [LITSX_MODULE_ID] = "/src/ProductCard.tsx";
 
       render() {
         return html`<article>${this.product.name}</article>`;
@@ -1276,7 +1276,7 @@ describe("@litsx/ssr", () => {
 
   it("renders nested server-component call markers inside server-component templates", async () => {
     class ProductCard extends LitElement {
-      static [LITSX_MODULE_ID] = "/src/ProductCard.litsx";
+      static [LITSX_MODULE_ID] = "/src/ProductCard.tsx";
 
       render() {
         return html`<article>${this.product.name}</article>`;
@@ -1311,14 +1311,14 @@ describe("@litsx/ssr", () => {
     assert.match(result.html, /Nested Trail Shoe/);
     assert.doesNotMatch(result.html, /<product-page\b/);
     assert.doesNotMatch(result.html, /<product-section\b/);
-    assert.deepStrictEqual(result.clientImports, ["/src/ProductCard.litsx"]);
+    assert.deepStrictEqual(result.clientImports, ["/src/ProductCard.tsx"]);
     assert.deepStrictEqual(result.hydrationData, {
       version: 1,
       roots: [
         {
           id: "litsx-root-0",
           tagName: "product-card",
-          moduleId: "/src/ProductCard.litsx",
+          moduleId: "/src/ProductCard.tsx",
         },
       ],
     });
@@ -1326,7 +1326,7 @@ describe("@litsx/ssr", () => {
 
   it("hydrates html template custom elements declared through Component.elements", async () => {
     class ProductCard extends LitElement {
-      static [LITSX_MODULE_ID] = "/src/ProductCard.litsx";
+      static [LITSX_MODULE_ID] = "/src/ProductCard.tsx";
 
       render() {
         return html`<article>${this.product.name}</article>`;
@@ -1352,14 +1352,14 @@ describe("@litsx/ssr", () => {
 
     assert.match(result.html, /<product-card\b[^>]*data-litsx-root="litsx-root-0"/);
     assert.match(result.html, /Trail Shoe/);
-    assert.deepStrictEqual(result.clientImports, ["/src/ProductCard.litsx"]);
+    assert.deepStrictEqual(result.clientImports, ["/src/ProductCard.tsx"]);
     assert.deepStrictEqual(result.hydrationData, {
       version: 1,
       roots: [
         {
           id: "litsx-root-0",
           tagName: "product-card",
-          moduleId: "/src/ProductCard.litsx",
+          moduleId: "/src/ProductCard.tsx",
         },
       ],
     });
@@ -1367,7 +1367,7 @@ describe("@litsx/ssr", () => {
 
   it("renders local async PascalCase composition inside a default-export-style server flow", async () => {
     class ProductCard extends LitElement {
-      static [LITSX_MODULE_ID] = "/src/ProductCard.litsx";
+      static [LITSX_MODULE_ID] = "/src/ProductCard.tsx";
 
       render() {
         return html`<article>${this.product.name}</article>`;
@@ -1401,14 +1401,14 @@ describe("@litsx/ssr", () => {
     assert.match(result.html, /Local Trail Shoe/);
     assert.doesNotMatch(result.html, /<product-page\b/);
     assert.doesNotMatch(result.html, /<product-section\b/);
-    assert.deepStrictEqual(result.clientImports, ["/src/ProductCard.litsx"]);
+    assert.deepStrictEqual(result.clientImports, ["/src/ProductCard.tsx"]);
     assert.deepStrictEqual(result.hydrationData, {
       version: 1,
       roots: [
         {
           id: "litsx-root-0",
           tagName: "product-card",
-          moduleId: "/src/ProductCard.litsx",
+          moduleId: "/src/ProductCard.tsx",
         },
       ],
     });
@@ -1416,7 +1416,7 @@ describe("@litsx/ssr", () => {
 
   it("renders complex server-to-lit projected content with nested SSR roots", async () => {
     class ActionChip extends LitElement {
-      static [LITSX_MODULE_ID] = "/src/ActionChip.litsx";
+      static [LITSX_MODULE_ID] = "/src/ActionChip.tsx";
 
       render() {
         return html`<button>${this.label}</button>`;
@@ -1424,7 +1424,7 @@ describe("@litsx/ssr", () => {
     }
 
     class ProductCard extends LitElement {
-      static [LITSX_MODULE_ID] = "/src/ProductCard.litsx";
+      static [LITSX_MODULE_ID] = "/src/ProductCard.tsx";
 
       render() {
         return html`
@@ -1479,8 +1479,8 @@ describe("@litsx/ssr", () => {
     assert.match(result.html, /<action-chip[\s\S]*<template shadowroot="open" shadowrootmode="open">[\s\S]*<button>[\s\S]*Buy now[\s\S]*<\/button>[\s\S]*<\/template><\/action-chip>/);
     assert.match(result.html, /<p>[\s\S]*Ships tomorrow[\s\S]*<\/p>/);
     assert.deepStrictEqual(result.clientImports, [
-      "/src/ActionChip.litsx",
-      "/src/ProductCard.litsx",
+      "/src/ActionChip.tsx",
+      "/src/ProductCard.tsx",
     ]);
     assert.deepStrictEqual(result.hydrationData, {
       version: 1,
@@ -1488,12 +1488,12 @@ describe("@litsx/ssr", () => {
         {
           id: "litsx-root-0",
           tagName: "action-chip",
-          moduleId: "/src/ActionChip.litsx",
+          moduleId: "/src/ActionChip.tsx",
         },
         {
           id: "litsx-root-1",
           tagName: "product-card",
-          moduleId: "/src/ProductCard.litsx",
+          moduleId: "/src/ProductCard.tsx",
         },
       ],
     });
@@ -1501,7 +1501,7 @@ describe("@litsx/ssr", () => {
 
   it("renders complex server-to-server renderer props with scoped Lit content", async () => {
     class ActionChip extends LitElement {
-      static [LITSX_MODULE_ID] = "/src/ActionChip.litsx";
+      static [LITSX_MODULE_ID] = "/src/ActionChip.tsx";
 
       render() {
         return html`<button>${this.label}</button>`;
@@ -1546,14 +1546,14 @@ describe("@litsx/ssr", () => {
     assert.match(result.html, /<action-chip\b[^>]*data-litsx-root="litsx-root-0"/);
     assert.match(result.html, /<button>[\s\S]*Buy now[\s\S]*<\/button>/);
     assert.match(result.html, /<p>[\s\S]*Ships tomorrow[\s\S]*<\/p>/);
-    assert.deepStrictEqual(result.clientImports, ["/src/ActionChip.litsx"]);
+    assert.deepStrictEqual(result.clientImports, ["/src/ActionChip.tsx"]);
     assert.deepStrictEqual(result.hydrationData, {
       version: 1,
       roots: [
         {
           id: "litsx-root-0",
           tagName: "action-chip",
-          moduleId: "/src/ActionChip.litsx",
+          moduleId: "/src/ActionChip.tsx",
         },
       ],
     });
@@ -1561,7 +1561,7 @@ describe("@litsx/ssr", () => {
 
   it("renders complex server-to-lit renderer props with scoped Lit content", async () => {
     class ActionChip extends LitElement {
-      static [LITSX_MODULE_ID] = "/src/ActionChip.litsx";
+      static [LITSX_MODULE_ID] = "/src/ActionChip.tsx";
 
       render() {
         return html`<button>${this.label}</button>`;
@@ -1569,7 +1569,7 @@ describe("@litsx/ssr", () => {
     }
 
     class ProductCard extends LitElement {
-      static [LITSX_MODULE_ID] = "/src/ProductCard.litsx";
+      static [LITSX_MODULE_ID] = "/src/ProductCard.tsx";
       static elements = {
         "action-chip": ActionChip,
       };
@@ -1617,8 +1617,8 @@ describe("@litsx/ssr", () => {
     assert.match(result.html, /<button>[\s\S]*Buy now[\s\S]*<\/button>/);
     assert.match(result.html, /<p>[\s\S]*Ships tomorrow[\s\S]*<\/p>/);
     assert.deepStrictEqual(result.clientImports, [
-      "/src/ProductCard.litsx",
-      "/src/ActionChip.litsx",
+      "/src/ProductCard.tsx",
+      "/src/ActionChip.tsx",
     ]);
     assert.deepStrictEqual(result.hydrationData, {
       version: 1,
@@ -1626,7 +1626,7 @@ describe("@litsx/ssr", () => {
         {
           id: "litsx-root-0",
           tagName: "product-card",
-          moduleId: "/src/ProductCard.litsx",
+          moduleId: "/src/ProductCard.tsx",
         },
       ],
     });
@@ -1634,7 +1634,7 @@ describe("@litsx/ssr", () => {
 
   it("renders nested scoped elements with arrays, objects, and callback property bindings", async () => {
     class PropertyLeaf extends LitElement {
-      static [LITSX_MODULE_ID] = "/src/PropertyLeaf.litsx";
+      static [LITSX_MODULE_ID] = "/src/PropertyLeaf.tsx";
       static properties = {
         items: { attribute: false },
         config: { attribute: false },
@@ -1649,7 +1649,7 @@ describe("@litsx/ssr", () => {
     }
 
     class PropertyParent extends LitElement {
-      static [LITSX_MODULE_ID] = "/src/PropertyParent.litsx";
+      static [LITSX_MODULE_ID] = "/src/PropertyParent.tsx";
       static elements = { "property-leaf": PropertyLeaf };
       static properties = {
         items: { attribute: false },
@@ -1687,8 +1687,8 @@ describe("@litsx/ssr", () => {
     assert.match(result.html, /data-page-size="24"/);
     assert.match(result.html, /First[\s\S]*function/);
     assert.deepStrictEqual(result.clientImports, [
-      "/src/PropertyParent.litsx",
-      "/src/PropertyLeaf.litsx",
+      "/src/PropertyParent.tsx",
+      "/src/PropertyLeaf.tsx",
     ]);
     assert.deepStrictEqual(
       result.hydrationData.payload.roots["litsx-root-0"].props,
@@ -1701,7 +1701,7 @@ describe("@litsx/ssr", () => {
 
   it("rejects server components projected through Lit renderer props during SSR", async () => {
     class ActionChip extends LitElement {
-      static [LITSX_MODULE_ID] = "/src/ActionChip.litsx";
+      static [LITSX_MODULE_ID] = "/src/ActionChip.tsx";
 
       render() {
         return html`<button>${this.label}</button>`;
@@ -1709,7 +1709,7 @@ describe("@litsx/ssr", () => {
     }
 
     class ProductCard extends LitElement {
-      static [LITSX_MODULE_ID] = "/src/ProductCard.litsx";
+      static [LITSX_MODULE_ID] = "/src/ProductCard.tsx";
 
       render() {
         return html`
@@ -1821,7 +1821,7 @@ describe("@litsx/ssr", () => {
     const ThemeContext = createContext("light");
 
     class ContextReader extends LitElement {
-      static [LITSX_MODULE_ID] = "/src/ContextReader.litsx";
+      static [LITSX_MODULE_ID] = "/src/ContextReader.tsx";
 
       render() {
         prepareEffects(this);
@@ -1831,7 +1831,7 @@ describe("@litsx/ssr", () => {
     }
 
     class ContextRoot extends LitElement {
-      static [LITSX_MODULE_ID] = "/src/ContextRoot.litsx";
+      static [LITSX_MODULE_ID] = "/src/ContextRoot.tsx";
       static elements = {
         "litsx-context-provider": LitsxContextProviderElement,
         "context-reader": ContextReader,
@@ -1906,7 +1906,7 @@ describe("@litsx/ssr", () => {
 import { LITSX_MODULE_ID } from "@litsx/core/elements";
 
 export class AlphaCard extends LitElement {
-  static [LITSX_MODULE_ID] = "/src/alpha/index.litsx";
+  static [LITSX_MODULE_ID] = "/src/alpha/index.tsx";
 
   render() {
     return html\`<article>alpha</article>\`;
@@ -1922,7 +1922,7 @@ export class AlphaCard extends LitElement {
 import { LITSX_MODULE_ID } from "@litsx/core/elements";
 
 export class BetaCard extends LitElement {
-  static [LITSX_MODULE_ID] = "/src/beta/index.litsx";
+  static [LITSX_MODULE_ID] = "/src/beta/index.tsx";
 
   render() {
     return html\`<article>beta</article>\`;

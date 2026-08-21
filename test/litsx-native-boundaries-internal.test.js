@@ -7,7 +7,7 @@ function transform(source, options = {}) {
   return babelCore.transformSync(source, {
     babelrc: false,
     configFile: false,
-    filename: "/virtual/view.litsx",
+    filename: "/virtual/view.tsx",
     parserOpts: { plugins: ["jsx"] },
     plugins: [[transformLitsxBoundaries, options]],
   }).code;

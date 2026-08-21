@@ -39,7 +39,7 @@ function toProjectRelativeModuleId(moduleId, root) {
  * environments.
  *
  * In dev it converts source module ids under `root` into browser-facing module
- * URLs such as `/src/components/ProductCard.litsx`. In build it can map those
+ * URLs such as `/src/components/ProductCard.tsx`. In build it can map those
  * module ids through a Vite manifest to the emitted asset file.
  */
 export function createLitsxViteAssetResolver({

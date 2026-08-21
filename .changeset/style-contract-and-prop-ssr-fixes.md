@@ -5,7 +5,7 @@
 "@litsx/core": patch
 ---
 
-Tighten the `.litsx` `style` contract to reject object-valued JSX `style`
+Tighten the `.tsx` `style` contract to reject object-valued JSX `style`
 bindings, document the string-only inline style behavior, and keep the public
 types aligned with that runtime/compiler rule.
 

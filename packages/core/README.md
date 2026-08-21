@@ -136,7 +136,7 @@ All helpers accept the Lit element instance as the first argument. The Babel tra
 
 ## Styling
 
-In `.litsx`, the JSX `style` attribute is string-based. LitSX does not support
+In LitSX JSX/TSX, the `style` attribute is string-based. LitSX does not support
 React-style object bindings such as `style={{ color: "red" }}`.
 
 - Use `style="color: red"` or `style={styleText}` when you need an inline style attribute.

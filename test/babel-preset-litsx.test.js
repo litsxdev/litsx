@@ -1412,7 +1412,7 @@ describe("@litsx/babel-preset-litsx", () => {
     ].join("\n");
 
     const result = compileWithNativePreset(source, {
-      filename: "/virtual/Page.litsx",
+      filename: "/virtual/Page.tsx",
     });
 
     assert.match(
@@ -1430,7 +1430,7 @@ describe("@litsx/babel-preset-litsx", () => {
     ].join("\n");
 
     const result = compileWithNativePreset(source, {
-      filename: "/virtual/layout.litsx",
+      filename: "/virtual/layout.tsx",
     });
 
     assert.match(

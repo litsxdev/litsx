@@ -752,7 +752,7 @@ describe("native element candidate internals", () => {
     try {
       const srcDir = path.join(tempDir, "src");
       fs.mkdirSync(path.join(srcDir, "pages"), { recursive: true });
-      const rootFile = path.join(srcDir, "entry.litsx");
+      const rootFile = path.join(srcDir, "entry.tsx");
       const pageFile = path.join(srcDir, "pages", "ProductPage.js");
       const tsconfigPath = path.join(tempDir, "tsconfig.json");
 

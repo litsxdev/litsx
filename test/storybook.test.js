@@ -212,6 +212,28 @@ describe("@litsx/storybook", () => {
     );
   });
 
+  it("does not resolve removed authored file extensions", async () => {
+    const source = [
+      'import { ProductCard } from "./product-card";',
+      'export default { title: "Catalog/Product" };',
+      "export const Default = { render: () => <ProductCard /> };",
+    ].join("\n");
+    const fileName = createStoryFile(source);
+    fs.writeFileSync(
+      path.join(path.dirname(fileName), "product-card.litsx"),
+      "export const ProductCard = () => <article />;",
+      "utf8",
+    );
+    const plugin = litsxStoryRegistrationPlugin({
+      storybookCsfLoader: createPassingCsfLoader(),
+    });
+
+    assert.strictEqual(
+      await plugin.transform.handler(source, fileName),
+      null,
+    );
+  });
+
   it("does not register an authored component twice when it already exists", async () => {
     const plugin = litsxStoryRegistrationPlugin({
       storybookCsfLoader: createPassingCsfLoader(),

@@ -7,8 +7,6 @@ let t;
 const RUNTIME_INFRASTRUCTURE_MODULE = "@litsx/core/elements";
 const ANNOTATE_HYDRATABLE_CUSTOM_ELEMENT_HELPER = "annotateHydratableCustomElement";
 const IMPORT_RESOLUTION_EXTENSIONS = [
-  ".litsx",
-  ".litsx.jsx",
   ".jsx",
   ".js",
   ".tsx",

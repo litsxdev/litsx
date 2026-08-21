@@ -142,7 +142,7 @@ export interface LitsxBaseAttributes {
   part?: string;
   /**
    * Inline style attribute text.
-   * LitSX does not support React-style object bindings such as `style={{ color: "red" }}` in `.litsx`.
+   * LitSX does not support React-style object bindings such as `style={{ color: "red" }}` in authored JSX/TSX.
    * Use a serialized string value here, or `useStyle(...)` for dynamic host style properties.
    */
   style?: string;

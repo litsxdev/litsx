@@ -300,7 +300,7 @@ export function assertNoObjectStyleAttributes(functionPath) {
       if (!resolvesToStyleObjectExpression(expressionPath)) return;
 
       throw attrPath.buildCodeFrameError(
-        "LitSX does not support object-valued `style` bindings in `.litsx`. Use a serialized string style value, or use `useStyle(...)` for dynamic host style properties."
+        "LitSX does not support object-valued `style` bindings in authored JSX/TSX. Use a serialized string style value, or use `useStyle(...)` for dynamic host style properties."
       );
     },
   });

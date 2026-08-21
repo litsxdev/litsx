@@ -15,13 +15,7 @@ import {
 import { createLitsxCompilationSession, transformLitsx } from "../packages/compiler/src/index.js";
 
 describe("compiler authored input helpers", () => {
-  it("rejects the removed authored file extensions and binding syntax", () => {
-    assert.throws(
-      () => prepareLitsxAuthoredInput("export const View = () => <div />;", {
-        filename: "/virtual/View.litsx",
-      }),
-      /standard \.jsx or \.tsx extension/,
-    );
+  it("rejects removed authored binding syntax", () => {
     for (const source of [
       "const view = <button @click={handler} />;",
       "const view = <input .value={value} />;",
@@ -61,6 +55,10 @@ describe("compiler authored input helpers", () => {
         requireJsx: true,
       }),
       ["typescript", "jsx"]
+    );
+    assert.deepStrictEqual(
+      ensureLitsxParserPlugins("/virtual/File.litsx"),
+      []
     );
   });
 

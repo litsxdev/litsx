@@ -1,21 +1,21 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { renderDocument } from "@litsx/ssr";
+import { createEntry, renderDocument } from "@litsx/ssr";
 
 const exampleDir = path.dirname(fileURLToPath(import.meta.url));
 const outputDir = path.join(exampleDir, "dist");
 const outputPath = path.join(outputDir, "index.html");
 
 export async function renderDemoHtml() {
-  const result = await renderDocument({
+  const result = await renderDocument(createEntry({
     root: exampleDir,
     template: "./index.html",
     clientEntry: "./src/main.js",
     elements(loader) {
       return {
         "demo-app": async () =>
-          (await loader("./src/components.litsx")).DemoApp,
+          (await loader("./src/components.tsx")).DemoApp,
       };
     },
     render({ html }) {
@@ -25,7 +25,7 @@ export async function renderDemoHtml() {
         .initialCount=${2}
       ></demo-app>`;
     },
-  });
+  }));
 
   await fs.mkdir(outputDir, { recursive: true });
   await fs.writeFile(outputPath, result.document);

@@ -497,7 +497,7 @@ describe("@litsx/ssr/hydration", () => {
         {
           id: "litsx-root-0",
           tagName: "product-card",
-          moduleId: "/src/ProductCard.litsx",
+          moduleId: "/src/ProductCard.tsx",
         },
       ],
     };
@@ -755,7 +755,7 @@ describe("@litsx/ssr/hydration", () => {
               {
                 id: "litsx-root-0",
                 tagName: "product-card",
-                moduleId: "/src/ProductCard.litsx",
+                moduleId: "/src/ProductCard.tsx",
               },
             ],
           }),
@@ -778,7 +778,7 @@ describe("@litsx/ssr/hydration", () => {
       {
         id: "litsx-root-0",
         tagName: "product-card",
-        moduleId: "/src/ProductCard.litsx",
+        moduleId: "/src/ProductCard.tsx",
         element: rootElement,
       },
     ]);
@@ -823,7 +823,7 @@ describe("@litsx/ssr/hydration", () => {
             {
               id: "litsx-root-0",
               tagName: "product-card",
-              moduleId: "/src/ProductCard.litsx",
+              moduleId: "/src/ProductCard.tsx",
             },
           ],
         },
@@ -834,7 +834,7 @@ describe("@litsx/ssr/hydration", () => {
       {
         id: "litsx-root-0",
         tagName: "product-card",
-        moduleId: "/src/ProductCard.litsx",
+        moduleId: "/src/ProductCard.tsx",
         element: rootElement,
       },
     ]);
@@ -850,7 +850,7 @@ describe("@litsx/ssr/hydration", () => {
               {
                 id: "litsx-root-0",
                 tagName: "product-card",
-                moduleId: "/src/ProductCard.litsx",
+                moduleId: "/src/ProductCard.tsx",
               },
             ],
           },
@@ -859,7 +859,7 @@ describe("@litsx/ssr/hydration", () => {
       {
         id: "litsx-root-0",
         tagName: "product-card",
-        moduleId: "/src/ProductCard.litsx",
+        moduleId: "/src/ProductCard.tsx",
         element: rootElement,
       },
     );

@@ -11,7 +11,7 @@ function normalizeParserPlugins(filename, parserPlugins = []) {
     return parserPlugins;
   }
 
-  if (typeof filename === "string" && /\.(?:litsx|tsx?)$/.test(filename)) {
+  if (typeof filename === "string" && /\.tsx?$/.test(filename)) {
     return ["typescript"];
   }
 
@@ -80,11 +80,6 @@ export function prepareLitsxAuthoredInput(
     ...runtime,
   };
   const filename = options.filename;
-  if (typeof filename === "string" && (filename.endsWith(".litsx") || filename.endsWith(".litsx.jsx"))) {
-    throw new SyntaxError(
-      `LitSX authored files must use a standard .jsx or .tsx extension: ${filename}`,
-    );
-  }
   const parserPlugins = ensureLitsxParserPlugins(filename, options.parserPlugins, {
     requireJsx: options.requireJsx !== false,
   });

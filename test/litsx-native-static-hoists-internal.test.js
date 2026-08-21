@@ -88,15 +88,15 @@ describe("native static hoists internals", () => {
     const state = {
       file: {
         opts: {
-          sourceFileName: "src\\card.litsx",
-          filename: "ignored.litsx",
+          sourceFileName: "src\\card.tsx",
+          filename: "ignored.tsx",
         },
       },
-      filename: "also-ignored.litsx",
+      filename: "also-ignored.tsx",
     };
 
-    assert.strictEqual(normalizeStableIdentityPath("src\\card.litsx"), "src/card.litsx");
-    assert.strictEqual(buildStableIdentitySeed(pathLike, state), "src/card.litsx:3:4:12");
+    assert.strictEqual(normalizeStableIdentityPath("src\\card.tsx"), "src/card.tsx");
+    assert.strictEqual(buildStableIdentitySeed(pathLike, state), "src/card.tsx:3:4:12");
     assert.strictEqual(buildStableIdentitySeed({ node: {} }, {}), ":0:0:0");
     assert.strictEqual(hashStableIdentity("card"), hashStableIdentity("card"));
     assert.notStrictEqual(hashStableIdentity("card"), hashStableIdentity("badge"));

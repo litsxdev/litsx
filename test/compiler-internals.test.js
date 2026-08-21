@@ -210,7 +210,7 @@ describe("compiler internals", () => {
       code: "compiled-output",
       map: {
         version: 3,
-        sources: ["/virtual/Example.litsx"],
+        sources: ["/virtual/Example.tsx"],
         sourcesContent: ["const compiled = true;"],
         names: [],
         mappings: "",
@@ -221,12 +221,12 @@ describe("compiler internals", () => {
     const mod = await import("../packages/compiler/src/index.js");
     const source = "export const Example = () => <div />;";
     const result = mod.transformLitsxSync(source, {
-      filename: "/virtual/Example.litsx",
+      filename: "/virtual/Example.tsx",
       jsxTemplate: false,
       sourceMaps: true,
     });
 
-    assert.deepStrictEqual(result.map.sources, ["/virtual/Example.litsx"]);
+    assert.deepStrictEqual(result.map.sources, ["/virtual/Example.tsx"]);
     assert.deepStrictEqual(result.map.sourcesContent, [source]);
   });
 

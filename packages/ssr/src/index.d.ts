@@ -783,7 +783,7 @@ export declare function renderDocument(
  *   elements(loader) {
  *     return {
  *       "app-root": async () =>
- *         (await loader("./src/App.litsx")).AppRoot,
+ *         (await loader("./src/App.tsx")).AppRoot,
  *     };
  *   },
  *   render({ html }) {
@@ -798,7 +798,7 @@ export declare function renderDocument(
 /**
  * Create a Vite-backed development server for authored LitSX SSR entrypoints.
  *
- * @usage Use this for local SSR development when authored `.litsx` modules are
+ * @usage Use this for local SSR development when authored `.tsx` modules are
  * resolved through `elements(loader)` and you want Vite to serve the hydrated page.
  * @param options Dev-server, document-template, authored entry, and render callback configuration.
  * @returns A configured Vite dev server instance that still needs `listen()`.
@@ -810,7 +810,7 @@ export declare function renderDocument(
  *   elements(loader) {
  *     return {
  *       "app-root": async () =>
- *         (await loader("./src/App.litsx")).AppRoot,
+ *         (await loader("./src/App.tsx")).AppRoot,
  *     };
  *   },
  *   render({ html }) {

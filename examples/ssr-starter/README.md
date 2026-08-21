@@ -17,7 +17,7 @@ The split of responsibility is:
 
 ## File Layout
 
-- `src/components.litsx`
+- `src/components.tsx`
   Defines the LitSX components rendered on the server and hydrated in the
   browser.
 - `index.html`

@@ -117,10 +117,8 @@ function createRegistrationSource(moduleAnalysis = null, options = {}) {
 const AUTHORED_MODULE_SUFFIXES = [
   ".tsx",
   ".jsx",
-  ".litsx",
   "/index.tsx",
   "/index.jsx",
-  "/index.litsx",
 ];
 
 async function fileExists(filename) {

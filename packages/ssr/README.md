@@ -40,10 +40,10 @@ Minimal server entry:
 
 ```tsx
 import { renderDocument } from "@litsx/ssr";
-import { ProductCard } from "./ProductCard.litsx";
+import { ProductCard } from "./ProductCard.tsx";
 
 const result = await renderDocument(
-  <ProductCard .product={product} />,
+  <ProductCard product={product} />,
   {
     title: "Product Page",
     clientEntry: "/src/main.js",
@@ -56,7 +56,7 @@ result.document;
 Matching client entry:
 
 ```js
-const { defineProductElements } = await import("./ProductCard.litsx");
+const { defineProductElements } = await import("./ProductCard.tsx");
 defineProductElements();
 ```
 
@@ -83,9 +83,9 @@ For most applications, `renderDocument(...)` should be your default server API:
 
 ```tsx
 import { renderDocument } from "@litsx/ssr";
-import { ProductCard } from "./ProductCard.litsx";
+import { ProductCard } from "./ProductCard.tsx";
 
-const result = await renderDocument(<ProductCard .product={product} />, {
+const result = await renderDocument(<ProductCard product={product} />, {
   title: "Product Page",
   clientEntry: "/src/main.js",
 });
@@ -119,7 +119,7 @@ If the built-in shell is not enough, pass `template(...)` to assemble the final
 document yourself:
 
 ```tsx
-const result = await renderDocument(<ProductCard .product={product} />, {
+const result = await renderDocument(<ProductCard product={product} />, {
   title: "Product Page",
   clientEntry: "/src/main.js",
   template({ html, title, modulePreloads, hydrationScript, bootstrap }) {
@@ -153,7 +153,7 @@ const result = await renderDocument(createEntry({
   elements(loader) {
     return {
       "app-root": async () =>
-        (await loader("./src/App.litsx")).AppRoot,
+        (await loader("./src/App.tsx")).AppRoot,
     };
   },
   render({ html }) {
@@ -167,10 +167,10 @@ available as the lower-level API:
 
 ```tsx
 import { renderToString } from "@litsx/ssr";
-import { ProductCard } from "./ProductCard.litsx";
+import { ProductCard } from "./ProductCard.tsx";
 
 const result = await renderToString(
-  <ProductCard .product={product} />,
+  <ProductCard product={product} />,
 );
 
 result.html;
@@ -241,7 +241,7 @@ const result = await renderToString(createEntry({
   elements(loader) {
     return {
       "product-card": async () =>
-        (await loader("./src/ProductCard.litsx")).ProductCard,
+        (await loader("./src/ProductCard.tsx")).ProductCard,
     };
   },
   render({ html }) {
@@ -261,7 +261,7 @@ import {
   renderToString,
 } from "@litsx/ssr";
 
-const fragment = await renderToString(<ProductCard .product={product} />, {
+const fragment = await renderToString(<ProductCard product={product} />, {
   assetResolver(moduleId) {
     return manifest[moduleId] ?? moduleId;
   },
@@ -300,7 +300,7 @@ For streaming responses, use `renderToStream(...)`:
 ```tsx
 import { renderToStream } from "@litsx/ssr";
 
-const { stream, allReady } = await renderToStream(<ProductCard .product={product} />);
+const { stream, allReady } = await renderToStream(<ProductCard product={product} />);
 const metadata = await allReady;
 ```
 
@@ -367,7 +367,7 @@ export async function ProductPage(props, ssrContext) {
 ## Dev Helper
 
 `@litsx/ssr` also exposes `createSsrDevServer(...)` for authored LitSX SSR
-examples and local development. It resolves authored `.litsx` modules through
+examples and local development. It resolves authored `.tsx` modules through
 `elements(loader)`, renders a fragment through your `render(...)` callback,
 injects that fragment into an HTML template, and serves the result through Vite
 with LitSX client sourcemaps enabled.
@@ -384,7 +384,7 @@ const server = await createSsrDevServer({
   elements(loader) {
     return {
       "demo-app": async () =>
-        (await loader("./src/components.litsx")).DemoApp,
+        (await loader("./src/components.tsx")).DemoApp,
     };
   },
   render({ html }) {
@@ -411,7 +411,7 @@ When you provide a template file, `createSsrDevServer(...)` expects
 
 For the simple case, `elements(loader)` is just the scoped registry for the
 tags returned by `render(...)`. The `loader(...)` helper exists so authored
-`.litsx` modules resolve through the same SSR-aware Vite pipeline the dev
+`.tsx` modules resolve through the same SSR-aware Vite pipeline the dev
 helper already uses internally.
 
 If you need total control over the emitted bootstrap script, pass `bootstrap`
@@ -444,7 +444,7 @@ behavior:
   module and imports that result
 - it returns the SSR-ready module namespace for the authored file
 
-That means authored `.litsx` modules work through the same API in:
+That means authored `.tsx` modules work through the same API in:
 
 - `renderDocument(...)`
 - `renderToString(...)`
@@ -471,24 +471,22 @@ exists.
 
 ## Authored Root Syntax
 
-LitSX SSR roots preserve the authored binding model.
-
-Use property bindings explicitly for component props:
+LitSX SSR roots use the same destination-aware binding inference as client
+compilation. Author component props with ordinary JSX names:
 
 ```tsx
-renderToString(<ProductCard .product={product} />);
+renderToString(<ProductCard product={product} />);
 ```
 
-Do not rely on implicit promotion from `product={product}` to
-`.product={product}`. The SSR root transform keeps the authored binding
-semantics intact.
+The compiler inspects the destination API and emits the Lit property,
+boolean-attribute, or attribute binding required by the component.
 
 ## How Scoped Rendering Works
 
 When LitSX lowers an SSR root, it wraps the generated Lit template in internal
 scope metadata. The SSR runtime then:
 
-- resolves root and nested custom elements from `static elements`
+- resolves root and nested custom elements from component `elements` metadata
 - prefers the most local matching scope when the same tag exists in parent and
   child scopes
 - instantiates the LitSX element without `customElements.define(...)`
@@ -499,7 +497,7 @@ scope metadata. The SSR runtime then:
 That means:
 
 - nested scoped LitSX elements render recursively
-- `static styles` are emitted into Declarative Shadow DOM
+- `Component.styles` are emitted into Declarative Shadow DOM
 - browser lifecycle/effect hooks do not run during SSR
 
 ## `Component.elements` Contract
@@ -561,7 +559,7 @@ const assetResolver = createLitsxViteAssetResolver({
   base: "/",
 });
 
-const result = await renderToString(<ProductCard .product={product} />, {
+const result = await renderToString(<ProductCard product={product} />, {
   assetResolver,
 });
 ```
@@ -572,7 +570,7 @@ builds, it can map them through a Vite manifest to hashed asset paths.
 If you want to emit those URLs directly into the SSR document:
 
 ```js
-const result = await renderToString(<ProductCard .product={product} />, {
+const result = await renderToString(<ProductCard product={product} />, {
   assetResolver,
 });
 
@@ -600,7 +598,7 @@ root payload:
     {
       "id": "litsx-root-0",
       "tagName": "product-card",
-      "moduleId": "/src/ProductCard.litsx"
+      "moduleId": "/src/ProductCard.tsx"
     }
   ],
   "payload": {

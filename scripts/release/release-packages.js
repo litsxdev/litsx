@@ -7,7 +7,6 @@ export const npmReleasePackages = [
   "packages/eslint-plugin-litsx",
   "packages/create-litsx-app",
   "packages/scoped-registry-shim",
-  "packages/ssr",
   "packages/authoring",
   "packages/prop-types",
   "packages/babel-preset-litsx",

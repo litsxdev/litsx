@@ -15,8 +15,6 @@ const RENDER_LIGHT_MODULE = "@lit-labs/ssr-client/directives/render-light.js";
 const RENDER_LIGHT_IMPORT = "renderLight";
 const NOSCRIPT_PRIMITIVE = "__litsxNoscript";
 const IMPORT_RESOLUTION_EXTENSIONS = [
-  ".litsx",
-  ".litsx.jsx",
   ".jsx",
   ".js",
   ".tsx",

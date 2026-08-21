@@ -9,8 +9,6 @@ const CORE_LIGHT_DOM_EXPORTS = new Set([
   "SuspenseList",
 ]);
 const IMPORT_RESOLUTION_EXTENSIONS = [
-  ".litsx",
-  ".litsx.jsx",
   ".jsx",
   ".js",
   ".tsx",

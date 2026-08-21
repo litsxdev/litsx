@@ -7,6 +7,7 @@ import { afterEach, describe, it } from "vitest";
 
 import { createReleaseManifest, stageReleasePackage } from "../scripts/release/release-manifest.js";
 import { readPackageVersion } from "../scripts/release/package-version-map.js";
+import { npmReleasePackages } from "../scripts/release/release-packages.js";
 
 const tempDirs = [];
 
@@ -33,6 +34,10 @@ afterEach(() => {
 });
 
 describe("release manifest staging", () => {
+  it("lists every release package exactly once", () => {
+    assert.strictEqual(new Set(npmReleasePackages).size, npmReleasePackages.length);
+  });
+
   it("rewrites release manifests to existing dist targets", () => {
     const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-release-manifest-cases-"));
     const esmPackageRoot = path.join(rootDir, "packages", "esm");

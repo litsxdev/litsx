@@ -51,7 +51,7 @@ describe("@litsx/ssr public configuration branches", () => {
 
   it("resolves authored element classes and lazy element factories", async () => {
     class DirectElement extends LitElement {
-      static [LITSX_MODULE_ID] = "/src/DirectElement.litsx";
+      static [LITSX_MODULE_ID] = "/src/DirectElement.tsx";
 
       render() {
         return html`<p>direct</p>`;
@@ -59,7 +59,7 @@ describe("@litsx/ssr public configuration branches", () => {
     }
 
     class LazyElement extends LitElement {
-      static [LITSX_MODULE_ID] = "/src/LazyElement.litsx";
+      static [LITSX_MODULE_ID] = "/src/LazyElement.tsx";
 
       render() {
         return html`<p>lazy</p>`;
@@ -189,7 +189,7 @@ describe("@litsx/ssr public configuration branches", () => {
 
   it("uses authored template callbacks and Vite-backed element loaders", async () => {
     class ViteElement extends LitElement {
-      static [LITSX_MODULE_ID] = "/component.litsx";
+      static [LITSX_MODULE_ID] = "/component.tsx";
 
       render() {
         return html`<p>vite element</p>`;
@@ -206,7 +206,7 @@ describe("@litsx/ssr public configuration branches", () => {
         },
       },
       elements(load) {
-        return { "vite-element": () => load("component.litsx") };
+        return { "vite-element": () => load("component.tsx") };
       },
       template(context) {
         return `<article data-title="${context.title}">${context.html}</article>`;
@@ -217,7 +217,7 @@ describe("@litsx/ssr public configuration branches", () => {
       },
     }));
 
-    assert.deepStrictEqual(loadedIds, ["/component.litsx"]);
+    assert.deepStrictEqual(loadedIds, ["/component.tsx"]);
     assert.match(result.document, /<article data-title="callback template">/);
     assert.match(result.document, /<p>vite element<\/p>/);
   });
