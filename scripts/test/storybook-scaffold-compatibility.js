@@ -7,7 +7,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { createProject } from "../../packages/create-litsx-app/src/index.js";
 
-const supportedVersions = ["10.4.6", "10.5.6"];
+const supportedVersions = ["10.4.6", "10.5.10"];
 const requestedVersions = process.argv.slice(2);
 const versions =
   requestedVersions.length > 0 ? requestedVersions : supportedVersions;

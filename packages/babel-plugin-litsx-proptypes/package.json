@@ -38,14 +38,14 @@
     "directory": "packages/babel-plugin-litsx-proptypes"
   },
   "peerDependencies": {
-    "@babel/core": ">=7"
+    "@babel/core": ">=7 <8"
   },
   "dependencies": {
-    "@babel/helper-plugin-utils": "^7.28.6",
+    "@babel/helper-plugin-utils": "^7.29.7",
     "@litsx/prop-types": "^1.0.0-next.0"
   },
   "devDependencies": {
-    "@babel/core": "^7.29.6"
+    "@babel/core": "^7.29.7"
   },
   "scripts": {
     "build": "../../node_modules/.bin/rollup --config rollup.config.js",

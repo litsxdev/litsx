@@ -1,7 +1,7 @@
 # UnoCSS integration design validation
 
 Date: 2026-08-21
-UnoCSS: 66.8.0
+UnoCSS: 66.8.1
 
 ## Result
 

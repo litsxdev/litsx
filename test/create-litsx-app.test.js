@@ -423,7 +423,7 @@ describe("create-litsx-app", () => {
       "@storybook/addon-docs",
       "@storybook/web-components-vite",
     ]) {
-      assert.strictEqual(packageJson.devDependencies[packageName], "^10.5.6");
+      assert.strictEqual(packageJson.devDependencies[packageName], "^10.5.10");
     }
     assert.ok(packageJson.scripts["test:visual"]);
     assert.ok(packageJson.scripts["test:visual:update"]);

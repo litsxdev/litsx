@@ -39,11 +39,11 @@
     "directory": "packages/babel-preset-react-compat"
   },
   "peerDependencies": {
-    "@babel/core": ">=7"
+    "@babel/core": ">=7 <8"
   },
   "dependencies": {
-    "@babel/helper-plugin-utils": "^7.28.6",
-    "@babel/plugin-syntax-jsx": "^7.28.6",
+    "@babel/helper-plugin-utils": "^7.29.7",
+    "@babel/plugin-syntax-jsx": "^7.29.7",
     "@litsx/babel-plugin-litsx-proptypes": "^1.0.0-next.0",
     "@litsx/babel-plugin-shared-hooks": "^1.0.0-next.0",
     "@litsx/babel-plugin-transform-jsx-html-template": "^1.0.0-next.0",
@@ -51,7 +51,7 @@
     "@litsx/babel-preset-litsx": "^1.0.0-next.0"
   },
   "devDependencies": {
-    "@babel/core": "^7.29.6"
+    "@babel/core": "^7.29.7"
   },
   "scripts": {
     "build": "../../node_modules/.bin/rollup --config rollup.config.js",

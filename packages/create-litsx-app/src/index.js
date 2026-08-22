@@ -121,14 +121,14 @@ function createBasePackageJson(packageName) {
     devDependencies: {
       "@litsx/eslint-plugin": publishedPackageVersions["@litsx/eslint-plugin"],
       "@litsx/vite-plugin": publishedPackageVersions["@litsx/vite-plugin"],
-      "@vitest/browser": "^4.1.5",
-      "@vitest/browser-playwright": "^4.1.5",
+      "@vitest/browser": "^4.1.11",
+      "@vitest/browser-playwright": "^4.1.11",
       "eslint": "^9.0.0",
-      "playwright": "^1.54.1",
+      "playwright": "^1.62.1",
       "prettier": "^3.8.3",
       "typescript": "^6.0.0",
       "vite": "^8.0.3",
-      "vitest": "^4.1.5"
+      "vitest": "^4.1.11"
     }
   };
 }
@@ -157,7 +157,7 @@ function addVisualTestingPackageBits(packageJson) {
   packageJson.scripts["test:visual"] = "playwright test";
   packageJson.scripts["test:visual:update"] = "playwright test --update-snapshots";
   packageJson.scripts["storybook:static"] = "storybook build";
-  packageJson.devDependencies["@playwright/test"] = "^1.54.1";
+  packageJson.devDependencies["@playwright/test"] = "^1.62.1";
 }
 
 function addVisualTestingFiles(files) {
@@ -201,7 +201,7 @@ test.describe("storybook visual smoke", () => {
   });
 });
 `);
-  files.set("Dockerfile.visual", `FROM mcr.microsoft.com/playwright:v1.54.1-jammy
+  files.set("Dockerfile.visual", `FROM mcr.microsoft.com/playwright:v1.62.1-jammy
 
 WORKDIR /app
 
@@ -1582,10 +1582,10 @@ function createPackageJson(packageName, template, options = {}) {
     packageJson.scripts["build-storybook"] = "storybook build";
     Object.assign(packageJson.devDependencies, {
       "@litsx/storybook": publishedPackageVersions["@litsx/storybook"],
-      "@storybook/addon-a11y": "^10.5.6",
-      "@storybook/addon-docs": "^10.5.6",
-      "@storybook/web-components-vite": "^10.5.6",
-      "storybook": "^10.5.6",
+      "@storybook/addon-a11y": "^10.5.10",
+      "@storybook/addon-docs": "^10.5.10",
+      "@storybook/web-components-vite": "^10.5.10",
+      "storybook": "^10.5.10",
     });
   }
 
