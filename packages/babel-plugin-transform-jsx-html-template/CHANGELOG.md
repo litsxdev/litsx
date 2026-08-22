@@ -1,5 +1,11 @@
 # @litsx/babel-plugin-transform-jsx-html-template
 
+## 1.0.0-next.2
+
+### Patch Changes
+
+- 4b34759: Move the compiler and lint integrations to Babel 8, ESLint 10, and Node 24 while retaining ESLint 9 compatibility. Refresh generated Storybook and Playwright versions, consume patched transitive dependencies, and support Chromium's native scoped-registry creation scope across shadow and projected light DOM.
+
 ## 1.0.0-next.1
 
 ### Patch Changes

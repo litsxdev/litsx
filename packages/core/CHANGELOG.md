@@ -1,5 +1,32 @@
 # litsx
 
+## 1.0.0-next.2
+
+### Minor Changes
+
+- 4321108: Compose function-authored component styles with structural-mixin styles by
+  default, add `replaceStyles()` for explicit isolation, preserve inherited
+  scoped-element maps, and rely on Lit's native property inheritance. Generated
+  classes now use direct static fields instead of the removed static-hoist runtime
+  getter and symbol machinery. UnoCSS keeps its preflight and generated utilities
+  in the resulting style chain, including components that replace inherited
+  styles.
+- 4321108: Replace compiler-injected host arguments with a bounded synchronous hook render
+  context. Authored and transformed custom hooks now preserve their declared
+  signatures, `useHost()` is the only authored host-access API, and structural
+  hook readers use `use(...args)`. Move cursor preparation and structural
+  application helpers to `@litsx/core/internal`, and ensure generated component
+  refs, client rendering, SSR, suspense retries, and React compatibility all enter
+  the same `renderWithHooks()` boundary.
+
+  Structural hooks may now omit `use()` when they only install a mixin. These
+  installation-only hooks return `void`; value-producing capability surfaces
+  remain explicit readers.
+
+### Patch Changes
+
+- 4b34759: Move the compiler and lint integrations to Babel 8, ESLint 10, and Node 24 while retaining ESLint 9 compatibility. Refresh generated Storybook and Playwright versions, consume patched transitive dependencies, and support Chromium's native scoped-registry creation scope across shadow and projected light DOM.
+
 ## 1.0.0-next.1
 
 ### Patch Changes

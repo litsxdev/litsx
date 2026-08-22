@@ -1,5 +1,33 @@
 # @litsx/babel-preset-react-compat
 
+## 1.0.0-next.1
+
+### Minor Changes
+
+- 4321108: Replace compiler-injected host arguments with a bounded synchronous hook render
+  context. Authored and transformed custom hooks now preserve their declared
+  signatures, `useHost()` is the only authored host-access API, and structural
+  hook readers use `use(...args)`. Move cursor preparation and structural
+  application helpers to `@litsx/core/internal`, and ensure generated component
+  refs, client rendering, SSR, suspense retries, and React compatibility all enter
+  the same `renderWithHooks()` boundary.
+
+  Structural hooks may now omit `use()` when they only install a mixin. These
+  installation-only hooks return `void`; value-producing capability surfaces
+  remain explicit readers.
+
+### Patch Changes
+
+- 4b34759: Move the compiler and lint integrations to Babel 8, ESLint 10, and Node 24 while retaining ESLint 9 compatibility. Refresh generated Storybook and Playwright versions, consume patched transitive dependencies, and support Chromium's native scoped-registry creation scope across shadow and projected light DOM.
+- Updated dependencies [4321108]
+- Updated dependencies [4321108]
+- Updated dependencies [4b34759]
+  - @litsx/babel-preset-litsx@1.0.0-next.2
+  - @litsx/babel-plugin-transform-litsx-scoped-elements@1.0.0-next.1
+  - @litsx/babel-plugin-shared-hooks@1.0.0-next.1
+  - @litsx/babel-plugin-litsx-proptypes@1.0.0-next.1
+  - @litsx/babel-plugin-transform-jsx-html-template@1.0.0-next.2
+
 ## 1.0.0-next.0
 
 ### Major Changes
