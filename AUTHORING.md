@@ -270,10 +270,10 @@ export function SaveButton() {
 
 `useHost()` is the only authored API for reading the current component host.
 Hooks run synchronously inside the generated render boundary; the compiler owns
-that boundary and its controller cursor. Do not import or call
-`prepareEffects`, `runWithHookHost`, `readStructuralHook`, or
-`applyStructuralHooks` from application source. They are available only from
-`@litsx/core/internal` for compiler and runtime packages.
+that boundary and its controller cursor. `renderWithHooks`,
+`readStructuralHook`, and `applyStructuralHooks` are the public low-level ABI
+used by generated modules; ordinary application components do not need to call
+them. Hook cursor and host-context machinery stays private to the runtime.
 
 An asynchronous continuation does not retain an implicit render host. Capture
 the state setter, controller, or host synchronously and request an update when

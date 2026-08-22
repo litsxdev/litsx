@@ -40,13 +40,13 @@ import {
   useExpose as runtimeUseExpose,
   useExternalStore as runtimeUseExternalStore,
   renderWithHooks,
+  applyStructuralHooks,
+  readStructuralHook as runtimeReadStructuralHook,
 } from "../packages/core/src/index.js";
 import {
-  applyStructuralHooks,
   prepareEffects,
-  readStructuralHook as runtimeReadStructuralHook,
   runWithHookHost,
-} from "../packages/core/src/internal.js";
+} from "../packages/core/src/runtime-controller.js";
 import {
   LITSX_COMPONENT,
   LITSX_HOST_TYPE_ID,

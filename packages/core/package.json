@@ -48,12 +48,6 @@
       "import": "./src/react-compat.js",
       "require": "./dist/react-compat.cjs",
       "default": "./src/react-compat.js"
-    },
-    "./internal": {
-      "types": "./src/internal.d.ts",
-      "import": "./src/internal.js",
-      "require": "./dist/internal.cjs",
-      "default": "./src/internal.js"
     }
   },
   "files": [

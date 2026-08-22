@@ -10,7 +10,7 @@ import {
   useContext,
 } from "../packages/core/src/context.js";
 import { renderWithHooks } from "../packages/core/src/index.js";
-import { runWithHookHost } from "../packages/core/src/internal.js";
+import { runWithHookHost } from "../packages/core/src/runtime-controller.js";
 
 let tagCounter = 0;
 

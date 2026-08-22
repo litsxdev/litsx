@@ -52,7 +52,9 @@ export {
   isLitsxComponentClass,
 } from "./elements/index.js";
 export {
+  applyStructuralHooks,
   defineHook,
+  readStructuralHook,
 } from "./structural-hooks-runtime.js";
 export {
   useElementInternals,

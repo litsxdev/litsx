@@ -493,6 +493,15 @@ export declare function defineHook<
   definition: LitsxStructuralDefinition<THost, TArgs, TResult>,
 ): LitsxStructuralHook<TArgs, TResult>;
 
+export declare function readStructuralHook<TArgs extends unknown[], TResult>(
+  hook: LitsxStructuralHook<TArgs, TResult>,
+  args?: TArgs,
+): TResult;
+
+export declare function applyStructuralHooks<
+  TBase extends abstract new (...args: any[]) => object,
+>(Base: TBase, hooks?: readonly LitsxStructuralHook[]): TBase;
+
 export type LitsxFormSubmitValue = string | File | FormData | null;
 
 export interface LitsxElementInternalsHandle {

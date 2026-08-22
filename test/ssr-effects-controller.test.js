@@ -18,7 +18,7 @@ import { getController } from "../packages/core/src/runtime-controller.js";
 import {
   prepareEffects,
   runWithHookHost,
-} from "../packages/core/src/internal.js";
+} from "../packages/core/src/runtime-controller.js";
 
 const withSsrHost = (hook) => (host, ...args) =>
   runWithHookHost(host, () => hook(...args));

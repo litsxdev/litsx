@@ -15,7 +15,7 @@ import {
 import {
   prepareEffects,
   runWithHookHost,
-} from "../packages/core/src/internal.js";
+} from "../packages/core/src/runtime-controller.js";
 
 const withTestHost = (hook) => (host, ...args) =>
   runWithHookHost(host, () => hook(...args));

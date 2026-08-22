@@ -198,11 +198,11 @@ Layout work runs immediately during `hostUpdated()`, while passive effects are d
 - React-compat transforms also lower their supported hook subset to these native Lit<sup>sx</sup> helpers.
 - Each Lit element instance gets its own `EffectsController` behind the scenes.
 
-`renderWithHooks`, `runWithHookHost`, `prepareEffects`,
-`readStructuralHook`, and `applyStructuralHooks` form compiler/runtime
-infrastructure. Only `renderWithHooks` remains on the root runtime for
-generated and advanced boundary code; the other helpers live under
-`@litsx/core/internal` and are not an authoring API.
+`renderWithHooks`, `readStructuralHook`, and `applyStructuralHooks` form the
+public low-level compiler/runtime ABI exported by `@litsx/core`, because they
+appear in generated modules. Application components normally use authored hooks
+instead. Hook cursor and host-context helpers remain implementation details and
+are not exported by the package.
 
 ## SSR Execution Context
 

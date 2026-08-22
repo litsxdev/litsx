@@ -2,7 +2,7 @@ import { ensureHooksRenderWrapper } from "./render-boundary.js";
 import { ensureRuntimeNamedImports } from "./runtime-imports.js";
 
 const BLOCKED_CUSTOM_HOOK_SOURCES = new Set(["react"]);
-const INTERNAL_RUNTIME_HELPERS = new Set([
+const STRUCTURAL_RUNTIME_HELPERS = new Set([
   "applyStructuralHooks",
   "readStructuralHook",
 ]);
@@ -1321,17 +1321,17 @@ function ensureHelperImports(programPath, state, t) {
     return;
   }
 
-  const internalHelpers = Array.from(helperNames).filter((name) =>
-    INTERNAL_RUNTIME_HELPERS.has(name),
+  const structuralHelpers = Array.from(helperNames).filter((name) =>
+    STRUCTURAL_RUNTIME_HELPERS.has(name),
   );
-  for (const name of internalHelpers) {
+  for (const name of structuralHelpers) {
     helperNames.delete(name);
   }
-  if (internalHelpers.length > 0) {
+  if (structuralHelpers.length > 0) {
     ensureRuntimeNamedImports(
       programPath,
-      "@litsx/core/internal",
-      internalHelpers,
+      "@litsx/core",
+      structuralHelpers,
       t,
     );
   }

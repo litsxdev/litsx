@@ -8,7 +8,7 @@ import {
 import {
   prepareEffects,
   runWithHookHost,
-} from "../packages/core/src/internal.js";
+} from "../packages/core/src/runtime-controller.js";
 
 class TestHost {
   constructor() {
