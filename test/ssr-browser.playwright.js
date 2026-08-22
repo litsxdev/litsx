@@ -506,6 +506,101 @@ window.__litsxHostAttributesHydrated = true;
   }
 });
 
+test("registers React lazy elements only after their default export resolves", async ({
+  page,
+}) => {
+  const tempRoot = path.join(repoRoot, "test-results");
+  await fs.mkdir(tempRoot, { recursive: true });
+  const tempDir = await fs.mkdtemp(path.join(tempRoot, "litsx-react-lazy-"));
+  const srcDir = path.join(tempDir, "src");
+  await fs.mkdir(srcDir, { recursive: true });
+
+  await fs.writeFile(path.join(srcDir, "results-panel.tsx"), `
+export default function ResultsPanel() {
+  return <p data-ready="true">Lazy results ready</p>;
+}
+`);
+  await fs.writeFile(path.join(srcDir, "lazy-root.tsx"), `
+import { lazy } from "react";
+
+const ResultsPanel = lazy(() => import("./results-panel.tsx"));
+
+export function LazyRoot() {
+  return <main><ResultsPanel /></main>;
+}
+`);
+  await fs.writeFile(path.join(srcDir, "main.js"), `
+const root = await import("./lazy-root.tsx");
+const { registerHydrationModules } = await import("@litsx/ssr/hydration");
+await registerHydrationModules([root]);
+`);
+
+  const server = await createSsrDevServer({
+    root: tempDir,
+    vite: isolatedViteOptions(tempDir),
+    litsx: { reactCompat: true },
+    clientEntry: "./src/main.js",
+    bootstrap: {
+      content: `
+const { hydratePage } = await import("@litsx/ssr/hydration");
+await hydratePage({ register: () => import("/src/main.js") });
+window.__litsxLazyHydrated = true;
+`,
+    },
+    logLevel: "silent",
+    host: "127.0.0.1",
+    strictPort: false,
+    elements(loader) {
+      return {
+        "lazy-root": async () => (await loader("./src/lazy-root.tsx")).LazyRoot,
+      };
+    },
+    render({ html: serverHtml }) {
+      return serverHtml`<lazy-root></lazy-root>`;
+    },
+  });
+  await server.listen();
+
+  try {
+    const consoleErrors = [];
+    const pageErrors = [];
+    page.on("console", (message) => {
+      if (message.type() === "error") consoleErrors.push(message.text());
+    });
+    page.on("pageerror", (error) => pageErrors.push(error.stack || error.message));
+
+    await page.goto(server.resolvedUrls.local[0]);
+    await page.waitForFunction(() => window.__litsxLazyHydrated === true);
+    await page.waitForFunction(() => {
+      const root = document.querySelector("lazy-root");
+      const renderRoot = root?.renderRoot ?? root?.shadowRoot ?? root;
+      const panel = renderRoot?.querySelector("results-panel");
+      const panelRoot = panel?.renderRoot ?? panel?.shadowRoot ?? panel;
+      return panelRoot?.querySelector('[data-ready="true"]')?.textContent === "Lazy results ready";
+    });
+
+    const result = await page.evaluate(() => {
+      const root = document.querySelector("lazy-root");
+      const renderRoot = root.renderRoot ?? root.shadowRoot ?? root;
+      const panel = renderRoot.querySelector("results-panel");
+      return {
+        loaderInStaticElements: Object.values(root.constructor.elements ?? {}).some(
+          (value) => value?.name === "ResultsPanel",
+        ),
+        panelConstructor: panel.constructor.name,
+      };
+    });
+
+    expect(result.loaderInStaticElements).toBe(false);
+    expect(result.panelConstructor).not.toBe("HTMLElement");
+    expect(consoleErrors).toEqual([]);
+    expect(pageErrors).toEqual([]);
+  } finally {
+    await server.close();
+    await fs.rm(tempDir, { recursive: true, force: true });
+  }
+});
+
 test("applies shared Wind4 styles after SSR hydration in shadow and light DOM", async ({
   page,
 }) => {

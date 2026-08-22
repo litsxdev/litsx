@@ -64,6 +64,7 @@ export {
 
 export {
   ensureLazyElement,
+  lazy,
   useAfterUpdate,
   useOnCommit,
   useOnConnect,

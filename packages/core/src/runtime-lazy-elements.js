@@ -1,5 +1,16 @@
 const lazyElementCache = new WeakMap();
 
+/**
+ * Authored marker consumed by the LitSX compiler. The runtime identity keeps
+ * direct evaluation predictable, while generated code owns host registration.
+ */
+export function lazy(loader) {
+  if (typeof loader !== "function") {
+    throw new TypeError("lazy requires a loader function.");
+  }
+  return loader;
+}
+
 function isUsableRegistry(registry) {
   return Boolean(
     registry &&
@@ -74,6 +85,14 @@ function defineScopedElement(registry, tag, ctor) {
 function resolveLazyLoaderResult(registry, tag, result) {
   if (result == null) {
     return null;
+  }
+
+  if (
+    typeof result === "object" &&
+    result !== null &&
+    Object.prototype.hasOwnProperty.call(result, "default")
+  ) {
+    result = result.default;
   }
 
   if (!isCustomElementConstructor(result)) {

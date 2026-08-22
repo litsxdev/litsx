@@ -4,20 +4,25 @@ import { isLitElementSuperClass } from "@litsx/babel-plugin-shared-hooks";
 import {
   ensureStaticIr,
   setStaticIrBabelTypes,
-} from "@litsx/babel-preset-litsx/internal/transform-litsx-static-ir";
+} from "./transform-litsx-static-ir.js";
 import {
   cloneLazyMarked,
   isLazyCallee,
-  setReactLazyAnalysisBabelTypes,
+  setLitsxLazyAnalysisBabelTypes,
   trackLazyUsage,
-} from "./react-lazy-analysis.js";
+} from "./transform-litsx-lazy-analysis.js";
 
 const RUNTIME_MODULE = "@litsx/core";
 const INFRASTRUCTURE_MODULE = "@litsx/core/elements";
 
-export default declare((api) => {
+export default declare((api, options = {}) => {
   api.assertVersion("^8.0.0");
   const t = api.types;
+  const lazySources = new Set(
+    Array.isArray(options.sources) && options.sources.length > 0
+      ? options.sources
+      : ["@litsx/core"],
+  );
   setStaticIrBabelTypes(t);
 
   function isScopedElementsWrapped(superClass) {
@@ -60,6 +65,38 @@ export default declare((api) => {
 
   function markNeedsElementsRegistry(classNode) {
     getOrCreateStaticIr(classNode).elements.needsRegistry = true;
+  }
+
+  function excludeLazyElementCandidate(classNode, requirement) {
+    if (!classNode || !requirement) return;
+
+    const { expression, tag } = requirement;
+    const candidateName = t.isIdentifier(expression)
+      ? expression.name
+      : t.isMemberExpression(expression) && !expression.computed && t.isIdentifier(expression.property)
+        ? expression.property.name
+        : null;
+    const matches = (name, candidateTag = null) => (
+      (candidateName != null && name === candidateName) ||
+      candidateTag === tag ||
+      (typeof name === "string" && name.replace(/([a-z])([A-Z])/g, "$1-$2").toLowerCase() === tag)
+    );
+    const staticIr = getOrCreateStaticIr(classNode);
+    staticIr.elements.localCandidates = staticIr.elements.localCandidates.filter(
+      (name) => !matches(name),
+    );
+    staticIr.elements.importedCandidates = staticIr.elements.importedCandidates.filter(
+      (candidate) => !matches(candidate?.originalName, candidate?.tagName),
+    );
+  }
+
+  function trackAndExcludeLazyUsage(path, state) {
+    const requirement = trackLazyUsage(path, state, ensureRequirementBucket);
+    if (!requirement) return;
+    const classPath = requirement.renderPath.findParent(
+      (entry) => entry.isClassDeclaration() || entry.isClassExpression(),
+    );
+    excludeLazyElementCandidate(classPath?.node, requirement);
   }
 
   function buildRuntimeImport(programPath, state) {
@@ -364,14 +401,14 @@ export default declare((api) => {
   }
 
   return {
-    name: "transform-react-lazy",
+    name: "transform-litsx-lazy",
     inherits: jsxSyntaxPlugin.default || jsxSyntaxPlugin,
     visitor: {
       Program: {
         enter(_, state) {
-          setReactLazyAnalysisBabelTypes(t);
+          setLitsxLazyAnalysisBabelTypes(t);
           state.lazyLocalNames = new Set();
-          state.reactNamespaceNames = new Set();
+          state.lazyNamespaceNames = new Set();
           state.runtimeNeeded = false;
         },
         exit(path, state) {
@@ -379,7 +416,7 @@ export default declare((api) => {
         },
       },
       ImportDeclaration(path, state) {
-        if (path.node.source.value !== "react") return;
+        if (!lazySources.has(path.node.source.value)) return;
 
         const remaining = [];
         let mutated = false;
@@ -399,7 +436,7 @@ export default declare((api) => {
             t.isImportNamespaceSpecifier(specifier) ||
             t.isImportDefaultSpecifier(specifier)
           ) {
-            state.reactNamespaceNames.add(specifier.local.name);
+            state.lazyNamespaceNames.add(specifier.local.name);
           }
 
           remaining.push(specifier);
@@ -441,7 +478,7 @@ export default declare((api) => {
         if (!classPath) return;
         if (!isLitElementSuperClass(classPath.node.superClass, t)) return;
 
-        trackLazyUsage(path, state, ensureRequirementBucket);
+        trackAndExcludeLazyUsage(path, state);
       },
       ClassMethod: {
         exit(path, state) {
@@ -457,7 +494,7 @@ export default declare((api) => {
           ) {
             path.traverse({
               JSXElement(childPath) {
-                trackLazyUsage(childPath, state, ensureRequirementBucket);
+                trackAndExcludeLazyUsage(childPath, state);
               },
             });
           }

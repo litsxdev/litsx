@@ -58,6 +58,8 @@ describe("react compat internal lazy", () => {
       /ensureLazyElement\(this,\s*"fancy-button",\s*FancyButton\);/
     );
     assert.match(code, /return <fancy-button label=['"]Save['"] \/>;/);
+    assert.match(code, /static elements = \{\s*\.\.\.\(super\.elements \?\? \{\}\)\s*\};/);
+    assert.doesNotMatch(code, /"fancy-button": FancyButton/);
     assert.doesNotMatch(code, /const FancyButton = lazy/);
   });
 

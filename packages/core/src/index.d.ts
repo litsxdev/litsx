@@ -822,3 +822,12 @@ export declare function ensureLazyElement(
   tagName: string,
   value: unknown
 ): void;
+/**
+ * Declare a lazily imported LitSX component. The compiler lowers usages to a
+ * scoped ensureLazyElement registration and preserves the component's props.
+ */
+export declare function lazy<
+  TComponent extends (...args: any[]) => unknown,
+>(
+  loader: () => Promise<TComponent | { default: TComponent }>,
+): TComponent;

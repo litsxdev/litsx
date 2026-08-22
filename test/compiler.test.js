@@ -348,6 +348,28 @@ describe("@litsx/compiler", () => {
     assert.doesNotMatch(result.code, /\.class=/);
   }, 20000);
 
+  it("lowers native lazy components without placing loaders in static elements", () => {
+    const source = [
+      'import { lazy } from "@litsx/core";',
+      'const ResultsPanel = lazy(() => import("./results-panel.js"));',
+      'export function SearchCard() {',
+      '  return <section><ResultsPanel /></section>;',
+      '}',
+    ].join("\n");
+
+    const result = transformLitsxSync(source, {
+      filename: "/virtual/native-lazy.tsx",
+      sourceMaps: false,
+    });
+
+    assert.match(result.code, /const ResultsPanel = \(\) => import\("\.\/results-panel\.js"\)/);
+    assert.match(result.code, /ensureLazyElement\(this, "results-panel", ResultsPanel\)/);
+    assert.match(result.code, /static elements = \{\s*\.\.\.\(super\.elements \?\? \{\}\)\s*\}/);
+    assert.match(result.code, /<results-panel><\/results-panel>/);
+    assert.doesNotMatch(result.code, /"results-panel": ResultsPanel/);
+    assert.doesNotMatch(result.code, /\blazy\(/);
+  }, 20000);
+
   it("materializes bare props references instead of reading a synthetic this.props", () => {
     const source = [
       "export function VdsOverlayBar(props) {",

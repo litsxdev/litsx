@@ -1,4 +1,4 @@
-import { defineHook, SuspenseBoundary, SuspenseList, useHost } from "@litsx/core";
+import { defineHook, lazy, SuspenseBoundary, SuspenseList, useHost } from "@litsx/core";
 
 interface I18nCapability {
   i18n: {
@@ -33,6 +33,8 @@ type ButtonProps = {
 function ActionButton({ label, disabled }: ButtonProps) {
   return <button disabled={disabled}>{label}</button>;
 }
+
+const LazyActionButton = lazy(async () => ({ default: ActionButton }));
 
 function TranslatedButton() {
   const installation: void = useI18nCapability();
@@ -73,6 +75,7 @@ export function Screen() {
         on:change={(event?: CustomEvent) => void event}
       />
       <TranslatedButton />
+      <LazyActionButton label="Lazy action" disabled />
       <button
         disabled
         ref={(node: HTMLButtonElement | undefined) => void node}

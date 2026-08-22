@@ -382,6 +382,7 @@ describe("@litsx/babel-preset-litsx", () => {
       domRefs: false,
       scopedElements: false,
       boundaries: false,
+      lazy: false,
     });
 
     assert.deepStrictEqual(detectLitsxSourceFeatures(featureSource, {}), {
@@ -389,6 +390,7 @@ describe("@litsx/babel-preset-litsx", () => {
       domRefs: true,
       scopedElements: true,
       boundaries: false,
+      lazy: false,
     });
 
     assert.strictEqual(
@@ -436,6 +438,14 @@ describe("@litsx/babel-preset-litsx", () => {
         'import { ErrorBoundary } from "@litsx/core"; <ErrorBoundary fallback={null} />;',
         {},
       ).boundaries,
+      true,
+    );
+
+    assert.strictEqual(
+      detectLitsxSourceFeatures(
+        'import { lazy as defer } from "@litsx/core"; const Panel = defer(() => import("./panel.js"));',
+        {},
+      ).lazy,
       true,
     );
 
@@ -509,6 +519,7 @@ describe("@litsx/babel-preset-litsx", () => {
         domRefs: false,
         scopedElements: true,
         boundaries: false,
+        lazy: false,
       },
     );
 

@@ -57,6 +57,16 @@
       "require": "./dist/internal/transform-litsx-static-ir.cjs",
       "default": "./src/internal/transform-litsx-static-ir.js"
     },
+    "./internal/transform-litsx-lazy": {
+      "import": "./src/internal/transform-litsx-lazy.js",
+      "require": "./dist/internal/transform-litsx-lazy.cjs",
+      "default": "./src/internal/transform-litsx-lazy.js"
+    },
+    "./internal/transform-litsx-lazy-analysis": {
+      "import": "./src/internal/transform-litsx-lazy-analysis.js",
+      "require": "./dist/internal/transform-litsx-lazy-analysis.cjs",
+      "default": "./src/internal/transform-litsx-lazy-analysis.js"
+    },
     "./internal/transform-typescript-namespace-collisions": {
       "import": "./src/internal/transform-typescript-namespace-collisions.js",
       "require": "./dist/internal/transform-typescript-namespace-collisions.cjs",

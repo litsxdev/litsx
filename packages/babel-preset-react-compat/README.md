@@ -155,6 +155,12 @@ as `@litsx/unocss` must therefore publish React-compatible utilities through
 their global stylesheet. The setting is harmless with `domMode: "shadow"`,
 because shadow components still receive their required local styles.
 
+React `lazy(() => import(...))` is lowered to a loader plus
+`ensureLazyElement(host, tag, loader)`. The loader is deliberately excluded
+from generated `static elements`; that map contains only eager, resolved custom
+element constructors. The host still receives an empty scoped-elements map when
+the lazy dependency is its only registry requirement.
+
 Use shadow DOM when the migrated tree intentionally wants style and DOM encapsulation:
 
 ```json

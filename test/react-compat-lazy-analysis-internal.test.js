@@ -7,9 +7,9 @@ import {
   hasLazyOrigin,
   isLazyCallee,
   resolveValueNode,
-  setReactLazyAnalysisBabelTypes,
+  setLitsxLazyAnalysisBabelTypes,
   trackLazyUsage,
-} from "../packages/babel-preset-react-compat/src/internal/react-lazy-analysis.js";
+} from "../packages/babel-preset-litsx/src/internal/transform-litsx-lazy-analysis.js";
 
 const traverse = babelTraverse.default || babelTraverse;
 
@@ -42,7 +42,7 @@ function getPaths(source) {
 
 describe("react compat lazy analysis internals", () => {
   beforeAll(() => {
-    setReactLazyAnalysisBabelTypes(t);
+setLitsxLazyAnalysisBabelTypes(t);
   });
 
   it("detects identifier and namespace lazy callees", () => {

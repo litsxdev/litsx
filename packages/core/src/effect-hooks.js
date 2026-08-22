@@ -1,7 +1,7 @@
 import { getController } from "./runtime-controller.js";
-import { ensureLazyElement } from "./runtime-lazy-elements.js";
+import { ensureLazyElement, lazy } from "./runtime-lazy-elements.js";
 
-export { ensureLazyElement };
+export { ensureLazyElement, lazy };
 
 /**
  * Run side effects after the host has committed its update.

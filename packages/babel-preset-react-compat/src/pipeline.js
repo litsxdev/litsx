@@ -14,7 +14,7 @@ import reactDomAttributes from "./internal/react-dom-attributes.js";
 import reactHooks from "./internal/react-hooks.js";
 import reactWrappers, { getReactWrapperMetadata } from "./internal/react-wrappers.js";
 import { reactUseState, reactUseRef } from "./internal/react-shared-hooks.js";
-import reactLazy from "./internal/react-lazy.js";
+import transformLitsxLazy from "@litsx/babel-preset-litsx/internal/transform-litsx-lazy";
 import reactSuspense from "./internal/react-suspense.js";
 import reactErrorBoundary from "./internal/react-error-boundary.js";
 import reactEvents from "./internal/react-events.js";
@@ -99,7 +99,10 @@ export function createReactCompatPresetPlugins(options = {}) {
     }],
     [reactUseState, { allowReactAttributes: true, ...(options.reactUseState || {}) }],
     [reactUseRef, options.reactUseRef || {}],
-    [reactLazy, options.reactLazy || {}],
+    [transformLitsxLazy, {
+      sources: ["react"],
+      ...(options.reactLazy || {}),
+    }],
     [reactErrorBoundary, options.reactErrorBoundary || {}],
     [reactSuspense, options.reactSuspense || {}],
     reactUnsupportedHooks,

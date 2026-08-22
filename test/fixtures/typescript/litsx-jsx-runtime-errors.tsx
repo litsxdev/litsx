@@ -1,4 +1,4 @@
-import { ErrorBoundary, SuspenseBoundary, SuspenseList } from "@litsx/core";
+import { ErrorBoundary, lazy, SuspenseBoundary, SuspenseList } from "@litsx/core";
 
 type ButtonProps = {
   label: string;
@@ -7,6 +7,8 @@ type ButtonProps = {
 function ActionButton({ label }: ButtonProps) {
   return <button>{label}</button>;
 }
+
+const LazyActionButton = lazy(async () => ({ default: ActionButton }));
 
 export function BrokenScreen() {
   return (
@@ -25,6 +27,9 @@ export function BrokenScreen() {
 
       {/* @ts-expect-error ActionButton requires a label */}
       <ActionButton />
+
+      {/* @ts-expect-error lazy components preserve their wrapped props */}
+      <LazyActionButton />
 
       {/* @ts-expect-error unknown names are neither props nor standard host attributes */}
       <ActionButton label="Unknown" mysteryAttribute="value" />

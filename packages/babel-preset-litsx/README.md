@@ -62,6 +62,10 @@ automatic generated styles for light-DOM components. Authored
   the generated custom-element host without being repeated in every props type.
   This includes global HTML names, `class`, `style`, `slot`, `part`, `aria-*`,
   and `data-*`; declared component properties continue to take precedence.
+- Native `lazy(() => import(...))` from `@litsx/core` lowers through the same
+  scoped registration transform used by React compatibility. Lazy loaders are
+  excluded from `static elements`; generated `ensureLazyElement(...)` code
+  defines the resolved default export and requests the follow-up render.
 - Native LitSX uses `on:event` as its unambiguous JSX listener channel on both
   HTML and custom elements. Names such as `onPrimaryAction` remain ordinary
   component callback properties. Exact native handler properties such as

@@ -345,6 +345,26 @@ A native JSX `key` prop has no React reconciliation meaning. The optional
 `react-compat` stage recognizes React-authored `key` and lowers supported cases
 to `repeat()` or `keyed()`.
 
+## Lazy custom elements
+
+Native LitSX uses the same lean component syntax for lazy imports:
+
+```tsx
+import { lazy } from "@litsx/core";
+
+const ResultsPanel = lazy(() => import("./results-panel.js"));
+
+export function SearchCard() {
+  return <ResultsPanel />;
+}
+```
+
+The compiler lowers `lazy()` to a loader, emits the lowercase host tag, enables
+the component's scoped registry, and generates `ensureLazyElement` internally.
+`static elements` only receives resolved eager constructors; the lazy loader is
+never exposed there. Once the dynamic import resolves, its default export is
+defined in the host registry and an update is requested.
+
 ## React compatibility boundary
 
 `@litsx/babel-preset-react-compat` is an optional source-migration layer. It owns

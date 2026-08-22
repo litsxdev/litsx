@@ -9,6 +9,7 @@ import {
   ErrorBoundary,
   isLitsxComponentClass,
   isLitsxHook,
+  lazy,
   SuspenseBoundary,
   SuspenseList,
   useMemoValue as runtimeUseMemoValue,
@@ -2063,6 +2064,12 @@ describe("litsx effects controller", () => {
     assert.strictEqual(host.updates, 0);
   });
 
+  it("keeps lazy as a compile-time authoring marker with a safe runtime identity", () => {
+    const loader = () => Promise.resolve({ default: class ResultsPanel {} });
+    assert.strictEqual(lazy(loader), loader);
+    assert.throws(() => lazy(null), /loader function/);
+  });
+
   it("loads scoped elements lazily and requests an update once resolved", async () => {
     const host = new TestHost();
     class FancyButtonElement {}
@@ -2086,6 +2093,28 @@ describe("litsx effects controller", () => {
     assert.strictEqual(resolved, FancyButtonElement);
     assert.strictEqual(host.registry.get("fancy-button"), FancyButtonElement);
     assert.strictEqual(loads, 1);
+    assert.strictEqual(host.updates, 1);
+  });
+
+  it("unwraps the default constructor from dynamic import module namespaces", async () => {
+    const host = new TestHost();
+    class ResultsPanelElement {}
+    const loader = () => Promise.resolve({ default: ResultsPanelElement });
+
+    assert.strictEqual(
+      ensureLazyElement(host, "results-panel", loader),
+      null,
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    assert.strictEqual(
+      ensureLazyElement(host, "results-panel", loader),
+      ResultsPanelElement,
+    );
+    assert.strictEqual(
+      host.registry.get("results-panel"),
+      ResultsPanelElement,
+    );
     assert.strictEqual(host.updates, 1);
   });
 

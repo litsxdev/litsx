@@ -1,6 +1,6 @@
 let t;
 
-export function setReactLazyAnalysisBabelTypes(nextTypes) {
+export function setLitsxLazyAnalysisBabelTypes(nextTypes) {
   t = nextTypes;
 }
 
@@ -39,7 +39,7 @@ export function isLazyCallee(path, state) {
     const property = callee.get("property");
     return (
       object.isIdentifier() &&
-      state.reactNamespaceNames.has(object.node.name) &&
+      (state.lazyNamespaceNames ?? state.reactNamespaceNames)?.has(object.node.name) &&
       property.isIdentifier({ name: "lazy" })
     );
   }
@@ -427,4 +427,5 @@ export function trackLazyUsage(path, state, ensureRequirementBucket) {
   requirements.set(requirementKey, { tag, expression });
 
   reference.rewrite();
+  return { expression, tag, renderPath };
 }

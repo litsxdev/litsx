@@ -10,6 +10,7 @@ import transformLitsxStaticAssignments from "./internal/transform-litsx-static-a
 import transformLitsxBoundaries from "./internal/transform-litsx-boundaries.js";
 import transformLitsxServerComponents from "./internal/transform-litsx-server-components.js";
 import transformLitsxSsrRoots from "./internal/transform-litsx-ssr-roots.js";
+import transformLitsxLazy from "./internal/transform-litsx-lazy.js";
 
 const NATIVE_TRANSFORM_OPTION_KEYS = [
   "ssr",
@@ -29,6 +30,7 @@ const REF_FEATURE_PATTERN = /\buseRef\b|\bref\s*=/;
 const SCOPED_ELEMENTS_PATTERN = /<\s*(?:[A-Z][\w.]*(?=[\s/>])|[a-z][\w]*-[\w-]*(?=[\s/>]))/;
 const LIGHT_DOM_PATTERN = /\b[A-Z][\w$]*\.lightDom\s*=\s*true\b/;
 const BOUNDARY_PATTERN = /\b(?:ErrorBoundary|SuspenseBoundary)\b/;
+const LAZY_PATTERN = /\blazy\b/;
 
 function escapeRegExp(value) {
   return String(value).replace(/[\\^$.*+?()[\]{}|]/g, "\\$&");
@@ -243,6 +245,7 @@ export function detectLitsxSourceFeatures(source, options = {}) {
       LIGHT_DOM_PATTERN.test(text) ||
       SCOPED_ELEMENTS_PATTERN.test(text),
     boundaries: BOUNDARY_PATTERN.test(text),
+    lazy: LAZY_PATTERN.test(text),
   };
 }
 
@@ -294,6 +297,16 @@ export function createLitsxPresetPlugins(options = {}, sourceFeatures = null) {
 
   if (shouldIncludeFeaturePlugin(sourceFeatures, "domRefs")) {
     plugins.push([transformLitsxDomRefs, options.transformLitsxDomRefs || {}]);
+  }
+
+  if (shouldIncludeFeaturePlugin(sourceFeatures, "lazy")) {
+    plugins.push([
+      transformLitsxLazy,
+      {
+        sources: ["@litsx/core"],
+        ...(options.transformLitsxLazy || {}),
+      },
+    ]);
   }
 
   if (shouldIncludeFeaturePlugin(sourceFeatures, "scopedElements")) {

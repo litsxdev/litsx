@@ -46,7 +46,9 @@ For authored syntax and binding rules, see the repository's
   - `useExternalStore`, `useStyle`
 - Async and error primitives:
   - `ErrorBoundary`, `SuspenseBoundary`, `SuspenseList`
-  - `ensureLazyElement(...)` for host-registry-aware lazy custom element registration
+  - `lazy(() => import(...))` for authored lazy components. Compilation emits
+    the lower-level `ensureLazyElement(...)` registration against the host's
+    scoped registry; application components do not call that ABI directly.
 - SSR request execution context:
   - `createExecutionContextKey(...)`
   - `getCurrentExecutionContext()`
