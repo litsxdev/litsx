@@ -26,12 +26,12 @@ describe("standard JSX authoring", () => {
         payload: unknown;
       };
 
-      function Child({ active, label, count, items, onSelect, payload }: ChildProps) {
+      function TestChild({ active, label, count, items, onSelect, payload }: ChildProps) {
         return <button>{label}:{count}:{items.length}:{String(active)}:{String(payload)}</button>;
       }
 
-      function Parent(props: ChildProps) {
-        return <Child
+      function TestParent(props: ChildProps) {
+        return <TestChild
           active={props.active}
           label={props.label}
           count={props.count}
@@ -46,17 +46,17 @@ describe("standard JSX authoring", () => {
       filename: "/tmp/litsx-standard-bindings.tsx",
     });
 
-    assert.match(code, /<child[^>]*\.active=\$\{this\.active\}/);
-    assert.match(code, /<child[^>]*label="\$\{this\.label\}"/);
-    assert.match(code, /<child[^>]*count="\$\{this\.count\}"/);
-    assert.match(code, /<child[^>]*\.items=\$\{this\.items\}/);
-    assert.match(code, /<child[^>]*\.onSelect=\$\{this\.onSelect\}/);
-    assert.match(code, /<child[^>]*\.payload=\$\{this\.payload\}/);
+    assert.match(code, /<test-child[^>]*\.active=\$\{this\.active\}/);
+    assert.match(code, /<test-child[^>]*label="\$\{this\.label\}"/);
+    assert.match(code, /<test-child[^>]*count="\$\{this\.count\}"/);
+    assert.match(code, /<test-child[^>]*\.items=\$\{this\.items\}/);
+    assert.match(code, /<test-child[^>]*\.onSelect=\$\{this\.onSelect\}/);
+    assert.match(code, /<test-child[^>]*\.payload=\$\{this\.payload\}/);
   });
 
   it("uses explicit native DOM listeners with live values and booleans", () => {
     const source = `
-      function Form({ value, disabled, onChange, onClick, onAnimationEnd }) {
+      function TestForm({ value, disabled, onChange, onClick, onAnimationEnd }) {
         return <section>
           <label className="field" htmlFor="query">Query</label>
           <input id="query" value={value} disabled={disabled} on:input={onChange} />
@@ -89,15 +89,15 @@ describe("standard JSX authoring", () => {
         config: { mode: string };
         onCommit: (value: string) => void;
       }
-      export function Child(props: ChildProps) {
+      export function TestChild(props: ChildProps) {
         return <div>{props.name}</div>;
       }
     `);
 
     const source = `
-      import { Child } from "./child.tsx";
-      export function Parent({ enabled, name, config, onCommit }) {
-        return <Child
+      import { TestChild } from "./child.tsx";
+      export function TestParent({ enabled, name, config, onCommit }) {
+        return <TestChild
           enabled={enabled}
           name={name}
           config={config}
@@ -109,10 +109,10 @@ describe("standard JSX authoring", () => {
 
     const { code } = transformLitsxSync(source, { filename: parentFile });
 
-    assert.match(code, /<child[^>]*\.enabled=\$\{this\.enabled\}/);
-    assert.match(code, /<child[^>]*name="\$\{this\.name\}"/);
-    assert.match(code, /<child[^>]*\.config=\$\{this\.config\}/);
-    assert.match(code, /<child[^>]*\.onCommit=\$\{this\.onCommit\}/);
+    assert.match(code, /<test-child[^>]*\.enabled=\$\{this\.enabled\}/);
+    assert.match(code, /<test-child[^>]*name="\$\{this\.name\}"/);
+    assert.match(code, /<test-child[^>]*\.config=\$\{this\.config\}/);
+    assert.match(code, /<test-child[^>]*\.onCommit=\$\{this\.onCommit\}/);
   });
 
   it("uses published intrinsic custom-element props without runtime metadata", () => {
@@ -132,7 +132,7 @@ describe("standard JSX authoring", () => {
         }
       }
 
-      function Screen({ active, label, payload, onCommit }: ThirdPartyWidgetProps) {
+      function TestScreen({ active, label, payload, onCommit }: ThirdPartyWidgetProps) {
         return <third-party-widget
           active={active}
           label={label}
@@ -158,12 +158,12 @@ describe("standard JSX authoring", () => {
       type ActionProps = {
         onCallback: (value: string) => void;
       };
-      function Action(props: ActionProps) {
+      function TestAction(props: ActionProps) {
         return <button>{String(props.onCallback)}</button>;
       }
-      function Screen({ onCallback, onPrimaryAction, onURLChange, onAnimationEnd }) {
+      function TestScreen({ onCallback, onPrimaryAction, onURLChange, onAnimationEnd }) {
         return <section>
-          <Action
+          <TestAction
             onCallback={onCallback}
             onPrimaryAction={onPrimaryAction}
             onURLChange={onURLChange}
@@ -190,13 +190,13 @@ describe("standard JSX authoring", () => {
       filename: "/tmp/litsx-standard-custom-events.tsx",
     });
 
-    assert.match(code, /<action[^>]*\.onCallback=\$\{this\.onCallback\}/);
-    assert.match(code, /<action[^>]*\.onPrimaryAction=\$\{this\.onPrimaryAction\}/);
-    assert.match(code, /<action[^>]*\.onURLChange=\$\{this\.onURLChange\}/);
-    assert.match(code, /<action[^>]*\.onAnimationEnd=\$\{this\.onAnimationEnd\}/);
+    assert.match(code, /<test-action[^>]*\.onCallback=\$\{this\.onCallback\}/);
+    assert.match(code, /<test-action[^>]*\.onPrimaryAction=\$\{this\.onPrimaryAction\}/);
+    assert.match(code, /<test-action[^>]*\.onURLChange=\$\{this\.onURLChange\}/);
+    assert.match(code, /<test-action[^>]*\.onAnimationEnd=\$\{this\.onAnimationEnd\}/);
     assert.match(code, /@primary-action=\$\{this\.onPrimaryAction\}/);
     assert.match(code, /@url-change=\$\{\{[\s\S]*handleEvent: this\.onURLChange,[\s\S]*capture: true/);
-    assert.match(code, /<action[^>]*@animationend=\$\{this\.onAnimationEnd\}/);
+    assert.match(code, /<test-action[^>]*@animationend=\$\{this\.onAnimationEnd\}/);
     assert.match(code, /<third-party-action[^>]*\.onclick=\$\{this\.onCallback\}/);
     assert.match(code, /<third-party-action[^>]*@primary-action=\$\{this\.onPrimaryAction\}/);
     assert.match(code, /<third-party-action[^>]*@url-change=\$\{this\.onURLChange\}/);
@@ -206,7 +206,7 @@ describe("standard JSX authoring", () => {
 
     assert.throws(
       () => transformLitsxSync(
-        "function Invalid({ handler }) { return <div on:menuOpen={handler} />; }",
+        "function TestInvalid({ handler }) { return <div on:menuOpen={handler} />; }",
         { filename: "/tmp/litsx-invalid-event-name.jsx" },
       ),
       /must use lowercase kebab-case/,
@@ -227,7 +227,7 @@ describe("standard JSX authoring", () => {
         }
       }
 
-      function Screen({ active, label, payload }: {
+      function TestScreen({ active, label, payload }: {
         active: boolean;
         label: string;
         payload: { id: string };
@@ -267,7 +267,7 @@ describe("standard JSX authoring", () => {
 
     const source = `
       import * as Controls from "./controls.tsx";
-      export function Screen({ enabled, tone, model }) {
+      export function TestScreen({ enabled, tone, model }) {
         return <>
           <Controls.Toggle
             enabled={enabled}
@@ -304,7 +304,7 @@ describe("standard JSX authoring", () => {
         spellCheck: boolean;
         readOnly: boolean;
       };
-      function Surface({ style, onPointerDown, editable, draggable, hidden, spellCheck, readOnly }: SurfaceProps) {
+      function TestSurface({ style, onPointerDown, editable, draggable, hidden, spellCheck, readOnly }: SurfaceProps) {
         return <section>
           <div
             style={style}
@@ -341,27 +341,27 @@ describe("standard JSX authoring", () => {
     const source = `
       import { css } from "@litsx/core";
 
-      function Card({ title, payload }) {
+      function TestCard({ title, payload }) {
         return <article>{title}:{String(payload)}</article>;
       }
-      Card.properties = {
+      TestCard.properties = {
         title: { reflect: true },
         payload: { type: Object, attribute: false },
       };
-      Card.styles = css\`:host { display: block; }\`;
-      Card.shadowRootOptions = { mode: "open", delegatesFocus: true };
+      TestCard.styles = css\`:host { display: block; }\`;
+      TestCard.shadowRootOptions = { mode: "open", delegatesFocus: true };
 
-      function Plain({ label }) {
+      function TestPlain({ label }) {
         return <p>{label}</p>;
       }
-      Plain.lightDom = true;
+      TestPlain.lightDom = true;
     `;
 
     const { code } = transformLitsxSync(source, {
       filename: "/tmp/litsx-standard-statics.jsx",
     });
 
-    assert.match(code, /class Card extends LitElement/);
+    assert.match(code, /class TestCard extends LitElement/);
     assert.match(code, /static properties = \{/);
     assert.match(code, /title: \{[\s\S]*type: String[\s\S]*reflect: true/);
     assert.match(code, /payload: \{[\s\S]*type: Object,[\s\S]*attribute: false/);
@@ -370,9 +370,9 @@ describe("standard JSX authoring", () => {
     assert.match(code, /import \{[^}]*css[^}]*\} from "@litsx\/core"/);
     assert.doesNotMatch(code, /import \{[^}]*css[^}]*\} from "lit"/);
     assert.match(code, /static shadowRootOptions = \{/);
-    assert.match(code, /class Plain extends LightDomMixin\(LitElement\)/);
-    assert.doesNotMatch(code, /Card\.properties\s*=/);
-    assert.doesNotMatch(code, /Plain\.lightDom\s*=/);
+    assert.match(code, /class TestPlain extends LightDomMixin\(LitElement\)/);
+    assert.doesNotMatch(code, /TestCard\.properties\s*=/);
+    assert.doesNotMatch(code, /TestPlain\.lightDom\s*=/);
   });
 
   it("preserves Lit CSSResultGroup assignments and rejects plain style strings", () => {
@@ -380,10 +380,10 @@ describe("standard JSX authoring", () => {
       import { css } from "lit";
       const sharedStyles = css\`:host { box-sizing: border-box; }\`;
 
-      function Card() {
+      function TestCard() {
         return <article />;
       }
-      Card.styles = [sharedStyles, css\`article { display: block; }\`];
+      TestCard.styles = [sharedStyles, css\`article { display: block; }\`];
     `;
 
     const { code } = transformLitsxSync(source, {
@@ -412,13 +412,13 @@ describe("standard JSX authoring", () => {
       const useStyled = defineHook({ mixin: StyledMixin, use: () => null });
       const OwnChild = class extends HTMLElement {};
 
-      function Composed() { useStyled(); return <div />; }
-      Composed.properties = { label: { type: String } };
-      Composed.styles = css\`:host { display: block; }\`;
-      Composed.elements = { "own-child": OwnChild };
+      function TestComposed() { useStyled(); return <div />; }
+      TestComposed.properties = { label: { type: String } };
+      TestComposed.styles = css\`:host { display: block; }\`;
+      TestComposed.elements = { "own-child": OwnChild };
 
-      function Isolated() { useStyled(); return <div />; }
-      Isolated.styles = replaceStyles(css\`:host { all: initial; }\`);
+      function TestIsolated() { useStyled(); return <div />; }
+      TestIsolated.styles = replaceStyles(css\`:host { all: initial; }\`);
     `;
 
     const { code } = transformLitsxSync(source, {
@@ -426,11 +426,11 @@ describe("standard JSX authoring", () => {
       jsxTemplate: false,
     });
 
-    assert.match(code, /class Composed extends applyStructuralHooks[\s\S]*?static styles = \[super\.styles \?\? \[\], css`:host \{ display: block; \}`\]/);
-    assert.match(code, /class Composed extends applyStructuralHooks[\s\S]*?static properties = \{[\s\S]*?label: \{[\s\S]*?type: String/);
+    assert.match(code, /class TestComposed extends applyStructuralHooks[\s\S]*?static styles = \[super\.styles \?\? \[\], css`:host \{ display: block; \}`\]/);
+    assert.match(code, /class TestComposed extends applyStructuralHooks[\s\S]*?static properties = \{[\s\S]*?label: \{[\s\S]*?type: String/);
     assert.doesNotMatch(code, /super\.properties/);
     assert.match(code, /static elements = \{\s*\.\.\.\(super\.elements \?\? \{\}\),\s*"own-child": OwnChild/);
-    assert.match(code, /class Isolated extends applyStructuralHooks[\s\S]*?static styles = css`:host \{ all: initial; \}`/);
+    assert.match(code, /class TestIsolated extends applyStructuralHooks[\s\S]*?static styles = css`:host \{ all: initial; \}`/);
     assert.doesNotMatch(code, /replaceStyles\(/);
     assert.doesNotMatch(code, /LitsxStaticHoistsMixin|__litsxStatic|litsx\.static\.styles/);
   });
@@ -457,11 +457,11 @@ describe("standard JSX authoring", () => {
   it("uses the final top-level styles and properties assignments", () => {
     const source = `
       import { css } from "@litsx/core";
-      function Card({ active }) { return <div>{active}</div>; }
-      Card.styles = css\`:host { color: red; }\`;
-      Card.properties = { active: { reflect: false } };
-      Card.styles = css\`:host { color: blue; }\`;
-      Card.properties = { active: { reflect: true } };
+      function TestCard({ active }) { return <div>{active}</div>; }
+      TestCard.styles = css\`:host { color: red; }\`;
+      TestCard.properties = { active: { reflect: false } };
+      TestCard.styles = css\`:host { color: blue; }\`;
+      TestCard.properties = { active: { reflect: true } };
     `;
     const { code } = transformLitsxSync(source, {
       filename: "/tmp/litsx-final-static-assignment.tsx",
@@ -477,10 +477,10 @@ describe("standard JSX authoring", () => {
   it("leaves React propTypes assignments outside LitSX static configuration", () => {
     const source = `
       import PropTypes from "prop-types";
-      function Card({ title }) {
+      function TestCard({ title }) {
         return <article>{title}</article>;
       }
-      Card.propTypes = { title: PropTypes.string };
+      TestCard.propTypes = { title: PropTypes.string };
     `;
 
     const { code } = transformLitsxSync(source, {
@@ -488,15 +488,15 @@ describe("standard JSX authoring", () => {
       jsxTemplate: false,
     });
 
-    assert.match(code, /Card\.propTypes = \{/);
+    assert.match(code, /TestCard\.propTypes = \{/);
     assert.doesNotMatch(code, /static get propTypes/);
   });
 
   it("does not enable React key reconciliation in the native pipeline", () => {
     const source = `
-      function Row({ item }) { return <li>{item.label}</li>; }
-      function List({ items }) {
-        return <ul>{items.map(item => <Row key={item.id} item={item} />)}</ul>;
+      function TestRow({ item }) { return <li>{item.label}</li>; }
+      function TestList({ items }) {
+        return <ul>{items.map(item => <TestRow key={item.id} item={item} />)}</ul>;
       }
     `;
 
@@ -505,6 +505,6 @@ describe("standard JSX authoring", () => {
     });
 
     assert.doesNotMatch(code, /lit\/directives\/(?:repeat|keyed)\.js/);
-    assert.match(code, /<row \.key=\$\{item\.id\}/);
+    assert.match(code, /<test-row \.key=\$\{item\.id\}/);
   });
 });

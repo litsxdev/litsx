@@ -142,7 +142,7 @@ describe("compiler authored input helpers", () => {
   });
 
   it("applies authoring plugins through the provided runtime transform", () => {
-    const source = "export const Example = () => <x-box />;";
+    const source = "export const TestExample = () => <x-box />;";
     let transformCalls = 0;
 
     const renameIntrinsicPlugin = ({ types: t }) => ({
@@ -158,7 +158,7 @@ describe("compiler authored input helpers", () => {
     const result = prepareLitsxAuthoredInput(
       source,
       {
-        filename: "/virtual/Example.jsx",
+        filename: "/virtual/TestExample.jsx",
         authoringPlugins: [renameIntrinsicPlugin],
       },
       {
@@ -181,8 +181,8 @@ describe("compiler authored input helpers", () => {
   it("throws when authoring plugins are provided without a sync transform runtime", () => {
     assert.throws(
       () =>
-        prepareLitsxAuthoredInput("export const Example = () => <div />;", {
-          filename: "/virtual/Example.jsx",
+        prepareLitsxAuthoredInput("export const TestExample = () => <div />;", {
+          filename: "/virtual/TestExample.jsx",
           authoringPlugins: [() => ({ visitor: {} })],
         }),
       /requires runtime\.transformFromAstSync/
@@ -190,9 +190,9 @@ describe("compiler authored input helpers", () => {
   });
 
   it("builds compiler config with standard parsing and normalized output plugins", () => {
-    const source = "export const Example = () => <button class='cta'>Save</button>;";
+    const source = "export const TestExample = () => <button class='cta'>Save</button>;";
     const result = createLitsxTransformConfig(source, {
-      filename: "/virtual/Example.jsx",
+      filename: "/virtual/TestExample.jsx",
       sourceMaps: true,
       outputPlugins: null,
     });
@@ -204,7 +204,7 @@ describe("compiler authored input helpers", () => {
   });
 
   it("reuses feature and authored-input caches inside a compilation session", () => {
-    const source = "export const Example = () => <button class='cta'>Save</button>;";
+    const source = "export const TestExample = () => <button class='cta'>Save</button>;";
     const session = createLitsxCompilationSession({
       transformOptions: {
         jsxTemplate: false,
@@ -213,11 +213,11 @@ describe("compiler authored input helpers", () => {
 
     try {
       const first = createLitsxTransformConfig(source, {
-        filename: "/virtual/Example.jsx",
+        filename: "/virtual/TestExample.jsx",
         __litsxCompilationSession: session,
       });
       const second = createLitsxTransformConfig(source, {
-        filename: "/virtual/Example.jsx",
+        filename: "/virtual/TestExample.jsx",
         __litsxCompilationSession: session,
       });
 
@@ -231,14 +231,14 @@ describe("compiler authored input helpers", () => {
 
   it("runs the async compiler path without the final template pass", async () => {
     const result = await transformLitsx(
-      "export const Example = () => <button>Save</button>;",
+      "export const TestExample = () => <button>Save</button>;",
       {
-        filename: "/virtual/Example.jsx",
+        filename: "/virtual/TestExample.jsx",
         jsxTemplate: false,
       }
     );
 
-    assert.match(result.code, /export const Example = \(\) => <button>Save<\/button>;/);
+    assert.match(result.code, /export const TestExample = \(\) => <button>Save<\/button>;/);
     assert.strictEqual(result.map, null);
   });
 
@@ -291,9 +291,9 @@ describe("compiler authored input helpers", () => {
   });
 
   it("builds final-template plugin arrays when jsx template options are provided", () => {
-    const source = "export const Example = () => <button class='cta'>Save</button>;";
+    const source = "export const TestExample = () => <button class='cta'>Save</button>;";
     const config = createLitsxTransformConfig(source, {
-      filename: "/virtual/Example.jsx",
+      filename: "/virtual/TestExample.jsx",
       jsxTemplateOptions: { preserveComments: true },
       outputPlugins: [() => ({ visitor: {} })],
     });

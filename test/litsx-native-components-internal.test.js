@@ -56,7 +56,7 @@ function runNativeTransform(source, pluginOptions = {}, babelOptions = {}) {
 
 describe("native components internals", () => {
   it("classifies capitalized component names defensively", () => {
-    assert.strictEqual(isCapitalizedComponentName("Card"), true);
+    assert.strictEqual(isCapitalizedComponentName("TestCard"), true);
     assert.strictEqual(isCapitalizedComponentName("button"), false);
     assert.strictEqual(isCapitalizedComponentName(""), false);
     assert.strictEqual(isCapitalizedComponentName(null), false);
@@ -87,25 +87,25 @@ describe("native components internals", () => {
 
   it("transforms top-level capitalized arrow-function declarators into component classes", () => {
     const code = runNativeTransform(`
-      const Card = ({ title }: { title: string }) => {
+      const TestCard = ({ title }: { title: string }) => {
         __litsx_static_properties({ title: { reflect: true } });
         return <section>{title}</section>;
       };
     `);
 
-    assert.match(code, /class Card extends LitElement/);
+    assert.match(code, /class TestCard extends LitElement/);
     assert.match(code, /static properties = \{[\s\S]*title: \{[\s\S]*type: String,[\s\S]*reflect: true[\s\S]*\};/);
     assert.match(code, /return <section>\{this\.title\}<\/section>;/);
   });
 
   it("transforms top-level capitalized function declarations into component classes", () => {
     const code = runNativeTransform(`
-      function Card({ title }: { title: string }) {
+      function TestCard({ title }: { title: string }) {
         return <section>{title}</section>;
       }
     `);
 
-    assert.match(code, /class Card extends LitElement/);
+    assert.match(code, /class TestCard extends LitElement/);
     assert.match(code, /static properties = \{[\s\S]*title: \{[\s\S]*type: String[\s\S]*\};/);
     assert.match(code, /return <section>\{this\.title\}<\/section>;/);
   });
@@ -113,34 +113,34 @@ describe("native components internals", () => {
   it("does not transform nested capitalized components inside other functions", () => {
     const code = runNativeTransform(`
       function makeCard() {
-        const Card = () => <section>nested</section>;
-        return Card;
+        const TestCard = () => <section>nested</section>;
+        return TestCard;
       }
     `);
 
-    assert.match(code, /const Card = \(\) => <section>nested<\/section>;/);
-    assert.doesNotMatch(code, /class Card extends LitElement/);
+    assert.match(code, /const TestCard = \(\) => <section>nested<\/section>;/);
+    assert.doesNotMatch(code, /class TestCard extends LitElement/);
   });
 
   it("transforms exported named arrow components", () => {
     const code = runNativeTransform(`
-      export const Card = ({ title }: { title: string }) => {
+      export const TestCard = ({ title }: { title: string }) => {
         return <section>{title}</section>;
       };
     `);
 
-    assert.match(code, /export class Card extends LitElement/);
+    assert.match(code, /export class TestCard extends LitElement/);
     assert.match(code, /static properties = \{[\s\S]*title: \{[\s\S]*type: String[\s\S]*\};/);
   });
 
   it("transforms default-exported function components", () => {
     const code = runNativeTransform(`
-      export default function Card({ title }: { title: string }) {
+      export default function TestCard({ title }: { title: string }) {
         return <section>{title}</section>;
       }
     `);
 
-    assert.match(code, /export default class Card extends LitElement/);
+    assert.match(code, /export default class TestCard extends LitElement/);
     assert.match(code, /static properties = \{[\s\S]*title: \{[\s\S]*type: String[\s\S]*\};/);
   });
 
@@ -158,28 +158,28 @@ describe("native components internals", () => {
   it("transforms wrapped component variable declarators through wrapper metadata", () => {
     const code = runNativeTransform(
       `
-        const Card = memo(({ title }: { title: string }) => {
+        const TestCard = memo(({ title }: { title: string }) => {
           return <section>{title}</section>;
         });
       `,
       { getWrapperMetadata: getMemoWrapperMetadata },
     );
 
-    assert.match(code, /class Card extends LitElement/);
+    assert.match(code, /class TestCard extends LitElement/);
     assert.match(code, /static properties = \{[\s\S]*title: \{[\s\S]*type: String[\s\S]*\};/);
   });
 
   it("transforms default-exported wrapped components through wrapper metadata", () => {
     const code = runNativeTransform(
       `
-        export default memo(function Card({ title }: { title: string }) {
+        export default memo(function TestCard({ title }: { title: string }) {
           return <section>{title}</section>;
         });
       `,
       { getWrapperMetadata: getMemoWrapperMetadata },
     );
 
-    assert.match(code, /export default class Card extends LitElement/);
+    assert.match(code, /export default class TestCard extends LitElement/);
     assert.match(code, /static properties = \{[\s\S]*title: \{[\s\S]*type: String[\s\S]*\};/);
   });
 

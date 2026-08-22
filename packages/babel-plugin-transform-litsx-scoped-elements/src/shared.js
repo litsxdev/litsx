@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { toKebabCase } from "@litsx/authoring";
 import { normalizeFilePath } from "@litsx/typescript-session";
 
 let t;
@@ -20,7 +21,7 @@ export function setTypes(apiTypes) {
 }
 
 export function toKebab(name) {
-  return name.replace(/([a-z])([A-Z])/g, "$1-$2").toLowerCase();
+  return toKebabCase(name);
 }
 
 export function buildAvailableMap(programPath, options = {}) {

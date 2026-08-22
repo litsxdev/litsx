@@ -3,6 +3,7 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 import { describe, it, vi } from "vitest";
+import { build } from "vite";
 import packageJson from "../packages/vite-plugin/package.json" with { type: "json" };
 
 import {
@@ -91,12 +92,12 @@ describe("@litsx/vite-plugin", () => {
   it("transforms jsx and returns code with a sourcemap", async () => {
     const plugin = litsx({ sourceMaps: true });
     const source = [
-      "export const Counter = () => {",
+      "export const TestCounter = () => {",
       "  return <button on:click={save}>Hi</button>;",
       "};",
     ].join("\n");
 
-    const result = await plugin.transform(source, "/virtual/Counter.jsx");
+    const result = await plugin.transform(source, "/virtual/TestCounter.jsx");
 
     assert.ok(result);
     assert.match(result.code, /html`/);
@@ -106,12 +107,12 @@ describe("@litsx/vite-plugin", () => {
   it("transforms .tsx files and returns code with a sourcemap", async () => {
     const plugin = litsx({ sourceMaps: true });
     const source = [
-      "export const Counter = ({ label }: { label: string }) => {",
+      "export const TestCounter = ({ label }: { label: string }) => {",
       "  return <button on:click={save}>{label}</button>;",
       "};",
     ].join("\n");
 
-    const result = await plugin.transform(source, "/virtual/Counter.tsx");
+    const result = await plugin.transform(source, "/virtual/TestCounter.tsx");
 
     assert.ok(result);
     assert.match(result.code, /html`/);
@@ -193,7 +194,7 @@ describe("@litsx/vite-plugin", () => {
     const plugin = litsx({
       include: (id) => id.endsWith(".demo"),
     });
-    const source = "export const Counter = () => <button on:click={save}>Hi</button>;";
+    const source = "export const TestCounter = () => <button on:click={save}>Hi</button>;";
 
     const transformed = await plugin.transform(source, "/virtual/example.demo");
     const ignored = await plugin.transform(source, "/virtual/example.jsx");
@@ -207,7 +208,7 @@ describe("@litsx/vite-plugin", () => {
     const plugin = litsx({
       include: /\.demo$/,
     });
-    const source = "export const Counter = () => <button on:click={save}>Hi</button>;";
+    const source = "export const TestCounter = () => <button on:click={save}>Hi</button>;";
 
     const transformed = await plugin.transform(source, "/virtual/example.demo");
     const ignored = await plugin.transform(source, "/virtual/example.jsx");
@@ -219,10 +220,10 @@ describe("@litsx/vite-plugin", () => {
 
   it("adds an optimizeDeps rolldown plugin that compiles LitSX-authored jsx during dependency scanning", async () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-vite-optimize-deps-"));
-    const sourcePath = path.join(tempDir, "Counter.jsx");
+    const sourcePath = path.join(tempDir, "TestCounter.jsx");
     fs.writeFileSync(
       sourcePath,
-      'export const Counter = () => { static styles = `:host { display: block; }`; return <button on:click={save}>Hi</button>; };',
+      'export const TestCounter = () => { static styles = `:host { display: block; }`; return <button on:click={save}>Hi</button>; };',
       "utf8",
     );
 
@@ -282,6 +283,65 @@ describe("@litsx/vite-plugin", () => {
       "@lit/context",
     ]);
   });
+
+  it("bundles one production Lit runtime for consumer builds", async () => {
+    const previousNodeEnv = process.env.NODE_ENV;
+    const tempRoot = path.join(process.cwd(), "test-results");
+    fs.mkdirSync(tempRoot, { recursive: true });
+    const tempDir = fs.mkdtempSync(
+      path.join(tempRoot, "litsx-vite-production-lit-"),
+    );
+    const entry = path.join(tempDir, "consumer-card.tsx");
+    fs.writeFileSync(
+      entry,
+      `
+export function ConsumerCard({ label = "Ready" }) {
+  return <article>{label}</article>;
+}
+`,
+      "utf8",
+    );
+
+    try {
+      // Vite's CLI sets NODE_ENV=production for `vite build`. Vitest sets it to
+      // `test`, so mirror the consumer build environment for this programmatic
+      // build instead of exercising Lit's development export condition.
+      process.env.NODE_ENV = "production";
+      const result = await build({
+        configFile: false,
+        root: tempDir,
+        logLevel: "silent",
+        plugins: [litsx()],
+        build: {
+          write: false,
+          minify: false,
+          lib: {
+            entry,
+            formats: ["es"],
+            fileName: "consumer-card",
+          },
+        },
+      });
+      const outputs = Array.isArray(result)
+        ? result.flatMap((buildResult) => buildResult.output)
+        : result.output;
+      const code = outputs
+        .filter((output) => output.type === "chunk")
+        .map((output) => output.code)
+        .join("\n");
+
+      assert.doesNotMatch(code, /Lit is in dev mode|litIssuedWarnings/);
+      assert.strictEqual(code.match(/litHtmlVersions/g)?.length ?? 0, 1);
+      assert.strictEqual(code.match(/reactiveElementVersions/g)?.length ?? 0, 1);
+    } finally {
+      if (previousNodeEnv === undefined) {
+        delete process.env.NODE_ENV;
+      } else {
+        process.env.NODE_ENV = previousNodeEnv;
+      }
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  }, 30000);
 
   it("drops legacy optimizeDeps rollupOptions when adding rolldown options", () => {
     const existingRolldownPlugin = { name: "existing-rolldown-plugin" };
@@ -345,7 +405,7 @@ describe("@litsx/vite-plugin", () => {
       },
       sourceMaps: true,
     });
-    const source = "export const Counter = () => <button on:click={save}>Hi</button>;";
+    const source = "export const TestCounter = () => <button on:click={save}>Hi</button>;";
 
     const transformed = await plugin.transform(
       source,

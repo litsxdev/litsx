@@ -56,7 +56,7 @@ beforeAll(async () => {
 describe("@litsx/babel-preset-litsx", () => {
   it("defaults to final html template lowering", () => {
     const source = [
-      "export const Greeting = ({ label }) => {",
+      "export const TestGreeting = ({ label }) => {",
       "  return <button>{label}</button>;",
       "};",
     ].join("\n");
@@ -80,8 +80,8 @@ describe("@litsx/babel-preset-litsx", () => {
 
   it("routes ordinary JSX props into local component rest bags", () => {
     const source = [
-      "const Action = ({ label, ...props }) => { return <button {...props}>{label}</button>; };",
-      'export const Screen = () => { return <Action label="Save" aria-label="Save action" />; };',
+      "const TestAction = ({ label, ...props }) => { return <button {...props}>{label}</button>; };",
+      'export const TestScreen = () => { return <TestAction label="Save" aria-label="Save action" />; };',
     ].join("\n");
 
     const result = compileWithNativePreset(source);
@@ -92,14 +92,14 @@ describe("@litsx/babel-preset-litsx", () => {
     );
     assert.match(
       result.code,
-      /jsxSpreadElement\("action", \[\{[\s\S]*?label: "Save",[\s\S]*?"aria-label": "Save action"/,
+      /jsxSpreadElement\("test-action", \[\{[\s\S]*?label: "Save",[\s\S]*?"aria-label": "Save action"/,
     );
   });
 
   it("matches the direct preset plugin factory", () => {
     const source = [
       "import FancyButton from './FancyButton.js';",
-      "export const Greeting = ({ label = 'Save' }) => {",
+      "export const TestGreeting = ({ label = 'Save' }) => {",
       "  return <FancyButton .label={label} @click={save} />;",
       "};",
     ].join("\n");
@@ -222,7 +222,7 @@ describe("@litsx/babel-preset-litsx", () => {
       "  mixin: CapabilityMixin,",
       "  use(suffix = '') { return useHost().capability + suffix; },",
       "});",
-      "export function Panel() {",
+      "export function TestPanel() {",
       "  const first = useCapability(':first');",
       "  const second = useCapability(':second');",
       "  return <div>{first}{second}</div>;",
@@ -242,7 +242,7 @@ describe("@litsx/babel-preset-litsx", () => {
 
     assert.match(
       result.code,
-      /class Panel extends applyStructuralHooks\(LitElement, \[/,
+      /class TestPanel extends applyStructuralHooks\(LitElement, \[/,
     );
     assert.strictEqual(
       (
@@ -268,7 +268,7 @@ describe("@litsx/babel-preset-litsx", () => {
       'import { defineHook } from "@litsx/core";',
       "const FocusMixin = Base => class extends Base { static delegatesFocus = true; };",
       "const useFocusCapability = defineHook({ mixin: FocusMixin });",
-      "export function Panel() {",
+      "export function TestPanel() {",
       "  useFocusCapability();",
       "  return <div>Ready</div>;",
       "}",
@@ -287,7 +287,7 @@ describe("@litsx/babel-preset-litsx", () => {
 
     assert.match(
       result.code,
-      /class Panel extends applyStructuralHooks\(LitElement, \[/,
+      /class TestPanel extends applyStructuralHooks\(LitElement, \[/,
     );
     assert.match(result.code, /readStructuralHook\(useFocusCapability, \[\]\)/);
     assert.doesNotMatch(result.code, /useHost/);
@@ -304,7 +304,7 @@ describe("@litsx/babel-preset-litsx", () => {
       "export function useToolbarLabel(key) {",
       "  return useTranslatedLabel(key);",
       "}",
-      "export function Button() {",
+      "export function TestButton() {",
       "  return <button>{useToolbarLabel('save')}</button>;",
       "}",
     ].join("\n");
@@ -330,7 +330,7 @@ describe("@litsx/babel-preset-litsx", () => {
     );
     assert.match(
       result.code,
-      /class Button extends applyStructuralHooks\(LitElement, \[/,
+      /class TestButton extends applyStructuralHooks\(LitElement, \[/,
     );
     assert.match(result.code, /readStructuralHook\(useI18n, \[\]\)/);
   });
@@ -363,14 +363,14 @@ describe("@litsx/babel-preset-litsx", () => {
 
   it("detects source features so the compiler can skip unnecessary native plugin passes", () => {
     const plainSource = [
-      "export const Greeting = ({ label }) => {",
+      "export const TestGreeting = ({ label }) => {",
       "  return <button>{label}</button>;",
       "};",
     ].join("\n");
     const featureSource = [
       "import FancyButton from './FancyButton.js';",
       "import { useRef, useState } from '@litsx\/core';",
-      "export function Greeting({ label }) {",
+      "export function TestGreeting({ label }) {",
       "  const ref = useRef(null);",
       "  const [count] = useState(0);",
       "  return <FancyButton ref={ref}>{label}{count}</FancyButton>;",
@@ -443,7 +443,7 @@ describe("@litsx/babel-preset-litsx", () => {
 
     assert.strictEqual(
       detectLitsxSourceFeatures(
-        'import { lazy as defer } from "@litsx/core"; const Panel = defer(() => import("./panel.js"));',
+        'import { lazy as defer } from "@litsx/core"; const TestPanel = defer(() => import("./panel.js"));',
         {},
       ).lazy,
       true,
@@ -507,10 +507,10 @@ describe("@litsx/babel-preset-litsx", () => {
     assert.deepStrictEqual(
       detectLitsxSourceFeatures(
         [
-          "export function Greeting() {",
+          "export function TestGreeting() {",
           "  return <div>ready</div>;",
           "}",
-          "Greeting.lightDom = true;",
+          "TestGreeting.lightDom = true;",
         ].join("\n"),
         {},
       ),
@@ -563,7 +563,7 @@ describe("@litsx/babel-preset-litsx", () => {
 
   it("can disable final template lowering", () => {
     const source = [
-      "export const Greeting = ({ label }) => {",
+      "export const TestGreeting = ({ label }) => {",
       "  return <button @click={save}>{label}</button>;",
       "};",
     ].join("\n");
@@ -578,7 +578,7 @@ describe("@litsx/babel-preset-litsx", () => {
       },
     );
 
-    assert.match(result.code, /class Greeting extends LitElement/);
+    assert.match(result.code, /class TestGreeting extends LitElement/);
     assert.match(
       result.code,
       /return <button @click=\{save\}>\{this\.label\}<\/button>;/,
@@ -591,7 +591,7 @@ describe("@litsx/babel-preset-litsx", () => {
       "function renderHelperWithArgs(alpha, beta, gamma) {",
       "  return <p>{alpha}{beta}{gamma}</p>;",
       "}",
-      "export const Demo = () => {",
+      "export const TestDemo = () => {",
       "  return <section>{renderHelperWithArgs('a', 'b', 'c')}</section>;",
       "};",
     ].join("\n");
@@ -610,7 +610,7 @@ describe("@litsx/babel-preset-litsx", () => {
       result.code,
       /function renderHelperWithArgs\(alpha, beta, gamma\) \{\s*return html`<p>\$\{alpha\}\$\{beta\}\$\{gamma\}<\/p>`;\s*\}/,
     );
-    assert.match(result.code, /class Demo extends LitElement/);
+    assert.match(result.code, /class TestDemo extends LitElement/);
     assert.doesNotMatch(result.code, /class renderHelperWithArgs extends/);
   });
 
@@ -640,7 +640,7 @@ describe("@litsx/babel-preset-litsx", () => {
 
   it("can be consumed through createLitsxPresetPlugins directly", () => {
     const source = [
-      "export const Greeting = ({ label }) => {",
+      "export const TestGreeting = ({ label }) => {",
       "  return <button @click={save}>{label}</button>;",
       "};",
     ].join("\n");
@@ -1001,12 +1001,12 @@ describe("@litsx/babel-preset-litsx", () => {
   it("resolves stable const aliases inside Component.elements", () => {
     const source = [
       "import ProductCard from './ProductCard.js';",
-      "const Card = ProductCard;",
+      "const TestCard = ProductCard;",
       "export default async function ProductPage({ product }) {",
       "  return html`<main><product-card .product=${product}></product-card></main>`;",
       "}",
       "ProductPage.elements = {",
-      "  'product-card': Card,",
+      "  'product-card': TestCard,",
       "};",
     ].join("\n");
 
@@ -1486,7 +1486,7 @@ describe("@litsx/babel-preset-litsx", () => {
       "  return <span>child</span>;",
       "}",
       "LightChild.lightDom = true;",
-      "export function Parent() {",
+      "export function TestParent() {",
       "  return <LightChild />;",
       "}",
     ].join("\n");
@@ -1516,7 +1516,7 @@ describe("@litsx/babel-preset-litsx", () => {
       path.join(os.tmpdir(), "litsx-ssr-light-dom-import-"),
     );
     const importedFilename = path.join(fixtureDirectory, "LightChild.tsx");
-    const entryFilename = path.join(fixtureDirectory, "Parent.tsx");
+    const entryFilename = path.join(fixtureDirectory, "TestParent.tsx");
 
     fs.writeFileSync(
       importedFilename,
@@ -1530,7 +1530,7 @@ describe("@litsx/babel-preset-litsx", () => {
 
     const source = [
       'import { LightChild } from "./LightChild.tsx";',
-      "export function Parent() {",
+      "export function TestParent() {",
       "  return <LightChild />;",
       "}",
     ].join("\n");
@@ -1559,7 +1559,7 @@ describe("@litsx/babel-preset-litsx", () => {
   it("injects SSR light DOM rendering for core suspense boundaries", () => {
     const source = [
       'import { SuspenseBoundary } from "@litsx/core";',
-      "export function Parent() {",
+      "export function TestParent() {",
       "  return <SuspenseBoundary fallback={<span>loading</span>}><article>ready</article></SuspenseBoundary>;",
       "}",
     ].join("\n");
@@ -1587,8 +1587,8 @@ describe("@litsx/babel-preset-litsx", () => {
   it("does not lower React-only wrappers in the native preset", () => {
     const source = [
       "import { forwardRef, memo } from 'react';",
-      "export const Card = memo(",
-      "  forwardRef(function Card({ title }, ref) {",
+      "export const TestCard = memo(",
+      "  forwardRef(function TestCard({ title }, ref) {",
       "    return <label ref={ref}>{title}</label>;",
       "  })",
       ");",
@@ -1612,10 +1612,10 @@ describe("@litsx/babel-preset-litsx", () => {
   it("does not lower React propTypes in the native preset anymore", () => {
     const source = [
       "import PropTypes from 'prop-types';",
-      "export function Card(props) {",
+      "export function TestCard(props) {",
       "  return <article>{props.title}</article>;",
       "}",
-      "Card.propTypes = {",
+      "TestCard.propTypes = {",
       "  title: PropTypes.string,",
       "};",
     ].join("\n");
@@ -1630,7 +1630,7 @@ describe("@litsx/babel-preset-litsx", () => {
       },
     );
 
-    assert.match(result.code, /Card\.propTypes = \{/);
+    assert.match(result.code, /TestCard\.propTypes = \{/);
     assert.match(result.code, /import PropTypes from ['"]prop-types['"]/);
     assert.doesNotMatch(result.code, /__litsx_static_properties\(/);
   });
@@ -1697,7 +1697,7 @@ describe("@litsx/babel-preset-litsx", () => {
         payload: BaseProps["payload"];
       };
 
-      function Card(props: CardProps) {
+      function TestCard(props: CardProps) {
         return <article>{props.title}</article>;
       }
     `;
@@ -1711,7 +1711,7 @@ describe("@litsx/babel-preset-litsx", () => {
       {
         configFile: false,
         babelrc: false,
-        filename: "/virtual/Card.tsx",
+        filename: "/virtual/TestCard.tsx",
         presets: [
           [
             nativePreset,
@@ -1733,7 +1733,7 @@ describe("@litsx/babel-preset-litsx", () => {
   it("lowers native useState through the canonical preset", () => {
     const source = [
       "import { useState } from '@litsx\/core';",
-      "export function Counter() {",
+      "export function TestCounter() {",
       "  const [count, setCount] = useState(1);",
       "  return <button @click={() => setCount(count + 1)}>{count}</button>;",
       "}",
@@ -1749,7 +1749,7 @@ describe("@litsx/babel-preset-litsx", () => {
       },
     );
 
-    assert.match(result.code, /class Counter extends LitElement/);
+    assert.match(result.code, /class TestCounter extends LitElement/);
     assert.match(
       result.code,
       /import \{[^}]*useState[^}]*renderWithHooks[^}]*\} from ['"]@litsx\/core['"]/,
@@ -1768,7 +1768,7 @@ describe("@litsx/babel-preset-litsx", () => {
   it("preserves sibling declarators around native useState through the preset", () => {
     const source = [
       "import { useState } from '@litsx\/core';",
-      "export function Counter() {",
+      "export function TestCounter() {",
       "  const label = 'ok', [count, setCount] = useState(0);",
       "  setCount(count + 1);",
       "  return <div>{label}: {count}</div>;",
@@ -1798,7 +1798,7 @@ describe("@litsx/babel-preset-litsx", () => {
       "  const [value, setValue] = useState(initial);",
       "  return [value, setValue];",
       "}",
-      "export function Counter() {",
+      "export function TestCounter() {",
       "  const [value, setValue] = useCounter(0);",
       "  return <button @click={() => setValue(value + 1)}>{value}</button>;",
       "}",
@@ -1829,7 +1829,7 @@ describe("@litsx/babel-preset-litsx", () => {
   it("runs native effect hooks inside the generated render boundary", () => {
     const source = [
       "import { useAfterUpdate } from '@litsx\/core';",
-      "export function Counter() {",
+      "export function TestCounter() {",
       "  useAfterUpdate(() => {",
       "    this.flag = true;",
       "  }, []);",
@@ -1866,7 +1866,7 @@ describe("@litsx/babel-preset-litsx", () => {
       "  useAfterUpdate(() => flag && callback(), [flag, callback]);",
       "  return callback;",
       "}",
-      "export function Counter() {",
+      "export function TestCounter() {",
       "  const value = useCustom(this.flag);",
       "  return <button>{String(value && value())}</button>;",
       "}",
@@ -1898,7 +1898,7 @@ describe("@litsx/babel-preset-litsx", () => {
   it("resolves native useEmit from the render context", () => {
     const source = [
       "import { useEmit } from '@litsx\/core';",
-      "export function Counter() {",
+      "export function TestCounter() {",
       "  const emit = useEmit();",
       "  emit('change', this.value, { cancelable: true });",
       "  return <div>{this.value}</div>;",
@@ -1929,7 +1929,7 @@ describe("@litsx/babel-preset-litsx", () => {
       result.code,
       /static events = \{\s*events: \["change"\],\s*complete: true\s*\};/,
     );
-    assert.deepStrictEqual(result.metadata.litsxComponentEvents.Counter, {
+    assert.deepStrictEqual(result.metadata.litsxComponentEvents.TestCounter, {
       events: ["change"],
       complete: true,
     });
@@ -1939,12 +1939,12 @@ describe("@litsx/babel-preset-litsx", () => {
     const source = [
       "import { useEmit as createEmitter } from '@litsx/core';",
       "import * as core from '@litsx/core';",
-      "export function Aliased() {",
+      "export function TestAliased() {",
       "  const emit = createEmitter();",
       "  emit('primary-action');",
       "  return <button />;",
       "}",
-      "export function Namespaced() {",
+      "export function TestNamespaced() {",
       "  const emit = core.useEmit();",
       "  emit('url-change');",
       "  return <button />;",
@@ -1961,11 +1961,11 @@ describe("@litsx/babel-preset-litsx", () => {
       },
     );
 
-    assert.deepStrictEqual(result.metadata.litsxComponentEvents.Aliased, {
+    assert.deepStrictEqual(result.metadata.litsxComponentEvents.TestAliased, {
       events: ["primary-action"],
       complete: true,
     });
-    assert.deepStrictEqual(result.metadata.litsxComponentEvents.Namespaced, {
+    assert.deepStrictEqual(result.metadata.litsxComponentEvents.TestNamespaced, {
       events: ["url-change"],
       complete: true,
     });
@@ -1974,12 +1974,12 @@ describe("@litsx/babel-preset-litsx", () => {
   it("preserves explicit public event metadata as the component contract", () => {
     const source = [
       "import { useEmit } from '@litsx/core';",
-      "export function Counter() {",
+      "export function TestCounter() {",
       "  const emit = useEmit();",
       "  emit(this.eventName);",
       "  return <button />;",
       "}",
-      "Counter.events = { events: ['primary-action'], complete: true };",
+      "TestCounter.events = { events: ['primary-action'], complete: true };",
     ].join("\n");
 
     const result = transformFromAstSync(
@@ -1999,9 +1999,9 @@ describe("@litsx/babel-preset-litsx", () => {
     assert.doesNotMatch(result.code, /static events =/);
     assert.match(
       result.code,
-      /Counter\.events = \{\s*events: \['primary-action'\],\s*complete: true\s*\};/,
+      /TestCounter\.events = \{\s*events: \['primary-action'\],\s*complete: true\s*\};/,
     );
-    assert.deepStrictEqual(result.metadata.litsxComponentEvents.Counter, {
+    assert.deepStrictEqual(result.metadata.litsxComponentEvents.TestCounter, {
       events: ["primary-action"],
       complete: true,
       explicit: true,
@@ -2011,7 +2011,7 @@ describe("@litsx/babel-preset-litsx", () => {
   it("lowers native useRef DOM bindings through the canonical preset", () => {
     const source = [
       "import { useRef } from '@litsx\/core';",
-      "export function Counter() {",
+      "export function TestCounter() {",
       "  const buttonRef = useRef(null);",
       "  return <button ref={buttonRef}>Click</button>;",
       "}",
@@ -2044,7 +2044,7 @@ describe("@litsx/babel-preset-litsx", () => {
   it("keeps non-DOM native useRef bindings as mutable refs through the preset", () => {
     const source = [
       "import { useRef } from '@litsx\/core';",
-      "export function Counter() {",
+      "export function TestCounter() {",
       "  const workerRef = useRef(null);",
       "  workerRef.value = 'ok';",
       "  return <div>{workerRef.value}</div>;",
@@ -2070,7 +2070,7 @@ describe("@litsx/babel-preset-litsx", () => {
   it("does not follow external playground imports when using in-memory mode", () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-playground-"));
     const typesPath = path.join(tempDir, "types.ts");
-    const componentPath = path.join(tempDir, "Card.tsx");
+    const componentPath = path.join(tempDir, "TestCard.tsx");
 
     fs.writeFileSync(
       typesPath,
@@ -2084,7 +2084,7 @@ describe("@litsx/babel-preset-litsx", () => {
 
     const source = [
       "import type { CardProps } from './types';",
-      "function Card({ title, active }: CardProps) {",
+      "function TestCard({ title, active }: CardProps) {",
       "  return <article>{title} {active ? 'on' : 'off'}</article>;",
       "}",
     ].join("\n");

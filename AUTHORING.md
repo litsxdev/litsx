@@ -11,12 +11,12 @@ parsed as standard JSX/TSX and still requires the LitSX compiler.
 ```tsx
 import { css, useRef, useState } from "@litsx/core";
 
-type ToggleProps = {
+type DetailsToggleProps = {
   active?: boolean;
   label: string;
 };
 
-export function Toggle({ active = false, label }: ToggleProps) {
+export function DetailsToggle({ active = false, label }: DetailsToggleProps) {
   const [pressed, setPressed] = useState(active);
   const button = useRef<HTMLButtonElement>();
 
@@ -32,7 +32,7 @@ export function Toggle({ active = false, label }: ToggleProps) {
   );
 }
 
-Toggle.styles = css`
+DetailsToggle.styles = css`
   .toggle { cursor: pointer; }
 `;
 ```
@@ -49,12 +49,26 @@ Top-level PascalCase functions and function-valued declarations are component
 candidates. Use normal JSX component names at callsites:
 
 ```tsx
-<Toggle active={enabled} label="Details" />
+<DetailsToggle active={enabled} label="Details" />
 ```
 
 A member expression imported through a namespace is also an element. For
 example, `Controls.Toggle` and `Controls.OtherComponent` receive stable scoped
 tags derived from the namespace and member names.
+
+The derived tag must already be a valid custom-element name. LitSX never invents
+a framework prefix, so single-word component names are rejected:
+
+```tsx
+function Switch() {} // error: would map to the invalid tag `switch`
+function App() {}    // error: would map to the invalid tag `app`
+
+function ToggleSwitch() {} // maps to `toggle-switch`
+<Controls.Switch />         // maps to `controls-switch`
+```
+
+The compiler, direct Babel pipeline, and ESLint plugin use the same name
+analyzer and stable `LITSX_INVALID_COMPONENT_NAME` diagnostic.
 
 Attach component metadata with standard top-level JavaScript assignments:
 
@@ -198,6 +212,34 @@ HTML keeps its own semantics:
   serialize `"true"` or `"false"`; they are not presence booleans;
 - exact lowercase native handler properties such as `onclick` remain property
   assignments on HTML and custom elements.
+
+## Hooks
+
+Hooks register against the current host synchronously while its render function
+runs. Call them at the top level of a component, a module-level `useX` custom
+hook, a Lit element `render()` method, or the `use` entry of `defineHook(...)`.
+Their order must be identical on every render.
+
+The shared authoring analyzer rejects hooks in conditions, after conditional
+early returns, loops, `try`/`catch`,
+async components or custom hooks, event handlers, effects, ordinary helpers and
+other deferred callbacks. A hook used by an asynchronous action must be captured
+before declaring the action:
+
+```tsx
+function AccountButton() {
+  const host = useHost();
+  const [account, refresh] = useAsyncState(null, async () => {
+    // `useHost()` here would be too late: this callback runs after render.
+    return loadAccount(host.accountId);
+  });
+  return <button on:click={refresh}>{account?.name}</button>;
+}
+```
+
+Custom hooks are module-level declarations. Defining a `useX` function inside a
+component would create a new identity on every render and is rejected. Compiler,
+Babel and ESLint diagnostics share stable `LITSX_HOOK_*` codes.
 
 ## Events
 

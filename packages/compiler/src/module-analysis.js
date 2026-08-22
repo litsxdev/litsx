@@ -1,11 +1,5 @@
 import * as babelTypes from "@babel/types";
-
-function toKebabCase(value) {
-  return value
-    .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
-    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1-$2")
-    .toLowerCase();
-}
+import { componentNameToTagName } from "@litsx/authoring";
 
 function isPascalCaseIdentifier(value) {
   return typeof value === "string" && /^[A-Z][A-Za-z0-9_$]*$/.test(value);
@@ -302,7 +296,7 @@ function collectJsxReferences(program, jsxReferences, importsByLocalName, declar
 
     jsxReferences.push({
       localName,
-      tagName: toKebabCase(localName),
+      tagName: componentNameToTagName(localName),
       source,
       importSource,
     });

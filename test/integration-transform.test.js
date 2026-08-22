@@ -37,7 +37,7 @@ describe("integration: parser + all plugins", () => {
         label: PropTypes.string,
       };
 
-      export const Alert = (message) => {
+      export const TestAlert = (message) => {
         const lower = message.toLowerCase();
         return <p>{lower}</p>;
       };
@@ -60,7 +60,7 @@ describe("integration: parser + all plugins", () => {
     assert.doesNotMatch(code, /prepareEffects/);
     assert.match(code, /useAfterUpdate\(\(\) => {\s*buttonRef\.current\.focus\(\);/s);
     assert.match(code, /static properties = {/);
-    assert.match(code, /class Alert extends LightDomMixin\(LitElement\)/);
+    assert.match(code, /class TestAlert extends LightDomMixin\(LitElement\)/);
     assert.doesNotMatch(code, /PropTypes|\.propTypes\s*=/);
   });
 
@@ -226,7 +226,7 @@ describe("integration: parser + all plugins", () => {
 
       const LazyCard = lazy(() => import("./LazyCard.js"));
 
-      export const Screen = () => {
+      export const TestScreen = () => {
         return (
           <Suspense fallback={<span>Loading</span>}>
             <LazyCard />
@@ -257,8 +257,8 @@ describe("integration: parser + all plugins", () => {
 
       const ResultsPanel = lazy(() => import("./ResultsPanel.js"));
 
-      export const Demo = memo(
-        forwardRef(function Demo({ value }, ref) {
+      export const TestDemo = memo(
+        forwardRef(function TestDemo({ value }, ref) {
           return (
             <ErrorBoundary fallback={<p>Oops</p>}>
               <Suspense fallback={<p>Loading</p>}>
@@ -280,7 +280,7 @@ describe("integration: parser + all plugins", () => {
       generatorOpts: { decoratorsBeforeExport: true },
     });
 
-    assert.match(code, /export class Demo extends LightDomMixin\(LitElement\)/);
+    assert.match(code, /export class TestDemo extends LightDomMixin\(LitElement\)/);
     assert.match(code, /const ResultsPanel = \(\) => import\("\.\/ResultsPanel\.js"\);/);
     assert.match(code, /ensureLazyElement/);
     assert.match(code, /SuspenseBoundary/);

@@ -1,6 +1,7 @@
 import jsxSyntaxPlugin from "@babel/plugin-syntax-jsx";
 import * as babelParser from "@babel/parser";
 import { isLitElementSuperClass } from "@litsx/babel-plugin-shared-hooks";
+import { componentNameToTagName } from "@litsx/authoring";
 import { parseWithLitsxVirtualization } from "@litsx/authoring/parser";
 import fs from "node:fs";
 import path from "node:path";
@@ -577,7 +578,7 @@ function getNamespaceMemberInfo(nameNode, availableMap) {
   const parts = [current.name, ...properties];
   return {
     key: parts.join("."),
-    tagName: parts.map(toKebab).join("-"),
+    tagName: componentNameToTagName(parts),
     expression,
     source: namespaceEntry.source,
   };
@@ -602,7 +603,7 @@ function detectElementsFromClass(classPath, programPath, availableMap, precomput
     used.set(candidate, {
       ...entry,
       originalName: candidate,
-      tagName: toKebab(originalName),
+      tagName: componentNameToTagName(originalName),
     });
   });
 
@@ -629,7 +630,7 @@ function detectElementsFromClass(classPath, programPath, availableMap, precomput
       if (!availableMap.has(originalName)) return;
 
       const entry = availableMap.get(originalName);
-      const tagName = toKebab(originalName);
+      const tagName = componentNameToTagName(originalName);
       nameNode.node.name = tagName;
       nameToTag.set(originalName, tagName);
       // Covers standalone use of this plugin before JSX has been lowered.
@@ -665,16 +666,17 @@ function detectElementsFromClass(classPath, programPath, availableMap, precomput
       const quasi = path.node.quasi;
 
       availableMap.forEach((entry, originalName) => {
-        const tagName = toKebab(originalName);
-        const replaced = replaceInTemplate(quasi, originalName, tagName);
+        const candidateTagName = toKebab(originalName);
+        const replaced = replaceInTemplate(quasi, originalName, candidateTagName);
         const insertedRenderLight = maybeInsertSsrRenderLightTemplate(
           quasi,
-          tagName,
+          candidateTagName,
           programPath,
           entry,
           options,
         );
         if (replaced || insertedRenderLight) {
+          const tagName = componentNameToTagName(originalName);
           used.set(originalName, {
             ...entry,
             originalName,

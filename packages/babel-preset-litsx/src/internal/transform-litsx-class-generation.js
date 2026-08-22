@@ -1,3 +1,5 @@
+import { componentNameToTagName } from "@litsx/authoring";
+
 let t;
 
 export function setClassGenerationBabelTypes(nextTypes) {
@@ -29,13 +31,6 @@ function createStaticRuntimeMetadataProperty(symbolKey, valueNode) {
   property.computed = true;
   property.static = true;
   return property;
-}
-
-function toKebabCase(value) {
-  return String(value ?? "")
-    .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
-    .replace(/([A-Z])([A-Z][a-z])/g, "$1-$2")
-    .toLowerCase();
 }
 
 export function buildClassMembers({
@@ -148,7 +143,7 @@ export function createComponentClass({
     );
     const hydratableTagProperty = createStaticRuntimeMetadataProperty(
       "litsx.hydratableTag",
-      t.stringLiteral(tagName ?? toKebabCase(className))
+      t.stringLiteral(tagName ?? componentNameToTagName(className))
     );
     const hostTypeIdProperty = createStaticRuntimeMetadataProperty(
       "litsx.hostTypeId",

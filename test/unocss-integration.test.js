@@ -41,6 +41,12 @@ function count(source, needle) {
   return source.split(needle).length - 1;
 }
 
+function createWorkspaceTempDirectory(prefix) {
+  const tempRoot = path.join(process.cwd(), "test-results");
+  fs.mkdirSync(tempRoot, { recursive: true });
+  return fs.mkdtempSync(path.join(tempRoot, prefix));
+}
+
 async function buildFixture(
   source,
   { ssr = false, preset = presetWind3(), unoCss = {} } = {},
@@ -486,8 +492,8 @@ export function RollupCard() {
     fs.writeFileSync(styles, 'export const BUTTON = "bg-red-600";', "utf8");
     const source = `
 import { BUTTON } from "./styles";
-export function Button() { return <button class={BUTTON}>Save</button>; }
-Button.styles = [BUTTON];
+export function TestButton() { return <button class={BUTTON}>Save</button>; }
+TestButton.styles = [BUTTON];
 `;
     fs.writeFileSync(entry, source, "utf8");
 
@@ -867,10 +873,10 @@ export const STATES = {
 `,
       "entry.tsx": `
 import { STATES } from "./states";
-export function Action() {
+export function TestAction() {
   return <button class={STATES.primary} data-appearance="primary">Save</button>;
 }
-Action.styles = [STATES];
+TestAction.styles = [STATES];
 `,
     });
 
@@ -885,8 +891,8 @@ Action.styles = [STATES];
         transformLitsxSync(
           `
 const DYNAMIC = makeStyles();
-export function Bad() { return <div />; }
-Bad.styles = [DYNAMIC];
+export function TestBad() { return <div />; }
+TestBad.styles = [DYNAMIC];
 `,
           withUnoCssCompiler({ filename: "/virtual/bad.tsx" }),
         ),
@@ -909,8 +915,8 @@ Bad.styles = [DYNAMIC];
       entry,
       `
 import { A } from "./a";
-export function Cyclic() { return <div />; }
-Cyclic.styles = [A];
+export function TestCyclic() { return <div />; }
+TestCyclic.styles = [A];
 `,
     );
     try {
@@ -931,10 +937,10 @@ Cyclic.styles = [A];
     const source = `
 const BUTTON = { base: "inline-flex", danger: "bg-red-600" };
 const CARD = { base: "rounded-xl", raised: "shadow-xl" };
-export function First() { return <button class={BUTTON.base}>First</button>; }
-First.styles = [BUTTON, CARD.raised ? "ring-2" : "ring-1"];
-export function Second() { return <article class={CARD.base}>Second</article>; }
-Second.styles = [CARD, BUTTON];
+export function TestFirst() { return <button class={BUTTON.base}>TestFirst</button>; }
+TestFirst.styles = [BUTTON, CARD.raised ? "ring-2" : "ring-1"];
+export function TestSecond() { return <article class={CARD.base}>TestSecond</article>; }
+TestSecond.styles = [CARD, BUTTON];
 `;
     const result = transformLitsxSync(
       source,
@@ -956,8 +962,8 @@ Second.styles = [CARD, BUTTON];
         transformLitsxSync(
           `
 const SIZES = { sm: "h-8" };
-export function Bad() { return <div />; }
-Bad.styles = [SIZES];
+export function TestBad() { return <div />; }
+TestBad.styles = [SIZES];
 `,
           { filename: "/virtual/no-unocss.tsx" },
         ),
@@ -1233,9 +1239,7 @@ export function SafelistedButton({ size }) {
   });
 
   it("renders generated utility styles through the real SSR renderer", async () => {
-    const directory = fs.mkdtempSync(
-      path.join(os.tmpdir(), "litsx-unocss-ssr-"),
-    );
+    const directory = createWorkspaceTempDirectory("litsx-unocss-ssr-");
     const entry = path.join(directory, "entry.tsx");
     fs.writeFileSync(entry, MULTI_COMPONENT_SOURCE, "utf8");
     const server = await createServer({
@@ -1246,10 +1250,6 @@ export function SafelistedButton({ size }) {
       server: { middlewareMode: true },
       resolve: {
         alias: [
-          {
-            find: /^lit$/,
-            replacement: path.resolve("node_modules/lit/index.js"),
-          },
           {
             find: "@litsx/core/elements",
             replacement: path.resolve("packages/core/src/elements/index.js"),
@@ -1297,9 +1297,7 @@ export function SafelistedButton({ size }) {
   });
 
   it("serializes the stable light DOM scope for hydration in SSR", async () => {
-    const directory = fs.mkdtempSync(
-      path.join(os.tmpdir(), "litsx-unocss-light-ssr-"),
-    );
+    const directory = createWorkspaceTempDirectory("litsx-unocss-light-ssr-");
     const entry = path.join(directory, "entry.tsx");
     fs.writeFileSync(
       entry,
@@ -1319,10 +1317,6 @@ LightCard.lightDom = true;
       server: { middlewareMode: true },
       resolve: {
         alias: [
-          {
-            find: /^lit$/,
-            replacement: path.resolve("node_modules/lit/index.js"),
-          },
           {
             find: "@litsx/core/elements",
             replacement: path.resolve("packages/core/src/elements/index.js"),
@@ -1354,14 +1348,12 @@ LightCard.lightDom = true;
   });
 
   it("resolves Wind4 theme tokens across SSR component modules", async () => {
-    const directory = fs.mkdtempSync(
-      path.join(os.tmpdir(), "litsx-unocss-wind4-ssr-"),
-    );
+    const directory = createWorkspaceTempDirectory("litsx-unocss-wind4-ssr-");
     fs.writeFileSync(
       path.join(directory, "action.tsx"),
       `
 export function WindAction() {
-  return <button class="p-4 bg-red-500">Action</button>;
+  return <button class="p-4 bg-red-500">TestAction</button>;
 }
 `,
       "utf8",
@@ -1392,10 +1384,6 @@ export { WindCard } from "./card.tsx";
       server: { middlewareMode: true },
       resolve: {
         alias: [
-          {
-            find: /^lit$/,
-            replacement: path.resolve("node_modules/lit/index.js"),
-          },
           {
             find: "@litsx/core/elements",
             replacement: path.resolve("packages/core/src/elements/index.js"),
@@ -1432,9 +1420,7 @@ export { WindCard } from "./card.tsx";
   });
 
   it("updates the development preflight when a later module introduces Wind4 theme tokens", async () => {
-    const directory = fs.mkdtempSync(
-      path.join(os.tmpdir(), "litsx-unocss-wind4-serve-order-"),
-    );
+    const directory = createWorkspaceTempDirectory("litsx-unocss-wind4-serve-order-");
     fs.writeFileSync(
       path.join(directory, "early.tsx"),
       `
@@ -1452,10 +1438,6 @@ export function EarlyCard() {
       server: { middlewareMode: true },
       resolve: {
         alias: [
-          {
-            find: /^lit$/,
-            replacement: path.resolve("node_modules/lit/index.js"),
-          },
           {
             find: "@litsx/core/elements",
             replacement: path.resolve("packages/core/src/elements/index.js"),
@@ -1496,9 +1478,7 @@ export function LateCard() {
   });
 
   it("invalidates the shared Wind4 preflight when development tokens change", async () => {
-    const directory = fs.mkdtempSync(
-      path.join(os.tmpdir(), "litsx-unocss-hmr-"),
-    );
+    const directory = createWorkspaceTempDirectory("litsx-unocss-hmr-");
     const entry = path.join(directory, "entry.tsx");
     fs.writeFileSync(
       entry,
@@ -1517,10 +1497,6 @@ export function WindCard() {
       server: { middlewareMode: true },
       resolve: {
         alias: [
-          {
-            find: /^lit$/,
-            replacement: path.resolve("node_modules/lit/index.js"),
-          },
           {
             find: "@litsx/core/elements",
             replacement: path.resolve("packages/core/src/elements/index.js"),
@@ -1567,9 +1543,7 @@ export function WindCard() {
   });
 
   it("re-resolves imported guards and removes obsolete utility rules during HMR", async () => {
-    const directory = fs.mkdtempSync(
-      path.join(os.tmpdir(), "litsx-unocss-guard-hmr-"),
-    );
+    const directory = createWorkspaceTempDirectory("litsx-unocss-guard-hmr-");
     const helper = path.join(directory, "button.styles.ts");
     const entry = path.join(directory, "entry.tsx");
     fs.writeFileSync(
@@ -1594,10 +1568,6 @@ WindButton.styles = [BUTTON];
       server: { middlewareMode: true },
       resolve: {
         alias: [
-          {
-            find: /^lit$/,
-            replacement: path.resolve("node_modules/lit/index.js"),
-          },
           {
             find: "@litsx/core/elements",
             replacement: path.resolve("packages/core/src/elements/index.js"),

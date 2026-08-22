@@ -1,6 +1,7 @@
 import { declare } from "@babel/helper-plugin-utils";
 import jsxSyntaxPlugin from "@babel/plugin-syntax-jsx";
 import { isLitElementSuperClass } from "@litsx/babel-plugin-shared-hooks";
+import { toKebabCase } from "@litsx/authoring";
 import {
   ensureStaticIr,
   setStaticIrBabelTypes,
@@ -79,7 +80,7 @@ export default declare((api, options = {}) => {
     const matches = (name, candidateTag = null) => (
       (candidateName != null && name === candidateName) ||
       candidateTag === tag ||
-      (typeof name === "string" && name.replace(/([a-z])([A-Z])/g, "$1-$2").toLowerCase() === tag)
+      (typeof name === "string" && toKebabCase(name) === tag)
     );
     const staticIr = getOrCreateStaticIr(classNode);
     staticIr.elements.localCandidates = staticIr.elements.localCandidates.filter(

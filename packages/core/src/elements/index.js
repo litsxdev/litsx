@@ -1,4 +1,4 @@
-import { adoptStyles } from "@lit/reactive-element";
+import { adoptStyles } from "lit";
 import {
   connectLightDomRegistry,
   createLightDomRegistry,

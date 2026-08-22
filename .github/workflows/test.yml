@@ -44,6 +44,9 @@ jobs:
       - name: Install dependencies
         run: corepack yarn install --immutable
 
+      - name: Check Lit dependency deduplication
+        run: corepack yarn check:lit-dedupe
+
       - name: Run test suite with coverage
         run: corepack yarn coverage
 

@@ -11,7 +11,13 @@ Application source is standard `.jsx` or `.tsx`. This package centralizes:
 - `on:event` parsing and event-name normalization
 - standard `onX` callback and native DOM event-property classification
 - component and implicit-children semantic analysis
+- strict component-name validation against the custom-elements contract
+- synchronous hook-scope and stable hook-order diagnostics
 - internal encoding used between LitSX compiler passes
+
+The compiler, Babel hooks transform, and ESLint plugin consume these analyzers
+through small adapters. The diagnostic code and source node therefore remain
+the same regardless of which entrypoint reports an error.
 
 The internal encoding may contain Lit binding prefixes, but it is not public
 authored syntax and must never be presented as application source in diagnostics,

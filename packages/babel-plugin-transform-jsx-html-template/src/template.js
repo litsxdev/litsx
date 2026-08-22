@@ -1,4 +1,4 @@
-import { decodeVirtualAttributeName } from "@litsx/authoring";
+import { componentNameToTagName, decodeVirtualAttributeName } from "@litsx/authoring";
 
 let t;
 
@@ -233,10 +233,6 @@ function stringifyJsxName(nameNode) {
   return "unknown";
 }
 
-function toKebab(name) {
-  return name.replace(/([a-z])([A-Z])/g, "$1-$2").toLowerCase();
-}
-
 function getTag(node) {
   if (t.isJSXIdentifier(node.name)) {
     const originalName = node.name.name;
@@ -253,7 +249,7 @@ function getTag(node) {
       originalName.charAt(0) !== originalName.charAt(0).toLowerCase();
 
     return {
-      name: isCapitalized ? toKebab(originalName) : originalName,
+      name: isCapitalized ? componentNameToTagName(originalName) : originalName,
       isComponent: false,
       isAuthoredComponentTag: isCapitalized || Boolean(routedComponentName) || Boolean(runtimeComponentExpression),
       componentExpression: runtimeComponentExpression

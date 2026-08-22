@@ -3,18 +3,12 @@ import path from "node:path";
 import { prepareLitsxAuthoredInput } from "@litsx/compiler/authored-input";
 import { transformLitsxSync } from "@litsx/compiler";
 import { litsx } from "@litsx/vite-plugin";
+import { componentNameToTagName } from "@litsx/authoring";
 
 const STORY_FILE_PATTERN = /\.stories\.[cm]?[jt]sx?(?:\?.*)?$/;
 
 function normalizeTagName(tagName) {
   return typeof tagName === "string" && tagName.includes("-") ? tagName : null;
-}
-
-function toKebabCase(value) {
-  return value
-    .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
-    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1-$2")
-    .toLowerCase();
 }
 
 function findImportedValueSpecifier(moduleAnalysis, localName) {
@@ -66,7 +60,7 @@ function collectStoryRegistrations(
       importedSpecifier &&
       importedSpecifier.importedName !== "default" &&
       importedSpecifier?.importedName !== "*"
-        ? toKebabCase(importedSpecifier.importedName)
+        ? componentNameToTagName(importedSpecifier.importedName)
         : entry.tagName;
     const tagName = normalizeTagName(rawTagName);
     const constructorName = entry?.localName;

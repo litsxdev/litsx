@@ -1456,7 +1456,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@lit/reactive-element@npm:^1.6.2 || ^2.1.0, @lit/reactive-element@npm:^2.0.4, @lit/reactive-element@npm:^2.1.0, @lit/reactive-element@npm:^2.1.2":
+"@lit/reactive-element@npm:^1.6.2 || ^2.1.0, @lit/reactive-element@npm:^2.0.4, @lit/reactive-element@npm:^2.1.0":
   version: 2.1.2
   resolution: "@lit/reactive-element@npm:2.1.2"
   dependencies:
@@ -1491,6 +1491,7 @@ __metadata:
   dependencies:
     "@babel/core": "npm:^8.0.1"
     "@babel/helper-plugin-utils": "npm:^8.0.1"
+    "@litsx/authoring": "npm:^1.0.0-next.1"
   peerDependencies:
     "@babel/core": ^8.0.0
   languageName: unknown
@@ -1585,7 +1586,6 @@ __metadata:
   resolution: "@litsx/core@workspace:packages/core"
   dependencies:
     "@lit/context": "npm:^1.1.6"
-    "@lit/reactive-element": "npm:^2.1.2"
     "@litsx/authoring": "npm:^1.0.0-next.2"
     "@litsx/scoped-registry-shim": "npm:^1.0.0-next.1"
     lit: "npm:^3.3.3"
@@ -1602,6 +1602,7 @@ __metadata:
     "@babel/eslint-parser": "npm:^8.0.1"
     "@babel/plugin-syntax-jsx": "npm:^8.0.1"
     "@babel/plugin-syntax-typescript": "npm:^8.0.3"
+    "@litsx/authoring": "npm:^1.0.0-next.1"
   peerDependencies:
     eslint: ^9.0.0 || ^10.0.0
     typescript: ">=5"
@@ -1629,7 +1630,7 @@ __metadata:
     "@litsx/compiler": "npm:^1.0.0-next.1"
     "@litsx/core": "npm:^1.0.0-next.1"
     "@litsx/vite-plugin": "npm:^1.0.0-next.0"
-    lit: "npm:^3.2.1"
+    lit: "npm:^3.3.3"
   peerDependencies:
     lit: ">=3"
     vite: ^7.3.2 || ^8.0.0
@@ -1643,6 +1644,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@litsx/storybook@workspace:packages/storybook"
   dependencies:
+    "@litsx/authoring": "npm:^1.0.0-next.1"
     "@litsx/compiler": "npm:^1.0.0-next.0"
     "@litsx/vite-plugin": "npm:^1.0.0-next.0"
     "@storybook/web-components-vite": "npm:10.5.10"
@@ -5457,7 +5459,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"lit-html@npm:^3.1.2":
+"lit-html@npm:^3.1.2, lit-html@npm:^3.3.0":
   version: 3.3.3
   resolution: "lit-html@npm:3.3.3"
   dependencies:
@@ -5466,16 +5468,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"lit-html@npm:^3.3.0":
-  version: 3.3.2
-  resolution: "lit-html@npm:3.3.2"
-  dependencies:
-    "@types/trusted-types": "npm:^2.0.2"
-  checksum: 10c0/0a6763875acd03dfc5d4483ea74ca4bfe5d71a90b05bfc484e8201721c8603db982760fd27566a69a834f21d34437f7c390e21cd4c6bff149ca7e3a46d3b217a
-  languageName: node
-  linkType: hard
-
-"lit@npm:^3.0.0, lit@npm:^3.1.2, lit@npm:^3.2.1, lit@npm:^3.3.3":
+"lit@npm:^3.0.0, lit@npm:^3.1.2, lit@npm:^3.3.3":
   version: 3.3.3
   resolution: "lit@npm:3.3.3"
   dependencies:

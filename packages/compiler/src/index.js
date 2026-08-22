@@ -3,7 +3,7 @@ import * as babelParser from "@babel/parser";
 import * as babelTypes from "@babel/types";
 import transformTypescript from "@babel/plugin-transform-typescript";
 import transformJsxHtmlTemplate from "@litsx/babel-plugin-transform-jsx-html-template";
-import { decodeVirtualAttributeName } from "@litsx/authoring";
+import { componentNameToTagName, decodeVirtualAttributeName } from "@litsx/authoring";
 import {
   createLitsxPresetPlugins,
   detectLitsxSourceFeatures,
@@ -169,7 +169,9 @@ function jsxTagName(name) {
     return null;
   }
 
-  return name.name.replace(/([a-z])([A-Z])/g, "$1-$2").toLowerCase();
+  return /^[A-Z]/.test(name.name)
+    ? componentNameToTagName(name.name)
+    : name.name;
 }
 
 function isChildrenExpression(node) {

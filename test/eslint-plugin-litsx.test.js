@@ -12,8 +12,58 @@ describe("@litsx/eslint-plugin", () => {
     assert.deepStrictEqual(plugin.processors, undefined);
     assert.ok(plugin.rules["no-native-classname"]);
     assert.ok(plugin.rules["no-react-memo"]);
+    assert.ok(plugin.rules["rules-of-hooks"]);
+    assert.ok(plugin.rules["valid-component-name"]);
     assert.ok(plugin.configs.recommended);
     assert.ok(plugin.configs["recommended-flat"]);
+  });
+
+  it("reports shared component-name and hook diagnostics with stable codes", async () => {
+    const eslint = await createFlatESLint({
+      cwd: process.cwd(),
+      overrideConfigFile: true,
+      overrideConfig: [plugin.configs["recommended-flat"]],
+    });
+    const [result] = await eslint.lintText(
+      [
+        'import { useState } from "@litsx/core";',
+        "export function Switch({ active }) {",
+        "  if (active) useState(0);",
+        "  return <button />;",
+        "}",
+      ].join("\n"),
+      { filePath: "invalid.tsx" },
+    );
+
+    assert.ok(result.messages.some((message) => (
+      message.ruleId === "@litsx/valid-component-name" &&
+      message.message.includes("[LITSX_INVALID_COMPONENT_NAME]")
+    )));
+    assert.ok(result.messages.some((message) => (
+      message.ruleId === "@litsx/rules-of-hooks" &&
+      message.message.includes("[LITSX_HOOK_CONDITIONAL]")
+    )));
+  });
+
+  it("does not duplicate diagnostics inside either ESLint adapter rule", async () => {
+    const eslint = await createFlatESLint({
+      cwd: process.cwd(),
+      overrideConfigFile: true,
+      overrideConfig: [plugin.configs["recommended-flat"]],
+    });
+    const [result] = await eslint.lintText(
+      'import { useState } from "@litsx/core"; function Switch(){ useState(0); return <div />; }',
+      { filePath: "single.tsx" },
+    );
+
+    assert.strictEqual(
+      result.messages.filter((message) => message.ruleId === "@litsx/valid-component-name").length,
+      1,
+    );
+    assert.strictEqual(
+      result.messages.filter((message) => message.ruleId === "@litsx/rules-of-hooks").length,
+      0,
+    );
   });
 
   it("lints and fixes standard TSX directly", async () => {

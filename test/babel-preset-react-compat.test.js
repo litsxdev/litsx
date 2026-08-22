@@ -109,20 +109,20 @@ describe("@litsx/babel-preset-react-compat", () => {
 
   it("keeps onX component props distinct from React DOM events", () => {
     const source = `
-      const Child = ({ onAction }) => <button onClick={onAction}>Run</button>;
-      export const Parent = ({ onAction }) => <Child onAction={onAction} />;
+      const TestChild = ({ onAction }) => <button onClick={onAction}>Run</button>;
+      export const TestParent = ({ onAction }) => <TestChild onAction={onAction} />;
     `;
 
     const code = run(source);
 
     assert.match(code, /html`<button @click=\$\{onAction\}>Run<\/button>`/);
-    assert.match(code, /html`<child \.onAction=\$\{onAction\}><\/child>`/);
-    assert.doesNotMatch(code, /<child[^>]*@action=/);
+    assert.match(code, /html`<test-child \.onAction=\$\{onAction\}><\/test-child>`/);
+    assert.doesNotMatch(code, /<test-child[^>]*@action=/);
   });
 
   it("lowers JSX spreads with surrounding React props in source order", () => {
     const source = `
-      export const Action = ({ props, active, onClick }) => (
+      export const TestAction = ({ props, active, onClick }) => (
         <button {...props} className="action" disabled={active} onClick={onClick} />
       );
     `;
@@ -138,44 +138,44 @@ describe("@litsx/babel-preset-react-compat", () => {
 
   it("lowers keyed React map expressions through Lit repeat", () => {
     const source = `
-      const Row = ({ item }) => <li>{item.label}</li>;
-      export const List = ({ items }) => (
-        <ul>{items.map((item, index) => <Row key={item.id} item={item} index={index} />)}</ul>
+      const TestRow = ({ item }) => <li>{item.label}</li>;
+      export const TestList = ({ items }) => (
+        <ul>{items.map((item, index) => <TestRow key={item.id} item={item} index={index} />)}</ul>
       );
     `;
 
     const code = run(source);
 
     assert.match(code, /import \{ repeat \} from "lit\/directives\/repeat\.js"/);
-    assert.match(code, /repeat\(items, \(item, index\) => item\.id, \(item, index\) => html`<row/);
+    assert.match(code, /repeat\(items, \(item, index\) => item\.id, \(item, index\) => html`<test-row/);
     assert.doesNotMatch(code, /(?:\s|\.)key=/);
 
     const blockCode = run(`
-      const Row = ({ item }) => <li>{item.label}</li>;
-      export const List = ({ items }) => (
-        <ul>{items.map(item => { return <Row key={item.id} item={item} />; })}</ul>
+      const TestRow = ({ item }) => <li>{item.label}</li>;
+      export const TestList = ({ items }) => (
+        <ul>{items.map(item => { return <TestRow key={item.id} item={item} />; })}</ul>
       );
     `);
-    assert.match(blockCode, /repeat\(items, item => item\.id, item => \{\s*return html`<row/);
+    assert.match(blockCode, /repeat\(items, item => item\.id, item => \{\s*return html`<test-row/);
 
     const decoratedCode = run(`
-      const Row = ({ item }) => <li>{item.label}</li>;
-      export const List = ({ items }) => <ul>{items.map(item => {
+      const TestRow = ({ item }) => <li>{item.label}</li>;
+      export const TestList = ({ items }) => <ul>{items.map(item => {
         const key = item.id;
-        return <Row key={key} item={item} />;
+        return <TestRow key={key} item={item} />;
       })}</ul>;
     `);
     assert.match(
       decoratedCode,
-      /repeat\(items\.map\(item => \{\s*const key = item\.id;\s*return \[key, html`<row/,
+      /repeat\(items\.map\(item => \{\s*const key = item\.id;\s*return \[key, html`<test-row/,
     );
     assert.match(decoratedCode, /entry => entry\[0\], entry => entry\[1\]\)/);
     assert.doesNotMatch(decoratedCode, /(?:\s|\.)key=/);
 
     const directReturnCode = run(`
-      const Row = ({ item }) => <li>{item.label}</li>;
-      export function List({ items }) {
-        return items.map(item => <Row key={item.id} item={item} />);
+      const TestRow = ({ item }) => <li>{item.label}</li>;
+      export function TestList({ items }) {
+        return items.map(item => <TestRow key={item.id} item={item} />);
       }
     `);
     assert.match(directReturnCode, /return repeat\(items, item => item\.id/);
@@ -183,25 +183,25 @@ describe("@litsx/babel-preset-react-compat", () => {
 
   it("lowers standalone React keys through Lit keyed and can disable key compatibility", () => {
     const source = `
-      const Panel = ({ label }) => <section>{label}</section>;
-      export const Screen = ({ selectedId, label }) => (
-        <main><Panel key={selectedId} label={label} /></main>
+      const TestPanel = ({ label }) => <section>{label}</section>;
+      export const TestScreen = ({ selectedId, label }) => (
+        <main><TestPanel key={selectedId} label={label} /></main>
       );
     `;
 
     const code = run(source);
     assert.match(code, /import \{ keyed \} from "lit\/directives\/keyed\.js"/);
-    assert.match(code, /keyed\(selectedId, html`<panel label="\$\{label\}"><\/panel>`\)/);
+    assert.match(code, /keyed\(selectedId, html`<test-panel label="\$\{label\}"><\/test-panel>`\)/);
     assert.doesNotMatch(code, /(?:\s|\.)key=/);
 
     const disabledCode = run(source, { preset: { reactKeys: false } });
     assert.doesNotMatch(disabledCode, /lit\/directives\/(?:repeat|keyed)\.js/);
-    assert.match(disabledCode, /<panel[^>]*\.key=\$\{selectedId\}/);
+    assert.match(disabledCode, /<test-panel[^>]*\.key=\$\{selectedId\}/);
   });
 
   it("keeps typed object rest bindings in a compact reactive bag", () => {
     const source = `
-      export function Action(
+      export function TestAction(
         { disabled, ...props }: { disabled: boolean; title?: string }
       ) {
         return <button {...props} disabled={disabled} />;
@@ -219,19 +219,19 @@ describe("@litsx/babel-preset-react-compat", () => {
 
   it("routes explicit callsite props into a local component rest bag", () => {
     const source = `
-      function Action({ disabled, ...props }) {
+      function TestAction({ disabled, ...props }) {
         return <button {...props} disabled={disabled} />;
       }
 
-      export function App() {
-        return <Action disabled aria-label="Save" data-track="primary" />;
+      export function TestApp() {
+        return <TestAction disabled aria-label="Save" data-track="primary" />;
       }
     `;
 
     const code = run(source);
 
     assert.match(code, /static \[Symbol\.for\("litsx\.restProps"\)\] = \{\s*property: "__litsxRestProps"/);
-    assert.match(code, /jsxSpreadElement\("action", \[\{[\s\S]*?disabled: true,[\s\S]*?"aria-label": "Save",[\s\S]*?"data-track": "primary"/);
+    assert.match(code, /jsxSpreadElement\("test-action", \[\{[\s\S]*?disabled: true,[\s\S]*?"aria-label": "Save",[\s\S]*?"data-track": "primary"/);
   });
 
   it("quotes hyphenated typed component properties", () => {
@@ -500,10 +500,10 @@ describe("@litsx/babel-preset-react-compat", () => {
           count,
         );
       };
-      export { a as Counter };
+      export { a as TestCounter };
     `);
 
-    assert.match(code, /export class Counter extends LightDomMixin\(LitElement\)/);
+    assert.match(code, /export class TestCounter extends LightDomMixin\(LitElement\)/);
     assert.match(code, /useState\(0\)/);
     assert.match(code, /return html`<button @click=/);
   });
@@ -511,16 +511,16 @@ describe("@litsx/babel-preset-react-compat", () => {
   it("recovers namespace hooks in bundled internal createElement components", () => {
     const code = run(`
       import * as React from "react";
-      var names = ["theme"], Internal = ({ children }) => {
+      var names = ["theme"], TestInternal = ({ children }) => {
         const [theme] = React.useState("light");
         (React.useEffect(() => document.body.dataset.theme = theme, [theme]),
           React.useEffect(() => document.body.dataset.ready = "true", []));
         return React.createElement("section", { className: theme }, children);
       };
-      export const ThemeProvider = (props) => React.createElement(Internal, props);
+      export const ThemeProvider = (props) => React.createElement(TestInternal, props);
     `);
 
-    assert.match(code, /class Internal extends LightDomMixin\(LitElement\)/);
+    assert.match(code, /class TestInternal extends LightDomMixin\(LitElement\)/);
     assert.match(code, /useState\("light"\)/);
     assert.match(code, /useAfterUpdate\(\(\) =>/);
     assert.doesNotMatch(code, /prepareEffects/);
@@ -544,11 +544,11 @@ describe("@litsx/babel-preset-react-compat", () => {
   it("recognizes internal components exported by a trailing specifier", () => {
     const code = run(`
       import * as React from "react";
-      import { Button } from "./button.js";
+      import { TestButton } from "./button.js";
       function CalendarDayButton({ active }) {
         const ref = React.useRef(null);
         React.useEffect(() => { if (active) ref.current?.focus(); }, [active]);
-        return <Button ref={ref} active={active} />;
+        return <TestButton ref={ref} active={active} />;
       }
       export { CalendarDayButton };
     `);
@@ -563,7 +563,7 @@ describe("@litsx/babel-preset-react-compat", () => {
   it("expands statically bounded polymorphic component aliases", () => {
     const code = run(`
       import { Slot } from "@radix-ui/react-slot";
-      export function Trigger({ asChild, children, ...props }) {
+      export function TestTrigger({ asChild, children, ...props }) {
         const Comp = asChild ? Slot : "button";
         return <Comp {...props}>{children}</Comp>;
       }
@@ -758,15 +758,15 @@ describe("@litsx/babel-preset-react-compat", () => {
 
       const ThemeContext = createContext("light");
 
-      export function Toolbar() {
+      export function TestToolbar() {
         const theme = useContext(ThemeContext);
         return <button className={theme}>{theme}</button>;
       }
 
-      export function App() {
+      export function TestApp() {
         return (
           <ThemeContext.Provider value="dark">
-            <Toolbar />
+            <TestToolbar />
           </ThemeContext.Provider>
         );
       }
@@ -785,11 +785,11 @@ describe("@litsx/babel-preset-react-compat", () => {
     assert.match(code, /return html`<button class="\$\{theme\}">\$\{theme\}<\/button>`;/);
     assert.match(
       code,
-      /return html`<litsx-context-provider \.context=\$\{ThemeContext\} \.value=\$\{"dark"\}><toolbar><\/toolbar><\/litsx-context-provider>`;/
+      /return html`<litsx-context-provider \.context=\$\{ThemeContext\} \.value=\$\{"dark"\}><test-toolbar><\/test-toolbar><\/litsx-context-provider>`;/
     );
     assert.match(
       code,
-      /static elements = \{[\s\S]*"litsx-context-provider": LitsxContextProvider[\s\S]*"toolbar": Toolbar[\s\S]*\}|static elements = \{[\s\S]*"toolbar": Toolbar[\s\S]*"litsx-context-provider": LitsxContextProvider[\s\S]*\}/
+      /static elements = \{[\s\S]*"litsx-context-provider": LitsxContextProvider[\s\S]*"test-toolbar": TestToolbar[\s\S]*\}|static elements = \{[\s\S]*"test-toolbar": TestToolbar[\s\S]*"litsx-context-provider": LitsxContextProvider[\s\S]*\}/
     );
     assert.doesNotMatch(code, /from "react"|from 'react'/);
   });
@@ -800,7 +800,7 @@ describe("@litsx/babel-preset-react-compat", () => {
 
       const ThemeContext = createContext("light");
 
-      export function App() {
+      export function TestApp() {
         return (
           <ThemeContext.Provider value="dark">
             <ThemeContext.Consumer>
@@ -835,7 +835,7 @@ describe("@litsx/babel-preset-react-compat", () => {
         return prefix + ":" + theme;
       }
 
-      export function Toolbar() {
+      export function TestToolbar() {
         const label = useThemeLabel("theme");
         return <span>{label}</span>;
       }
@@ -933,7 +933,7 @@ describe("@litsx/babel-preset-react-compat", () => {
     const fullyLoweredSource = `
       import { useState } from "react";
 
-      export function Counter() {
+      export function TestCounter() {
         const [count, setCount] = useState(0);
         return <button onClick={() => setCount(count + 1)}>{count}</button>;
       }
@@ -946,7 +946,7 @@ describe("@litsx/babel-preset-react-compat", () => {
     const preservedImportSource = `
       import React, { useState } from "react";
 
-      export function Counter() {
+      export function TestCounter() {
         const [count, setCount] = useState(0);
         return <button title={React.version} onClick={() => setCount(count + 1)}>{count}</button>;
       }

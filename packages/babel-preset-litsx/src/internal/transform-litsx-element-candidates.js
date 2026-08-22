@@ -2,6 +2,7 @@ import { declare } from "@babel/helper-plugin-utils";
 import * as babelParser from "@babel/parser";
 import babelTraverse from "@babel/traverse";
 import jsxSyntaxPlugin from "@babel/plugin-syntax-jsx";
+import { componentNameToTagName } from "@litsx/authoring";
 import fs from "node:fs";
 import path from "node:path";
 import { normalizeFilePath } from "@litsx/typescript-session";
@@ -946,7 +947,7 @@ function resolveImportedElementRequirement(candidateName, moduleAnalysis, contex
         : importInfo.sourceValue,
       importedName: importInfo.importedName,
       originalName: candidateName,
-      tagName: candidateName.replace(/([a-z])([A-Z])/g, "$1-$2").toLowerCase(),
+      tagName: componentNameToTagName(candidateName),
       rootFilename,
       lightDom: importedBindingHasLightDomHoist(importInfo, context),
     };
@@ -961,7 +962,7 @@ function resolveImportedElementRequirement(candidateName, moduleAnalysis, contex
         : namespaceAliasInfo.sourceValue,
       importedName: namespaceAliasInfo.importedName,
       originalName: candidateName,
-      tagName: candidateName.replace(/([a-z])([A-Z])/g, "$1-$2").toLowerCase(),
+      tagName: componentNameToTagName(candidateName),
       rootFilename,
     };
   }
@@ -992,7 +993,7 @@ function resolveImportedElementRequirement(candidateName, moduleAnalysis, contex
     sourceSpecifier: null,
     importedName,
     originalName: candidateName,
-    tagName: candidateName.replace(/([a-z])([A-Z])/g, "$1-$2").toLowerCase(),
+    tagName: componentNameToTagName(candidateName),
     rootFilename,
     lightDom: helperPathHasLightDomHoist(moduleAnalysis.helperPaths.get(candidateName)),
   };
@@ -1020,7 +1021,7 @@ function resolveDirectImportRequirement(candidateName, moduleAnalysis, context, 
         : importInfo.sourceValue,
       importedName: importInfo.importedName,
       originalName: candidateName,
-      tagName: candidateName.replace(/([a-z])([A-Z])/g, "$1-$2").toLowerCase(),
+      tagName: componentNameToTagName(candidateName),
       rootFilename,
     };
   }
@@ -1037,7 +1038,7 @@ function resolveDirectImportRequirement(candidateName, moduleAnalysis, context, 
       : namespaceAliasInfo.sourceValue,
     importedName: namespaceAliasInfo.importedName,
     originalName: candidateName,
-    tagName: candidateName.replace(/([a-z])([A-Z])/g, "$1-$2").toLowerCase(),
+    tagName: componentNameToTagName(candidateName),
     rootFilename,
   };
 }

@@ -1,3 +1,5 @@
+import { componentNameToTagName, toKebabCase } from "@litsx/authoring";
+
 let t;
 
 export function setLitsxLazyAnalysisBabelTypes(nextTypes) {
@@ -5,7 +7,14 @@ export function setLitsxLazyAnalysisBabelTypes(nextTypes) {
 }
 
 function toKebab(name) {
-  return name.replace(/([a-z])([A-Z])/g, "$1-$2").toLowerCase();
+  return componentNameToTagName(name);
+}
+
+function getJsxNameParts(node) {
+  if (t.isJSXIdentifier(node)) return [node.__scopedOriginal || node.name];
+  if (!t.isJSXMemberExpression(node)) return null;
+  const objectParts = getJsxNameParts(node.object);
+  return objectParts ? [...objectParts, node.property.name] : null;
 }
 
 function getExpressionKey(node) {
@@ -324,6 +333,27 @@ function getSpecialMemberAttribute(openingElement) {
   ) ?? null;
 }
 
+function isReactControlComponent(expression, scope) {
+  if (t.isIdentifier(expression)) {
+    const binding = scope.getBinding(expression.name);
+    if (!binding?.path?.isImportSpecifier()) return false;
+    const importedName = binding.path.node.imported?.name ?? binding.path.node.imported?.value;
+    return (
+      binding.path.parentPath?.node?.source?.value === "react" &&
+      (importedName === "Suspense" || importedName === "SuspenseList")
+    );
+  }
+  if (!t.isMemberExpression(expression) || expression.computed || !t.isIdentifier(expression.object)) {
+    return false;
+  }
+  const binding = scope.getBinding(expression.object.name);
+  return (
+    (binding?.path?.isImportNamespaceSpecifier() || binding?.path?.isImportDefaultSpecifier()) &&
+    binding.path.parentPath?.node?.source?.value === "react" &&
+    (expression.property?.name === "Suspense" || expression.property?.name === "SuspenseList")
+  );
+}
+
 function rewriteJSXName(node, tagName) {
   if (t.isJSXIdentifier(node)) {
     node.name = tagName;
@@ -338,13 +368,9 @@ function rewriteJSXName(node, tagName) {
 }
 
 function getRenderedTagName(node) {
-  if (t.isJSXIdentifier(node)) {
-    return toKebab(node.name);
-  }
-  if (t.isJSXMemberExpression(node)) {
-    return toKebab(node.property.name);
-  }
-  return null;
+  if (t.isJSXIdentifier(node) && !/^[A-Z]/.test(node.name)) return null;
+  const parts = getJsxNameParts(node);
+  return parts ? parts.map(toKebabCase).join("-") : null;
 }
 
 function getLazyComponentReference(path) {
@@ -368,14 +394,15 @@ function getLazyComponentReference(path) {
         t.identifier(objectName.name),
         t.identifier(propertyName)
       ),
-      tag: toKebab(propertyName),
+      componentName: [objectName.name, propertyName],
+      tag: componentNameToTagName([objectName.name, propertyName]),
       rewrite() {
-        opening.name = t.jsxIdentifier(toKebab(propertyName));
+        opening.name = t.jsxIdentifier(componentNameToTagName([objectName.name, propertyName]));
         opening.attributes = opening.attributes.filter(
           (attribute) => attribute !== specialMemberAttribute
         );
         if (path.node.closingElement) {
-          path.node.closingElement.name = t.jsxIdentifier(toKebab(propertyName));
+          path.node.closingElement.name = t.jsxIdentifier(componentNameToTagName([objectName.name, propertyName]));
         }
       },
     };
@@ -394,6 +421,7 @@ function getLazyComponentReference(path) {
 
   return {
     expression,
+    componentName: getJsxNameParts(nameNode),
     tag,
     rewrite() {
       rewriteJSXName(opening.name, tag);
@@ -407,9 +435,11 @@ function getLazyComponentReference(path) {
 export function trackLazyUsage(path, state, ensureRequirementBucket) {
   const reference = getLazyComponentReference(path);
   if (!reference) return;
-  const { expression, tag } = reference;
+  const { expression, tag, componentName } = reference;
 
+  if (isReactControlComponent(expression, path.scope)) return;
   if (!hasLazyOrigin(expression, path.scope, state)) return;
+  componentNameToTagName(componentName);
 
   const resolvedNode = resolveValueNode(expression, path.scope, state);
   if (!resolvedNode) return;

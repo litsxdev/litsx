@@ -52,7 +52,7 @@ describe("@litsx/babel-preset-react-compat suspense boundaries", () => {
     const source = [
       "import { Suspense } from 'react';",
       "",
-      "export const Screen = () => {",
+      "export const TestScreen = () => {",
       "  return (",
       "    <Suspense fallback={<span>loading</span>}>",
       "      <div>ready</div>",
@@ -63,7 +63,7 @@ describe("@litsx/babel-preset-react-compat suspense boundaries", () => {
 
     const code = run(source);
 
-    assert.match(code, /class Screen extends LightDomMixin\(LitElement\)/);
+    assert.match(code, /class TestScreen extends LightDomMixin\(LitElement\)/);
     assert.match(code, /import \{[^}]*SuspenseBoundary[^}]*\} from ["']@litsx\/core["']/);
     assert.match(code, /static elements = \{[\s\S]*"suspense-boundary": SuspenseBoundary[\s\S]*\}/);
     assert.match(code, /<suspense-boundary/);
@@ -76,7 +76,7 @@ describe("@litsx/babel-preset-react-compat suspense boundaries", () => {
     const source = [
       "import React, { Suspense, SuspenseList } from 'react';",
       "",
-      "export const Screen = () => {",
+      "export const TestScreen = () => {",
       "  return (",
       "    <SuspenseList revealOrder='forwards'>",
       "      <Suspense fallback={<span>One</span>}>",
@@ -109,7 +109,7 @@ describe("@litsx/babel-preset-react-compat suspense boundaries", () => {
       "",
       "const FancyButton = lazy(() => import('./FancyButton.js'));",
       "",
-      "export const Screen = () => {",
+      "export const TestScreen = () => {",
       "  return (",
       "    <Suspense fallback={<span>loading</span>}>",
       "      <FancyButton />",
@@ -137,7 +137,7 @@ describe("@litsx/babel-preset-react-compat suspense boundaries", () => {
       "const AlphaPanel = lazy(() => import('./AlphaPanel.js'));",
       "const BetaPanel = lazy(() => import('./BetaPanel.js'));",
       "",
-      "export const Screen = () => {",
+      "export const TestScreen = () => {",
       "  return (",
       "    <SuspenseList revealOrder='forwards'>",
       "      <Suspense fallback={<span>One</span>}>",
@@ -167,7 +167,7 @@ describe("@litsx/babel-preset-react-compat suspense boundaries", () => {
     const source = [
       "import * as React from 'react';",
       "",
-      "export const Screen = () => {",
+      "export const TestScreen = () => {",
       "  return (",
       "    <React.SuspenseList revealOrder='forwards'>",
       "      <React.Suspense fallback={<span>loading</span>}>",
@@ -210,7 +210,7 @@ describe("@litsx/babel-preset-react-compat suspense boundaries", () => {
       const source = [
         importLine,
         'const order = "backwards";',
-        `export const Screen = () => <>`,
+        `export const TestScreen = () => <>`,
         `  <${tag} revealOrder="forwards" tail="hidden" />`,
         `  <${tag} revealOrder={"together"} tail="collapsed" />`,
         `  <${tag} revealOrder={order} />`,
@@ -229,7 +229,7 @@ describe("@litsx/babel-preset-react-compat suspense boundaries", () => {
     const source = [
       "import { Suspense } from 'react';",
       "",
-      "export const Screen = () => {",
+      "export const TestScreen = () => {",
       "  return <Suspense />;",
       "};",
     ].join("\n");
@@ -245,7 +245,7 @@ describe("@litsx/babel-preset-react-compat suspense boundaries", () => {
     const source = [
       "import { Suspense } from 'react';",
       "",
-      "export const Screen = () => {",
+      "export const TestScreen = () => {",
       "  return (",
       "    <Suspense fallback={<span>loading</span>}>",
       "      <>",
@@ -266,7 +266,7 @@ describe("@litsx/babel-preset-react-compat suspense boundaries", () => {
     const source = [
       "import { Suspense as Wait } from 'react';",
       "",
-      "export const Screen = ({ readyView }) => {",
+      "export const TestScreen = ({ readyView }) => {",
       "  return <Wait fallback>{readyView}</Wait>;",
       "};",
     ].join("\n");
@@ -282,7 +282,7 @@ describe("@litsx/babel-preset-react-compat suspense boundaries", () => {
     const source = [
       "import { Suspense } from 'react';",
       "",
-      "export const Screen = () => {",
+      "export const TestScreen = () => {",
       "  return <Suspense fallback=\"loading\">ready</Suspense>;",
       "};",
     ].join("\n");
@@ -297,7 +297,7 @@ describe("@litsx/babel-preset-react-compat suspense boundaries", () => {
     const source = [
       "import { Suspense } from 'react';",
       "",
-      "export const Screen = () => {",
+      "export const TestScreen = () => {",
       "  return <Suspense fallback={true}><div>ready</div></Suspense>;",
       "};",
     ].join("\n");
@@ -316,7 +316,7 @@ describe("@litsx/babel-preset-react-compat suspense boundaries", () => {
     const source = [
       "import * as UI from 'ui-kit';",
       "",
-      "export const Screen = () => {",
+      "export const TestScreen = () => {",
       "  return <UI.Suspense fallback=\"loading\"><div>ready</div></UI.Suspense>;",
       "};",
     ].join("\n");
@@ -332,7 +332,7 @@ describe("@litsx/babel-preset-react-compat suspense boundaries", () => {
     const source = [
       "import { Suspense as Wait, SuspenseList as Queue } from 'react';",
       "",
-      "export const Screen = () => {",
+      "export const TestScreen = () => {",
       "  return (",
       "    <Queue key=\"outer\" revealOrder=\"forwards\">",
       "      <Wait fallback={<span>One</span>}>",
@@ -354,7 +354,7 @@ describe("@litsx/babel-preset-react-compat suspense boundaries", () => {
     const source = [
       "import { Suspense } from 'react';",
       "",
-      "export const Screen = () => {",
+      "export const TestScreen = () => {",
       "  return <Suspense fallback={404}>{/* empty */}</Suspense>;",
       "};",
     ].join("\n");
@@ -373,7 +373,7 @@ describe("@litsx/babel-preset-react-compat suspense boundaries", () => {
       "const AlphaPanel = () => null;",
       "const BetaPanel = () => null;",
       "",
-      "export const Screen = () => {",
+      "export const TestScreen = () => {",
       "  ensureLazyElement(this, 'alpha-panel', AlphaPanel);",
       "  ensureLazyElement(this, 'beta-panel', BetaPanel);",
       "  return (",
@@ -404,7 +404,7 @@ describe("@litsx/babel-preset-react-compat suspense boundaries", () => {
     const source = [
       "import { Suspense, SuspenseList } from 'react';",
       "",
-      "export const Screen = () => {",
+      "export const TestScreen = () => {",
       "  return (",
       "    <SuspenseList revealOrder='forwards'>",
       "      <Suspense fallback={<span>One</span>}>",
@@ -425,7 +425,7 @@ describe("@litsx/babel-preset-react-compat suspense boundaries", () => {
     const source = [
       "import { Suspense } from 'react';",
       "",
-      "export const Screen = () => {",
+      "export const TestScreen = () => {",
       "  return (",
       "    <Suspense fallback={<span>loading</span>}>",
       "      <div>ready</div>",
@@ -445,7 +445,7 @@ describe("@litsx/babel-preset-react-compat suspense boundaries", () => {
     const source = [
       "import { Suspense } from 'react';",
       "",
-      "export const Screen = () => {",
+      "export const TestScreen = () => {",
       "  return (",
       "    <Suspense fallback={<span>loading</span>}>",
       "      <div>ready</div>",
@@ -469,7 +469,7 @@ describe("@litsx/babel-preset-react-compat suspense boundaries", () => {
       "",
       "const AlphaPanel = lazy(() => import('./AlphaPanel.js'));",
       "",
-      "export const Screen = () => {",
+      "export const TestScreen = () => {",
       "  return (",
       "    <ErrorBoundary fallback={<p>outer-fallback</p>}>",
       "      <section>",

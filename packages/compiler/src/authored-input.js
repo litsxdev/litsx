@@ -1,5 +1,7 @@
 import * as babelParser from "@babel/parser";
 import {
+  collectComponentNameDiagnostics,
+  collectHookDiagnostics,
   collectNativeClassNameWarnings,
   collectReactMemoWarnings,
 } from "@litsx/authoring";
@@ -53,6 +55,22 @@ function assertNoRemovedAuthoringCalls(ast) {
   visit(ast?.program ?? ast);
 }
 
+function assertNoAuthoringErrors(ast) {
+  const diagnostics = [
+    ...collectComponentNameDiagnostics(ast),
+    ...collectHookDiagnostics(ast),
+  ].sort((left, right) => (left.start ?? 0) - (right.start ?? 0));
+  const diagnostic = diagnostics.find((entry) => entry.severity === "error");
+  if (!diagnostic) return;
+
+  const error = new SyntaxError(`[${diagnostic.code}] ${diagnostic.message}`);
+  error.code = diagnostic.code;
+  if (typeof diagnostic.line === "number" && typeof diagnostic.column === "number") {
+    error.loc = { line: diagnostic.line, column: diagnostic.column };
+  }
+  throw error;
+}
+
 export function ensureLitsxParserPlugins(filename, parserPlugins = [], { requireJsx = false } = {}) {
   const normalized = normalizeParserPlugins(filename, parserPlugins);
   if (!requireJsx) {
@@ -89,6 +107,7 @@ export function prepareLitsxAuthoredInput(
     sourceFileName: filename,
   });
   assertNoRemovedAuthoringCalls(parsedAst);
+  assertNoAuthoringErrors(parsedAst);
   const authoredWarnings = mergeLitsxWarnings(
     collectNativeClassNameWarnings(parsedAst).map((warning) => ({
       ...warning,

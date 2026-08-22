@@ -1,11 +1,34 @@
 import { ensureHooksRenderWrapper } from "./render-boundary.js";
 import { ensureRuntimeNamedImports } from "./runtime-imports.js";
+import { collectHookDiagnostics } from "@litsx/authoring";
 
 const BLOCKED_CUSTOM_HOOK_SOURCES = new Set(["react"]);
 const STRUCTURAL_RUNTIME_HELPERS = new Set([
   "applyStructuralHooks",
   "readStructuralHook",
 ]);
+
+function assertValidHookAuthoring(programPath) {
+  const diagnostic = collectHookDiagnostics(programPath.node)
+    .find((entry) => entry.severity === "error");
+  if (!diagnostic) return;
+
+  let targetPath = programPath;
+  if (diagnostic.node !== programPath.node) {
+    programPath.traverse({
+      enter(path) {
+        if (path.node !== diagnostic.node) return;
+        targetPath = path;
+        path.stop();
+      },
+    });
+  }
+  const error = targetPath.buildCodeFrameError(
+    `[${diagnostic.code}] ${diagnostic.message}`,
+  );
+  error.code = diagnostic.code;
+  throw error;
+}
 
 function isCustomHookName(name) {
   return typeof name === "string" && /^use[A-Z0-9]/.test(name);
@@ -1491,6 +1514,7 @@ export function createRuntimeHooksTransform({
       visitor: {
         Program: {
           enter(path, state) {
+            assertValidHookAuthoring(path);
             state.runtimeModule = runtimeModule;
             state.importSourceSet = importSourceSet;
             state.preservedRuntimeImportSourceSet =

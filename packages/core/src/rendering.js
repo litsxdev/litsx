@@ -1,5 +1,4 @@
-import { adoptStyles } from "@lit/reactive-element";
-import { nothing } from "lit";
+import { adoptStyles, nothing } from "lit";
 import { isTemplateResult } from "lit/directive-helpers.js";
 import { render as renderLightDom } from "lit/html.js";
 import { Directive, PartType, directive } from "lit/directive.js";

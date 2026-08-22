@@ -414,7 +414,7 @@ describe("@litsx/storybook", () => {
     });
     const source = [
       'export default { title: "Catalog/Button" };',
-      "export function Default() {",
+      "export function BasicStory() {",
       "  return <div />;",
       "}",
     ].join("\n");

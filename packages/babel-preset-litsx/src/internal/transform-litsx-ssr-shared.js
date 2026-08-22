@@ -1,4 +1,4 @@
-import { decodeVirtualAttributeName } from "@litsx/authoring";
+import { componentNameToTagName, decodeVirtualAttributeName } from "@litsx/authoring";
 import fs from "node:fs";
 import path from "node:path";
 import { normalizeFilePath } from "@litsx/typescript-session";
@@ -18,7 +18,7 @@ export function setSsrSharedBabelTypes(nextTypes) {
 }
 
 export function toKebab(name) {
-  return name.replace(/([a-z])([A-Z])/g, "$1-$2").toLowerCase();
+  return componentNameToTagName(name);
 }
 
 export function buildAvailableMap(programPath, options = {}) {

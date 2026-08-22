@@ -1,5 +1,24 @@
 import MagicString from "magic-string";
 export {
+  collectComponentNameDiagnostics,
+  componentNameToTagName,
+  createInvalidComponentNameDiagnostic,
+  isValidCustomElementName,
+  LITSX_INVALID_COMPONENT_NAME_CODE,
+  toKebabCase,
+} from "./component-names.js";
+export {
+  collectHookDiagnostics,
+  LITSX_HOOK_AFTER_EARLY_RETURN_CODE,
+  LITSX_HOOK_ASYNC_SCOPE_CODE,
+  LITSX_HOOK_CONDITIONAL_CODE,
+  LITSX_HOOK_DEFERRED_ACTION_CODE,
+  LITSX_HOOK_INVALID_SCOPE_CODE,
+  LITSX_HOOK_LOOP_CODE,
+  LITSX_HOOK_TRY_BLOCK_CODE,
+  LITSX_NESTED_HOOK_DEFINITION_CODE,
+} from "./hook-diagnostics.js";
+export {
   collectComponentLikeFunctions,
   collectNativeClassNameWarnings,
   collectReactMemoWarnings,

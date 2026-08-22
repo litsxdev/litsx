@@ -131,7 +131,7 @@ describe("@litsx/babel-plugin-transform-litsx-scoped-elements", () => {
         label: PropTypes.string,
       };
 
-      export const Alert = (message) => {
+      export const TestAlert = (message) => {
         const lower = message.toLowerCase();
         return <p>{lower}</p>;
       };
@@ -598,7 +598,7 @@ describe("@litsx/babel-plugin-transform-litsx-scoped-elements", () => {
     const source = `
       import { SuspenseBoundary } from '@litsx\/core';
 
-      export function Screen() {
+      export function TestScreen() {
         return (
           <section>
             <SuspenseBoundary fallback={<span>loading</span>}>
@@ -611,7 +611,7 @@ describe("@litsx/babel-plugin-transform-litsx-scoped-elements", () => {
 
     const { code } = transformWithNativePreset(source);
 
-    assert.match(code, /class Screen extends ShadowDomMixin\(LitElement\)/);
+    assert.match(code, /class TestScreen extends ShadowDomMixin\(LitElement\)/);
     assert.match(
       code,
       /return <section>\s*<suspense-boundary \.fallback=\{\(\) => <span>loading<\/span>\} \.content=\{\(\) => <span>ready<\/span>\}><\/suspense-boundary>\s*<\/section>;/s
@@ -627,7 +627,7 @@ describe("@litsx/babel-plugin-transform-litsx-scoped-elements", () => {
       import { keyed } from 'lit/directives/keyed.js';
       import { SuspenseBoundary } from '@litsx\/core';
 
-      export function Screen({ cycle }) {
+      export function TestScreen({ cycle }) {
         return (
           <section>
             {keyed(cycle, (
@@ -642,7 +642,7 @@ describe("@litsx/babel-plugin-transform-litsx-scoped-elements", () => {
 
     const { code } = transformWithNativePreset(source);
 
-    assert.match(code, /class Screen extends ShadowDomMixin\(LitElement\)/);
+    assert.match(code, /class TestScreen extends ShadowDomMixin\(LitElement\)/);
     assert.match(
       code,
       /keyed\(this\.cycle,\s*<suspense-boundary \.fallback=\{\(\) => <span>loading<\/span>\} \.content=\{\(\) => <span>ready<\/span>\}><\/suspense-boundary>\s*\)/s
@@ -659,7 +659,7 @@ describe("@litsx/babel-plugin-transform-litsx-scoped-elements", () => {
       import { keyed } from 'lit/directives/keyed.js';
       import { SuspenseBoundary, SuspenseList } from '@litsx\/core';
 
-      class Screen extends LitElement {
+      class TestScreen extends LitElement {
         render() {
           return html\`
             <SuspenseList reveal-order="forwards">

@@ -45,7 +45,8 @@
     "@babel/core": "^8.0.0"
   },
   "dependencies": {
-    "@babel/helper-plugin-utils": "^8.0.1"
+    "@babel/helper-plugin-utils": "^8.0.1",
+    "@litsx/authoring": "^1.0.0-next.1"
   },
   "devDependencies": {
     "@babel/core": "^8.0.1"

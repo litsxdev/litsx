@@ -363,7 +363,7 @@ describe("@litsx/babel-plugin-shared-hooks createRuntimeHooksTransform", () => {
     assert.doesNotMatch(code, /prepareEffects/);
   });
 
-  it("adds a runtime import when none exists and leaves files without render-hook usage untouched", () => {
+  it("adds a runtime import when none exists and rejects hooks outside render scope", () => {
     const hookSource = `
       import * as hooks from "./hooks";
 
@@ -390,10 +390,10 @@ describe("@litsx/babel-plugin-shared-hooks createRuntimeHooksTransform", () => {
       }
     `;
 
-    const untouchedCode = run(untouchedSource);
-    assert.doesNotMatch(untouchedCode, /prepareEffects/);
-    assert.match(untouchedCode, /import \{ useAfterUpdate \} from "@litsx\/core";/);
-    assert.match(untouchedCode, /useAfterUpdate\(\(\) => this\.sync\(\), \[]\);/);
+    assert.throws(
+      () => run(untouchedSource),
+      (error) => error?.code === "LITSX_HOOK_INVALID_SCOPE",
+    );
   });
 
   it("adds a render boundary when render only uses a local custom hook", () => {

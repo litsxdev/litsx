@@ -66,23 +66,23 @@ describe("@litsx/babel-preset-litsx native lowering internals", () => {
 
   it("keeps forwarded refs live when a child component relies on the default instance target", () => {
     const source = [
-      "const Leaf = () => {",
+      "const TestLeaf = () => {",
       "  return <div>leaf</div>;",
       "};",
       "",
-      "const Parent = ({ ref }) => {",
-      "  return <Leaf ref={ref} />;",
+      "const TestParent = ({ ref }) => {",
+      "  return <TestLeaf ref={ref} />;",
       "};",
     ].join("\n");
 
     const { code } = transformWithNativePreset(source);
 
-    assert.match(code, /class Leaf extends LitElement/);
-    assert.match(code, /class Parent extends (?:ShadowDomMixin\(LitElement\)|LitElement)/);
-    assert.match(code, /<(?:leaf|Leaf) \.ref=\{this\.ref\} \/>/);
+    assert.match(code, /class TestLeaf extends LitElement/);
+    assert.match(code, /class TestParent extends (?:ShadowDomMixin\(LitElement\)|LitElement)/);
+    assert.match(code, /<test-leaf \.ref=\{this\.ref\} \/>/);
     assert.match(
       code,
-      /class Leaf extends LitElement \{[\s\S]*useCallbackRef\(\(\) => this,/
+      /class TestLeaf extends LitElement \{[\s\S]*useCallbackRef\(\(\) => this,/
     );
   });
 
@@ -197,7 +197,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
 
   it("converts arrow functions into LitElement classes", () => {
     const source = `
-      const Greeting = ({ name, count }) => {
+      const TestGreeting = ({ name, count }) => {
         const doubled = count * 2;
         return <p>{name} {doubled}</p>;
       };
@@ -335,7 +335,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
         tags: string[];
       }
 
-      function Card(props: CardProps) {
+      function TestCard(props: CardProps) {
         return <article>{props.title} {props.active ? "on" : "off"} {props.tags.length}</article>;
       }
     `;
@@ -366,7 +366,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
         active: boolean;
       }
 
-      function Card(props: CardProps = {} as CardProps) {
+      function TestCard(props: CardProps = {} as CardProps) {
         return <article>{props.title} {props.active ? "on" : "off"}</article>;
       }
     `;
@@ -397,7 +397,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
         active: boolean;
       }
 
-      function Card(props: CardProps = {} as CardProps) {
+      function TestCard(props: CardProps = {} as CardProps) {
         const { title, active } = props;
         return <article>{title} {active ? "on" : "off"}</article>;
       }
@@ -429,7 +429,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
         onSelect: (id: string) => void;
       };
 
-      function Card(props: CardProps) {
+      function TestCard(props: CardProps) {
         return <button on:click={() => props.onSelect(props.title)}>{props.title}</button>;
       }
     `;
@@ -457,11 +457,11 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
         onSelect: (id: string) => void;
       };
 
-      function Card(props: CardProps) {
+      function TestCard(props: CardProps) {
         return <article>{props.title}</article>;
       }
 
-      Card.properties = {
+      TestCard.properties = {
         active: { reflect: true },
         payload: { attribute: false },
         onSelect: { attribute: false }
@@ -494,11 +494,11 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
         active: boolean;
       };
 
-      function Card(props: CardProps) {
+      function TestCard(props: CardProps) {
         return <article>{props.title}</article>;
       }
 
-      Card.properties = {
+      TestCard.properties = {
         active: { reflect: true },
       };
     `;
@@ -531,7 +531,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
         payload: BaseProps["payload"];
       };
 
-      function Card(props: CardProps) {
+      function TestCard(props: CardProps) {
         return <article>{props.title} {props.active ? "on" : "off"}</article>;
       }
     `;
@@ -554,7 +554,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
   it("resolves imported TypeScript prop types with the checker when filename is available", () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-transform-"));
     const typesPath = path.join(tempDir, "types.ts");
-    const componentPath = path.join(tempDir, "Card.tsx");
+    const componentPath = path.join(tempDir, "TestCard.tsx");
 
     fs.writeFileSync(
       typesPath,
@@ -571,7 +571,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
 
     const source = [
       "import type { CardProps } from './types';",
-      "function Card(props: CardProps) {",
+      "function TestCard(props: CardProps) {",
       "  return <article>{props.title} {props.active ? 'on' : 'off'} {props.tags.length}</article>;",
       "}",
     ].join("\n");
@@ -598,7 +598,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
 
   it("supports object rest properties in parameter destructuring", () => {
     const source = `
-      const List = ({ items = [], title, ...restProps }) => {
+      const TestList = ({ items = [], title, ...restProps }) => {
         const count = items.length;
         const extra = restProps.subtitle;
         const dynamic = restProps["data-id"];
@@ -640,7 +640,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
 
   it("hoists inline event handlers into class methods", () => {
     const source = `
-      const Button = ({ label }) => {
+      const TestButton = ({ label }) => {
         return <button on:click={() => console.log(label)}>{label}</button>;
       };
     `;
@@ -657,10 +657,10 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
 
     const ast = parser.parse(code, { sourceType: "module" });
     const classDecl = ast.program.body.find(
-      (node) => node.type === "ClassDeclaration" && node.id.name === "Button"
+      (node) => node.type === "ClassDeclaration" && node.id.name === "TestButton"
     );
 
-    assert(classDecl, "expected Button class declaration");
+    assert(classDecl, "expected TestButton class declaration");
 
     const hasHandlerMethod = classDecl.body.body.some(
       (member) => member.type === "ClassMethod" && member.key.name === "handleClick"
@@ -671,7 +671,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
 
   it("hoists declared handlers into class methods", () => {
     const source = `
-      const Button = ({ label }) => {
+      const TestButton = ({ label }) => {
         const handleClick = (event) => {
           console.log(label, event.type);
         };
@@ -692,10 +692,10 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
 
     const ast = parser.parse(code, { sourceType: "module" });
     const classDecl = ast.program.body.find(
-      (node) => node.type === "ClassDeclaration" && node.id.name === "Button"
+      (node) => node.type === "ClassDeclaration" && node.id.name === "TestButton"
     );
 
-    assert(classDecl, "expected Button class declaration");
+    assert(classDecl, "expected TestButton class declaration");
 
     const handlerMethod = classDecl.body.body.find(
       (member) => member.type === "ClassMethod" && member.key.name === "handleClick"
@@ -707,7 +707,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
 
   it("keeps inline handlers that capture local bindings", () => {
     const source = `
-      const Button = ({ label }) => {
+      const TestButton = ({ label }) => {
         const prefix = '>>>';
         return <button on:click={() => console.log(prefix, label)}>{prefix}{label}</button>;
       };
@@ -724,7 +724,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
 
     const ast = parser.parse(code, { sourceType: "module" });
     const classDecl = ast.program.body.find(
-      (node) => node.type === "ClassDeclaration" && node.id.name === "Button"
+      (node) => node.type === "ClassDeclaration" && node.id.name === "TestButton"
     );
 
     const handlerMethods = classDecl.body.body.filter(
@@ -744,7 +744,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
         metadata: Record<string, unknown>;
       };
 
-      const Logger = (entries: LogEntry[]) => {
+      const TestLogger = (entries: LogEntry[]) => {
         const first = entries[0];
 
         return (
@@ -777,9 +777,9 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
     });
 
     const classDecl = ast.program.body.find(
-      (node) => node.type === "ClassDeclaration" && node.id.name === "Logger"
+      (node) => node.type === "ClassDeclaration" && node.id.name === "TestLogger"
     );
-    assert(classDecl, "expected a Logger class declaration");
+    assert(classDecl, "expected a TestLogger class declaration");
 
     const propertiesField = classDecl.body.body.find(
       (member) => member.type === "ClassProperty" && member.key.name === "properties"
@@ -811,7 +811,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
         metadata: Record<string, unknown>;
       };
 
-      const Logger = (entry: LogEntry) => {
+      const TestLogger = (entry: LogEntry) => {
         const extra = entry.metadata.details;
 
         return (
@@ -846,9 +846,9 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
     });
 
     const classDecl = ast.program.body.find(
-      (node) => node.type === "ClassDeclaration" && node.id.name === "Logger"
+      (node) => node.type === "ClassDeclaration" && node.id.name === "TestLogger"
     );
-    assert(classDecl, "expected Logger class declaration");
+    assert(classDecl, "expected TestLogger class declaration");
 
     const propertiesField = classDecl.body.body.find(
       (member) => member.type === "ClassProperty" && member.key.name === "properties"
@@ -907,7 +907,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
   it("preserves existing LitElement imports", () => {
     const source = `
       import { LitElement } from 'lit';
-      const Button = ({ label }) => {
+      const TestButton = ({ label }) => {
         return <button>{label}</button>;
       };
     `;
@@ -925,7 +925,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
   it("adds LitElement import when lit is namespaced imported", () => {
     const source = `
       import * as lit from 'lit';
-      const Button = ({ label }) => {
+      const TestButton = ({ label }) => {
         return <button>{label}</button>;
       };
     `;
@@ -969,11 +969,11 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
 
   it("rewrites props member access to component properties when static properties declares them", () => {
     const source = `
-      export function Playground(props) {
+      export function TestPlayground(props) {
         return <section>{props.source} {props.exportName}</section>;
       }
 
-      Playground.properties = {
+      TestPlayground.properties = {
         source: String,
         exportName: String,
       };
@@ -995,7 +995,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
 
   it("converts default exported named function declarations when the name is capitalized", () => {
     const source = `
-      export default function Greeting({ message }) {
+      export default function TestGreeting({ message }) {
         return <div>{message}</div>;
       }
     `;
@@ -1006,7 +1006,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
       presets: [[nativePreset, { jsxTemplate: false }]],
     });
 
-    assert.match(code, /export default class Greeting extends LitElement/);
+    assert.match(code, /export default class TestGreeting extends LitElement/);
     assert.match(code, /static properties = \{[\s\S]*message: \{\s*type: String\s*\}[\s\S]*\};/);
   });
 
@@ -1032,7 +1032,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
   it("uses namespace import when LitElement is not directly imported", () => {
     const source = `
       import * as lit from 'lit';
-      const Button = ({ label }) => {
+      const TestButton = ({ label }) => {
         return <button>{label}</button>;
       };
     `;
@@ -1044,7 +1044,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
     });
 
     assert.match(code, /import \{ LitElement \} from ['"]lit['"];?/);
-    assert.match(code, /class Button extends LitElement/);
+    assert.match(code, /class TestButton extends LitElement/);
   });
 
   it("handles function with non-JSX return statement", () => {
@@ -1067,7 +1067,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
   it("preserves LitElement when already imported from lit", () => {
     const source = `
       import { LitElement, html } from 'lit';
-      const Button = ({ label }) => {
+      const TestButton = ({ label }) => {
         return <button>{label}</button>;
       };
     `;
@@ -1080,12 +1080,12 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
 
     const litImports = (code.match(/import \{[^}]*LitElement[^}]*\} from ['"]lit['"];?/g) || []);
     assert.strictEqual(litImports.length, 1);
-    assert.match(code, /class Button extends LitElement/);
+    assert.match(code, /class TestButton extends LitElement/);
   });
 
   it("handles parameter without direct binding references", () => {
     const source = `
-      const Component = ({ unused }) => {
+      const TestComponent = ({ unused }) => {
         return <div>static content</div>;
       };
     `;
@@ -1097,7 +1097,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
     });
 
     assert.match(code, /static properties = \{[\s\S]*unused:/);
-    assert.match(code, /class Component extends LitElement/);
+    assert.match(code, /class TestComponent extends LitElement/);
   });
 
   it("infers array type from default value without type annotation", () => {
@@ -1164,7 +1164,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
         mapping: Record<string, number>;
       };
 
-      export const Viewer = ({ entries, mapping }: Config) => {
+      export const TestViewer = ({ entries, mapping }: Config) => {
         return (
           <section>
             <p>{entries.length}</p>
@@ -1343,7 +1343,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
 
   it("converts named exported arrow functions", () => {
     const source = `
-      export const Banner = ({ title }) => {
+      export const TestBanner = ({ title }) => {
         return <section>{title}</section>;
       };
     `;
@@ -1355,13 +1355,13 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
       presets: [[nativePreset, { jsxTemplate: false }]],
     });
 
-    assert.match(code, /export class Banner extends LitElement/);
+    assert.match(code, /export class TestBanner extends LitElement/);
     assert.match(code, /this\.title/);
   });
 
   it("infers String properties from opaque props member access", () => {
     const source = `
-      export function Banner(props) {
+      export function TestBanner(props) {
         return <section>{props.title} {props.count}</section>;
       }
     `;
@@ -1380,7 +1380,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
 
   it("emits warnings when opaque props access falls back to String metadata", () => {
     const source = `
-      export function Banner(props) {
+      export function TestBanner(props) {
         return <section>{props.title}</section>;
       }
     `;
@@ -1401,7 +1401,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
 
   it("emits warnings when native className is authored", () => {
     const source = `
-      export function Banner() {
+      export function TestBanner() {
         return <section className="panel">panel</section>;
       }
     `;
@@ -1422,7 +1422,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
 
   it("rewrites shorthand object properties and JSX attribute bindings", () => {
     const source = `
-      const Card = ({ label, info }) => {
+      const TestCard = ({ label, info }) => {
         const payload = { label, info };
         return <child-card title={label} payload={payload}>{info.value}</child-card>;
       };
@@ -1443,7 +1443,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
 
   it("captures prop references for nested non-arrow functions", () => {
     const source = `
-      function Worker({ filename }) {
+      function TestWorker({ filename }) {
         function compile() {
           return { filename };
         }
@@ -1466,7 +1466,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
 
   it("propagates local aliases of props into nested non-arrow functions", () => {
     const source = `
-      function Worker({ filename }) {
+      function TestWorker({ filename }) {
         const outputFilename = filename;
 
         function compile() {
@@ -1491,7 +1491,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
 
   it("rewrites prop shorthands inside object literals", () => {
     const source = `
-      function Worker({ filename, exportName }) {
+      function TestWorker({ filename, exportName }) {
         const message = {
           filename,
           exportName,
@@ -1518,7 +1518,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
 
   it("supports typed rest parameters", () => {
     const source = `
-      const Collector = (...entries: string[]) => {
+      const TestCollector = (...entries: string[]) => {
         return <p>{entries.length}</p>;
       };
     `;
@@ -1533,14 +1533,14 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
       presets: [[nativePreset, { jsxTemplate: false }]],
     });
 
-    assert.match(code, /class Collector extends LitElement/);
+    assert.match(code, /class TestCollector extends LitElement/);
     assert.match(code, /entries: \{\s*type: Array\s*\}/);
     assert.match(code, /this\.entries\.length/);
   });
 
   it("creates unique handler names when a method name already exists", () => {
     const source = `
-      const Button = ({ label }) => {
+      const TestButton = ({ label }) => {
         const handleClick = () => console.log('declared');
         return (
           <button on:click={() => console.log('inline')}>
@@ -1566,13 +1566,13 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
     const source = `
       import { css } from "@litsx/core";
 
-      const Panel = ({ accent }) => {
+      const TestPanel = ({ accent }) => {
         useStyle("--accent", accent);
 
         return <section class="panel">panel</section>;
       };
 
-      Panel.styles = css\`
+      TestPanel.styles = css\`
         :host {
           display: block;
         }
@@ -1602,13 +1602,13 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
     const source = `
       import { css } from "@litsx/core";
 
-      const Panel = ({ accent }) => {
+      const TestPanel = ({ accent }) => {
         useStyle("--accent", accent);
 
         return <section class="panel">panel</section>;
       };
 
-      Panel.styles = css\`
+      TestPanel.styles = css\`
         :host {
           display: block;
         }
@@ -1633,11 +1633,11 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
 
   it("lowers Lit shadow root options into a direct static field", () => {
     const source = `
-      function Card() {
+      function TestCard() {
         return <div>ready</div>;
       }
 
-      Card.shadowRootOptions = {
+      TestCard.shadowRootOptions = {
         delegatesFocus: true,
       };
     `;
@@ -1656,11 +1656,11 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
 
   it("lowers static lightDom to LightDomMixin", () => {
     const source = `
-      function Card() {
+      function TestCard() {
         return <div>ready</div>;
       }
 
-      Card.lightDom = true;
+      TestCard.lightDom = true;
     `;
 
     const inputAst = parser.parse(source, { sourceType: "module", plugins: ["typescript"] });
@@ -1671,7 +1671,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
     });
 
     assert.match(code, /import \{[^}]*LightDomMixin[^}]*\} from "@litsx\/core\/elements";/);
-    assert.match(code, /class Card extends LightDomMixin\(LitElement\)/);
+    assert.match(code, /class TestCard extends LightDomMixin\(LitElement\)/);
     assert.doesNotMatch(code, /createRenderRoot\(\)\s*\{\s*return this;\s*\}/s);
     assert.doesNotMatch(code, /static get lightDom\(\)/);
     assert.doesNotMatch(code, /static get elements\(\)/);
@@ -1681,11 +1681,11 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
     const source = `
       import { FancyButton } from "./fancy-button.tsx";
 
-      function Card() {
+      function TestCard() {
         return <section>ready</section>;
       }
 
-      Card.elements = {
+      TestCard.elements = {
         "fancy-button": FancyButton,
       };
     `;
@@ -1693,7 +1693,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
     const { code } = transformWithNativePreset(source);
 
     assert.match(code, /import \{[^}]*ShadowDomMixin[^}]*\} from "@litsx\/core\/elements";/);
-    assert.match(code, /class Card extends ShadowDomMixin\(LitElement\)/);
+    assert.match(code, /class TestCard extends ShadowDomMixin\(LitElement\)/);
     assert.match(code, /static elements = \{\s*\.\.\.\(super\.elements \?\? \{\}\),/);
   });
 
@@ -1702,18 +1702,18 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
       import { ChildOne } from "./child-one.tsx";
       import { ChildTwo } from "./child-two.tsx";
 
-      function Wrapper() {
+      function TestWrapper() {
         return <ChildTwo />;
       }
 
-      Wrapper.elements = {
+      TestWrapper.elements = {
         "child-one": ChildOne,
       };
     `;
 
     const { code } = transformWithNativePreset(source);
 
-    assert.match(code, /class Wrapper extends ShadowDomMixin\(LitElement\)/);
+    assert.match(code, /class TestWrapper extends ShadowDomMixin\(LitElement\)/);
     assert.match(code, /static elements = \{\s*\.\.\.\(super\.elements \?\? \{\}\),/);
     assert.match(code, /"child-one": ChildOne/);
     assert.doesNotMatch(code, /static elements = \{\s*"child-two": ChildTwo\s*\}/);
@@ -1723,18 +1723,18 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
     const source = `
       import { FancyButton } from "./fancy-button.tsx";
 
-      function Card() {
+      function TestCard() {
         return <section>ready</section>;
       }
 
-      Card.lightDom = true;
-      Card.elements = {
+      TestCard.lightDom = true;
+      TestCard.elements = {
         "fancy-button": FancyButton,
       };
     `;
 
     const { code } = transformWithNativePreset(source);
-    assert.match(code, /class Card extends LightDomMixin\(LitElement\)/);
+    assert.match(code, /class TestCard extends LightDomMixin\(LitElement\)/);
     assert.match(code, /static elements = \{\s*\.\.\.\(super\.elements \?\? \{\}\),/);
     assert.match(code, /"fancy-button": FancyButton/);
   });
@@ -1745,7 +1745,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
       import { LitElement } from "lit";
       import { FancyButton } from "./fancy-button.tsx";
 
-      class Card extends LightDomMixin(LitElement) {
+      class TestCard extends LightDomMixin(LitElement) {
         render() {
           return <section>ready</section>;
         }
@@ -1763,12 +1763,12 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
 
   it("ignores static shadowRootOptions when static lightDom is present", () => {
     const source = `
-      function Card() {
+      function TestCard() {
         return <div>ready</div>;
       }
 
-      Card.lightDom = true;
-      Card.shadowRootOptions = { delegatesFocus: true };
+      TestCard.lightDom = true;
+      TestCard.shadowRootOptions = { delegatesFocus: true };
     `;
 
     const inputAst = parser.parse(source, { sourceType: "module", plugins: ["typescript"] });
@@ -1779,18 +1779,18 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
       presets: [[nativePreset, { jsxTemplate: false }]],
     });
 
-    assert.match(code, /class Card extends LightDomMixin\(LitElement\)/);
+    assert.match(code, /class TestCard extends LightDomMixin\(LitElement\)/);
     assert.doesNotMatch(code, /static get shadowRootOptions\(\)/);
     assert.doesNotMatch(code, /_litsx_static_shadowRootOptions/);
   });
 
   it("lowers static expose object literals into static class methods", () => {
     const source = `
-      function Registry() {
+      function TestRegistry() {
         return <div>ready</div>;
       }
 
-      Registry.expose = {
+      TestRegistry.expose = {
         canHandle(type) {
           return type === "dialog";
         },
@@ -1819,11 +1819,11 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
 
   it("rejects parent-based static expose factories", () => {
     const source = `
-      function Registry() {
+      function TestRegistry() {
         return <div>ready</div>;
       }
 
-      Registry.expose = ((parent) => ({
+      TestRegistry.expose = ((parent) => ({
         canHandle(type) {
           return parent.canHandle?.(type) || type === "dialog";
         },
@@ -1843,11 +1843,11 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
 
   it("rejects parent-based generic hoist factories", () => {
     const source = `
-      function Card() {
+      function TestCard() {
         return <div>ready</div>;
       }
 
-      Card.shadowRootOptions = ((parent) => ({
+      TestCard.shadowRootOptions = ((parent) => ({
         ...parent.shadowRootOptions,
         delegatesFocus: true,
       }));
@@ -1868,16 +1868,16 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
     const source = `
       import { css, useState } from "@litsx/core";
 
-      export function Card() {
+      export function TestCard() {
         const [count] = useState(0);
         return <div>{count}</div>;
       }
 
-      Card.properties = {
+      TestCard.properties = {
         title: String,
       };
 
-      Card.styles = css\`
+      TestCard.styles = css\`
         :host {
           display: block;
         }
