@@ -38,7 +38,6 @@ function createManagedRefLookupExpression(refName) {
 function createForwardedTargetRefSyncStatement(propName, refName) {
   return t.expressionStatement(
     t.callExpression(t.identifier("useCallbackRef"), [
-      t.thisExpression(),
       t.arrowFunctionExpression([], createManagedRefLookupExpression(refName)),
       t.arrowFunctionExpression(
         [t.identifier("node")],
@@ -226,7 +225,6 @@ export function hasExplicitRefForwarding(functionPath, propName) {
 export function createComponentInstanceRefSyncStatement() {
   return t.expressionStatement(
     t.callExpression(t.identifier("useCallbackRef"), [
-      t.thisExpression(),
       t.arrowFunctionExpression([], t.thisExpression()),
       t.arrowFunctionExpression(
         [t.identifier("node")],

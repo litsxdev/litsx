@@ -60,11 +60,11 @@ describe("@litsx/babel-plugin-shared-hooks createUseRefTransform", () => {
 
     const code = run(source);
 
-    assert.match(code, /import \{ useRef, useCallbackRef \} from "@litsx\/core";|import \{ useCallbackRef, useRef \} from "@litsx\/core";/);
+    assert.match(code, /import \{[^}]*renderWithHooks[^}]*useRef[^}]*useCallbackRef[^}]*\} from "@litsx\/core";/);
     assert.match(code, /get _inputRefElement\(\)/);
     assert.match(code, /data-ref="_inputRefElement"/);
-    assert.match(code, /const inputRef = useRef\(this, null\);/);
-    assert.match(code, /useCallbackRef\(this, \(\) => this\._inputRefElement, node => inputRef\.current = node\);/);
+    assert.match(code, /const inputRef = useRef\(null\);/);
+    assert.match(code, /useCallbackRef\(\(\) => this\._inputRefElement, node => inputRef\.current = node\);/);
     assert.strictEqual((code.match(/get _inputRefElement\(\)/g) || []).length, 1);
   });
 
@@ -125,9 +125,9 @@ describe("@litsx/babel-plugin-shared-hooks createUseRefTransform", () => {
 
     const code = run(source);
 
-    assert.match(code, /import \{ useCallbackRef \} from "@litsx\/core";/);
+    assert.match(code, /import \{[^}]*renderWithHooks[^}]*useCallbackRef[^}]*\} from "@litsx\/core";/);
     assert.match(code, /get _ref\(\)/);
-    assert.match(code, /useCallbackRef\(this, \(\) => this\._ref, node => this\.register\(node\)\);/);
+    assert.match(code, /useCallbackRef\(\(\) => this\._ref, node => this\.register\(node\)\);/);
     assert.match(code, /html`<button data-ref="_ref">Click<\/button>`/);
   });
 
@@ -153,7 +153,7 @@ describe("@litsx/babel-plugin-shared-hooks createUseRefTransform", () => {
 
     const code = run(source);
 
-    assert.strictEqual((code.match(/useCallbackRef\(this,/g) || []).length, 3);
+    assert.strictEqual((code.match(/useCallbackRef\(\(\) =>/g) || []).length, 3);
     assert.match(code, /const _refValue = props\.ref;/);
     assert.match(code, /const _refValue2 = state\.ref;/);
     assert.match(code, /const _refValue3 = object\.callback;/);
@@ -202,9 +202,9 @@ describe("@litsx/babel-plugin-shared-hooks createUseRefTransform", () => {
 
     assert.match(
       code,
-      /import \{ useCallbackRef as _useCallbackRef \} from "@litsx\/core";/
+      /import \{[^}]*renderWithHooks[^}]*useCallbackRef as _useCallbackRef[^}]*\} from "@litsx\/core";/
     );
-    assert.match(code, /_useCallbackRef\(this, \(\) => this\._ref, node => this\.register\(node\)\);/);
+    assert.match(code, /_useCallbackRef\(\(\) => this\._ref, node => this\.register\(node\)\);/);
     assert.match(code, /const useCallbackRef = Symbol\(['"]local['"]\);/);
   });
 
@@ -233,7 +233,7 @@ describe("@litsx/babel-plugin-shared-hooks createUseRefTransform", () => {
     assert.match(code, /html`<button data-ref="_ref">Click<\/button>`/);
   });
 
-  it("injects host parameters for custom hooks that create refs", () => {
+  it("preserves custom hook parameters when lowering refs", () => {
     const source = `
       import { useRef } from 'react';
 
@@ -246,12 +246,13 @@ describe("@litsx/babel-plugin-shared-hooks createUseRefTransform", () => {
 
     const code = run(source);
 
-    assert.match(code, /export function useLatest\(_host, value\)/);
-    assert.match(code, /const ref = useRef\(_host\);/);
+    assert.match(code, /export function useLatest\(value\)/);
+    assert.match(code, /const ref = useRef\(\);/);
+    assert.doesNotMatch(code, /_host/);
     assert.doesNotMatch(code, /from 'react';|from "react";/);
   });
 
-  it("preserves already host-aware mutable refs and adds a separate runtime import after litsx namespaces", () => {
+  it("does not reinterpret authored ref arguments and adds a runtime import after namespaces", () => {
     const source = `
       import { LitElement } from 'lit';
       import * as runtime from '@litsx/core';
@@ -271,7 +272,7 @@ describe("@litsx/babel-plugin-shared-hooks createUseRefTransform", () => {
     assert.strictEqual((code.match(/from ['"]@litsx\/core['"];/g) || []).length, 2);
     assert.strictEqual((code.match(/useRef\(this, null\)/g) || []).length, 1);
     assert.doesNotMatch(code, /useRef\(this, this, null\)/);
-    assert.match(code, /import \{ useRef, useCallbackRef \} from ['"]@litsx\/core['"]|import \{ useCallbackRef, useRef \} from ['"]@litsx\/core['"]/);
+    assert.match(code, /import \{[^}]*renderWithHooks[^}]*useRef[^}]*useCallbackRef[^}]*\} from ['"]@litsx\/core['"]/);
     assert.doesNotMatch(code, /import \{ useRef \} from 'react';|import \{ useRef \} from "react";/);
   });
 
@@ -359,7 +360,7 @@ describe("@litsx/babel-plugin-shared-hooks createUseRefTransform", () => {
     const code = result.code;
 
     assert.match(code, /function plainUtility\(\) \{\s*return useRef\(null\);/);
-    assert.match(code, /const inputRef = useRef\(this, null\);/);
+    assert.match(code, /const inputRef = useRef\(null\);/);
     assert.match(code, /data-ref="_inputRefElement"/);
   });
 
@@ -419,9 +420,9 @@ describe("@litsx/babel-plugin-shared-hooks createUseRefTransform", () => {
     const code = result.code;
 
     assert.match(code, /data-ref="_inputRefElement"/);
-    assert.match(code, /import \{ useRef as useManagedRef, useCallbackRef \} from "@litsx\/core";|import \{ useCallbackRef, useRef as useManagedRef \} from "@litsx\/core";/);
-    assert.match(code, /useManagedRef\(this, null\);/);
-    assert.match(code, /useCallbackRef\(this, \(\) => this\._inputRefElement, node => inputRef\.current = node\);/);
+    assert.match(code, /import \{[^}]*renderWithHooks[^}]*useRef as useManagedRef[^}]*useCallbackRef[^}]*\} from "@litsx\/core";/);
+    assert.match(code, /useManagedRef\(null\);/);
+    assert.match(code, /useCallbackRef\(\(\) => this\._inputRefElement, node => inputRef\.current = node\);/);
   });
 
   it("surfaces unresolved host errors after queueing pending mutable ref calls", () => {
@@ -469,7 +470,7 @@ describe("@litsx/babel-plugin-shared-hooks createUseRefTransform", () => {
 
     assert.match(code, /html`<button class="\$\{inputRef\}">Click<\/button>`/);
     assert.doesNotMatch(code, /data-ref=/);
-    assert.match(code, /const inputRef = useRef\(this, null\);/);
+    assert.match(code, /const inputRef = useRef\(null\);/);
   });
 
   it("keeps callback refs on components as .ref bindings", () => {
@@ -511,10 +512,10 @@ describe("@litsx/babel-plugin-shared-hooks createUseRefTransform", () => {
 
     const code = run(source);
 
-    assert.match(code, /import \{ useCallbackRef \} from "@litsx\/core";/);
+    assert.match(code, /import \{[^}]*renderWithHooks[^}]*useCallbackRef[^}]*\} from "@litsx\/core";/);
     assert.match(code, /get _ref\(\)/);
     assert.match(code, /data-ref="_ref"/);
-    assert.match(code, /useCallbackRef\(this, \(\) => this\._ref, node => this\.register\(node\)\);/);
+    assert.match(code, /useCallbackRef\(\(\) => this\._ref, node => this\.register\(node\)\);/);
   });
 
   it("ignores template callbacks that are not attached to ref attributes", () => {

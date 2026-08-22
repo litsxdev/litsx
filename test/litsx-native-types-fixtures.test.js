@@ -54,12 +54,10 @@ describe("@litsx/babel-preset-litsx typed fixtures", () => {
   it("resolves imported utility types and merges static properties overrides", () => {
     const code = transformFixture("shared-card.tsx");
 
-    assert.match(code, /static get properties\(\)/);
+    assert.match(code, /static properties = \{/);
     assert.match(code, /title: \{\s*type: String\s*\}/);
-    assert.match(code, /active: \{\s*type: Boolean\s*\}/);
-    assert.match(code, /reflect: true/);
-    assert.match(code, /payload: \{\s*type: Object\s*\}/s);
-    assert.match(code, /payload: \{\s*attribute: false\s*\}/s);
+    assert.match(code, /active: \{\s*type: Boolean,\s*reflect: true\s*\}/s);
+    assert.match(code, /payload: \{\s*type: Object,\s*attribute: false\s*\}/s);
     assert.match(code, /onSelect: \{\s*type: Object,\s*attribute: false\s*\}/s);
     assert.match(code, /tags: \{\s*type: Array\s*\}/);
   }, TEST_TIMEOUT);
@@ -76,29 +74,23 @@ describe("@litsx/babel-preset-litsx typed fixtures", () => {
   it("resolves branded primitive props and preserves richer Lit property options", () => {
     const code = transformFixture("resource-card.tsx");
 
-    assert.match(code, /static get properties\(\)/);
-    assert.match(code, /resourceId: \{\s*type: String\s*\}/s);
-    assert.match(code, /attribute: "resource-id"/);
-    assert.match(code, /useDefault: true/);
-    assert.match(code, /status: \{\s*type: String\s*\}/s);
-    assert.match(code, /reflect: true/);
-    assert.match(code, /metadata: \{\s*type: Object\s*\}/s);
-    assert.match(code, /metadata: \{\s*attribute: false,\s*converter: \{\s*fromAttribute\(value\)/s);
-    assert.match(code, /onCommit: \{\s*type: Object,\s*attribute: false\s*\}/s);
+    assert.match(code, /static properties = \{/);
+    assert.match(code, /resourceId: \{\s*type: String,\s*attribute: "resource-id",\s*useDefault: true\s*\}/s);
+    assert.match(code, /status: \{\s*type: String,\s*reflect: true\s*\}/s);
+    assert.match(code, /metadata: \{\s*type: Object,\s*attribute: false,\s*converter: \{\s*fromAttribute\(value\)/s);
+    assert.match(code, /onCommit: \{\s*type: Object,\s*attribute: false,[\s\S]*hasChanged\(value, oldValue\)/s);
     assert.match(code, /hasChanged\(value, oldValue\)/);
   }, TEST_TIMEOUT);
 
   it("resolves composed utility types and merges static properties over inferred fields", () => {
     const code = transformFixture("form-panel.tsx");
 
-    assert.match(code, /static get properties\(\)/);
+    assert.match(code, /static properties = \{/);
     assert.match(code, /id: \{\s*type: String\s*\}/);
-    assert.match(code, /disabled: \{\s*type: Boolean\s*\}/s);
-    assert.match(code, /reflect: true/);
+    assert.match(code, /disabled: \{\s*type: Boolean,\s*reflect: true\s*\}/s);
     assert.match(code, /submitLabel: \{\s*type: String\s*\}/);
     assert.match(code, /theme: \{\s*type: String\s*\}/);
-    assert.match(code, /metadata: \{\s*type: Object\s*\}/s);
-    assert.match(code, /metadata: \{\s*attribute: false\s*\}/s);
+    assert.match(code, /metadata: \{\s*type: Object,\s*attribute: false\s*\}/s);
     assert.match(code, /onSubmit: \{\s*type: Object,\s*attribute: false\s*\}/s);
   }, TEST_TIMEOUT);
 
@@ -115,14 +107,11 @@ describe("@litsx/babel-preset-litsx typed fixtures", () => {
   it("resolves deep barrel imports and shared generic model types", () => {
     const code = transformFixture("project-grid.tsx");
 
-    assert.match(code, /static get properties\(\)/);
+    assert.match(code, /static properties = \{/);
     assert.match(code, /title: \{\s*type: String\s*\}/);
     assert.match(code, /filters: \{\s*type: Array\s*\}/);
-    assert.match(code, /page: \{\s*type: Object\s*\}/s);
-    assert.match(code, /page: \{\s*attribute: false\s*\}/s);
-    assert.match(code, /selectedId: \{\s*type: String\s*\}/s);
-    assert.match(code, /attribute: "selected-id"/);
-    assert.match(code, /reflect: true/);
+    assert.match(code, /page: \{\s*type: Object,\s*attribute: false\s*\}/s);
+    assert.match(code, /selectedId: \{\s*type: String,\s*attribute: "selected-id",\s*reflect: true\s*\}/s);
     assert.match(code, /onSelect: \{\s*type: Object,\s*attribute: false\s*\}/s);
   }, TEST_TIMEOUT);
 

@@ -345,43 +345,27 @@ function isPlainObject(value) {
     Object.getPrototypeOf(value) === Object.prototype;
 }
 
-export const LitsxStaticHoistsMixin = dedupeMixin((Base) =>
-  class LitsxStaticHoistsHost extends Base {
-    static __litsxStatic(cacheKey, compute) {
-      if (!Object.prototype.hasOwnProperty.call(this, cacheKey)) {
-        this[cacheKey] = compute();
-      }
+export function mergePropertyDeclarations(base, override) {
+  if (!override) return base;
 
-      return this[cacheKey];
-    }
+  const next = { ...(base || {}) };
 
-    static __litsxResolveStaticValue(value) {
-      return value;
-    }
+  for (const key in override) {
+    const baseEntry = next[key];
+    const overrideEntry = override[key];
 
-    static __litsxMergeProperties(base, override) {
-      if (!override) return base;
-
-      const next = { ...(base || {}) };
-
-      for (const key in override) {
-        const baseEntry = next[key];
-        const overrideEntry = override[key];
-
-        if (isPlainObject(baseEntry) && isPlainObject(overrideEntry)) {
-          next[key] = {
-            ...baseEntry,
-            ...overrideEntry,
-          };
-        } else {
-          next[key] = overrideEntry;
-        }
-      }
-
-      return next;
+    if (isPlainObject(baseEntry) && isPlainObject(overrideEntry)) {
+      next[key] = {
+        ...baseEntry,
+        ...overrideEntry,
+      };
+    } else {
+      next[key] = overrideEntry;
     }
   }
-);
+
+  return next;
+}
 
 function hasScopedElements(host) {
   const elements = host?.constructor?.elements ?? host?.constructor?.scopedElements;

@@ -97,9 +97,21 @@ function composeStyleReferences(
 ) {
   return t.arrayExpression([
     ...(preflightIdentifier ? [t.cloneNode(preflightIdentifier)] : []),
-    ...(existingStyle ? [t.cloneNode(existingStyle, true)] : []),
+    ...(existingStyle
+      ? t.isArrayExpression(existingStyle)
+        ? existingStyle.elements.map((element) => t.cloneNode(element, true))
+        : [t.cloneNode(existingStyle, true)]
+      : []),
     t.cloneNode(styleIdentifier),
   ]);
+}
+
+function inheritedStylesExpression(t) {
+  return t.logicalExpression(
+    "??",
+    t.memberExpression(t.super(), t.identifier("styles")),
+    t.arrayExpression([]),
+  );
 }
 
 function appendStyleReference(
@@ -119,12 +131,17 @@ function appendStyleReference(
           t.identifier("styles"),
           preflightIdentifier
             ? composeStyleReferences(
-                null,
+                inheritedStylesExpression(t),
                 styleIdentifier,
                 preflightIdentifier,
                 t,
               )
-            : t.cloneNode(styleIdentifier),
+            : composeStyleReferences(
+                inheritedStylesExpression(t),
+                styleIdentifier,
+                null,
+                t,
+              ),
           null,
           null,
           false,
@@ -226,6 +243,38 @@ function guardTemplate(payload, cssIdentifier, t) {
   );
 }
 
+function getReplaceStylesArgument(path, t) {
+  if (!path?.isCallExpression?.() || path.node.arguments.length !== 1) {
+    return null;
+  }
+  const calleePath = path.get("callee");
+  if (calleePath.isIdentifier()) {
+    const binding = path.scope.getBinding(calleePath.node.name);
+    if (
+      binding?.path?.isImportSpecifier?.() &&
+      t.isIdentifier(binding.path.node.imported, { name: "replaceStyles" }) &&
+      binding.path.parentPath?.node?.source?.value === "@litsx/core"
+    ) {
+      return path.get("arguments.0");
+    }
+  }
+  if (
+    calleePath.isMemberExpression() &&
+    !calleePath.node.computed &&
+    t.isIdentifier(calleePath.node.property, { name: "replaceStyles" }) &&
+    t.isIdentifier(calleePath.node.object)
+  ) {
+    const binding = path.scope.getBinding(calleePath.node.object.name);
+    if (
+      binding?.path?.isImportNamespaceSpecifier?.() &&
+      binding.path.parentPath?.node?.source?.value === "@litsx/core"
+    ) {
+      return path.get("arguments.0");
+    }
+  }
+  return null;
+}
+
 function getStylesAssignment(path, t) {
   if (!path.isExpressionStatement()) return null;
   const expression = path.node.expression;
@@ -243,12 +292,12 @@ function getStylesAssignment(path, t) {
     : t.isIdentifier(expression.left.property)
       ? expression.left.property.name
       : null;
-  return name === "styles"
-    ? {
-        componentName: expression.left.object.name,
-        stylePath: path.get("expression.right"),
-      }
-    : null;
+  if (name !== "styles") return null;
+  const rightPath = path.get("expression.right");
+  return {
+    componentName: expression.left.object.name,
+    stylePath: getReplaceStylesArgument(rightPath, t) ?? rightPath,
+  };
 }
 
 function collectLightDomComponents(programPath, t, defaultDomMode) {

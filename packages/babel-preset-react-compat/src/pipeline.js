@@ -92,8 +92,8 @@ export function createReactCompatPresetPlugins(options = {}) {
     [transformLitsxDomRefs, options.transformLitsxDomRefs || {}],
     [reactHooks, {
       // The structural hook pass immediately above already rewrites imported
-      // hooks whose implementation proves that they need the active host.
-      // Avoid treating every opaque third-party `use*` export as host-aware.
+      // hooks whose implementation proves that they use the LitSX runtime.
+      // Avoid treating every opaque third-party `use*` export as compatible.
       transformImportedCustomHooks: false,
       ...(options.reactHooks || {}),
     }],

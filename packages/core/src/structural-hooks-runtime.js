@@ -25,15 +25,11 @@ function createStructuralHookCallable() {
 export function defineHook(definition) {
   if (
     definition == null ||
-    typeof definition !== "object" ||
-    typeof definition.use !== "function"
+    typeof definition !== "object"
   ) {
     throw new TypeError(
-      "defineHook() expects an object with a use(host, ...args) function.",
+      "defineHook() expects a structural hook definition object.",
     );
-  }
-  if (definition.mixin != null && typeof definition.mixin !== "function") {
-    throw new TypeError("defineHook() mixin must be a function when provided.");
   }
   const unsupportedKeys = Object.keys(definition).filter(
     (key) => key !== "mixin" && key !== "use",
@@ -45,12 +41,23 @@ export function defineHook(definition) {
       )}. Host behavior must be implemented by mixin.`,
     );
   }
+  if (definition.mixin != null && typeof definition.mixin !== "function") {
+    throw new TypeError("defineHook() mixin must be a function when provided.");
+  }
+  if (definition.use != null && typeof definition.use !== "function") {
+    throw new TypeError("defineHook() use must be a function when provided.");
+  }
+  if (definition.mixin == null && definition.use == null) {
+    throw new TypeError(
+      "defineHook() requires a mixin, a use(...args) reader, or both.",
+    );
+  }
 
   const hook = createStructuralHookCallable();
   Object.defineProperty(hook, STRUCTURAL_HOOK_DEFINITION, {
     value: Object.freeze({
       mixin: definition.mixin ?? null,
-      use: definition.use,
+      use: definition.use ?? null,
     }),
     configurable: false,
   });
@@ -66,12 +73,20 @@ export function isStructuralHook(value) {
   return resolveStructuralDefinition(value) !== null;
 }
 
-export function readStructuralHook(host, hook, args = []) {
+export function readStructuralHook(hook, args = []) {
   const definition = resolveStructuralDefinition(hook);
   if (!definition) {
     throw new TypeError("Cannot read an unregistered structural hook.");
   }
-  return definition.use(host, ...(Array.isArray(args) ? args : []));
+  if (!definition.use) {
+    if (Array.isArray(args) && args.length > 0) {
+      throw new TypeError(
+        "A mixin-only structural hook does not accept arguments.",
+      );
+    }
+    return undefined;
+  }
+  return definition.use(...(Array.isArray(args) ? args : []));
 }
 
 /**

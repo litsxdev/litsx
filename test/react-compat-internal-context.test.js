@@ -55,11 +55,11 @@ describe("react compat internal context", () => {
     assert.match(code, /<LitsxContextProvider \.context=\{ThemeContext\} \.value=\{theme \+ memo\}>/);
     assert.match(
       code,
-      /\{renderContext\(this, ThemeContext, value => <span>\{value\}<\/span>\)\}/
+      /\{renderContext\(ThemeContext, value => <span>\{value\}<\/span>\)\}/
     );
   });
 
-  it("supports React namespace forms and preserves host-aware useContext calls", () => {
+  it("supports React namespace forms with authored useContext calls", () => {
     const source = [
       "import * as React from 'react';",
       "",
@@ -67,8 +67,7 @@ describe("react compat internal context", () => {
       "",
       "export function Example() {",
       "  const one = React.useContext(ThemeContext);",
-      "  const two = React.useContext(this, ThemeContext);",
-      "  return <ThemeContext.Provider value={one + two}><div>{one}</div></ThemeContext.Provider>;",
+      "  return <ThemeContext.Provider value={one}><div>{one}</div></ThemeContext.Provider>;",
       "}",
     ].join("\n");
 
@@ -77,9 +76,18 @@ describe("react compat internal context", () => {
     assert.match(code, /import \{ createContext, useContext, LitsxContextProviderElement as LitsxContextProvider \} from "@litsx\/core\/context";/);
     assert.match(code, /const ThemeContext = createContext\('light'\);/);
     assert.match(code, /const one = useContext\(ThemeContext\);/);
-    assert.match(code, /const two = useContext\(this, ThemeContext\);/);
     assert.doesNotMatch(code, /React\.createContext/);
     assert.doesNotMatch(code, /React\.useContext/);
+  });
+
+  it("rejects the removed explicit-host useContext ABI", () => {
+    const source = [
+      "import * as React from 'react';",
+      "const ThemeContext = React.createContext('light');",
+      "export const useTheme = () => React.useContext(this, ThemeContext);",
+    ].join("\n");
+
+    assert.throws(() => run(source), /useContext requires a context object/);
   });
 
   it("errors on invalid Provider shapes", () => {
@@ -141,7 +149,7 @@ describe("react compat internal context", () => {
 
     const code = run(source);
 
-    assert.match(code, /renderContext\(this, ThemeContext, value => <span>\{value\}<\/span>\)/);
+    assert.match(code, /renderContext\(ThemeContext, value => <span>\{value\}<\/span>\)/);
   });
 
   it("preserves Provider keys and lowers Consumer to a plain call outside JSX", () => {
@@ -160,7 +168,7 @@ describe("react compat internal context", () => {
       code,
       /import \{ createContext, renderContext, LitsxContextProviderElement as LitsxContextProvider \} from "@litsx\/core\/context";|import \{ createContext, LitsxContextProviderElement as LitsxContextProvider, renderContext \} from "@litsx\/core\/context";/
     );
-    assert.match(code, /const rendered = renderContext\(this, ThemeContext, function \(value\) \{/);
+    assert.match(code, /const rendered = renderContext\(ThemeContext, function \(value\) \{/);
     assert.match(code, /<LitsxContextProvider \.context=\{ThemeContext\} key=\{routeKey\} \.value=\{"dark"\}>/);
   });
 

@@ -42,7 +42,7 @@ describe("@litsx/babel-plugin-shared-hooks createUseStateTransform", () => {
     );
   });
 
-  it("rewrites useState calls to host-aware runtime state and injects prepareEffects", () => {
+  it("rewrites useState calls without changing their authored arguments", () => {
     const source = `
       import { LitElement } from 'lit';
       import { useState } from 'react';
@@ -57,9 +57,10 @@ describe("@litsx/babel-plugin-shared-hooks createUseStateTransform", () => {
 
     const code = run(source);
 
-    assert.match(code, /import \{ useState, prepareEffects \} from "@litsx\/core";|import \{ prepareEffects, useState \} from "@litsx\/core";/);
-    assert.match(code, /prepareEffects\(this\);/);
-    assert.match(code, /const \[count, setCount\] = useState\(this, 1\);/);
+    assert.match(code, /import \{[^}]*useState[^}]*renderWithHooks[^}]*\} from "@litsx\/core";/);
+    assert.match(code, /renderWithHooks\(this, \(\) => \{/);
+    assert.match(code, /const \[count, setCount\] = useState\(1\);/);
+    assert.doesNotMatch(code, /prepareEffects|useState\(this,/);
     assert.doesNotMatch(code, /from 'react';|from "react";/);
   });
 
@@ -78,10 +79,10 @@ describe("@litsx/babel-plugin-shared-hooks createUseStateTransform", () => {
 
     const code = run(source);
 
-    assert.match(code, /const \[count\] = useState\(this, \(\) => 1\);/);
+    assert.match(code, /const \[count\] = useState\(\(\) => 1\);/);
   });
 
-  it("injects host parameters for custom hooks that create state", () => {
+  it("preserves custom hook signatures and calls", () => {
     const source = `
       import { useState } from 'react';
 
@@ -93,8 +94,9 @@ describe("@litsx/babel-plugin-shared-hooks createUseStateTransform", () => {
 
     const code = run(source);
 
-    assert.match(code, /export function useCounter\(_host, initial\)/);
-    assert.match(code, /const \[count, setCount\] = useState\(_host, initial\);/);
+    assert.match(code, /export function useCounter\(initial\)/);
+    assert.match(code, /const \[count, setCount\] = useState\(initial\);/);
+    assert.doesNotMatch(code, /_host|renderWithHooks/);
   });
 
   it("merges into an existing litsx runtime import instead of duplicating it", () => {
@@ -115,10 +117,10 @@ describe("@litsx/babel-plugin-shared-hooks createUseStateTransform", () => {
     const code = run(source);
 
     assert.strictEqual((code.match(/from ['"]@litsx\/core['"];/g) || []).length, 1);
-    assert.match(code, /import \{[^}]*useState[^}]*prepareEffects[^}]*useId[^}]*\} from ['"]@litsx\/core['"]|import \{[^}]*useId[^}]*useState[^}]*prepareEffects[^}]*\} from ['"]@litsx\/core['"]|import \{[^}]*prepareEffects[^}]*useId[^}]*useState[^}]*\} from ['"]@litsx\/core['"]/);
+    assert.match(code, /import \{[^}]*useState[^}]*useId[^}]*renderWithHooks[^}]*\} from ['"]@litsx\/core['"]|import \{[^}]*useId[^}]*useState[^}]*renderWithHooks[^}]*\} from ['"]@litsx\/core['"]/);
   });
 
-  it("rewrites namespace imports and does not duplicate prepareEffects when already present", () => {
+  it("rewrites namespace imports behind the render boundary", () => {
     const namespacePlugin = createUseStateTransform({
       importSource: ["react"],
       hookName: "useState",
@@ -131,7 +133,6 @@ describe("@litsx/babel-plugin-shared-hooks createUseStateTransform", () => {
 
       class Counter extends LitElement {
         render() {
-          prepareEffects(this);
           const [count] = React.useState(0);
           return <button onClick={() => count} />;
         }
@@ -145,8 +146,9 @@ describe("@litsx/babel-plugin-shared-hooks createUseStateTransform", () => {
     });
     const code = result.code;
 
-    assert.strictEqual((code.match(/prepareEffects\(this\);/g) || []).length, 1);
-    assert.match(code, /const \[count\] = useState\(this, 0\);/);
+    assert.doesNotMatch(code, /prepareEffects/);
+    assert.match(code, /renderWithHooks\(this, \(\) => \{/);
+    assert.match(code, /const \[count\] = useState\(0\);/);
     assert.match(code, /onClick/);
   });
 
@@ -168,11 +170,11 @@ describe("@litsx/babel-plugin-shared-hooks createUseStateTransform", () => {
 
     assert.match(code, /import \* as runtime from '@litsx\/core';|import \* as runtime from "@litsx\/core";/);
     assert.strictEqual((code.match(/from ['"]@litsx\/core['"];/g) || []).length, 2);
-    assert.match(code, /import \{ useState, prepareEffects \} from ['"]@litsx\/core['"]|import \{ prepareEffects, useState \} from ['"]@litsx\/core['"]/);
-    assert.match(code, /const \[count\] = useState\(this, 0\);/);
+    assert.match(code, /import \{[^}]*useState[^}]*renderWithHooks[^}]*\} from ['"]@litsx\/core['"]/);
+    assert.match(code, /const \[count\] = useState\(0\);/);
   });
 
-  it("preserves already host-aware useState calls while still wiring prepareEffects and runtime imports", () => {
+  it("does not reinterpret an authored first argument as an internal host", () => {
     const source = `
       import { LitElement } from 'lit';
       import { useState } from 'react';
@@ -187,9 +189,9 @@ describe("@litsx/babel-plugin-shared-hooks createUseStateTransform", () => {
 
     const code = run(source);
 
-    assert.match(code, /import \{ useState, prepareEffects \} from "@litsx\/core";|import \{ prepareEffects, useState \} from "@litsx\/core";/);
+    assert.match(code, /import \{[^}]*useState[^}]*renderWithHooks[^}]*\} from "@litsx\/core";/);
     assert.strictEqual((code.match(/useState\(this, 0\)/g) || []).length, 1);
-    assert.match(code, /prepareEffects\(this\);/);
+    assert.doesNotMatch(code, /prepareEffects/);
     assert.doesNotMatch(code, /useState\(this, this, 0\)/);
   });
 
@@ -239,8 +241,8 @@ describe("@litsx/babel-plugin-shared-hooks createUseStateTransform", () => {
     assert.match(code, /import \* as runtime from '@litsx\/core';|import \* as runtime from "@litsx\/core";/);
     assert.match(
       code,
-      /import \{ useState, prepareEffects \} from ['"]@litsx\/core['"]|import \{ prepareEffects, useState \} from ['"]@litsx\/core['"]/
+      /import \{[^}]*useState[^}]*renderWithHooks[^}]*\} from ['"]@litsx\/core['"]/
     );
-    assert.strictEqual((code.match(/prepareEffects\(this\);/g) || []).length, 1);
+    assert.doesNotMatch(code, /prepareEffects/);
   });
 });

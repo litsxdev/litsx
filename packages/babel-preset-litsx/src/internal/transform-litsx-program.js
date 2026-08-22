@@ -150,7 +150,7 @@ export function finalizeProgram(programPath, state) {
     ensureNamedImportAcross(nextLitImports, "unsafeCSS");
   }
 
-  if (state.__litsxNeedsStaticHoistsMixin) {
+  if (state.__litsxNeedsPropertyDeclarationMerge) {
     const bodyPathsWithInternal = programPath.get("body");
     const internalImports = bodyPathsWithInternal.filter(
       (n) => n.isImportDeclaration() && n.node.source.value === "@litsx/core/elements"
@@ -158,11 +158,11 @@ export function finalizeProgram(programPath, state) {
 
     const internalImported = ensureNamedImportAcross(
       internalImports,
-      "LitsxStaticHoistsMixin"
+      "mergePropertyDeclarations"
     );
 
     if (!internalImported) {
-      programPath.unshiftContainer("body", createLitsxInfrastructureImport("LitsxStaticHoistsMixin"));
+      programPath.unshiftContainer("body", createLitsxInfrastructureImport("mergePropertyDeclarations"));
     }
   }
 
@@ -232,6 +232,22 @@ export function finalizeProgram(programPath, state) {
 
     if (!litsxImported) {
       programPath.unshiftContainer("body", createLitsxImport("useCallbackRef"));
+    }
+  }
+
+  if (state.__litsxNeedsRenderWithHooks) {
+    const bodyPathsWithLitsx = programPath.get("body");
+    const litsxImports = bodyPathsWithLitsx.filter(
+      (n) => n.isImportDeclaration() && n.node.source.value === "@litsx/core"
+    );
+
+    const litsxImported = ensureNamedImportAcross(
+      litsxImports,
+      "renderWithHooks"
+    );
+
+    if (!litsxImported) {
+      programPath.unshiftContainer("body", createLitsxImport("renderWithHooks"));
     }
   }
 

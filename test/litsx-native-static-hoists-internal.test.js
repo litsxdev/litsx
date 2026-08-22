@@ -51,38 +51,12 @@ function getFunctionContext(source, plugins = []) {
   return { ast, programPath, functionPath };
 }
 
-function createStaticSymbolFactory() {
-  const seen = new Map();
-  return (programPath, name) => {
-    const existing = seen.get(name);
-    if (existing) {
-      return { symbolId: existing.symbolId, declaration: null };
-    }
-
-    const symbolId = programPath.scope.generateUidIdentifier(`litsx_static_${name}`);
-    const declaration = t.variableDeclaration("const", [
-      t.variableDeclarator(
-        t.cloneNode(symbolId),
-        t.callExpression(t.identifier("Symbol"), [t.stringLiteral(`litsx.static.${name}`)])
-      ),
-    ]);
-
-    const value = { symbolId, declaration };
-    seen.set(name, value);
-    return value;
-  };
-}
-
-function getStaticPropertiesGetterObjectProperties(member) {
-  return member.body.body[0].argument.arguments[1].body.arguments[0].properties;
-}
-
 setStaticHoistsBabelTypes(t);
 setStaticIrBabelTypes(t);
 setPropertyBabelTypes(t);
 setClassGenerationBabelTypes(t);
 
-describe("native static hoists internals", () => {
+describe("native static component metadata internals", () => {
   it("creates stable identities from source locations and filename fallbacks", () => {
     const pathLike = { node: { start: 12, loc: { start: { line: 3, column: 4 } } } };
     const state = {
@@ -125,9 +99,8 @@ describe("native static hoists internals", () => {
       className: "FeatureCard",
       classMembers: members,
       hoistMembers: [t.classProperty(t.identifier("styles"), t.stringLiteral(""))],
-      hoistSymbolDeclarations: [t.variableDeclaration("const", [])],
       hostTypeId: "feature-card:1",
-      needsStaticHoistsMixin: true,
+      needsPropertyDeclarationMerge: true,
       lightDomRequested: true,
       needsCss: true,
       needsUnsafeCss: true,
@@ -137,12 +110,13 @@ describe("native static hoists internals", () => {
     });
 
     assert.strictEqual(classNode.superClass.callee.name, "LightDomMixin");
-    assert.strictEqual(classNode.superClass.arguments[0].callee.name, "LitsxStaticHoistsMixin");
+    assert.strictEqual(classNode.superClass.arguments[0].name, "LitElement");
+    assert.strictEqual(classNode._needsPropertyDeclarationMerge, true);
     assert.strictEqual(classNode._needsCss, true);
     assert.strictEqual(classNode._needsUnsafeCss, true);
     assert.strictEqual(classNode._needsCallbackRef, true);
     assert.strictEqual(classNode._needsModuleIdMetadata, true);
-    assert.strictEqual(classNode._litsxStaticSymbolDeclarations.length, 1);
+    assert.strictEqual(classNode._litsxStaticSymbolDeclarations, undefined);
   });
 
   it("builds minimal generated component classes without optional metadata", () => {
@@ -150,9 +124,8 @@ describe("native static hoists internals", () => {
       className: "PlainCard",
       classMembers: [],
       hoistMembers: [],
-      hoistSymbolDeclarations: [],
       hostTypeId: null,
-      needsStaticHoistsMixin: false,
+      needsPropertyDeclarationMerge: false,
       lightDomRequested: false,
       needsCss: false,
       needsUnsafeCss: false,
@@ -286,23 +259,19 @@ describe("native static hoists internals", () => {
       staticIr,
       classMembers,
       options: {},
-      getOrCreateModuleStaticHoistSymbol: createStaticSymbolFactory(),
     });
 
     assert.strictEqual(renderStatements.length, 1);
-    assert.strictEqual(classMembers.length, 0);
-    const propertiesGetter = result.hoistMembers.find((member) => member.key.name === "properties");
+    assert.strictEqual(classMembers.length, 1);
+    const propertiesField = classMembers.find((member) => member.key.name === "properties");
     assert.deepStrictEqual(
-      getStaticPropertiesGetterObjectProperties(propertiesGetter)
+      propertiesField.value.properties
         .filter((node) => t.isObjectProperty(node))
         .map((node) => (t.isIdentifier(node.key) ? node.key.name : node.key.value))
         .sort(),
-      ["inferred"]
+      ["inferred", "title"]
     );
-    assert.deepStrictEqual(
-      result.hoistMembers.map((member) => member.key.name),
-      ["properties"]
-    );
+    assert.deepStrictEqual(result.hoistMembers, []);
   });
 
   it("collects generated static IR members and marks css requirements", () => {
@@ -355,48 +324,46 @@ describe("native static hoists internals", () => {
       staticIr,
       classMembers,
       options: {},
-      getOrCreateModuleStaticHoistSymbol: createStaticSymbolFactory(),
     });
 
     assert.strictEqual(result.lightDomRequested, false);
-    assert.strictEqual(result.needsStaticHoistsMixin, true);
+    assert.strictEqual(result.needsPropertyDeclarationMerge, false);
     assert.strictEqual(result.needsCss, false);
     assert.strictEqual(result.needsUnsafeCss, false);
-    assert.strictEqual(result.hoistSymbolDeclarations.length, 3);
-    assert.strictEqual(classMembers.length, 0);
+    assert.strictEqual(result.hoistSymbolDeclarations, undefined);
+    assert.strictEqual(classMembers.length, 1);
     assert.strictEqual(renderStatements.length, 1);
 
-    const propertiesGetter = result.hoistMembers.find((member) => member.key.name === "properties");
-    const propertyNames = getStaticPropertiesGetterObjectProperties(propertiesGetter)
+    const propertiesField = classMembers.find((member) => member.key.name === "properties");
+    const propertyNames = propertiesField.value.properties
       .filter((node) => t.isObjectProperty(node))
       .map((node) => (t.isIdentifier(node.key) ? node.key.name : node.key.value))
       .sort();
-    assert.deepStrictEqual(propertyNames, ["initial"]);
+    assert.deepStrictEqual(propertyNames, ["count", "initial", "payload", "title"]);
 
     const memberNames = result.hoistMembers.map((member) => member.key.name).sort();
     assert.deepStrictEqual(memberNames, [
       "compute",
       "ping",
-      "properties",
       "shadowRootOptions",
       "styles",
     ]);
 
-    const stylesGetter = result.hoistMembers.find((member) => member.key.name === "styles");
-    const shadowRootOptionsGetter = result.hoistMembers.find(
+    const stylesField = result.hoistMembers.find((member) => member.key.name === "styles");
+    const shadowRootOptionsField = result.hoistMembers.find(
       (member) => member.key.name === "shadowRootOptions"
     );
     const pingMethod = result.hoistMembers.find((member) => member.key.name === "ping");
     const computeMethod = result.hoistMembers.find((member) => member.key.name === "compute");
 
-    assert.ok(propertiesGetter);
-    assert.ok(stylesGetter);
-    assert.ok(shadowRootOptionsGetter);
+    assert.ok(propertiesField);
+    assert.ok(stylesField);
+    assert.ok(shadowRootOptionsField);
     assert.ok(pingMethod);
     assert.ok(computeMethod);
-    assert.strictEqual(propertiesGetter.kind, "get");
-    assert.strictEqual(stylesGetter.kind, "get");
-    assert.strictEqual(shadowRootOptionsGetter.kind, "get");
+    assert.strictEqual(propertiesField.static, true);
+    assert.strictEqual(stylesField.static, true);
+    assert.strictEqual(shadowRootOptionsField.static, true);
     assert.strictEqual(pingMethod.static, true);
     assert.strictEqual(computeMethod.static, true);
     assert.strictEqual(computeMethod.async, false);
@@ -451,7 +418,6 @@ describe("native static hoists internals", () => {
         programPath: stylesProgramPath,
         classMembers: [],
         options: {},
-        getOrCreateModuleStaticHoistSymbol: createStaticSymbolFactory(),
       });
     }, /Component\.styles must be a Lit CSSResultGroup/);
 
@@ -475,7 +441,6 @@ describe("native static hoists internals", () => {
         programPath: exposeProgramPath,
         classMembers: [],
         options: {},
-        getOrCreateModuleStaticHoistSymbol: createStaticSymbolFactory(),
       });
     }, /Component\.expose = \.\.\. does not accept spread elements\./);
 
@@ -499,7 +464,6 @@ describe("native static hoists internals", () => {
         programPath: hoistedPropertiesProgramPath,
         classMembers: [],
         options: {},
-        getOrCreateModuleStaticHoistSymbol: createStaticSymbolFactory(),
       });
     }, /Component\.properties = \.\.\. only accepts an object literal/);
   });
@@ -522,14 +486,13 @@ describe("native static hoists internals", () => {
       programPath,
       classMembers: [],
       options: {},
-      getOrCreateModuleStaticHoistSymbol: createStaticSymbolFactory(),
     });
 
     assert.strictEqual(result.lightDomRequested, true);
     assert.ok(!result.hoistMembers.some((member) => member.key.name === "shadowRootOptions"));
   });
 
-  it("resolves generated static metadata getters", () => {
+  it("emits direct static metadata fields and inherited styles", () => {
     const source = `
       const baseStyles = ":host { color: red; }";
 
@@ -544,37 +507,29 @@ describe("native static hoists internals", () => {
     `;
 
     const { programPath, functionPath } = getFunctionContext(source);
+    const classMembers = [];
     const result = processStaticHoists({
       functionPath,
       node: functionPath.node,
       renderStatements: [...functionPath.node.body.body],
       programPath,
-      classMembers: [],
+      classMembers,
       options: {},
-      getOrCreateModuleStaticHoistSymbol: createStaticSymbolFactory(),
     });
 
-    assert.strictEqual(result.needsStaticHoistsMixin, true);
-    assert.strictEqual(result.hoistMembers.length, 3);
+    assert.strictEqual(result.needsPropertyDeclarationMerge, false);
+    assert.strictEqual(result.hoistMembers.length, 2);
 
-    const propertiesGetter = result.hoistMembers.find((member) => member.key.name === "properties");
-    const stylesGetter = result.hoistMembers.find((member) => member.key.name === "styles");
-    const shadowGetter = result.hoistMembers.find((member) => member.key.name === "shadowRootOptions");
+    const propertiesField = classMembers.find((member) => member.key.name === "properties");
+    const stylesField = result.hoistMembers.find((member) => member.key.name === "styles");
+    const shadowField = result.hoistMembers.find((member) => member.key.name === "shadowRootOptions");
 
-    assert.ok(propertiesGetter);
-    assert.ok(stylesGetter);
-    assert.ok(shadowGetter);
-
-    const propertiesResolver = propertiesGetter.body.body[0].argument.arguments[1].body;
-    assert.strictEqual(propertiesResolver.callee.property.name, "__litsxMergeProperties");
-    assert.strictEqual(propertiesResolver.arguments[0].properties.length, 0);
-    assert.strictEqual(propertiesResolver.arguments[1].callee.property.name, "__litsxResolveStaticValue");
-
-    const stylesResolver = stylesGetter.body.body[0].argument.arguments[1].body;
-    assert.strictEqual(stylesResolver.callee.property.name, "__litsxResolveStaticValue");
-
-    const shadowResolver = shadowGetter.body.body[0].argument.arguments[1].body;
-    assert.strictEqual(shadowResolver.callee.property.name, "__litsxResolveStaticValue");
+    assert.ok(propertiesField);
+    assert.ok(stylesField);
+    assert.ok(shadowField);
+    assert.strictEqual(propertiesField.value.properties.length, 1);
+    assert.strictEqual(stylesField.value.elements[0].left.object.type, "Super");
+    assert.strictEqual(shadowField.value.properties[0].key.name, "delegatesFocus");
   });
 
   it("rejects invalid lightDom, generic hoist, and expose method forms", () => {
@@ -594,7 +549,6 @@ describe("native static hoists internals", () => {
         programPath: lightDomProgramPath,
         classMembers: [],
         options: {},
-        getOrCreateModuleStaticHoistSymbol: createStaticSymbolFactory(),
       });
     }, /Component\.lightDom = true only accepts the literal value true\./);
 
@@ -614,7 +568,6 @@ describe("native static hoists internals", () => {
         programPath: genericProgramPath,
         classMembers: [],
         options: {},
-        getOrCreateModuleStaticHoistSymbol: createStaticSymbolFactory(),
       });
     }, /Component\.shadowRootOptions = \.\.\. expects exactly one value\./);
 
@@ -634,7 +587,6 @@ describe("native static hoists internals", () => {
         programPath: genericDynamicProgramPath,
         classMembers: [],
         options: {},
-        getOrCreateModuleStaticHoistSymbol: createStaticSymbolFactory(),
       });
     }, /Component\.shadowRootOptions = \.\.\. only accepts a direct static value\./);
 
@@ -658,7 +610,6 @@ describe("native static hoists internals", () => {
         programPath: exposeGetterProgramPath,
         classMembers: [],
         options: {},
-        getOrCreateModuleStaticHoistSymbol: createStaticSymbolFactory(),
       });
     }, /Component\.expose = \.\.\. only accepts plain methods\./);
 
@@ -680,7 +631,6 @@ describe("native static hoists internals", () => {
         programPath: exposeValueProgramPath,
         classMembers: [],
         options: {},
-        getOrCreateModuleStaticHoistSymbol: createStaticSymbolFactory(),
       });
     }, /Component\.expose = \.\.\. values must be functions\./);
 

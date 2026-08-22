@@ -22,7 +22,7 @@ function run(source, options = {}) {
 }
 
 describe("react compat internal useState", () => {
-  it("rewrites React useState calls to host-aware runtime state", () => {
+  it("rewrites React useState calls behind a render boundary", () => {
     const source = `
       import { LitElement } from "lit";
       import { useState, useEffect } from "react";
@@ -42,10 +42,11 @@ describe("react compat internal useState", () => {
 
     assert.match(
       code,
-      /import \{ useState, prepareEffects \} from "@litsx\/core";|import \{ prepareEffects, useState \} from "@litsx\/core";/
+      /import \{[^}]*useState[^}]*renderWithHooks[^}]*\} from "@litsx\/core";/
     );
-    assert.match(code, /const \[count, setCount\] = useState\(this, 1\);/);
-    assert.match(code, /prepareEffects\(this\);/);
+    assert.match(code, /const \[count, setCount\] = useState\(1\);/);
+    assert.match(code, /renderWithHooks\(this, \(\) => \{/);
+    assert.doesNotMatch(code, /prepareEffects/);
     assert.match(code, /useEffect/);
     assert.doesNotMatch(code, /import \{[^}]*\buseState\b[^}]*\} from "react";/);
   });
@@ -65,11 +66,11 @@ describe("react compat internal useState", () => {
 
     const code = run(source, { allowReactAttributes: true });
 
-    assert.match(code, /const \[count\] = useState\(this, 0\);/);
+    assert.match(code, /const \[count\] = useState\(0\);/);
     assert.match(code, /onClick/);
   });
 
-  it("preserves already host-aware calls without duplicating the host argument", () => {
+  it("does not reinterpret authored first arguments as an internal host", () => {
     const source = `
       import { LitElement } from "lit";
       import { useState } from "react";
@@ -86,7 +87,7 @@ describe("react compat internal useState", () => {
 
     assert.strictEqual((code.match(/useState\(this, 0\)/g) || []).length, 1);
     assert.doesNotMatch(code, /useState\(this, this, 0\)/);
-    assert.match(code, /prepareEffects\(this\);/);
+    assert.doesNotMatch(code, /prepareEffects/);
   });
 
   it("throws on authored React event attributes by default", () => {

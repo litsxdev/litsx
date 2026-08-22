@@ -5,7 +5,10 @@
 [![Module](https://img.shields.io/badge/module-ESM%20%2B%20CJS-0366d6)](./package.json)
 [![Provenance](https://img.shields.io/badge/npm_provenance-enabled-2ea44f)](../../RELEASING.md)
 
-Runtime helpers that back the Lit<sup>SX</sup> Babel transforms. The module bundles an `EffectsController` plus native effect helpers (`prepareEffects`, `useAfterUpdate`, `useOnCommit`) so rewritten components can schedule work in Lit terms.
+Runtime helpers that back the Lit<sup>SX</sup> compiler. The module bundles an
+`EffectsController` plus native hooks such as `useAfterUpdate` and
+`useOnCommit`, so compiled components can schedule work in Lit terms without
+exposing the host-threading ABI used internally by the runtime.
 
 The package also exposes `@litsx/core/jsx-runtime` and `@litsx/core/jsx-dev-runtime` entrypoints so editors and TypeScript can treat LitSX as a first-class JSX runtime via `jsxImportSource: "@litsx/core"`.
 
@@ -29,10 +32,9 @@ For authored syntax and binding rules, see the repository's
 
 - `EffectsController`: a Lit `ReactiveController` implementation that tracks hook registrations, dependency arrays, effect queues, transitions, refs, and external-store subscriptions per host instance.
 - Effect primitives:
-  - `prepareEffects(host)`: reset the controller cursor at the start of `render()` so subsequent registrations line up with their previous runs.
-  - `useAfterUpdate(host, callback, deps?)`: register a passive effect.
-  - `useOnCommit(host, callback, deps?)`: register synchronous commit-phase work.
-  - `useOnConnect(host, callback, deps?)`: register work that stays active only while the host is connected.
+  - `useAfterUpdate(callback, deps?)`: register a passive effect.
+  - `useOnCommit(callback, deps?)`: register synchronous commit-phase work.
+  - `useOnConnect(callback, deps?)`: register work that stays active only while the host is connected.
 - State and concurrency primitives:
   - `useState`, `useReducedState`, `useControlledState`
   - `useAsyncState`, `useOptimistic`
@@ -50,12 +52,16 @@ For authored syntax and binding rules, see the repository's
   - `getCurrentExecutionContext()`
 - Component styling:
   - `css` is the original Lit template tag re-exported for the common
-    `Component.styles = css\`...\``authoring pattern. Lit directives remain
-available from their normal Lit entrypoints;`createRef`and`ref` are also
-    re-exported because JSX refs lower directly to Lit's ref directive.
+    `Component.styles = css\`...\`` authoring pattern.
+  - `replaceStyles(...)` explicitly discards styles inherited from structural
+    mixins or another base class; ordinary assignments extend them.
+  - Lit directives remain available from their normal Lit entrypoints;
+    `createRef` and `ref` are also re-exported because JSX refs lower directly
+    to Lit's ref directive.
 - Structural host capabilities:
-  - `defineHook({ mixin, use })`
-  - compiler-injected `applyStructuralHooks(...)`
+  - `defineHook({ mixin })` for installation-only capabilities
+  - `defineHook({ mixin, use })` when the hook also reads a value
+  - compiler-owned structural reader and mixin application
   - stable mixin deduplication in first-use order
 - JSX compatibility helpers:
   - `jsxSpreadElement(tagName, sources, options?, children?)` merges JSX prop sources in authored order. It uses an `ElementPart` in the browser and regular Lit parts during SSR.
@@ -133,7 +139,9 @@ object with `capture`, `once`, or `passive` options. Event names outside the
 canonical JSX channel, such as `menu:open` or `state.change`, remain available
 through `addEventListener()`.
 
-All helpers accept the Lit element instance as the first argument. The Babel transforms insert it automatically, but you can also call the runtime manually.
+Hooks use the active synchronous render context established by compiled output.
+Their authored arguments are never rewritten and the host is never prepended.
+Call `useHost()` when a hook explicitly needs the current element.
 
 ## Styling
 
@@ -146,40 +154,22 @@ React-style object bindings such as `style={{ color: "red" }}`.
 
 ## Usage
 
-```js
-import { LitElement, html } from "lit";
-import { prepareEffects, useAfterUpdate, useOnCommit } from "@litsx/core";
+```tsx
+import { useAfterUpdate, useHost, useOnCommit } from "@litsx/core";
 
-class ClockDisplay extends LitElement {
-  static properties = {
-    delay: { type: Number },
-  };
+export function ClockDisplay({ delay = 1000 }) {
+  const host = useHost();
 
-  render() {
-    prepareEffects(this);
+  useOnCommit(() => {
+    host.classList.add("hydrated");
+  }, []);
 
-    useOnCommit(
-      this,
-      () => {
-        this.classList.add("hydrated");
-      },
-      [],
-    );
+  useAfterUpdate(() => {
+    const handle = setInterval(() => host.requestUpdate(), delay);
+    return () => clearInterval(handle);
+  }, [delay]);
 
-    useAfterUpdate(
-      this,
-      () => {
-        const handle = setInterval(
-          () => this.requestUpdate(),
-          this.delay ?? 1000,
-        );
-        return () => clearInterval(handle);
-      },
-      [this.delay],
-    );
-
-    return html`<time>${new Date().toLocaleTimeString()}</time>`;
-  }
+  return <time>{new Date().toLocaleTimeString()}</time>;
 }
 ```
 
@@ -202,12 +192,17 @@ Layout work runs immediately during `hostUpdated()`, while passive effects are d
 
 ## Working with the Babel plugins
 
-- `prepareEffects(this);` is injected at the top of every transformed `render()` so the controller cursor resets before registering effects.
+- Generated `render()` methods establish one bounded hook context and reset the
+  controller cursor for each render attempt.
 - Native authored hooks lower directly to this runtime surface.
 - React-compat transforms also lower their supported hook subset to these native Lit<sup>sx</sup> helpers.
-- You can mix manual registrations and transformed ones. Each Lit element instance gets its own `EffectsController` behind the scenes.
+- Each Lit element instance gets its own `EffectsController` behind the scenes.
 
-The helpers are framework agnostic: they only assume that the host object exposes Lit’s controller lifecycle (`addController`, `hostUpdated`, `hostDisconnected`).
+`renderWithHooks`, `runWithHookHost`, `prepareEffects`,
+`readStructuralHook`, and `applyStructuralHooks` form compiler/runtime
+infrastructure. Only `renderWithHooks` remains on the root runtime for
+generated and advanced boundary code; the other helpers live under
+`@litsx/core/internal` and are not an authoring API.
 
 ## SSR Execution Context
 
@@ -266,11 +261,11 @@ Do not use `useStableId()` when you need unique DOM ids for multiple instances o
 ## Structural hooks and host capabilities
 
 Structural hooks let function-authored components request capabilities that
-must exist on their generated element class. The hook reads the capability;
-a standard class mixin implements it.
+must exist on their generated element class. A standard class mixin implements
+the capability; an optional reader exposes an explicitly selected value.
 
 ```ts
-import { defineHook } from "@litsx/core";
+import { defineHook, useHost } from "@litsx/core";
 
 const I18nMixin = (Base) =>
   class extends Base {
@@ -283,8 +278,8 @@ const I18nMixin = (Base) =>
 
 export const useI18n = defineHook({
   mixin: I18nMixin,
-  use(host) {
-    return host.i18n;
+  use() {
+    return useHost().i18n;
   },
 });
 ```
@@ -305,8 +300,10 @@ class SaveButton extends applyStructuralHooks(LitElement, [
   ...(useI18n[Symbol.for("litsx.structuralHooks")] || [useI18n]),
 ]) {
   render() {
-    const i18n = readStructuralHook(this, useI18n, []);
-    return html`<button>${i18n.t("save")}</button>`;
+    return renderWithHooks(this, () => {
+      const i18n = readStructuralHook(useI18n, []);
+      return html`<button>${i18n.t("save")}</button>`;
+    });
   }
 }
 ```
@@ -317,11 +314,73 @@ appear in authored hook calls. Two different hooks may deliberately share one
 mixin. Repeating either hook does not add another class to the inheritance
 chain.
 
+Omit `use` when the callsite only needs to install class behavior:
+
+```ts
+const useFormAssociation = defineHook({
+  mixin: FormAssociationMixin,
+});
+
+export function FormControl() {
+  useFormAssociation(); // returns void
+  return <input />;
+}
+```
+
+An installation-only hook never returns the host or an inferred property
+snapshot. If a capability needs a public value, define its `use()` reader
+explicitly. This keeps multiple composed mixins isolated even though they share
+one generated host instance.
+
 Mixins use ordinary class semantics. Lifecycle work overrides the relevant
 method and delegates with `super`; properties, accessors, controllers, private
 state, and static fields belong to the class capability itself. The removed
 `static`, `setup`, `props`, `accessors`, and `middlewares` structural
 hook fields are not accepted.
+
+Lit finalizes reactive `properties` across the class chain automatically. A
+mixin can therefore declare only its own properties. Styles are different:
+every mixin that contributes styles must preserve the prior class explicitly.
+Scoped element maps follow the same cooperative collection rule:
+
+```js
+const StyledCapabilityMixin = (Base) =>
+  class extends Base {
+    static properties = {
+      active: { type: Boolean },
+    };
+
+    static styles = [super.styles ?? [], capabilityStyles];
+
+    static elements = {
+      ...(super.elements ?? {}),
+      "capability-icon": CapabilityIcon,
+    };
+  };
+
+const useStyledCapability = defineHook({
+  mixin: StyledCapabilityMixin,
+  use: () => useHost().active,
+});
+
+function CapabilityButton() {
+  const active = useStyledCapability();
+  return <button class="button">{active ? "Active" : "Inactive"}</button>;
+}
+
+CapabilityButton.styles = css`
+  .button { padding: 0.5rem 1rem; }
+`;
+```
+
+Function-authored components compose inherited styles and elements
+automatically. In this example, calling `useStyledCapability()` installs the
+mixin before the generated component class; the compiler then emits the
+component stylesheet after `super.styles`. Use
+`Component.styles = replaceStyles(styles)` only when the component
+intentionally cuts the style chain. A derived reactive property with the same
+name replaces its inherited Lit declaration; options are not merged across
+classes.
 
 ```js
 const FormAssociatedMixin = (Base) =>

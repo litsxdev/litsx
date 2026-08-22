@@ -166,8 +166,8 @@ describe("native refs internals", () => {
     const statement = createComponentInstanceRefSyncStatement();
     const call = statement.expression;
     assert.strictEqual(call.callee.name, "useCallbackRef");
-    assert.strictEqual(call.arguments[1].body.type, "ThisExpression");
-    assert.strictEqual(call.arguments[2].body.body[0].declarations[0].init.property.name, "ref");
-    assert.strictEqual(call.arguments[3].elements[0].property.name, "ref");
+    assert.strictEqual(call.arguments[0].body.type, "ThisExpression");
+    assert.strictEqual(call.arguments[1].body.body[0].declarations[0].init.property.name, "ref");
+    assert.strictEqual(call.arguments[2].elements[0].property.name, "ref");
   });
 });

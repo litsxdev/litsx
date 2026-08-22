@@ -13,6 +13,7 @@ import {
   getController,
   prepareEffects,
   resolveRuntimeHost,
+  runWithHookHost,
 } from "../packages/core/src/runtime-controller.js";
 import { EffectsController } from "../packages/core/src/effects-controller.js";
 import { SsrEffectsController } from "../packages/core/src/ssr-effects-controller.js";
@@ -124,7 +125,7 @@ describe("runtime utility internals", () => {
     assert.deepStrictEqual(host.reportedErrors, ["boom"]);
   });
 
-  it("resolves controller hosts from explicit arguments and the prepared render context", () => {
+  it("bounds controller hosts to the active render callback", () => {
     const host = new TestHost();
 
     assert.strictEqual(resolveRuntimeHost(host), host);
@@ -132,12 +133,14 @@ describe("runtime utility internals", () => {
     assert.throws(() => getController(null), /ReactiveControllerHost/);
     assert.throws(() => prepareEffects(null), /prepareEffects\(\)/);
 
-    prepareEffects(host);
-
     const directController = getController(host);
-    const contextualController = getController(null);
+    const contextualController = runWithHookHost(host, () => {
+      prepareEffects(host);
+      assert.strictEqual(resolveRuntimeHost(undefined), host);
+      return getController();
+    });
 
-    assert.strictEqual(resolveRuntimeHost(undefined), host);
+    assert.strictEqual(resolveRuntimeHost(undefined), null);
     assert.strictEqual(directController, contextualController);
     assert.strictEqual(host.controllers.length, 1);
   });

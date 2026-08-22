@@ -53,15 +53,15 @@ describe("react compat internal external hooks", () => {
       plugins: [JSX_PLUGIN, effectsPlugin, useStatePlugin],
     });
 
-    assert.match(hooksCode, /export function useCounter\(_[A-Za-z0-9]+, initial\)/);
-    assert.match(hooksCode, /useState\(_[A-Za-z0-9]+, initial\);/);
+    assert.match(hooksCode, /export function useCounter\(initial\)/);
+    assert.match(hooksCode, /useState\(initial\);/);
     assert.match(
       hooksCode,
-      /const \[value, setValue\] = useCounter\(_[A-Za-z0-9]+, initial \+ 1\);/
+      /const \[value, setValue\] = useCounter\(initial \+ 1\);/
     );
     assert.match(
       hooksCode,
-      /export default function useDefault\(_[A-Za-z0-9]+, initial\s*=\s*0\)/
+      /export default function useDefault\(initial\s*=\s*0\)/
     );
     assert.doesNotMatch(hooksCode, /from 'react';?/);
 
@@ -92,14 +92,15 @@ describe("react compat internal external hooks", () => {
       generatorOpts: { decoratorsBeforeExport: true },
     });
 
-    assert.match(consumerCode, /prepareEffects\(this\);/);
-    assert.match(consumerCode, /const \[primary\] = useCounter\(this, 0\);/);
-    assert.match(consumerCode, /const \[secondary\] = useDefault\(this, 1\);/);
-    assert.match(consumerCode, /const aliasResult = useAlias\(this, 2\);/);
-    assert.match(consumerCode, /hooks\.useCounter\(this, 3\);/);
-    assert.match(consumerCode, /hooks\.useAlias\(this, 4\);/);
-    assert.match(consumerCode, /function useExternal\(_[A-Za-z0-9]+, initial\)/);
-    assert.match(consumerCode, /useCounter\(_[A-Za-z0-9]+, initial\);/);
+    assert.match(consumerCode, /renderWithHooks\(this, \(\) => \{/);
+    assert.doesNotMatch(consumerCode, /prepareEffects|_host/);
+    assert.match(consumerCode, /const \[primary\] = useCounter\(0\);/);
+    assert.match(consumerCode, /const \[secondary\] = useDefault\(1\);/);
+    assert.match(consumerCode, /const aliasResult = useAlias\(2\);/);
+    assert.match(consumerCode, /hooks\.useCounter\(3\);/);
+    assert.match(consumerCode, /hooks\.useAlias\(4\);/);
+    assert.match(consumerCode, /function useExternal\(initial\)/);
+    assert.match(consumerCode, /useCounter\(initial\);/);
   });
 
   it("supports modules that only export custom hooks", () => {
@@ -133,26 +134,26 @@ describe("react compat internal external hooks", () => {
 
     assert.match(
       hooksCode,
-      /export function useSpinner\(_[A-Za-z0-9]+, initial\s*=\s*false\)/
+      /export function useSpinner\(initial\s*=\s*false\)/
     );
-    assert.match(hooksCode, /useState\(_[A-Za-z0-9]+, initial\);/);
+    assert.match(hooksCode, /useState\(initial\);/);
     assert.match(
       hooksCode,
-      /export const useToggle = \(_[A-Za-z0-9]+, initial\s*=\s*false\) =>/
+      /export const useToggle = \(initial\s*=\s*false\) =>/
     );
-    assert.match(hooksCode, /useToggle\(_[A-Za-z0-9]+/);
+    assert.match(hooksCode, /useToggle\(/);
     assert.match(hooksCode, /export const useAliasToggle = useToggle;/);
     assert.match(
       hooksCode,
-      /export function useComposite\(_[A-Za-z0-9]+, initial\s*=\s*0\)/
+      /export function useComposite\(initial\s*=\s*0\)/
     );
     assert.match(
       hooksCode,
-      /const \[value, setValue\] = useToggle\(_[A-Za-z0-9]+, initial\);/
+      /const \[value, setValue\] = useToggle\(initial\);/
     );
     assert.match(
       hooksCode,
-      /const \[derived\] = useToggle\(_[A-Za-z0-9]+, value\);/
+      /const \[derived\] = useToggle\(value\);/
     );
     assert.match(
       hooksCode,

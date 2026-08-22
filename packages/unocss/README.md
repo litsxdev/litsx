@@ -27,6 +27,11 @@ production component module from embedding its own reset. Existing
 `Component.styles` values are preserved between the preflight and generated
 utilities.
 
+UnoCSS participates in LitSX's normal inheritance order: inherited/mixin
+styles and authored component styles precede the generated utility sheet.
+`replaceStyles(...)` removes inherited styles but still allows the component's
+UnoCSS utilities (and the shared preflight, when configured) to be appended.
+
 The preflight is generated from UnoCSS's resolved project configuration and
 token set. Production emits one shared stylesheet after the complete module
 graph has been collected. Vite development gives each component module a

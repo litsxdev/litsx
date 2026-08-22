@@ -7,7 +7,7 @@ import { afterEach, describe, it } from "vitest";
 import { SuspenseBoundary } from "../packages/core/src/index.js";
 import { ShadowDomMixin } from "../packages/core/src/elements/index.js";
 import { bindRendererContext } from "../packages/core/src/rendering.js";
-import { renderWithSoftSuspense } from "../packages/core/src/runtime-suspense.js";
+import { renderWithHooks } from "../packages/core/src/runtime-suspense.js";
 import { ensureLightDomProxy } from "../packages/scoped-registry-shim/src/index.js";
 
 function defineTestElement(tagName, ctor) {
@@ -328,7 +328,7 @@ describe("scoped registry story host reuse", () => {
       }
 
       render() {
-        return renderWithSoftSuspense(this, () => {
+        return renderWithHooks(this, () => {
           if (this.suspend && !resolved) {
             throw pending.promise;
           }
@@ -515,7 +515,7 @@ describe("scoped registry story host reuse", () => {
       }
 
       render() {
-        return renderWithSoftSuspense(this, () => {
+        return renderWithHooks(this, () => {
           if (this.mode !== "ready") {
             suspendMode(this.mode);
           }

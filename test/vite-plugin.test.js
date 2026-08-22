@@ -164,7 +164,8 @@ describe("@litsx/vite-plugin", () => {
 
       const result = await plugin.transform(hookSource, hookFilename);
       assert.ok(result);
-      assert.match(result.code, /function useWindowResize\(.*host.*listener\)/);
+      assert.match(result.code, /function useWindowResize\(listener\)/);
+      assert.doesNotMatch(result.code, /function useWindowResize\(.*host/);
       assert.match(result.code, /useAfterUpdate\(/);
       assert.match(result.code, /Symbol\.for\("litsx\.hook"\)/);
 
@@ -180,7 +181,8 @@ describe("@litsx/vite-plugin", () => {
       `;
       fs.writeFileSync(componentFilename, componentSource);
       const componentResult = await plugin.transform(componentSource, componentFilename);
-      assert.match(componentResult.code, /useWindowResize\(this, \(\) => \{\}\)/);
+      assert.match(componentResult.code, /useWindowResize\(\(\) => \{\}\)/);
+      assert.doesNotMatch(componentResult.code, /useWindowResize\(this,/);
       assert.match(componentResult.code, /html`<section>Ready<\/section>`/);
     } finally {
       fs.rmSync(tempDir, { recursive: true, force: true });

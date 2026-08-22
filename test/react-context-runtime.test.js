@@ -9,6 +9,8 @@ import {
   renderContext,
   useContext,
 } from "../packages/core/src/context.js";
+import { renderWithHooks } from "../packages/core/src/index.js";
+import { runWithHookHost } from "../packages/core/src/internal.js";
 
 let tagCounter = 0;
 
@@ -42,7 +44,10 @@ describe("react context compat runtime", () => {
 
     class ContextReader extends LitElement {
       render() {
-        return html`<span>${useContext(this, ThemeContext)}</span>`;
+        return renderWithHooks(
+          this,
+          () => html`<span>${useContext(ThemeContext)}</span>`,
+        );
       }
     }
 
@@ -72,7 +77,10 @@ describe("react context compat runtime", () => {
 
     class ContextReader extends LitElement {
       render() {
-        return html`<span>${useContext(this, ThemeContext)}</span>`;
+        return renderWithHooks(
+          this,
+          () => html`<span>${useContext(ThemeContext)}</span>`,
+        );
       }
     }
 
@@ -118,11 +126,10 @@ describe("react context compat runtime", () => {
 
     class ConsumerView extends LitElement {
       render() {
-        return html`${renderContext(
-          this,
+        return renderWithHooks(this, () => html`${renderContext(
           ThemeContext,
           (theme) => html`<strong>${theme}</strong>`
-        )}`;
+        )}`);
       }
     }
 
@@ -154,11 +161,11 @@ describe("react context compat runtime", () => {
     };
 
     assert.throws(
-      () => useContext(host, {}),
+      () => runWithHookHost(host, () => useContext({})),
       /requires a context created by createContext/
     );
     assert.throws(
-      () => renderContext({}, createContext("light"), "not-a-function"),
+      () => renderContext(createContext("light"), "not-a-function"),
       /requires a function child/
     );
   });

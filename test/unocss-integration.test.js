@@ -530,11 +530,11 @@ Button.styles = [BUTTON];
     );
     assert.match(
       result.code,
-      /return \[this\.__litsxStatic\([\s\S]*?\), _litsxUnoCssStyles\];/,
+      /static styles = \[super\.styles \?\? \[\], css`[\s\S]*?`, _litsxUnoCssStyles\];/,
     );
     assert.match(
       result.code,
-      /class InfoCard[\s\S]*?static styles = _litsxUnoCssStyles;/,
+      /class InfoCard[\s\S]*?static styles = \[super\.styles \?\? \[\], _litsxUnoCssStyles\];/,
     );
     assert.deepStrictEqual(result.metadata.litsxStyleIntegrations, [
       {
@@ -573,11 +573,11 @@ Button.styles = [BUTTON];
     );
     assert.match(
       result.code,
-      /return \[_litsxUnoCssPreflight, this\.__litsxStatic\([\s\S]*?\), _litsxUnoCssStyles\];/,
+      /static styles = \[_litsxUnoCssPreflight, super\.styles \?\? \[\], css`[\s\S]*?`, _litsxUnoCssStyles\];/,
     );
     assert.match(
       result.code,
-      /class InfoCard[\s\S]*?static styles = \[_litsxUnoCssPreflight, _litsxUnoCssStyles\];/,
+      /class InfoCard[\s\S]*?static styles = \[_litsxUnoCssPreflight, super\.styles \?\? \[\], _litsxUnoCssStyles\];/,
     );
     assert.deepStrictEqual(result.metadata.litsxStyleIntegrations, [
       {
@@ -656,7 +656,7 @@ LightCard.lightDom = true;
       /class LightCard extends LightDomMixin\(LitElement\)/,
     );
     assert.match(result.code, /litsx\.lightDomStyleScope/);
-    assert.match(result.code, /static styles = _litsxUnoCssScopedStyles;/);
+    assert.match(result.code, /static styles = \[super\.styles \?\? \[\], _litsxUnoCssScopedStyles\];/);
     assert.doesNotMatch(result.code, /@unocss-placeholder/);
   });
 
@@ -772,7 +772,7 @@ export function CompatButton({ active }) {
     assert.match(result.code, /bg-green-500/);
     assert.match(result.code, /bg-gray-500/);
     assert.strictEqual(count(shadowResult.code, UNO_CSS_PLACEHOLDER), 1);
-    assert.match(shadowResult.code, /static styles = _litsxUnoCssStyles;/);
+    assert.match(shadowResult.code, /static styles = \[super\.styles \?\? \[\], _litsxUnoCssStyles\];/);
   });
 
   it("consumes local object, tuple, nested, template and finite-map guards before runtime", () => {
@@ -800,11 +800,32 @@ GuardedButton.styles = [[SIZES, ...VARIANTS], css\`:host { display: block; }\`];
       result.code,
       /__litsxResolveStaticValue\(\[\[SIZES, VARIANTS\]/,
     );
-    const runtimeStyles = result.code.match(
-      /static get styles\(\) \{([\s\S]*?)static \[Symbol/,
-    )?.[1];
+    const stylesStart = result.code.indexOf("static styles =");
+    const stylesEnd = result.code.indexOf("static [Symbol", stylesStart);
+    const runtimeStyles = result.code.slice(stylesStart, stylesEnd);
     assert(runtimeStyles);
     assert.doesNotMatch(runtimeStyles, /\b(?:SIZES|VARIANTS)\b/);
+  });
+
+  it("consumes guards inside replaceStyles without restoring inherited styles", () => {
+    const source = `
+import { css, replaceStyles } from "@litsx/core";
+const SIZES = { sm: "h-8 px-3", lg: "h-12 px-6" } as const;
+export function IsolatedButton({ size }) {
+  return <button class={SIZES[size]}>Save</button>;
+}
+IsolatedButton.styles = replaceStyles([SIZES, css\`:host { all: initial; }\`]);
+`;
+    const result = transformLitsxSync(
+      source,
+      withUnoCssCompiler({ filename: "/virtual/isolated-button.tsx" }),
+    );
+
+    const classOutput = result.code.slice(result.code.indexOf("class IsolatedButton"));
+    assert.match(classOutput, /static styles = \[css`\/\*__LITSX_UNOCSS_GUARD_/);
+    assert.match(classOutput, /all: initial/);
+    assert.match(classOutput, /_litsxUnoCssStyles/);
+    assert.doesNotMatch(classOutput, /super\.styles|replaceStyles\(/);
   });
 
   it("resolves named aliases, reexports, barrels and transitive export dependencies", async () => {
@@ -1462,8 +1483,12 @@ export function LateCard() {
         "utf8",
       );
       const late = await server.ssrLoadModule("/late.tsx");
-      assert.match(late.LateCard.styles[0].cssText, /--colors-white:/);
-      assert.match(late.LateCard.styles[1].cssText, /var\(--colors-white\)/);
+      const lateCss = late.LateCard.styles
+        .flat(Infinity)
+        .map((style) => style?.cssText ?? "")
+        .join("\n");
+      assert.match(lateCss, /--colors-white:/);
+      assert.match(lateCss, /var\(--colors-white\)/);
     } finally {
       await server.close();
       fs.rmSync(directory, { recursive: true, force: true });
@@ -1588,7 +1613,11 @@ WindButton.styles = [BUTTON];
 
     try {
       const before = await server.ssrLoadModule("/entry.tsx");
-      assert.match(before.WindButton.styles[1][0].cssText, /\.bg-red-500\{/);
+      const readUtilities = (component) => component.styles
+        .flat(Infinity)
+        .map((style) => style?.cssText ?? "")
+        .join("\n");
+      assert.match(readUtilities(before.WindButton), /\.bg-red-500\{/);
 
       fs.writeFileSync(
         helper,
@@ -1599,7 +1628,7 @@ WindButton.styles = [BUTTON];
       let cssText = "";
       for (let attempt = 0; attempt < 200; attempt += 1) {
         const after = await server.ssrLoadModule("/entry.tsx");
-        cssText = after.WindButton.styles[1][0].cssText;
+        cssText = readUtilities(after.WindButton);
         if (cssText.includes(".bg-blue-500{")) break;
         await new Promise((resolve) => setTimeout(resolve, 25));
       }

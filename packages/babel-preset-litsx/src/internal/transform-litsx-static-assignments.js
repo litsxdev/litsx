@@ -113,11 +113,63 @@ function getComponentFunctionPath(statementPath, t) {
   return null;
 }
 
+function isReplaceStylesBinding(path, t) {
+  if (path?.isImportSpecifier?.()) {
+    const imported = path.node.imported;
+    return (
+      (t.isIdentifier(imported, { name: "replaceStyles" }) ||
+        t.isStringLiteral(imported, { value: "replaceStyles" })) &&
+      path.parentPath?.node?.source?.value === "@litsx/core"
+    );
+  }
+  return false;
+}
+
+function unwrapReplaceStyles(expressionPath, t) {
+  if (!expressionPath?.isCallExpression?.()) return null;
+  const calleePath = expressionPath.get("callee");
+  let isHelper = false;
+
+  if (calleePath.isIdentifier()) {
+    isHelper = isReplaceStylesBinding(
+      expressionPath.scope.getBinding(calleePath.node.name)?.path,
+      t,
+    );
+  } else if (
+    calleePath.isMemberExpression() &&
+    !calleePath.node.computed &&
+    t.isIdentifier(calleePath.node.property, { name: "replaceStyles" }) &&
+    t.isIdentifier(calleePath.node.object)
+  ) {
+    const binding = expressionPath.scope.getBinding(calleePath.node.object.name);
+    isHelper = Boolean(
+      binding?.path?.isImportNamespaceSpecifier?.() &&
+      binding.path.parentPath?.node?.source?.value === "@litsx/core",
+    );
+  }
+
+  if (!isHelper) return null;
+  if (expressionPath.node.arguments.length !== 1) {
+    throw expressionPath.buildCodeFrameError(
+      "replaceStyles() expects exactly one Lit CSSResultGroup.",
+    );
+  }
+  const [argument] = expressionPath.node.arguments;
+  if (t.isSpreadElement(argument)) {
+    throw expressionPath.buildCodeFrameError(
+      "replaceStyles() does not accept a spread argument.",
+    );
+  }
+  return argument;
+}
+
 function insertStaticAssignments(functionPath, assignments, t) {
   if (assignments.length === 0) return;
-  const statements = assignments.map(({ staticName, value, sourceNode }) => {
+  const statements = assignments.map(({ staticName, value, sourceNode, replaceInheritedStyles }) => {
     const macroName = staticName === "styles"
-      ? "__litsx_static_styles_value"
+      ? replaceInheritedStyles
+        ? "__litsx_static_styles_replace_value"
+        : "__litsx_static_styles_value"
       : `__litsx_static_${staticName}`;
     const statement = t.expressionStatement(
       t.callExpression(
@@ -173,9 +225,22 @@ export default function transformLitsxStaticAssignments(api) {
             // host configuration. Leave them for react-compat (or userland).
             if (assigned.staticName === "propTypes" || assigned.staticName === "events") continue;
 
+            if (![
+              "elements",
+              "expose",
+              "lightDom",
+              "properties",
+              "shadowRootOptions",
+              "styles",
+            ].includes(assigned.staticName)) continue;
+
+            const replacement = assigned.staticName === "styles"
+              ? unwrapReplaceStyles(statementPath.get("expression.right"), t)
+              : null;
             if (assigned.staticName === "styles") {
+              const styleValue = replacement ?? expression.right;
               const invalidStyle = findDefiniteNonRuntimeStyle(
-                expression.right,
+                styleValue,
                 statementPath.scope,
                 t,
                 new Set(),
@@ -192,7 +257,12 @@ export default function transformLitsxStaticAssignments(api) {
             const assignments = assignmentsByComponent.get(assigned.componentName) || [];
             assignments.push({
               staticName: assigned.staticName,
-              value: expression.right,
+              value: assigned.staticName === "styles"
+                ? (replacement ?? expression.right)
+                : expression.right,
+              replaceInheritedStyles:
+                assigned.staticName === "styles" &&
+                replacement !== null,
               sourceNode: statementPath.node,
             });
             assignmentsByComponent.set(assigned.componentName, assignments);

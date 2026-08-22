@@ -3,6 +3,7 @@ import {
   resolveHostInfo,
 } from "./custom-hook-host.js";
 import { ensureRuntimeNamedImports } from "./runtime-imports.js";
+import { ensureHooksRenderWrapper } from "./render-boundary.js";
 let t;
 
 const RUNTIME_MODULE = "@litsx/core";
@@ -244,7 +245,7 @@ function isSoftSuspenseRenderScope(functionPath) {
   return Boolean(
     functionPath?.isArrowFunctionExpression?.() &&
     parentPath?.isCallExpression?.() &&
-    t.isIdentifier(parentPath.node.callee, { name: "renderWithSoftSuspense" })
+    t.isIdentifier(parentPath.node.callee, { name: "renderWithHooks" })
   );
 }
 
@@ -352,7 +353,6 @@ function transformMutableRefCall(callPath, state, hostInfo, t) {
   }
 
   const existingArgs = callPath.node.arguments;
-  const hostExprClone = t.cloneNode(hostInfo.expression, true);
 
   if (!state.loweredMutableRuntimeLocals) {
     state.loweredMutableRuntimeLocals = new Set();
@@ -360,16 +360,13 @@ function transformMutableRefCall(callPath, state, hostInfo, t) {
   state.loweredMutableRuntimeLocals.add(importedLocalName);
   state.mutableRuntimeImportLocals?.add(importedLocalName);
 
-  if (
-    existingArgs.length > 0 &&
-    t.isNodesEquivalent(existingArgs[0], hostExprClone)
-  ) {
+  if (callPath.node.__litsxMutableRefLowered) {
     callPath.node.__litsxMutableRefLowered = true;
     return;
   }
 
   const runtimeCallee = t.identifier(importedLocalName);
-  const nextArgs = [hostExprClone, ...existingArgs.map((arg) => t.cloneNode(arg, true))];
+  const nextArgs = existingArgs.map((arg) => t.cloneNode(arg, true));
   const runtimeCall = t.callExpression(runtimeCallee, nextArgs);
   runtimeCall.__litsxMutableRefLowered = true;
 
@@ -760,7 +757,6 @@ export function createUseRefTransform({
         const declarationPath = declaratorPath.parentPath;
         const callbackStatement = t.expressionStatement(
           t.callExpression(t.identifier(state.callbackRuntimeLocalName), [
-            t.thisExpression(),
             t.arrowFunctionExpression(
               [],
               t.memberExpression(t.thisExpression(), t.identifier(managedRefName))
@@ -821,6 +817,32 @@ export function createUseRefTransform({
           },
           exit(programPath, state) {
             processPendingMutableRefCalls(state, t);
+            if (
+              state.mutableRuntimeImportLocals.size > 0 ||
+              state.callbackRuntimeNeeded
+            ) {
+              let wrappedRender = false;
+              programPath.traverse({
+                ClassMethod(methodPath) {
+                  if (
+                    methodPath.node.kind === "method" &&
+                    t.isIdentifier(methodPath.node.key, { name: "render" })
+                  ) {
+                    wrappedRender =
+                      ensureHooksRenderWrapper(methodPath, t) ||
+                      wrappedRender;
+                  }
+                },
+              });
+              if (wrappedRender) {
+                ensureRuntimeNamedImports(
+                  programPath,
+                  RUNTIME_MODULE,
+                  ["renderWithHooks"],
+                  t,
+                );
+              }
+            }
             programPath.traverse({
               ClassDeclaration(classPath) {
                 const pendingList = classPath.node[pendingPropertyKey];
@@ -1018,7 +1040,6 @@ export function createUseRefTransform({
               ensureGetter(classPath, refName);
 
               const callbackArguments = [
-                  t.thisExpression(),
                   t.arrowFunctionExpression([], t.memberExpression(t.thisExpression(), t.identifier(refName))),
                   callbackExpression,
               ];
@@ -1066,7 +1087,6 @@ export function createUseRefTransform({
                 renderBody.unshiftContainer("body",
                   t.expressionStatement(
                     t.callExpression(t.identifier(state.callbackRuntimeLocalName), [
-                      t.thisExpression(),
                       t.arrowFunctionExpression([], t.memberExpression(t.thisExpression(), t.identifier(refName))),
                       t.cloneNode(expression, true),
                     ])

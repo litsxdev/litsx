@@ -44,6 +44,7 @@ export function buildClassMembers({
   renderStatements,
   handlerInfos,
   createHandlerClassMember,
+  wrapRender = false,
 }) {
   if (defaults.size > 0) {
     const constructorStatements = [
@@ -81,11 +82,22 @@ export function buildClassMembers({
     createHandlerClassMember(handler)
   );
 
+  const renderBody = wrapRender
+    ? [
+        t.returnStatement(
+          t.callExpression(t.identifier("renderWithHooks"), [
+            t.thisExpression(),
+            t.arrowFunctionExpression([], t.blockStatement(renderStatements)),
+          ])
+        ),
+      ]
+    : renderStatements;
+
   const renderMethod = t.classMethod(
     "method",
     t.identifier("render"),
     [],
-    t.blockStatement(renderStatements)
+    t.blockStatement(renderBody)
   );
 
   classMembers.push(...handlerMembers, renderMethod);
@@ -97,10 +109,9 @@ export function createComponentClass({
   tagName = null,
   classMembers,
   hoistMembers,
-  hoistSymbolDeclarations,
   hostTypeId,
   eventMetadata,
-  needsStaticHoistsMixin,
+  needsPropertyDeclarationMerge,
   lightDomRequested,
   lightDomStyleStrategy = "scoped",
   needsCss,
@@ -178,17 +189,9 @@ export function createComponentClass({
 
   if (hoistMembers.length > 0) {
     classNode.body.body.unshift(...hoistMembers);
-    if (hoistSymbolDeclarations.length > 0) {
-      classNode._litsxStaticSymbolDeclarations = hoistSymbolDeclarations;
-    }
-    if (needsStaticHoistsMixin) {
-      classNode.superClass = t.callExpression(
-        t.identifier("LitsxStaticHoistsMixin"),
-        [classNode.superClass]
-      );
-      classNode._needsStaticHoistsMixin = true;
-    }
   }
+
+  classNode._needsPropertyDeclarationMerge = needsPropertyDeclarationMerge;
 
   if (lightDomRequested) {
     classNode.superClass = t.callExpression(
@@ -209,6 +212,7 @@ export function createComponentClass({
   classNode._needsCss = needsCss;
   classNode._needsUnsafeCss = needsUnsafeCss;
   classNode._needsCallbackRef = needsCallbackRef;
+  classNode._needsRenderWithHooks = needsCallbackRef;
   classNode._needsModuleIdMetadata = needsModuleIdMetadata;
 
   if (needsModuleIdMetadata) {

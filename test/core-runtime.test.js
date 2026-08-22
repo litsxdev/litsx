@@ -9,47 +9,82 @@ import {
   ErrorBoundary,
   isLitsxComponentClass,
   isLitsxHook,
-  prepareEffects,
   SuspenseBoundary,
   SuspenseList,
-  useMemoValue,
-  useAfterUpdate,
-  useHost,
-  useHostTypeId,
-  useHostContent,
-  useSlot,
-  useTextContent,
-  useRef,
-  useOnConnect,
-  useId,
-  useStableId,
-  useOnCommit,
-  useEvent,
-  useEmit,
+  useMemoValue as runtimeUseMemoValue,
+  useAfterUpdate as runtimeUseAfterUpdate,
+  useHost as runtimeUseHost,
+  useHostTypeId as runtimeUseHostTypeId,
+  useHostContent as runtimeUseHostContent,
+  useSlot as runtimeUseSlot,
+  useTextContent as runtimeUseTextContent,
+  useRef as runtimeUseRef,
+  useOnConnect as runtimeUseOnConnect,
+  useId as runtimeUseId,
+  useStableId as runtimeUseStableId,
+  useOnCommit as runtimeUseOnCommit,
+  useEvent as runtimeUseEvent,
+  useEmit as runtimeUseEmit,
   useElementInternals,
   useFormValidity,
   useFormValue,
-  usePrevious,
-  applyStructuralHooks,
-  readStructuralHook,
-  useStableCallback,
-  useStyle,
-  useReducedState,
-  useState,
-  useControlledState,
-  useAsyncState,
-  useOptimistic,
-  useCallbackRef,
-  useExpose,
-  useExternalStore,
-  renderWithSoftSuspense,
+  usePrevious as runtimeUsePrevious,
+  useStableCallback as runtimeUseStableCallback,
+  useStyle as runtimeUseStyle,
+  useReducedState as runtimeUseReducedState,
+  useState as runtimeUseState,
+  useControlledState as runtimeUseControlledState,
+  useAsyncState as runtimeUseAsyncState,
+  useOptimistic as runtimeUseOptimistic,
+  useCallbackRef as runtimeUseCallbackRef,
+  useExpose as runtimeUseExpose,
+  useExternalStore as runtimeUseExternalStore,
+  renderWithHooks,
 } from "../packages/core/src/index.js";
+import {
+  applyStructuralHooks,
+  prepareEffects,
+  readStructuralHook as runtimeReadStructuralHook,
+  runWithHookHost,
+} from "../packages/core/src/internal.js";
 import {
   LITSX_COMPONENT,
   LITSX_HOST_TYPE_ID,
 } from "../packages/core/src/elements/index.js";
 import { LITSX_HOOK } from "../packages/core/src/index.js";
 import { withSuspenseCapture } from "../packages/core/src/runtime-suspense.js";
+
+// The semantic runtime tests predate the authored hook ABI. Keep their explicit
+// host setup local to the harness while exercising the same public hook bodies.
+const withTestHost = (hook) => (host, ...args) =>
+  runWithHookHost(host, () => hook(...args));
+const useMemoValue = withTestHost(runtimeUseMemoValue);
+const useAfterUpdate = withTestHost(runtimeUseAfterUpdate);
+const useHost = withTestHost(runtimeUseHost);
+const useHostTypeId = withTestHost(runtimeUseHostTypeId);
+const useHostContent = withTestHost(runtimeUseHostContent);
+const useSlot = withTestHost(runtimeUseSlot);
+const useTextContent = withTestHost(runtimeUseTextContent);
+const useRef = withTestHost(runtimeUseRef);
+const useOnConnect = withTestHost(runtimeUseOnConnect);
+const useId = withTestHost(runtimeUseId);
+const useStableId = withTestHost(runtimeUseStableId);
+const useOnCommit = withTestHost(runtimeUseOnCommit);
+const useEvent = withTestHost(runtimeUseEvent);
+const useEmit = withTestHost(runtimeUseEmit);
+const useStableCallback = withTestHost(runtimeUseStableCallback);
+const useStyle = withTestHost(runtimeUseStyle);
+const useReducedState = withTestHost(runtimeUseReducedState);
+const useState = withTestHost(runtimeUseState);
+const useControlledState = withTestHost(runtimeUseControlledState);
+const useAsyncState = withTestHost(runtimeUseAsyncState);
+const useOptimistic = withTestHost(runtimeUseOptimistic);
+const useCallbackRef = withTestHost(runtimeUseCallbackRef);
+const useExpose = withTestHost(runtimeUseExpose);
+const useExternalStore = withTestHost(runtimeUseExternalStore);
+const usePrevious = withTestHost(runtimeUsePrevious);
+const readStructuralHook = (host, hook, args = []) =>
+  runWithHookHost(host, () => runtimeReadStructuralHook(hook, args));
 
 const DEFAULT_VALIDITY = Object.freeze({
   badInput: false,
@@ -1161,7 +1196,9 @@ describe("litsx effects controller", () => {
     ];
 
     prepareEffects(host);
-    const content = useHostContent({ trim: true });
+    const content = runWithHookHost(host, () =>
+      runtimeUseHostContent({ trim: true }),
+    );
     update(host);
 
     assert.strictEqual(content.text, "hello world");
@@ -1495,7 +1532,7 @@ describe("litsx effects controller", () => {
     const host = new TestHost();
 
     prepareEffects(host);
-    const ref = useRef(null, 123);
+    const ref = runWithHookHost(host, () => runtimeUseRef(123));
 
     assert.strictEqual(ref.value, 123);
     assert.strictEqual(host.controllers.length, 1);
@@ -1505,7 +1542,7 @@ describe("litsx effects controller", () => {
     const host = new TestHost();
 
     prepareEffects(host);
-    const current = useHost(null);
+    const current = runWithHookHost(host, () => runtimeUseHost());
 
     assert.strictEqual(current, host);
   });
@@ -1556,7 +1593,7 @@ describe("litsx effects controller", () => {
     let ready = false;
 
     const render = () =>
-      renderWithSoftSuspense(host, () => {
+      renderWithHooks(host, () => {
         prepareEffects(host);
         useCallbackRef(host, () => target, ref, [ref]);
         if (!ready) throw pending.promise;
@@ -1824,7 +1861,9 @@ describe("litsx effects controller", () => {
     host.textContent = "  alpha  ";
 
     prepareEffects(host);
-    const initialContent = useHostContent({ trim: true });
+    const initialContent = runWithHookHost(host, () =>
+      runtimeUseHostContent({ trim: true }),
+    );
     update(host);
 
     assert.strictEqual(initialContent.text, "alpha");
@@ -1849,7 +1888,9 @@ describe("litsx effects controller", () => {
     }
 
     prepareEffects(host);
-    const nextContent = useHostContent({ trim: true });
+    const nextContent = runWithHookHost(host, () =>
+      runtimeUseHostContent({ trim: true }),
+    );
     update(host);
 
     assert.strictEqual(nextContent.text, "betaGo");
@@ -1887,9 +1928,14 @@ describe("litsx effects controller", () => {
     host.textContent = "  hello  Save";
 
     prepareEffects(host);
-    const initialText = useTextContent({ trim: true });
-    const initialDefault = useSlot();
-    const initialActions = useSlot("actions");
+    const [initialText, initialDefault, initialActions] = runWithHookHost(
+      host,
+      () => [
+        runtimeUseTextContent({ trim: true }),
+        runtimeUseSlot(),
+        runtimeUseSlot("actions"),
+      ],
+    );
     update(host);
 
     assert.strictEqual(initialText, "hello  Save");
@@ -1903,9 +1949,11 @@ describe("litsx effects controller", () => {
     }
 
     prepareEffects(host);
-    const nextText = useTextContent({ trim: true });
-    const nextDefault = useSlot();
-    const nextActions = useSlot("actions");
+    const [nextText, nextDefault, nextActions] = runWithHookHost(host, () => [
+      runtimeUseTextContent({ trim: true }),
+      runtimeUseSlot(),
+      runtimeUseSlot("actions"),
+    ]);
     update(host);
 
     assert.strictEqual(nextText, "bye");
@@ -2477,7 +2525,7 @@ describe("litsx soft suspense runtime", () => {
     const host = new TestHost();
     const pending = deferred();
 
-    const value = renderWithSoftSuspense(host, () => {
+    const value = renderWithHooks(host, () => {
       throw pending.promise;
     });
 
@@ -2499,7 +2547,7 @@ describe("litsx soft suspense runtime", () => {
     const value = withSuspenseCapture(
       { capture: (thenable) => captured.push(thenable) },
       () =>
-        renderWithSoftSuspense(host, () => {
+        renderWithHooks(host, () => {
           throw pending.promise;
         }),
     );
@@ -2515,7 +2563,7 @@ describe("litsx soft suspense runtime", () => {
     const collected = new Set();
 
     const value = collectSoftSuspenseThenables(collected, () =>
-      renderWithSoftSuspense(host, () => {
+      renderWithHooks(host, () => {
         throw pending.promise;
       }),
     );

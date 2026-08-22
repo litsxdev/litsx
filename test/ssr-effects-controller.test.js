@@ -3,10 +3,32 @@ import { describe, it } from "vitest";
 import {
   LITSX_SSR_CONTEXT,
 } from "../packages/core/src/elements/index.js";
-import { prepareEffects } from "../packages/core/src/effect-hooks.js";
-import { useState, useRef, useId, useExternalStore, useExpose } from "../packages/core/src/state-hooks.js";
-import { useMemoValue, useOnConnect } from "../packages/core/src/effect-hooks.js";
+import {
+  useState as runtimeUseState,
+  useRef as runtimeUseRef,
+  useId as runtimeUseId,
+  useExternalStore as runtimeUseExternalStore,
+  useExpose as runtimeUseExpose,
+} from "../packages/core/src/state-hooks.js";
+import {
+  useMemoValue as runtimeUseMemoValue,
+  useOnConnect as runtimeUseOnConnect,
+} from "../packages/core/src/effect-hooks.js";
 import { getController } from "../packages/core/src/runtime-controller.js";
+import {
+  prepareEffects,
+  runWithHookHost,
+} from "../packages/core/src/internal.js";
+
+const withSsrHost = (hook) => (host, ...args) =>
+  runWithHookHost(host, () => hook(...args));
+const useState = withSsrHost(runtimeUseState);
+const useRef = withSsrHost(runtimeUseRef);
+const useId = withSsrHost(runtimeUseId);
+const useExternalStore = withSsrHost(runtimeUseExternalStore);
+const useExpose = withSsrHost(runtimeUseExpose);
+const useMemoValue = withSsrHost(runtimeUseMemoValue);
+const useOnConnect = withSsrHost(runtimeUseOnConnect);
 
 function createSsrHost(instanceId = "0") {
   return {

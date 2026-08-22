@@ -38,7 +38,8 @@ describe("react compat internal useRef", () => {
     });
 
     assert.match(code, /import \{ useReactRef as useRef \} from "@litsx\/core\/react-compat";/);
-    assert.match(code, /const inputRef = useRef\(this, null\);/);
+    assert.match(code, /import \{ renderWithHooks \} from "@litsx\/core";/);
+    assert.match(code, /const inputRef = useRef\(null\);/);
     assert.doesNotMatch(code, /const inputRef\s*=\s*this\.inputRef/);
     assert.match(code, /ref=\{inputRef\}/);
     assert.doesNotMatch(code, /data-ref|querySelector|useCallbackRef/);
@@ -174,7 +175,7 @@ describe("react compat internal useRef", () => {
     });
 
     assert.match(code, /useReactRef as useRef/);
-    assert.match(code, /const latest = useRef\(this, 0\);/);
+    assert.match(code, /const latest = useRef\(0\);/);
     assert.doesNotMatch(code, /import \{ useRef \} from 'react';|import \{ useRef \} from "react";/);
   });
 
@@ -197,8 +198,8 @@ describe("react compat internal useRef", () => {
     });
 
     assert.match(code, /useReactRef as useRef/);
-    assert.match(code, /export function useLatest\(_[A-Za-z0-9]+, value\)/);
-    assert.match(code, /const ref = useRef\(_[A-Za-z0-9]+\);/);
+    assert.match(code, /export function useLatest\(value\)/);
+    assert.match(code, /const ref = useRef\(\);/);
     assert.match(code, /ref\.current = value;/);
     assert.doesNotMatch(code, /import \{ useRef \} from 'react';|import \{ useRef \} from "react";/);
   });
@@ -296,7 +297,7 @@ describe("react compat internal useRef", () => {
     });
 
     assert.match(code, /useReactRef as useRef/);
-    assert.match(code, /const inputRef = useRef\(this, null\);/);
+    assert.match(code, /const inputRef = useRef\(null\);/);
     assert.match(code, /ref=\{inputRef\}/);
     assert.match(code, /this\.track\(inputRef\);/);
     assert.doesNotMatch(code, /data-ref|querySelector|useCallbackRef/);
@@ -322,7 +323,7 @@ describe("react compat internal useRef", () => {
       plugins: [plugin],
     });
 
-    assert.match(code, /const inputRef = useRef\(this, null\);/);
+    assert.match(code, /const inputRef = useRef\(null\);/);
     assert.match(code, /inputRef\.current = this\.fallbackNode;/);
     assert.match(code, /ref="\$\{inputRef\}"/);
     assert.doesNotMatch(code, /data-ref|querySelector|useCallbackRef/);

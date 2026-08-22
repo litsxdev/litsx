@@ -107,7 +107,7 @@ export function createTransformFunctionToClassPlugin(defaultPluginOptions = {}) 
         this.__litsxTransformCount = 0;
         this.__litsxNeedsCss = false;
         this.__litsxNeedsUnsafeCss = false;
-        this.__litsxNeedsStaticHoistsMixin = false;
+        this.__litsxNeedsPropertyDeclarationMerge = false;
         this.__litsxNeedsLightDomMixin = false;
         this.__litsxNeedsHydrationSuspenseMixin = false;
         this.__litsxNeedsCallbackRef = false;
@@ -283,31 +283,6 @@ export function createTransformFunctionToClassPlugin(defaultPluginOptions = {}) 
 export default createTransformFunctionToClassPlugin();
 export { isCapitalizedComponentName };
 
-function getOrCreateModuleStaticHoistSymbol(programPath, hoistName) {
-  let symbolMap = programPath.getData("__litsxStaticHoistSymbols");
-  if (!symbolMap) {
-    symbolMap = new Map();
-    programPath.setData("__litsxStaticHoistSymbols", symbolMap);
-  }
-
-  if (symbolMap.has(hoistName)) {
-    return symbolMap.get(hoistName);
-  }
-
-  const symbolId = programPath.scope.generateUidIdentifier(`litsx_static_${hoistName}`);
-  const declaration = t.variableDeclaration("const", [
-    t.variableDeclarator(
-      symbolId,
-      t.callExpression(t.identifier("Symbol"), [t.stringLiteral(`litsx.static.${hoistName}`)])
-    ),
-  ]);
-
-  const entry = { symbolId, declaration };
-  symbolMap.set(hoistName, entry);
-  return entry;
-}
-
-
 function updateTransformState(state, classNode) {
   if (!state || !classNode) {
     return;
@@ -316,8 +291,8 @@ function updateTransformState(state, classNode) {
   state.__litsxTransformCount = (state.__litsxTransformCount || 0) + 1;
   state.__litsxNeedsCss ||= Boolean(classNode._needsCss);
   state.__litsxNeedsUnsafeCss ||= Boolean(classNode._needsUnsafeCss);
-  state.__litsxNeedsStaticHoistsMixin ||= Boolean(
-    classNode._needsStaticHoistsMixin
+  state.__litsxNeedsPropertyDeclarationMerge ||= Boolean(
+    classNode._needsPropertyDeclarationMerge
   );
   state.__litsxNeedsLightDomMixin ||= Boolean(
     classNode._needsLightDomMixin
@@ -327,6 +302,9 @@ function updateTransformState(state, classNode) {
   );
   state.__litsxNeedsCallbackRef ||= Boolean(
     classNode._needsCallbackRef
+  );
+  state.__litsxNeedsRenderWithHooks ||= Boolean(
+    classNode._needsRenderWithHooks
   );
   state.__litsxNeedsModuleIdMetadata ||= Boolean(
     classNode._needsModuleIdMetadata
@@ -642,8 +620,7 @@ function transformFunction(functionPath, programPath, className, options = {}) {
   const {
     lightDomRequested,
     hoistMembers,
-    hoistSymbolDeclarations,
-    needsStaticHoistsMixin,
+    needsPropertyDeclarationMerge,
     needsCss,
     needsUnsafeCss,
   } = processStaticHoists({
@@ -654,7 +631,6 @@ function transformFunction(functionPath, programPath, className, options = {}) {
     staticIr,
     classMembers,
     options,
-    getOrCreateModuleStaticHoistSymbol,
   });
 
   buildClassMembers({
@@ -663,6 +639,7 @@ function transformFunction(functionPath, programPath, className, options = {}) {
     renderStatements,
     handlerInfos,
     createHandlerClassMember,
+    wrapRender: needsCallbackRef,
   });
 
   const lightDomStyleStrategy =
@@ -678,10 +655,9 @@ function transformFunction(functionPath, programPath, className, options = {}) {
     tagName: resolvedName.replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase(),
     classMembers,
     hoistMembers,
-    hoistSymbolDeclarations,
     hostTypeId: createStableIdentity("litsx-host-type-", functionPath, options.state || {}),
     eventMetadata,
-    needsStaticHoistsMixin,
+    needsPropertyDeclarationMerge,
     lightDomRequested,
     lightDomStyleStrategy,
     needsCss,

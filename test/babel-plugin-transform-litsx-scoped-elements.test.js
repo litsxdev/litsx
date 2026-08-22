@@ -102,7 +102,7 @@ describe("@litsx/babel-plugin-transform-litsx-scoped-elements", () => {
     assert(elementsField.static, "elements field should be static");
 
     const elementEntry = elementsField.value.properties.find(
-      (prop) => prop.key.value === "fancy-button"
+      (prop) => prop.type === "ObjectProperty" && prop.key.value === "fancy-button"
     );
     assert(elementEntry, "expected fancy-button entry in elements");
   });
@@ -169,7 +169,7 @@ describe("@litsx/babel-plugin-transform-litsx-scoped-elements", () => {
     assert(elementsField.static, "elements should be static");
 
     const fancyButtonEntry = elementsField.value.properties.find(
-      (prop) => prop.key.value === "fancy-button"
+      (prop) => prop.type === "ObjectProperty" && prop.key.value === "fancy-button"
     );
     assert(fancyButtonEntry, "expected fancy-button entry in elements");
 
@@ -221,7 +221,7 @@ describe("@litsx/babel-plugin-transform-litsx-scoped-elements", () => {
     });
 
     assert.match(code, /class IconButton extends ShadowDomMixin\(LitElement\)/);
-    assert.match(code, /static elements = \{\s*"my-component": MyComponent\s*\};/);
+    assert.match(code, /static elements = \{\s*\.\.\.\(super\.elements \?\? \{\}\),\s*"my-component": MyComponent\s*\};/);
     assert.match(code, /return <my-component size="sm"\s*\/>;/);
   });
 
@@ -291,7 +291,7 @@ describe("@litsx/babel-plugin-transform-litsx-scoped-elements", () => {
       parserPlugins: ["typescript"],
     });
     assert.match(code, /class LightScreen extends LightDomMixin\(LitElement\)/);
-    assert.match(code, /static elements = \{\s*"fancy-button": FancyButton\s*\}/);
+    assert.match(code, /static elements = \{\s*\.\.\.\(super\.elements \?\? \{\}\),\s*"fancy-button": FancyButton\s*\}/);
   });
 
   it("uses LightDomMixin for light DOM components without element dependencies", () => {
@@ -356,7 +356,7 @@ describe("@litsx/babel-plugin-transform-litsx-scoped-elements", () => {
     });
 
     assert.match(code, /class MixedElement extends ShadowDomMixin\(withTheme\(LitElement\)\)/);
-    assert.match(code, /static elements = \{\s*"fancy-button": FancyButton\s*\}/);
+    assert.match(code, /static elements = \{\s*\.\.\.\(super\.elements \?\? \{\}\),\s*"fancy-button": FancyButton\s*\}/);
   });
 
   it("does not duplicate ShadowDomMixin when it is nested inside another mixin", () => {
@@ -453,7 +453,7 @@ describe("@litsx/babel-plugin-transform-litsx-scoped-elements", () => {
       plugins: [plugin],
     });
     assert.match(code, /class HostCard extends LightDomMixin\(LitElement\)/);
-    assert.match(code, /static elements = \{\s*"child-card": ChildCard\s*\}/);
+    assert.match(code, /static elements = \{\s*\.\.\.\(super\.elements \?\? \{\}\),\s*"child-card": ChildCard\s*\}/);
   });
 
   it("rewrites JSX opening tags with attributes to kebab-case consistently", () => {
@@ -476,7 +476,7 @@ describe("@litsx/babel-plugin-transform-litsx-scoped-elements", () => {
     });
 
     assert.match(code, /return <fancy-button label=\{this\.label\}>Click<\/fancy-button>;/);
-    assert.match(code, /static elements = \{\s*"fancy-button": FancyButton\s*\}/);
+    assert.match(code, /static elements = \{\s*\.\.\.\(super\.elements \?\? \{\}\),\s*"fancy-button": FancyButton\s*\}/);
   });
 
   it("registers locally defined sibling components used in JSX", () => {
@@ -504,7 +504,7 @@ describe("@litsx/babel-plugin-transform-litsx-scoped-elements", () => {
     });
 
     assert.match(code, /export class ProfileScreen extends ShadowDomMixin\(LitElement\)/);
-    assert.match(code, /static elements = \{\s*"profile-chip": ProfileChip\s*\}/);
+    assert.match(code, /static elements = \{\s*\.\.\.\(super\.elements \?\? \{\}\),\s*"profile-chip": ProfileChip\s*\}/);
     assert.match(code, /return <profile-chip\s*\/>;/);
   });
 
@@ -531,7 +531,7 @@ describe("@litsx/babel-plugin-transform-litsx-scoped-elements", () => {
     });
 
     assert.match(code, /export class TreeNode extends ShadowDomMixin\(LitElement\)/);
-    assert.match(code, /static elements = \{\s*"tree-node": TreeNode\s*\}/);
+    assert.match(code, /static elements = \{\s*\.\.\.\(super\.elements \?\? \{\}\),\s*"tree-node": TreeNode\s*\}/);
     assert.match(code, /return <section>\s*<tree-node\s*\/>\s*<\/section>;/s);
   });
 
@@ -618,7 +618,7 @@ describe("@litsx/babel-plugin-transform-litsx-scoped-elements", () => {
     );
     assert.match(
       code,
-      /static elements = \{\s*"suspense-boundary": SuspenseBoundary\s*\}/
+      /static elements = \{\s*\.\.\.\(super\.elements \?\? \{\}\),\s*"suspense-boundary": SuspenseBoundary\s*\}/
     );
   });
 
@@ -649,7 +649,7 @@ describe("@litsx/babel-plugin-transform-litsx-scoped-elements", () => {
     );
     assert.match(
       code,
-      /static elements = \{\s*"suspense-boundary": SuspenseBoundary\s*\}/
+      /static elements = \{\s*\.\.\.\(super\.elements \?\? \{\}\),\s*"suspense-boundary": SuspenseBoundary\s*\}/
     );
   });
 

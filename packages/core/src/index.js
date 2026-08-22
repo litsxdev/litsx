@@ -3,6 +3,15 @@
 // on one line without introducing a parallel styling abstraction.
 export { css } from "lit";
 
+/**
+ * Mark a component stylesheet as a complete replacement for inherited styles.
+ * The compiler consumes this marker while the runtime behavior stays an
+ * ordinary CSSResultGroup identity.
+ */
+export function replaceStyles(styles) {
+  return styles;
+}
+
 export {
   ErrorBoundary,
   ErrorBoundaryElement,
@@ -19,7 +28,7 @@ export {
 export { EffectsController } from "./effects-controller.js";
 export {
   collectSoftSuspenseThenables,
-  renderWithSoftSuspense,
+  renderWithHooks,
 } from "./runtime-suspense.js";
 export {
   __getLitsxNoscriptFactory,
@@ -43,11 +52,7 @@ export {
   isLitsxComponentClass,
 } from "./elements/index.js";
 export {
-  STRUCTURAL_HOOKS,
-  applyStructuralHooks,
   defineHook,
-  isStructuralHook,
-  readStructuralHook,
 } from "./structural-hooks-runtime.js";
 export {
   useElementInternals,
@@ -56,7 +61,6 @@ export {
 } from "./form-hooks.js";
 
 export {
-  prepareEffects,
   ensureLazyElement,
   useAfterUpdate,
   useOnCommit,

@@ -211,9 +211,17 @@ function createClassProperty(name, elements, programPath, options = {}, allowEmp
     )
   );
 
+  const inheritedElements = t.logicalExpression(
+    "??",
+    t.memberExpression(t.super(), t.identifier("elements")),
+    t.objectExpression([]),
+  );
   const property = t.classProperty(
     t.identifier(name),
-    t.objectExpression(properties),
+    t.objectExpression([
+      t.spreadElement(inheritedElements),
+      ...properties,
+    ]),
     null,
     [],
     false

@@ -82,11 +82,10 @@ export function createContext(defaultValue) {
   return Object.freeze(record);
 }
 
-export function useContext(hostOrContext, maybeContext) {
-  const hasExplicitHost = arguments.length > 1;
-  const resolvedHost = hasExplicitHost ? useHost(hostOrContext) : useHost();
+export function useContext(context) {
+  const resolvedHost = useHost();
   const record = getReactContextRecord(
-    hasExplicitHost ? maybeContext : hostOrContext,
+    context,
     "useContext"
   );
   const ssrValue = getSsrProvidedContextValue(record);
@@ -119,14 +118,14 @@ export function useContext(hostOrContext, maybeContext) {
     : record.defaultValue;
 }
 
-export function renderContext(host, context, render) {
+export function renderContext(context, render) {
   if (typeof render !== "function") {
     throw new TypeError(
       "renderContext requires a function child."
     );
   }
 
-  return render(useContext(host, context));
+  return render(useContext(context));
 }
 
 export class LitsxContextProviderElement extends LitsxContextProviderElementBase {

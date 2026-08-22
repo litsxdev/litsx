@@ -449,15 +449,11 @@ export default declare((api) => {
         if (getUseContextKind(calleePath, state)) {
           const argPaths = path.get("arguments");
           const args = path.node.arguments;
-          const isHostAwareCall =
-            args.length === 2 &&
-            isExpression(argPaths[0], t) &&
-            isExpression(argPaths[1], t);
           const isSimpleCall =
             args.length === 1 &&
             isExpression(argPaths[0], t);
 
-          if (!isHostAwareCall && !isSimpleCall) {
+          if (!isSimpleCall) {
             createCompileError(
               path,
               "useContext requires a context object."
@@ -467,9 +463,7 @@ export default declare((api) => {
           state.needsUseReactContext = true;
           const replacement = t.callExpression(
             t.identifier(USE_CONTEXT_IMPORT_NAME),
-            isHostAwareCall
-              ? args.map((arg) => t.cloneNode(arg, true))
-              : [t.cloneNode(args[0], true)]
+            [t.cloneNode(args[0], true)]
           );
           replacement.__litsxContextLowered = true;
           replacement.__litsxCompatUseContext = true;
@@ -567,7 +561,6 @@ export default declare((api) => {
             t.callExpression(
               t.identifier(RENDER_CONTEXT_IMPORT_NAME),
               [
-                t.thisExpression(),
                 t.cloneNode(contextMember.contextExpression, true),
                 renderFn,
               ]

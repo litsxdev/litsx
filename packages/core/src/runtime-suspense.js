@@ -1,4 +1,5 @@
 import { nothing } from "lit";
+import { prepareEffects, runWithHookHost } from "./runtime-controller.js";
 import { getCurrentSsrRuntimeState } from "./runtime-ssr-state.js";
 
 const SOFT_SUSPENSE = Symbol("litsx.softSuspense");
@@ -131,7 +132,7 @@ export function collectSuspenseThenable(thenable) {
   return promise;
 }
 
-export function renderWithSoftSuspense(host, render) {
+function renderSoftSuspenseAttempt(host, render) {
   try {
     return render();
   } catch (thrown) {
@@ -198,4 +199,11 @@ export function renderWithSoftSuspense(host, render) {
 
     return nothing;
   }
+}
+
+export function renderWithHooks(host, render) {
+  return runWithHookHost(host, () => {
+    prepareEffects(host);
+    return renderSoftSuspenseAttempt(host, render);
+  });
 }

@@ -1,4 +1,4 @@
-import { defineHook } from "@litsx/core";
+import { defineHook, useHost } from "@litsx/core";
 
 const ResourceMixin = (Base) =>
   class extends Base {
@@ -12,13 +12,14 @@ const ResourceMixin = (Base) =>
 
 export const useResource = defineHook({
   mixin: ResourceMixin,
-  use(host, key) {
+  use(key) {
+    const host = useHost();
     return host.resourceConnected ? key : `pending:${key}`;
   },
 });
 
 export const useScopedResource = defineHook({
-  use(_host, key) {
+  use(key) {
     return useResource(`scope:${key}`);
   },
 });

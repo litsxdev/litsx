@@ -26,8 +26,7 @@ function assertOptions(options) {
  * Library runtimes call this from their own hooks. Applications do not need to
  * install an adapter or add bootstrap code.
  */
-export function useSsrResourceSnapshot(hostOrOptions, compiledOptions) {
-  const options = arguments.length === 1 ? hostOrOptions : compiledOptions;
+export function useSsrResourceSnapshot(options) {
   assertOptions(options);
 
   const ssrRegistry = getCurrentSsrRuntimeState()?.resourceSnapshotRegistry;

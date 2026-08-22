@@ -28,8 +28,13 @@ import {
 } from "../packages/ssr/src/scoped-rendering.js";
 import { withCurrentSsrRuntimeState } from "../packages/ssr/src/ssr-state.js";
 import { css } from "lit";
-import { prepareEffects, useMemoValue } from "../packages/core/src/effect-hooks.js";
-import { useId, useRef, useState, useExternalStore } from "../packages/core/src/state-hooks.js";
+import { useMemoValue as runtimeUseMemoValue } from "../packages/core/src/effect-hooks.js";
+import {
+  useId as runtimeUseId,
+  useRef as runtimeUseRef,
+  useState as runtimeUseState,
+  useExternalStore as runtimeUseExternalStore,
+} from "../packages/core/src/state-hooks.js";
 import {
   bindRendererContext,
   renderRendererCall,
@@ -37,19 +42,32 @@ import {
 import {
   LitsxContextProviderElement,
   createContext,
-  useContext,
+  useContext as runtimeUseContext,
 } from "../packages/core/src/context.js";
 import {
   ErrorBoundary,
   collectSoftSuspenseThenables,
   createExecutionContextKey,
   getCurrentExecutionContext,
-  renderWithSoftSuspense,
+  renderWithHooks,
   SuspenseBoundary,
   SuspenseList,
   __litsxNoscript,
   useSsrResourceSnapshot,
 } from "../packages/core/src/index.js";
+import {
+  prepareEffects,
+  runWithHookHost,
+} from "../packages/core/src/internal.js";
+
+const withSsrHookHost = (hook) => (host, ...args) =>
+  runWithHookHost(host, () => hook(...args));
+const useMemoValue = withSsrHookHost(runtimeUseMemoValue);
+const useId = withSsrHookHost(runtimeUseId);
+const useRef = withSsrHookHost(runtimeUseRef);
+const useState = withSsrHookHost(runtimeUseState);
+const useExternalStore = withSsrHookHost(runtimeUseExternalStore);
+const useContext = withSsrHookHost(runtimeUseContext);
 
 function createDeferred() {
   let resolve;
@@ -126,7 +144,10 @@ describe("@litsx/ssr", () => {
       withCurrentSsrRuntimeState({}, () =>
         collectSoftSuspenseThenables(collector, async () => {
           await gate.promise;
-          renderWithSoftSuspense({}, () => {
+          renderWithHooks({
+            addController() {},
+            requestUpdate() {},
+          }, () => {
             throw Promise.resolve();
           });
         })
@@ -495,7 +516,7 @@ describe("@litsx/ssr", () => {
       static [LITSX_MODULE_ID] = "/src/AsyncCard.tsx";
 
       render() {
-        return renderWithSoftSuspense(this, () => {
+        return renderWithHooks(this, () => {
           prepareEffects(this);
           renderPasses += 1;
 
@@ -542,7 +563,7 @@ describe("@litsx/ssr", () => {
 
     class AsyncStreamCard extends LitElement {
       render() {
-        return renderWithSoftSuspense(this, () => {
+        return renderWithHooks(this, () => {
           prepareEffects(this);
 
           if (!ready) {
@@ -600,7 +621,7 @@ describe("@litsx/ssr", () => {
   it("fails clearly when rootless soft suspense does not converge during SSR", async () => {
     class AlwaysSuspends extends LitElement {
       render() {
-        return renderWithSoftSuspense(this, () => {
+        return renderWithHooks(this, () => {
           throw Promise.resolve();
         });
       }
@@ -1027,7 +1048,7 @@ describe("@litsx/ssr", () => {
 
     class AsyncCard extends LitElement {
       render() {
-        return renderWithSoftSuspense(this, () => {
+        return renderWithHooks(this, () => {
           renders += 1;
           if (!ready) {
             firstPass.resolve();
@@ -2036,7 +2057,7 @@ export class BetaCard extends LitElement {
 
     class RetryCard extends LitElement {
       render() {
-        return renderWithSoftSuspense(this, () => {
+        return renderWithHooks(this, () => {
           const executionContext = getCurrentExecutionContext();
           seenContexts.push(executionContext);
           const nextCount = (executionContext?.get(RETRY_KEY) ?? 0) + 1;
@@ -2080,7 +2101,7 @@ export class BetaCard extends LitElement {
 
     class ResourceCard extends LitElement {
       render() {
-        return renderWithSoftSuspense(this, () => {
+        return renderWithHooks(this, () => {
           useSsrResourceSnapshot({
             key: "library:i18n",
             capture() {

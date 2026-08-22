@@ -1,4 +1,5 @@
 import { useEvent } from "./effect-hooks.js";
+import { useHost } from "./host-hooks.js";
 import { defineHook } from "./structural-hooks-runtime.js";
 
 const FACE_INTERNALS = Symbol.for("litsx.face.internals");
@@ -260,7 +261,8 @@ export function FormAssociatedMixin(Base) {
 
 export const useElementInternals = defineHook({
   mixin: FormAssociatedMixin,
-  use(host) {
+  use() {
+    const host = useHost();
     const shared = getOrCreateFaceState(host);
     return {
       supported: shared.supported,
@@ -271,7 +273,8 @@ export const useElementInternals = defineHook({
 
 export const useFormValue = defineHook({
   mixin: FormAssociatedMixin,
-  use(host, initialValue) {
+  use(initialValue) {
+    const host = useHost();
     const shared = getOrCreateFaceState(host);
     if (!shared.formValue) {
       shared.formValue = {
@@ -283,7 +286,7 @@ export const useFormValue = defineHook({
       syncInternalsValue(shared.internals, initialValue, initialValue);
     }
     const formValue = shared.formValue;
-    const setValue = useEvent(host, (next) => {
+    const setValue = useEvent((next) => {
       const resolvedValue =
         typeof next === "function" ? next(formValue.value) : next;
 
@@ -297,7 +300,7 @@ export const useFormValue = defineHook({
       return resolvedValue;
     });
 
-    const setDefaultValue = useEvent(host, (next) => {
+    const setDefaultValue = useEvent((next) => {
       const resolvedValue =
         typeof next === "function" ? next(formValue.defaultValue) : next;
 
@@ -311,7 +314,6 @@ export const useFormValue = defineHook({
     });
 
     const setFormValue = useEvent(
-      host,
       (value, restoreState = formValue.value) => {
         syncInternalsValue(shared.internals, value, restoreState);
       },
@@ -333,11 +335,12 @@ export const useFormValue = defineHook({
 
 export const useFormValidity = defineHook({
   mixin: FormAssociatedMixin,
-  use(host) {
+  use() {
+    const host = useHost();
     const shared = getOrCreateFaceState(host);
     updateSharedValiditySnapshot(shared);
 
-    const setValidity = useEvent(host, (flags = {}, message = "", anchor) => {
+    const setValidity = useEvent((flags = {}, message = "", anchor) => {
       if (typeof shared.internals?.setValidity !== "function") {
         return;
       }
@@ -353,7 +356,7 @@ export const useFormValidity = defineHook({
       refreshSharedValidity(host, shared);
     });
 
-    const checkValidity = useEvent(host, () => {
+    const checkValidity = useEvent(() => {
       if (typeof shared.internals?.checkValidity !== "function") {
         return true;
       }
@@ -362,7 +365,7 @@ export const useFormValidity = defineHook({
       return result;
     });
 
-    const reportValidity = useEvent(host, () => {
+    const reportValidity = useEvent(() => {
       if (typeof shared.internals?.reportValidity !== "function") {
         return true;
       }

@@ -39,7 +39,7 @@ describe("@litsx/babel-preset-litsx native lowering internals", () => {
       code,
       /static properties = \{[\s\S]*title: \{[\s\S]*type: String[\s\S]*ref: \{[\s\S]*type: Object[\s\S]*attribute: false/s
     );
-    assert.match(code, /useCallbackRef\(this, \(\) => this,/);
+    assert.match(code, /useCallbackRef\(\(\) => this,/);
     assert.doesNotMatch(code, /data-ref="_refElement"/);
   });
 
@@ -60,7 +60,7 @@ describe("@litsx/babel-preset-litsx native lowering internals", () => {
     assert.match(code, /class SearchShell extends (?:ShadowDomMixin\(LitElement\)|LitElement)/);
     assert.match(code, /<input ref=\{this\.ref\} \/>/);
     assert.doesNotMatch(code, /data-ref=/);
-    assert.doesNotMatch(code, /useCallbackRef\(this, \(\) => this,/);
+    assert.doesNotMatch(code, /useCallbackRef\(\(\) => this,/);
     assert.match(code, /<(?:search-field|SearchField) \.ref=\{this\.ref\} \/>/);
   });
 
@@ -82,7 +82,7 @@ describe("@litsx/babel-preset-litsx native lowering internals", () => {
     assert.match(code, /<(?:leaf|Leaf) \.ref=\{this\.ref\} \/>/);
     assert.match(
       code,
-      /class Leaf extends LitElement \{[\s\S]*useCallbackRef\(this, \(\) => this,/
+      /class Leaf extends LitElement \{[\s\S]*useCallbackRef\(\(\) => this,/
     );
   });
 
@@ -119,10 +119,10 @@ describe("@litsx/babel-preset-litsx native lowering internals", () => {
 
     const { code } = transformWithNativePreset(source);
 
-    assert.match(code, /const internalRef = useRef\(this\);/);
+    assert.match(code, /const internalRef = useRef\(\);/);
     assert.match(code, /<form ref=\{setFormNode\}><\/form>/);
     assert.doesNotMatch(code, /data-ref=/);
-    assert.doesNotMatch(code, /useCallbackRef\(this, \(\) => this,/);
+    assert.doesNotMatch(code, /useCallbackRef\(\(\) => this,/);
   });
 
   it("preserves native member and aliased refs for Lit directive lowering", () => {
@@ -142,7 +142,7 @@ describe("@litsx/babel-preset-litsx native lowering internals", () => {
 
     // The component instance keeps its own ref lifecycle channel, while refs
     // authored on native elements remain available to the Lit ref directive.
-    assert.strictEqual((code.match(/useCallbackRef\(this,/g) || []).length, 1);
+    assert.strictEqual((code.match(/useCallbackRef\(\(\) =>/g) || []).length, 1);
     assert.doesNotMatch(code, /data-ref=/);
     assert.match(code, /<form ref=\{this\.formState\.ref\}><\/form>/);
     assert.match(code, /<input ref=\{localRef\} \/>/);
@@ -479,20 +479,15 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
     });
 
     assert.match(code, /title: \{\s*type: String\s*\}/);
-    assert.match(code, /active: \{\s*type: Boolean\s*\}/s);
-    assert.match(code, /payload: \{\s*type: Object\s*\}/s);
+    assert.match(code, /active: \{\s*type: Boolean,\s*reflect: true\s*\}/s);
+    assert.match(code, /payload: \{\s*type: Object,\s*attribute: false\s*\}/s);
     assert.match(code, /onSelect: \{\s*type: Object,\s*attribute: false\s*\}/s);
     assert.match(code, /reflect: true/);
-    assert.match(code, /payload: \{\s*attribute: false\s*\}/s);
-    assert.match(code, /static get properties\(\)/);
-    assert.match(code, /from "@litsx\/core\/elements"/);
-    assert.match(code, /extends LitsxStaticHoistsMixin\(LitElement\)/);
-    assert.match(code, /this\.__litsxMergeProperties\(/);
-    assert.match(code, /this\.__litsxStatic\(_litsx_static_properties,\s*\(\)\s*=>/);
-    assert.doesNotMatch(code, /static properties = \{/);
+    assert.match(code, /static properties = \{/);
+    assert.doesNotMatch(code, /LitsxStaticHoistsMixin|__litsxMergeProperties|__litsxStatic|litsx\.static\.properties/);
   });
 
-  it("hoists static properties into a memoized static getter that merges inferred props", () => {
+  it("merges authored property options into inferred declarations at compile time", () => {
     const source = `
       type CardProps = {
         title: string;
@@ -518,15 +513,10 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
       presets: [[nativePreset, { jsxTemplate: false }]],
     });
 
-    assert.match(code, /const _litsx_static_properties = Symbol\("litsx\.static\.properties"\);/);
-    assert.match(code, /static get properties\(\)/);
-    assert.match(code, /from "@litsx\/core\/elements"/);
-    assert.match(code, /extends LitsxStaticHoistsMixin\(LitElement\)/);
-    assert.match(code, /this\.__litsxStatic\(_litsx_static_properties,\s*\(\)\s*=>/);
-    assert.match(code, /this\.__litsxMergeProperties\(/);
+    assert.match(code, /static properties = \{/);
     assert.match(code, /title: \{\s*type: String\s*\}/);
-    assert.match(code, /active: \{\s*type: Boolean\s*\}/);
-    assert.match(code, /reflect: true/);
+    assert.match(code, /active: \{\s*type: Boolean,\s*reflect: true\s*\}/s);
+    assert.doesNotMatch(code, /LitsxStaticHoistsMixin|__litsxMergeProperties|__litsxStatic|litsx\.static\.properties/);
   });
 
   it("uses a virtual TypeScript checker program for inline utility types", () => {
@@ -1602,13 +1592,13 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
 
     assert.match(code, /import \{[^}]*LitElement[^}]*\} from ['"]lit['"]/);
     assert.match(code, /import \{[^}]*css[^}]*\} from ['"]@litsx\/core['"]/);
-    assert.match(code, /static get styles\(\)/);
+    assert.match(code, /static styles = \[super\.styles \?\? \[\], css`/);
     assert.match(code, /css`[\s\S]*:host \{[\s\S]*display: block;[\s\S]*\.panel \{[\s\S]*color: var\(--accent\);[\s\S]*`/);
-    assert.doesNotMatch(code, /static styles = /);
-    assert.match(code, /useStyle\(this, "--accent", this\.accent\);/);
+    assert.doesNotMatch(code, /LitsxStaticHoistsMixin|__litsxStatic|litsx\.static\.styles/);
+    assert.match(code, /useStyle\("--accent", this\.accent\);/);
   });
 
-  it("hoists static styles into a memoized static getter", () => {
+  it("lowers static styles into an inherited Lit CSSResultGroup", () => {
     const source = `
       import { css } from "@litsx/core";
 
@@ -1636,13 +1626,12 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
       presets: [[nativePreset, { jsxTemplate: false }]],
     });
 
-    assert.match(code, /const _litsx_static_styles = Symbol\("litsx\.static\.styles"\);/);
-    assert.match(code, /static get styles\(\)/);
+    assert.match(code, /static styles = \[super\.styles \?\? \[\], css`/);
     assert.match(code, /css`[\s\S]*display: block;[\s\S]*color: var\(--accent\);[\s\S]*`/);
-    assert.doesNotMatch(code, /static styles = /);
+    assert.doesNotMatch(code, /LitsxStaticHoistsMixin|__litsxStatic|litsx\.static\.styles/);
   });
 
-  it("hoists arbitrary static name assignments into memoized static getters", () => {
+  it("lowers Lit shadow root options into a direct static field", () => {
     const source = `
       function Card() {
         return <div>ready</div>;
@@ -1660,10 +1649,8 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
       presets: [[nativePreset, { jsxTemplate: false }]],
     });
 
-    assert.match(code, /const _litsx_static_shadowRootOptions = Symbol\("litsx\.static\.shadowRootOptions"\);/);
-    assert.match(code, /static get shadowRootOptions\(\)/);
-    assert.match(code, /extends LitsxStaticHoistsMixin\(LitElement\)/);
-    assert.match(code, /this\.__litsxStatic\(_litsx_static_shadowRootOptions,\s*\(\)\s*=>/);
+    assert.match(code, /static shadowRootOptions = \{/);
+    assert.doesNotMatch(code, /LitsxStaticHoistsMixin|__litsxStatic|litsx\.static\.shadowRootOptions/);
     assert.match(code, /delegatesFocus: true/);
   });
 
@@ -1706,8 +1693,8 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
     const { code } = transformWithNativePreset(source);
 
     assert.match(code, /import \{[^}]*ShadowDomMixin[^}]*\} from "@litsx\/core\/elements";/);
-    assert.match(code, /class Card extends ShadowDomMixin\(LitsxStaticHoistsMixin\(LitElement\)\)|class Card extends LitsxStaticHoistsMixin\(ShadowDomMixin\(LitElement\)\)/);
-    assert.match(code, /static get elements\(\)/);
+    assert.match(code, /class Card extends ShadowDomMixin\(LitElement\)/);
+    assert.match(code, /static elements = \{\s*\.\.\.\(super\.elements \?\? \{\}\),/);
   });
 
   it("does not overwrite authored static elements when JSX also contains component candidates", () => {
@@ -1726,8 +1713,8 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
 
     const { code } = transformWithNativePreset(source);
 
-    assert.match(code, /class Wrapper extends ShadowDomMixin\(LitsxStaticHoistsMixin\(LitElement\)\)|class Wrapper extends LitsxStaticHoistsMixin\(ShadowDomMixin\(LitElement\)\)/);
-    assert.match(code, /static get elements\(\)/);
+    assert.match(code, /class Wrapper extends ShadowDomMixin\(LitElement\)/);
+    assert.match(code, /static elements = \{\s*\.\.\.\(super\.elements \?\? \{\}\),/);
     assert.match(code, /"child-one": ChildOne/);
     assert.doesNotMatch(code, /static elements = \{\s*"child-two": ChildTwo\s*\}/);
   });
@@ -1747,8 +1734,8 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
     `;
 
     const { code } = transformWithNativePreset(source);
-    assert.match(code, /class Card extends LightDomMixin\(LitsxStaticHoistsMixin\(LitElement\)\)/);
-    assert.match(code, /static get elements\(\)/);
+    assert.match(code, /class Card extends LightDomMixin\(LitElement\)/);
+    assert.match(code, /static elements = \{\s*\.\.\.\(super\.elements \?\? \{\}\),/);
     assert.match(code, /"fancy-button": FancyButton/);
   });
 
@@ -1904,9 +1891,10 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
       presets: [[nativePreset, { jsxTemplate: false }]],
     });
 
-    assert.doesNotMatch(code, /static properties = \{/);
-    assert.doesNotMatch(code, /static styles = /);
+    assert.match(code, /static properties = \{/);
+    assert.match(code, /static styles = \[super\.styles \?\? \[\], css`/);
     assert.match(code, /import \{[^}]*useState[^}]*\} from ['"]@litsx\/core['"]/);
+    assert.doesNotMatch(code, /LitsxStaticHoistsMixin|__litsxStatic/);
   });
 
 });

@@ -1,10 +1,18 @@
 import assert from "assert";
 import { describe, it } from "vitest";
-import { prepareEffects } from "../packages/core/src/runtime-controller.js";
 import {
-  useAsyncStateImpl,
-  useOptimisticImpl,
+  prepareEffects,
+  runWithHookHost,
+} from "../packages/core/src/runtime-controller.js";
+import {
+  useAsyncStateImpl as runtimeUseAsyncStateImpl,
+  useOptimisticImpl as runtimeUseOptimisticImpl,
 } from "../packages/core/src/state-async-hooks.js";
+
+const useAsyncStateImpl = (host, ...args) =>
+  runWithHookHost(host, () => runtimeUseAsyncStateImpl(...args));
+const useOptimisticImpl = (host, ...args) =>
+  runWithHookHost(host, () => runtimeUseOptimisticImpl(...args));
 
 class TestHost {
   constructor() {
@@ -34,7 +42,7 @@ function createHookHarness() {
       stateIndex = 0;
       refIndex = 0;
     },
-    useState(_host, initialState) {
+    useState(initialState) {
       const slotIndex = stateIndex++;
       if (!stateSlots[slotIndex]) {
         stateSlots[slotIndex] = { value: initialState };
@@ -50,14 +58,14 @@ function createHookHarness() {
         },
       ];
     },
-    useRef(_host, initialValue) {
+    useRef(initialValue) {
       const slotIndex = refIndex++;
       if (!refSlots[slotIndex]) {
         refSlots[slotIndex] = { value: initialValue };
       }
       return refSlots[slotIndex];
     },
-    useTransition(_host) {
+    useTransition() {
       return [false, (callback) => callback()];
     },
   };

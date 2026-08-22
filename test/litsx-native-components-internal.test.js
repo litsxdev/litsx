@@ -93,8 +93,8 @@ describe("native components internals", () => {
       };
     `);
 
-    assert.match(code, /class Card extends LitsxStaticHoistsMixin\(LitElement\)/);
-    assert.match(code, /static get properties\(\) \{[\s\S]*__litsxMergeProperties\(\{[\s\S]*type: String[\s\S]*reflect: true[\s\S]*\)\)\);[\s\S]*\}/);
+    assert.match(code, /class Card extends LitElement/);
+    assert.match(code, /static properties = \{[\s\S]*title: \{[\s\S]*type: String,[\s\S]*reflect: true[\s\S]*\};/);
     assert.match(code, /return <section>\{this\.title\}<\/section>;/);
   });
 

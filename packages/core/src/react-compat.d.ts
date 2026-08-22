@@ -1,12 +1,9 @@
-import type { ReactiveControllerHost } from "lit";
-
 export interface ReactCompatibleRef<T> {
   value: T | undefined;
   current: T | null;
 }
 
 export declare function useReactRef<T>(
-  host: ReactiveControllerHost,
   initialValue?: T
 ): ReactCompatibleRef<Exclude<T, null>>;
 

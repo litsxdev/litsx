@@ -1,7 +1,6 @@
 import { resolveRuntimeHost } from "./runtime-controller.js";
 import { LITSX_HOST_TYPE_ID } from "./elements/index.js";
 import {
-  isReactiveControllerHostLike,
   createHostContentSnapshot,
   isSameHostContentSnapshot,
 } from "./runtime-host-content.js";
@@ -31,8 +30,8 @@ import { useState } from "./state-hooks.js";
  * @param {import('lit').ReactiveControllerHost} host
  * @returns {import('lit').ReactiveControllerHost}
  */
-export function useHost(host) {
-  const resolvedHost = resolveRuntimeHost(host);
+export function useHost() {
+  const resolvedHost = resolveRuntimeHost();
   if (!resolvedHost) {
     throw new TypeError(
       "Lit<sup>sx</sup> hooks require an active ReactiveControllerHost during render."
@@ -56,8 +55,8 @@ export function useHost(host) {
  * @param {import('lit').ReactiveControllerHost} host
  * @returns {string}
  */
-export function useHostTypeId(host) {
-  const resolvedHost = useHost(host);
+export function useHostTypeId() {
+  const resolvedHost = useHost();
   const hostTypeId = resolvedHost?.constructor?.[LITSX_HOST_TYPE_ID];
 
   if (typeof hostTypeId === "string" && hostTypeId.length > 0) {
@@ -89,25 +88,17 @@ export function useHostTypeId(host) {
  * @param {{ trim?: boolean }} [options]
  * @returns {{ text: string, nodes: Node[], hasContent: boolean, slots: Record<string, Node[]> & { default: Node[] } }}
  */
-export function useHostContent(host, options) {
-  let runtimeHost = host;
+export function useHostContent(options) {
+  const resolvedHost = useHost();
   let normalizedOptions = options;
-
-  if (!isReactiveControllerHostLike(host)) {
-    runtimeHost = undefined;
-    normalizedOptions = host;
-  }
-
-  const resolvedHost = useHost(runtimeHost);
   normalizedOptions = normalizedOptions && typeof normalizedOptions === "object"
     ? normalizedOptions
     : {};
   const [snapshot, setSnapshot] = useState(
-    resolvedHost,
     () => createHostContentSnapshot(resolvedHost, normalizedOptions)
   );
 
-  useOnConnect(resolvedHost, () => {
+  useOnConnect(() => {
     if (typeof MutationObserver !== "function") {
       return;
     }
@@ -159,18 +150,8 @@ export function useHostContent(host, options) {
  * @param {{ trim?: boolean }} [options]
  * @returns {string}
  */
-export function useTextContent(host, options) {
-  let runtimeHost = host;
-  let normalizedOptions = options;
-
-  if (!isReactiveControllerHostLike(host)) {
-    runtimeHost = undefined;
-    normalizedOptions = host;
-  }
-
-  return runtimeHost === undefined
-    ? useHostContent(normalizedOptions).text
-    : useHostContent(runtimeHost, normalizedOptions).text;
+export function useTextContent(options) {
+  return useHostContent(options).text;
 }
 
 /**
@@ -189,20 +170,12 @@ export function useTextContent(host, options) {
  * @param {string} [slotName]
  * @returns {Node[]}
  */
-export function useSlot(host, slotName) {
-  let runtimeHost = host;
-  let requestedSlot = slotName;
-
-  if (!isReactiveControllerHostLike(host)) {
-    runtimeHost = undefined;
-    requestedSlot = host;
-  }
-
-  const resolvedSlotName = typeof requestedSlot === "string" && requestedSlot
-    ? requestedSlot
+export function useSlot(slotName) {
+  const resolvedSlotName = typeof slotName === "string" && slotName
+    ? slotName
     : "default";
 
-  return useHostContent(runtimeHost).slots[resolvedSlotName] ?? [];
+  return useHostContent().slots[resolvedSlotName] ?? [];
 }
 
 /**
@@ -229,10 +202,11 @@ export function useSlot(host, slotName) {
  * @param {string | number | null | undefined | false | (() => string | number | null | undefined | false)} valueOrFactory Value to assign to that property, or a pure compute function evaluated after commit.
  * @param {ReadonlyArray<unknown>} [deps] Reactive values that control when the computed style value should be recalculated.
  */
-export function useStyle(host, propertyName, valueOrFactory, deps) {
+export function useStyle(propertyName, valueOrFactory, deps) {
+  const host = useHost();
   const isComputed = typeof valueOrFactory === "function";
 
-  useOnCommit(host, () => {
+  useOnCommit(() => {
     if (!host?.style) return;
 
     const value = isComputed ? valueOrFactory() : valueOrFactory;

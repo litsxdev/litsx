@@ -1,7 +1,7 @@
-import { prepareEffects, getController } from "./runtime-controller.js";
+import { getController } from "./runtime-controller.js";
 import { ensureLazyElement } from "./runtime-lazy-elements.js";
 
-export { prepareEffects, ensureLazyElement };
+export { ensureLazyElement };
 
 /**
  * Run side effects after the host has committed its update.
@@ -23,8 +23,8 @@ export { prepareEffects, ensureLazyElement };
  * @param {() => void | (() => void)} callback Effect logic to run after commit. May return a cleanup function.
  * @param {ReadonlyArray<unknown>} [deps] Reactive values that control when the effect is re-run.
  */
-export function useAfterUpdate(host, callback, deps) {
-  getController(host).register(
+export function useAfterUpdate(callback, deps) {
+  getController().register(
     callback,
     Array.isArray(deps) ? deps : deps ?? null,
     false
@@ -54,8 +54,8 @@ export function useAfterUpdate(host, callback, deps) {
  * @param {() => void | (() => void)} callback Commit-phase logic to run immediately after the DOM update.
  * @param {ReadonlyArray<unknown>} [deps] Reactive values that control when the effect is re-run.
  */
-export function useOnCommit(host, callback, deps) {
-  getController(host).register(
+export function useOnCommit(callback, deps) {
+  getController().register(
     callback,
     Array.isArray(deps) ? deps : deps ?? null,
     true
@@ -81,8 +81,8 @@ export function useOnCommit(host, callback, deps) {
  * @param {() => void | (() => void)} callback Setup logic to run while the host is connected.
  * @param {ReadonlyArray<unknown>} [deps] Reactive values that control when the setup should be re-armed.
  */
-export function useOnConnect(host, callback, deps) {
-  getController(host).registerConnected(
+export function useOnConnect(callback, deps) {
+  getController().registerConnected(
     callback,
     Array.isArray(deps) ? deps : deps ?? []
   );
@@ -110,8 +110,8 @@ export function useOnConnect(host, callback, deps) {
  * @param {ReadonlyArray<unknown>} [deps] Reactive values that decide when the cached value becomes stale.
  * @returns {unknown} The cached value for the current dependency set.
  */
-export function useMemoValue(host, factory, deps) {
-  return getController(host).resolveMemo(factory, deps);
+export function useMemoValue(factory, deps) {
+  return getController().resolveMemo(factory, deps);
 }
 
 /**
@@ -136,8 +136,8 @@ export function useMemoValue(host, factory, deps) {
  * @param {ReadonlyArray<unknown>} [deps] Reactive values that decide when a new callback should be produced.
  * @returns {Function} A callback with stable identity for the current dependency set.
  */
-export function useStableCallback(host, callback, deps) {
-  return getController(host).resolveCallback(callback, deps);
+export function useStableCallback(callback, deps) {
+  return getController().resolveCallback(callback, deps);
 }
 
 /**
@@ -164,8 +164,8 @@ export function useStableCallback(host, callback, deps) {
  * @param {Function} callback Event callback whose body should stay fresh.
  * @returns {Function} A stable callback reference that always delegates to the latest callback.
  */
-export function useEvent(host, callback) {
-  return getController(host).resolveEvent(callback);
+export function useEvent(callback) {
+  return getController().resolveEvent(callback);
 }
 
 /**
@@ -186,8 +186,9 @@ export function useEvent(host, callback) {
  * @param {import('lit').ReactiveControllerHost & EventTarget} host
  * @returns {(type: string, detail?: unknown, options?: { bubbles?: boolean; composed?: boolean; cancelable?: boolean }) => boolean}
  */
-export function useEmit(host) {
-  return useEvent(host, (type, detail, options = {}) =>
+export function useEmit() {
+  const host = getController().host;
+  return useEvent((type, detail, options = {}) =>
     host.dispatchEvent(
       new CustomEvent(type, {
         detail,

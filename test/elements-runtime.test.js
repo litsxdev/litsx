@@ -5,7 +5,7 @@ import { LitElement, html } from "lit";
 import { describe, it } from "vitest";
 import { connectLightDomRegistry } from "../packages/scoped-registry-shim/src/index.js";
 import {
-  prepareEffects,
+  renderWithHooks,
   useOnConnect,
   useState,
 } from "../packages/core/src/index.js";
@@ -21,7 +21,7 @@ import {
   LITSX_SSR_CONTEXT,
   HydrationSuspenseMixin,
   LightDomMixin,
-  LitsxStaticHoistsMixin,
+  mergePropertyDeclarations,
   ShadowDomMixin,
 } from "../packages/core/src/elements/index.js";
 
@@ -81,17 +81,9 @@ describe("litsx elements runtime", () => {
     assert.deepStrictEqual(call.props, { slug: "x" });
   });
 
-  it("dedupes static hoist mixins and merges nested property metadata", () => {
-    class Base extends HTMLElement {}
-
-    const MixedOnce = LitsxStaticHoistsMixin(Base);
-    const MixedTwice = LitsxStaticHoistsMixin(MixedOnce);
-
-    assert.strictEqual(MixedTwice, MixedOnce);
-    assert.equal(MixedOnce.__litsxStatic("__cache", () => 3), 3);
-    assert.equal(MixedOnce.__litsxStatic("__cache", () => 9), 3);
+  it("merges inferred and authored property declarations when spreads require runtime resolution", () => {
     assert.deepStrictEqual(
-      MixedOnce.__litsxMergeProperties(
+      mergePropertyDeclarations(
         { count: { type: Number, reflect: false }, label: { type: String } },
         { count: { reflect: true }, active: { type: Boolean } },
       ),
@@ -101,11 +93,10 @@ describe("litsx elements runtime", () => {
         active: { type: Boolean },
       },
     );
-    assert.strictEqual(MixedOnce.__litsxResolveStaticValue("ok"), "ok");
     const fallbackBase = { count: { type: Number } };
-    assert.strictEqual(MixedOnce.__litsxMergeProperties(fallbackBase, null), fallbackBase);
+    assert.strictEqual(mergePropertyDeclarations(fallbackBase, null), fallbackBase);
     assert.deepStrictEqual(
-      MixedOnce.__litsxMergeProperties(
+      mergePropertyDeclarations(
         { count: { type: Number, reflect: false } },
         { count: new Date(0) },
       ),
@@ -1445,18 +1436,19 @@ describe("litsx elements runtime", () => {
         };
 
         render() {
-          prepareEffects(this);
-          const [connectCount, setConnectCount] = useState(this, 0);
+          return renderWithHooks(this, () => {
+            const [connectCount, setConnectCount] = useState(0);
 
-          useOnConnect(this, () => {
-            setConnectCount((count) => count + 1);
-          }, []);
+            useOnConnect(() => {
+              setConnectCount((count) => count + 1);
+            }, []);
 
-          return html`
-            <section data-connect-count=${String(connectCount)}>
-              <litsx-runtime-reconnect-shadow-child></litsx-runtime-reconnect-shadow-child>
-            </section>
-          `;
+            return html`
+              <section data-connect-count=${String(connectCount)}>
+                <litsx-runtime-reconnect-shadow-child></litsx-runtime-reconnect-shadow-child>
+              </section>
+            `;
+          });
         }
       }
 

@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "vitest";
+import { useHost } from "../packages/core/src/index.js";
+import { runWithHookHost } from "../packages/core/src/runtime-controller.js";
 import {
   STRUCTURAL_HOOKS,
   applyStructuralHooks,
@@ -11,12 +13,18 @@ import {
 describe("structural hook mixins", () => {
   it("reads a host capability through a structural hook", () => {
     const useLocale = defineHook({
-      use(host, fallback) {
+      use(fallback) {
+        const host = useHost();
         return host.locale ?? fallback;
       },
     });
 
-    assert.equal(readStructuralHook({ locale: "es" }, useLocale, ["en"]), "es");
+    assert.equal(
+      runWithHookHost({ locale: "es" }, () =>
+        readStructuralHook(useLocale, ["en"]),
+      ),
+      "es",
+    );
     assert.equal(isStructuralHook(useLocale), true);
     assert.deepEqual(useLocale[STRUCTURAL_HOOKS], [useLocale]);
   });
@@ -37,8 +45,8 @@ describe("structural hook mixins", () => {
           return super.connectedCallback?.();
         }
       };
-    const useFirst = defineHook({ mixin: firstMixin, use: (host) => host });
-    const useSecond = defineHook({ mixin: secondMixin, use: (host) => host });
+    const useFirst = defineHook({ mixin: firstMixin, use: () => useHost() });
+    const useSecond = defineHook({ mixin: secondMixin, use: () => useHost() });
     class Base {
       connectedCallback() {
         calls.push("base");
@@ -59,15 +67,44 @@ describe("structural hook mixins", () => {
     };
     const useFirst = defineHook({
       mixin: capabilityMixin,
-      use: (host) => host,
+      use: () => useHost(),
     });
     const useSecond = defineHook({
       mixin: capabilityMixin,
-      use: (host) => host,
+      use: () => useHost(),
     });
 
     applyStructuralHooks(class {}, [useFirst, useFirst, useSecond]);
     assert.equal(applications, 1);
+  });
+
+  it("supports installation-only mixin hooks without exposing the host", () => {
+    const firstMixin = (Base) => class extends Base { first = true; };
+    const secondMixin = (Base) => class extends Base { second = true; };
+    const useFirst = defineHook({ mixin: firstMixin });
+    const useSecond = defineHook({ mixin: secondMixin });
+
+    const Host = applyStructuralHooks(class {}, [
+      useFirst,
+      useSecond,
+      useFirst,
+    ]);
+    const host = new Host();
+
+    assert.equal(host.first, true);
+    assert.equal(host.second, true);
+    assert.equal(
+      runWithHookHost(host, () => readStructuralHook(useFirst, [])),
+      undefined,
+    );
+    assert.equal(
+      runWithHookHost(host, () => readStructuralHook(useSecond, [])),
+      undefined,
+    );
+    assert.throws(
+      () => readStructuralHook(useFirst, ["unexpected"]),
+      /does not accept arguments/,
+    );
   });
 
   it("rejects the removed middleware structural contract", () => {
@@ -75,25 +112,29 @@ describe("structural hook mixins", () => {
       () =>
         defineHook({
           middlewares: {},
-          use: (host) => host,
+          use: () => useHost(),
         }),
       /unsupported structural fields: middlewares/,
     );
     assert.throws(
-      () => defineHook({ setup() {}, use: (host) => host }),
+      () => defineHook({ setup() {}, use: () => useHost() }),
       /unsupported structural fields: setup/,
     );
   });
 
   it("validates hook definitions and mixin results", () => {
-    assert.throws(() => defineHook({}), /use\(host, \.\.\.args\)/);
+    assert.throws(() => defineHook({}), /requires a mixin, a use\(\.\.\.args\) reader, or both/);
     assert.throws(
-      () => defineHook({ mixin: {}, use: (host) => host }),
+      () => defineHook({ mixin: class {}, use: true }),
+      /use must be a function/,
+    );
+    assert.throws(
+      () => defineHook({ mixin: {}, use: () => useHost() }),
       /mixin must be a function/,
     );
     const useBroken = defineHook({
       mixin: () => null,
-      use: (host) => host,
+      use: () => useHost(),
     });
     assert.throws(
       () => applyStructuralHooks(class {}, [useBroken]),

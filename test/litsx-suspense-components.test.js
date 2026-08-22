@@ -6,7 +6,7 @@ import {
   SuspenseBoundaryElement,
   SuspenseList,
   SuspenseListElement,
-  renderWithSoftSuspense,
+  renderWithHooks,
 } from "../packages/core/src/index.js";
 
 const DOCUMENT_POSITION_PRECEDING =
@@ -563,7 +563,7 @@ describe("litsx suspense components", () => {
       throw Promise.resolve();
     };
     boundary.fallback = () =>
-      renderWithSoftSuspense(boundary, () => {
+      renderWithHooks(boundary, () => {
         throw deferred.promise;
       });
 

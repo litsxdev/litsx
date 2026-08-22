@@ -51,15 +51,15 @@ describe("integration: parser + all plugins", () => {
       generatorOpts: { decoratorsBeforeExport: true },
     });
 
-    assert.match(code, /import \{[^}]*prepareEffects[^}]*useAfterUpdate[^}]*\} from "@litsx\/core";/);
-    assert.match(code, /class FancyForm extends LightDomMixin\(LitsxStaticHoistsMixin\(LitElement\)\)/);
+    assert.match(code, /import \{[^}]*renderWithHooks[^}]*useAfterUpdate[^}]*\} from "@litsx\/core";/);
+    assert.match(code, /class FancyForm extends LightDomMixin\(LitElement\)/);
     assert.match(code, /static elements = {/);
     assert.match(code, /<fancy-button \.ref=\{buttonRef\} \.label=\{this\.label\} \/>/);
     assert.doesNotMatch(code, /data-ref="_buttonRefElement"/);
     assert.doesNotMatch(code, /get _buttonRefElement\(\)/);
-    assert.match(code, /prepareEffects\(this\);/);
-    assert.match(code, /useAfterUpdate\(this, \(\) => {\s*buttonRef\.current\.focus\(\);/s);
-    assert.match(code, /static get properties\(\)/);
+    assert.doesNotMatch(code, /prepareEffects/);
+    assert.match(code, /useAfterUpdate\(\(\) => {\s*buttonRef\.current\.focus\(\);/s);
+    assert.match(code, /static properties = {/);
     assert.match(code, /class Alert extends LightDomMixin\(LitElement\)/);
     assert.doesNotMatch(code, /PropTypes|\.propTypes\s*=/);
   });
@@ -100,7 +100,7 @@ describe("integration: parser + all plugins", () => {
     assert.match(code, /<fancy-button \.ref=\{buttonRef\} \.label=\{this\.label\} \.mode=\{"primary" as ButtonMode\}>/);
     assert.doesNotMatch(code, /data-ref="_buttonRefElement"/);
     assert.doesNotMatch(code, /get _buttonRefElement\(\)/);
-    assert.match(code, /static elements = {\s*"fancy-button": FancyButton\s*};/);
+    assert.match(code, /static elements = {\s*\.\.\.\(super\.elements \?\? {}\),\s*"fancy-button": FancyButton\s*};/);
   });
 
   it("rewrites React useState calls inside existing Lit classes", () => {
@@ -132,8 +132,9 @@ describe("integration: parser + all plugins", () => {
 
     assert.match(code, /static properties = {\s*foo:/s);
     assert.match(code, /items: {\s*attribute: false\s*}/s);
-    assert.match(code, /prepareEffects\(this\);/);
-    assert.match(code, /const \[count, setCount\] = useState\(this, \(\) => 1\);/);
+    assert.match(code, /renderWithHooks\(this, \(\) => \{/);
+    assert.doesNotMatch(code, /prepareEffects/);
+    assert.match(code, /const \[count, setCount\] = useState\(\(\) => 1\);/);
     assert.match(code, /setCount\(prev => prev \+ this\.items\.length\);/);
   });
 
@@ -368,10 +369,10 @@ describe("integration: parser + all plugins", () => {
       generatorOpts: { decoratorsBeforeExport: true },
     });
 
-    assert.match(code, /useDeferredValue\(this, this\.query, \{\s*timeout: 200\s*\}\)/);
-    assert.match(code, /useMemoValue\(this, \(\) => deferredQuery\.trim\(\), \[deferredQuery\]\)/);
-    assert.match(code, /useExpose\(this, toLitRef\(this\.expose\), \(\) => \(\{/);
-    assert.match(code, /useTransition\(this\)/);
+    assert.match(code, /useDeferredValue\(this\.query, \{\s*timeout: 200\s*\}\)/);
+    assert.match(code, /useMemoValue\(\(\) => deferredQuery\.trim\(\), \[deferredQuery\]\)/);
+    assert.match(code, /useExpose\(toLitRef\(this\.expose\), \(\) => \(\{/);
+    assert.match(code, /useTransition\(\)/);
     assert.match(code, /useReactRef as useRef/);
     assert.match(code, /<input ref=\{apiRef\} \.value=\{summary\} data-pending=\{isPending\} \/>/);
     assert.doesNotMatch(code, /data-ref|querySelector/);

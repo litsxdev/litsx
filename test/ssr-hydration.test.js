@@ -384,7 +384,7 @@ describe("@litsx/ssr/hydration", () => {
     assert.deepStrictEqual(restored, [{ locale: "es" }]);
   });
 
-  it("accepts both the authored and compiler-injected resource snapshot ABI", async () => {
+  it("accepts repeated authored resource snapshot registrations", async () => {
     const { prepareHydrationResources } = await import("../packages/ssr/src/hydration.js");
     const restored = [];
 
@@ -408,7 +408,7 @@ describe("@litsx/ssr/hydration", () => {
         restored.push(snapshot.value);
       },
     });
-    useSsrResourceSnapshot({ kind: "host" }, {
+    useSsrResourceSnapshot({
       key: "library:compiled",
       capture: () => null,
       restore(snapshot) {

@@ -77,12 +77,13 @@ describe("@litsx/babel-preset-react-compat", () => {
 
     const code = run(source);
 
-    assert.match(code, /class FancyForm extends LightDomMixin\(LitsxStaticHoistsMixin\(LitElement\)\)/);
-    assert.match(code, /prepareEffects\(this\);/);
-    assert.match(code, /useAfterUpdate\(this,/);
+    assert.match(code, /class FancyForm extends LightDomMixin\(LitElement\)/);
+    assert.match(code, /renderWithHooks\(this, \(\) => \{/);
+    assert.match(code, /useAfterUpdate\(\(\) =>/);
+    assert.doesNotMatch(code, /prepareEffects/);
     assert.match(code, /return html`<div>\$\{jsxSpreadElement\("fancy-button", \[\{[\s\S]*?"\.ref": buttonRef,[\s\S]*?"\.label": this\.label[\s\S]*?component: FancyButton[\s\S]*?\)\}<\/div>`;/);
-    assert.match(code, /static elements = \{\s*"fancy-button": FancyButton\s*\}/);
-    assert.match(code, /static get properties\(\)/);
+    assert.match(code, /static elements = \{\s*\.\.\.\(super\.elements \?\? \{\}\),\s*"fancy-button": FancyButton\s*\}/);
+    assert.match(code, /static properties = \{/);
     assert.doesNotMatch(code, /PropTypes|\.propTypes\s*=/);
   });
 
@@ -308,7 +309,8 @@ describe("@litsx/babel-preset-react-compat", () => {
       fs.writeFileSync(
         path.join(packageDir, "index.js"),
         [
-          "export function useTheme(host) { return host.theme; }",
+          'import { useHost } from "@litsx/core";',
+          "export function useTheme() { return useHost().theme; }",
           'useTheme[Symbol.for("litsx.hook")] = true;',
         ].join("\n"),
       );
@@ -328,7 +330,7 @@ describe("@litsx/babel-preset-react-compat", () => {
         parser: { plugins: ["typescript"] },
       });
 
-      assert.match(code, /useTheme\(this\)/);
+      assert.match(code, /useTheme\(\)/);
     } finally {
       fs.rmSync(tempDir, { recursive: true, force: true });
     }
@@ -424,12 +426,12 @@ describe("@litsx/babel-preset-react-compat", () => {
         preset,
       });
 
-      assert.match(hookCode, /(?:const|let) useWindowResize = \(.*host.*listener\) =>/);
-      assert.match(hookCode, /useResizeEffect\(_host, listener\)/);
+      assert.match(hookCode, /(?:const|let) useWindowResize = listener =>/);
+      assert.match(hookCode, /useResizeEffect\(listener\)/);
       assert.match(hookCode, /Symbol\.for\("litsx\.hook"\)/);
       assert.match(innerHookCode, /useAfterUpdate\(/);
       assert.match(innerHookCode, /Symbol\.for\("litsx\.hook"\)/);
-      assert.match(consumerCode, /useWindowResize\(this, \(\) => \{\}\)/);
+      assert.match(consumerCode, /useWindowResize\(\(\) => \{\}\)/);
     } finally {
       fs.rmSync(tempDir, { recursive: true, force: true });
     }
@@ -502,7 +504,7 @@ describe("@litsx/babel-preset-react-compat", () => {
     `);
 
     assert.match(code, /export class Counter extends LightDomMixin\(LitElement\)/);
-    assert.match(code, /useState\(this, 0\)/);
+    assert.match(code, /useState\(0\)/);
     assert.match(code, /return html`<button @click=/);
   });
 
@@ -519,9 +521,9 @@ describe("@litsx/babel-preset-react-compat", () => {
     `);
 
     assert.match(code, /class Internal extends LightDomMixin\(LitElement\)/);
-    assert.match(code, /useState\(this, "light"\)/);
-    assert.match(code, /useAfterUpdate\(this,/);
-    assert.match(code, /prepareEffects\(this\);/);
+    assert.match(code, /useState\("light"\)/);
+    assert.match(code, /useAfterUpdate\(\(\) =>/);
+    assert.doesNotMatch(code, /prepareEffects/);
     assert.doesNotMatch(code, /React\.use(?:State|Effect)/);
   });
 
@@ -535,7 +537,7 @@ describe("@litsx/babel-preset-react-compat", () => {
     `);
 
     assert.match(code, /export class WelcomeToast extends LightDomMixin\(LitElement\)/);
-    assert.match(code, /useAfterUpdate\(this,/);
+    assert.match(code, /useAfterUpdate\(\(\) =>/);
     assert.match(code, /render\(\)[\s\S]*return null/);
   });
 
@@ -553,8 +555,8 @@ describe("@litsx/babel-preset-react-compat", () => {
 
     assert.match(code, /class CalendarDayButton extends/);
     assert.match(code, /import \{[^}]*useReactRef as useRef[^}]*\} from "@litsx\/core\/react-compat"/);
-    assert.match(code, /useRef\(this, null\)/);
-    assert.match(code, /useAfterUpdate\(this,/);
+    assert.match(code, /useRef\(null\)/);
+    assert.match(code, /useAfterUpdate\(\(\) =>/);
     assert.doesNotMatch(code, /React\.use(?:Ref|Effect)/);
   });
 
@@ -573,7 +575,7 @@ describe("@litsx/babel-preset-react-compat", () => {
     assert.doesNotMatch(code, /<Comp/);
   });
 
-  it("treats hooks from allowlisted ESM dependency exports as host-aware", () => {
+  it("treats hooks from allowlisted ESM dependency exports as runtime hooks", () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-transform-esm-dep-"));
     try {
       const packageDir = path.join(tempDir, "node_modules", "next-themes");
@@ -611,7 +613,7 @@ describe("@litsx/babel-preset-react-compat", () => {
         preset: { transformDependencies: ["next-themes"] },
       });
 
-      assert.match(code, /useTheme\(this\)/);
+      assert.match(code, /useTheme\(\)/);
     } finally {
       fs.rmSync(tempDir, { recursive: true, force: true });
     }
@@ -777,8 +779,9 @@ describe("@litsx/babel-preset-react-compat", () => {
       /import \{ createContext, useContext, LitsxContextProviderElement as LitsxContextProvider \} from "@litsx\/core\/context";/
     );
     assert.match(code, /const ThemeContext = createContext\("light"\);/);
-    assert.match(code, /prepareEffects\(this\);/);
-    assert.match(code, /const theme = useContext\(this, ThemeContext\);/);
+    assert.match(code, /renderWithHooks\(this, \(\) => \{/);
+    assert.match(code, /const theme = useContext\(ThemeContext\);/);
+    assert.doesNotMatch(code, /prepareEffects/);
     assert.match(code, /return html`<button class="\$\{theme\}">\$\{theme\}<\/button>`;/);
     assert.match(
       code,
@@ -817,11 +820,11 @@ describe("@litsx/babel-preset-react-compat", () => {
     assert.match(code, /const ThemeContext = createContext\("light"\);/);
     assert.match(
       code,
-      /return <litsx-context-provider \.context=\{ThemeContext\} \.value=\{"dark"\}>\s*\{renderContext\(this, ThemeContext, theme => <span class=\{theme\}>\{theme\}<\/span>\)\}\s*<\/litsx-context-provider>;/s
+      /return <litsx-context-provider \.context=\{ThemeContext\} \.value=\{"dark"\}>\s*\{renderContext\(ThemeContext, theme => <span class=\{theme\}>\{theme\}<\/span>\)\}\s*<\/litsx-context-provider>;/s
     );
   });
 
-  it("rewrites local custom hooks that call useContext with the active host", () => {
+  it("preserves local custom hooks that call useContext", () => {
     const source = `
       import { createContext, useContext } from "react";
 
@@ -840,9 +843,9 @@ describe("@litsx/babel-preset-react-compat", () => {
 
     const code = run(source, { preset: { jsxTemplate: false } });
 
-    assert.match(code, /function useThemeLabel\(_host, prefix\)/);
-    assert.match(code, /const theme = useContext\(_host, ThemeContext\);/);
-    assert.match(code, /const label = useThemeLabel\(this, "theme"\);/);
+    assert.match(code, /function useThemeLabel\(prefix\)/);
+    assert.match(code, /const theme = useContext\(ThemeContext\);/);
+    assert.match(code, /const label = useThemeLabel\("theme"\);/);
   });
 
   it("lowers memo and forwardRef together through the preset", () => {
@@ -882,7 +885,7 @@ describe("@litsx/babel-preset-react-compat", () => {
 
     const code = run(source);
     assert.match(code, /class LightForm extends LightDomMixin\(LitElement\)/);
-    assert.match(code, /static elements = \{\s*"fancy-button": FancyButton\s*\}/);
+    assert.match(code, /static elements = \{\s*\.\.\.\(super\.elements \?\? \{\}\),\s*"fancy-button": FancyButton\s*\}/);
     assert.doesNotMatch(code, /litsx\.lightDomStyleScope/);
 
     const forcedGlobalCode = run(source, {
@@ -1012,7 +1015,7 @@ describe("@litsx/babel-preset-react-compat", () => {
     const code = run(source);
 
     assert.match(code, /<litsx-context-provider \.context=\$\{ThemeContext\} \.value=\$\{this\.theme\}>/);
-    assert.match(code, /renderContext\(this, ThemeContext, value => html`<span>\$\{value\}<\/span>`\)/);
+    assert.match(code, /renderContext\(ThemeContext, value => html`<span>\$\{value\}<\/span>`\)/);
     assert.doesNotMatch(code, /theme-context-(?:provider|consumer)/);
   });
 

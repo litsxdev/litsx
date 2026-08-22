@@ -4,7 +4,6 @@ import { useEvent } from "./effect-hooks.js";
 const INITIAL_ASYNC_STATE = Symbol("litsx.initialAsyncState");
 
 export function useAsyncStateImpl(
-  host,
   initialState,
   action,
   useState,
@@ -15,12 +14,12 @@ export function useAsyncStateImpl(
     throw new TypeError("useAsyncState expects an action function");
   }
 
-  const [state, setState] = useState(host, initialState);
-  const [error, setError] = useState(host, null);
-  const [pending, beginTransition] = useTransition(host);
-  const initialStateRef = useRef(host, INITIAL_ASYNC_STATE);
-  const stateRef = useRef(host, state);
-  const latestRunRef = useRef(host, 0);
+  const [state, setState] = useState(initialState);
+  const [error, setError] = useState(null);
+  const [pending, beginTransition] = useTransition();
+  const initialStateRef = useRef(INITIAL_ASYNC_STATE);
+  const stateRef = useRef(state);
+  const latestRunRef = useRef(0);
 
   if (initialStateRef.value === INITIAL_ASYNC_STATE) {
     initialStateRef.value = state;
@@ -28,7 +27,7 @@ export function useAsyncStateImpl(
 
   stateRef.value = state;
 
-  const run = useEvent(host, (...args) => {
+  const run = useEvent((...args) => {
     const runId = latestRunRef.value + 1;
     latestRunRef.value = runId;
     setError(null);
@@ -61,7 +60,7 @@ export function useAsyncStateImpl(
     );
   });
 
-  const reset = useEvent(host, () => {
+  const reset = useEvent(() => {
     latestRunRef.value += 1;
     stateRef.value = initialStateRef.value;
     setError(null);
@@ -71,25 +70,25 @@ export function useAsyncStateImpl(
   return [state, run, { pending, error, reset }];
 }
 
-export function useOptimisticImpl(host, state, updateFn, useRef, useState) {
+export function useOptimisticImpl(state, updateFn, useRef, useState) {
   const reducer = typeof updateFn === "function"
     ? updateFn
     : (_currentState, optimisticValue) => optimisticValue;
-  const baseStateRef = useRef(host, state);
-  const queueRef = useRef(host, []);
-  const [, forceRender] = useState(host, 0);
+  const baseStateRef = useRef(state);
+  const queueRef = useRef([]);
+  const [, forceRender] = useState(0);
 
   if (!Object.is(baseStateRef.value, state)) {
     baseStateRef.value = state;
     queueRef.value = [];
   }
 
-  const addOptimistic = useEvent(host, (optimisticValue) => {
+  const addOptimistic = useEvent((optimisticValue) => {
     queueRef.value = [...queueRef.value, optimisticValue];
     forceRender((version) => version + 1);
   });
 
-  const resetOptimistic = useEvent(host, () => {
+  const resetOptimistic = useEvent(() => {
     if (queueRef.value.length === 0) {
       return;
     }
@@ -105,15 +104,15 @@ export function useOptimisticImpl(host, state, updateFn, useRef, useState) {
   return [optimisticState, addOptimistic, resetOptimistic];
 }
 
-export function useTransitionImpl(host) {
-  return getController(host).resolveTransition();
+export function useTransitionImpl() {
+  return getController().resolveTransition();
 }
 
-export function startTransitionImpl(host, callback) {
-  return getController(host).startTransition(callback);
+export function startTransitionImpl(callback) {
+  return getController().startTransition(callback);
 }
 
-export function useDeferredValueImpl(host, value, options) {
-  const slot = getController(host).resolveDeferredValue(value, options);
+export function useDeferredValueImpl(value, options) {
+  const slot = getController().resolveDeferredValue(value, options);
   return slot.pending ? slot.current : slot.source;
 }

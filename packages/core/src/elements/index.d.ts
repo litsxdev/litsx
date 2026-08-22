@@ -121,21 +121,10 @@ export declare function __litsxForwardedRef(id: string): LitsxForwardedRef;
 export declare function __isLitsxForwardedRef(value: unknown): value is LitsxForwardedRef;
 export declare function __getLitsxForwardedRefId(value: unknown): string | null;
 
-export interface LitsxStaticHoistsStatics {
-  __litsxStatic<T>(cacheKey: PropertyKey, compute: () => T): T;
-  __litsxResolveStaticValue<T>(value: T): T;
-  __litsxMergeProperties<
-    TBase extends Record<PropertyKey, unknown> | null | undefined,
-    TOverride extends Record<PropertyKey, unknown> | null | undefined,
-  >(base: TBase, override: TOverride): Record<PropertyKey, unknown> | TBase;
-}
-
-export type LitsxStaticHoistsHost<TBase extends LitsxConstructor> =
-  TBase & LitsxStaticHoistsStatics;
-
-export declare function LitsxStaticHoistsMixin<TBase extends LitsxConstructor>(
-  Base: TBase
-): LitsxStaticHoistsHost<TBase>;
+export declare function mergePropertyDeclarations(
+  base: Record<PropertyKey, unknown> | null | undefined,
+  override: Record<PropertyKey, unknown> | null | undefined,
+): Record<PropertyKey, unknown>;
 
 export interface ShadowDomStatics {
   readonly scopedElements: Record<string, unknown>;

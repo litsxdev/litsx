@@ -152,10 +152,10 @@ describe("@litsx/babel-preset-litsx", () => {
     );
 
     const ids = [
-      ...result.code.matchAll(/useStableId\((?:this|_host), "([^"]+)"\)/g),
+      ...result.code.matchAll(/useStableId\("([^"]+)"\)/g),
     ].map((match) => match[1]);
 
-    assert.match(result.code, /function useResourceKey\(_host\)/);
+    assert.match(result.code, /function useResourceKey\(\)/);
     assert.strictEqual(ids.length, 2);
     assert.notStrictEqual(ids[0], ids[1]);
     assert.ok(ids.every((id) => id.startsWith("litsx-stable-")));
@@ -216,11 +216,11 @@ describe("@litsx/babel-preset-litsx", () => {
 
   it("compiles structural hooks as deduplicated host capabilities", () => {
     const source = [
-      'import { defineHook } from "@litsx/core";',
+      'import { defineHook, useHost } from "@litsx/core";',
       "const CapabilityMixin = Base => class extends Base { get capability() { return 'ready'; } };",
       "const useCapability = defineHook({",
       "  mixin: CapabilityMixin,",
-      "  use(host, suffix = '') { return host.capability + suffix; },",
+      "  use(suffix = '') { return useHost().capability + suffix; },",
       "});",
       "export function Panel() {",
       "  const first = useCapability(':first');",
@@ -254,20 +254,50 @@ describe("@litsx/babel-preset-litsx", () => {
     );
     assert.match(
       result.code,
-      /readStructuralHook\(this, useCapability, \[':first'\]|\[":first"\]/,
+      /readStructuralHook\(useCapability, \[':first'\]|\[":first"\]/,
     );
     assert.match(
       result.code,
-      /readStructuralHook\(this, useCapability, \[':second'\]|\[":second"\]/,
+      /readStructuralHook\(useCapability, \[':second'\]|\[":second"\]/,
     );
     assert.doesNotMatch(result.code, /HostMiddleware|structuralEntries/);
   });
 
-  it("propagates structural hook requirements through custom hooks", () => {
+  it("compiles installation-only structural hooks without an implicit host result", () => {
     const source = [
       'import { defineHook } from "@litsx/core";',
+      "const FocusMixin = Base => class extends Base { static delegatesFocus = true; };",
+      "const useFocusCapability = defineHook({ mixin: FocusMixin });",
+      "export function Panel() {",
+      "  useFocusCapability();",
+      "  return <div>Ready</div>;",
+      "}",
+    ].join("\n");
+
+    const result = transformFromAstSync(
+      parser.parse(source, { sourceType: "module" }),
+      source,
+      {
+        configFile: false,
+        babelrc: false,
+        filename: "/virtual/installation-only-mixin.tsx",
+        presets: [[nativePreset, { jsxTemplate: false }]],
+      },
+    );
+
+    assert.match(
+      result.code,
+      /class Panel extends applyStructuralHooks\(LitElement, \[/,
+    );
+    assert.match(result.code, /readStructuralHook\(useFocusCapability, \[\]\)/);
+    assert.doesNotMatch(result.code, /useHost/);
+  });
+
+  it("propagates structural hook requirements through custom hooks", () => {
+    const source = [
+      'import { defineHook, useHost } from "@litsx/core";',
       "const I18nMixin = Base => class extends Base {};",
-      "const useI18n = defineHook({ mixin: I18nMixin, use: host => host.i18n });",
+      "const useI18n = defineHook({ mixin: I18nMixin, use: () => useHost().i18n });",
       "export function useTranslatedLabel(key) {",
       "  return useI18n().t(key);",
       "}",
@@ -302,7 +332,7 @@ describe("@litsx/babel-preset-litsx", () => {
       result.code,
       /class Button extends applyStructuralHooks\(LitElement, \[/,
     );
-    assert.match(result.code, /readStructuralHook\(_host, useI18n, \[\]\)/);
+    assert.match(result.code, /readStructuralHook\(useI18n, \[\]\)/);
   });
 
   it("rejects the removed structural middleware contract at compile time", () => {
@@ -1624,19 +1654,19 @@ describe("@litsx/babel-preset-litsx", () => {
 
     assert.match(
       result.code,
-      /extends ShadowDomMixin\(LitsxStaticHoistsMixin\(LitElement\)\)|extends LitsxStaticHoistsMixin\(ShadowDomMixin\(LitElement\)\)/,
+      /extends ShadowDomMixin\(LitElement\)/,
     );
-    assert.match(result.code, /static get styles\(\)/);
-    assert.match(result.code, /static get properties\(\)/);
+    assert.match(result.code, /static styles = \[super\.styles \?\? \[\],/);
+    assert.match(result.code, /static properties = \{/);
     assert.match(result.code, /reflect: true/);
     assert.match(
       result.code,
-      /static elements = \{\s*"fancy-button": FancyButton\s*\}/,
+      /static elements = \{\s*\.\.\.\(super\.elements \?\? \{\}\),\s*"fancy-button": FancyButton\s*\}/,
     );
-    assert.match(result.code, /const buttonRef = useRef\(this, null\);/);
+    assert.match(result.code, /const buttonRef = useRef\(null\);/);
     assert.match(
       result.code,
-      /const \[count, setCount\] = useState\(this, 0\);/,
+      /const \[count, setCount\] = useState\(0\);/,
     );
     assert.match(
       result.code,
@@ -1711,12 +1741,12 @@ describe("@litsx/babel-preset-litsx", () => {
     assert.match(result.code, /class Counter extends LitElement/);
     assert.match(
       result.code,
-      /import \{[^}]*useState[^}]*prepareEffects[^}]*\} from ['"]@litsx\/core['"]|import \{[^}]*prepareEffects[^}]*useState[^}]*\} from ['"]@litsx\/core['"]/,
+      /import \{[^}]*useState[^}]*renderWithHooks[^}]*\} from ['"]@litsx\/core['"]/,
     );
-    assert.match(result.code, /prepareEffects\(this\);/);
+    assert.doesNotMatch(result.code, /prepareEffects/);
     assert.match(
       result.code,
-      /const \[count, setCount\] = useState\(this, 1\);/,
+      /const \[count, setCount\] = useState\(1\);/,
     );
     assert.match(
       result.code,
@@ -1746,11 +1776,11 @@ describe("@litsx/babel-preset-litsx", () => {
 
     assert.match(
       result.code,
-      /const label = 'ok',\s*\[count, setCount\] = useState\(this, 0\);/,
+      /const label = 'ok',\s*\[count, setCount\] = useState\(0\);/,
     );
   });
 
-  it("threads host through local custom hooks that call native useState", () => {
+  it("preserves local custom hook signatures that call native useState", () => {
     const source = [
       "import { useState } from '@litsx\/core';",
       "function useCounter(initial) {",
@@ -1773,19 +1803,19 @@ describe("@litsx/babel-preset-litsx", () => {
       },
     );
 
-    assert.match(result.code, /function useCounter\(_[A-Za-z0-9]+, initial\)/);
+    assert.match(result.code, /function useCounter\(initial\)/);
     assert.match(
       result.code,
-      /const \[value, setValue\] = useState\(_[A-Za-z0-9]+, initial\);/,
+      /const \[value, setValue\] = useState\(initial\);/,
     );
-    assert.match(result.code, /prepareEffects\(this\);/);
+    assert.doesNotMatch(result.code, /prepareEffects|_host/);
     assert.match(
       result.code,
-      /const \[value, setValue\] = useCounter\(this, 0\);/,
+      /const \[value, setValue\] = useCounter\(0\);/,
     );
   });
 
-  it("injects prepareEffects and host args for native effect hooks through the preset", () => {
+  it("runs native effect hooks inside the generated render boundary", () => {
     const source = [
       "import { useAfterUpdate } from '@litsx\/core';",
       "export function Counter() {",
@@ -1808,16 +1838,16 @@ describe("@litsx/babel-preset-litsx", () => {
 
     assert.match(
       result.code,
-      /import \{[^}]*useAfterUpdate[^}]*prepareEffects[^}]*\} from ['"]@litsx\/core['"]|import \{[^}]*prepareEffects[^}]*useAfterUpdate[^}]*\} from ['"]@litsx\/core['"]/,
+      /import \{[^}]*useAfterUpdate[^}]*renderWithHooks[^}]*\} from ['"]@litsx\/core['"]/,
     );
-    assert.match(result.code, /prepareEffects\(this\);/);
+    assert.doesNotMatch(result.code, /prepareEffects/);
     assert.match(
       result.code,
-      /useAfterUpdate\(this, \(\) => \{\s*this\.flag = true;\s*}, \[]\);/s,
+      /useAfterUpdate\(\(\) => \{\s*this\.flag = true;\s*}, \[]\);/s,
     );
   });
 
-  it("threads host through native custom hooks in the preset", () => {
+  it("preserves native custom hook signatures in the preset", () => {
     const source = [
       "import { useStableCallback, useAfterUpdate } from '@litsx\/core';",
       "function useCustom(flag) {",
@@ -1841,20 +1871,20 @@ describe("@litsx/babel-preset-litsx", () => {
       },
     );
 
-    assert.match(result.code, /function useCustom\(_host, flag\)/);
+    assert.match(result.code, /function useCustom\(flag\)/);
     assert.match(
       result.code,
-      /const callback = useStableCallback\(_host, \(\) => flag, \[flag\]\);/,
+      /const callback = useStableCallback\(\(\) => flag, \[flag\]\);/,
     );
     assert.match(
       result.code,
-      /useAfterUpdate\(_host, \(\) => flag && callback\(\), \[flag, callback\]\);/,
+      /useAfterUpdate\(\(\) => flag && callback\(\), \[flag, callback\]\);/,
     );
-    assert.match(result.code, /prepareEffects\(this\);/);
-    assert.match(result.code, /const value = useCustom\(this, this\.flag\);/);
+    assert.doesNotMatch(result.code, /prepareEffects|_host/);
+    assert.match(result.code, /const value = useCustom\(this\.flag\);/);
   });
 
-  it("injects host for native useEmit through the preset", () => {
+  it("resolves native useEmit from the render context", () => {
     const source = [
       "import { useEmit } from '@litsx\/core';",
       "export function Counter() {",
@@ -1874,8 +1904,8 @@ describe("@litsx/babel-preset-litsx", () => {
       },
     );
 
-    assert.match(result.code, /prepareEffects\(this\);/);
-    assert.match(result.code, /const emit = useEmit\(this\);/);
+    assert.doesNotMatch(result.code, /prepareEffects/);
+    assert.match(result.code, /const emit = useEmit\(\);/);
     assert.match(
       result.code,
       /emit\('change', this\.value, \{\s*cancelable: true\s*\}\);/,
@@ -1990,12 +2020,9 @@ describe("@litsx/babel-preset-litsx", () => {
       result.code,
       /import \{[^}]*useRef[^}]*\} from ['"]@litsx\/core['"]/,
     );
-    assert.match(
-      result.code,
-      /import \{[^}]*prepareEffects[^}]*\} from ['"]@litsx\/core['"]/,
-    );
-    assert.match(result.code, /prepareEffects\(this\);/);
-    assert.match(result.code, /const buttonRef = useRef\(this, null\);/);
+    assert.match(result.code, /renderWithHooks\(this, \(\) => \{/);
+    assert.doesNotMatch(result.code, /prepareEffects/);
+    assert.match(result.code, /const buttonRef = useRef\(null\);/);
     assert.match(result.code, /<button ref=\{buttonRef\}>Click<\/button>/);
     assert.doesNotMatch(
       result.code,
@@ -2023,7 +2050,7 @@ describe("@litsx/babel-preset-litsx", () => {
       },
     );
 
-    assert.match(result.code, /const workerRef = useRef\(this, null\);/);
+    assert.match(result.code, /const workerRef = useRef\(null\);/);
     assert.match(result.code, /workerRef\.value = 'ok';/);
     assert.doesNotMatch(result.code, /get workerRef\(\)/);
     assert.doesNotMatch(result.code, /data-ref="/);

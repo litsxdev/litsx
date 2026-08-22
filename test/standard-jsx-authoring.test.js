@@ -360,15 +360,15 @@ describe("standard JSX authoring", () => {
       filename: "/tmp/litsx-standard-statics.jsx",
     });
 
-    assert.match(code, /class Card extends LitsxStaticHoistsMixin\(LitElement\)/);
-    assert.match(code, /static get properties\(\)/);
+    assert.match(code, /class Card extends LitElement/);
+    assert.match(code, /static properties = \{/);
     assert.match(code, /title: \{[\s\S]*type: String[\s\S]*reflect: true/);
     assert.match(code, /payload: \{[\s\S]*type: Object,[\s\S]*attribute: false/);
-    assert.match(code, /static get styles\(\)/);
+    assert.match(code, /static styles = \[super\.styles \?\? \[\], css`/);
     assert.match(code, /css`:host \{ display: block; \}`/);
     assert.match(code, /import \{[^}]*css[^}]*\} from "@litsx\/core"/);
     assert.doesNotMatch(code, /import \{[^}]*css[^}]*\} from "lit"/);
-    assert.match(code, /static get shadowRootOptions\(\)/);
+    assert.match(code, /static shadowRootOptions = \{/);
     assert.match(code, /class Plain extends LightDomMixin\(LitElement\)/);
     assert.doesNotMatch(code, /Card\.properties\s*=/);
     assert.doesNotMatch(code, /Plain\.lightDom\s*=/);
@@ -389,7 +389,7 @@ describe("standard JSX authoring", () => {
       filename: "/tmp/litsx-standard-css-results.tsx",
     });
 
-    assert.match(code, /\[sharedStyles, css`article \{ display: block; \}`\]/);
+    assert.match(code, /\[super\.styles \?\? \[\], sharedStyles, css`article \{ display: block; \}`\]/);
     assert.doesNotMatch(code, /unsafeCSS\(sharedStyles\)/);
 
     assert.throws(
@@ -399,6 +399,78 @@ describe("standard JSX authoring", () => {
       `, { filename: "/tmp/litsx-invalid-standard-styles.tsx" }),
       /must be a Lit CSSResultGroup[\s\S]*css`\.\.\.`/,
     );
+  });
+
+  it("composes inherited styles by default and supports an explicit replacement", () => {
+    const source = `
+      import { css, defineHook, replaceStyles } from "@litsx/core";
+      const StyledMixin = Base => class extends Base {
+        static properties = { mixed: { type: Boolean } };
+        static styles = [super.styles ?? [], css\`:host { color: red; }\`];
+      };
+      const useStyled = defineHook({ mixin: StyledMixin, use: () => null });
+      const OwnChild = class extends HTMLElement {};
+
+      function Composed() { useStyled(); return <div />; }
+      Composed.properties = { label: { type: String } };
+      Composed.styles = css\`:host { display: block; }\`;
+      Composed.elements = { "own-child": OwnChild };
+
+      function Isolated() { useStyled(); return <div />; }
+      Isolated.styles = replaceStyles(css\`:host { all: initial; }\`);
+    `;
+
+    const { code } = transformLitsxSync(source, {
+      filename: "/tmp/litsx-inherited-styles.tsx",
+      jsxTemplate: false,
+    });
+
+    assert.match(code, /class Composed extends applyStructuralHooks[\s\S]*?static styles = \[super\.styles \?\? \[\], css`:host \{ display: block; \}`\]/);
+    assert.match(code, /class Composed extends applyStructuralHooks[\s\S]*?static properties = \{[\s\S]*?label: \{[\s\S]*?type: String/);
+    assert.doesNotMatch(code, /super\.properties/);
+    assert.match(code, /static elements = \{\s*\.\.\.\(super\.elements \?\? \{\}\),\s*"own-child": OwnChild/);
+    assert.match(code, /class Isolated extends applyStructuralHooks[\s\S]*?static styles = css`:host \{ all: initial; \}`/);
+    assert.doesNotMatch(code, /replaceStyles\(/);
+    assert.doesNotMatch(code, /LitsxStaticHoistsMixin|__litsxStatic|litsx\.static\.styles/);
+  });
+
+  it("recognizes aliased and namespace replaceStyles imports", () => {
+    const source = `
+      import { css, replaceStyles as resetStyles } from "@litsx/core";
+      import * as litsx from "@litsx/core";
+      function AliasCard() { return <div />; }
+      AliasCard.styles = resetStyles(css\`:host { color: red; }\`);
+      function NamespaceCard() { return <div />; }
+      NamespaceCard.styles = litsx.replaceStyles(css\`:host { color: blue; }\`);
+    `;
+    const { code } = transformLitsxSync(source, {
+      filename: "/tmp/litsx-replace-style-imports.tsx",
+      jsxTemplate: false,
+    });
+
+    assert.match(code, /class AliasCard[\s\S]*?static styles = css`:host \{ color: red; \}`/);
+    assert.match(code, /class NamespaceCard[\s\S]*?static styles = css`:host \{ color: blue; \}`/);
+    assert.doesNotMatch(code, /super\.styles/);
+  });
+
+  it("uses the final top-level styles and properties assignments", () => {
+    const source = `
+      import { css } from "@litsx/core";
+      function Card({ active }) { return <div>{active}</div>; }
+      Card.styles = css\`:host { color: red; }\`;
+      Card.properties = { active: { reflect: false } };
+      Card.styles = css\`:host { color: blue; }\`;
+      Card.properties = { active: { reflect: true } };
+    `;
+    const { code } = transformLitsxSync(source, {
+      filename: "/tmp/litsx-final-static-assignment.tsx",
+      jsxTemplate: false,
+    });
+
+    assert.match(code, /static styles = \[super\.styles \?\? \[\], css`:host \{ color: blue; \}`\]/);
+    assert.doesNotMatch(code, /color: red/);
+    assert.match(code, /active: \{\s*type: String,\s*reflect: true\s*\}/s);
+    assert.doesNotMatch(code, /reflect: false/);
   });
 
   it("leaves React propTypes assignments outside LitSX static configuration", () => {

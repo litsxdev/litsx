@@ -47,6 +47,13 @@ automatic generated styles for light-DOM components. Authored
 - This preset owns the supported native plugin order.
 - Standard top-level assignments such as `Component.styles = css\`...\`` and
   `Component.properties = {...}` are collected before component lowering.
+- Component styles extend `super.styles` by default. Wrap a CSSResultGroup in
+  `replaceStyles(...)` from `@litsx/core` to discard inherited styles explicitly.
+  Structural mixins that declare styles must likewise compose `super.styles`.
+- Reactive properties use Lit's native inheritance finalization; only inferred
+  and authored options on the same generated component are merged by the
+  compiler. Scoped `elements` maps extend `super.elements`, with local tags
+  taking precedence.
 - Ordinary JSX prop names are classified from the destination API. Boolean
   declarations become boolean attribute parts, primitive declarations become
   attributes, and object/function/opaque declarations become properties. Lit's

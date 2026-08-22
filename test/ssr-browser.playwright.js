@@ -544,6 +544,125 @@ customElements.define("parent-card", ParentCard);
   }
 });
 
+test("composes structural mixin metadata in shadow and light DOM and supports isolated styles", async ({
+  page,
+}) => {
+  const tempRoot = path.join(repoRoot, "test-results");
+  await fs.mkdir(tempRoot, { recursive: true });
+  const tempDir = await fs.mkdtemp(path.join(tempRoot, "litsx-static-composition-"));
+  const srcDir = path.join(tempDir, "src");
+  await fs.mkdir(srcDir, { recursive: true });
+  await fs.writeFile(
+    path.join(tempDir, "index.html"),
+    `<shadow-composed capability="shadow"></shadow-composed>
+     <shadow-isolated capability="isolated"></shadow-isolated>
+     <light-composed capability="light"></light-composed>
+     <script type="module" src="/src/main.js"></script>`,
+  );
+  await fs.writeFile(
+    path.join(srcDir, "components.tsx"),
+    `
+import { css, defineHook, replaceStyles, useHost } from "@litsx/core";
+
+class MixinChild extends HTMLElement {}
+class OwnChild extends HTMLElement {}
+
+const CapabilityMixin = (Base) => class extends Base {
+  static properties = { capability: { type: String } };
+  static styles = [super.styles ?? [], css\`.probe { color: rgb(255, 0, 0); }\`];
+  static elements = {
+    ...(super.elements ?? {}),
+    "mixin-child": MixinChild,
+  };
+};
+
+const useCapability = defineHook({
+  mixin: CapabilityMixin,
+  use() { return useHost().capability; },
+});
+
+export function ShadowComposed() {
+  const capability = useCapability();
+  return <div class="probe">{capability}</div>;
+}
+ShadowComposed.styles = css\`.probe { background-color: rgb(0, 0, 255); }\`;
+ShadowComposed.elements = { "own-child": OwnChild };
+
+export function ShadowIsolated() {
+  const capability = useCapability();
+  return <div class="probe">{capability}</div>;
+}
+ShadowIsolated.styles = replaceStyles(css\`.probe { color: rgb(0, 128, 0); }\`);
+
+export function LightComposed() {
+  const capability = useCapability();
+  return <div class="probe">{capability}</div>;
+}
+LightComposed.lightDom = true;
+LightComposed.styles = css\`.probe { background-color: rgb(128, 0, 128); }\`;
+`,
+  );
+  await fs.writeFile(
+    path.join(srcDir, "main.js"),
+    `
+import { LightComposed, ShadowComposed, ShadowIsolated } from "./components.tsx";
+customElements.define("shadow-composed", ShadowComposed);
+customElements.define("shadow-isolated", ShadowIsolated);
+customElements.define("light-composed", LightComposed);
+`,
+  );
+
+  const server = await createServer({
+    configFile: false,
+    root: tempDir,
+    logLevel: "silent",
+    ...isolatedViteOptions(tempDir),
+    plugins: litsxUnoCss({ unocss: { presets: [presetWind4()] } }),
+  });
+  await server.listen();
+
+  try {
+    const pageErrors = [];
+    page.on("pageerror", (error) => pageErrors.push(error.message));
+    await page.goto(server.resolvedUrls.local[0]);
+    await page.waitForFunction(() =>
+      document.querySelector("shadow-composed")?.shadowRoot?.querySelector(".probe")?.textContent === "shadow" &&
+      document.querySelector("shadow-isolated")?.shadowRoot?.querySelector(".probe")?.textContent === "isolated" &&
+      document.querySelector("light-composed .probe")?.textContent === "light"
+    );
+
+    const result = await page.evaluate(() => {
+      const shadow = document.querySelector("shadow-composed");
+      const isolated = document.querySelector("shadow-isolated");
+      const light = document.querySelector("light-composed");
+      const shadowStyle = getComputedStyle(shadow.shadowRoot.querySelector(".probe"));
+      const isolatedStyle = getComputedStyle(isolated.shadowRoot.querySelector(".probe"));
+      const lightStyle = getComputedStyle(light.querySelector(".probe"));
+      return {
+        shadowColor: shadowStyle.color,
+        shadowBackground: shadowStyle.backgroundColor,
+        isolatedColor: isolatedStyle.color,
+        lightColor: lightStyle.color,
+        lightBackground: lightStyle.backgroundColor,
+        properties: [...shadow.constructor.elementProperties.keys()],
+        elements: Object.keys(shadow.constructor.elements).sort(),
+      };
+    });
+
+    expect(result.shadowColor).toBe("rgb(255, 0, 0)");
+    expect(result.shadowBackground).toBe("rgb(0, 0, 255)");
+    expect(result.isolatedColor).toBe("rgb(0, 128, 0)");
+    expect(result.lightColor).toBe("rgb(255, 0, 0)");
+    expect(result.lightBackground).toBe("rgb(128, 0, 128)");
+    expect(result.properties).toContain("capability");
+    expect(result.elements).toEqual(["mixin-child", "own-child"]);
+    expect(pageErrors).toEqual([]);
+  } finally {
+    await server.close();
+    await fs.rm(tempDir, { recursive: true, force: true });
+  }
+});
+
 test("updates the Wind4 preflight when a later client module adds theme tokens", async ({
   page,
 }) => {

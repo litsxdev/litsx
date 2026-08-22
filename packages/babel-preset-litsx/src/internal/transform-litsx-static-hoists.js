@@ -31,42 +31,46 @@ function isLightDomHoist(statement) {
   throw new Error("Component.lightDom = true only accepts the literal value true.");
 }
 
-function createStaticHoistGetter(name, symbolId, expression) {
-  const getter = t.classMethod(
-    "get",
+function createStaticClassProperty(name, expression) {
+  const property = t.classProperty(
     t.identifier(name),
-    [],
-    t.blockStatement([
-      t.returnStatement(
-        t.callExpression(
-          t.memberExpression(t.thisExpression(), t.identifier("__litsxStatic")),
-          [
-            t.cloneNode(symbolId),
-            t.arrowFunctionExpression([], expression),
-          ]
-        )
-      ),
-    ])
+    t.cloneNode(expression, true),
   );
-  getter.static = true;
-  return getter;
+  property.static = true;
+  return property;
 }
 
-function resolveStaticHoistExpression(expression) {
-  return t.callExpression(
-    t.memberExpression(t.thisExpression(), t.identifier("__litsxResolveStaticValue")),
-    [t.cloneNode(expression)]
+function createInheritedStaticValue(name, fallback) {
+  return t.logicalExpression(
+    "??",
+    t.memberExpression(t.super(), t.identifier(name)),
+    fallback,
   );
 }
 
-function createPropertiesHoistResolver(propertiesStatic, expression) {
-  return t.callExpression(
-    t.memberExpression(t.thisExpression(), t.identifier("__litsxMergeProperties")),
-    [
-      t.objectExpression(propertiesStatic.map((property) => t.cloneNode(property))),
-      resolveStaticHoistExpression(expression),
-    ]
+function createComposedStylesExpression(expression) {
+  return t.arrayExpression([
+    createInheritedStaticValue("styles", t.arrayExpression([])),
+    ...(t.isArrayExpression(expression)
+      ? expression.elements.map((element) => t.cloneNode(element, true))
+      : [t.cloneNode(expression, true)]),
+  ]);
+}
+
+function createComposedElementsExpression(expression) {
+  const inherited = t.spreadElement(
+    createInheritedStaticValue("elements", t.objectExpression([])),
   );
+  if (t.isObjectExpression(expression)) {
+    return t.objectExpression([
+      inherited,
+      ...expression.properties.map((property) => t.cloneNode(property, true)),
+    ]);
+  }
+  return t.objectExpression([
+    inherited,
+    t.spreadElement(t.cloneNode(expression, true)),
+  ]);
 }
 
 function getGeneratedPropertiesExpression(statement) {
@@ -121,13 +125,139 @@ function normalizePropertiesIr(staticIr, renderStatements) {
   return properties;
 }
 
+function getStaticPropertyKey(property) {
+  if (!t.isObjectProperty(property) || property.computed) return null;
+  if (t.isIdentifier(property.key)) return property.key.name;
+  if (t.isStringLiteral(property.key) || t.isNumericLiteral(property.key)) {
+    return String(property.key.value);
+  }
+  return null;
+}
+
+function normalizeAuthoredProperty(property) {
+  const next = t.cloneNode(property, true);
+  if (
+    t.isObjectProperty(next) &&
+    t.isIdentifier(next.value) &&
+    ["Array", "Boolean", "Number", "Object", "String"].includes(next.value.name)
+  ) {
+    next.value = t.objectExpression([
+      t.objectProperty(t.identifier("type"), t.cloneNode(next.value)),
+    ]);
+  }
+  return next;
+}
+
+function mergeObjectPropertyLists(baseProperties, overrideProperties) {
+  const properties = baseProperties.map((property) => t.cloneNode(property, true));
+  const indexByKey = new Map();
+  properties.forEach((property, index) => {
+    const key = getStaticPropertyKey(property);
+    if (key !== null) indexByKey.set(key, index);
+  });
+
+  for (const property of overrideProperties) {
+    const nextProperty = t.cloneNode(property, true);
+    const key = getStaticPropertyKey(property);
+    const existingIndex = key === null ? undefined : indexByKey.get(key);
+    if (existingIndex !== undefined) {
+      properties[existingIndex] = nextProperty;
+      continue;
+    }
+    properties.push(nextProperty);
+    if (key !== null) indexByKey.set(key, properties.length - 1);
+  }
+  return properties;
+}
+
+function mergeKnownPropertyDeclarations(inferred, authored) {
+  const properties = inferred.map((property) => t.cloneNode(property, true));
+  const indexByKey = new Map();
+  properties.forEach((property, index) => {
+    const key = getStaticPropertyKey(property);
+    if (key !== null) indexByKey.set(key, index);
+  });
+
+  for (const property of authored.properties) {
+    const normalizedProperty = normalizeAuthoredProperty(property);
+    const nextProperty = t.cloneNode(normalizedProperty, true);
+    const key = getStaticPropertyKey(property);
+    const existingIndex = key === null ? undefined : indexByKey.get(key);
+    const existing = existingIndex === undefined ? null : properties[existingIndex];
+
+    if (
+      existing &&
+      t.isObjectProperty(existing) &&
+      t.isObjectExpression(existing.value) &&
+      t.isObjectProperty(normalizedProperty) &&
+      t.isObjectExpression(normalizedProperty.value)
+    ) {
+      existing.value = t.objectExpression(
+        mergeObjectPropertyLists(
+          existing.value.properties,
+          normalizedProperty.value.properties,
+        ),
+      );
+      continue;
+    }
+
+    if (existingIndex !== undefined) {
+      properties[existingIndex] = nextProperty;
+      continue;
+    }
+
+    properties.push(nextProperty);
+    if (key !== null) indexByKey.set(key, properties.length - 1);
+  }
+
+  return t.objectExpression(properties);
+}
+
+function createPropertiesExpression(inferred, authored) {
+  const base = t.objectExpression(
+    inferred.map((property) => t.cloneNode(property, true)),
+  );
+  if (!authored) {
+    return { expression: base, needsMergeHelper: false };
+  }
+
+  const hasSpread = authored.properties.some((property) =>
+    t.isSpreadElement(property),
+  );
+  if (!hasSpread) {
+    return {
+      expression: mergeKnownPropertyDeclarations(inferred, authored),
+      needsMergeHelper: false,
+    };
+  }
+
+  return {
+    expression: t.callExpression(
+      t.identifier("mergePropertyDeclarations"),
+      [
+        base,
+        t.objectExpression(
+          authored.properties.map((property) =>
+            normalizeAuthoredProperty(property),
+          ),
+        ),
+      ],
+    ),
+    needsMergeHelper: true,
+  };
+}
+
 function getGeneratedStylesExpression(statement) {
   if (!t.isExpressionStatement(statement)) return null;
   if (!t.isCallExpression(statement.expression)) return null;
-  if (!t.isIdentifier(
-    statement.expression.callee,
-    { name: "__litsx_static_styles_value" },
-  )) return null;
+  const callee = statement.expression.callee;
+  const inherited = t.isIdentifier(callee, {
+    name: "__litsx_static_styles_value",
+  });
+  const replacement = t.isIdentifier(callee, {
+    name: "__litsx_static_styles_replace_value",
+  });
+  if (!inherited && !replacement) return null;
   if (statement.expression.arguments.length !== 1) return null;
 
   const [argument] = statement.expression.arguments;
@@ -142,7 +272,10 @@ function getGeneratedStylesExpression(statement) {
       "Component.styles must be a Lit CSSResultGroup. Use css`...` from lit instead of a plain string, untagged template literal, or function.",
     );
   }
-  return copySourceLocation(t.cloneNode(argument, true), argument);
+  return {
+    expression: copySourceLocation(t.cloneNode(argument, true), argument),
+    inherit: !replacement,
+  };
 }
 
 function getStaticHoistExpression(statement, functionPath) {
@@ -301,6 +434,10 @@ function containsUnsafeCssCall(node) {
 }
 
 function isStaticStylesExpression(node, functionPath, seenBindings = new Set()) {
+  if (t.isClassExpression(node)) {
+    return true;
+  }
+
   if (
     t.isStringLiteral(node) ||
     t.isNumericLiteral(node) ||
@@ -437,17 +574,13 @@ export function processStaticHoists({
   staticIr = null,
   classMembers,
   options = {},
-  getOrCreateModuleStaticHoistSymbol,
 }) {
   const propertiesIr = normalizePropertiesIr(staticIr, renderStatements);
   const effectivePropertiesStatic = propertiesIr.inferred
     .map((entry) => entry.expression)
     .filter(Boolean);
-  const staticHoists = propertiesIr.authored
-    .map((entry) => ({
-      name: "properties",
-      expression: entry.expression,
-    }));
+  const lastAuthoredProperties = propertiesIr.authored.at(-1)?.expression ?? null;
+  const staticMetadata = [];
   let lightDomRequested = options.defaultDomMode === "light";
 
   if (t.isBlockStatement(node.body)) {
@@ -458,12 +591,12 @@ export function processStaticHoists({
         continue;
       }
 
-      const cssExpression = getGeneratedStylesExpression(renderStatements[index]);
-      if (!cssExpression) continue;
-      staticHoists.unshift({
+      const styles = getGeneratedStylesExpression(renderStatements[index]);
+      if (!styles) continue;
+      staticMetadata.unshift({
         name: "styles",
-        expression: cssExpression,
-        needsCssImport: false,
+        expression: styles.expression,
+        inherit: styles.inherit,
       });
       renderStatements.splice(index, 1);
     }
@@ -478,84 +611,72 @@ export function processStaticHoists({
     for (let index = renderStatements.length - 1; index >= 0; index -= 1) {
       const hoistExpression = getStaticHoistExpression(renderStatements[index], functionPath);
       if (!hoistExpression) continue;
-      staticHoists.unshift(hoistExpression);
+      staticMetadata.unshift(hoistExpression);
       renderStatements.splice(index, 1);
     }
   }
 
   if (lightDomRequested) {
-    for (let index = staticHoists.length - 1; index >= 0; index -= 1) {
-      if (staticHoists[index]?.name === "shadowRootOptions") {
-        staticHoists.splice(index, 1);
+    for (let index = staticMetadata.length - 1; index >= 0; index -= 1) {
+      if (staticMetadata[index]?.name === "shadowRootOptions") {
+        staticMetadata.splice(index, 1);
       }
     }
   }
 
-  const hasHoistedProperties = staticHoists.some((entry) => entry.name === "properties");
-  if (effectivePropertiesStatic.length > 0 && !hasHoistedProperties) {
-    const classProperties = t.classProperty(
-      t.identifier("properties"),
-      t.objectExpression(effectivePropertiesStatic),
-      null,
-      [],
-      false
+  let needsPropertyDeclarationMerge = false;
+  if (effectivePropertiesStatic.length > 0 || lastAuthoredProperties) {
+    const properties = createPropertiesExpression(
+      effectivePropertiesStatic,
+      lastAuthoredProperties,
     );
-
-    classProperties.static = true;
-    classMembers.push(classProperties);
+    classMembers.push(
+      createStaticClassProperty("properties", properties.expression),
+    );
+    needsPropertyDeclarationMerge = properties.needsMergeHelper;
   }
 
-  const hoistSymbolDeclarations = [];
-  let needsStaticHoistsMixin = false;
-  const hoistMembers = staticHoists.flatMap((hoist) => {
+  const lastMetadataByName = new Map();
+  staticMetadata.forEach((entry) => lastMetadataByName.set(entry.name, entry));
+  const effectiveMetadata = staticMetadata.filter(
+    (entry) => lastMetadataByName.get(entry.name) === entry,
+  );
+
+  const hoistMembers = effectiveMetadata.flatMap((hoist) => {
     if (hoist.name === "expose") {
       return createExposeHoistMembers(hoist.expression);
     }
 
-    needsStaticHoistsMixin = true;
-    const { symbolId, declaration } = getOrCreateModuleStaticHoistSymbol(programPath, hoist.name);
-    if (declaration) {
-      hoistSymbolDeclarations.push(declaration);
-      const symbolMap = programPath.getData("__litsxStaticHoistSymbols");
-      if (symbolMap?.has(hoist.name)) {
-        symbolMap.set(hoist.name, { symbolId, declaration: null });
-      }
-    }
-
-    if (hoist.name === "properties") {
-      return createStaticHoistGetter(
-        "properties",
-        symbolId,
-        createPropertiesHoistResolver(effectivePropertiesStatic, hoist.expression)
-      );
-    }
-
     if (hoist.name === "styles") {
-      return createStaticHoistGetter(
+      return createStaticClassProperty(
         "styles",
-        symbolId,
-        resolveStaticHoistExpression(hoist.expression)
+        hoist.inherit === false
+          ? hoist.expression
+          : createComposedStylesExpression(hoist.expression),
       );
     }
 
-    return createStaticHoistGetter(
+    if (hoist.name === "elements") {
+      return createStaticClassProperty(
+        "elements",
+        createComposedElementsExpression(hoist.expression),
+      );
+    }
+
+    return createStaticClassProperty(
       hoist.name,
-      symbolId,
-      resolveStaticHoistExpression(hoist.expression)
+      hoist.expression,
     );
   });
 
   return {
     lightDomRequested,
     hoistMembers,
-    hoistSymbolDeclarations,
-    needsStaticHoistsMixin,
+    needsPropertyDeclarationMerge,
     needsCss:
-      staticHoists.some(
-        (entry) => entry.name === "styles" && entry.needsCssImport !== false,
-      ),
+      effectiveMetadata.some((entry) => entry.name === "styles" && entry.needsCssImport),
     needsUnsafeCss:
-      staticHoists.some(
+      effectiveMetadata.some(
         (entry) => entry.name === "styles" && containsUnsafeCssCall(entry.expression)
       ),
   };

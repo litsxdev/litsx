@@ -20,35 +20,6 @@ export function isCustomHookFunction(path, t) {
   return typeof name === 'string' && /^use[A-Z0-9]/.test(name);
 }
 
-export function inferHostIdentifier(path, t) {
-  if (!path) return null;
-  if (path.node.__litsxHostIdentifier) {
-    return path.node.__litsxHostIdentifier;
-  }
-  const [firstParam] = path.node.params;
-  if (t.isIdentifier(firstParam) && /^_?host/.test(firstParam.name)) {
-    return firstParam.name;
-  }
-  return null;
-}
-
-export function ensureHostParam(functionPath, t) {
-  const existingHostName = inferHostIdentifier(functionPath, t);
-  if (existingHostName) {
-    functionPath.node.__litsxHostIdentifier = existingHostName;
-    return t.identifier(existingHostName);
-  }
-
-  let hostId = t.identifier('_host');
-  if (functionPath.scope.hasBinding(hostId.name)) {
-    hostId = functionPath.scope.generateUidIdentifier('host');
-  }
-
-  functionPath.node.params.unshift(hostId);
-  functionPath.node.__litsxHostIdentifier = hostId.name;
-  return hostId;
-}
-
 export function resolveHostInfo(callPath, t) {
   const funcPath = callPath.getFunctionParent();
   if (!funcPath) return null;
@@ -57,7 +28,7 @@ export function resolveHostInfo(callPath, t) {
     typeof funcPath.isArrowFunctionExpression === "function" &&
     funcPath.isArrowFunctionExpression() &&
     funcPath.parentPath?.isCallExpression() &&
-    funcPath.parentPath.get("callee").isIdentifier({ name: "renderWithSoftSuspense" }) &&
+    funcPath.parentPath.get("callee").isIdentifier({ name: "renderWithHooks" }) &&
     funcPath.parentPath.get("arguments.0").isThisExpression()
   ) {
     const wrapperFuncPath = funcPath.parentPath.getFunctionParent();
@@ -85,9 +56,8 @@ export function resolveHostInfo(callPath, t) {
   }
 
   if (isCustomHookFunction(funcPath, t)) {
-    const hostId = ensureHostParam(funcPath, t);
     return {
-      expression: t.identifier(hostId.name),
+      expression: null,
       type: HOST_TYPE_CUSTOM,
       functionPath: funcPath,
     };

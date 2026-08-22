@@ -71,6 +71,39 @@ Use the `css` export from `@litsx/core` for component styles. It is Lit's real
 `css` tag, so editors can recognize and decorate the template and Lit receives a
 `CSSResult`, not an untyped string.
 
+Component styles extend the styles installed by structural mixins and other
+base classes by default. Arrays remain ordinary Lit `CSSResultGroup` values:
+
+```tsx
+Card.styles = [sharedCardStyles, css`:host { display: block; }`];
+```
+
+The generated Lit class prepends `super.styles`. Use `replaceStyles()` when a
+component deliberately needs an isolated stylesheet:
+
+```tsx
+import { css, replaceStyles } from "@litsx/core";
+
+IsolatedCard.styles = replaceStyles(css`:host { all: initial; }`);
+```
+
+`replaceStyles()` is an identity outside compilation, so the same expression is
+valid in a directly authored Lit class. A structural mixin that owns styles
+must use ordinary cooperative Lit inheritance itself:
+
+```ts
+const FocusRingMixin = (Base) => class extends Base {
+  static styles = [super.styles ?? [], focusRingStyles];
+};
+```
+
+Reactive `properties` follow Lit's native class finalization: declarations from
+the inheritance chain accumulate, and a derived declaration of the same name
+replaces the inherited declaration. LitSX only combines inferred property
+options with `Component.properties` options declared on the same component.
+Scoped `elements` maps are combined with `super.elements`; local entries win on
+tag-name collisions.
+
 Build integrations can route generated light-DOM styles with
 `lightDomStyles: "scoped" | "global" | "none"`. The default `scoped` mode
 creates a stable component boundary; `global` is intended for an
@@ -216,6 +249,71 @@ adapts object refs, callback refs, `createRef`, `forwardRef`,
 `useImperativeHandle`, spreads, SSR, hydration, and React 19 callback cleanup.
 React-authored source therefore keeps React's ref contract without changing the
 native LitSX contract.
+
+## Hooks and host capabilities
+
+Hook signatures are ordinary authored JavaScript signatures. LitSX does not
+prepend a hidden host parameter to hook definitions or callsites:
+
+```tsx
+export function useTranslatedLabel(key: string) {
+  const host = useHost();
+  const [locale] = useState(host.locale);
+  return translate(locale, key);
+}
+
+export function SaveButton() {
+  const label = useTranslatedLabel("save");
+  return <button>{label}</button>;
+}
+```
+
+`useHost()` is the only authored API for reading the current component host.
+Hooks run synchronously inside the generated render boundary; the compiler owns
+that boundary and its controller cursor. Do not import or call
+`prepareEffects`, `runWithHookHost`, `readStructuralHook`, or
+`applyStructuralHooks` from application source. They are available only from
+`@litsx/core/internal` for compiler and runtime packages.
+
+An asynchronous continuation does not retain an implicit render host. Capture
+the state setter, controller, or host synchronously and request an update when
+the async result changes renderable state. This keeps request-local SSR context
+and concurrent renders isolated.
+
+Use a structural hook when a hook requires a capability on the generated class:
+
+```tsx
+const I18nMixin = (Base) => class extends Base {
+  i18n = createI18nController(this);
+};
+
+export const useI18n = defineHook({
+  mixin: I18nMixin,
+  use() {
+    return useHost().i18n;
+  },
+});
+```
+
+The compiler installs structural mixins in first-callsite order and deduplicates
+them by mixin identity. Custom hooks propagate this requirement through
+compiler-generated metadata; no structural metadata is authored manually.
+
+When a mixin only contributes lifecycle or class behavior, omit the reader:
+
+```tsx
+const useFormAssociation = defineHook({ mixin: FormAssociationMixin });
+
+export function FormControl() {
+  useFormAssociation(); // void
+  return <input />;
+}
+```
+
+LitSX does not return the shared host or infer a snapshot from the mixin's
+reactive properties. Add an explicit `use()` reader when a callsite needs a
+value. This keeps capability surfaces intentional when several mixins compose
+on the same generated class.
 
 ## Identity and collections
 

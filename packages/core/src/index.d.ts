@@ -70,7 +70,6 @@ export declare const LITSX_EVENTS: unique symbol;
 export declare const LITSX_HOST_TYPE_ID: unique symbol;
 export declare const LITSX_LIGHT_DOM_STYLE_SCOPE: unique symbol;
 export declare const LITSX_HYDRATABLE_TAG: unique symbol;
-export declare const STRUCTURAL_HOOKS: unique symbol;
 export interface LitsxHook {
   readonly [LITSX_HOOK]: true;
 }
@@ -422,7 +421,7 @@ export { ErrorBoundary as ErrorBoundaryElement };
 export { SuspenseBoundary as SuspenseBoundaryElement };
 export { SuspenseList as SuspenseListElement };
 
-export declare function renderWithSoftSuspense<T>(
+export declare function renderWithHooks<T>(
   host: object,
   render: () => T
 ): T;
@@ -431,6 +430,9 @@ export declare function collectSoftSuspenseThenables<T>(
   collector: { add(thenable: Promise<unknown>): void },
   render: () => T
 ): T;
+
+/** Return a CSSResultGroup that replaces, rather than extends, inherited styles. */
+export declare function replaceStyles(styles: CSSResultGroup): CSSResultGroup;
 
 export declare function createExecutionContextKey<T>(
   description?: string
@@ -464,9 +466,23 @@ export interface LitsxStructuralDefinition<
 > {
   /** Host capability installed once per distinct mixin. */
   mixin?: LitsxStructuralMixin<THost>;
-  /** Render-time reader invoked with the generated component host. */
-  use(host: THost, ...args: TArgs): TResult;
+  /** Render-time reader. Call useHost() when the capability needs its host. */
+  use(...args: TArgs): TResult;
 }
+
+export interface LitsxStructuralMixinDefinition<
+  THost extends object = object,
+> {
+  /** Host capability installed once per distinct mixin. */
+  mixin: LitsxStructuralMixin<THost>;
+  /** Omit the reader for an installation-only structural hook. */
+  use?: never;
+}
+
+/** Define an installation-only hook that requests a host capability. */
+export declare function defineHook<THost extends object = object>(
+  definition: LitsxStructuralMixinDefinition<THost>,
+): LitsxStructuralHook<[], void>;
 
 /** Define a hook that requests and reads a host capability. */
 export declare function defineHook<
@@ -476,18 +492,6 @@ export declare function defineHook<
 >(
   definition: LitsxStructuralDefinition<THost, TArgs, TResult>,
 ): LitsxStructuralHook<TArgs, TResult>;
-
-export declare function isStructuralHook(
-  value: unknown,
-): value is LitsxStructuralHook;
-export declare function readStructuralHook<TArgs extends unknown[], TResult>(
-  host: unknown,
-  hook: LitsxStructuralHook<TArgs, TResult>,
-  args?: TArgs,
-): TResult;
-export declare function applyStructuralHooks<
-  TBase extends abstract new (...args: any[]) => object,
->(Base: TBase, hooks?: readonly LitsxStructuralHook[]): TBase;
 
 export type LitsxFormSubmitValue = string | File | FormData | null;
 

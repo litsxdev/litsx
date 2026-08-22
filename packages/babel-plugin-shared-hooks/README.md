@@ -22,8 +22,7 @@ This package includes internal helpers such as:
 - `createUseStateTransform`
 - `createUseRefTransform`
 - `createRuntimeHooksTransform`
-- `createEffectHooksTransform`
-- host-resolution and runtime-import helpers used by transform packages
+- render-scope and runtime-import helpers used by transform packages
 
 ## Intended Audience
 

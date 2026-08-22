@@ -1,4 +1,5 @@
 import { declare } from "@babel/helper-plugin-utils";
+import { ensureHooksRenderWrapper } from "@litsx/babel-plugin-shared-hooks";
 let t;
 
 const RUNTIME_MODULE = "@litsx/core";
@@ -21,31 +22,6 @@ const REACT_COMPAT_RUNTIME_MODULE = "@litsx/core/context";
 const REACT_COMPAT_SUPPORTED_HOOKS = new Set(["useContext"]);
 
 const IGNORED_CUSTOM_HOOK_SOURCES = new Set(["react", "@litsx/core"]);
-
-function ensurePrepareCall(renderMethodPath) {
-  const bodyPath = renderMethodPath.get("body");
-  if (!bodyPath.isBlockStatement()) return;
-
-  const statements = bodyPath.get("body");
-  if (statements.length > 0) {
-    const first = statements[0];
-    if (
-      first.isExpressionStatement() &&
-      t.isCallExpression(first.node.expression) &&
-      t.isIdentifier(first.node.expression.callee, { name: "prepareEffects" }) &&
-      first.node.expression.arguments.length === 1 &&
-      t.isThisExpression(first.node.expression.arguments[0])
-    ) {
-      return;
-    }
-  }
-
-  const prepareCall = t.expressionStatement(
-    t.callExpression(t.identifier("prepareEffects"), [t.thisExpression()])
-  );
-
-  bodyPath.unshiftContainer("body", prepareCall);
-}
 
 function isCustomHookName(name) {
   return typeof name === "string" && /^use[A-Z0-9]/.test(name);
@@ -76,52 +52,6 @@ function pushHostExpression(state, expression) {
 function popHostExpression(state) {
   if (!state.hostExpressions) return;
   state.hostExpressions.pop();
-}
-
-function getHostExpression(state) {
-  const stack = state.hostExpressions;
-  if (!stack || stack.length === 0) {
-    throw new Error("transform-react-hooks: missing host expression context.");
-  }
-  return stack[stack.length - 1];
-}
-
-function cloneHostExpression(state) {
-  return t.cloneNode(getHostExpression(state), true);
-}
-
-function ensureHostParamIdentifier(fnPath, state) {
-  if (!state.customHookHostParams) {
-    state.customHookHostParams = new WeakMap();
-  }
-  let hostId = state.customHookHostParams.get(fnPath.node);
-  if (hostId) return hostId;
-
-  const [firstParam] = fnPath.node.params;
-  if (t.isIdentifier(firstParam) && /^_?host/.test(firstParam.name)) {
-    hostId = firstParam;
-    state.customHookHostParams.set(fnPath.node, hostId);
-    fnPath.node.__litsxHostIdentifier = hostId.name;
-    return hostId;
-  }
-
-  if (fnPath.node.__litsxHostIdentifier) {
-    hostId = t.identifier(fnPath.node.__litsxHostIdentifier);
-    if (!fnPath.scope.hasBinding(hostId.name)) {
-      fnPath.node.params.unshift(hostId);
-    }
-    state.customHookHostParams.set(fnPath.node, hostId);
-    return hostId;
-  }
-
-  hostId = t.identifier("_host");
-  if (fnPath.scope.hasBinding(hostId.name)) {
-    hostId = fnPath.scope.generateUidIdentifier("host");
-  }
-  fnPath.node.params.unshift(hostId);
-  state.customHookHostParams.set(fnPath.node, hostId);
-  fnPath.node.__litsxHostIdentifier = hostId.name;
-  return hostId;
 }
 
 function getFunctionFromBinding(binding) {
@@ -168,7 +98,7 @@ function isCompatUseContextBinding(binding) {
 
 function createRuntimeCall(state, hookType, callbackNode, depNodes) {
   const calleeName = hookType === "useLayoutEffect" ? "useOnCommit" : "useAfterUpdate";
-  const args = [cloneHostExpression(state), t.cloneNode(callbackNode, true)];
+  const args = [t.cloneNode(callbackNode, true)];
 
   if (Array.isArray(depNodes)) {
     args.push(t.arrayExpression(depNodes.map((node) => t.cloneNode(node, true))));
@@ -178,7 +108,7 @@ function createRuntimeCall(state, hookType, callbackNode, depNodes) {
 }
 
 function createMemoRuntimeCall(state, factoryNode, depNodes) {
-  const args = [cloneHostExpression(state), t.cloneNode(factoryNode, true)];
+  const args = [t.cloneNode(factoryNode, true)];
   if (Array.isArray(depNodes)) {
     args.push(t.arrayExpression(depNodes.map((node) => t.cloneNode(node, true))));
   }
@@ -186,7 +116,7 @@ function createMemoRuntimeCall(state, factoryNode, depNodes) {
 }
 
 function createCallbackRuntimeCall(state, callbackNode, depNodes) {
-  const args = [cloneHostExpression(state), t.cloneNode(callbackNode, true)];
+  const args = [t.cloneNode(callbackNode, true)];
   if (Array.isArray(depNodes)) {
     args.push(t.arrayExpression(depNodes.map((node) => t.cloneNode(node, true))));
   }
@@ -194,7 +124,7 @@ function createCallbackRuntimeCall(state, callbackNode, depNodes) {
 }
 
 function createReducerRuntimeCall(state, argNodes) {
-  const args = [cloneHostExpression(state)];
+  const args = [];
 
   if (Array.isArray(argNodes)) {
     argNodes.forEach((node) => {
@@ -209,7 +139,6 @@ function createReducerRuntimeCall(state, argNodes) {
 
 function createImperativeRuntimeCall(state, _refNode, factoryNode, depNodes) {
   const args = [
-    cloneHostExpression(state),
     t.callExpression(
       t.identifier(state.reactRefAdapterLocal || "toLitRef"),
       [t.cloneNode(_refNode, true)],
@@ -249,7 +178,6 @@ function ensureReactRefAdapterImport(programPath, state) {
 
 function createExternalStoreRuntimeCall(state, subscribeNode, getSnapshotNode, getServerSnapshotNode) {
   const args = [
-    cloneHostExpression(state),
     t.cloneNode(subscribeNode, true),
     t.cloneNode(getSnapshotNode, true),
   ];
@@ -288,13 +216,12 @@ function transformCustomHookDefinition(binding, state) {
     return;
   }
 
-  const hostId = ensureHostParamIdentifier(fnPath, state);
   state.processedCustomHooks.add(fnPath.node);
   if (binding.identifier?.name) {
     state.compiledCustomHookNames.add(binding.identifier.name);
   }
 
-  pushHostExpression(state, hostId);
+  pushHostExpression(state, t.booleanLiteral(true));
 
   fnPath.traverse({
     CallExpression(innerPath) {
@@ -357,25 +284,13 @@ function attachCompiledCustomHookMetadata(programPath, state) {
 
 function processHookCall(callPath, state) {
   if (callPath.node.__litsxCompatUseContext) {
-    const args = callPath.get("arguments");
     const hostStack = state.hostExpressions || [];
-    const hostExprNode = hostStack.length > 0 ? hostStack[hostStack.length - 1] : null;
-    const firstArg = args[0];
-    const hasHostArg =
-      Boolean(hostExprNode) &&
-      firstArg &&
-      t.isNodesEquivalent(firstArg.node, hostExprNode);
-
-    if (!hostExprNode) {
+    if (hostStack.length === 0) {
       return false;
     }
 
-    if (!hasHostArg) {
-      callPath.unshiftContainer("arguments", cloneHostExpression(state));
-    }
-
     state.runtimeNeeded = true;
-    return !hasHostArg;
+    return true;
   }
 
   const callee = callPath.get("callee");
@@ -453,38 +368,26 @@ function processHookCall(callPath, state) {
 
   const hostStack = state.hostExpressions || [];
   const hostExprNode = hostStack.length > 0 ? hostStack[hostStack.length - 1] : null;
-  const firstArg = args[0];
-  const hasHostArg =
-    Boolean(hostExprNode) &&
-    firstArg &&
-    t.isNodesEquivalent(firstArg.node, hostExprNode);
-
   if (callKind === "custom") {
     if (!hostExprNode) {
       return false;
-    }
-    if (!hasHostArg) {
-      callPath.unshiftContainer("arguments", cloneHostExpression(state));
     }
     state.runtimeNeeded = true;
     if (customBinding && customBinding.path && !customNamespace) {
       transformCustomHookDefinition(customBinding, state);
     }
-    return !hasHostArg;
+    return true;
   }
 
   if (callKind === "compat") {
     if (!hostExprNode) {
       return false;
     }
-    if (!hasHostArg) {
-      callPath.unshiftContainer("arguments", cloneHostExpression(state));
-    }
     state.runtimeNeeded = true;
-    return !hasHostArg;
+    return true;
   }
 
-  const isRuntimeCall = hasHostArg;
+  const isRuntimeCall = false;
 
   switch (hookType) {
     case "useEffect":
@@ -583,7 +486,7 @@ function processHookCall(callPath, state) {
     case "useId": {
       if (isRuntimeCall) return false;
       callPath.replaceWith(
-        t.callExpression(t.identifier("useId"), [cloneHostExpression(state)])
+        t.callExpression(t.identifier("useId"), [])
       );
       callPath.skip();
       state.runtimeNeeded = true;
@@ -640,7 +543,7 @@ function processHookCall(callPath, state) {
     case "useOptimistic": {
       if (isRuntimeCall) return false;
       if (args.length === 0) return false;
-      const callArgs = [cloneHostExpression(state)];
+      const callArgs = [];
       if (args[0]) {
         callArgs.push(t.cloneNode(args[0].node, true));
       }
@@ -661,7 +564,6 @@ function processHookCall(callPath, state) {
     case "useTransition": {
       if (isRuntimeCall) return false;
       const runtimeCall = t.callExpression(t.identifier("useTransition"), [
-        cloneHostExpression(state),
       ]);
       callPath.replaceWith(runtimeCall);
       callPath.skip();
@@ -674,7 +576,7 @@ function processHookCall(callPath, state) {
     }
     case "useDeferredValue": {
       if (isRuntimeCall) return false;
-      const callArgs = [cloneHostExpression(state)];
+      const callArgs = [];
       if (args[0]) {
         callArgs.push(args[0].node);
       }
@@ -697,7 +599,6 @@ function processHookCall(callPath, state) {
       if (args.length === 0) return false;
       callPath.replaceWith(
         t.callExpression(t.identifier("startTransition"), [
-          cloneHostExpression(state),
           ...args.map((arg) => t.cloneNode(arg.node, true)),
         ])
       );
@@ -770,7 +671,9 @@ function ensureRuntimeImport(programPath, state) {
   });
 
   const requiredSpecifiers = new Map();
-  requiredSpecifiers.set("prepareEffects", true);
+  if (state.renderBoundaryNeeded) {
+    requiredSpecifiers.set("renderWithHooks", true);
+  }
   if (state.effectNeeded) {
     requiredSpecifiers.set("useAfterUpdate", true);
   }
@@ -858,7 +761,6 @@ export default declare((api, options = {}) => {
           state.reactNamespaceBindings = new Set();
           state.hostExpressions = [];
           state.processedCustomHooks = new WeakSet();
-          state.customHookHostParams = new WeakMap();
           state.customHookLocals = new Set();
           state.customHookNamespaces = new Set();
           state.compiledCustomHookNames = new Set();
@@ -875,6 +777,7 @@ export default declare((api, options = {}) => {
           state.transitionNeeded = false;
           state.deferredNeeded = false;
           state.startTransitionNeeded = false;
+          state.renderBoundaryNeeded = false;
           state.reactRefAdapterLocal = path.scope.hasBinding("toLitRef")
             ? path.scope.generateUidIdentifier("toLitRef").name
             : "toLitRef";
@@ -972,6 +875,6 @@ function transformClass(classPath, state) {
   popHostExpression(state);
 
   if (!transformed) return;
-
-  ensurePrepareCall(renderMethodPath);
+  ensureHooksRenderWrapper(renderMethodPath, t);
+  state.renderBoundaryNeeded = true;
 }

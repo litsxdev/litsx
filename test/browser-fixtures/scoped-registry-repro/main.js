@@ -3,7 +3,7 @@ import { render as renderLightDom } from "lit/html.js";
 import { SuspenseBoundary } from "../../../packages/core/src/index.js";
 import { LightDomMixin, ShadowDomMixin } from "../../../packages/core/src/elements/index.js";
 import { bindRendererContext } from "../../../packages/core/src/rendering.js";
-import { renderWithSoftSuspense } from "../../../packages/core/src/runtime-suspense.js";
+import { renderWithHooks } from "../../../packages/core/src/runtime-suspense.js";
 import {
   connectLightDomRegistry,
   isLightDomRegistryRuntimeActive,
@@ -101,7 +101,7 @@ class NestedPanel extends ShadowDomMixin(LitElement) {
   }
 
   render() {
-    return renderWithSoftSuspense(this, () => {
+    return renderWithHooks(this, () => {
       if (this.mode !== "ready") {
         suspendMode(this.mode);
       }

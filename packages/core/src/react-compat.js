@@ -28,8 +28,8 @@ function createReactRefView(litRef, initialValue) {
 }
 
 /** Create a Lit ref whose public mutable view follows React's `.current` contract. */
-export function useReactRef(host, initialValue) {
-  const litRef = useRef(host, initialValue === null ? undefined : initialValue);
+export function useReactRef(initialValue) {
+  const litRef = useRef(initialValue === null ? undefined : initialValue);
   let view = REACT_REF_VIEWS.get(litRef);
   if (!view) {
     view = createReactRefView(litRef, initialValue);

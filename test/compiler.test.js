@@ -342,9 +342,9 @@ describe("@litsx/compiler", () => {
 
     const firstResult = transformLitsxSync(source, options);
     const secondResult = transformLitsxSync(source, options);
-    const ids = [...firstResult.code.matchAll(/useStableId\(this, "([^"]+)"\)/g)]
+    const ids = [...firstResult.code.matchAll(/useStableId\("([^"]+)"\)/g)]
       .map((match) => match[1]);
-    const nextIds = [...secondResult.code.matchAll(/useStableId\(this, "([^"]+)"\)/g)]
+    const nextIds = [...secondResult.code.matchAll(/useStableId\("([^"]+)"\)/g)]
       .map((match) => match[1]);
 
     assert.strictEqual(ids.length, 2);
@@ -501,7 +501,7 @@ describe("@litsx/compiler", () => {
     assert.match(result.code, /Uses \\`revalidate: 60\\` and \\\$\{literalValue\}/);
   }, 20000);
 
-  it("threads host through useHostTypeId inside imported custom hooks", () => {
+  it("preserves imported custom hook signatures that use useHostTypeId", () => {
     const hookSource = [
       'import { useHostTypeId, useMemoValue } from "@litsx/core";',
       "export function useDemoType() {",
@@ -529,13 +529,13 @@ describe("@litsx/compiler", () => {
       },
     });
 
-    assert.match(hookResult.code, /export function useDemoType\(_host\)/);
-    assert.match(hookResult.code, /const hostTypeId = useHostTypeId\(_host\);/);
+    assert.match(hookResult.code, /export function useDemoType\(\)/);
+    assert.match(hookResult.code, /const hostTypeId = useHostTypeId\(\);/);
     assert.match(hookResult.code, /useDemoType\[Symbol\.for\("litsx\.hook"\)\] = true;/);
-    assert.match(consumerResult.code, /const hostTypeId = useDemoType\(this\);/);
+    assert.match(consumerResult.code, /const hostTypeId = useDemoType\(\);/);
   }, 20000);
 
-  it("threads host through useSsrResourceSnapshot while preserving its authored API", () => {
+  it("preserves the authored useSsrResourceSnapshot API", () => {
     const source = [
       'import { useSsrResourceSnapshot } from "@litsx/core";',
       "export function ResourceCard() {",
@@ -555,11 +555,11 @@ describe("@litsx/compiler", () => {
 
     assert.match(
       result.code,
-      /useSsrResourceSnapshot\(this, \{\s*key: "library:i18n",/,
+      /useSsrResourceSnapshot\(\{\s*key: "library:i18n",/,
     );
   }, 20000);
 
-  it("threads host through imported custom hooks that call LitSX runtime hooks", () => {
+  it("preserves imported custom hook signatures that call LitSX runtime hooks", () => {
     const hookSource = [
       'import { useExternalStore, useMemoValue, useStableId } from "@litsx/core";',
       "const subscribe = (listener: () => void) => {",
@@ -593,14 +593,14 @@ describe("@litsx/compiler", () => {
       },
     });
 
-    assert.match(hookResult.code, /export function useDemo\(_host, input\)/);
-    assert.match(hookResult.code, /useExternalStore\(_host, subscribe, getSnapshot, getSnapshot\)/);
-    assert.match(hookResult.code, /useStableId\(_host, "litsx-stable-[^"]+"\)/);
-    assert.match(hookResult.code, /useMemoValue\(_host, \(\) => `\$\{input\}:\$\{id\}`, \[input, id\]\)/);
+    assert.match(hookResult.code, /export function useDemo\(input\)/);
+    assert.match(hookResult.code, /useExternalStore\(subscribe, getSnapshot, getSnapshot\)/);
+    assert.match(hookResult.code, /useStableId\("litsx-stable-[^"]+"\)/);
+    assert.match(hookResult.code, /useMemoValue\(\(\) => `\$\{input\}:\$\{id\}`, \[input, id\]\)/);
     assert.match(hookResult.code, /useDemo\[Symbol\.for\("litsx\.hook"\)\] = true;/);
-    assert.match(consumerResult.code, /prepareEffects\(this\);/);
-    assert.match(consumerResult.code, /const value = useDemo\(this, "x"\);/);
-    assert.doesNotMatch(consumerResult.code, /const value = useDemo\("x"\);/);
+    assert.match(consumerResult.code, /renderWithHooks\(this, \(\) => \{/);
+    assert.match(consumerResult.code, /const value = useDemo\("x"\);/);
+    assert.doesNotMatch(consumerResult.code, /prepareEffects|useDemo\(this,/);
   }, 20000);
 
   it("recognizes precompiled LitSX runtime custom hooks from published metadata", () => {
@@ -632,7 +632,7 @@ describe("@litsx/compiler", () => {
     });
 
     assert.match(compiledHookResult.code, /useDemo\[Symbol\.for\("litsx\.hook"\)\] = true;/);
-    assert.match(consumerResult.code, /const value = useDemo\(this, "x"\);/);
+    assert.match(consumerResult.code, /const value = useDemo\("x"\);/);
   }, 20000);
 
   it("recognizes precompiled LitSX runtime custom hooks from direct Symbol.for metadata", () => {
@@ -658,7 +658,7 @@ describe("@litsx/compiler", () => {
       },
     });
 
-    assert.match(consumerResult.code, /const value = useDemo\(this, "x"\);/);
+    assert.match(consumerResult.code, /const value = useDemo\("x"\);/);
   }, 20000);
 
   it("recognizes precompiled LitSX runtime custom hooks through namespace imports", () => {
@@ -689,7 +689,7 @@ describe("@litsx/compiler", () => {
       },
     });
 
-    assert.match(consumerResult.code, /const value = DemoHooks\.useDemo\(this, "x"\);/);
+    assert.match(consumerResult.code, /const value = DemoHooks\.useDemo\("x"\);/);
   }, 20000);
 
   it("recognizes precompiled LitSX runtime custom hooks through compiled barrel re-exports", () => {
@@ -722,15 +722,15 @@ describe("@litsx/compiler", () => {
       },
     });
 
-    assert.match(consumerResult.code, /const value = useDemo\(this, "x"\);/);
+    assert.match(consumerResult.code, /const value = useDemo\("x"\);/);
   }, 20000);
 
   it("does not reprocess custom hooks already marked as compiled", () => {
     const source = [
       'import { useMemoValue, useStableId } from "@litsx/core";',
-      "export function useDemo(_host, input) {",
-      '  const id = useStableId(_host, "litsx-stable-demo");',
-      "  return useMemoValue(_host, () => `${input}:${id}`, [input, id]);",
+      "export function useDemo(input) {",
+      '  const id = useStableId("litsx-stable-demo");',
+      "  return useMemoValue(() => `${input}:${id}`, [input, id]);",
       "}",
       'useDemo[Symbol.for("litsx.hook")] = true;',
     ].join("\n");
@@ -742,8 +742,8 @@ describe("@litsx/compiler", () => {
 
     const markerMatches = result.code.match(/useDemo\[Symbol\.for\("litsx\.hook"\)\] = true;/g) || [];
     assert.strictEqual(markerMatches.length, 1);
-    assert.match(result.code, /export function useDemo\(_host, input\)/);
-    assert.doesNotMatch(result.code, /export function useDemo\(_host, _host, input\)/);
+    assert.match(result.code, /export function useDemo\(input\)/);
+    assert.doesNotMatch(result.code, /_host/);
   }, 20000);
 
   it("recognizes useId from @litsx/core as a runtime hook inside imported custom hooks", () => {
@@ -774,9 +774,9 @@ describe("@litsx/compiler", () => {
       },
     });
 
-    assert.match(hookResult.code, /export function useDemoHook\(_host\)/);
-    assert.match(hookResult.code, /const id = useId\(_host\);/);
-    assert.match(consumerResult.code, /const id = useDemoHook\(this\);/);
+    assert.match(hookResult.code, /export function useDemoHook\(\)/);
+    assert.match(hookResult.code, /const id = useId\(\);/);
+    assert.match(consumerResult.code, /const id = useDemoHook\(\);/);
     assert.doesNotMatch(
       consumerResult.code,
       /Unable to resolve imported custom hook/
@@ -813,12 +813,12 @@ describe("@litsx/compiler", () => {
 
     assert.match(hookResult.code, /import \{ createContext, useContext \} from "@litsx\/core\/context";/);
     assert.doesNotMatch(hookResult.code, /import \{[^}]*useContext[^}]*\} from "@litsx\/core";/);
-    assert.match(hookResult.code, /export function useThemeName\(_host\)/);
-    assert.match(hookResult.code, /return useContext\(_host, ThemeContext\);/);
-    assert.match(consumerResult.code, /const theme = useThemeName\(this\);/);
+    assert.match(hookResult.code, /export function useThemeName\(\)/);
+    assert.match(hookResult.code, /return useContext\(ThemeContext\);/);
+    assert.match(consumerResult.code, /const theme = useThemeName\(\);/);
   }, 20000);
 
-  it("threads host through imported custom hooks re-exported from barrels", () => {
+  it("preserves imported custom hooks re-exported from barrels", () => {
     const hookSource = [
       'import { useMemoValue, useStableId } from "@litsx/core";',
       "export function useDemo(input: string) {",
@@ -844,15 +844,15 @@ describe("@litsx/compiler", () => {
       },
     });
 
-    assert.match(result.code, /prepareEffects\(this\);/);
-    assert.match(result.code, /const value = useDemo\(this, "x"\);/);
+    assert.match(result.code, /renderWithHooks\(this, \(\) => \{/);
+    assert.match(result.code, /const value = useDemo\("x"\);/);
   }, 20000);
 
   it("recognizes precompiled structural custom hooks from published metadata", () => {
     const hookSource = [
       'import { defineHook } from "@litsx/core";',
       "const useLocale = defineHook({",
-      "  use(_host, locale) {",
+      "  use(locale) {",
       "    return locale;",
       "  },",
       "});",
@@ -903,14 +903,14 @@ describe("@litsx/compiler", () => {
       consumerResult.code,
       /HostMiddlewareMixin|structuralEntries/,
     );
-    assert.match(consumerResult.code, /const locale = useGreeting\(this\);/);
+    assert.match(consumerResult.code, /const locale = useGreeting\(\);/);
   }, 20000);
 
   it("recognizes precompiled structural custom hooks through namespace imports", () => {
     const hookSource = [
       'import { defineHook } from "@litsx/core";',
       "const useLocale = defineHook({",
-      "  use(_host, locale) {",
+      "  use(locale) {",
       "    return locale;",
       "  },",
       "});",
@@ -944,7 +944,7 @@ describe("@litsx/compiler", () => {
     );
     assert.match(
       consumerResult.code,
-      /const locale = MessageHooks\.useMessage\(this\);/,
+      /const locale = MessageHooks\.useMessage\(\);/,
     );
   }, 20000);
 
@@ -1004,7 +1004,7 @@ describe("@litsx/compiler", () => {
     );
   }, 20000);
 
-  it("threads host through local custom hooks that wrap imported runtime custom hooks", () => {
+  it("preserves local custom hooks that wrap imported runtime custom hooks", () => {
     const hookSource = [
       'import { useMemoValue, useStableId } from "@litsx/core";',
       "export function useDemo(input: string) {",
@@ -1031,9 +1031,9 @@ describe("@litsx/compiler", () => {
       },
     });
 
-    assert.match(result.code, /function useWrappedDemo\(_host, input\)/);
-    assert.match(result.code, /return useDemo\(_host, input\);/);
-    assert.match(result.code, /const value = useWrappedDemo\(this, "x"\);/);
+    assert.match(result.code, /function useWrappedDemo\(input\)/);
+    assert.match(result.code, /return useDemo\(input\);/);
+    assert.match(result.code, /const value = useWrappedDemo\("x"\);/);
   }, 20000);
 
   it("throws when an imported custom hook call cannot be resolved for host analysis", () => {
@@ -1158,7 +1158,7 @@ describe("@litsx/compiler", () => {
         jsxTemplate: false,
       });
 
-      assert.match(hookResult.code, /const value = useDemo\(this, "x"\);/);
+      assert.match(hookResult.code, /const value = useDemo\("x"\);/);
       assert.match(rendererResult.code, /\.header=\{bindRendererContext\(typeof this === "undefined" \? null : this,\s*renderHeader,\s*\{\s*projected: true\s*\}\)\}/);
       assert.match(rendererResult.code, /static elements\s*=\s*\{[\s\S]*"litsx-button": (?:LitsxButton|__litsxImportedLitsxButton1)[\s\S]*\}/);
     } finally {

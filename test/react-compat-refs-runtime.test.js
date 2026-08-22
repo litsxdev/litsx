@@ -5,7 +5,10 @@ import {
   toLitRef,
   useReactRef,
 } from "../packages/core/src/react-compat.js";
-import { prepareEffects } from "../packages/core/src/index.js";
+import {
+  prepareEffects,
+  runWithHookHost,
+} from "../packages/core/src/internal.js";
 
 class TestHost {
   constructor() {
@@ -33,11 +36,11 @@ describe("React-compatible Lit refs", () => {
   it("keeps the React ref facade stable across hook renders", () => {
     const host = new TestHost();
     prepareEffects(host);
-    const first = useReactRef(host, null);
+    const first = runWithHookHost(host, () => useReactRef(null));
     first.current = "changed";
 
     prepareEffects(host);
-    const second = useReactRef(host, "ignored");
+    const second = runWithHookHost(host, () => useReactRef("ignored"));
 
     assert.strictEqual(first, second);
     assert.strictEqual(second.current, "changed");

@@ -196,6 +196,13 @@ In particular, application source uses ordinary prop names, `on:event`,
 assignments. `.prop`, `?attr`, and `@event` only describe the Lit template output
 chosen by the compiler.
 
+Generated components extend inherited styles and scoped element maps. An
+ordinary `Component.styles = value` becomes a Lit `static styles` group with
+`super.styles` first; `Component.styles = replaceStyles(value)` explicitly
+cuts that chain. Reactive properties retain Lit's own inheritance semantics,
+while inferred and authored options belonging to the same component are
+combined before the class is emitted.
+
 When `sourceMaps: true`, the returned map includes:
 
 - the transform chain sourcemap from Babel

@@ -346,21 +346,7 @@ export default declare((api) => {
     const bodyPath = renderPath.get("body");
     if (!bodyPath.isBlockStatement()) return;
 
-    const bodyStatements = bodyPath.get("body");
     let insertIndex = 0;
-
-    if (bodyStatements.length > 0) {
-      const first = bodyStatements[0];
-      if (
-        first.isExpressionStatement() &&
-        t.isCallExpression(first.node.expression) &&
-        t.isIdentifier(first.node.expression.callee, { name: "prepareEffects" }) &&
-        first.node.expression.arguments.length === 1 &&
-        t.isThisExpression(first.node.expression.arguments[0])
-      ) {
-        insertIndex = 1;
-      }
-    }
 
     const firstReturnIndex = bodyPath.node.body.findIndex((statement) =>
       t.isReturnStatement(statement)

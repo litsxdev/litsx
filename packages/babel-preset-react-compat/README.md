@@ -68,9 +68,10 @@ Raw React hook packages can opt into the same transformation with `transformDepe
 }
 ```
 
-Every module from an allowlisted package must pass through this preset. Its custom hooks receive the
-LitSX host, supported React hooks are lowered, and compiled hooks are marked with
-`Symbol.for("litsx.hook")`. Traversal stops with a diagnostic when it reaches an unsupported React
+Every module from an allowlisted package must pass through this preset. Custom-hook signatures stay
+unchanged, supported React hooks are lowered to LitSX hooks, and compiled hooks are marked with
+`Symbol.for("litsx.hook")`. Host access inside a transformed hook goes through `useHost()`; no hidden
+argument is added to definitions or callsites. Traversal stops with a diagnostic when it reaches an unsupported React
 hook or a non-allowlisted external hook dependency. With Vite, prefer the official
 `reactCompat.transformDependencies` option because it also configures dependency optimization and
 SSR externalization correctly.

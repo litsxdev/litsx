@@ -642,7 +642,7 @@ describe("react compat internal lazy", () => {
 
     const code = run(source);
     assert.match(code, /class Screen extends LightDomMixin\(LitElement\)/);
-    assert.match(code, /static elements = \{\};/);
+    assert.match(code, /static elements = \{\s*\.\.\.\(super\.elements \?\? \{\}\)\s*\};/);
     assert.match(code, /ensureLazyElement\(this, "fancy-button", FancyButton\)/);
   });
 
@@ -759,7 +759,7 @@ describe("react compat internal lazy", () => {
 
     const code = run(source);
     assert.strictEqual((code.match(/LightDomMixin/g) || []).length, 2);
-    assert.match(code, /static elements = \{\};/);
+    assert.match(code, /static elements = \{\s*\.\.\.\(super\.elements \?\? \{\}\)\s*\};/);
     assert.match(code, /ensureLazyElement\(this, "fancy-button", FancyButton\)/);
   });
 });

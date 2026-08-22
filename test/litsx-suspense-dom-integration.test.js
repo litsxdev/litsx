@@ -6,13 +6,23 @@ import { afterEach, describe, it } from "vitest";
 import {
   SuspenseBoundary,
   SuspenseList,
-  prepareEffects,
-  renderWithSoftSuspense,
-  useCallbackRef,
-  useOnConnect,
-  useRef,
-  useState,
+  renderWithHooks,
+  useCallbackRef as runtimeUseCallbackRef,
+  useOnConnect as runtimeUseOnConnect,
+  useRef as runtimeUseRef,
+  useState as runtimeUseState,
 } from "../packages/core/src/index.js";
+import {
+  prepareEffects,
+  runWithHookHost,
+} from "../packages/core/src/internal.js";
+
+const withTestHost = (hook) => (host, ...args) =>
+  runWithHookHost(host, () => hook(...args));
+const useCallbackRef = withTestHost(runtimeUseCallbackRef);
+const useOnConnect = withTestHost(runtimeUseOnConnect);
+const useRef = withTestHost(runtimeUseRef);
+const useState = withTestHost(runtimeUseState);
 
 let tagCounter = 0;
 
@@ -98,7 +108,7 @@ describe("litsx suspense DOM integration", () => {
         }
 
         render() {
-          return renderWithSoftSuspense(this, () => {
+          return renderWithHooks(this, () => {
             prepareEffects(this);
             useCallbackRef(
               this,
@@ -162,7 +172,7 @@ describe("litsx suspense DOM integration", () => {
       }
 
       render() {
-        return renderWithSoftSuspense(this, () => {
+        return renderWithHooks(this, () => {
           prepareEffects(this);
           useCallbackRef(
             this,
@@ -226,7 +236,7 @@ describe("litsx suspense DOM integration", () => {
 
     class AsyncChild extends LitElement {
       render() {
-        return renderWithSoftSuspense(this, () => {
+        return renderWithHooks(this, () => {
           prepareEffects(this);
           useCallbackRef(
             this,

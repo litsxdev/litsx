@@ -7,13 +7,8 @@ export interface ReactContext<T> {
 export declare function createContext<T>(defaultValue: T): ReactContext<T>;
 
 export declare function useContext<T>(context: ReactContext<T>): T;
-export declare function useContext<T>(
-  host: object,
-  context: ReactContext<T>
-): T;
 
 export declare function renderContext<T, TResult>(
-  host: object,
   context: ReactContext<T>,
   render: (value: T) => TResult
 ): TResult;

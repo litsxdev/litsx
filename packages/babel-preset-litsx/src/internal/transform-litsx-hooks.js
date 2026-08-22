@@ -1070,11 +1070,11 @@ function createStructuralHookResolver(options = {}) {
           ? "unsupported-external-hook"
           : "unresolved-custom-hook";
       }
-      const isHostAware =
+      const usesRuntime =
         isExternal && !isTransformedDependency
           ? isCompiledRuntimeCustomExport(analysis, importedName)
           : isRuntimeCustomExport(analysis, importedName);
-      if (isHostAware) {
+      if (usesRuntime) {
         return "runtime-custom-hook";
       }
       return isExternal && !isTransformedDependency
