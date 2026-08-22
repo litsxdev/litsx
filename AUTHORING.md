@@ -126,6 +126,14 @@ from the destination API:
 | native `value` on `input`, `textarea`, or `select` | property part |
 | native HTML boolean attribute such as `disabled` | boolean attribute part |
 
+Standard host attributes are a common custom-element surface, not component
+function props. For example, `class`, `id`, `style`, `slot`, `part`, global HTML
+attributes, `aria-*`, and `data-*` written on `<QuartzIcon>` stay on the generated
+`<quartz-icon>` host even when `QuartzIconProps` does not declare them. They are
+not added to an object-rest props bag intended for an inner element. Declared
+component props still take precedence when a component deliberately owns the
+same name.
+
 Inference uses, in order, the local component declaration, TypeScript's imported
 component or intrinsic-element type, and the target custom-element constructor
 when runtime spread handling is required. A component prop without an available
@@ -151,6 +159,13 @@ Binding resolution follows one precedence order in browser and SSR output:
 4. A spread applies the same resolver at runtime after the destination
    constructor has been finalized. Sources retain JSX order and the final value
    for a resolved binding wins.
+
+This makes ordinary JSX precedence deterministic, including removal by an
+`undefined` final value:
+
+```tsx
+<QuartzIcon class="first" {...attributes} class={open ? "open" : undefined} />
+```
 
 Lit's `.property`, `?boolean`, and `@event` prefixes can appear in generated
 templates and take precedence there, but they are not authored LitSX syntax.

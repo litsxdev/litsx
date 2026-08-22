@@ -57,6 +57,17 @@ export function Screen() {
       </SuspenseList>
       <ActionButton
         label="Standalone"
+        id="standalone-action"
+        class="rotate-180"
+        style="color: red"
+        slot="action"
+        part="button"
+        exportparts="label"
+        role="button"
+        title="Standalone action"
+        tabindex={-1}
+        aria-label="Standalone"
+        data-state="ready"
         hidden
         inert
         on:change={(event?: CustomEvent) => void event}

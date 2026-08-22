@@ -15,6 +15,9 @@ import {
   mapOriginalPositionToVirtual,
   mapVirtualPositionToOriginal,
   isNativeDomEventHandlerPropertyName,
+  isBooleanHostAttributeName,
+  isBooleanValueHostAttributeName,
+  isStandardHostAttributeName,
   isStandardDomEventPropName,
   resolveExplicitJsxEventName,
   resolveStandardJsxEventName,
@@ -30,6 +33,20 @@ import {
 import parser from "./helpers/litsx-parser.js";
 
 describe("@litsx/authoring", () => {
+  it("classifies the shared custom-element host attribute contract", () => {
+    for (const name of [
+      "class", "id", "style", "slot", "part", "exportparts", "role",
+      "title", "tabindex", "aria-label", "data-state",
+    ]) {
+      assert.strictEqual(isStandardHostAttributeName(name), true, name);
+    }
+    assert.strictEqual(isStandardHostAttributeName("payload"), false);
+    assert.strictEqual(isStandardHostAttributeName("mystery-attribute"), false);
+    assert.strictEqual(isBooleanHostAttributeName("disabled"), true);
+    assert.strictEqual(isBooleanHostAttributeName("spellcheck"), false);
+    assert.strictEqual(isBooleanValueHostAttributeName("spellcheck"), true);
+  });
+
   it("normalizes standard JSX event names consistently", () => {
     assert.deepStrictEqual(
       resolveStandardJsxEventName("onPrimaryAction", { customElement: true }),

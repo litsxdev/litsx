@@ -5,6 +5,11 @@ export {
   collectReactMemoWarnings,
 } from "./authored-semantics.js";
 export {
+  isBooleanHostAttributeName,
+  isBooleanValueHostAttributeName,
+  isStandardHostAttributeName,
+} from "./host-attributes.js";
+export {
   collectImplicitChildrenProjectionIssues,
   LITSX_IMPLICIT_CHILDREN_DUPLICATE_CODE,
   LITSX_IMPLICIT_CHILDREN_DUPLICATE_MESSAGE,

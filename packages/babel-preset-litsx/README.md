@@ -58,6 +58,10 @@ automatic generated styles for light-DOM components. Authored
   declarations become boolean attribute parts, primitive declarations become
   attributes, and object/function/opaque declarations become properties. Lit's
   `.`, `?`, and `@` prefixes are generated IR, not native authoring syntax.
+- Standard host attributes on local and imported components remain attributes on
+  the generated custom-element host without being repeated in every props type.
+  This includes global HTML names, `class`, `style`, `slot`, `part`, `aria-*`,
+  and `data-*`; declared component properties continue to take precedence.
 - Native LitSX uses `on:event` as its unambiguous JSX listener channel on both
   HTML and custom elements. Names such as `onPrimaryAction` remain ordinary
   component callback properties. Exact native handler properties such as

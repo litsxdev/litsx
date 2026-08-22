@@ -134,13 +134,39 @@ export declare function __getLitsxNoscriptFactory(value: unknown): {
 } | null;
 
 export interface LitsxBaseAttributes {
+  id?: string;
   slot?: string;
   class?: string;
+  accesskey?: string;
+  autocapitalize?: string;
+  autofocus?: boolean;
+  contenteditable?: boolean | "true" | "false" | "plaintext-only";
+  dir?: "ltr" | "rtl" | "auto";
+  draggable?: boolean;
+  enterkeyhint?: string;
   hidden?: boolean | "until-found";
   inert?: boolean;
+  inputmode?: string;
+  is?: string;
+  itemid?: string;
+  itemprop?: string;
+  itemref?: string;
+  itemscope?: boolean;
+  itemtype?: string;
+  lang?: string;
+  nonce?: string;
+  popover?: boolean | "" | "auto" | "manual" | "hint";
+  role?: string;
+  tabindex?: string | number;
+  title?: string;
+  translate?: boolean | "yes" | "no";
+  virtualkeyboardpolicy?: "auto" | "manual";
+  writingsuggestions?: boolean | "true" | "false";
   autoFocus?: boolean;
   spellCheck?: boolean;
+  spellcheck?: boolean;
   part?: string;
+  exportparts?: string;
   /**
    * Inline style attribute text.
    * LitSX does not support React-style object bindings such as `style={{ color: "red" }}` in authored JSX/TSX.

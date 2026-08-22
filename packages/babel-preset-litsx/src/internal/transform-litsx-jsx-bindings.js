@@ -2,7 +2,10 @@ import { declare } from "@babel/helper-plugin-utils";
 import jsxSyntaxPlugin from "@babel/plugin-syntax-jsx";
 import {
   decodeVirtualAttributeName,
+  isBooleanHostAttributeName,
+  isBooleanValueHostAttributeName,
   isNativeDomEventHandlerPropertyName,
+  isStandardHostAttributeName,
   resolveExplicitJsxEventName,
 } from "@litsx/authoring";
 import {
@@ -13,41 +16,6 @@ import {
 } from "./transform-litsx-properties.js";
 
 
-// `?name` controls attribute presence, so it is only equivalent to JSX's
-// boolean value for HTML boolean attributes. Boolean-valued enumerated
-// attributes such as draggable and spellcheck must serialize "true"/"false".
-const HTML_BOOLEAN_ATTRIBUTE_NAMES = new Set([
-  "allowfullscreen",
-  "async",
-  "autofocus",
-  "autoplay",
-  "checked",
-  "controls",
-  "default",
-  "defer",
-  "disabled",
-  "formnovalidate",
-  "hidden",
-  "inert",
-  "ismap",
-  "itemscope",
-  "loop",
-  "multiple",
-  "muted",
-  "nomodule",
-  "novalidate",
-  "open",
-  "playsinline",
-  "readonly",
-  "required",
-  "reversed",
-  "selected",
-]);
-const HTML_BOOLEAN_VALUE_ATTRIBUTE_NAMES = new Set([
-  "contenteditable",
-  "draggable",
-  "spellcheck",
-]);
 const HTML_ATTRIBUTE_ALIASES = new Map([
   ["acceptCharset", "accept-charset"],
   ["className", "class"],
@@ -539,6 +507,23 @@ function transformOpeningElement(path, state, t) {
         ? classifyDeclaredProperty(propertyType, typeResolver.checker)
         : null;
       const effectiveKind = localKind ?? declaredKind;
+      if (
+        effectiveKind == null &&
+        (
+          isStandardHostAttributeName(rawName) ||
+          isBooleanHostAttributeName(rawName) ||
+          isBooleanValueHostAttributeName(rawName)
+        )
+      ) {
+        if (isBooleanHostAttributeName(rawName)) {
+          if (!hasExplicitPrimitiveAttributeValue(attribute, typeResolver, t)) {
+            renameAttribute(attribute, `?${rawName.toLowerCase()}`, t);
+          }
+        } else if (isBooleanValueHostAttributeName(rawName) && !attribute.value) {
+          attribute.value = t.jsxExpressionContainer(t.booleanLiteral(true));
+        }
+        continue;
+      }
       const camelCaseProperty = /[A-Z]/.test(rawName);
       const booleanProperty = effectiveKind === "boolean";
       const objectProperty = effectiveKind === "property";
@@ -607,7 +592,7 @@ function transformOpeningElement(path, state, t) {
       ? normalizeHtmlAttributeName(rawName)
       : rawName;
 
-    if (nativeHtml && HTML_BOOLEAN_ATTRIBUTE_NAMES.has(htmlAttributeName)) {
+    if (nativeHtml && isBooleanHostAttributeName(htmlAttributeName)) {
       if (hasExplicitPrimitiveAttributeValue(attribute, typeResolver, t)) {
         if (htmlAttributeName !== rawName) renameAttribute(attribute, htmlAttributeName, t);
       } else {
@@ -618,7 +603,7 @@ function transformOpeningElement(path, state, t) {
 
     if (
       nativeHtml &&
-      HTML_BOOLEAN_VALUE_ATTRIBUTE_NAMES.has(htmlAttributeName) &&
+      isBooleanValueHostAttributeName(htmlAttributeName) &&
       !attribute.value
     ) {
       attribute.value = t.jsxExpressionContainer(t.booleanLiteral(true));

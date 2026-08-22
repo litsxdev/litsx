@@ -26,6 +26,9 @@ export function BrokenScreen() {
       {/* @ts-expect-error ActionButton requires a label */}
       <ActionButton />
 
+      {/* @ts-expect-error unknown names are neither props nor standard host attributes */}
+      <ActionButton label="Unknown" mysteryAttribute="value" />
+
       {/* @ts-expect-error native LitSX uses class */}
       <div className="legacy" />
 

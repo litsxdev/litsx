@@ -132,7 +132,7 @@ describe("jsxSpreadElement SSR", () => {
     assert.match(attributeOutput, /data-branch="label"/);
   });
 
-  it("routes undeclared SSR component inputs through rest props", () => {
+  it("keeps standard SSR host attributes outside component rest props", () => {
     const tagName = "litsx-jsx-spread-ssr-rest";
     if (!customElements.get(tagName)) {
       customElements.define(tagName, class extends LitElement {
@@ -148,16 +148,29 @@ describe("jsxSpreadElement SSR", () => {
       });
     }
 
-    const output = renderToString(jsxSpreadElement(tagName, [{
-      label: "Save",
-      "aria-label": "Save action",
-      disabled: true,
-    }], { component: customElements.get(tagName) }));
+    const output = renderToString(jsxSpreadElement(tagName, [
+      { class: "first", title: "removed" },
+      {
+        label: "Save",
+        class: "last",
+        "aria-label": "Save action",
+        "data-state": "ready",
+        disabled: true,
+      },
+      { title: undefined },
+    ], { component: customElements.get(tagName) }));
 
-    assert.match(output, /<button[^>]*aria-label="Save action"/);
-    assert.match(output, /<button[^>]*disabled(?:\s|>)/);
+    assert.match(
+      output,
+      new RegExp(`<${tagName}[^>]*aria-label="Save action"`),
+    );
+    assert.match(output, new RegExp(`<${tagName}[^>]*class="last"`));
+    assert.match(output, new RegExp(`<${tagName}[^>]*data-state="ready"`));
+    assert.match(output, new RegExp(`<${tagName}[^>]*disabled(?:\\s|>)`));
+    assert.doesNotMatch(output, new RegExp(`<${tagName}[^>]*title=`));
+    assert.doesNotMatch(output, /<button[^>]*aria-label=/);
+    assert.doesNotMatch(output, /<button[^>]*disabled(?:\s|>)/);
     assert.match(output, />Save</);
-    assert.doesNotMatch(output, new RegExp(`<${tagName}[^>]*aria-label=`));
   });
 
   it("keeps declared callback props and custom-event listeners out of SSR markup", () => {

@@ -212,6 +212,300 @@ window.__litsxImportedPropsHydrated = true;
   }
 });
 
+test("preserves imported component host attributes through SSR, hydration, and updates", async ({
+  page,
+}) => {
+  const tempRoot = path.join(repoRoot, "test-results");
+  await fs.mkdir(tempRoot, { recursive: true });
+  const tempDir = await fs.mkdtemp(path.join(tempRoot, "litsx-host-attributes-"));
+  const srcDir = path.join(tempDir, "src");
+  await fs.mkdir(srcDir, { recursive: true });
+
+  await fs.writeFile(path.join(srcDir, "quartz-icon.tsx"), `
+import { css, defineHook } from "@litsx/core";
+import { LightDomMixin } from "@litsx/core/elements";
+
+const useLightDom = defineHook({ mixin: LightDomMixin });
+
+export type QuartzIconProps = {
+  name?: string;
+  payload?: { id: number };
+};
+
+export function QuartzIcon({ name = "", payload }: QuartzIconProps) {
+  return <span data-name={name} data-payload={payload?.id ?? ""}>{name}</span>;
+}
+
+QuartzIcon.styles = css\`
+  :host { display: block; }
+  :host(.rotate-180) { rotate: 180deg; }
+  :host(.rotate-0) { rotate: 0deg; }
+\`;
+
+export function QuartzLightIcon({ name = "", payload }: QuartzIconProps) {
+  useLightDom();
+  return <span data-name={name} data-payload={payload?.id ?? ""}>{name}</span>;
+}
+
+QuartzLightIcon.styles = css\`
+  quartz-light-icon { display: block; }
+  quartz-light-icon.rotate-180 { rotate: 180deg; }
+  quartz-light-icon.rotate-0 { rotate: 0deg; }
+\`;
+`);
+  await fs.writeFile(path.join(srcDir, "host-attribute-root.tsx"), `
+import { QuartzIcon, QuartzLightIcon } from "./quartz-icon";
+
+const spreadAttributes = {
+  class: "spread-middle",
+  title: "Spread title",
+  "aria-label": "Spread icon",
+  "data-state": "open",
+  payload: { id: 2 },
+};
+
+const handleClick = (event) => {
+  event.currentTarget.setAttribute("data-clicked", "true");
+};
+
+export function HostAttributeRoot({ open = true }) {
+  return (
+    <main>
+      <QuartzIcon
+        name="direct"
+        class={open ? "rotate-180" : "rotate-0"}
+        id="direct-icon"
+        style="color: red"
+        slot="indicator"
+        part="icon"
+        exportparts="glyph"
+        title="Direct title"
+        tabindex="-1"
+        role="img"
+        aria-hidden="true"
+        data-state={open ? "open" : "closed"}
+        payload={{ id: 1 }}
+        on:click={handleClick}
+      />
+      <QuartzLightIcon
+        name="light"
+        class={open ? "rotate-180" : "rotate-0"}
+        aria-label="Light icon"
+        data-state={open ? "open" : "closed"}
+        payload={{ id: 3 }}
+        on:click={handleClick}
+      />
+      <QuartzIcon
+        name="spread"
+        class="spread-first"
+        {...spreadAttributes}
+        class={open ? "rotate-180" : undefined}
+        on:click={handleClick}
+      />
+    </main>
+  );
+}
+`);
+  await fs.writeFile(path.join(srcDir, "main.js"), `
+const root = await import("./host-attribute-root.tsx");
+const icon = await import("./quartz-icon.tsx");
+const { registerHydrationModules } = await import("@litsx/ssr/hydration");
+await registerHydrationModules([root, icon]);
+`);
+
+  const server = await createSsrDevServer({
+    root: tempDir,
+    vite: isolatedViteOptions(tempDir),
+    clientEntry: "./src/main.js",
+    bootstrap: {
+      content: `
+const root = document.querySelector("host-attribute-root");
+window.__litsxHostAttributeNodes = [...root.shadowRoot.querySelectorAll("quartz-icon, quartz-light-icon")];
+window.__litsxHostAttributeSsr = window.__litsxHostAttributeNodes.map((host) => ({
+  name: (host.shadowRoot ?? host).querySelector("span")?.getAttribute("data-name") ?? null,
+  className: host.getAttribute("class"),
+  id: host.getAttribute("id"),
+  ariaHidden: host.getAttribute("aria-hidden"),
+  ariaLabel: host.getAttribute("aria-label"),
+  state: host.getAttribute("data-state"),
+  title: host.getAttribute("title"),
+}));
+const { hydratePage } = await import("@litsx/ssr/hydration");
+await hydratePage({ register: () => import("/src/main.js") });
+window.__litsxHostAttributesHydrated = true;
+`,
+    },
+    logLevel: "silent",
+    host: "127.0.0.1",
+    strictPort: false,
+    elements(loader) {
+      return {
+        "host-attribute-root": async () =>
+          (await loader("./src/host-attribute-root.tsx")).HostAttributeRoot,
+      };
+    },
+    render({ html: serverHtml }) {
+      return serverHtml`<host-attribute-root></host-attribute-root>`;
+    },
+  });
+  await server.listen();
+
+  try {
+    const consoleErrors = [];
+    const consoleWarnings = [];
+    const pageErrors = [];
+    page.on("console", (message) => {
+      if (message.type() === "error") consoleErrors.push(message.text());
+      if (message.type() === "warning") consoleWarnings.push(message.text());
+    });
+    page.on("pageerror", (error) => pageErrors.push(error.stack || error.message));
+
+    await page.goto(server.resolvedUrls.local[0]);
+    await page.waitForFunction(() => window.__litsxHostAttributesHydrated === true);
+    await page.waitForFunction(() => {
+      const root = document.querySelector("host-attribute-root");
+      const renderRoot = root?.renderRoot ?? root?.shadowRoot ?? root;
+      return renderRoot?.querySelectorAll("quartz-icon, quartz-light-icon").length === 3;
+    });
+
+    const initial = await page.evaluate(async () => {
+      const root = document.querySelector("host-attribute-root");
+      await root.updateComplete;
+      const renderRoot = root.renderRoot ?? root.shadowRoot ?? root;
+      const hosts = [...renderRoot.querySelectorAll("quartz-icon, quartz-light-icon")];
+      await Promise.all(hosts.map((host) => host.updateComplete));
+      const [direct, light, spread] = hosts;
+      direct.dispatchEvent(new Event("click"));
+      light.dispatchEvent(new Event("click"));
+      spread.dispatchEvent(new Event("click"));
+      return {
+        ssr: window.__litsxHostAttributeSsr,
+        rootIsLight: renderRoot === root,
+        direct: {
+          sameNode: direct === window.__litsxHostAttributeNodes[0],
+          className: direct.getAttribute("class"),
+          id: direct.id,
+          style: direct.getAttribute("style"),
+          slot: direct.getAttribute("slot"),
+          part: direct.getAttribute("part"),
+          exportparts: direct.getAttribute("exportparts"),
+          title: direct.title,
+          tabindex: direct.getAttribute("tabindex"),
+          role: direct.getAttribute("role"),
+          ariaHidden: direct.getAttribute("aria-hidden"),
+          state: direct.dataset.state,
+          payload: direct.payload,
+          clicked: direct.dataset.clicked,
+          rotate: getComputedStyle(direct).rotate,
+        },
+        light: {
+          sameNode: light === window.__litsxHostAttributeNodes[1],
+          className: light.getAttribute("class"),
+          ariaLabel: light.getAttribute("aria-label"),
+          state: light.dataset.state,
+          payload: light.payload,
+          clicked: light.dataset.clicked,
+          rotate: getComputedStyle(light).rotate,
+          rendersInLightDom: light.shadowRoot === null && light.querySelector("span") !== null,
+        },
+        spread: {
+          sameNode: spread === window.__litsxHostAttributeNodes[2],
+          className: spread.getAttribute("class"),
+          ariaLabel: spread.getAttribute("aria-label"),
+          state: spread.dataset.state,
+          title: spread.title,
+          payload: spread.payload,
+          clicked: spread.dataset.clicked,
+          rotate: getComputedStyle(spread).rotate,
+        },
+      };
+    });
+
+    expect(initial.ssr).toEqual([
+      { name: "direct", className: "rotate-180", id: "direct-icon", ariaHidden: "true", ariaLabel: null, state: "open", title: "Direct title" },
+      { name: null, className: "rotate-180", id: null, ariaHidden: null, ariaLabel: "Light icon", state: "open", title: null },
+      { name: "spread", className: "rotate-180", id: null, ariaHidden: null, ariaLabel: "Spread icon", state: "open", title: "Spread title" },
+    ]);
+    expect(initial.rootIsLight).toBe(false);
+    expect(initial.direct).toEqual({
+      sameNode: true,
+      className: "rotate-180",
+      id: "direct-icon",
+      style: "color: red",
+      slot: "indicator",
+      part: "icon",
+      exportparts: "glyph",
+      title: "Direct title",
+      tabindex: "-1",
+      role: "img",
+      ariaHidden: "true",
+      state: "open",
+      payload: { id: 1 },
+      clicked: "true",
+      rotate: "180deg",
+    });
+    expect(initial.spread).toEqual({
+      sameNode: true,
+      className: "rotate-180",
+      ariaLabel: "Spread icon",
+      state: "open",
+      title: "Spread title",
+      payload: { id: 2 },
+      clicked: "true",
+      rotate: "180deg",
+    });
+    expect(initial.light).toEqual({
+      sameNode: true,
+      className: "rotate-180",
+      ariaLabel: "Light icon",
+      state: "open",
+      payload: { id: 3 },
+      clicked: "true",
+      rotate: "180deg",
+      rendersInLightDom: true,
+    });
+
+    const updated = await page.evaluate(async () => {
+      const root = document.querySelector("host-attribute-root");
+      const renderRoot = root.renderRoot ?? root.shadowRoot ?? root;
+      const nodes = [...renderRoot.querySelectorAll("quartz-icon, quartz-light-icon")];
+      root.open = false;
+      await root.updateComplete;
+      await Promise.all(nodes.map((host) => host.updateComplete));
+      const current = [...renderRoot.querySelectorAll("quartz-icon, quartz-light-icon")];
+      return {
+        sameNodes: current.every((host, index) => host === nodes[index]),
+        directClass: current[0].getAttribute("class"),
+        directState: current[0].dataset.state,
+        directRotate: getComputedStyle(current[0]).rotate,
+        lightClass: current[1].getAttribute("class"),
+        lightState: current[1].dataset.state,
+        lightRotate: getComputedStyle(current[1]).rotate,
+        spreadClass: current[2].getAttribute("class"),
+      };
+    });
+
+    expect(updated).toEqual({
+      sameNodes: true,
+      directClass: "rotate-0",
+      directState: "closed",
+      directRotate: "0deg",
+      lightClass: "rotate-0",
+      lightState: "closed",
+      lightRotate: "0deg",
+      spreadClass: null,
+    });
+    expect(consoleErrors).toEqual([]);
+    expect(consoleWarnings.filter(
+      (message) => !message.startsWith("Lit is in dev mode."),
+    )).toEqual([]);
+    expect(pageErrors).toEqual([]);
+  } finally {
+    await server.close();
+    await fs.rm(tempDir, { recursive: true, force: true });
+  }
+});
+
 test("applies shared Wind4 styles after SSR hydration in shadow and light DOM", async ({
   page,
 }) => {

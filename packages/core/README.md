@@ -66,6 +66,8 @@ For authored syntax and binding rules, see the repository's
 - JSX compatibility helpers:
   - `jsxSpreadElement(tagName, sources, options?, children?)` merges JSX prop sources in authored order. It uses an `ElementPart` in the browser and regular Lit parts during SSR.
   - Component constructors are finalized before spread resolution. Public prop names map to properties, while declared attribute aliases map back to their canonical attribute and Boolean presence semantics.
+  - Standard custom-element host attributes (`class`, `id`, `style`, `slot`, `part`, global HTML attributes, `aria-*`, and `data-*`) remain on the host even when they are absent from the component's functional props. They are excluded from compiled object-rest forwarding bags; declared component props still take precedence.
+  - Spread sources and explicit attributes retain authored JSX order. The final value wins, and a final `undefined` removes the corresponding host attribute.
   - Compiled components with an object-rest parameter publish `Symbol.for("litsx.restProps")` metadata. `jsxSpreadElement` uses it to keep declared reactive props on the component host while routing undeclared inputs through one compact reactive object for forwarding to an inner element.
   - `on:event` is the explicit JSX event channel. The destination constructor, reactive component API, and native DOM properties determine whether ordinary JSX names become Lit property, boolean-attribute, or attribute bindings.
   - `onX` names are ordinary component properties/callbacks. React-style `onClick` event conversion belongs exclusively to react-compat. Native handler properties such as `onclick` remain available and are assigned as properties.

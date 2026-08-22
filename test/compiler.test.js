@@ -258,6 +258,7 @@ describe("@litsx/compiler", () => {
       "    <ContractButton aria-label={dynamicLabel} />",
       "    <ContractButton {...{ iconOnly: true }} />",
       "    <ContractButton {...runtimeProps} />",
+      '    <ContractButton class="first" {...runtimeProps} class={dynamicLabel} />',
       "  </section>;",
       "}",
     ].join("\n");
@@ -281,11 +282,70 @@ describe("@litsx/compiler", () => {
       assert.match(result.code, /<contract-button aria-label="\$\{this\.dynamicLabel\}"><\/contract-button>/);
       assert.match(result.code, /jsxSpreadElement\("contract-button", \[\{\s*iconOnly: true/);
       assert.match(result.code, /jsxSpreadElement\("contract-button", \[this\.runtimeProps\]/);
+      assert.match(
+        result.code,
+        /jsxSpreadElement\("contract-button", \[\{\s*class: "first"\s*\}, this\.runtimeProps, \{\s*class: this\.dynamicLabel\s*\}\]/,
+      );
       assert.match(result.code, /component: ContractButton/);
       if (ssr) assert.match(result.code, /server: true/);
       else assert.doesNotMatch(result.code, /server: true/);
       assert.doesNotMatch(result.code, /\?iconOnly|\.icon-only|\barialabel\b/);
     }
+  }, 20000);
+
+  it("keeps undeclared standard host attributes on imported component elements", () => {
+    const iconTypes = [
+      "export type IconProps = { name?: string; payload?: object; disabled?: boolean };",
+      "export declare const QuartzIcon: (props: IconProps) => unknown;",
+    ].join("\n");
+    const source = [
+      'import { QuartzIcon } from "./quartz-icon";',
+      "export function Accordion({ open, classes, state, payload, handleClick }) {",
+      "  return <QuartzIcon",
+      '    name="chevron-down"',
+      '    class={open ? "icon rotate-180" : "icon rotate-0"}',
+      '    id="expand-icon"',
+      '    style="color: red"',
+      '    slot="indicator"',
+      '    part="icon"',
+      '    exportparts="glyph"',
+      '    title="Expand"',
+      '    tabindex="-1"',
+      '    role="img"',
+      '    aria-hidden="true"',
+      '    data-state={state}',
+      "    hidden={open}",
+      "    payload={payload}",
+      "    disabled={open}",
+      "    on:click={handleClick}",
+      "  />;",
+      "}",
+    ].join("\n");
+
+    const result = transformLitsxSync(source, {
+      filename: "/virtual/accordion.tsx",
+      sourceMaps: false,
+      inMemoryFiles: {
+        "/virtual/quartz-icon.tsx": iconTypes,
+      },
+    });
+
+    assert.match(result.code, /class="\$\{this\.open \? "icon rotate-180" : "icon rotate-0"\}"/);
+    assert.match(result.code, /id="expand-icon"/);
+    assert.match(result.code, /style="color: red"/);
+    assert.match(result.code, /slot="indicator"/);
+    assert.match(result.code, /part="icon"/);
+    assert.match(result.code, /exportparts="glyph"/);
+    assert.match(result.code, /title="Expand"/);
+    assert.match(result.code, /tabindex="-1"/);
+    assert.match(result.code, /role="img"/);
+    assert.match(result.code, /aria-hidden="true"/);
+    assert.match(result.code, /data-state="\$\{this\.state\}"/);
+    assert.match(result.code, /\?hidden=\$\{this\.open\}/);
+    assert.match(result.code, /\.payload=\$\{this\.payload\}/);
+    assert.match(result.code, /\?disabled=\$\{this\.open\}/);
+    assert.match(result.code, /@click=\$\{this\.handleClick\}/);
+    assert.doesNotMatch(result.code, /\.class=/);
   }, 20000);
 
   it("materializes bare props references instead of reading a synthetic this.props", () => {

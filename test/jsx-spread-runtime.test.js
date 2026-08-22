@@ -200,6 +200,61 @@ describe("jsxSpreadElement", () => {
     assert.strictEqual(button.title, "Next");
   });
 
+  it("keeps standard host attributes outside native component rest props", () => {
+    const tag = "jsx-spread-host-attributes";
+    if (!customElements.get(tag)) {
+      customElements.define(tag, class extends HTMLElement {
+        static [Symbol.for("litsx.restProps")] = { property: "__litsxRestProps" };
+        static elementProperties = new Map([
+          ["payload", { attribute: false }],
+          ["__litsxRestProps", { type: Object, attribute: false }],
+        ]);
+        static finalize() {}
+      });
+    }
+
+    const container = document.createElement("div");
+    const payload = { id: 1 };
+    const component = customElements.get(tag);
+
+    render(jsxSpreadElement(tag, [
+      { class: "first", title: "before" },
+      {
+        class: "middle",
+        id: "host-id",
+        style: "color: red",
+        slot: "indicator",
+        part: "icon",
+        exportparts: "glyph",
+        role: "img",
+        tabindex: -1,
+        "aria-label": "Host label",
+        "data-state": "open",
+        hidden: true,
+        payload,
+        forwarded: "inner",
+      },
+      { class: "last", title: undefined },
+    ], { component }), container);
+
+    const host = container.querySelector(tag);
+    assert.strictEqual(host.getAttribute("class"), "last");
+    assert.strictEqual(host.id, "host-id");
+    assert.strictEqual(host.getAttribute("style"), "color: red");
+    assert.strictEqual(host.getAttribute("slot"), "indicator");
+    assert.strictEqual(host.getAttribute("part"), "icon");
+    assert.strictEqual(host.getAttribute("exportparts"), "glyph");
+    assert.strictEqual(host.getAttribute("role"), "img");
+    assert.strictEqual(host.getAttribute("tabindex"), "-1");
+    assert.strictEqual(host.getAttribute("aria-label"), "Host label");
+    assert.strictEqual(host.dataset.state, "open");
+    assert.strictEqual(host.hidden, true);
+    assert.strictEqual(host.hasAttribute("title"), false);
+    assert.strictEqual(host.payload, payload);
+    assert.deepStrictEqual(host.__litsxRestProps, { forwarded: "inner" });
+
+  });
+
   it("distinguishes onX callback props from explicit custom events", () => {
     const tag = "jsx-spread-custom-events";
     if (!customElements.get(tag)) {

@@ -1,5 +1,8 @@
 import {
+  isBooleanHostAttributeName,
+  isBooleanValueHostAttributeName,
   isNativeDomEventHandlerPropertyName,
+  isStandardHostAttributeName,
   resolveExplicitJsxEventName,
   resolveStandardJsxEventName,
 } from "@litsx/authoring";
@@ -9,9 +12,6 @@ import { ifDefined } from "lit/directives/if-defined.js";
 import { ref } from "lit/directives/ref.js";
 import { styleMap } from "lit/directives/style-map.js";
 
-const ATTRIBUTE_NAMES = new Set(["class", "id", "slot", "part", "exportparts", "role", "title", "tabindex"]);
-const BOOLEAN_ATTRIBUTE_NAMES = new Set(["allowfullscreen", "async", "autofocus", "autoplay", "checked", "controls", "default", "defer", "disabled", "formnovalidate", "hidden", "inert", "ismap", "itemscope", "loop", "multiple", "muted", "nomodule", "novalidate", "open", "playsinline", "readonly", "required", "reversed", "selected"]);
-const BOOLEAN_VALUE_ATTRIBUTE_NAMES = new Set(["contenteditable", "draggable", "spellcheck"]);
 const HTML_ATTRIBUTE_ALIASES = new Map([["acceptCharset", "accept-charset"], ["className", "class"], ["htmlFor", "for"], ["httpEquiv", "http-equiv"]]);
 const NATIVE_PROPERTY_NAMES = new Set(["checked", "files", "indeterminate", "selectedIndex", "value"]);
 const SKIPPED_KEYS = new Set(["__proto__", "constructor", "prototype", "key", "children"]);
@@ -76,10 +76,6 @@ function normalizeName(rawName, nativeHtml, reactCompatEvents = false) {
   };
 }
 
-function isAttributeName(name) {
-  return ATTRIBUTE_NAMES.has(name) || name.startsWith("data-") || name.startsWith("aria-");
-}
-
 function resolveConstructor(tagName, component, element) {
   if (typeof component === "function") return component;
   return element?.constructor ?? globalThis.customElements?.get?.(tagName);
@@ -128,7 +124,13 @@ function hasDeclaredComponentProperty(tagName, name, component, element) {
   return getDeclaredComponentBinding(tagName, name, component, element) != null;
 }
 
-function routeComponentRestProps(tagName, sources, component, element) {
+function routeComponentRestProps(
+  tagName,
+  sources,
+  component,
+  element,
+  forwardHostAttributes = false,
+) {
   const constructor = resolveConstructor(tagName, component, element);
   const metadata = constructor?.[REST_PROPS];
   const propertyName = metadata?.property;
@@ -149,9 +151,16 @@ function routeComponentRestProps(tagName, sources, component, element) {
       const routedName = prefix === "." || prefix === "?" || prefix === "@"
         ? rawName.slice(1)
         : rawName;
+      const normalizedHostName = HTML_ATTRIBUTE_ALIASES.get(routedName) ?? routedName;
       const targetsHost = prefix === "@" || rawName === "ref" ||
+        resolveExplicitJsxEventName(rawName) != null ||
         isNativeDomEventHandlerPropertyName(routedName) ||
-        hasDeclaredComponentProperty(tagName, routedName, component, element);
+        hasDeclaredComponentProperty(tagName, routedName, component, element) ||
+        (!forwardHostAttributes && (
+          isStandardHostAttributeName(normalizedHostName) ||
+          isBooleanHostAttributeName(normalizedHostName) ||
+          isBooleanValueHostAttributeName(normalizedHostName)
+        ));
       if (targetsHost) {
         explicit[rawName] = source[rawName];
         hasExplicit = true;
@@ -198,9 +207,13 @@ function inferDescriptor(tagName, rawName, value, component, element, namespace,
       ? { kind: "property", name: declaredBinding.name }
       : { kind: declaredBinding.kind, name: declaredBinding.name };
   }
-  if (isAttributeName(name)) return { kind: "attribute", name };
-  if (nativeHtml && BOOLEAN_ATTRIBUTE_NAMES.has(name)) return { kind: "boolean", name };
-  if (nativeHtml && BOOLEAN_VALUE_ATTRIBUTE_NAMES.has(name)) return { kind: "attribute", name, booleanValue: true };
+  if (namespace !== "svg" && isBooleanHostAttributeName(name)) {
+    return { kind: "boolean", name };
+  }
+  if (namespace !== "svg" && isBooleanValueHostAttributeName(name)) {
+    return { kind: "attribute", name, booleanValue: true };
+  }
+  if (isStandardHostAttributeName(name)) return { kind: "attribute", name };
   if (namespace === "svg" && typeof value === "boolean") return { kind: "attribute", name, booleanValue: true };
   if (hasComponentProperty(tagName, propertyName, component, element)) return { kind: "property", name: propertyName };
   if (typeof value === "boolean") return { kind: "boolean", name };
@@ -223,10 +236,10 @@ function inferClientDescriptor(tagName, rawName, value, component, element, name
   const valueDependent = normalized.kind === "inferred" && (
     normalized.name === "style" || (
       normalized.name !== "ref" && normalized.name !== "dangerouslySetInnerHTML" &&
-      !isAttributeName(normalized.name) &&
+      !isStandardHostAttributeName(normalized.name) &&
       !hasComponentProperty(tagName, normalized.propertyName, component, element) &&
-      !BOOLEAN_ATTRIBUTE_NAMES.has(normalized.name.toLowerCase()) &&
-      !BOOLEAN_VALUE_ATTRIBUTE_NAMES.has(normalized.name.toLowerCase()) &&
+      !isBooleanHostAttributeName(normalized.name) &&
+      !isBooleanValueHostAttributeName(normalized.name) &&
       !NATIVE_PROPERTY_NAMES.has(normalized.propertyName)
     )
   );
@@ -237,7 +250,13 @@ function inferClientDescriptor(tagName, rawName, value, component, element, name
 const descriptorKey = (descriptor) => `${descriptor.kind}:${descriptor.name}`;
 
 function mergeSources(tagName, sources, component, element, namespace, reactCompatEvents = false) {
-  sources = routeComponentRestProps(tagName, sources, component, element);
+  sources = routeComponentRestProps(
+    tagName,
+    sources,
+    component,
+    element,
+    reactCompatEvents,
+  );
   const merged = new Map();
   for (const source of sources || []) {
     if (source == null || (typeof source !== "object" && typeof source !== "function")) continue;
@@ -256,7 +275,13 @@ function mergeSources(tagName, sources, component, element, namespace, reactComp
 
 function mergeSourcesReverse(tagName, sources, component, element, seen, namespace, reactCompatEvents = false) {
   const bindings = [];
-  const validSources = routeComponentRestProps(tagName, sources, component, element) || [];
+  const validSources = routeComponentRestProps(
+    tagName,
+    sources,
+    component,
+    element,
+    reactCompatEvents,
+  ) || [];
   const dedupe = validSources.length > 1;
   if (dedupe) seen.clear();
   for (let sourceIndex = validSources.length - 1; sourceIndex >= 0; sourceIndex -= 1) {
