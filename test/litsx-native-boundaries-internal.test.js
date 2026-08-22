@@ -1,5 +1,5 @@
 import assert from "assert";
-import babelCore from "@babel/core";
+import * as babelCore from "@babel/core";
 import { describe, it } from "vitest";
 import transformLitsxBoundaries from "../packages/babel-preset-litsx/src/internal/transform-litsx-boundaries.js";
 

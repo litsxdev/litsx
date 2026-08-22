@@ -1,7 +1,7 @@
 import assert from "assert";
 import fs from "fs";
 import path from "path";
-import babelCore from "@babel/core";
+import * as babelCore from "@babel/core";
 import parser from "./helpers/litsx-parser.js";
 import ts from "typescript";
 import { beforeAll, describe, it } from "vitest";

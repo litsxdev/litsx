@@ -28,18 +28,17 @@
     "packages/vite-plugin"
   ],
   "devDependencies": {
-    "@babel/core": "^7.29.7",
-    "@babel/eslint-parser": "^7.29.7",
-    "@babel/plugin-syntax-jsx": "^7.29.7",
-    "@babel/plugin-syntax-typescript": "^7.29.7",
-    "@babel/plugin-transform-typescript": "^7.29.7",
+    "@babel/core": "^8.0.1",
+    "@babel/eslint-parser": "^8.0.1",
+    "@babel/plugin-syntax-jsx": "^8.0.1",
+    "@babel/plugin-syntax-typescript": "^8.0.3",
+    "@babel/plugin-transform-typescript": "^8.0.1",
     "@changesets/cli": "^2.31.1",
     "@commitlint/cli": "^20.1.0",
     "@commitlint/config-conventional": "^20.0.0",
     "@lit-labs/ssr": "^4.1.0",
     "@open-wc/scoped-elements": "^3.0.10",
     "@playwright/test": "^1.62.1",
-    "@rollup/plugin-babel": "^7.1.0",
     "@rollup/plugin-commonjs": "^29.0.3",
     "@rollup/plugin-json": "^6.1.0",
     "@rollup/plugin-node-resolve": "^16.0.3",
@@ -57,7 +56,6 @@
     "typescript": "^6.0.0",
     "unocss": "^66.8.1",
     "vite": "^8.2.2",
-    "vite-plugin-babel": "^1.7.3",
     "vitest": "^4.1.11"
   },
   "scripts": {

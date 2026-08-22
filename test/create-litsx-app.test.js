@@ -68,6 +68,10 @@ describe("create-litsx-app", () => {
 
     assert.ok(packageJson.dependencies["@litsx/core"]);
     assert.strictEqual(
+      packageJson.engines.node,
+      "^22.18.0 || >=24.11.0",
+    );
+    assert.strictEqual(
       packageJson.dependencies["@webcomponents/scoped-custom-element-registry"],
       "^0.0.10",
     );

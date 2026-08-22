@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { performance } from "node:perf_hooks";
-import babelCore from "@babel/core";
+import * as babelCore from "@babel/core";
 import * as babelParser from "@babel/parser";
 import nativePreset from "../../packages/babel-preset-litsx/src/index.js";
 

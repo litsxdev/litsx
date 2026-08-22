@@ -1,6 +1,4 @@
-import helperPluginUtils from "@babel/helper-plugin-utils";
-
-const { declare } = helperPluginUtils;
+import { declare } from "@babel/helper-plugin-utils";
 
 const SUPPORTED_REACT_HOOKS = new Set([
   "useState",
@@ -45,7 +43,7 @@ function throwUnsupported(path, name, source) {
 }
 
 export default declare((api) => {
-  api.assertVersion(7);
+  api.assertVersion("^8.0.0");
   const t = api.types;
 
   return {

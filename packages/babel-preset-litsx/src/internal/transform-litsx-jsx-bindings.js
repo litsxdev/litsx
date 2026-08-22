@@ -1,4 +1,4 @@
-import helperPluginUtils from "@babel/helper-plugin-utils";
+import { declare } from "@babel/helper-plugin-utils";
 import jsxSyntaxPlugin from "@babel/plugin-syntax-jsx";
 import {
   decodeVirtualAttributeName,
@@ -12,7 +12,6 @@ import {
   setPropertyBabelTypes,
 } from "./transform-litsx-properties.js";
 
-const { declare } = helperPluginUtils;
 
 // `?name` controls attribute presence, so it is only equivalent to JSX's
 // boolean value for HTML boolean attributes. Boolean-valued enumerated
@@ -652,7 +651,7 @@ function transformOpeningElement(path, state, t) {
 }
 
 export default declare((api, options = {}) => {
-  api.assertVersion(7);
+  api.assertVersion("^8.0.0");
   const t = api.types;
   setPropertyBabelTypes(t);
 

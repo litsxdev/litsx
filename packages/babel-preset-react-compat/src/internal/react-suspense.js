@@ -1,4 +1,4 @@
-import helperPluginUtils from "@babel/helper-plugin-utils";
+import { declare } from "@babel/helper-plugin-utils";
 import jsxSyntaxPlugin from "@babel/plugin-syntax-jsx";
 import {
   addNamedImport,
@@ -10,10 +10,9 @@ import {
   setReactCompatSharedBabelTypes,
 } from "./react-compat-shared.js";
 
-const { declare } = helperPluginUtils;
 
 export default declare((api) => {
-  api.assertVersion(7);
+  api.assertVersion("^8.0.0");
   const t = api.types;
 
   function getSuspenseKind(nameNode, state) {

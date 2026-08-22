@@ -25,6 +25,9 @@
     "jsx"
   ],
   "license": "Apache-2.0",
+  "engines": {
+    "node": "^22.18.0 || >=24.11.0"
+  },
   "homepage": "https://litsx.dev/",
   "bugs": {
     "url": "https://github.com/litsxdev/litsx/issues"
@@ -43,10 +46,10 @@
     "typescript": ">=5"
   },
   "dependencies": {
-    "@babel/core": "^7.29.7",
-    "@babel/eslint-parser": "^7.29.7",
-    "@babel/plugin-syntax-jsx": "^7.29.7",
-    "@babel/plugin-syntax-typescript": "^7.29.7"
+    "@babel/core": "^8.0.1",
+    "@babel/eslint-parser": "^8.0.1",
+    "@babel/plugin-syntax-jsx": "^8.0.1",
+    "@babel/plugin-syntax-typescript": "^8.0.3"
   },
   "scripts": {
     "build": "../../node_modules/.bin/rollup --config rollup.config.js",

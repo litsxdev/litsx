@@ -907,7 +907,7 @@ function markServerComponent(programPath, componentName) {
 }
 
 export default function transformLitsxServerComponents(api) {
-  api.assertVersion(7);
+  api.assertVersion("^8.0.0");
   t = api.types;
   setServerComponentBabelTypes(t);
 

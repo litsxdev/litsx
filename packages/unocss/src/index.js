@@ -296,7 +296,7 @@ function collectLightDomComponents(programPath, t, defaultDomMode) {
  */
 export function createUnoCssAuthoringPlugin(options = {}) {
   return function litsxUnoCssAuthoringPlugin(api) {
-    api.assertVersion?.(7);
+    api.assertVersion("^8.0.0");
     const t = api.types;
     return {
       name: "litsx-unocss-authoring-guards",
@@ -425,7 +425,7 @@ export function createUnoCssOutputPlugin(options = {}) {
       : null;
 
   return function litsxUnoCssOutputPlugin(api) {
-    api.assertVersion?.(7);
+    api.assertVersion("^8.0.0");
     const t = api.types;
 
     return {

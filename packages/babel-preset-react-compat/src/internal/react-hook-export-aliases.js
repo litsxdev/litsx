@@ -1,6 +1,4 @@
-import helperPluginUtils from "@babel/helper-plugin-utils";
-
-const { declare } = helperPluginUtils;
+import { declare } from "@babel/helper-plugin-utils";
 
 function isCustomHookName(name) {
   return typeof name === "string" && /^use[A-Z0-9]/.test(name);
@@ -11,7 +9,7 @@ function isComponentName(name) {
 }
 
 export default declare((api) => {
-  api.assertVersion(7);
+  api.assertVersion("^8.0.0");
   const t = api.types;
 
   function promoteBindingToNamedExport(programPath, localName) {

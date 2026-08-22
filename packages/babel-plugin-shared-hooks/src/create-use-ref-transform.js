@@ -1,4 +1,7 @@
-import { resolveHostInfo } from "./custom-hook-host.js";
+import {
+  findCurrentCallPath,
+  resolveHostInfo,
+} from "./custom-hook-host.js";
 import { ensureRuntimeNamedImports } from "./runtime-imports.js";
 let t;
 
@@ -379,8 +382,10 @@ function processPendingMutableRefCalls(state, t) {
     return;
   }
 
-  for (const callPath of state.pendingMutableCalls) {
-    if (!callPath.node) continue;
+  for (const pendingPath of state.pendingMutableCalls) {
+    if (!pendingPath.node) continue;
+    const callPath = findCurrentCallPath(state.programPath, pendingPath);
+    if (!callPath) continue;
     const hostInfo = resolveHostInfo(callPath, t);
     if (!hostInfo) {
       throw callPath.buildCodeFrameError(
@@ -636,7 +641,7 @@ export function createUseRefTransform({
   }
 
   return function useRefTransform(api) {
-    api.assertVersion(7);
+    api.assertVersion("^8.0.0");
     t = api.types;
 
     function transformHook(declaratorPath, classPath, state) {

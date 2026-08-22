@@ -1,5 +1,5 @@
 import assert from "assert";
-import babelCore from "@babel/core";
+import * as babelCore from "@babel/core";
 import * as t from "@babel/types";
 import {
   createTransformFunctionToClassPlugin,

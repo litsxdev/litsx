@@ -61,8 +61,8 @@ describe("react compat lazy analysis internals", () => {
     };
 
     assert.strictEqual(isLazyCallee(callPaths[0], state), true);
-    assert.strictEqual(isLazyCallee(callPaths[2], state), true);
-    assert.strictEqual(isLazyCallee(callPaths[4], state), false);
+    assert.strictEqual(isLazyCallee(callPaths[1], state), true);
+    assert.strictEqual(isLazyCallee(callPaths[2], state), false);
   });
 
   it("resolves classes, missing bindings, cycles, and invalid conditional branches", () => {

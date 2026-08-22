@@ -1,4 +1,4 @@
-import helperPluginUtils from "@babel/helper-plugin-utils";
+import { declare } from "@babel/helper-plugin-utils";
 import jsxSyntaxPlugin from "@babel/plugin-syntax-jsx";
 import { isLitElementSuperClass } from "@litsx/babel-plugin-shared-hooks";
 import {
@@ -12,12 +12,11 @@ import {
   trackLazyUsage,
 } from "./react-lazy-analysis.js";
 
-const { declare } = helperPluginUtils;
 const RUNTIME_MODULE = "@litsx/core";
 const INFRASTRUCTURE_MODULE = "@litsx/core/elements";
 
 export default declare((api) => {
-  api.assertVersion(7);
+  api.assertVersion("^8.0.0");
   const t = api.types;
   setStaticIrBabelTypes(t);
 

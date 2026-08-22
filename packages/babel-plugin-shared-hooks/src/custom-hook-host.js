@@ -95,3 +95,26 @@ export function resolveHostInfo(callPath, t) {
 
   return null;
 }
+
+export function findCurrentCallPath(programPath, callPath) {
+  const targetNode = callPath?.node;
+  if (!programPath || !targetNode) return callPath;
+  const targetStart = targetNode.start;
+  const targetEnd = targetNode.end;
+
+  let currentPath = null;
+  programPath.traverse({
+    CallExpression(path) {
+      const isSameSourceNode =
+        Number.isInteger(targetStart) &&
+        Number.isInteger(targetEnd) &&
+        path.node.start === targetStart &&
+        path.node.end === targetEnd;
+      if (path.node !== targetNode && !isSameSourceNode) return;
+      currentPath = path;
+      path.stop();
+    },
+  });
+
+  return currentPath;
+}

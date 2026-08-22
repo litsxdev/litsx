@@ -103,6 +103,9 @@ function createBasePackageJson(packageName) {
     private: true,
     version: "0.0.0",
     type: "module",
+    engines: {
+      node: "^22.18.0 || >=24.11.0",
+    },
     scripts: {
       dev: "vite",
       build: "vite build",

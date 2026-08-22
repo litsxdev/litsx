@@ -30,7 +30,7 @@ function isReactNamespaceBinding(binding) {
 }
 
 export default function reactRefsPlugin(api) {
-  api.assertVersion?.(7);
+  api.assertVersion("^8.0.0");
   t = api.types;
   return {
     name: "transform-react-create-ref",

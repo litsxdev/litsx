@@ -14,10 +14,8 @@ const createStandaloneTsSession = vi.fn();
 const normalizeFilePath = vi.fn((value = "") => String(value).replace(/\\/g, "/"));
 
 vi.mock("@babel/core", () => ({
-  default: {
-    transformFromAstAsync,
-    transformFromAstSync,
-  },
+  transformFromAstAsync,
+  transformFromAstSync,
 }));
 
 vi.mock("@litsx/babel-plugin-transform-jsx-html-template", () => ({

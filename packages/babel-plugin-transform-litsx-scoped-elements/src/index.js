@@ -22,7 +22,7 @@ const IMPORT_RESOLUTION_EXTENSIONS = [
 ];
 
 export default function transformFunctionToClassPlugin(api, options = {}) {
-  api.assertVersion(7);
+  api.assertVersion("^8.0.0");
   t = api.types;
   setTypes(t);
 

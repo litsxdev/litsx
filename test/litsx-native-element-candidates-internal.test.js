@@ -1,6 +1,6 @@
 import assert from "assert";
 import * as t from "@babel/types";
-import babelCore from "@babel/core";
+import * as babelCore from "@babel/core";
 import babelTraverse from "@babel/traverse";
 import fs from "fs";
 import os from "os";

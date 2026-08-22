@@ -1,6 +1,4 @@
-import helperPluginUtils from "@babel/helper-plugin-utils";
-
-const { declare } = helperPluginUtils;
+import { declare } from "@babel/helper-plugin-utils";
 
 function expressionToJsxName(node, t) {
   if (t.isStringLiteral(node) && /^[A-Za-z][A-Za-z0-9:._-]*$/.test(node.value)) {
@@ -27,7 +25,7 @@ function cloneElementWithName(element, name, t) {
 }
 
 export default declare((api) => {
-  api.assertVersion(7);
+  api.assertVersion("^8.0.0");
   const t = api.types;
 
   return {

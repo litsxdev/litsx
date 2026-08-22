@@ -1,4 +1,4 @@
-import helperPluginUtils from "@babel/helper-plugin-utils";
+import { declare } from "@babel/helper-plugin-utils";
 import * as babelParser from "@babel/parser";
 import babelTraverse from "@babel/traverse";
 import jsxSyntaxPlugin from "@babel/plugin-syntax-jsx";
@@ -11,7 +11,6 @@ import {
   setStaticIrBabelTypes,
 } from "./transform-litsx-static-ir.js";
 
-const { declare } = helperPluginUtils;
 const traverse = babelTraverse.default || babelTraverse;
 const IMPORT_RESOLUTION_EXTENSIONS = [
   ".tsx",
@@ -1542,7 +1541,7 @@ export function getImportedBindingModuleAnalysis(programPath, localName, options
 }
 
 export default declare((api) => {
-  api.assertVersion(7);
+  api.assertVersion("^8.0.0");
   t = api.types;
 
   return {

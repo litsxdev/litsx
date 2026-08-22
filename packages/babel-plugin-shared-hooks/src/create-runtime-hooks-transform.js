@@ -1606,7 +1606,7 @@ export function createRuntimeHooksTransform({
       : new Map(Object.entries(callMetadataByHelper || {}));
 
   return function runtimeHooksTransform(api, pluginOptions = {}) {
-    api.assertVersion(7);
+    api.assertVersion("^8.0.0");
     const t = api.types;
 
     return {

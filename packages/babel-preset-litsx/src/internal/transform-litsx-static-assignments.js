@@ -143,7 +143,7 @@ function insertStaticAssignments(functionPath, assignments, t) {
 }
 
 export default function transformLitsxStaticAssignments(api) {
-  api.assertVersion?.(7);
+  api.assertVersion("^8.0.0");
   const t = api.types;
 
   return {

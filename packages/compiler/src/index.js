@@ -1,4 +1,4 @@
-import babelCore from "@babel/core";
+import * as babelCore from "@babel/core";
 import * as babelParser from "@babel/parser";
 import * as babelTypes from "@babel/types";
 import transformTypescript from "@babel/plugin-transform-typescript";

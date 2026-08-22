@@ -452,7 +452,7 @@ function ensureRendererBindingImport(programPath) {
 }
 
 export default function transformLitsxRendererProps(api, options = {}) {
-  api.assertVersion?.(7);
+  api.assertVersion("^8.0.0");
   t = api.types;
 
   return {

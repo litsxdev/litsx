@@ -1,6 +1,4 @@
-import helperPluginUtils from "@babel/helper-plugin-utils";
-
-const { declare } = helperPluginUtils;
+import { declare } from "@babel/helper-plugin-utils";
 
 const JSX_RUNTIME_SOURCES = new Set(["react/jsx-runtime", "react/jsx-dev-runtime"]);
 
@@ -225,7 +223,7 @@ function transformElementRuntimeCall(callPath, state, t) {
 }
 
 export default declare((api) => {
-  api.assertVersion(7);
+  api.assertVersion("^8.0.0");
   const t = api.types;
 
   return {

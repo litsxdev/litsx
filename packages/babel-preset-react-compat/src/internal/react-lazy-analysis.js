@@ -66,7 +66,10 @@ function getReturnedExpression(node) {
 }
 
 function isImportCall(node) {
-  return t.isCallExpression(node) && t.isImport(node.callee);
+  return (
+    t.isImportExpression?.(node) ||
+    (t.isCallExpression(node) && t.isImport(node.callee))
+  );
 }
 
 function isLoaderLike(node) {
@@ -299,7 +302,8 @@ export function hasLazyOrigin(node, scope, state, seen = new Set()) {
 
 function createExpressionFromJSXName(node) {
   if (t.isJSXIdentifier(node)) {
-    return t.identifier(node.__scopedOriginal || node.name);
+    const name = node.__scopedOriginal || node.name;
+    return t.isValidIdentifier(name) ? t.identifier(name) : null;
   }
   if (t.isJSXMemberExpression(node)) {
     return t.memberExpression(

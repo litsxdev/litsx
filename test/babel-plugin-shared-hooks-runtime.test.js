@@ -1,5 +1,5 @@
 import assert from "assert";
-import babelCore from "@babel/core";
+import * as babelCore from "@babel/core";
 import parser from "./helpers/litsx-parser.js";
 import { describe, it } from "vitest";
 import { createRuntimeHooksTransform } from "../packages/babel-plugin-shared-hooks/src/index.js";

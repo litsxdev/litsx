@@ -14,7 +14,7 @@ function getDeclaredValueNames(statement, t) {
 }
 
 export default function transformTypescriptNamespaceCollisions(api) {
-  api.assertVersion?.(7);
+  api.assertVersion("^8.0.0");
   const t = api.types;
 
   return {

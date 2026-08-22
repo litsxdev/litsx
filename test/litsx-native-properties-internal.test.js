@@ -1,5 +1,5 @@
 import assert from "assert";
-import babelTypes from "@babel/types";
+import * as babelTypes from "@babel/types";
 import traverseModule from "@babel/traverse";
 import { beforeAll } from "vitest";
 import parser from "./helpers/litsx-parser.js";

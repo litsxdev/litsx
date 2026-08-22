@@ -24,6 +24,9 @@
     "jsx"
   ],
   "license": "Apache-2.0",
+  "engines": {
+    "node": "^22.18.0 || >=24.11.0"
+  },
   "homepage": "https://litsx.dev/",
   "bugs": {
     "url": "https://github.com/litsxdev/litsx/issues"
@@ -38,19 +41,19 @@
     "directory": "packages/babel-plugin-transform-jsx-html-template"
   },
   "peerDependencies": {
-    "@babel/core": ">=7 <8"
+    "@babel/core": "^8.0.0"
   },
   "dependencies": {
-    "@babel/generator": "^7.29.8",
-    "@babel/helper-plugin-utils": "^7.29.7",
-    "@babel/parser": "^7.29.8",
-    "@babel/plugin-syntax-jsx": "^7.29.7",
-    "@babel/types": "^7.29.8",
+    "@babel/generator": "^8.0.0",
+    "@babel/helper-plugin-utils": "^8.0.1",
+    "@babel/parser": "^8.0.4",
+    "@babel/plugin-syntax-jsx": "^8.0.1",
+    "@babel/types": "^8.0.4",
     "@litsx/authoring": "^1.0.0-next.1",
     "source-map-js": "^1.2.1"
   },
   "devDependencies": {
-    "@babel/core": "^7.29.7"
+    "@babel/core": "^8.0.1"
   },
   "scripts": {
     "build": "../../node_modules/.bin/rollup --config rollup.config.js",

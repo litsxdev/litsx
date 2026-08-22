@@ -19,7 +19,7 @@ const SCOPED_TEMPLATE_HELPER = "__litsxScopedTemplate";
 const SERVER_COMPONENT_CALL_HELPER = "__litsxServerComponentCall";
 
 export default function transformLitsxSsrRoots(api) {
-  api.assertVersion(7);
+  api.assertVersion("^8.0.0");
   t = api.types;
   setSsrSharedBabelTypes(t);
 

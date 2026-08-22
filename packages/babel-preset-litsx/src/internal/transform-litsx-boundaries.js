@@ -135,7 +135,7 @@ function ensureRenderLightImport(programPath) {
 }
 
 export default function transformLitsxBoundaries(api) {
-  api.assertVersion?.(7);
+  api.assertVersion("^8.0.0");
   t = api.types;
 
   return {

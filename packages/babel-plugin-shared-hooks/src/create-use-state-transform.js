@@ -1,6 +1,7 @@
 import { ensurePrepareEffectsCall } from "./prepare-effects.js";
 import { assertNoReactEventAttributes } from "./react-event-attributes.js";
 import {
+  findCurrentCallPath,
   HOST_TYPE_RENDER,
   resolveHostInfo,
 } from "./custom-hook-host.js";
@@ -42,8 +43,10 @@ function processPendingCalls(state, t) {
     return;
   }
 
-  for (const callPath of state.pendingCalls) {
-    if (!callPath.node) continue;
+  for (const pendingPath of state.pendingCalls) {
+    if (!pendingPath.node) continue;
+    const callPath = findCurrentCallPath(state.programPath, pendingPath);
+    if (!callPath) continue;
     const hostInfo = resolveHostInfo(callPath, t);
     if (!hostInfo) {
       throw callPath.buildCodeFrameError(
@@ -72,7 +75,7 @@ export function createUseStateTransform({
   }
 
   return function useStateTransform(api, options = {}) {
-    api.assertVersion(7);
+    api.assertVersion("^8.0.0");
     const t = api.types;
 
     return {
