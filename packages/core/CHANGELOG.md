@@ -1,5 +1,37 @@
 # litsx
 
+## 1.0.0-next.3
+
+### Minor Changes
+
+- a816706: Support object-valued native JSX `style` bindings through Lit's official
+  `styleMap` directive. Dynamic bindings can switch between CSS text, style maps,
+  `null`, and `undefined`; spread styles now preserve the same camelCase, dashed,
+  custom-property, update, removal, SSR, and hydration semantics.
+- f097f04: Expose the structural composition primitives required by generated modules
+  directly from `@litsx/core`. Remove the redundant `@litsx/core/internal`
+  re-export entrypoint, keep hook cursor and host-context helpers private to their
+  implementation modules, and make generated hook code use the canonical public
+  runtime import.
+
+### Patch Changes
+
+- 66003e8: Keep React lazy loaders out of generated static elements maps. Lazy custom
+  elements are now registered only through ensureLazyElement after their loader
+  resolves, while the host retains the scoped registry required for registration.
+  Dynamic import module namespaces are unwrapped through their default export
+  before the constructor is defined. Native LitSX now exposes `lazy()` from core
+  and lowers it through the same shared transform as React compatibility.
+- dbda7c3: Preserve standard HTML, ARIA, and data attributes on local and imported LitSX
+  component hosts. Runtime spreads now keep those attributes out of native
+  component rest-props bags, retain JSX source precedence, and use the same
+  attribute classification in browser and SSR output. Expand the native JSX type
+  surface for standard custom-element host attributes.
+- Updated dependencies [4106a37]
+- Updated dependencies [dbda7c3]
+  - @litsx/scoped-registry-shim@1.0.0-next.1
+  - @litsx/authoring@1.0.0-next.2
+
 ## 1.0.0-next.2
 
 ### Minor Changes

@@ -1,5 +1,19 @@
 # @litsx/babel-plugin-transform-jsx-html-template
 
+## 1.0.0-next.3
+
+### Minor Changes
+
+- a816706: Support object-valued native JSX `style` bindings through Lit's official
+  `styleMap` directive. Dynamic bindings can switch between CSS text, style maps,
+  `null`, and `undefined`; spread styles now preserve the same camelCase, dashed,
+  custom-property, update, removal, SSR, and hydration semantics.
+
+### Patch Changes
+
+- Updated dependencies [dbda7c3]
+  - @litsx/authoring@1.0.0-next.2
+
 ## 1.0.0-next.2
 
 ### Patch Changes

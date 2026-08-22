@@ -1465,7 +1465,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@litsx/authoring@npm:^1.0.0-next.0, @litsx/authoring@npm:^1.0.0-next.1, @litsx/authoring@workspace:packages/authoring":
+"@litsx/authoring@npm:^1.0.0-next.0, @litsx/authoring@npm:^1.0.0-next.2, @litsx/authoring@workspace:packages/authoring":
   version: 0.0.0-use.local
   resolution: "@litsx/authoring@workspace:packages/authoring"
   dependencies:
@@ -1485,7 +1485,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@litsx/babel-plugin-shared-hooks@npm:^1.0.0-next.1, @litsx/babel-plugin-shared-hooks@workspace:packages/babel-plugin-shared-hooks":
+"@litsx/babel-plugin-shared-hooks@npm:^1.0.0-next.1, @litsx/babel-plugin-shared-hooks@npm:^1.0.0-next.2, @litsx/babel-plugin-shared-hooks@workspace:packages/babel-plugin-shared-hooks":
   version: 0.0.0-use.local
   resolution: "@litsx/babel-plugin-shared-hooks@workspace:packages/babel-plugin-shared-hooks"
   dependencies:
@@ -1496,7 +1496,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@litsx/babel-plugin-transform-jsx-html-template@npm:^1.0.0-next.2, @litsx/babel-plugin-transform-jsx-html-template@workspace:packages/babel-plugin-transform-jsx-html-template":
+"@litsx/babel-plugin-transform-jsx-html-template@npm:^1.0.0-next.3, @litsx/babel-plugin-transform-jsx-html-template@workspace:packages/babel-plugin-transform-jsx-html-template":
   version: 0.0.0-use.local
   resolution: "@litsx/babel-plugin-transform-jsx-html-template@workspace:packages/babel-plugin-transform-jsx-html-template"
   dependencies:
@@ -1506,7 +1506,7 @@ __metadata:
     "@babel/parser": "npm:^8.0.4"
     "@babel/plugin-syntax-jsx": "npm:^8.0.1"
     "@babel/types": "npm:^8.0.4"
-    "@litsx/authoring": "npm:^1.0.0-next.1"
+    "@litsx/authoring": "npm:^1.0.0-next.2"
     source-map-js: "npm:^1.2.1"
   peerDependencies:
     "@babel/core": ^8.0.0
@@ -1528,7 +1528,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@litsx/babel-preset-litsx@npm:^1.0.0-next.2, @litsx/babel-preset-litsx@workspace:packages/babel-preset-litsx":
+"@litsx/babel-preset-litsx@npm:^1.0.0-next.3, @litsx/babel-preset-litsx@workspace:packages/babel-preset-litsx":
   version: 0.0.0-use.local
   resolution: "@litsx/babel-preset-litsx@workspace:packages/babel-preset-litsx"
   dependencies:
@@ -1536,9 +1536,9 @@ __metadata:
     "@babel/parser": "npm:^8.0.4"
     "@babel/plugin-syntax-jsx": "npm:^8.0.1"
     "@babel/traverse": "npm:^8.0.4"
-    "@litsx/authoring": "npm:^1.0.0-next.1"
-    "@litsx/babel-plugin-shared-hooks": "npm:^1.0.0-next.1"
-    "@litsx/babel-plugin-transform-jsx-html-template": "npm:^1.0.0-next.2"
+    "@litsx/authoring": "npm:^1.0.0-next.2"
+    "@litsx/babel-plugin-shared-hooks": "npm:^1.0.0-next.2"
+    "@litsx/babel-plugin-transform-jsx-html-template": "npm:^1.0.0-next.3"
     "@litsx/babel-plugin-transform-litsx-scoped-elements": "npm:^1.0.0-next.1"
     "@litsx/typescript-session": "npm:^1.0.0-next.0"
   peerDependencies:
@@ -1546,7 +1546,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@litsx/babel-preset-react-compat@npm:^1.0.0-next.1, @litsx/babel-preset-react-compat@workspace:packages/babel-preset-react-compat":
+"@litsx/babel-preset-react-compat@npm:^1.0.0-next.2, @litsx/babel-preset-react-compat@workspace:packages/babel-preset-react-compat":
   version: 0.0.0-use.local
   resolution: "@litsx/babel-preset-react-compat@workspace:packages/babel-preset-react-compat"
   dependencies:
@@ -1554,10 +1554,10 @@ __metadata:
     "@babel/helper-plugin-utils": "npm:^8.0.1"
     "@babel/plugin-syntax-jsx": "npm:^8.0.1"
     "@litsx/babel-plugin-litsx-proptypes": "npm:^1.0.0-next.1"
-    "@litsx/babel-plugin-shared-hooks": "npm:^1.0.0-next.1"
-    "@litsx/babel-plugin-transform-jsx-html-template": "npm:^1.0.0-next.2"
+    "@litsx/babel-plugin-shared-hooks": "npm:^1.0.0-next.2"
+    "@litsx/babel-plugin-transform-jsx-html-template": "npm:^1.0.0-next.3"
     "@litsx/babel-plugin-transform-litsx-scoped-elements": "npm:^1.0.0-next.1"
-    "@litsx/babel-preset-litsx": "npm:^1.0.0-next.2"
+    "@litsx/babel-preset-litsx": "npm:^1.0.0-next.3"
   peerDependencies:
     "@babel/core": ^8.0.0
   languageName: unknown
@@ -1571,10 +1571,10 @@ __metadata:
     "@babel/parser": "npm:^8.0.4"
     "@babel/plugin-transform-typescript": "npm:^8.0.1"
     "@babel/types": "npm:^8.0.4"
-    "@litsx/authoring": "npm:^1.0.0-next.1"
-    "@litsx/babel-plugin-transform-jsx-html-template": "npm:^1.0.0-next.2"
-    "@litsx/babel-preset-litsx": "npm:^1.0.0-next.2"
-    "@litsx/babel-preset-react-compat": "npm:^1.0.0-next.1"
+    "@litsx/authoring": "npm:^1.0.0-next.2"
+    "@litsx/babel-plugin-transform-jsx-html-template": "npm:^1.0.0-next.3"
+    "@litsx/babel-preset-litsx": "npm:^1.0.0-next.3"
+    "@litsx/babel-preset-react-compat": "npm:^1.0.0-next.2"
     "@litsx/typescript-session": "npm:^1.0.0-next.0"
     source-map-js: "npm:^1.2.1"
   languageName: unknown
@@ -1586,8 +1586,8 @@ __metadata:
   dependencies:
     "@lit/context": "npm:^1.1.6"
     "@lit/reactive-element": "npm:^2.1.2"
-    "@litsx/authoring": "npm:^1.0.0-next.1"
-    "@litsx/scoped-registry-shim": "npm:^1.0.0-next.0"
+    "@litsx/authoring": "npm:^1.0.0-next.2"
+    "@litsx/scoped-registry-shim": "npm:^1.0.0-next.1"
     lit: "npm:^3.3.3"
   peerDependencies:
     lit: ">=3"
@@ -1614,7 +1614,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@litsx/scoped-registry-shim@npm:^1.0.0-next.0, @litsx/scoped-registry-shim@workspace:packages/scoped-registry-shim":
+"@litsx/scoped-registry-shim@npm:^1.0.0-next.1, @litsx/scoped-registry-shim@workspace:packages/scoped-registry-shim":
   version: 0.0.0-use.local
   resolution: "@litsx/scoped-registry-shim@workspace:packages/scoped-registry-shim"
   languageName: unknown

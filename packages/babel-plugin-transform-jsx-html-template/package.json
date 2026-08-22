@@ -1,6 +1,6 @@
 {
   "name": "@litsx/babel-plugin-transform-jsx-html-template",
-  "version": "1.0.0-next.2",
+  "version": "1.0.0-next.3",
   "description": "Transforms JSX trees into lit-html template literals",
   "author": "LitSX Team",
   "type": "module",
@@ -49,7 +49,7 @@
     "@babel/parser": "^8.0.4",
     "@babel/plugin-syntax-jsx": "^8.0.1",
     "@babel/types": "^8.0.4",
-    "@litsx/authoring": "^1.0.0-next.1",
+    "@litsx/authoring": "^1.0.0-next.2",
     "source-map-js": "^1.2.1"
   },
   "devDependencies": {

@@ -1,5 +1,15 @@
 # @litsx/jsx-authoring
 
+## 1.0.0-next.2
+
+### Patch Changes
+
+- dbda7c3: Preserve standard HTML, ARIA, and data attributes on local and imported LitSX
+  component hosts. Runtime spreads now keep those attributes out of native
+  component rest-props bags, retain JSX source precedence, and use the same
+  attribute classification in browser and SSR output. Expand the native JSX type
+  surface for standard custom-element host attributes.
+
 ## 1.0.0-next.1
 
 ### Patch Changes

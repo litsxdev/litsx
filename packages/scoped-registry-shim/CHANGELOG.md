@@ -1,5 +1,11 @@
 # @litsx/scoped-registry-shim
 
+## 1.0.0-next.1
+
+### Patch Changes
+
+- 4106a37: Compile `SuspenseList.revealOrder` as a property for native and React-compatible JSX, including string literals, aliases, and namespace imports. Replay properties assigned before a scoped custom element upgrade through the real class accessors so React Context providers initialize and propagate updates in light DOM.
+
 ## 1.0.0-next.0
 
 ### Major Changes

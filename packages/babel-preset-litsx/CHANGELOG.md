@@ -1,5 +1,35 @@
 # @litsx/babel-preset-litsx
 
+## 1.0.0-next.3
+
+### Minor Changes
+
+- a816706: Support object-valued native JSX `style` bindings through Lit's official
+  `styleMap` directive. Dynamic bindings can switch between CSS text, style maps,
+  `null`, and `undefined`; spread styles now preserve the same camelCase, dashed,
+  custom-property, update, removal, SSR, and hydration semantics.
+
+### Patch Changes
+
+- 4106a37: Compile `SuspenseList.revealOrder` as a property for native and React-compatible JSX, including string literals, aliases, and namespace imports. Replay properties assigned before a scoped custom element upgrade through the real class accessors so React Context providers initialize and propagate updates in light DOM.
+- 66003e8: Keep React lazy loaders out of generated static elements maps. Lazy custom
+  elements are now registered only through ensureLazyElement after their loader
+  resolves, while the host retains the scoped registry required for registration.
+  Dynamic import module namespaces are unwrapped through their default export
+  before the constructor is defined. Native LitSX now exposes `lazy()` from core
+  and lowers it through the same shared transform as React compatibility.
+- dbda7c3: Preserve standard HTML, ARIA, and data attributes on local and imported LitSX
+  component hosts. Runtime spreads now keep those attributes out of native
+  component rest-props bags, retain JSX source precedence, and use the same
+  attribute classification in browser and SSR output. Expand the native JSX type
+  surface for standard custom-element host attributes.
+- Updated dependencies [a816706]
+- Updated dependencies [f097f04]
+- Updated dependencies [dbda7c3]
+  - @litsx/babel-plugin-transform-jsx-html-template@1.0.0-next.3
+  - @litsx/babel-plugin-shared-hooks@1.0.0-next.2
+  - @litsx/authoring@1.0.0-next.2
+
 ## 1.0.0-next.2
 
 ### Minor Changes
