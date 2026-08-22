@@ -41,11 +41,11 @@
     "@babel/core": ">=7"
   },
   "dependencies": {
-    "@babel/helper-plugin-utils": "^7.28.6",
+    "@babel/helper-plugin-utils": "^7.29.7",
     "@litsx/prop-types": "^0.2.2"
   },
   "devDependencies": {
-    "@babel/core": "^7.29.6"
+    "@babel/core": "^7.29.7"
   },
   "scripts": {
     "build": "../../node_modules/.bin/rollup --config rollup.config.js",
