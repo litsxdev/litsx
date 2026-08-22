@@ -1423,16 +1423,6 @@ export function EarlyCard() {
 `,
       "utf8",
     );
-    fs.writeFileSync(
-      path.join(directory, "late.tsx"),
-      `
-export function LateCard() {
-  return <article class="text-white">Late</article>;
-}
-`,
-      "utf8",
-    );
-
     const server = await createServer({
       configFile: false,
       root: directory,
@@ -1462,6 +1452,15 @@ export function LateCard() {
       const early = await server.ssrLoadModule("/early.tsx");
       assert.doesNotMatch(early.EarlyCard.styles[0].cssText, /--colors-white:/);
 
+      fs.writeFileSync(
+        path.join(directory, "late.tsx"),
+        `
+export function LateCard() {
+  return <article class="text-white">Late</article>;
+}
+`,
+        "utf8",
+      );
       const late = await server.ssrLoadModule("/late.tsx");
       assert.match(late.LateCard.styles[0].cssText, /--colors-white:/);
       assert.match(late.LateCard.styles[1].cssText, /var\(--colors-white\)/);
