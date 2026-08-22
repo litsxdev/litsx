@@ -90,7 +90,6 @@ function parseFile(filePath) {
     sourceType: "unambiguous",
     plugins: [
       "jsx",
-      "importAssertions",
       "importAttributes",
       "dynamicImport",
       "topLevelAwait",
