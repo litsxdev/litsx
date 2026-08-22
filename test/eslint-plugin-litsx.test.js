@@ -1,6 +1,7 @@
 import assert from "node:assert";
 import { describe, it } from "vitest";
 import plugin from "../packages/eslint-plugin-litsx/src/index.js";
+import packageJson from "../packages/eslint-plugin-litsx/package.json" with { type: "json" };
 
 async function createFlatESLint(options) {
   const { ESLint } = await import("eslint");
@@ -11,11 +12,12 @@ describe("@litsx/eslint-plugin", () => {
   it("exports standard JSX rules without a syntax processor", () => {
     assert.deepStrictEqual(plugin.processors, undefined);
     assert.ok(plugin.rules["no-native-classname"]);
-    assert.ok(plugin.rules["no-react-memo"]);
+    assert.strictEqual(plugin.rules["no-react-memo"], undefined);
     assert.ok(plugin.rules["rules-of-hooks"]);
     assert.ok(plugin.rules["valid-component-name"]);
     assert.ok(plugin.configs.recommended);
     assert.ok(plugin.configs["recommended-flat"]);
+    assert.strictEqual(plugin.meta.version, packageJson.version);
   });
 
   it("reports shared component-name and hook diagnostics with stable codes", async () => {
@@ -79,6 +81,6 @@ describe("@litsx/eslint-plugin", () => {
     );
 
     assert.match(result.output, /class="cta"/);
-    assert.ok(result.messages.some((message) => message.ruleId === "@litsx/no-react-memo"));
+    assert.deepStrictEqual(result.messages, []);
   });
 });

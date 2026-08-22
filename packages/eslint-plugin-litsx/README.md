@@ -23,7 +23,6 @@ export default [litsx.configs["recommended-flat"]];
 The recommended preset enables:
 
 - `@litsx/no-native-classname`
-- `@litsx/no-react-memo`
 - `@litsx/valid-component-name`
 - `@litsx/rules-of-hooks`
 
@@ -41,3 +40,7 @@ the same finding across tools.
 `no-native-classname` safely autofixes `className` to `class` on native elements.
 Formatting remains the responsibility of standard Prettier JSX/TSX support or
 another formatter.
+
+React migration semantics such as `memo(...)` are diagnosed by the optional
+react-compat compiler pipeline, which owns their lowering context. They are not
+native JSX lint rules.

@@ -1491,7 +1491,7 @@ __metadata:
   dependencies:
     "@babel/core": "npm:^8.0.1"
     "@babel/helper-plugin-utils": "npm:^8.0.1"
-    "@litsx/authoring": "npm:^1.0.0-next.1"
+    "@litsx/authoring": "npm:^1.0.0-next.2"
   peerDependencies:
     "@babel/core": ^8.0.0
   languageName: unknown
@@ -1600,12 +1600,9 @@ __metadata:
   dependencies:
     "@babel/core": "npm:^8.0.1"
     "@babel/eslint-parser": "npm:^8.0.1"
-    "@babel/plugin-syntax-jsx": "npm:^8.0.1"
-    "@babel/plugin-syntax-typescript": "npm:^8.0.3"
-    "@litsx/authoring": "npm:^1.0.0-next.1"
+    "@litsx/authoring": "npm:^1.0.0-next.2"
   peerDependencies:
     eslint: ^9.0.0 || ^10.0.0
-    typescript: ">=5"
   languageName: unknown
   linkType: soft
 
@@ -1644,7 +1641,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@litsx/storybook@workspace:packages/storybook"
   dependencies:
-    "@litsx/authoring": "npm:^1.0.0-next.1"
+    "@litsx/authoring": "npm:^1.0.0-next.2"
     "@litsx/compiler": "npm:^1.0.0-next.0"
     "@litsx/vite-plugin": "npm:^1.0.0-next.0"
     "@storybook/web-components-vite": "npm:10.5.10"

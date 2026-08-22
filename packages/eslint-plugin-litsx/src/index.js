@@ -1,6 +1,6 @@
 import babelEslintParser from "@babel/eslint-parser";
+import packageJson from "../package.json" with { type: "json" };
 import noNativeClassname from "./rules/no-native-classname.js";
-import noReactMemo from "./rules/no-react-memo.js";
 import rulesOfHooks from "./rules/rules-of-hooks.js";
 import validComponentName from "./rules/valid-component-name.js";
 
@@ -26,7 +26,6 @@ const languageOptions = {
 };
 const recommendedRules = {
   "@litsx/no-native-classname": "warn",
-  "@litsx/no-react-memo": "warn",
   "@litsx/rules-of-hooks": "error",
   "@litsx/valid-component-name": "error",
 };
@@ -34,11 +33,10 @@ const recommendedRules = {
 const plugin = {
   meta: {
     name: "@litsx/eslint-plugin",
-    version: "0.4.0",
+    version: packageJson.version,
   },
   rules: {
     "no-native-classname": noNativeClassname,
-    "no-react-memo": noReactMemo,
     "rules-of-hooks": rulesOfHooks,
     "valid-component-name": validComponentName,
   },
