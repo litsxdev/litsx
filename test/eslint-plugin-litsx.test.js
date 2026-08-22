@@ -3,9 +3,8 @@ import { describe, it } from "vitest";
 import plugin from "../packages/eslint-plugin-litsx/src/index.js";
 
 async function createFlatESLint(options) {
-  const moduleNamespace = await import("eslint/use-at-your-own-risk");
-  const Ctor = moduleNamespace.FlatESLint || moduleNamespace.ESLint || moduleNamespace.default?.FlatESLint;
-  return new Ctor(options);
+  const { ESLint } = await import("eslint");
+  return new ESLint(options);
 }
 
 describe("@litsx/eslint-plugin", () => {

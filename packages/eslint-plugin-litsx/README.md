@@ -10,6 +10,8 @@ The plugin uses Babel's normal JSX/TypeScript parser support. It does not virtua
 npm install -D eslint @litsx/eslint-plugin
 ```
 
+ESLint 9 and ESLint 10 are supported. LitSX uses ESLint's flat configuration API.
+
 ## Flat config
 
 ```js

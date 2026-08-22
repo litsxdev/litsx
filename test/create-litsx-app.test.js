@@ -85,7 +85,7 @@ describe("create-litsx-app", () => {
     assert.ok(packageJson.devDependencies.playwright);
     assert.ok(packageJson.devDependencies.prettier);
     assert.ok(!packageJson.devDependencies["prettier-plugin-litsx"]);
-    assert.ok(packageJson.devDependencies.eslint);
+    assert.strictEqual(packageJson.devDependencies.eslint, "^10.9.0");
     assert.ok(packageJson.devDependencies.vitest);
     assert.strictEqual(packageJson.scripts.lint, "eslint .");
     assert.strictEqual(packageJson.scripts.test, "vitest run");

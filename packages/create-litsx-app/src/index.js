@@ -126,7 +126,7 @@ function createBasePackageJson(packageName) {
       "@litsx/vite-plugin": publishedPackageVersions["@litsx/vite-plugin"],
       "@vitest/browser": "^4.1.11",
       "@vitest/browser-playwright": "^4.1.11",
-      "eslint": "^9.0.0",
+      "eslint": "^10.9.0",
       "playwright": "^1.62.1",
       "prettier": "^3.8.3",
       "typescript": "^6.0.0",

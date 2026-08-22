@@ -46,7 +46,7 @@
     "@vitest/coverage-v8": "^4.1.11",
     "@webcomponents/scoped-custom-element-registry": "^0.0.10",
     "diff": "^9.0.0",
-    "eslint": "^9.39.5",
+    "eslint": "^10.9.0",
     "happy-dom": "^20.11.6",
     "jsdom": "^29.1.1",
     "magic-string": "^0.30.21",
