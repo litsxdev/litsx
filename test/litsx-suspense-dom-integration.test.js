@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import assert from "assert";
-import { LitElement, html } from "lit";
+import { LitElement, html, render } from "lit";
 import { afterEach, describe, it } from "vitest";
 import {
   SuspenseBoundary,
@@ -87,6 +87,35 @@ afterEach(() => {
 });
 
 describe("litsx suspense DOM integration", () => {
+  it("commits revealOrder through the SuspenseList property binding", async () => {
+    const listTag = "litsx-suspense-list-property-binding";
+    class TestList extends SuspenseList {}
+
+    if (!customElements.get(listTag)) {
+      customElements.define(listTag, TestList);
+    }
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const renderList = (revealOrder, tail) => render(html`
+      <litsx-suspense-list-property-binding
+        .revealOrder=${revealOrder}
+        tail=${tail}
+      ></litsx-suspense-list-property-binding>
+    `, container);
+    renderList("forwards", "hidden");
+
+    const list = container.querySelector(listTag);
+    await list.updateComplete;
+    assert.strictEqual(list.revealOrder, "forwards");
+    assert.strictEqual(list.tail, "hidden");
+
+    renderList("backwards", "collapsed");
+    await list.updateComplete;
+    assert.strictEqual(list.revealOrder, "backwards");
+    assert.strictEqual(list.tail, "collapsed");
+  });
+
   it("restores callback and object refs after a cold soft suspension", async () => {
     const callbackTag = nextTag("litsx-suspended-callback-ref");
     const objectTag = nextTag("litsx-suspended-object-ref");

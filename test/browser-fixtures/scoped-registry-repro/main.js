@@ -1,6 +1,11 @@
 import { LitElement, html } from "lit";
 import { render as renderLightDom } from "lit/html.js";
 import { SuspenseBoundary } from "../../../packages/core/src/index.js";
+import {
+  LitsxContextProviderElement,
+  createContext,
+  useContext,
+} from "../../../packages/core/src/context.js";
 import { LightDomMixin, ShadowDomMixin } from "../../../packages/core/src/elements/index.js";
 import { bindRendererContext } from "../../../packages/core/src/rendering.js";
 import { renderWithHooks } from "../../../packages/core/src/runtime-suspense.js";
@@ -269,6 +274,89 @@ window.__repro = {
         registryRestored: host.registry?.get(childTag) === InitChild,
         calls: [...calls],
       },
+    };
+  },
+
+  async probeScopedContextProvider() {
+    const providerTag = "probe-context-provider";
+    const readerTag = "probe-context-reader";
+    const hostTag = "probe-context-host";
+    const ThemeContext = createContext("default");
+
+    class ContextReader extends LitElement {
+      render() {
+        return renderWithHooks(
+          this,
+          () => html`<span data-theme>${useContext(ThemeContext)}</span>`,
+        );
+      }
+    }
+
+    class ContextHost extends LightDomMixin(LitElement) {
+      static properties = {
+        theme: { attribute: false },
+      };
+
+      static elements = {
+        [providerTag]: LitsxContextProviderElement,
+        [readerTag]: ContextReader,
+      };
+
+      constructor() {
+        super();
+        this.theme = "violet";
+      }
+
+      render() {
+        return html`
+          <probe-context-provider
+            .context=${ThemeContext}
+            .value=${this.theme}
+          >
+            <probe-context-reader></probe-context-reader>
+            <button @click=${() => {
+              this.theme = this.theme === "violet" ? "coral" : "violet";
+            }}>toggle</button>
+          </probe-context-provider>
+        `;
+      }
+    }
+
+    defineTestElement(hostTag, ContextHost);
+    const host = document.createElement(hostTag);
+    document.body.appendChild(host);
+    await host.updateComplete;
+    const provider = host.querySelector(providerTag);
+    const reader = provider?.querySelector(readerTag);
+    await reader?.updateComplete;
+    const initial = reader?.shadowRoot?.querySelector("[data-theme]")?.textContent ?? null;
+
+    provider?.querySelector("button")?.click();
+    await host.updateComplete;
+    await reader?.updateComplete;
+    const updated = reader?.shadowRoot?.querySelector("[data-theme]")?.textContent ?? null;
+
+    host.theme = false;
+    await host.updateComplete;
+    await reader?.updateComplete;
+    const falseValue = reader?.shadowRoot?.querySelector("[data-theme]")?.textContent ?? null;
+
+    host.remove();
+    document.body.appendChild(host);
+    host.theme = "reconnected";
+    await host.updateComplete;
+    await reader?.updateComplete;
+
+    return {
+      initial,
+      updated,
+      falseValue,
+      reconnected: reader?.shadowRoot?.querySelector("[data-theme]")?.textContent ?? null,
+      providerInitialized: Boolean(provider?._provider),
+      contextIsExpando: Object.hasOwn(provider, "context"),
+      valueIsExpando: Object.hasOwn(provider, "value"),
+      sameProvider: host.querySelector(providerTag) === provider,
+      sameReader: provider?.querySelector(readerTag) === reader,
     };
   },
 

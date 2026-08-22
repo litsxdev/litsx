@@ -601,6 +601,138 @@ window.__litsxLazyHydrated = true;
   }
 });
 
+test("hydrates React Context through a scoped light-DOM provider and propagates updates", async ({
+  page,
+}) => {
+  const tempRoot = path.join(repoRoot, "test-results");
+  await fs.mkdir(tempRoot, { recursive: true });
+  const tempDir = await fs.mkdtemp(path.join(tempRoot, "litsx-react-context-"));
+  const srcDir = path.join(tempDir, "src");
+  await fs.mkdir(srcDir, { recursive: true });
+
+  await fs.writeFile(path.join(srcDir, "context-root.tsx"), `
+import React, { createContext, useContext, useState } from "react";
+
+const ThemeContext = createContext("default");
+
+function ThemeValue() {
+  const theme = useContext(ThemeContext);
+  return <p data-theme>{theme}</p>;
+}
+
+export function ContextRoot() {
+  const [theme, setTheme] = useState("violet");
+  return (
+    <ThemeContext.Provider value={theme}>
+      <ThemeValue />
+      <button onClick={() => setTheme(current => current === "violet" ? "coral" : "violet")}>
+        toggle
+      </button>
+    </ThemeContext.Provider>
+  );
+}
+`);
+  await fs.writeFile(path.join(srcDir, "main.js"), `
+const root = await import("./context-root.tsx");
+const { registerHydrationModules } = await import("@litsx/ssr/hydration");
+await registerHydrationModules([root]);
+`);
+
+  const server = await createSsrDevServer({
+    root: tempDir,
+    vite: isolatedViteOptions(tempDir),
+    litsx: { reactCompat: true },
+    clientEntry: "./src/main.js",
+    bootstrap: {
+      content: `
+const root = document.querySelector("context-root");
+window.__litsxContextSsrNodes = {
+  root,
+  provider: root?.querySelector("litsx-context-provider"),
+  value: root?.querySelector("[data-theme]"),
+};
+const { hydratePage } = await import("@litsx/ssr/hydration");
+await hydratePage({ register: () => import("/src/main.js") });
+window.__litsxContextHydrated = true;
+`,
+    },
+    logLevel: "silent",
+    host: "127.0.0.1",
+    strictPort: false,
+    elements(loader) {
+      return {
+        "context-root": async () =>
+          (await loader("./src/context-root.tsx")).ContextRoot,
+      };
+    },
+    render({ html: serverHtml }) {
+      return serverHtml`<context-root></context-root>`;
+    },
+  });
+  await server.listen();
+
+  try {
+    const consoleErrors = [];
+    const pageErrors = [];
+    page.on("console", (message) => {
+      if (message.type() === "error") consoleErrors.push(message.text());
+    });
+    page.on("pageerror", (error) => pageErrors.push(error.stack || error.message));
+
+    await page.goto(server.resolvedUrls.local[0]);
+    await page.waitForFunction(() => window.__litsxContextHydrated === true);
+    await page.waitForFunction(() =>
+      document.querySelector("context-root [data-theme]")?.textContent === "violet"
+    );
+    await page.evaluate(() => {
+      const root = document.querySelector("context-root");
+      window.__litsxHydratedContextNodes = {
+        provider: root?.querySelector("litsx-context-provider"),
+        value: root?.querySelector("[data-theme]"),
+      };
+    });
+
+    await page.locator("context-root button").click();
+    await page.waitForFunction(() =>
+      document.querySelector("context-root [data-theme]")?.textContent === "coral"
+    );
+    await page.locator("context-root button").click();
+    await page.waitForFunction(() =>
+      document.querySelector("context-root [data-theme]")?.textContent === "violet"
+    );
+
+    const result = await page.evaluate(() => {
+      const root = document.querySelector("context-root");
+      const provider = root.querySelector("litsx-context-provider");
+      const value = root.querySelector("[data-theme]");
+      return {
+        text: value.textContent,
+        providerInitialized: Boolean(provider._provider),
+        contextIsExpando: Object.hasOwn(provider, "context"),
+        valueIsExpando: Object.hasOwn(provider, "value"),
+        sameRoot: root === window.__litsxContextSsrNodes.root,
+        sameProviderAcrossUpdates: provider === window.__litsxHydratedContextNodes.provider,
+        sameValueAcrossUpdates: value === window.__litsxHydratedContextNodes.value,
+      };
+    });
+
+    expect(result).toEqual({
+      text: "violet",
+      providerInitialized: true,
+      contextIsExpando: false,
+      valueIsExpando: false,
+      sameRoot: true,
+      sameProviderAcrossUpdates: true,
+      sameValueAcrossUpdates: true,
+    });
+    expect(consoleErrors).toEqual([]);
+    expect(pageErrors).toEqual([]);
+  } finally {
+    await server.close();
+    await fs.rm(tempDir, { recursive: true, force: true });
+  }
+});
+
 test("hydrates native object style bindings without replacing nodes and updates removals", async ({
   page,
 }) => {

@@ -444,7 +444,7 @@ describe("react compat internal lazy", () => {
 
     assert.match(
       code,
-      /<suspense-list revealOrder=['"]forwards['"]>/
+      /<suspense-list \.revealOrder=['"]forwards['"]>/
     );
     assert.match(
       code,

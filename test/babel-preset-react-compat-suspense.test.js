@@ -97,7 +97,7 @@ describe("@litsx/babel-preset-react-compat suspense boundaries", () => {
       code,
       /static elements = \{[\s\S]*"suspense-boundary": SuspenseBoundary[\s\S]*"suspense-list": SuspenseList[\s\S]*\}|static elements = \{[\s\S]*"suspense-list": SuspenseList[\s\S]*"suspense-boundary": SuspenseBoundary[\s\S]*\}/
     );
-    assert.match(code, /<suspense-list revealOrder=['"]forwards['"]>/);
+    assert.match(code, /<suspense-list \.revealOrder=['"]forwards['"]>/);
     const boundaryMatches = code.match(/<suspense-boundary/g) || [];
     assert.strictEqual(boundaryMatches.length, 2);
     assert.doesNotMatch(code, /suspenseBoundaryList\(/);
@@ -184,10 +184,45 @@ describe("@litsx/babel-preset-react-compat suspense boundaries", () => {
       code,
       /import \{[^}]*SuspenseList[^}]*SuspenseBoundary[^}]*\} from ["']@litsx\/core["']|import \{[^}]*SuspenseBoundary[^}]*SuspenseList[^}]*\} from ["']@litsx\/core["']/
     );
-    assert.match(code, /<suspense-list revealOrder=['"]forwards['"]>/);
+    assert.match(code, /<suspense-list \.revealOrder=['"]forwards['"]>/);
     assert.match(code, /<suspense-boundary/);
     assert.doesNotMatch(code, /<React\.Suspense/);
     assert.doesNotMatch(code, /<React\.SuspenseList/);
+  });
+
+  it("keeps native @litsx/core SuspenseList props as property bindings in react-compat", () => {
+    const cases = [
+      {
+        importLine: 'import { SuspenseList } from "@litsx/core";',
+        tag: "SuspenseList",
+      },
+      {
+        importLine: 'import { SuspenseList as RevealList } from "@litsx/core";',
+        tag: "RevealList",
+      },
+      {
+        importLine: 'import * as LitSX from "@litsx/core";',
+        tag: "LitSX.SuspenseList",
+      },
+    ];
+
+    for (const { importLine, tag } of cases) {
+      const source = [
+        importLine,
+        'const order = "backwards";',
+        `export const Screen = () => <>`,
+        `  <${tag} revealOrder="forwards" tail="hidden" />`,
+        `  <${tag} revealOrder={"together"} tail="collapsed" />`,
+        `  <${tag} revealOrder={order} />`,
+        `</>;`,
+      ].join("\n");
+
+      const code = run(source);
+      assert.match(code, /\.revealOrder="forwards" tail="hidden"/);
+      assert.match(code, /\.revealOrder=\{"together"\} tail="collapsed"/);
+      assert.match(code, /\.revealOrder=\{order\}/);
+      assert.doesNotMatch(code, /(?:^|\s)revealOrder=/);
+    }
   });
 
   it("emits null renderers when suspense has no fallback or content", () => {
@@ -310,7 +345,7 @@ describe("@litsx/babel-preset-react-compat suspense boundaries", () => {
 
     const code = run(source);
 
-    assert.match(code, /<suspense-list revealOrder=\"forwards\">/);
+    assert.match(code, /<suspense-list \.revealOrder=\"forwards\">/);
     assert.doesNotMatch(code, /key=\"outer\"/);
     assert.match(code, /<suspense-boundary/);
   });
@@ -462,7 +497,7 @@ describe("@litsx/babel-preset-react-compat suspense boundaries", () => {
     assert.match(code, /import \{[^}]*LightDomMixin[^}]*\} from "@litsx\/core\/elements";/);
     assert.match(code, /ensureLazyElement\(this, "alpha-panel", AlphaPanel\);/);
     assert.match(code, /<error-boundary/);
-    assert.match(code, /<suspense-list revealOrder="forwards">/);
+    assert.match(code, /<suspense-list \.revealOrder=\$\{"forwards"\}>/);
 
     const boundaryMatches = code.match(/<suspense-boundary/g) || [];
     assert.strictEqual(boundaryMatches.length, 2);

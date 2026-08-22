@@ -211,9 +211,20 @@ export default declare((api) => {
         )
     );
 
+    const normalizedAttributes = attributes.map((attr) => {
+      const cloned = t.cloneNode(attr, true);
+      if (
+        t.isJSXAttribute(cloned) &&
+        t.isJSXIdentifier(cloned.name, { name: "revealOrder" })
+      ) {
+        cloned.name = t.jsxIdentifier(".revealOrder");
+      }
+      return cloned;
+    });
+
     return createComponentElement(
       "SuspenseList",
-      attributes.map((attr) => t.cloneNode(attr, true)),
+      normalizedAttributes,
       node.children.map((child) => t.cloneNode(child, true)),
       "_litsxSuspenseTransformed"
     );

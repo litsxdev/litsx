@@ -146,6 +146,22 @@ describe("scoped registry browser fixture", () => {
     });
   }, 30000);
 
+  it("propagates scoped React Context bindings in light DOM across updates and reconnects", async () => {
+    const result = await runProbe("probeScopedContextProvider");
+
+    assert.deepStrictEqual(result, {
+      initial: "violet",
+      updated: "coral",
+      falseValue: "false",
+      reconnected: "reconnected",
+      providerInitialized: true,
+      contextIsExpando: false,
+      valueIsExpando: false,
+      sameProvider: true,
+      sameReader: true,
+    });
+  }, 30000);
+
   it("resolves the nearest constructor for nested light-dom scopes sharing a tag", async () => {
     const result = await runProbe("probeNestedLightScopes");
 

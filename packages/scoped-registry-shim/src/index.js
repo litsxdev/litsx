@@ -408,7 +408,45 @@ function getRuntime() {
     }
   }
 
+  function takePreUpgradeProperties(instance, prototype) {
+    const properties = [];
+
+    for (const name of Reflect.ownKeys(instance)) {
+      const ownDescriptor = Object.getOwnPropertyDescriptor(instance, name);
+      if (!ownDescriptor?.configurable || !("value" in ownDescriptor)) {
+        continue;
+      }
+
+      let current = prototype;
+      let setter = null;
+      while (current) {
+        const descriptor = Object.getOwnPropertyDescriptor(current, name);
+        if (descriptor) {
+          setter = descriptor.set;
+          break;
+        }
+        current = Object.getPrototypeOf(current);
+      }
+
+      if (typeof setter !== "function") {
+        continue;
+      }
+
+      properties.push([name, ownDescriptor.value]);
+      delete instance[name];
+    }
+
+    return properties;
+  }
+
   function customize(instance, definition, isUpgrade = false) {
+    // Lit can commit a property binding before a scoped definition becomes
+    // available. Preserve those pre-upgrade values, but remove the own data
+    // properties so they cannot shadow accessors on the real element class.
+    const preUpgradeProperties = takePreUpgradeProperties(
+      instance,
+      definition.elementClass.prototype,
+    );
     Object.setPrototypeOf(instance, definition.elementClass.prototype);
     definitionForElement.set(instance, definition);
     upgradingInstance = instance;
@@ -417,6 +455,10 @@ function getRuntime() {
     } catch {
       patchHTMLElement(definition.elementClass);
       new definition.elementClass();
+    }
+
+    for (const [name, value] of preUpgradeProperties) {
+      instance[name] = value;
     }
 
     if (definition.attributeChangedCallback) {

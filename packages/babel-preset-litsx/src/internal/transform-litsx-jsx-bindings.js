@@ -475,8 +475,9 @@ function transformOpeningElement(path, state, t) {
 
     if (
       state.__litsxDeferReactBoundaryAttributes &&
-      (REACT_BOUNDARY_ATTRIBUTES.get(tagName)?.has(rawName) ||
-        REACT_BOUNDARY_ATTRIBUTES.get(reactBoundaryKind)?.has(rawName))
+      (REACT_BOUNDARY_ATTRIBUTES.get(reactBoundaryKind)?.has(rawName) ||
+        (tagName === "ErrorBoundary" &&
+          REACT_BOUNDARY_ATTRIBUTES.get(tagName)?.has(rawName)))
     ) {
       continue;
     }

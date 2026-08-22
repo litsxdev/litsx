@@ -11,6 +11,10 @@ import {
 } from "../packages/core/src/context.js";
 import { renderWithHooks } from "../packages/core/src/index.js";
 import { runWithHookHost } from "../packages/core/src/runtime-controller.js";
+import {
+  createLightDomRegistry,
+  ensureLightDomProxy,
+} from "../packages/scoped-registry-shim/src/index.js";
 
 let tagCounter = 0;
 
@@ -194,5 +198,63 @@ describe("react context compat runtime", () => {
       provider.connectedCallback();
       provider.disconnectedCallback();
     });
+  });
+
+  it("propagates scoped light-DOM provider values assigned before upgrade", async () => {
+    const ThemeContext = createContext("default");
+    const providerTag = nextTag("litsx-context-provider-scoped");
+    const readerTag = nextTag("litsx-context-reader-scoped");
+
+    class ContextReader extends LitElement {
+      render() {
+        return renderWithHooks(
+          this,
+          () => html`<span>${useContext(ThemeContext)}</span>`,
+        );
+      }
+    }
+
+    defineElement(readerTag, ContextReader);
+    ensureLightDomProxy(providerTag);
+
+    const host = document.createElement("section");
+    const registry = createLightDomRegistry(host, {});
+    host.innerHTML = `<${providerTag}></${providerTag}>`;
+    const provider = host.firstElementChild;
+
+    // This is the order produced when Lit commits bindings before the light
+    // host has finished installing its scoped definitions.
+    provider.context = ThemeContext;
+    provider.value = "violet";
+    const reader = document.createElement(readerTag);
+    provider.appendChild(reader);
+    document.body.appendChild(host);
+
+    registry.define(providerTag, LitsxContextProviderElement);
+    await reader.updateComplete;
+
+    assert.ok(provider._provider);
+    assert.strictEqual(Object.hasOwn(provider, "context"), false);
+    assert.strictEqual(Object.hasOwn(provider, "value"), false);
+    assert.match(reader.shadowRoot.textContent, /violet/);
+
+    for (const value of ["coral", false, 0, "", null, "violet"]) {
+      provider.value = value;
+      await flush();
+      await reader.updateComplete;
+      assert.strictEqual(
+        reader.shadowRoot.querySelector("span").textContent,
+        value == null ? "" : String(value),
+      );
+    }
+
+    host.remove();
+    document.body.appendChild(host);
+    provider.value = "reconnected";
+    await flush();
+    await reader.updateComplete;
+    assert.match(reader.shadowRoot.textContent, /reconnected/);
+
+    host.remove();
   });
 });

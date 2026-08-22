@@ -213,6 +213,51 @@ describe("@litsx/scoped-registry-shim shim runtime", () => {
     host.remove();
   });
 
+  it("replays properties assigned before upgrade through definition accessors", () => {
+    const tagName = nextTag();
+    const host = document.createElement("section");
+    ensureLightDomProxy(tagName);
+    const registry = createLightDomRegistry(host, {});
+
+    host.innerHTML = `<${tagName}></${tagName}>`;
+    const pending = host.firstElementChild;
+    pending.context = "theme";
+    pending.value = "violet";
+
+    class ProviderLikeElement extends HTMLElement {
+      constructor() {
+        super();
+        this.received = [];
+      }
+
+      set context(value) {
+        this.received.push(["context", value]);
+      }
+
+      get context() {
+        return this.received.at(-1)?.[1];
+      }
+
+      set value(value) {
+        this.received.push(["value", value]);
+      }
+
+      get value() {
+        return this.received.at(-1)?.[1];
+      }
+    }
+
+    registry.define(tagName, ProviderLikeElement);
+    upgradeScopedRegistryTree(host, registry);
+
+    assert.strictEqual(Object.hasOwn(pending, "context"), false);
+    assert.strictEqual(Object.hasOwn(pending, "value"), false);
+    assert.deepStrictEqual(pending.received, [
+      ["context", "theme"],
+      ["value", "violet"],
+    ]);
+  });
+
   it("reuses existing definitions when reconnecting the same host mapping", () => {
     const tagName = nextTag();
     const host = document.createElement("section");
