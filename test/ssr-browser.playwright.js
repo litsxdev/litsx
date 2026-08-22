@@ -31,15 +31,11 @@ test("hydrates imported camelCase props, declared attribute aliases, and spreads
 }) => {
   const tempRoot = path.join(repoRoot, "test-results");
   await fs.mkdir(tempRoot, { recursive: true });
-  const tempDir = await fs.mkdtemp(
-    path.join(tempRoot, "litsx-imported-props-"),
-  );
+  const tempDir = await fs.mkdtemp(path.join(tempRoot, "litsx-imported-props-"));
   const srcDir = path.join(tempDir, "src");
   await fs.mkdir(srcDir, { recursive: true });
 
-  await fs.writeFile(
-    path.join(srcDir, "contract-button.tsx"),
-    `
+  await fs.writeFile(path.join(srcDir, "contract-button.tsx"), `
 export type ContractButtonProps = {
   label?: string;
   iconOnly?: boolean;
@@ -60,11 +56,8 @@ ContractButton.properties = {
   iconOnly: { type: Boolean, reflect: true, attribute: "icon-only" },
   ariaLabel: { type: String, reflect: true, attribute: "aria-label" },
 };
-`,
-  );
-  await fs.writeFile(
-    path.join(srcDir, "contract-root.tsx"),
-    `
+`);
+  await fs.writeFile(path.join(srcDir, "contract-root.tsx"), `
 import { ContractButton } from "./contract-button";
 
 const runtimeProps = { iconOnly: true, ariaLabel: "Runtime spread" };
@@ -87,17 +80,13 @@ export function ContractRoot() {
     </main>
   );
 }
-`,
-  );
-  await fs.writeFile(
-    path.join(srcDir, "main.js"),
-    `
+`);
+  await fs.writeFile(path.join(srcDir, "main.js"), `
 const components = await import("./contract-root.tsx");
 const button = await import("./contract-button.tsx");
 const { registerHydrationModules } = await import("@litsx/ssr/hydration");
 await registerHydrationModules([components, button]);
-`,
-  );
+`);
 
   const server = await createSsrDevServer({
     root: tempDir,
@@ -147,35 +136,23 @@ window.__litsxImportedPropsHydrated = true;
       if (message.type() === "error") consoleErrors.push(message.text());
       if (message.type() === "warning") consoleWarnings.push(message.text());
     });
-    page.on("pageerror", (error) =>
-      pageErrors.push(error.stack || error.message),
-    );
+    page.on("pageerror", (error) => pageErrors.push(error.stack || error.message));
     await page.goto(server.resolvedUrls.local[0]);
-    await page.waitForFunction(
-      () => window.__litsxImportedPropsHydrated === true,
-    );
+    await page.waitForFunction(() => window.__litsxImportedPropsHydrated === true);
     await page.evaluate(async () => {
       const root = document.querySelector("contract-root");
       await root.updateComplete;
-      const hosts = [
-        ...(root.shadowRoot?.querySelectorAll("contract-button") ?? []),
-      ];
+      const hosts = [...(root.shadowRoot?.querySelectorAll("contract-button") ?? [])];
       await Promise.all(hosts.map((host) => host.updateComplete));
-      await new Promise((resolve) =>
-        requestAnimationFrame(() => requestAnimationFrame(resolve)),
-      );
+      await new Promise((resolve) => requestAnimationFrame(() =>
+        requestAnimationFrame(resolve)
+      ));
     });
     await page.waitForFunction(() => {
       const root = document.querySelector("contract-root");
-      const hosts = [
-        ...(root?.shadowRoot?.querySelectorAll("contract-button") ?? []),
-      ];
-      return (
-        hosts.length === 10 &&
-        hosts.every(
-          (host) =>
-            host.updateComplete?.then && typeof host.iconOnly === "boolean",
-        )
+      const hosts = [...(root?.shadowRoot?.querySelectorAll("contract-button") ?? [])];
+      return hosts.length === 10 && hosts.every((host) =>
+        host.updateComplete?.then && typeof host.iconOnly === "boolean"
       );
     });
 
@@ -213,113 +190,21 @@ window.__litsxImportedPropsHydrated = true;
       { caseName: "spread-undefined", iconAttribute: false, branch: "label" },
     ]);
     expect(result.hydrated).toEqual([
-      {
-        caseName: "camel-true",
-        iconOnly: true,
-        ariaLabel: "",
-        iconAttribute: true,
-        ariaAttribute: "",
-        branch: "icon",
-        sameHost: true,
-        sameBranch: true,
-      },
-      {
-        caseName: "camel-false",
-        iconOnly: false,
-        ariaLabel: "",
-        iconAttribute: false,
-        ariaAttribute: "",
-        branch: "label",
-        sameHost: true,
-        sameBranch: true,
-      },
-      {
-        caseName: "attribute-static",
-        iconOnly: true,
-        ariaLabel: "",
-        iconAttribute: true,
-        ariaAttribute: "",
-        branch: "icon",
-        sameHost: true,
-        sameBranch: true,
-      },
-      {
-        caseName: "attribute-dynamic",
-        iconOnly: true,
-        ariaLabel: "",
-        iconAttribute: true,
-        ariaAttribute: "",
-        branch: "icon",
-        sameHost: true,
-        sameBranch: true,
-      },
-      {
-        caseName: "aria-camel",
-        iconOnly: false,
-        ariaLabel: "Camel label",
-        iconAttribute: false,
-        ariaAttribute: "Camel label",
-        branch: "label",
-        sameHost: true,
-        sameBranch: true,
-      },
-      {
-        caseName: "aria-attribute",
-        iconOnly: false,
-        ariaLabel: "Attribute label",
-        iconAttribute: false,
-        ariaAttribute: "Attribute label",
-        branch: "label",
-        sameHost: true,
-        sameBranch: true,
-      },
-      {
-        caseName: "spread-literal",
-        iconOnly: true,
-        ariaLabel: "Literal spread",
-        iconAttribute: true,
-        ariaAttribute: "Literal spread",
-        branch: "icon",
-        sameHost: true,
-        sameBranch: true,
-      },
-      {
-        caseName: "spread-runtime",
-        iconOnly: true,
-        ariaLabel: "Runtime spread",
-        iconAttribute: true,
-        ariaAttribute: "Runtime spread",
-        branch: "icon",
-        sameHost: true,
-        sameBranch: true,
-      },
-      {
-        caseName: "spread-false",
-        iconOnly: false,
-        ariaLabel: null,
-        iconAttribute: false,
-        ariaAttribute: null,
-        branch: "label",
-        sameHost: true,
-        sameBranch: true,
-      },
-      {
-        caseName: "spread-undefined",
-        iconOnly: false,
-        ariaLabel: "",
-        iconAttribute: false,
-        ariaAttribute: "",
-        branch: "label",
-        sameHost: true,
-        sameBranch: true,
-      },
+      { caseName: "camel-true", iconOnly: true, ariaLabel: "", iconAttribute: true, ariaAttribute: "", branch: "icon", sameHost: true, sameBranch: true },
+      { caseName: "camel-false", iconOnly: false, ariaLabel: "", iconAttribute: false, ariaAttribute: "", branch: "label", sameHost: true, sameBranch: true },
+      { caseName: "attribute-static", iconOnly: true, ariaLabel: "", iconAttribute: true, ariaAttribute: "", branch: "icon", sameHost: true, sameBranch: true },
+      { caseName: "attribute-dynamic", iconOnly: true, ariaLabel: "", iconAttribute: true, ariaAttribute: "", branch: "icon", sameHost: true, sameBranch: true },
+      { caseName: "aria-camel", iconOnly: false, ariaLabel: "Camel label", iconAttribute: false, ariaAttribute: "Camel label", branch: "label", sameHost: true, sameBranch: true },
+      { caseName: "aria-attribute", iconOnly: false, ariaLabel: "Attribute label", iconAttribute: false, ariaAttribute: "Attribute label", branch: "label", sameHost: true, sameBranch: true },
+      { caseName: "spread-literal", iconOnly: true, ariaLabel: "Literal spread", iconAttribute: true, ariaAttribute: "Literal spread", branch: "icon", sameHost: true, sameBranch: true },
+      { caseName: "spread-runtime", iconOnly: true, ariaLabel: "Runtime spread", iconAttribute: true, ariaAttribute: "Runtime spread", branch: "icon", sameHost: true, sameBranch: true },
+      { caseName: "spread-false", iconOnly: false, ariaLabel: null, iconAttribute: false, ariaAttribute: null, branch: "label", sameHost: true, sameBranch: true },
+      { caseName: "spread-undefined", iconOnly: false, ariaLabel: "", iconAttribute: false, ariaAttribute: "", branch: "label", sameHost: true, sameBranch: true },
     ]);
     expect(consoleErrors).toEqual([]);
-    expect(
-      consoleWarnings.filter(
-        (message) => !message.startsWith("Lit is in dev mode."),
-      ),
-    ).toEqual([]);
+    expect(consoleWarnings.filter(
+      (message) => !message.startsWith("Lit is in dev mode."),
+    )).toEqual([]);
     expect(pageErrors).toEqual([]);
   } finally {
     await server.close();
@@ -664,9 +549,7 @@ test("composes structural mixin metadata in shadow and light DOM and supports is
 }) => {
   const tempRoot = path.join(repoRoot, "test-results");
   await fs.mkdir(tempRoot, { recursive: true });
-  const tempDir = await fs.mkdtemp(
-    path.join(tempRoot, "litsx-static-composition-"),
-  );
+  const tempDir = await fs.mkdtemp(path.join(tempRoot, "litsx-static-composition-"));
   const srcDir = path.join(tempDir, "src");
   await fs.mkdir(srcDir, { recursive: true });
   await fs.writeFile(
@@ -742,28 +625,18 @@ customElements.define("light-composed", LightComposed);
     const pageErrors = [];
     page.on("pageerror", (error) => pageErrors.push(error.message));
     await page.goto(server.resolvedUrls.local[0]);
-    await page.waitForFunction(
-      () =>
-        document
-          .querySelector("shadow-composed")
-          ?.shadowRoot?.querySelector(".probe")?.textContent === "shadow" &&
-        document
-          .querySelector("shadow-isolated")
-          ?.shadowRoot?.querySelector(".probe")?.textContent === "isolated" &&
-        document.querySelector("light-composed .probe")?.textContent ===
-          "light",
+    await page.waitForFunction(() =>
+      document.querySelector("shadow-composed")?.shadowRoot?.querySelector(".probe")?.textContent === "shadow" &&
+      document.querySelector("shadow-isolated")?.shadowRoot?.querySelector(".probe")?.textContent === "isolated" &&
+      document.querySelector("light-composed .probe")?.textContent === "light"
     );
 
     const result = await page.evaluate(() => {
       const shadow = document.querySelector("shadow-composed");
       const isolated = document.querySelector("shadow-isolated");
       const light = document.querySelector("light-composed");
-      const shadowStyle = getComputedStyle(
-        shadow.shadowRoot.querySelector(".probe"),
-      );
-      const isolatedStyle = getComputedStyle(
-        isolated.shadowRoot.querySelector(".probe"),
-      );
+      const shadowStyle = getComputedStyle(shadow.shadowRoot.querySelector(".probe"));
+      const isolatedStyle = getComputedStyle(isolated.shadowRoot.querySelector(".probe"));
       const lightStyle = getComputedStyle(light.querySelector(".probe"));
       return {
         shadowColor: shadowStyle.color,
@@ -889,11 +762,10 @@ window.__litsxLateCardReady = true;
       const host = document.querySelector("late-card");
       const card = host?.shadowRoot?.querySelector("#late-card");
       const globalCard = document.querySelector("#late-global-card");
-      const componentStyles =
-        host?.constructor?.styles
-          ?.flat(Infinity)
-          .map((style) => style?.cssText ?? "")
-          .join("\n") ?? "";
+      const componentStyles = host?.constructor?.styles
+        ?.flat(Infinity)
+        .map((style) => style?.cssText ?? "")
+        .join("\n") ?? "";
       return {
         radius: getComputedStyle(card).borderRadius,
         variable: getComputedStyle(card)
