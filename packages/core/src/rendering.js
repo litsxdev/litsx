@@ -405,22 +405,25 @@ export function renderWithRendererContext(render, container, value, context, opt
   const projectedCreationHost = context?.projected
     ? options.creationContextHost ?? null
     : null;
+  const useExternalCreationScope = hasExternalScopedRegistry(creationScope);
   const { creationContextHost, ...renderOptions } = options;
   const renderValue = () =>
     render(value, container, {
       ...renderOptions,
       renderMode: resolvedRenderMode,
       ...(context?.host ? { host: context.host } : {}),
-      ...(creationScope && !projectedCreationHost ? { creationScope } : {}),
+      ...(creationScope && (!projectedCreationHost || useExternalCreationScope)
+        ? { creationScope }
+        : {}),
     });
 
   return !context?.host
     ? renderValue()
-    : projectedCreationHost
+    : projectedCreationHost && !useExternalCreationScope
       ? withLightDomCreationContext(projectedCreationHost, renderValue)
-    : hasExternalScopedRegistry(creationScope)
-      ? renderValue()
-      : withLightDomCreationContext(context?.host ?? null, renderValue);
+      : hasExternalScopedRegistry(creationScope)
+        ? renderValue()
+        : withLightDomCreationContext(context?.host ?? null, renderValue);
 }
 
 export function syncRendererHost(

@@ -394,9 +394,7 @@ function syncShadowRootCreationScope(host, shadowRoot, registry) {
   }
 
   let creationScope = null;
-  if (typeof shadowRoot?.importNode === "function" && registry) {
-    creationScope = shadowRoot;
-  } else if (registry && typeof registry.initialize === "function") {
+  if (registry && typeof registry.initialize === "function") {
     const ownerDocument = shadowRoot?.ownerDocument ?? host.ownerDocument;
     if (typeof ownerDocument?.importNode === "function") {
       const cached = shadowRoot[SHADOW_DOM_CREATION_SCOPE];
@@ -404,6 +402,7 @@ function syncShadowRootCreationScope(host, shadowRoot, registry) {
         creationScope = cached.scope;
       } else {
         creationScope = {
+          customElementRegistry: registry,
           importNode(node, deep = false) {
             return ownerDocument.importNode(node, {
               customElementRegistry: registry,
@@ -417,6 +416,8 @@ function syncShadowRootCreationScope(host, shadowRoot, registry) {
         };
       }
     }
+  } else if (typeof shadowRoot?.importNode === "function" && registry) {
+    creationScope = shadowRoot;
   }
 
   if (creationScope) {
