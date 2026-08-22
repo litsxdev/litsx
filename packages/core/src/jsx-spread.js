@@ -10,7 +10,7 @@ import { html, isServer, noChange, nothing } from "lit";
 import { Directive, PartType, directive } from "lit/directive.js";
 import { ifDefined } from "lit/directives/if-defined.js";
 import { ref } from "lit/directives/ref.js";
-import { styleMap } from "lit/directives/style-map.js";
+import { resolveStyle } from "./style.js";
 
 const HTML_ATTRIBUTE_ALIASES = new Map([["acceptCharset", "accept-charset"], ["className", "class"], ["htmlFor", "for"], ["httpEquiv", "http-equiv"]]);
 const NATIVE_PROPERTY_NAMES = new Set(["checked", "files", "indeterminate", "selectedIndex", "value"]);
@@ -247,7 +247,10 @@ function inferClientDescriptor(tagName, rawName, value, component, element, name
   return descriptor;
 }
 
-const descriptorKey = (descriptor) => `${descriptor.kind}:${descriptor.name}`;
+const descriptorKey = (descriptor) =>
+  descriptor.name === "style" && (descriptor.kind === "style" || descriptor.kind === "attribute")
+    ? "style:style"
+    : `${descriptor.kind}:${descriptor.name}`;
 
 function mergeSources(tagName, sources, component, element, namespace, reactCompatEvents = false) {
   sources = routeComponentRestProps(
@@ -334,7 +337,7 @@ function serverBindingValue(descriptor, value) {
     if (descriptor.booleanValue) return ifDefined(value == null ? undefined : String(value));
     return ifDefined(value == null || value === false ? undefined : value === true ? "" : value);
   }
-  if (descriptor.kind === "style") return styleMap(value || {});
+  if (descriptor.kind === "style") return resolveStyle(value);
   if (descriptor.kind === "boolean") return booleanAttributeValue(value);
   if (descriptor.kind === "ref") return ref(value);
   if (descriptor.kind === "event" && descriptor.capture && value != null) return { handleEvent: value, capture: true };
@@ -401,13 +404,56 @@ function eventOptions(descriptor, value) {
   };
 }
 
+function cssPropertyName(name) {
+  return name.includes("-")
+    ? name
+    : name.replace(/(?:^(webkit|moz|ms|o)|)(?=[A-Z])/g, "-$&").toLowerCase();
+}
+
 function clearBinding(element, descriptor, previous) {
   if (!element) return;
   if (descriptor.kind === "event") element.removeEventListener(descriptor.name, previous.value, eventOptions(descriptor, previous.value));
   else if (descriptor.kind === "ref") assignRef(previous.value, undefined);
-  else if (descriptor.kind === "style") for (const name of Object.keys(previous.value || {})) element.style[name] = "";
+  else if (descriptor.kind === "style") {
+    for (const name of previous.styleNames || Object.keys(previous.value || {})) {
+      element.style.removeProperty(cssPropertyName(name));
+    }
+  }
   else if (descriptor.kind === "property") element[descriptor.name] = typeof element[descriptor.name] === "boolean" ? false : undefined;
   else if (descriptor.kind !== "inner-html") element.removeAttribute(descriptor.name);
+}
+
+function applyStyleBinding(element, value, previous) {
+  // A runtime JSX spread is attached to Lit's ElementPart, where an attribute
+  // directive cannot run. Apply styleMap's DOM update semantics directly;
+  // serialization still goes through the official directive on the server.
+  const nextStyle = value || {};
+  const oldNames = previous?.styleNames || new Set(Object.keys(previous?.value || {}));
+  const nextNames = new Set();
+
+  for (const name of oldNames) {
+    if (!(name in nextStyle) || nextStyle[name] == null) {
+      element.style.removeProperty(cssPropertyName(name));
+    }
+  }
+
+  for (const name of Object.keys(nextStyle)) {
+    const next = nextStyle[name];
+    if (next == null) continue;
+    nextNames.add(name);
+    const isImportant = typeof next === "string" && next.endsWith(" !important");
+    if (name.includes("-") || isImportant) {
+      element.style.setProperty(
+        name,
+        isImportant ? next.slice(0, -11) : next,
+        isImportant ? "important" : "",
+      );
+    } else {
+      element.style[name] = next;
+    }
+  }
+
+  return nextNames;
 }
 
 function applyBinding(element, descriptor, value, previous, adoptAttributes) {
@@ -429,10 +475,7 @@ function applyBinding(element, descriptor, value, previous, adoptAttributes) {
     if (previous) assignRef(previous.value, undefined);
     assignRef(value, element);
   } else if (descriptor.kind === "style") {
-    const oldStyle = previous?.value || {};
-    const nextStyle = value || {};
-    for (const name of Object.keys(oldStyle)) if (!(name in nextStyle)) element.style[name] = "";
-    Object.assign(element.style, nextStyle);
+    return applyStyleBinding(element, value, previous);
   } else if (descriptor.kind === "inner-html") {
     const markup = value?.__html == null ? "" : String(value.__html);
     if (element.innerHTML !== markup) element.innerHTML = markup;
@@ -462,7 +505,11 @@ class JsxSpreadDirective extends Directive {
     const updated = new Map();
     for (const binding of next) {
       const key = descriptorKey(binding.descriptor);
-      const previous = this.bindings.get(key);
+      let previous = this.bindings.get(key);
+      if (previous && previous.descriptor.kind !== binding.descriptor.kind) {
+        clearBinding(element, previous.descriptor, previous);
+        previous = null;
+      }
       if (
         binding.descriptor.kind === "property" &&
         binding.descriptor.name === restPropertyName &&
@@ -470,7 +517,8 @@ class JsxSpreadDirective extends Directive {
       ) {
         binding.value = previous?.value ?? element[restPropertyName];
       }
-      applyBinding(element, binding.descriptor, binding.value, previous, adoptAttributes);
+      const styleNames = applyBinding(element, binding.descriptor, binding.value, previous, adoptAttributes);
+      if (styleNames) binding.styleNames = styleNames;
       updated.set(key, binding);
     }
     this.bindings = updated;

@@ -23,6 +23,11 @@ export type LitsxRenderable =
   | undefined
   | Iterable<unknown>;
 
+/** Property map accepted by Lit's styleMap directive in JSX style bindings. */
+export type LitsxStyleInfo = Readonly<
+  Record<string, string | number | null | undefined>
+>;
+
 /** A Lit-native ref. Assignment uses `.value`; cleanup publishes `undefined`. */
 export type LitsxRef<T> =
   | { value: T | undefined }
@@ -121,6 +126,11 @@ export declare function jsxSpreadElement(
   },
   children?: unknown
 ): import("lit").TemplateResult;
+export declare function resolveStyle(
+  value: string | null | undefined,
+): string | null | undefined;
+export declare function resolveStyle(value: LitsxStyleInfo): DirectiveResult;
+export declare function resolveStyle(value: DirectiveResult): DirectiveResult;
 
 /** @internal Compiler/runtime bridge for dynamic <noscript> fallback markup. */
 export declare function __litsxNoscript(
@@ -167,12 +177,8 @@ export interface LitsxBaseAttributes {
   spellcheck?: boolean;
   part?: string;
   exportparts?: string;
-  /**
-   * Inline style attribute text.
-   * LitSX does not support React-style object bindings such as `style={{ color: "red" }}` in authored JSX/TSX.
-   * Use a serialized string value here, or `useStyle(...)` for dynamic host style properties.
-   */
-  style?: string;
+  /** Inline CSS text or a property map applied through Lit's styleMap directive. */
+  style?: string | LitsxStyleInfo | null;
   /**
    * Authored child content passed between component tags.
    * LitSX treats this as projected content for the default slot.

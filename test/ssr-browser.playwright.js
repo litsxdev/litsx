@@ -601,6 +601,141 @@ window.__litsxLazyHydrated = true;
   }
 });
 
+test("hydrates native object style bindings without replacing nodes and updates removals", async ({
+  page,
+}) => {
+  const tempRoot = path.join(repoRoot, "test-results");
+  await fs.mkdir(tempRoot, { recursive: true });
+  const tempDir = await fs.mkdtemp(path.join(tempRoot, "litsx-object-style-"));
+  const srcDir = path.join(tempDir, "src");
+  await fs.mkdir(srcDir, { recursive: true });
+
+  await fs.writeFile(path.join(srcDir, "style-root.tsx"), `
+import { useState } from "@litsx/core";
+
+export function StyleRoot() {
+  const [active, setActive] = useState(true);
+  const computedStyle = active
+    ? { backgroundColor: "tomato", width: "20px", opacity: 0.5, "--accent": "gold" }
+    : { color: "blue", opacity: 1, "--accent": undefined };
+  const spreadProps = {
+    style: active
+      ? { "border-top": "3px solid black", "--spread-accent": "purple" }
+      : "color: green; display: block",
+  };
+
+  return (
+    <main>
+      <div id="object" style={computedStyle}>object</div>
+      <div id="text" style={active ? "color: purple" : null}>text</div>
+      <div id="spread" {...spreadProps}>spread</div>
+      <button id="toggle" on:click={() => setActive(false)}>toggle</button>
+    </main>
+  );
+}
+`);
+  await fs.writeFile(path.join(srcDir, "main.js"), `
+const root = await import("./style-root.tsx");
+const { registerHydrationModules } = await import("@litsx/ssr/hydration");
+await registerHydrationModules([root]);
+`);
+
+  const server = await createSsrDevServer({
+    root: tempDir,
+    vite: isolatedViteOptions(tempDir),
+    clientEntry: "./src/main.js",
+    bootstrap: {
+      content: `
+const host = document.querySelector("style-root");
+const root = host.shadowRoot;
+window.__litsxStyleNodes = [root.querySelector("#object"), root.querySelector("#text"), root.querySelector("#spread")];
+window.__litsxStyleSsr = window.__litsxStyleNodes.map((node) => node.getAttribute("style"));
+const { hydratePage } = await import("@litsx/ssr/hydration");
+await hydratePage({ register: () => import("/src/main.js") });
+window.__litsxStyleHydrated = true;
+`,
+    },
+    logLevel: "silent",
+    host: "127.0.0.1",
+    strictPort: false,
+    elements(loader) {
+      return {
+        "style-root": async () => (await loader("./src/style-root.tsx")).StyleRoot,
+      };
+    },
+    render({ html: serverHtml }) {
+      return serverHtml`<style-root></style-root>`;
+    },
+  });
+  await server.listen();
+
+  try {
+    const pageErrors = [];
+    page.on("pageerror", (error) => pageErrors.push(error.stack || error.message));
+    await page.goto(server.resolvedUrls.local[0]);
+    await page.waitForFunction(() => window.__litsxStyleHydrated === true);
+
+    const initial = await page.evaluate(async () => {
+      const host = document.querySelector("style-root");
+      await host.updateComplete;
+      const nodes = [host.shadowRoot.querySelector("#object"), host.shadowRoot.querySelector("#text"), host.shadowRoot.querySelector("#spread")];
+      return {
+        ssr: window.__litsxStyleSsr,
+        sameNodes: nodes.map((node, index) => node === window.__litsxStyleNodes[index]),
+        styles: nodes.map((node) => ({
+          backgroundColor: node.style.backgroundColor,
+          borderTop: node.style.borderTop,
+          accent: node.style.getPropertyValue("--accent"),
+          spreadAccent: node.style.getPropertyValue("--spread-accent"),
+          color: node.style.color,
+          width: node.style.width,
+          opacity: node.style.opacity,
+        })),
+      };
+    });
+
+    expect(initial.ssr[0]).toContain("background-color:tomato");
+    expect(initial.ssr[2]).toContain("border-top:3px solid black");
+    expect(initial.sameNodes).toEqual([true, true, true]);
+    expect(initial.styles[0]).toMatchObject({ backgroundColor: "tomato", accent: "gold", width: "20px", opacity: "0.5" });
+    expect(initial.styles[1].color).toBe("purple");
+    expect(initial.styles[2]).toMatchObject({ borderTop: "3px solid black", spreadAccent: "purple" });
+
+    const updated = await page.evaluate(async () => {
+      const host = document.querySelector("style-root");
+      host.shadowRoot.querySelector("#toggle").click();
+      await host.updateComplete;
+      const nodes = [host.shadowRoot.querySelector("#object"), host.shadowRoot.querySelector("#text"), host.shadowRoot.querySelector("#spread")];
+      return {
+        sameNodes: nodes.map((node, index) => node === window.__litsxStyleNodes[index]),
+        styles: nodes.map((node) => ({
+          backgroundColor: node.style.backgroundColor,
+          borderTop: node.style.borderTop,
+          accent: node.style.getPropertyValue("--accent"),
+          spreadAccent: node.style.getPropertyValue("--spread-accent"),
+          color: node.style.color,
+          display: node.style.display,
+          width: node.style.width,
+          opacity: node.style.opacity,
+        })),
+      };
+    });
+
+    expect(updated.sameNodes).toEqual([true, true, true]);
+    expect(updated.styles[0]).toEqual({
+      backgroundColor: "", borderTop: "", accent: "", spreadAccent: "",
+      color: "blue", display: "", width: "", opacity: "1",
+    });
+    expect(updated.styles[1].color).toBe("");
+    expect(updated.styles[2]).toMatchObject({
+      borderTop: "", spreadAccent: "", color: "green", display: "block",
+    });
+    expect(pageErrors).toEqual([]);
+  } finally {
+    await server.close();
+  }
+});
+
 test("applies shared Wind4 styles after SSR hydration in shadow and light DOM", async ({
   page,
 }) => {

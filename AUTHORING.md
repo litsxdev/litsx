@@ -71,6 +71,23 @@ Use the `css` export from `@litsx/core` for component styles. It is Lit's real
 `css` tag, so editors can recognize and decorate the template and Lit receives a
 `CSSResult`, not an untyped string.
 
+Inline JSX styles are separate from `Component.styles`. Literal CSS text stays
+an ordinary inline attribute, while object values are applied through Lit's
+`styleMap` directive:
+
+```tsx
+<div style="color: red" />
+<div style={{ color: "red", width: "20px", "--accent": tone }} />
+<div style={computedStyle} />
+```
+
+`computedStyle` may be CSS text, a style-property map, `null`, or `undefined`.
+CamelCase names such as `backgroundColor`, already dashed names, and custom
+properties are supported. LitSX follows Lit rather than React numeric style
+semantics, so values that require units must include them explicitly. Use
+`useStyle(...)` instead when the dynamic properties belong to the component
+host rather than an element rendered by it.
+
 Component styles extend the styles installed by structural mixins and other
 base classes by default. Arrays remain ordinary Lit `CSSResultGroup` values:
 

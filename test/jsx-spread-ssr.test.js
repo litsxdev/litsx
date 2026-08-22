@@ -49,13 +49,42 @@ describe("jsxSpreadElement SSR", () => {
     assert.match(output, /Continue/);
   });
 
+  it("serializes camelCase, dashed, custom, and nullish spread style properties", () => {
+    const output = renderToString(jsxSpreadElement("div", [{
+      style: {
+        backgroundColor: "tomato",
+        "border-top": "1px solid black",
+        "--accent": "gold",
+        opacity: 0.5,
+        color: null,
+        width: undefined,
+      },
+    }]));
+
+    assert.match(output, /style="[^"]*background-color:tomato;/);
+    assert.match(output, /style="[^"]*border-top:1px solid black;/);
+    assert.match(output, /style="[^"]*--accent:gold;/);
+    assert.match(output, /style="[^"]*opacity:0.5;/);
+    assert.doesNotMatch(output, /color:null|width:undefined/);
+  });
+
   it("omits bindings overridden with undefined", () => {
     const output = renderToString(jsxSpreadElement("button", [
-      { title: "earlier", disabled: true },
-      { title: undefined, disabled: undefined },
+      { title: "earlier", disabled: true, style: { color: "red" } },
+      { title: undefined, disabled: undefined, style: undefined },
     ]));
     assert.doesNotMatch(output, /title=/);
     assert.doesNotMatch(output, /disabled(?:=|\s|>)/);
+    assert.doesNotMatch(output, /style=/);
+  });
+
+  it("lets later CSS text override an earlier style map", () => {
+    const output = renderToString(jsxSpreadElement("div", [
+      { style: { color: "red", backgroundColor: "tomato" } },
+      { style: "color: purple" },
+    ]));
+    assert.match(output, /style="color: purple"/);
+    assert.doesNotMatch(output, /tomato/);
   });
 
   it("passes inferred custom-element properties into SSR rendering", () => {

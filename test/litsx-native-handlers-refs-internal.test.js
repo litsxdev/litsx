@@ -4,7 +4,6 @@ import * as t from "@babel/types";
 import { describe, it } from "vitest";
 import parser from "./helpers/litsx-parser.js";
 import {
-  assertNoObjectStyleAttributes,
   collectNativeClassNameWarnings,
   createHandlerClassMember,
   processHandlers,
@@ -55,7 +54,7 @@ describe("native handlers and refs internals", () => {
     assert.strictEqual(member.async, true);
   });
 
-  it("reports native className and rejects object-valued style bindings", () => {
+  it("reports native className without treating style as handler syntax", () => {
     const functionPath = getFunctionPath(`
       function Card() {
         const style = { color: "red" };
@@ -67,10 +66,6 @@ describe("native handlers and refs internals", () => {
     collectNativeClassNameWarnings(functionPath, (warning) => warnings.push(warning));
     assert.deepStrictEqual(warnings.map((warning) => warning.code), ["LITSX_NATIVE_CLASSNAME"]);
     assert.strictEqual(warnings[0].tagName, "section");
-    assert.throws(
-      () => assertNoObjectStyleAttributes(functionPath),
-      /does not support object-valued `style` bindings/,
-    );
   });
 
   it("detects forwarded refs and preserves native targets for Lit directive lowering", () => {

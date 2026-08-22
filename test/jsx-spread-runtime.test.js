@@ -60,6 +60,60 @@ describe("jsxSpreadElement", () => {
     assert.strictEqual(article.querySelector("strong").textContent, "ready");
   });
 
+  it("matches styleMap semantics for object and string styles introduced by spreads", () => {
+    const clientRuntime = Symbol.for("@litsx/ssr/client-runtime");
+    const previousClientRuntime = globalThis[clientRuntime];
+    globalThis[clientRuntime] = true;
+    const container = document.createElement("div");
+    const style = {
+      backgroundColor: "tomato",
+      "border-top": "1px solid black",
+      "--accent": "gold",
+      opacity: 0.5,
+      color: null,
+    };
+
+    try {
+      render(jsxSpreadElement("div", [{ style }]), container);
+      const element = container.querySelector("div");
+      assert.strictEqual(element.style.backgroundColor, "tomato");
+      assert.strictEqual(element.style.getPropertyValue("border-top"), "1px solid black");
+      assert.strictEqual(element.style.getPropertyValue("--accent"), "gold");
+      assert.strictEqual(element.style.opacity, "0.5");
+
+      render(jsxSpreadElement("div", [{ style: {
+        opacity: 0.5,
+        "--accent": undefined,
+        color: "blue",
+      } }]), container);
+      assert.strictEqual(container.querySelector("div"), element);
+      assert.strictEqual(element.style.backgroundColor, "");
+      assert.strictEqual(element.style.getPropertyValue("border-top"), "");
+      assert.strictEqual(element.style.getPropertyValue("--accent"), "");
+      assert.strictEqual(element.style.color, "blue");
+
+      render(jsxSpreadElement("div", [{ style: "display: block; color: green" }]), container);
+      assert.strictEqual(element.style.display, "block");
+      assert.strictEqual(element.style.color, "green");
+
+      render(jsxSpreadElement("div", [
+        { style: { color: "red", backgroundColor: "tomato" } },
+        { style: "color: purple" },
+      ]), container);
+      assert.strictEqual(element.style.color, "purple");
+      assert.strictEqual(element.style.backgroundColor, "");
+
+      render(jsxSpreadElement("div", [
+        { style: { color: "red" } },
+        { style: undefined },
+      ]), container);
+      assert.strictEqual(element.hasAttribute("style"), false);
+    } finally {
+      if (previousClientRuntime === undefined) delete globalThis[clientRuntime];
+      else globalThis[clientRuntime] = previousClientRuntime;
+    }
+  });
+
   it("inspects a custom element reactive API for lowercase custom-element tags", () => {
     const tag = "jsx-spread-reactive-api";
     if (!customElements.get(tag)) {

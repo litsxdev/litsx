@@ -129,6 +129,24 @@ describe("JSX spread dual SSR/client hydration", () => {
     assert.strictEqual(original.hasAttribute("title"), false);
   });
 
+  it("hydrates spread style maps onto the server node and removes properties on update", () => {
+    const server = {
+      tag: "div",
+      sources: [{ style: { backgroundColor: "tomato", "--accent": "gold" } }],
+    };
+    const { container, originals } = hydrateSpec(server);
+    const element = container.querySelector("div");
+    assert.strictEqual(element, originals[0]);
+    assert.strictEqual(element.style.backgroundColor, "tomato");
+    assert.strictEqual(element.style.getPropertyValue("--accent"), "gold");
+
+    render(jsxSpreadElement("div", [{ style: { color: "blue" } }]), container);
+    assert.strictEqual(container.querySelector("div"), element);
+    assert.strictEqual(element.style.backgroundColor, "");
+    assert.strictEqual(element.style.getPropertyValue("--accent"), "");
+    assert.strictEqual(element.style.color, "blue");
+  });
+
   it("preserves focus while applying controlled properties", () => {
     const spec = { tag: "input", options: { void: true }, sources: [{ value: "client" }] };
     const container = document.createElement("div");

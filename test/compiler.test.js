@@ -530,7 +530,7 @@ describe("@litsx/compiler", () => {
     );
   }, 20000);
 
-  it("lowers inline object-valued style bindings through the inferred DOM property", () => {
+  it("lowers inline object-valued style bindings through the native style resolver", () => {
     const source = [
       "export function ProductCard() {",
       "  return <div style={{ color: 'red' }}>card</div>;",
@@ -540,21 +540,51 @@ describe("@litsx/compiler", () => {
     const result = transformLitsxSync(source, {
       filename: "/virtual/ProductCard.tsx",
     });
-    assert.match(result.code, /<div \.style=\$\{\{[\s\S]*color: 'red'[\s\S]*\}\}>card<\/div>/);
+    assert.match(result.code, /import \{[^}]*resolveStyle[^}]*\} from "@litsx\/core"/);
+    assert.match(result.code, /<div style=\$\{resolveStyle\(\{[\s\S]*color: 'red'[\s\S]*\}\)\}>card<\/div>/);
   }, 20000);
 
-  it("lowers aliased object-valued style bindings through the inferred DOM property", () => {
+  it("normalizes aliased and conditional style bindings without evaluating them twice", () => {
     const source = [
-      "export function ProductCard() {",
-      "  const styles = { color: 'red' };",
-      "  return <div style={styles}>card</div>;",
+      "export function ProductCard({ active }) {",
+      "  const styles = active ? { backgroundColor: 'tomato', '--accent': 'red' } : 'color: red';",
+      "  return <div style={(track(), styles)}>card</div>;",
       "}",
     ].join("\n");
 
     const result = transformLitsxSync(source, {
       filename: "/virtual/ProductCard.tsx",
     });
-    assert.match(result.code, /<div \.style=\$\{styles\}>card<\/div>/);
+    assert.match(result.code, /<div style=\$\{resolveStyle\(\(track\(\), styles\)\)\}>card<\/div>/);
+    assert.strictEqual((result.code.match(/track\(\)/g) || []).length, 1);
+  }, 20000);
+
+  it("keeps literal style text static and normalizes calculated string styles", () => {
+    const source = [
+      "export function ProductCard({ color }) {",
+      "  return <><div style=\"color: red\" /><div style={`color: ${color}`} /></>;",
+      "}",
+    ].join("\n");
+
+    const result = transformLitsxSync(source, {
+      filename: "/virtual/ProductCard.tsx",
+    });
+    assert.match(result.code, /<div style="color: red"><\/div>/);
+    assert.match(result.code, /<div style=\$\{resolveStyle\(`color: \$\{this\.color\}`\)\}><\/div>/);
+  }, 20000);
+
+  it("preserves explicit Lit directives passed to dynamic style bindings", () => {
+    const source = [
+      "import { styleMap } from 'lit/directives/style-map.js';",
+      "export function ProductCard({ styles }) {",
+      "  return <div style={styleMap(styles)}>card</div>;",
+      "}",
+    ].join("\n");
+
+    const result = transformLitsxSync(source, {
+      filename: "/virtual/ProductCard.tsx",
+    });
+    assert.match(result.code, /style=\$\{resolveStyle\(styleMap\(this\.styles\)\)\}/);
   }, 20000);
 
   it("escapes backticks and literal interpolation markers in SSR template output", () => {

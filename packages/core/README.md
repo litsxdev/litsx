@@ -149,12 +149,33 @@ Call `useHost()` when a hook explicitly needs the current element.
 
 ## Styling
 
-In LitSX JSX/TSX, the `style` attribute is string-based. LitSX does not support
-React-style object bindings such as `style={{ color: "red" }}`.
+LitSX has distinct primitives for static component CSS, host styling, and
+inline element styling:
 
-- Use `style="color: red"` or `style={styleText}` when you need an inline style attribute.
-- Use `useStyle(...)` when the value belongs on the component host as a dynamic
-  host style property or CSS custom property.
+- `Component.styles = css\`...\`` defines static component CSS and accepts Lit
+  `CSSResultGroup` composition. It extends inherited styles unless wrapped in
+  `replaceStyles(...)`.
+- `useStyle(...)` applies dynamic style properties or CSS custom properties to
+  the component host.
+- `style="color: red"` and `style={styleText}` apply inline CSS text.
+- `style={{ color: "red", width: "20px" }}` applies a dynamic property map
+  through Lit's official `styleMap` directive.
+
+Style maps accept camelCase properties, dashed properties, and custom
+properties:
+
+```tsx
+<div style={{
+  backgroundColor: "tomato",
+  "border-top": "1px solid currentColor",
+  "--accent": tone,
+  opacity: active ? 1 : 0.5,
+}} />
+```
+
+LitSX keeps Lit's `styleMap` value semantics. Numeric values are not given an
+implicit unit: use `width: "20px"` when a unit is required. A top-level dynamic
+binding may switch between CSS text, a style map, `null`, and `undefined`.
 
 ## Usage
 

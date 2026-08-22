@@ -102,4 +102,5 @@ export {
 } from "./state-hooks.js";
 
 export { jsxSpreadElement } from "./jsx-spread.js";
+export { resolveStyle } from "./style.js";
 export { createRef, ref } from "lit/directives/ref.js";

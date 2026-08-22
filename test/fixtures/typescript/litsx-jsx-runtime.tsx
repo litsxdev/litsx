@@ -1,4 +1,11 @@
-import { defineHook, lazy, SuspenseBoundary, SuspenseList, useHost } from "@litsx/core";
+import {
+  defineHook,
+  lazy,
+  SuspenseBoundary,
+  SuspenseList,
+  useHost,
+  type LitsxStyleInfo,
+} from "@litsx/core";
 
 interface I18nCapability {
   i18n: {
@@ -35,6 +42,14 @@ function ActionButton({ label, disabled }: ButtonProps) {
 }
 
 const LazyActionButton = lazy(async () => ({ default: ActionButton }));
+const cardStyle: LitsxStyleInfo = {
+  backgroundColor: "tomato",
+  "border-top": "1px solid currentColor",
+  "--accent": "gold",
+  opacity: 0.5,
+  color: null,
+};
+const optionalStyle: string | LitsxStyleInfo | null | undefined = cardStyle;
 
 function TranslatedButton() {
   const installation: void = useI18nCapability();
@@ -45,6 +60,10 @@ function TranslatedButton() {
 export function Screen() {
   return (
     <section class="screen-shell">
+      <div style={{ color: "red", width: "20px" }} />
+      <div style={cardStyle} />
+      <div style={optionalStyle} />
+      <div style="display: block" />
       <SuspenseList revealOrder="forwards" tail="collapsed">
         <SuspenseBoundary
           fallback={<span>loading primary</span>}

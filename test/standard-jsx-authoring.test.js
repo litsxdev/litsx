@@ -324,7 +324,8 @@ describe("standard JSX authoring", () => {
       filename: "/tmp/litsx-standard-dom-advanced.tsx",
     });
 
-    assert.match(code, /\.style=\$\{this\.style\}/);
+    assert.match(code, /import \{[^}]*resolveStyle[^}]*\} from "@litsx\/core"/);
+    assert.match(code, /style=\$\{resolveStyle\(this\.style\)\}/);
     assert.match(code, /contenteditable="\$\{this\.editable\}"/);
     assert.match(code, /draggable="\$\{this\.draggable\}"/);
     assert.match(code, /\?hidden=\$\{this\.hidden\}/);

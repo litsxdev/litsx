@@ -467,7 +467,7 @@ function transformOpeningElement(path, state, t) {
     if (!rawName || rawName.startsWith(".") || rawName.startsWith("?") || rawName.startsWith("@")) {
       continue;
     }
-    if (rawName === "ref") continue;
+    if (rawName === "ref" || rawName === "style") continue;
 
     if (state.__litsxDeferReactEvents && !component && /^on[A-Z]/.test(rawName)) {
       continue;

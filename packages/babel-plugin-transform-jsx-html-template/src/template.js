@@ -585,6 +585,16 @@ const transforms = {
         return;
       }
 
+      if (rawName === "style" && attr.value?.type === "JSXExpressionContainer") {
+        (opts.__litsxRuntimeNeeds ??= {}).styleResolver = true;
+        addString(strings, keys, " style=", attr.name);
+        addKey(strings, keys, t.callExpression(
+          t.identifier(opts?.styleResolverName || "resolveStyle"),
+          [lowerEmbeddedJsx(attr.value.expression, opts)],
+        ));
+        return;
+      }
+
       if (isAuthoredComponentTag && shouldLowerAuthoredComponentAttributeAsProperty(attr, rawName, opts)) {
         addString(strings, keys, ` .${rawName}=`, attr);
         addKey(

@@ -45,6 +45,15 @@ export function BrokenScreen() {
 
       {/* @ts-expect-error native LitSX key has no reconciliation contract */}
       <div key="legacy" />
+
+      {/* @ts-expect-error style itself must be CSS text or a style property map */}
+      <div style={42} />
+
+      {/* @ts-expect-error style map values must be primitive CSS values */}
+      <div style={{ color: { nested: true } }} />
+
+      {/* @ts-expect-error boolean style property values are not part of Lit styleMap */}
+      <div style={{ display: true }} />
     </>
   );
 }

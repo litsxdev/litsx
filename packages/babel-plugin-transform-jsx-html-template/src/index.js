@@ -155,6 +155,20 @@ function containsRoutedComponentProps(node) {
   });
 }
 
+function hasBindingAnywhere(programPath, name) {
+  let found = programPath.scope.hasOwnBinding(name);
+  if (found) return true;
+  programPath.traverse({
+    Scope(scopePath) {
+      if (scopePath.scope.hasOwnBinding(name)) {
+        found = true;
+        scopePath.stop();
+      }
+    },
+  });
+  return found;
+}
+
 function replaceNode(path, state) {
   if (path.parentPath?.isJSXElement() || path.parentPath?.isJSXFragment()) {
     return;
@@ -430,10 +444,15 @@ export default function transformJsxHtmlTemplatePlugin(api) {
           const reactRefAdapterName = programPath.scope.hasBinding("toLitRef")
             ? programPath.scope.generateUidIdentifier("toLitRef").name
             : "toLitRef";
+          const styleResolverName = hasBindingAnywhere(programPath, "resolveStyle")
+            ? programPath.scope.generateUidIdentifier("litsxResolveStyle").name
+            : "resolveStyle";
           state.opts = {
             ...baseOptions,
             refDirectiveName,
             reactRefAdapterName,
+            styleResolverName,
+            __litsxRuntimeNeeds: {},
             __litsxNeedsNoscriptRuntime: false,
           };
           if (state.opts.componentRestProps === true) {
@@ -465,6 +484,14 @@ export default function transformJsxHtmlTemplatePlugin(api) {
               "@litsx/core/react-compat",
               "toLitRef",
               state.opts.reactRefAdapterName,
+            );
+          }
+          if (state.opts.__litsxRuntimeNeeds?.styleResolver === true) {
+            ensureNamedImport(
+              programPath,
+              "@litsx/core",
+              "resolveStyle",
+              state.opts.styleResolverName,
             );
           }
           let needsNoscriptRuntime = state.opts.__litsxNeedsNoscriptRuntime === true;
