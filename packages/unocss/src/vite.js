@@ -18,6 +18,7 @@ const RESOLVED_PREFLIGHT_MODULE_ID = `\0${UNO_CSS_PREFLIGHT_MODULE_ID}`;
 const GLOBAL_CSS_MODULE_ID = "virtual:uno.css";
 const RESOLVED_GLOBAL_CSS_MODULE_ID = "/__litsx_unocss_global.css";
 const GLOBAL_CSS_BUILD_SENTINEL = `:root{--${UNO_CSS_GLOBAL_BUILD_PLACEHOLDER}:0}`;
+const GLOBAL_CSS_READY_EVENT = "litsx:unocss-global-ready";
 const isCompiledComponentModule = (code) =>
   code.includes(UNO_CSS_COMPONENT_MODULE_MARKER);
 
@@ -181,75 +182,112 @@ function createUnoCssPreflightVitePlugin(context, engine) {
   };
 }
 
-function createUnoCssGlobalVitePlugin(context, engine) {
+function createUnoCssGlobalVitePlugins(context, engine) {
   let command = "serve";
+  let revision = 0;
   let server;
+  let resolvedGlobalCssModuleId;
+  const servedRevisions = new Map();
 
-  function invalidateGlobalModule() {
-    const module = server?.moduleGraph.getModuleById(
-      RESOLVED_GLOBAL_CSS_MODULE_ID,
-    );
+  context.onInvalidate(() => {
+    revision += 1;
+    updateGlobalModule();
+  });
+
+  function isResolvedGlobalCssModule(id) {
+    return id === RESOLVED_GLOBAL_CSS_MODULE_ID;
+  }
+
+  function updateGlobalModule() {
+    const module = resolvedGlobalCssModuleId
+      ? server?.moduleGraph.getModuleById(resolvedGlobalCssModuleId)
+      : null;
     if (!module || !server) return;
     server.moduleGraph.invalidateModule(module);
-    const timestamp = Date.now();
     server.ws.send({
       type: "update",
       updates: [
         {
           acceptedPath: module.url,
           path: module.url,
-          timestamp,
+          timestamp: Date.now(),
           type: "js-update",
         },
       ],
     });
   }
 
-  context.onInvalidate(invalidateGlobalModule);
-
-  return {
-    name: "litsx:unocss-global",
-    enforce: "pre",
-    configResolved(config) {
-      command = config.command;
-    },
-    configureServer(viteServer) {
-      server = viteServer;
-    },
-    resolveId(id) {
-      return id === GLOBAL_CSS_MODULE_ID ? RESOLVED_GLOBAL_CSS_MODULE_ID : null;
-    },
-    async load(id) {
-      if (id !== RESOLVED_GLOBAL_CSS_MODULE_ID) return null;
-      return {
-        code:
-          command === "build"
-            ? GLOBAL_CSS_BUILD_SENTINEL
-            : await engine.generateGlobalCss(),
-        map: null,
-        moduleSideEffects: true,
-      };
-    },
-    generateBundle: {
-      order: "post",
-      async handler(_options, bundle) {
-        const css = await engine.generateGlobalCss();
-        for (const output of Object.values(bundle)) {
-          if (
-            output.type !== "asset" ||
-            typeof output.source !== "string" ||
-            !output.source.includes(UNO_CSS_GLOBAL_BUILD_PLACEHOLDER)
-          ) {
-            continue;
-          }
-          output.source = output.source.replaceAll(
-            GLOBAL_CSS_BUILD_SENTINEL,
-            css,
-          );
+  return [
+    {
+      name: "litsx:unocss-global",
+      enforce: "pre",
+      configResolved(config) {
+        command = config.command;
+      },
+      configureServer(viteServer) {
+        server = viteServer;
+        server.ws.on(GLOBAL_CSS_READY_EVENT, (clientRevision) => {
+          if (clientRevision !== revision) updateGlobalModule();
+        });
+      },
+      resolveId(id) {
+        return id === GLOBAL_CSS_MODULE_ID
+          ? RESOLVED_GLOBAL_CSS_MODULE_ID
+          : null;
+      },
+      async load(id) {
+        if (!isResolvedGlobalCssModule(id)) return null;
+        resolvedGlobalCssModuleId = id;
+        if (command === "build") {
+          return {
+            code: GLOBAL_CSS_BUILD_SENTINEL,
+            map: null,
+            moduleSideEffects: true,
+          };
         }
+        let loadedRevision;
+        let css;
+        do {
+          loadedRevision = revision;
+          css = await engine.generateGlobalCss();
+        } while (loadedRevision !== revision);
+        servedRevisions.set(id, loadedRevision);
+        return { code: css, map: null, moduleSideEffects: true };
+      },
+      generateBundle: {
+        order: "post",
+        async handler(_options, bundle) {
+          const css = await engine.generateGlobalCss();
+          for (const output of Object.values(bundle)) {
+            if (
+              output.type !== "asset" ||
+              typeof output.source !== "string" ||
+              !output.source.includes(UNO_CSS_GLOBAL_BUILD_PLACEHOLDER)
+            ) {
+              continue;
+            }
+            output.source = output.source.replaceAll(
+              GLOBAL_CSS_BUILD_SENTINEL,
+              css,
+            );
+          }
+        },
       },
     },
-  };
+    {
+      name: "litsx:unocss-global-ready",
+      enforce: "post",
+      apply(config, environment) {
+        return environment.command === "serve" && !config.build?.ssr;
+      },
+      async transform(code, id) {
+        if (!isResolvedGlobalCssModule(id)) return null;
+        const servedRevision = servedRevisions.get(id);
+        if (servedRevision === undefined) return null;
+        return `${code}\nif (import.meta.hot) {\n  import.meta.hot.accept();\n  import.meta.hot.send(${JSON.stringify(GLOBAL_CSS_READY_EVENT)}, ${servedRevision});\n}`;
+      },
+    },
+  ];
 }
 
 export function createUnoCssVitePlugins(options = {}, integrationOptions = {}) {
@@ -308,28 +346,30 @@ export function createUnoCssVitePlugins(options = {}, integrationOptions = {}) {
   const globalPlugins = [
     ...GlobalModeBuildPlugin(globalContext),
     ...GlobalModeDevPlugin(globalContext),
-  ].map((plugin) => {
-    if (
-      !["unocss:global:build:scan", "unocss:global"].includes(plugin.name) ||
-      typeof plugin.transform !== "function"
-    ) {
-      return plugin;
-    }
-    const transform = plugin.transform;
-    return {
-      ...plugin,
-      transform(code, id) {
-        if (isCompiledComponentModule(code)) return null;
-        return transform.call(this, code, id);
-      },
-    };
-  });
+  ]
+    .filter((plugin) => plugin.name !== "unocss:global:post")
+    .map((plugin) => {
+      if (
+        !["unocss:global:build:scan", "unocss:global"].includes(plugin.name) ||
+        typeof plugin.transform !== "function"
+      ) {
+        return plugin;
+      }
+      const transform = plugin.transform;
+      return {
+        ...plugin,
+        transform(code, id) {
+          if (isCompiledComponentModule(code)) return null;
+          return transform.call(this, code, id);
+        },
+      };
+    });
 
   return [
     createUnoCssTokenCollector(engine),
     createUnoCssGuardMaterializer(engine),
     createUnoCssPreflightVitePlugin(context, engine),
-    createUnoCssGlobalVitePlugin(context, engine),
+    ...createUnoCssGlobalVitePlugins(context, engine),
     ...contextPlugins,
     ...globalPlugins,
   ];
