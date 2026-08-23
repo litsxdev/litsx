@@ -13,12 +13,30 @@ declare module "@litsx/core" {
 }
 
 export type LitsxUnoCssOptions = {
-  placeholder?: string;
+  /** Vite document stylesheet module. Defaults to `virtual:uno.css`; false delegates ownership. */
+  globalCssModule?: string | false;
+  /** JavaScript module exporting the component-routed preflight CSSResult. */
   preflightModule?: string;
+  /** Fallback light-DOM output policy; the compiler's explicit option wins. */
   lightDomStyles?: TransformLitsxOptions["lightDomStyles"];
+  /** Select which resolved UnoCSS preflight layers belong in each destination. */
+  preflightLayers?: Partial<
+    Record<"component" | "global", UnoCssPreflightLayerSelector>
+  >;
 };
 
-export declare const UNO_CSS_PLACEHOLDER: "@unocss-placeholder";
+export type UnoCssPreflightDestination = "component" | "global";
+export type UnoCssPreflightLayerContext = {
+  /** Current resolved UnoCSS layer name. */
+  layer: string;
+  /** Output currently being generated. */
+  destination: UnoCssPreflightDestination;
+  /** All resolved layer names available to the selector. */
+  layers: readonly string[];
+};
+export type UnoCssPreflightLayerSelector =
+  readonly string[] | ((context: UnoCssPreflightLayerContext) => boolean);
+
 export declare const UNO_CSS_PREFLIGHT_MODULE_ID: "virtual:@litsx/unocss/preflight";
 export declare const UNO_CSS_PREFLIGHT_EXPORT: "unoPreflightStyles";
 /** @internal Build-tool bridge for component-owned guard materialization. */
@@ -33,7 +51,6 @@ export declare function decodeUnoCssGuardPayload(value: string): {
   } | null;
   dependencies?: string[];
   emit?: "component" | "global" | "none";
-  moduleCandidates?: boolean;
   scope?: string;
 };
 
@@ -46,7 +63,10 @@ export type UnoCssBuildEngineOptions = {
     | UnoGenerator
     | Promise<UnoGenerator>
     | (() => UnoGenerator | Promise<UnoGenerator>);
+  /** All candidates, including component-only tokens needed by preflight/theme generation. */
   tokens?: Set<string> | (() => Set<string>);
+  /** Candidates whose utility rules belong in document CSS. */
+  globalTokens?: Set<string> | (() => Set<string>);
   ready?: Promise<unknown> | (() => unknown | Promise<unknown>);
   flushTasks?: () => unknown | Promise<unknown>;
   filter?: (code: string, id: string) => boolean;
@@ -55,6 +75,7 @@ export type UnoCssBuildEngineOptions = {
     id: string,
     tokens: Set<string>,
   ) => unknown | Promise<unknown>;
+  preflightLayers?: LitsxUnoCssOptions["preflightLayers"];
 };
 
 export type UnoCssModuleResult = {
@@ -64,9 +85,18 @@ export type UnoCssModuleResult = {
 };
 
 export interface UnoCssBuildEngine {
+  /** All candidates used for token-dependent preflight generation. */
   readonly tokens: Set<string>;
+  /** Candidates whose utility rules belong in document CSS. */
+  readonly globalTokens: Set<string>;
+  /** Extract candidates and contribute them to both token views. */
   collect(code: string, id?: string): Promise<Set<string>>;
-  scan(code: string, id?: string): Promise<Set<string>>;
+  /** Extract candidates; `global: false` keeps their utility rules component-local. */
+  scan(
+    code: string,
+    id?: string,
+    options?: { global?: boolean },
+  ): Promise<Set<string>>;
   materializeModule(
     code: string,
     id: string,
@@ -75,8 +105,18 @@ export interface UnoCssBuildEngine {
     config: Record<string, any>,
     options?: { detachPreflights?: boolean },
   ): void;
+  /** Generate the component/shadow-routed preflight. */
   generatePreflight(): Promise<string>;
+  /** Generate only the preflight layers routed to a destination. */
+  generatePreflightFor(
+    destination: UnoCssPreflightDestination,
+  ): Promise<string>;
+  /** Generate global-routed preflight plus document-owned utility rules. */
   generateGlobalCss(): Promise<string>;
+  routeGeneratedResult(
+    result: Awaited<ReturnType<UnoGenerator["generate"]>>,
+    destination?: UnoCssPreflightDestination,
+  ): Promise<Awaited<ReturnType<UnoGenerator["generate"]>>>;
   createPreflightModuleSource(cssText: string): string;
   finalizePreflight(code: string, placeholder?: string): Promise<string>;
   finalizeGlobalCss(code: string, placeholder?: string): Promise<string>;
@@ -97,6 +137,7 @@ export declare function createUnoCssBuildEngine(
 /** Create a standalone engine directly from an ordinary UnoCSS config. */
 export declare function createUnoCssIntegration(
   config?: UserConfig,
+  integrationOptions?: Pick<LitsxUnoCssOptions, "preflightLayers">,
 ): Promise<UnoCssBuildEngine>;
 
 export declare function createUnoCssOutputPlugin(

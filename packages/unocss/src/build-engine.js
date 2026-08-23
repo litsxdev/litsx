@@ -7,7 +7,6 @@ import {
   escapeUnoCssTemplateCss,
   UNO_CSS_GUARD_PATTERN,
   UNO_CSS_DYNAMIC_WILDCARD,
-  UNO_CSS_PLACEHOLDER,
   UNO_CSS_PREFLIGHT_BUILD_PLACEHOLDER,
 } from "./protocol.js";
 import { resolveStaticGuardExport } from "./static-guards.js";
@@ -45,6 +44,21 @@ function uniquePreflightLayers(generator) {
   ];
 }
 
+function defaultPreflightLayerSelector({ destination, layer }) {
+  return destination === "global" || layer !== "theme";
+}
+
+function resolvePreflightLayerSelector(options, destination) {
+  return (
+    options.preflightLayers?.[destination] ?? defaultPreflightLayerSelector
+  );
+}
+
+function includesPreflightLayer(selector, layer, destination, layers) {
+  if (Array.isArray(selector)) return selector.includes(layer);
+  return selector({ layer, destination, layers });
+}
+
 async function resolveValue(value) {
   return typeof value === "function" ? value() : value;
 }
@@ -77,13 +91,17 @@ export function createUnoCssBuildEngine(options = {}) {
   let preflightGeneratorSource =
     options.preflightGenerator ?? options.generator;
   const ownedTokens = new Set();
+  const ownedGlobalTokens = new Set();
   const tokenStore = () =>
     (typeof options.tokens === "function"
       ? options.tokens()
       : options.tokens) ?? ownedTokens;
+  const globalTokenStore = () =>
+    (typeof options.globalTokens === "function"
+      ? options.globalTokens()
+      : options.globalTokens) ?? ownedGlobalTokens;
   const dependencyImporters = new Map();
   const importerDependencies = new Map();
-  const moduleTokens = new Map();
 
   async function ready() {
     await resolveValue(options.ready);
@@ -133,21 +151,25 @@ export function createUnoCssBuildEngine(options = {}) {
   async function collect(code, id = "") {
     await ready();
     if (!isIncluded(code, id)) return tokenStore();
+    const uno = await generator();
+    const extracted = await uno.applyExtractors(code, id, new Set());
+    for (const token of extracted) globalTokenStore().add(token);
     if (typeof options.extract === "function") {
       await options.extract(code, id, tokenStore());
       return tokenStore();
     }
-    const uno = await generator();
-    await uno.applyExtractors(code, id, tokenStore());
+    for (const token of extracted) tokenStore().add(token);
     return tokenStore();
   }
 
-  async function scan(code, id = "") {
+  async function scan(code, id = "", { global = true } = {}) {
     await ready();
     if (!isIncluded(code, id)) return new Set();
     const uno = await generator();
     const extracted = await uno.applyExtractors(code, id, new Set());
-    moduleTokens.set(id, new Set(extracted));
+    if (global) {
+      for (const token of extracted) globalTokenStore().add(token);
+    }
     if (typeof options.extract === "function") {
       await options.extract(code, id, tokenStore());
       return new Set(extracted);
@@ -160,15 +182,12 @@ export function createUnoCssBuildEngine(options = {}) {
   async function materializeModule(code, id) {
     const pattern = new RegExp(UNO_CSS_GUARD_PATTERN.source, "g");
     const matches = [...code.matchAll(pattern)];
-    const hasPlaceholder = code.includes(UNO_CSS_PLACEHOLDER);
-    if (matches.length === 0 && !hasPlaceholder) {
+    if (matches.length === 0) {
       forgetModule(id);
       return null;
     }
 
     const uno = await generator();
-    const extracted = hasPlaceholder ? await scan(code, id) : new Set();
-    const moduleCandidateSet = new Set(extracted);
     const dependencies = new Set();
     const resolvedGuards = new Map();
     const generatedCss = new Map();
@@ -178,9 +197,7 @@ export function createUnoCssBuildEngine(options = {}) {
 
     for (const match of matches) {
       const payload = decodeUnoCssGuardPayload(match[1]);
-      let candidates = payload.moduleCandidates
-        ? [...(moduleTokens.get(id) || extracted)]
-        : payload.candidates || [];
+      let candidates = payload.candidates || [];
       for (const dependency of payload.dependencies || []) {
         dependencies.add(dependency);
       }
@@ -225,6 +242,7 @@ export function createUnoCssBuildEngine(options = {}) {
       await scan(
         candidates.join(" "),
         `${id}?litsx-unocss-guard=${match.index}`,
+        { global: payload.emit === "global" },
       );
       if (payload.emit === "global") {
         transformed = transformed.replace(match[0], "");
@@ -259,17 +277,6 @@ export function createUnoCssBuildEngine(options = {}) {
       );
     }
 
-    if (hasPlaceholder) {
-      const generated = await uno.generate(moduleCandidateSet, {
-        preflights: false,
-        safelist: true,
-      });
-      transformed = transformed.replace(
-        UNO_CSS_PLACEHOLDER,
-        escapeUnoCssTemplateCss(generated.css),
-      );
-    }
-
     trackModule(id, dependencies);
     return {
       code: transformed,
@@ -280,13 +287,50 @@ export function createUnoCssBuildEngine(options = {}) {
 
   function captureResolvedConfig(config, { detachPreflights = true } = {}) {
     const preflights = [...(config.preflights || [])];
-    preflightGeneratorSource = createGenerator(
-      createResolvedPreflightConfig(config, preflights),
-    );
-    if (detachPreflights) config.preflights = [];
+    if (detachPreflights) {
+      preflightGeneratorSource = createGenerator(
+        createResolvedPreflightConfig(config, preflights),
+      );
+      config.preflights = [];
+    } else {
+      // Vite's resolved context already owns the complete configuration. Keep
+      // one generator/token lifecycle and expose destination-filtered views of
+      // its GenerateResult instead of resolving the presets a second time.
+      preflightGeneratorSource = generatorSource;
+    }
   }
 
   async function generatePreflight() {
+    return generatePreflightFor("component");
+  }
+
+  function routeGeneratedResult(result, destination, source) {
+    const preflightLayers = uniquePreflightLayers(source);
+    const selector = resolvePreflightLayerSelector(options, destination);
+    const excluded = preflightLayers.filter(
+      (layer) =>
+        !includesPreflightLayer(selector, layer, destination, preflightLayers),
+    );
+    const excludedSet = new Set(excluded);
+    return {
+      ...result,
+      layers: result.layers.filter((layer) => !excludedSet.has(layer)),
+      get css() {
+        return result.getLayers(undefined, excluded);
+      },
+      getLayer(layer) {
+        return excludedSet.has(layer) ? "" : result.getLayer(layer);
+      },
+      getLayers(includes, excludes = []) {
+        return result.getLayers(includes, [
+          ...new Set([...excludes, ...excluded]),
+        ]);
+      },
+      setLayer: result.setLayer.bind(result),
+    };
+  }
+
+  async function generatePreflightFor(destination) {
     await ready();
     const preflightGenerator = await resolveValue(preflightGeneratorSource);
     if (!preflightGenerator) return "";
@@ -294,17 +338,22 @@ export function createUnoCssBuildEngine(options = {}) {
       preflights: true,
       safelist: true,
     });
-    return result.getLayers(uniquePreflightLayers(preflightGenerator));
+    const routed = routeGeneratedResult(
+      result,
+      destination,
+      preflightGenerator,
+    );
+    return routed.getLayers(uniquePreflightLayers(preflightGenerator));
   }
 
   async function generateGlobalCss() {
     const uno = await generator();
-    const generated = await uno.generate(new Set(tokenStore()), {
+    const globalGenerated = await uno.generate(new Set(globalTokenStore()), {
       preflights: false,
       safelist: true,
     });
-    const preflight = await generatePreflight();
-    return [preflight, generated.css].filter(Boolean).join("\n");
+    const preflight = await generatePreflightFor("global");
+    return [preflight, globalGenerated.css].filter(Boolean).join("\n");
   }
 
   function getImporters(file) {
@@ -317,12 +366,21 @@ export function createUnoCssBuildEngine(options = {}) {
     get tokens() {
       return tokenStore();
     },
+    get globalTokens() {
+      return globalTokenStore();
+    },
     collect,
     scan,
     materializeModule,
     captureResolvedConfig,
     generatePreflight,
+    generatePreflightFor,
     generateGlobalCss,
+    routeGeneratedResult(result, destination = "component") {
+      return generator().then((uno) =>
+        routeGeneratedResult(result, destination, uno),
+      );
+    },
     createPreflightModuleSource: createUnoCssPreflightModuleSource,
     finalizePreflight(code, placeholder = UNO_CSS_PREFLIGHT_BUILD_PLACEHOLDER) {
       return generatePreflight().then((css) =>
@@ -350,7 +408,10 @@ export function createUnoCssBuildEngine(options = {}) {
 }
 
 /** Create a standalone engine for Rollup, webpack, esbuild or custom builds. */
-export async function createUnoCssIntegration(config = {}) {
+export async function createUnoCssIntegration(
+  config = {},
+  integrationOptions = {},
+) {
   const generator = await createGenerator(config);
-  return createUnoCssBuildEngine({ generator });
+  return createUnoCssBuildEngine({ generator, ...integrationOptions });
 }

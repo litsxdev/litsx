@@ -33,13 +33,108 @@ styles and authored component styles precede the generated utility sheet.
 UnoCSS utilities (and the shared preflight, when configured) to be appended.
 
 The preflight is generated from UnoCSS's resolved project configuration and
-token set. Production emits one shared stylesheet after the complete module
-graph has been collected. Vite development gives each component module a
-preflight snapshot after extracting that module, so a lazily imported module
-can introduce token-dependent theme variables such as Wind4 colors without
-retaining an already evaluated, stale virtual module. External `uno.config`
-files are followed and the development snapshots are invalidated when tokens
-or configuration change.
+token set. By default, LitSX routes the `theme` layer to the document sheet and
+omits it from component shadow styles. Other preflight layers remain available
+inside shadow roots. This lets custom properties such as Wind4 colors inherit
+through nested shadow roots instead of being reset by a repeated `:host`
+declaration. Production emits the document sheet after the complete module
+graph has been collected. Vite development invalidates both destinations when
+tokens or configuration change. External `uno.config` files are followed.
+
+The Vite compiler contribution imports the global sheet for generated
+components, so the normal `litsxUnoCss()` setup emits it once without an
+additional authored import. Set `integration.globalCssModule: false` only when
+the framework owns document CSS generation itself.
+
+Layer ownership can be overridden without inspecting or rewriting generated
+CSS:
+
+```js
+litsxUnoCss({
+  integration: {
+    preflightLayers: {
+      component: ({ layer }) => layer !== "tokens",
+      global: ["tokens"],
+    },
+  },
+});
+```
+
+Selectors receive `{ layer, destination, layers }`. Both outputs reuse the
+same resolved UnoCSS context, token store and invalidation lifecycle.
+
+The default policy is equivalent to:
+
+```js
+{
+  component: ({ layer }) => layer !== "theme",
+  global: () => true,
+}
+```
+
+`theme` is an UnoCSS layer name, not a Wind-specific CSS inspection rule. A
+different preset can route its own layer names with the same API.
+
+## Vite API
+
+### `litsxUnoCss(options?)`
+
+This is the recommended entrypoint. It keeps compiler and Vite integration
+options synchronized:
+
+```js
+litsxUnoCss({
+  litsx: {
+    lightDomStyles: "scoped",
+  },
+  unocss: {
+    presets: [presetWind4()],
+  },
+  integration: {
+    globalCssModule: "virtual:uno.css",
+    preflightLayers: {
+      component: ({ layer }) => layer !== "theme",
+      global: () => true,
+    },
+  },
+});
+```
+
+`integration` accepts:
+
+- `preflightLayers.component`: layer-name array or predicate for component and
+  shadow-root preflight output.
+- `preflightLayers.global`: layer-name array or predicate for document output.
+- `globalCssModule`: module imported as the document stylesheet. Vite defaults
+  this to `virtual:uno.css`; `false` delegates document CSS ownership to the
+  surrounding framework.
+- `preflightModule`: virtual JavaScript module that exports the component
+  preflight `CSSResult`. The Vite default is managed internally.
+- `lightDomStyles`: integration-level fallback for `scoped`, `global` or
+  `none`; the top-level LitSX compiler option takes precedence.
+
+### `withUnoCssViteCompiler()` and `createUnoCssVitePlugins()`
+
+Use the split API when another tool, such as Storybook, owns plugin ordering.
+Pass the same integration object to both functions:
+
+```js
+const integration = {
+  preflightLayers: {
+    component: ({ layer }) => layer !== "theme",
+    global: () => true,
+  },
+};
+
+const compiler = withUnoCssViteCompiler({}, integration);
+const vitePlugins = createUnoCssVitePlugins(
+  { presets: [presetWind4()] },
+  integration,
+);
+```
+
+Calling `withUnoCssCompiler()` directly remains build-tool neutral and does
+not inject a Vite global CSS module unless `globalCssModule` is provided.
 
 ## Light DOM routing
 
@@ -59,24 +154,21 @@ litsxUnoCss({
   component host identity remains available as runtime metadata without being
   repeated in HTML and CSS. Parent utilities therefore do not select matching
   classes inside nested light-DOM components.
-- `global` omits component-local generated utility sheets. Import
-  `virtual:uno.css` once from the browser entry to apply the shared project
-  utilities and preflight.
-- `none` omits automatic UnoCSS sheets for light-DOM components. An explicit
-  `virtual:uno.css` import remains an explicit request for global UnoCSS and is
-  independent of this automatic component route.
+- `global` omits component-local generated utility sheets and routes the
+  project utilities through the shared document sheet.
+- `none` omits automatic component-local UnoCSS sheets for light-DOM
+  components. Set `integration.globalCssModule: false` as well when the Vite
+  compiler must not add the shared document sheet.
 
 Authored `Component.styles` values are preserved in every mode. Shadow-DOM
 components always keep component-local utility sheets because document CSS
 cannot cross a shadow boundary.
 
 The React compatibility pipeline always selects `global`: migrated React trees
-expect document-level CSS rather than per-component selector boundaries. Add
-`import "virtual:uno.css"` to the browser entry when using react-compat with
-UnoCSS.
+expect document-level CSS rather than per-component selector boundaries.
 
-Projects that also use utilities in ordinary document light DOM can import the
-global sheet once from their browser entry:
+Projects can still import the standard global sheet explicitly from ordinary
+browser modules that are not compiled as LitSX components:
 
 ```js
 import "virtual:uno.css";
@@ -102,22 +194,40 @@ import {
 } from "@litsx/unocss";
 import { presetWind4 } from "unocss";
 
-const unocss = await createUnoCssIntegration({
-  presets: [presetWind4()],
-});
+const integration = {
+  preflightLayers: {
+    component: ({ layer }) => layer !== "theme",
+    global: () => true,
+  },
+};
+
+const unocss = await createUnoCssIntegration(
+  { presets: [presetWind4()] },
+  integration,
+);
 
 const compiled = await transformLitsx(
   source,
   withUnoCssCompiler(
     { filename: id },
-    { preflightModule: UNO_CSS_PREFLIGHT_MODULE_ID },
+    { ...integration, preflightModule: UNO_CSS_PREFLIGHT_MODULE_ID },
   ),
 );
 
 const module = await unocss.materializeModule(compiled.code, id);
 const preflightCss = await unocss.generatePreflight();
 const preflightModule = unocss.createPreflightModuleSource(preflightCss);
+const documentCss = await unocss.generateGlobalCss();
 ```
+
+`generatePreflight()` returns the component/shadow destination.
+`generatePreflightFor("global")` returns only globally routed preflight layers,
+and `generateGlobalCss()` combines those layers with global utilities.
+The engine exposes two token views: `tokens` contains all candidates used to
+resolve token-dependent preflights, while `globalTokens` contains only utility
+candidates whose rules belong in document CSS. `collect()` contributes to both
+views. Adapters can call `scan(code, id, { global: false })` for component-only
+sources so their utility rules are not duplicated globally.
 
 `materializeModule()` performs the complete module-local operation: it
 materializes component-owned markup candidates, resolves component-owned
@@ -126,12 +236,13 @@ the files that the build tool should watch. `invalidate(file)` returns the modul
 affected by a changed static dependency.
 
 The adapter owns only build lifecycle policy. Production adapters typically
-collect and materialize every module before calling `generatePreflight()`;
-development adapters can create per-module snapshots and invalidate their
-virtual modules when the token set changes. Passing a config directly to
-`createUnoCssIntegration()` does not search the filesystem for an
-`uno.config`; config-file discovery belongs to the build adapter. The Vite
-adapter uses UnoCSS's official config resolution and preserves that behavior.
+collect and materialize every module before generating the component preflight
+module and document CSS. Development adapters can create per-module component
+snapshots and invalidate both component and global virtual modules when their
+token views change. Passing a config directly to `createUnoCssIntegration()`
+does not search the filesystem for an `uno.config`; config-file discovery
+belongs to the build adapter. The Vite adapter uses UnoCSS's official config
+resolution and preserves that behavior.
 
 Vite and `@litsx/vite-plugin` are optional peers. They are required only when
 importing `@litsx/unocss/vite`.
@@ -223,12 +334,13 @@ export function Button({ size = "md" }) {
 Button.styles = [sizes];
 ```
 
-A project `safelist` belongs to the optional global `virtual:uno.css` sheet and
-the shared token/preflight calculation. For a non-finite component binding,
-LitSX also projects only matching safelist entries into that component. For
-example, `bg-${color}-600` selects `bg-red-600` but not `text-white` from the
-same safelist. A fully opaque `class={value}` has no safe static shape to match;
-enumerate its finite values through `Component.styles` instead.
+A project `safelist` belongs to the shared token/preflight calculation and the
+global `virtual:uno.css` sheet when document output is enabled. For a
+non-finite component binding, LitSX also projects only matching safelist
+entries into that component. For example, `bg-${color}-600` selects
+`bg-red-600` but not `text-white` from the same safelist. A fully opaque
+`class={value}` has no safe static shape to match; enumerate its finite values
+through `Component.styles` instead.
 
 Strings in imported helpers are intentionally not discovered merely because
 render code imports them. Add the exact helper export to `Component.styles` to
@@ -250,13 +362,26 @@ import {
 } from "@litsx/unocss/vite";
 import { presetWind3 } from "unocss";
 
+const integration = {
+  preflightLayers: {
+    component: ({ layer }) => layer !== "theme",
+    global: () => true,
+  },
+};
+
 export default createLitsxStorybookConfig({
-  compiler: withUnoCssViteCompiler(),
+  compiler: withUnoCssViteCompiler({}, integration),
   vitePlugins: {
-    afterLitsx: createUnoCssVitePlugins({ presets: [presetWind3()] }),
+    afterLitsx: createUnoCssVitePlugins(
+      { presets: [presetWind3()] },
+      integration,
+    ),
   },
 });
 ```
+
+The same `integration` object must reach both halves of the split API. Omit it
+from both calls when the defaults are sufficient.
 
 ## Granularity and SSR
 
@@ -274,20 +399,22 @@ may currently cause a broader module invalidation, but never broaden the set of
 generated rules.
 
 In a production browser build, importing the virtual preflight module gives
-every component the same constructible stylesheet. Vite serve uses the
-per-module snapshots described above. During SSR the preflight must still be
-serialized inside every declarative shadow root; a document-level stylesheet
-cannot cross a shadow boundary.
+every component the same constructible stylesheet. Vite serve uses
+per-module snapshots. During SSR, component-routed reset/property layers are
+serialized inside declarative shadow roots, while globally routed theme layers
+belong to the document stylesheet and inherit across those roots.
 
 In `scoped` mode, `LightDomMixin` installs the generated `CSSResult` in the
 component host. SSR serializes the stable scope attribute so hydration uses the
 same boundary without replacing the host. A document-level stylesheet is
 still required when utility styling must be visible before a client-only
-light-DOM component has initialized. The optional `virtual:uno.css` import also
+light-DOM component has initialized. The shared `virtual:uno.css` sheet also
 covers page shells, third-party light DOM and other markup outside LitSX hosts.
 
 The global sheet is a normal Vite CSS asset in production. SSR frameworks
 should link the CSS emitted for the browser entry in the document head, just
-as they would for any other imported stylesheet. Shadow roots continue to
-receive their shared preflight `CSSResult`, because a document stylesheet
-cannot cross a shadow boundary.
+as they would for any other imported stylesheet. Shadow roots receive only the
+preflight layers routed to `component`; globally routed custom properties can
+inherit through those roots. A framework using `globalCssModule: false` must
+call `generateGlobalCss()` (or provide an equivalent adapter hook) and emit or
+link that result once at document level.

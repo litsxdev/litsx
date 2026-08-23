@@ -5,7 +5,6 @@ import {
   UNO_CSS_COMPONENT_MODULE_MARKER,
   UNO_CSS_DYNAMIC_WILDCARD,
   UNO_CSS_GUARD_PATTERN,
-  UNO_CSS_PLACEHOLDER,
   UNO_CSS_PREFLIGHT_EXPORT,
   UNO_CSS_PREFLIGHT_MODULE_ID,
 } from "./protocol.js";
@@ -219,19 +218,6 @@ function findImportedCssIdentifier(programPath, t) {
     }
   }
   return null;
-}
-
-function programHasPlaceholder(programPath, placeholder) {
-  let found = false;
-  programPath.traverse({
-    TemplateElement(templatePath) {
-      if (templatePath.node.value?.raw?.includes(placeholder)) {
-        found = true;
-        templatePath.stop();
-      }
-    },
-  });
-  return found;
 }
 
 function guardTemplate(payload, cssIdentifier, t) {
@@ -638,10 +624,10 @@ export function createUnoCssAuthoringPlugin(options = {}) {
  * dynamic maps are contributed explicitly through Component.styles guards.
  */
 export function createUnoCssOutputPlugin(options = {}) {
-  const placeholder =
-    typeof options.placeholder === "string" && options.placeholder
-      ? options.placeholder
-      : UNO_CSS_PLACEHOLDER;
+  const globalCssModule =
+    typeof options.globalCssModule === "string" && options.globalCssModule
+      ? options.globalCssModule
+      : null;
   const preflightModule =
     typeof options.preflightModule === "string" && options.preflightModule
       ? options.preflightModule
@@ -663,10 +649,6 @@ export function createUnoCssOutputPlugin(options = {}) {
             ) {
               return;
             }
-            if (programHasPlaceholder(programPath, placeholder)) {
-              return;
-            }
-
             const componentClasses = [];
             programPath.traverse({
               ClassDeclaration(classPath) {
@@ -705,6 +687,11 @@ export function createUnoCssOutputPlugin(options = {}) {
               ? programPath.scope.generateUidIdentifier("litsxUnoCssPreflight")
               : null;
             const insertedNodes = [];
+            if (globalCssModule) {
+              insertedNodes.push(
+                t.importDeclaration([], t.stringLiteral(globalCssModule)),
+              );
+            }
             insertedNodes.push(
               t.expressionStatement(
                 t.unaryExpression(
@@ -905,7 +892,6 @@ export {
 export {
   decodeUnoCssGuardPayload,
   UNO_CSS_GUARD_PATTERN,
-  UNO_CSS_PLACEHOLDER,
   UNO_CSS_PREFLIGHT_EXPORT,
   UNO_CSS_PREFLIGHT_MODULE_ID,
 } from "./protocol.js";

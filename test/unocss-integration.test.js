@@ -13,7 +13,6 @@ import {
   createUnoCssIntegration,
   decodeUnoCssGuardPayload,
   UNO_CSS_GUARD_PATTERN,
-  UNO_CSS_PLACEHOLDER,
   UNO_CSS_PREFLIGHT_MODULE_ID,
   withUnoCssCompiler,
 } from "../packages/unocss/src/index.js";
@@ -39,6 +38,13 @@ export function InfoCard() {
 
 function count(source, needle) {
   return source.split(needle).length - 1;
+}
+
+async function loadViteGlobalCss(server) {
+  const resolved = await server.pluginContainer.resolveId("virtual:uno.css");
+  assert(resolved, "expected Vite to resolve the global UnoCSS module");
+  const loaded = await server.pluginContainer.load(resolved.id);
+  return typeof loaded === "string" ? loaded : (loaded?.code ?? "");
 }
 
 function createWorkspaceTempDirectory(prefix) {
@@ -168,6 +174,7 @@ async function buildExternalConfigFixture() {
   fs.writeFileSync(
     entry,
     `
+import "virtual:uno.css";
 export function BrandCard() {
   return <article class="bg-brand">Configured</article>;
 }
@@ -211,8 +218,7 @@ export default {
       ? result.flatMap((item) => item.output)
       : result.output;
     return outputs
-      .filter((item) => item.type === "chunk")
-      .map((item) => item.code)
+      .map((item) => (item.type === "chunk" ? item.code : String(item.source)))
       .join("\n");
   } finally {
     fs.rmSync(directory, { recursive: true, force: true });
@@ -375,10 +381,60 @@ describe("@litsx/unocss integration", () => {
     const result = await integration.materializeModule(compiled.code, id);
 
     assert(result);
-    assert.doesNotMatch(result.code, /@unocss-placeholder/);
     assert.match(result.code, /\.bg-red-500\{/);
     assert.match(result.code, /\.p-8\{/);
     assert.deepStrictEqual(result.dependencies, []);
+  });
+
+  it("does not treat author-owned placeholder text as compiler output", async () => {
+    const integration = await createUnoCssIntegration({
+      presets: [presetWind4()],
+      preflights: [],
+    });
+    const sources = [
+      'export const value = "@unocss-placeholder";',
+      "export const value = `@unocss-placeholder`;",
+      "export const value = /@unocss-placeholder/;",
+      "// @unocss-placeholder\nexport const value = 1;",
+    ];
+
+    for (const [index, source] of sources.entries()) {
+      const result = await integration.materializeModule(
+        source,
+        `/virtual/author-literal-${index}.js`,
+      );
+      assert.strictEqual(result, null);
+    }
+  });
+
+  it("preserves author-owned placeholder text while materializing real guards", async () => {
+    const id = "/virtual/placeholder-and-component.tsx";
+    const compiled = transformLitsxSync(
+      `
+export const unrelated = "@unocss-placeholder";
+export const unrelatedTemplate = \`@unocss-placeholder\`;
+export const unrelatedPattern = /@unocss-placeholder/;
+// @unocss-placeholder remains author-owned text.
+export function GuardedCard() { return <article class="p-4">Card</article>; }
+`,
+      withUnoCssCompiler({ filename: id }),
+    );
+    const integration = await createUnoCssIntegration({
+      presets: [presetWind4()],
+      preflights: [],
+    });
+
+    const result = await integration.materializeModule(compiled.code, id);
+
+    assert(result);
+    assert.match(result.code, /unrelated = "@unocss-placeholder"/);
+    assert.match(result.code, /unrelatedTemplate = `@unocss-placeholder`/);
+    assert.match(result.code, /unrelatedPattern = \/@unocss-placeholder\//);
+    assert.match(
+      result.code,
+      /\/\/ @unocss-placeholder remains author-owned text\./,
+    );
+    assert.match(result.code, /\.p-4\{/);
   });
 
   it("integrates through a plain Rollup adapter built from the neutral engine", async () => {
@@ -452,8 +508,12 @@ export function RollupCard() {
 
       assert.match(code, /\.rounded-lg\{/);
       assert.match(code, /\.bg-blue-600\{/);
-      assert.match(code, /--colors-blue-600:/);
-      assert.doesNotMatch(code, /ROLLUP_UNOCSS_PREFLIGHT|unocss-placeholder/);
+      assert.doesNotMatch(code, /--colors-blue-600:/);
+      assert.match(
+        await integration.generatePreflightFor("global"),
+        /--colors-blue-600:/,
+      );
+      assert.doesNotMatch(code, /ROLLUP_UNOCSS_PREFLIGHT/);
       await bundle.close();
     } finally {
       fs.rmSync(directory, { recursive: true, force: true });
@@ -472,9 +532,53 @@ export function RollupCard() {
     const preflight = await integration.generatePreflight();
     const moduleSource = integration.createPreflightModuleSource(preflight);
 
-    assert.match(preflight, /--colors-blue-600/);
-    assert.match(preflight, /--colors-white/);
+    assert.doesNotMatch(preflight, /--colors-blue-600/);
+    assert.doesNotMatch(preflight, /--colors-white/);
+    assert.match(
+      await integration.generatePreflightFor("global"),
+      /--colors-blue-600/,
+    );
     assert.match(moduleSource, /export const unoPreflightStyles = css`/);
+  });
+
+  it("routes theme preflight globally by default without masking shadow inheritance", async () => {
+    const integration = await createUnoCssIntegration({
+      presets: [presetWind4()],
+    });
+    await integration.scan(
+      '<button class="bg-blue-600 text-white">Save</button>',
+      "/virtual/button.html",
+    );
+
+    const componentPreflight = await integration.generatePreflight();
+    const globalCss = await integration.generateGlobalCss();
+
+    assert.doesNotMatch(componentPreflight, /--colors-blue-600:/);
+    assert.doesNotMatch(componentPreflight, /:root,\s*:host/);
+    assert.match(globalCss, /--colors-blue-600:/);
+    assert.match(globalCss, /:root,\s*:host/);
+  });
+
+  it("allows preflight layers to be routed generically per destination", async () => {
+    const integration = await createUnoCssIntegration(
+      {
+        preflights: [
+          { layer: "tokens", getCSS: () => ":root,:host{--brand:red}" },
+          { layer: "reset", getCSS: () => "button{font:inherit}" },
+        ],
+      },
+      {
+        preflightLayers: {
+          component: ({ layer }) => layer === "reset",
+          global: ["tokens"],
+        },
+      },
+    );
+
+    assert.match(await integration.generatePreflight(), /font:inherit/);
+    assert.doesNotMatch(await integration.generatePreflight(), /--brand/);
+    assert.match(await integration.generateGlobalCss(), /--brand/);
+    assert.doesNotMatch(await integration.generateGlobalCss(), /font:inherit/);
   });
 
   it("generates one global light DOM sheet from the shared token store", async () => {
@@ -541,7 +645,6 @@ TestButton.styles = [BUTTON];
       }),
     );
 
-    assert.strictEqual(count(result.code, UNO_CSS_PLACEHOLDER), 0);
     assert.strictEqual(count(result.code, "__LITSX_UNOCSS_GUARD_"), 2);
     assert.match(
       result.code,
@@ -644,6 +747,7 @@ SecondCard.styles = [SECOND_SIZES];
       result.code,
       new RegExp(`from ["']${UNO_CSS_PREFLIGHT_MODULE_ID}["']`),
     );
+    assert.match(result.code, /import ["']virtual:uno\.css["'];/);
     assert.match(
       result.code,
       /static styles = \[_litsxUnoCssPreflight, super\.styles \?\? \[\], css`[\s\S]*?`, _litsxUnoCssStyles\];/,
@@ -659,6 +763,18 @@ SecondCard.styles = [SECOND_SIZES];
         components: ["ActionButton", "InfoCard"],
       },
     ]);
+
+    const frameworkOwnedGlobal = transformLitsxSync(
+      MULTI_COMPONENT_SOURCE,
+      withUnoCssViteCompiler(
+        { filename: "/virtual/framework-owned.tsx" },
+        { globalCssModule: false },
+      ),
+    );
+    assert.doesNotMatch(
+      frameworkOwnedGlobal.code,
+      /import ["']virtual:uno\.css["'];/,
+    );
   });
 
   it("composes with existing output plugins and is idempotent", () => {
@@ -689,7 +805,7 @@ SecondCard.styles = [SECOND_SIZES];
       withUnoCssCompiler({ filename: "/virtual/constants.ts" }),
     );
 
-    assert.doesNotMatch(result.code, /unocss-placeholder|litsxUnoCssStyles/);
+    assert.doesNotMatch(result.code, /litsxUnoCssStyles/);
     assert.strictEqual(result.metadata.litsxStyleIntegrations, undefined);
   });
 
@@ -733,7 +849,6 @@ LightCard.lightDom = true;
       result.code,
       /static styles = \[super\.styles \?\? \[\], _litsxUnoCssScopedStyles\];/,
     );
-    assert.doesNotMatch(result.code, /@unocss-placeholder/);
   });
 
   it("routes generated light DOM styles through scoped, global and none modes", async () => {
@@ -842,7 +957,6 @@ export function CompatButton({ active }) {
       }),
     );
 
-    assert.strictEqual(count(result.code, UNO_CSS_PLACEHOLDER), 0);
     assert.match(result.code, /class CompatButton/);
     assert.doesNotMatch(result.code, /static styles|lightDomStyleScope/);
     assert.match(result.code, /bg-green-500/);
@@ -1084,10 +1198,9 @@ BadImport.styles = [BUTTON_SIZES];
     }
   });
 
-  it("generates real utility CSS after LitSX and removes the placeholder", async () => {
+  it("materializes real utility CSS after LitSX", async () => {
     const chunk = await buildFixture(MULTI_COMPONENT_SOURCE);
 
-    assert.doesNotMatch(chunk.code, /@unocss-placeholder/);
     assert.match(chunk.code, /\.bg-red-500\{/);
     assert.match(chunk.code, /\.p-8\{/);
     assert.match(chunk.code, /\.shadow-lg\{/);
@@ -1100,7 +1213,6 @@ BadImport.styles = [BUTTON_SIZES];
   it("emits one preflight module across independently compiled component modules", async () => {
     const chunk = await buildCrossModuleFixture();
 
-    assert.doesNotMatch(chunk.code, /@unocss-placeholder/);
     assert.match(chunk.code, /\.bg-red-500\{/);
     assert.match(chunk.code, /\.shadow-lg\{/);
     assert.strictEqual(count(chunk.code, "/* layer: preflights */"), 1);
@@ -1190,6 +1302,7 @@ LightCard.lightDom = true;
       assert.match(css, /\.text-white\{/);
       assert.match(css, /\.m-7\{/);
       assert.match(css, /\.bg-green-600\{/);
+      assert.doesNotMatch(css, /\.bg-red-500\{/);
       assert.doesNotMatch(css, /\.bg-pink-500\{/);
       assert.match(js, /\.bg-red-500\{/);
       assert.doesNotMatch(js, /@scope \(\[data-litsx-style-scope=/);
@@ -1199,9 +1312,10 @@ LightCard.lightDom = true;
     }
   });
 
-  it("generates Wind4 on-demand theme variables from the project token set", async () => {
+  it("keeps Wind4 on-demand theme variables out of component output", async () => {
     const chunk = await buildFixture(
       `
+import "virtual:uno.css";
 export function WindCard() {
   return <article class="p-4 rounded-lg bg-red-500">Wind 4</article>;
 }
@@ -1209,9 +1323,10 @@ export function WindCard() {
       { preset: presetWind4() },
     );
 
-    assert.match(chunk.code, /--spacing:/);
-    assert.match(chunk.code, /--radius-lg:/);
-    assert.match(chunk.code, /--colors-red-500:/);
+    assert.doesNotMatch(chunk.code, /--colors-red-500:/);
+    assert.match(chunk.code, /var\(--spacing\)/);
+    assert.match(chunk.code, /var\(--radius-lg\)/);
+    assert.match(chunk.code, /var\(--colors-red-500\)/);
     assert.match(chunk.code, /padding:calc\(var\(--spacing\) \* 4\)/);
   });
 
@@ -1392,7 +1507,7 @@ export function StaticBox() {
     const code = await buildExternalConfigFixture();
 
     assert.match(code, /\.bg-brand\{background:var\(--brand-color\);\}/);
-    assert.strictEqual(count(code, ":host{--brand-color:rgb(12 34 56);}"), 1);
+    assert.match(code, /--brand-color\s*:/);
   });
 
   it("shares one preflight chunk across multiple build entrypoints", async () => {
@@ -1407,7 +1522,6 @@ export function StaticBox() {
   it("emits the same utility stylesheet through Vite's SSR pipeline", async () => {
     const chunk = await buildFixture(MULTI_COMPONENT_SOURCE, { ssr: true });
 
-    assert.doesNotMatch(chunk.code, /@unocss-placeholder/);
     assert.match(chunk.code, /\.bg-red-500\{/);
     assert.match(chunk.code, /\.p-8\{/);
     assert.match(chunk.code, /:host \{ display: inline-block; \}/);
@@ -1454,7 +1568,6 @@ export function StaticBox() {
         },
       );
 
-      assert.doesNotMatch(rendered.html, /@unocss-placeholder/);
       assert.match(
         rendered.html,
         /declarative-shadow-root|shadowrootmode="open"/,
@@ -1584,10 +1697,14 @@ export { WindCard } from "./card.tsx";
         },
       );
 
-      assert.match(rendered.html, /--spacing:/);
-      assert.match(rendered.html, /--radius-lg:/);
-      assert.match(rendered.html, /--colors-red-500:/);
-      assert.match(rendered.html, /--colors-blue-500:/);
+      const globalCss = await loadViteGlobalCss(server);
+
+      assert.doesNotMatch(rendered.html, /--colors-red-500:/);
+      assert.doesNotMatch(rendered.html, /--colors-blue-500:/);
+      assert.match(globalCss, /--spacing:/);
+      assert.match(globalCss, /--radius-lg:/);
+      assert.match(globalCss, /--colors-red-500:/);
+      assert.match(globalCss, /--colors-blue-500:/);
     } finally {
       await server.close();
       fs.rmSync(directory, { recursive: true, force: true });
@@ -1646,8 +1763,10 @@ export function LateCard() {
         .flat(Infinity)
         .map((style) => style?.cssText ?? "")
         .join("\n");
-      assert.match(lateCss, /--colors-white:/);
+      const globalCss = await loadViteGlobalCss(server);
+      assert.doesNotMatch(lateCss, /--colors-white:/);
       assert.match(lateCss, /var\(--colors-white\)/);
+      assert.match(globalCss, /--colors-white:/);
     } finally {
       await server.close();
       fs.rmSync(directory, { recursive: true, force: true });
@@ -1689,7 +1808,11 @@ export function WindCard() {
 
     try {
       const before = await server.ssrLoadModule("/entry.tsx");
-      assert.match(before.WindCard.styles[0].cssText, /--colors-red-500:/);
+      assert.doesNotMatch(
+        before.WindCard.styles[0].cssText,
+        /--colors-red-500:/,
+      );
+      assert.match(await loadViteGlobalCss(server), /--colors-red-500:/);
 
       fs.writeFileSync(
         entry,
@@ -1706,13 +1829,24 @@ export function WindCard() {
       // loaded full-suite run enough time without weakening the assertion.
       for (let attempt = 0; attempt < 200; attempt += 1) {
         after = await server.ssrLoadModule("/entry.tsx");
-        if (after.WindCard.styles[0].cssText.includes("--colors-blue-500:")) {
+        const globalCss = await loadViteGlobalCss(server);
+        if (globalCss.includes("--colors-blue-500:")) {
           break;
         }
         await new Promise((resolve) => setTimeout(resolve, 25));
       }
-      assert.match(after.WindCard.styles[0].cssText, /--colors-blue-500:/);
-      assert.match(after.WindCard.styles[0].cssText, /--spacing:/);
+      assert.doesNotMatch(
+        after.WindCard.styles[0].cssText,
+        /--colors-blue-500:/,
+      );
+      const afterCss = after.WindCard.styles
+        .flat(Infinity)
+        .map((style) => style?.cssText ?? "")
+        .join("\n");
+      assert.match(afterCss, /var\(--colors-blue-500\)/);
+      const globalCss = await loadViteGlobalCss(server);
+      assert.match(globalCss, /--colors-blue-500:/);
+      assert.match(globalCss, /--spacing:/);
     } finally {
       await server.close();
       fs.rmSync(directory, { recursive: true, force: true });

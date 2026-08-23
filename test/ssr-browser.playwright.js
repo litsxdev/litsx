@@ -31,11 +31,15 @@ test("hydrates imported camelCase props, declared attribute aliases, and spreads
 }) => {
   const tempRoot = path.join(repoRoot, "test-results");
   await fs.mkdir(tempRoot, { recursive: true });
-  const tempDir = await fs.mkdtemp(path.join(tempRoot, "litsx-imported-props-"));
+  const tempDir = await fs.mkdtemp(
+    path.join(tempRoot, "litsx-imported-props-"),
+  );
   const srcDir = path.join(tempDir, "src");
   await fs.mkdir(srcDir, { recursive: true });
 
-  await fs.writeFile(path.join(srcDir, "contract-button.tsx"), `
+  await fs.writeFile(
+    path.join(srcDir, "contract-button.tsx"),
+    `
 export type ContractButtonProps = {
   label?: string;
   iconOnly?: boolean;
@@ -56,8 +60,11 @@ ContractButton.properties = {
   iconOnly: { type: Boolean, reflect: true, attribute: "icon-only" },
   ariaLabel: { type: String, reflect: true, attribute: "aria-label" },
 };
-`);
-  await fs.writeFile(path.join(srcDir, "contract-root.tsx"), `
+`,
+  );
+  await fs.writeFile(
+    path.join(srcDir, "contract-root.tsx"),
+    `
 import { ContractButton } from "./contract-button";
 
 const runtimeProps = { iconOnly: true, ariaLabel: "Runtime spread" };
@@ -80,13 +87,17 @@ export function ContractRoot() {
     </main>
   );
 }
-`);
-  await fs.writeFile(path.join(srcDir, "main.js"), `
+`,
+  );
+  await fs.writeFile(
+    path.join(srcDir, "main.js"),
+    `
 const components = await import("./contract-root.tsx");
 const button = await import("./contract-button.tsx");
 const { registerHydrationModules } = await import("@litsx/ssr/hydration");
 await registerHydrationModules([components, button]);
-`);
+`,
+  );
 
   const server = await createSsrDevServer({
     root: tempDir,
@@ -136,23 +147,35 @@ window.__litsxImportedPropsHydrated = true;
       if (message.type() === "error") consoleErrors.push(message.text());
       if (message.type() === "warning") consoleWarnings.push(message.text());
     });
-    page.on("pageerror", (error) => pageErrors.push(error.stack || error.message));
+    page.on("pageerror", (error) =>
+      pageErrors.push(error.stack || error.message),
+    );
     await page.goto(server.resolvedUrls.local[0]);
-    await page.waitForFunction(() => window.__litsxImportedPropsHydrated === true);
+    await page.waitForFunction(
+      () => window.__litsxImportedPropsHydrated === true,
+    );
     await page.evaluate(async () => {
       const root = document.querySelector("contract-root");
       await root.updateComplete;
-      const hosts = [...(root.shadowRoot?.querySelectorAll("contract-button") ?? [])];
+      const hosts = [
+        ...(root.shadowRoot?.querySelectorAll("contract-button") ?? []),
+      ];
       await Promise.all(hosts.map((host) => host.updateComplete));
-      await new Promise((resolve) => requestAnimationFrame(() =>
-        requestAnimationFrame(resolve)
-      ));
+      await new Promise((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(resolve)),
+      );
     });
     await page.waitForFunction(() => {
       const root = document.querySelector("contract-root");
-      const hosts = [...(root?.shadowRoot?.querySelectorAll("contract-button") ?? [])];
-      return hosts.length === 10 && hosts.every((host) =>
-        host.updateComplete?.then && typeof host.iconOnly === "boolean"
+      const hosts = [
+        ...(root?.shadowRoot?.querySelectorAll("contract-button") ?? []),
+      ];
+      return (
+        hosts.length === 10 &&
+        hosts.every(
+          (host) =>
+            host.updateComplete?.then && typeof host.iconOnly === "boolean",
+        )
       );
     });
 
@@ -190,21 +213,113 @@ window.__litsxImportedPropsHydrated = true;
       { caseName: "spread-undefined", iconAttribute: false, branch: "label" },
     ]);
     expect(result.hydrated).toEqual([
-      { caseName: "camel-true", iconOnly: true, ariaLabel: "", iconAttribute: true, ariaAttribute: "", branch: "icon", sameHost: true, sameBranch: true },
-      { caseName: "camel-false", iconOnly: false, ariaLabel: "", iconAttribute: false, ariaAttribute: "", branch: "label", sameHost: true, sameBranch: true },
-      { caseName: "attribute-static", iconOnly: true, ariaLabel: "", iconAttribute: true, ariaAttribute: "", branch: "icon", sameHost: true, sameBranch: true },
-      { caseName: "attribute-dynamic", iconOnly: true, ariaLabel: "", iconAttribute: true, ariaAttribute: "", branch: "icon", sameHost: true, sameBranch: true },
-      { caseName: "aria-camel", iconOnly: false, ariaLabel: "Camel label", iconAttribute: false, ariaAttribute: "Camel label", branch: "label", sameHost: true, sameBranch: true },
-      { caseName: "aria-attribute", iconOnly: false, ariaLabel: "Attribute label", iconAttribute: false, ariaAttribute: "Attribute label", branch: "label", sameHost: true, sameBranch: true },
-      { caseName: "spread-literal", iconOnly: true, ariaLabel: "Literal spread", iconAttribute: true, ariaAttribute: "Literal spread", branch: "icon", sameHost: true, sameBranch: true },
-      { caseName: "spread-runtime", iconOnly: true, ariaLabel: "Runtime spread", iconAttribute: true, ariaAttribute: "Runtime spread", branch: "icon", sameHost: true, sameBranch: true },
-      { caseName: "spread-false", iconOnly: false, ariaLabel: null, iconAttribute: false, ariaAttribute: null, branch: "label", sameHost: true, sameBranch: true },
-      { caseName: "spread-undefined", iconOnly: false, ariaLabel: "", iconAttribute: false, ariaAttribute: "", branch: "label", sameHost: true, sameBranch: true },
+      {
+        caseName: "camel-true",
+        iconOnly: true,
+        ariaLabel: "",
+        iconAttribute: true,
+        ariaAttribute: "",
+        branch: "icon",
+        sameHost: true,
+        sameBranch: true,
+      },
+      {
+        caseName: "camel-false",
+        iconOnly: false,
+        ariaLabel: "",
+        iconAttribute: false,
+        ariaAttribute: "",
+        branch: "label",
+        sameHost: true,
+        sameBranch: true,
+      },
+      {
+        caseName: "attribute-static",
+        iconOnly: true,
+        ariaLabel: "",
+        iconAttribute: true,
+        ariaAttribute: "",
+        branch: "icon",
+        sameHost: true,
+        sameBranch: true,
+      },
+      {
+        caseName: "attribute-dynamic",
+        iconOnly: true,
+        ariaLabel: "",
+        iconAttribute: true,
+        ariaAttribute: "",
+        branch: "icon",
+        sameHost: true,
+        sameBranch: true,
+      },
+      {
+        caseName: "aria-camel",
+        iconOnly: false,
+        ariaLabel: "Camel label",
+        iconAttribute: false,
+        ariaAttribute: "Camel label",
+        branch: "label",
+        sameHost: true,
+        sameBranch: true,
+      },
+      {
+        caseName: "aria-attribute",
+        iconOnly: false,
+        ariaLabel: "Attribute label",
+        iconAttribute: false,
+        ariaAttribute: "Attribute label",
+        branch: "label",
+        sameHost: true,
+        sameBranch: true,
+      },
+      {
+        caseName: "spread-literal",
+        iconOnly: true,
+        ariaLabel: "Literal spread",
+        iconAttribute: true,
+        ariaAttribute: "Literal spread",
+        branch: "icon",
+        sameHost: true,
+        sameBranch: true,
+      },
+      {
+        caseName: "spread-runtime",
+        iconOnly: true,
+        ariaLabel: "Runtime spread",
+        iconAttribute: true,
+        ariaAttribute: "Runtime spread",
+        branch: "icon",
+        sameHost: true,
+        sameBranch: true,
+      },
+      {
+        caseName: "spread-false",
+        iconOnly: false,
+        ariaLabel: null,
+        iconAttribute: false,
+        ariaAttribute: null,
+        branch: "label",
+        sameHost: true,
+        sameBranch: true,
+      },
+      {
+        caseName: "spread-undefined",
+        iconOnly: false,
+        ariaLabel: "",
+        iconAttribute: false,
+        ariaAttribute: "",
+        branch: "label",
+        sameHost: true,
+        sameBranch: true,
+      },
     ]);
     expect(consoleErrors).toEqual([]);
-    expect(consoleWarnings.filter(
-      (message) => !message.startsWith("Lit is in dev mode."),
-    )).toEqual([]);
+    expect(
+      consoleWarnings.filter(
+        (message) => !message.startsWith("Lit is in dev mode."),
+      ),
+    ).toEqual([]);
     expect(pageErrors).toEqual([]);
   } finally {
     await server.close();
@@ -217,11 +332,15 @@ test("preserves imported component host attributes through SSR, hydration, and u
 }) => {
   const tempRoot = path.join(repoRoot, "test-results");
   await fs.mkdir(tempRoot, { recursive: true });
-  const tempDir = await fs.mkdtemp(path.join(tempRoot, "litsx-host-attributes-"));
+  const tempDir = await fs.mkdtemp(
+    path.join(tempRoot, "litsx-host-attributes-"),
+  );
   const srcDir = path.join(tempDir, "src");
   await fs.mkdir(srcDir, { recursive: true });
 
-  await fs.writeFile(path.join(srcDir, "quartz-icon.tsx"), `
+  await fs.writeFile(
+    path.join(srcDir, "quartz-icon.tsx"),
+    `
 import { css, defineHook } from "@litsx/core";
 import { LightDomMixin } from "@litsx/core/elements";
 
@@ -252,8 +371,11 @@ QuartzLightIcon.styles = css\`
   quartz-light-icon.rotate-180 { rotate: 180deg; }
   quartz-light-icon.rotate-0 { rotate: 0deg; }
 \`;
-`);
-  await fs.writeFile(path.join(srcDir, "host-attribute-root.tsx"), `
+`,
+  );
+  await fs.writeFile(
+    path.join(srcDir, "host-attribute-root.tsx"),
+    `
 import { QuartzIcon, QuartzLightIcon } from "./quartz-icon";
 
 const spreadAttributes = {
@@ -305,13 +427,17 @@ export function HostAttributeRoot({ open = true }) {
     </main>
   );
 }
-`);
-  await fs.writeFile(path.join(srcDir, "main.js"), `
+`,
+  );
+  await fs.writeFile(
+    path.join(srcDir, "main.js"),
+    `
 const root = await import("./host-attribute-root.tsx");
 const icon = await import("./quartz-icon.tsx");
 const { registerHydrationModules } = await import("@litsx/ssr/hydration");
 await registerHydrationModules([root, icon]);
-`);
+`,
+  );
 
   const server = await createSsrDevServer({
     root: tempDir,
@@ -358,21 +484,30 @@ window.__litsxHostAttributesHydrated = true;
       if (message.type() === "error") consoleErrors.push(message.text());
       if (message.type() === "warning") consoleWarnings.push(message.text());
     });
-    page.on("pageerror", (error) => pageErrors.push(error.stack || error.message));
+    page.on("pageerror", (error) =>
+      pageErrors.push(error.stack || error.message),
+    );
 
     await page.goto(server.resolvedUrls.local[0]);
-    await page.waitForFunction(() => window.__litsxHostAttributesHydrated === true);
+    await page.waitForFunction(
+      () => window.__litsxHostAttributesHydrated === true,
+    );
     await page.waitForFunction(() => {
       const root = document.querySelector("host-attribute-root");
       const renderRoot = root?.renderRoot ?? root?.shadowRoot ?? root;
-      return renderRoot?.querySelectorAll("quartz-icon, quartz-light-icon").length === 3;
+      return (
+        renderRoot?.querySelectorAll("quartz-icon, quartz-light-icon")
+          .length === 3
+      );
     });
 
     const initial = await page.evaluate(async () => {
       const root = document.querySelector("host-attribute-root");
       await root.updateComplete;
       const renderRoot = root.renderRoot ?? root.shadowRoot ?? root;
-      const hosts = [...renderRoot.querySelectorAll("quartz-icon, quartz-light-icon")];
+      const hosts = [
+        ...renderRoot.querySelectorAll("quartz-icon, quartz-light-icon"),
+      ];
       await Promise.all(hosts.map((host) => host.updateComplete));
       const [direct, light, spread] = hosts;
       direct.dispatchEvent(new Event("click"));
@@ -406,7 +541,8 @@ window.__litsxHostAttributesHydrated = true;
           payload: light.payload,
           clicked: light.dataset.clicked,
           rotate: getComputedStyle(light).rotate,
-          rendersInLightDom: light.shadowRoot === null && light.querySelector("span") !== null,
+          rendersInLightDom:
+            light.shadowRoot === null && light.querySelector("span") !== null,
         },
         spread: {
           sameNode: spread === window.__litsxHostAttributeNodes[2],
@@ -422,9 +558,33 @@ window.__litsxHostAttributesHydrated = true;
     });
 
     expect(initial.ssr).toEqual([
-      { name: "direct", className: "rotate-180", id: "direct-icon", ariaHidden: "true", ariaLabel: null, state: "open", title: "Direct title" },
-      { name: null, className: "rotate-180", id: null, ariaHidden: null, ariaLabel: "Light icon", state: "open", title: null },
-      { name: "spread", className: "rotate-180", id: null, ariaHidden: null, ariaLabel: "Spread icon", state: "open", title: "Spread title" },
+      {
+        name: "direct",
+        className: "rotate-180",
+        id: "direct-icon",
+        ariaHidden: "true",
+        ariaLabel: null,
+        state: "open",
+        title: "Direct title",
+      },
+      {
+        name: null,
+        className: "rotate-180",
+        id: null,
+        ariaHidden: null,
+        ariaLabel: "Light icon",
+        state: "open",
+        title: null,
+      },
+      {
+        name: "spread",
+        className: "rotate-180",
+        id: null,
+        ariaHidden: null,
+        ariaLabel: "Spread icon",
+        state: "open",
+        title: "Spread title",
+      },
     ]);
     expect(initial.rootIsLight).toBe(false);
     expect(initial.direct).toEqual({
@@ -468,11 +628,15 @@ window.__litsxHostAttributesHydrated = true;
     const updated = await page.evaluate(async () => {
       const root = document.querySelector("host-attribute-root");
       const renderRoot = root.renderRoot ?? root.shadowRoot ?? root;
-      const nodes = [...renderRoot.querySelectorAll("quartz-icon, quartz-light-icon")];
+      const nodes = [
+        ...renderRoot.querySelectorAll("quartz-icon, quartz-light-icon"),
+      ];
       root.open = false;
       await root.updateComplete;
       await Promise.all(nodes.map((host) => host.updateComplete));
-      const current = [...renderRoot.querySelectorAll("quartz-icon, quartz-light-icon")];
+      const current = [
+        ...renderRoot.querySelectorAll("quartz-icon, quartz-light-icon"),
+      ];
       return {
         sameNodes: current.every((host, index) => host === nodes[index]),
         directClass: current[0].getAttribute("class"),
@@ -496,9 +660,11 @@ window.__litsxHostAttributesHydrated = true;
       spreadClass: null,
     });
     expect(consoleErrors).toEqual([]);
-    expect(consoleWarnings.filter(
-      (message) => !message.startsWith("Lit is in dev mode."),
-    )).toEqual([]);
+    expect(
+      consoleWarnings.filter(
+        (message) => !message.startsWith("Lit is in dev mode."),
+      ),
+    ).toEqual([]);
     expect(pageErrors).toEqual([]);
   } finally {
     await server.close();
@@ -515,12 +681,17 @@ test("registers React lazy elements only after their default export resolves", a
   const srcDir = path.join(tempDir, "src");
   await fs.mkdir(srcDir, { recursive: true });
 
-  await fs.writeFile(path.join(srcDir, "results-panel.tsx"), `
+  await fs.writeFile(
+    path.join(srcDir, "results-panel.tsx"),
+    `
 export default function ResultsPanel() {
   return <p data-ready="true">Lazy results ready</p>;
 }
-`);
-  await fs.writeFile(path.join(srcDir, "lazy-root.tsx"), `
+`,
+  );
+  await fs.writeFile(
+    path.join(srcDir, "lazy-root.tsx"),
+    `
 import { lazy } from "react";
 
 const ResultsPanel = lazy(() => import("./results-panel.tsx"));
@@ -528,12 +699,16 @@ const ResultsPanel = lazy(() => import("./results-panel.tsx"));
 export function LazyRoot() {
   return <main><ResultsPanel /></main>;
 }
-`);
-  await fs.writeFile(path.join(srcDir, "main.js"), `
+`,
+  );
+  await fs.writeFile(
+    path.join(srcDir, "main.js"),
+    `
 const root = await import("./lazy-root.tsx");
 const { registerHydrationModules } = await import("@litsx/ssr/hydration");
 await registerHydrationModules([root]);
-`);
+`,
+  );
 
   const server = await createSsrDevServer({
     root: tempDir,
@@ -567,7 +742,9 @@ window.__litsxLazyHydrated = true;
     page.on("console", (message) => {
       if (message.type() === "error") consoleErrors.push(message.text());
     });
-    page.on("pageerror", (error) => pageErrors.push(error.stack || error.message));
+    page.on("pageerror", (error) =>
+      pageErrors.push(error.stack || error.message),
+    );
 
     await page.goto(server.resolvedUrls.local[0]);
     await page.waitForFunction(() => window.__litsxLazyHydrated === true);
@@ -576,7 +753,10 @@ window.__litsxLazyHydrated = true;
       const renderRoot = root?.renderRoot ?? root?.shadowRoot ?? root;
       const panel = renderRoot?.querySelector("results-panel");
       const panelRoot = panel?.renderRoot ?? panel?.shadowRoot ?? panel;
-      return panelRoot?.querySelector('[data-ready="true"]')?.textContent === "Lazy results ready";
+      return (
+        panelRoot?.querySelector('[data-ready="true"]')?.textContent ===
+        "Lazy results ready"
+      );
     });
 
     const result = await page.evaluate(() => {
@@ -584,9 +764,9 @@ window.__litsxLazyHydrated = true;
       const renderRoot = root.renderRoot ?? root.shadowRoot ?? root;
       const panel = renderRoot.querySelector("results-panel");
       return {
-        loaderInStaticElements: Object.values(root.constructor.elements ?? {}).some(
-          (value) => value?.name === "ResultsPanel",
-        ),
+        loaderInStaticElements: Object.values(
+          root.constructor.elements ?? {},
+        ).some((value) => value?.name === "ResultsPanel"),
         panelConstructor: panel.constructor.name,
       };
     });
@@ -610,7 +790,9 @@ test("hydrates React Context through a scoped light-DOM provider and propagates 
   const srcDir = path.join(tempDir, "src");
   await fs.mkdir(srcDir, { recursive: true });
 
-  await fs.writeFile(path.join(srcDir, "context-root.tsx"), `
+  await fs.writeFile(
+    path.join(srcDir, "context-root.tsx"),
+    `
 import React, { createContext, useContext, useState } from "react";
 
 const ThemeContext = createContext("default");
@@ -631,12 +813,16 @@ export function ContextRoot() {
     </ThemeContext.Provider>
   );
 }
-`);
-  await fs.writeFile(path.join(srcDir, "main.js"), `
+`,
+  );
+  await fs.writeFile(
+    path.join(srcDir, "main.js"),
+    `
 const root = await import("./context-root.tsx");
 const { registerHydrationModules } = await import("@litsx/ssr/hydration");
 await registerHydrationModules([root]);
-`);
+`,
+  );
 
   const server = await createSsrDevServer({
     root: tempDir,
@@ -677,12 +863,16 @@ window.__litsxContextHydrated = true;
     page.on("console", (message) => {
       if (message.type() === "error") consoleErrors.push(message.text());
     });
-    page.on("pageerror", (error) => pageErrors.push(error.stack || error.message));
+    page.on("pageerror", (error) =>
+      pageErrors.push(error.stack || error.message),
+    );
 
     await page.goto(server.resolvedUrls.local[0]);
     await page.waitForFunction(() => window.__litsxContextHydrated === true);
-    await page.waitForFunction(() =>
-      document.querySelector("context-root [data-theme]")?.textContent === "violet"
+    await page.waitForFunction(
+      () =>
+        document.querySelector("context-root [data-theme]")?.textContent ===
+        "violet",
     );
     await page.evaluate(() => {
       const root = document.querySelector("context-root");
@@ -693,12 +883,16 @@ window.__litsxContextHydrated = true;
     });
 
     await page.locator("context-root button").click();
-    await page.waitForFunction(() =>
-      document.querySelector("context-root [data-theme]")?.textContent === "coral"
+    await page.waitForFunction(
+      () =>
+        document.querySelector("context-root [data-theme]")?.textContent ===
+        "coral",
     );
     await page.locator("context-root button").click();
-    await page.waitForFunction(() =>
-      document.querySelector("context-root [data-theme]")?.textContent === "violet"
+    await page.waitForFunction(
+      () =>
+        document.querySelector("context-root [data-theme]")?.textContent ===
+        "violet",
     );
 
     const result = await page.evaluate(() => {
@@ -711,8 +905,10 @@ window.__litsxContextHydrated = true;
         contextIsExpando: Object.hasOwn(provider, "context"),
         valueIsExpando: Object.hasOwn(provider, "value"),
         sameRoot: root === window.__litsxContextSsrNodes.root,
-        sameProviderAcrossUpdates: provider === window.__litsxHydratedContextNodes.provider,
-        sameValueAcrossUpdates: value === window.__litsxHydratedContextNodes.value,
+        sameProviderAcrossUpdates:
+          provider === window.__litsxHydratedContextNodes.provider,
+        sameValueAcrossUpdates:
+          value === window.__litsxHydratedContextNodes.value,
       };
     });
 
@@ -742,7 +938,9 @@ test("hydrates native object style bindings without replacing nodes and updates 
   const srcDir = path.join(tempDir, "src");
   await fs.mkdir(srcDir, { recursive: true });
 
-  await fs.writeFile(path.join(srcDir, "style-root.tsx"), `
+  await fs.writeFile(
+    path.join(srcDir, "style-root.tsx"),
+    `
 import { useState } from "@litsx/core";
 
 export function StyleRoot() {
@@ -765,12 +963,16 @@ export function StyleRoot() {
     </main>
   );
 }
-`);
-  await fs.writeFile(path.join(srcDir, "main.js"), `
+`,
+  );
+  await fs.writeFile(
+    path.join(srcDir, "main.js"),
+    `
 const root = await import("./style-root.tsx");
 const { registerHydrationModules } = await import("@litsx/ssr/hydration");
 await registerHydrationModules([root]);
-`);
+`,
+  );
 
   const server = await createSsrDevServer({
     root: tempDir,
@@ -792,7 +994,8 @@ window.__litsxStyleHydrated = true;
     strictPort: false,
     elements(loader) {
       return {
-        "style-root": async () => (await loader("./src/style-root.tsx")).StyleRoot,
+        "style-root": async () =>
+          (await loader("./src/style-root.tsx")).StyleRoot,
       };
     },
     render({ html: serverHtml }) {
@@ -803,17 +1006,25 @@ window.__litsxStyleHydrated = true;
 
   try {
     const pageErrors = [];
-    page.on("pageerror", (error) => pageErrors.push(error.stack || error.message));
+    page.on("pageerror", (error) =>
+      pageErrors.push(error.stack || error.message),
+    );
     await page.goto(server.resolvedUrls.local[0]);
     await page.waitForFunction(() => window.__litsxStyleHydrated === true);
 
     const initial = await page.evaluate(async () => {
       const host = document.querySelector("style-root");
       await host.updateComplete;
-      const nodes = [host.shadowRoot.querySelector("#object"), host.shadowRoot.querySelector("#text"), host.shadowRoot.querySelector("#spread")];
+      const nodes = [
+        host.shadowRoot.querySelector("#object"),
+        host.shadowRoot.querySelector("#text"),
+        host.shadowRoot.querySelector("#spread"),
+      ];
       return {
         ssr: window.__litsxStyleSsr,
-        sameNodes: nodes.map((node, index) => node === window.__litsxStyleNodes[index]),
+        sameNodes: nodes.map(
+          (node, index) => node === window.__litsxStyleNodes[index],
+        ),
         styles: nodes.map((node) => ({
           backgroundColor: node.style.backgroundColor,
           borderTop: node.style.borderTop,
@@ -829,17 +1040,31 @@ window.__litsxStyleHydrated = true;
     expect(initial.ssr[0]).toContain("background-color:tomato");
     expect(initial.ssr[2]).toContain("border-top:3px solid black");
     expect(initial.sameNodes).toEqual([true, true, true]);
-    expect(initial.styles[0]).toMatchObject({ backgroundColor: "tomato", accent: "gold", width: "20px", opacity: "0.5" });
+    expect(initial.styles[0]).toMatchObject({
+      backgroundColor: "tomato",
+      accent: "gold",
+      width: "20px",
+      opacity: "0.5",
+    });
     expect(initial.styles[1].color).toBe("purple");
-    expect(initial.styles[2]).toMatchObject({ borderTop: "3px solid black", spreadAccent: "purple" });
+    expect(initial.styles[2]).toMatchObject({
+      borderTop: "3px solid black",
+      spreadAccent: "purple",
+    });
 
     const updated = await page.evaluate(async () => {
       const host = document.querySelector("style-root");
       host.shadowRoot.querySelector("#toggle").click();
       await host.updateComplete;
-      const nodes = [host.shadowRoot.querySelector("#object"), host.shadowRoot.querySelector("#text"), host.shadowRoot.querySelector("#spread")];
+      const nodes = [
+        host.shadowRoot.querySelector("#object"),
+        host.shadowRoot.querySelector("#text"),
+        host.shadowRoot.querySelector("#spread"),
+      ];
       return {
-        sameNodes: nodes.map((node, index) => node === window.__litsxStyleNodes[index]),
+        sameNodes: nodes.map(
+          (node, index) => node === window.__litsxStyleNodes[index],
+        ),
         styles: nodes.map((node) => ({
           backgroundColor: node.style.backgroundColor,
           borderTop: node.style.borderTop,
@@ -855,12 +1080,21 @@ window.__litsxStyleHydrated = true;
 
     expect(updated.sameNodes).toEqual([true, true, true]);
     expect(updated.styles[0]).toEqual({
-      backgroundColor: "", borderTop: "", accent: "", spreadAccent: "",
-      color: "blue", display: "", width: "", opacity: "1",
+      backgroundColor: "",
+      borderTop: "",
+      accent: "",
+      spreadAccent: "",
+      color: "blue",
+      display: "",
+      width: "",
+      opacity: "1",
     });
     expect(updated.styles[1].color).toBe("");
     expect(updated.styles[2]).toMatchObject({
-      borderTop: "", spreadAccent: "", color: "green", display: "block",
+      borderTop: "",
+      spreadAccent: "",
+      color: "green",
+      display: "block",
     });
     expect(pageErrors).toEqual([]);
   } finally {
@@ -938,6 +1172,22 @@ export function DynamicWindButton({ size = "md", appearance = "default" }) {
 }
 DynamicWindButton.styles = [buttonSizes, buttonAppearances, buttonStates];
 
+export function ThemeLeaf() {
+  return <div id="theme-leaf" class="bg-blue-600">Inherited theme</div>;
+}
+
+export function ThemeMiddle() {
+  return <theme-leaf />;
+}
+
+export function ThemeOuter() {
+  return (
+    <section style="--colors-blue-600: rgb(1 2 3)">
+      <theme-middle />
+    </section>
+  );
+}
+
 export function defineWindCards() {
   if (!customElements.get("shadow-wind-card")) {
     customElements.define("shadow-wind-card", ShadowWindCard);
@@ -947,6 +1197,15 @@ export function defineWindCards() {
   }
   if (!customElements.get("dynamic-wind-button")) {
     customElements.define("dynamic-wind-button", DynamicWindButton);
+  }
+  if (!customElements.get("theme-leaf")) {
+    customElements.define("theme-leaf", ThemeLeaf);
+  }
+  if (!customElements.get("theme-middle")) {
+    customElements.define("theme-middle", ThemeMiddle);
+  }
+  if (!customElements.get("theme-outer")) {
+    customElements.define("theme-outer", ThemeOuter);
   }
 }
 `,
@@ -993,6 +1252,12 @@ export function mountGlobalLightDom() {
           (await loader("./src/wind-cards.tsx")).LightWindCard,
         "dynamic-wind-button": async () =>
           (await loader("./src/wind-cards.tsx")).DynamicWindButton,
+        "theme-leaf": async () =>
+          (await loader("./src/wind-cards.tsx")).ThemeLeaf,
+        "theme-middle": async () =>
+          (await loader("./src/wind-cards.tsx")).ThemeMiddle,
+        "theme-outer": async () =>
+          (await loader("./src/wind-cards.tsx")).ThemeOuter,
       };
     },
     render({ html: serverHtml }) {
@@ -1002,6 +1267,7 @@ export function mountGlobalLightDom() {
         <dynamic-wind-button size="sm" appearance="default"></dynamic-wind-button>
         <dynamic-wind-button size="md" appearance="primary"></dynamic-wind-button>
         <dynamic-wind-button size="lg" appearance="danger"></dynamic-wind-button>
+        <theme-outer></theme-outer>
       `;
     },
   });
@@ -1020,7 +1286,13 @@ export function mountGlobalLightDom() {
         customElements.get("shadow-wind-card") !== undefined &&
         customElements.get("light-wind-card") !== undefined &&
         customElements.get("dynamic-wind-button") !== undefined &&
+        customElements.get("theme-outer") !== undefined &&
         document.querySelector("#global-light-panel") !== null,
+    );
+    await page.waitForFunction(
+      () =>
+        getComputedStyle(document.querySelector("#global-light-panel"))
+          .padding === "24px",
     );
     const result = await page.evaluate(() => {
       const shadowPanel = document
@@ -1047,6 +1319,10 @@ export function mountGlobalLightDom() {
           };
         },
       );
+      const themeOuter = document.querySelector("theme-outer");
+      const themeMiddle = themeOuter?.shadowRoot?.querySelector("theme-middle");
+      const themeLeaf = themeMiddle?.shadowRoot?.querySelector("theme-leaf");
+      const themeNode = themeLeaf?.shadowRoot?.querySelector("#theme-leaf");
       return {
         shadowPadding: shadowStyle.padding,
         shadowRadius: shadowStyle.borderRadius,
@@ -1058,6 +1334,13 @@ export function mountGlobalLightDom() {
         globalLightRadius: globalLightStyle.borderRadius,
         globalLightBackground: globalLightStyle.backgroundColor,
         buttons,
+        inheritedTheme: getComputedStyle(themeNode)
+          .getPropertyValue("--colors-blue-600")
+          .trim(),
+        leafStyles: (themeLeaf?.constructor.styles ?? [])
+          .flat(Infinity)
+          .map((style) => style?.cssText ?? "")
+          .join("\n"),
       };
     });
 
@@ -1102,6 +1385,8 @@ export function mountGlobalLightDom() {
         opacity: "0.5",
       },
     ]);
+    expect(result.inheritedTheme).toBe("rgb(1 2 3)");
+    expect(result.leafStyles).not.toContain("--colors-blue-600:");
     expect(consoleErrors).toEqual([]);
     expect(pageErrors).toEqual([]);
   } finally {
@@ -1205,7 +1490,9 @@ test("composes structural mixin metadata in shadow and light DOM and supports is
 }) => {
   const tempRoot = path.join(repoRoot, "test-results");
   await fs.mkdir(tempRoot, { recursive: true });
-  const tempDir = await fs.mkdtemp(path.join(tempRoot, "litsx-static-composition-"));
+  const tempDir = await fs.mkdtemp(
+    path.join(tempRoot, "litsx-static-composition-"),
+  );
   const srcDir = path.join(tempDir, "src");
   await fs.mkdir(srcDir, { recursive: true });
   await fs.writeFile(
@@ -1281,18 +1568,28 @@ customElements.define("light-composed", LightComposed);
     const pageErrors = [];
     page.on("pageerror", (error) => pageErrors.push(error.message));
     await page.goto(server.resolvedUrls.local[0]);
-    await page.waitForFunction(() =>
-      document.querySelector("shadow-composed")?.shadowRoot?.querySelector(".probe")?.textContent === "shadow" &&
-      document.querySelector("shadow-isolated")?.shadowRoot?.querySelector(".probe")?.textContent === "isolated" &&
-      document.querySelector("light-composed .probe")?.textContent === "light"
+    await page.waitForFunction(
+      () =>
+        document
+          .querySelector("shadow-composed")
+          ?.shadowRoot?.querySelector(".probe")?.textContent === "shadow" &&
+        document
+          .querySelector("shadow-isolated")
+          ?.shadowRoot?.querySelector(".probe")?.textContent === "isolated" &&
+        document.querySelector("light-composed .probe")?.textContent ===
+          "light",
     );
 
     const result = await page.evaluate(() => {
       const shadow = document.querySelector("shadow-composed");
       const isolated = document.querySelector("shadow-isolated");
       const light = document.querySelector("light-composed");
-      const shadowStyle = getComputedStyle(shadow.shadowRoot.querySelector(".probe"));
-      const isolatedStyle = getComputedStyle(isolated.shadowRoot.querySelector(".probe"));
+      const shadowStyle = getComputedStyle(
+        shadow.shadowRoot.querySelector(".probe"),
+      );
+      const isolatedStyle = getComputedStyle(
+        isolated.shadowRoot.querySelector(".probe"),
+      );
       const lightStyle = getComputedStyle(light.querySelector(".probe"));
       return {
         shadowColor: shadowStyle.color,
@@ -1418,10 +1715,11 @@ window.__litsxLateCardReady = true;
       const host = document.querySelector("late-card");
       const card = host?.shadowRoot?.querySelector("#late-card");
       const globalCard = document.querySelector("#late-global-card");
-      const componentStyles = host?.constructor?.styles
-        ?.flat(Infinity)
-        .map((style) => style?.cssText ?? "")
-        .join("\n") ?? "";
+      const componentStyles =
+        host?.constructor?.styles
+          ?.flat(Infinity)
+          .map((style) => style?.cssText ?? "")
+          .join("\n") ?? "";
       return {
         radius: getComputedStyle(card).borderRadius,
         variable: getComputedStyle(card)

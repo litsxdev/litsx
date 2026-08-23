@@ -48,6 +48,11 @@ You can wire those pieces together manually, but this package exists so callers 
 
 If you do want to wire Babel directly, `@litsx/babel-preset-litsx` is the canonical source of truth for the native LitSX plugin order.
 
+The compiler's `lightDomStyles` option controls generic component-output
+routing. Integration-specific destination policies, such as UnoCSS preflight
+layers and document CSS ownership, are documented by the integration itself;
+see [`@litsx/unocss`](../unocss/README.md#vite-api).
+
 For advanced integrations that need authored-input preparation without using the full compiler facade, `@litsx/compiler` also exports low-level helpers such as `prepareLitsxAuthoredInput(...)` and `ensureLitsxParserPlugins(...)`. Generated-template virtualization remains an internal compiler concern, not an authored-source parser.
 
 ## Basic Usage

@@ -10,10 +10,14 @@ import {
 } from "./index.js";
 import {
   UNO_CSS_COMPONENT_MODULE_MARKER,
+  UNO_CSS_GLOBAL_BUILD_PLACEHOLDER,
   UNO_CSS_PREFLIGHT_BUILD_PLACEHOLDER,
 } from "./protocol.js";
 
 const RESOLVED_PREFLIGHT_MODULE_ID = `\0${UNO_CSS_PREFLIGHT_MODULE_ID}`;
+const GLOBAL_CSS_MODULE_ID = "virtual:uno.css";
+const RESOLVED_GLOBAL_CSS_MODULE_ID = `\0${GLOBAL_CSS_MODULE_ID}`;
+const GLOBAL_CSS_BUILD_SENTINEL = `:root{--${UNO_CSS_GLOBAL_BUILD_PLACEHOLDER}:0}`;
 const isCompiledComponentModule = (code) =>
   code.includes(UNO_CSS_COMPONENT_MODULE_MARKER);
 
@@ -177,7 +181,78 @@ function createUnoCssPreflightVitePlugin(context, engine) {
   };
 }
 
-export function createUnoCssVitePlugins(options = {}) {
+function createUnoCssGlobalVitePlugin(context, engine) {
+  let command = "serve";
+  let server;
+
+  function invalidateGlobalModule() {
+    const module = server?.moduleGraph.getModuleById(
+      RESOLVED_GLOBAL_CSS_MODULE_ID,
+    );
+    if (!module || !server) return;
+    server.moduleGraph.invalidateModule(module);
+    const timestamp = Date.now();
+    server.ws.send({
+      type: "update",
+      updates: [
+        {
+          acceptedPath: module.url,
+          path: module.url,
+          timestamp,
+          type: "css-update",
+        },
+      ],
+    });
+  }
+
+  context.onInvalidate(invalidateGlobalModule);
+
+  return {
+    name: "litsx:unocss-global",
+    enforce: "pre",
+    configResolved(config) {
+      command = config.command;
+    },
+    configureServer(viteServer) {
+      server = viteServer;
+    },
+    resolveId(id) {
+      return id === GLOBAL_CSS_MODULE_ID ? RESOLVED_GLOBAL_CSS_MODULE_ID : null;
+    },
+    async load(id) {
+      if (id !== RESOLVED_GLOBAL_CSS_MODULE_ID) return null;
+      return {
+        code:
+          command === "build"
+            ? GLOBAL_CSS_BUILD_SENTINEL
+            : await engine.generateGlobalCss(),
+        map: null,
+        moduleSideEffects: true,
+      };
+    },
+    generateBundle: {
+      order: "post",
+      async handler(_options, bundle) {
+        const css = await engine.generateGlobalCss();
+        for (const output of Object.values(bundle)) {
+          if (
+            output.type !== "asset" ||
+            typeof output.source !== "string" ||
+            !output.source.includes(UNO_CSS_GLOBAL_BUILD_PLACEHOLDER)
+          ) {
+            continue;
+          }
+          output.source = output.source.replaceAll(
+            GLOBAL_CSS_BUILD_SENTINEL,
+            css,
+          );
+        }
+      },
+    },
+  };
+}
+
+export function createUnoCssVitePlugins(options = {}, integrationOptions = {}) {
   let engine;
   const userConfigResolved = options.configResolved;
   const unoPlugins = UnoCSS({
@@ -206,13 +281,33 @@ export function createUnoCssVitePlugins(options = {}) {
     flushTasks: () => context.flushTasks(),
     filter: (code, id) => context.filter(code, id),
     extract: (code, id) => context.extract(code, id),
+    preflightLayers: integrationOptions.preflightLayers,
   });
   const contextPlugins = normalizedPlugins.filter(
     (plugin) => plugin.name !== "unocss:shadow-dom",
   );
+  const globalGenerator = new Proxy(
+    {},
+    {
+      get(_target, property) {
+        const target = context.uno;
+        if (property === "generate") {
+          return async (...args) =>
+            engine.routeGeneratedResult(
+              await target.generate(...args),
+              "global",
+            );
+        }
+        const value = Reflect.get(target, property, target);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    },
+  );
+  const globalContext = Object.create(context);
+  Object.defineProperty(globalContext, "uno", { value: globalGenerator });
   const globalPlugins = [
-    ...GlobalModeBuildPlugin(context),
-    ...GlobalModeDevPlugin(context),
+    ...GlobalModeBuildPlugin(globalContext),
+    ...GlobalModeDevPlugin(globalContext),
   ].map((plugin) => {
     if (
       !["unocss:global:build:scan", "unocss:global"].includes(plugin.name) ||
@@ -234,6 +329,7 @@ export function createUnoCssVitePlugins(options = {}) {
     createUnoCssTokenCollector(engine),
     createUnoCssGuardMaterializer(engine),
     createUnoCssPreflightVitePlugin(context, engine),
+    createUnoCssGlobalVitePlugin(context, engine),
     ...contextPlugins,
     ...globalPlugins,
   ];
@@ -242,6 +338,7 @@ export function createUnoCssVitePlugins(options = {}) {
 export function withUnoCssViteCompiler(options = {}, integrationOptions = {}) {
   return withUnoCssCompiler(options, {
     ...integrationOptions,
+    globalCssModule: integrationOptions.globalCssModule ?? GLOBAL_CSS_MODULE_ID,
     preflightModule:
       integrationOptions.preflightModule ?? UNO_CSS_PREFLIGHT_MODULE_ID,
   });
@@ -260,7 +357,7 @@ export function litsxUnoCss(options = {}) {
     integration: integrationOptions = {},
   } = options;
 
-  const unoPlugins = createUnoCssVitePlugins(unoCssOptions);
+  const unoPlugins = createUnoCssVitePlugins(unoCssOptions, integrationOptions);
   const compilerOptions = withUnoCssViteCompiler(
     litsxOptions,
     integrationOptions,
