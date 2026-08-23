@@ -1644,6 +1644,11 @@ export function EarlyCard() {
 export function LateCard() {
   return <article id="late-card" class="text-white rounded-lg">Late</article>;
 }
+
+export function LateGlobalCard() {
+  return <article id="late-global-card" class="text-white rounded-lg">Late global</article>;
+}
+LateGlobalCard.lightDom = true;
 `,
   );
   await fs.writeFile(
@@ -1656,16 +1661,15 @@ customElements.define("early-card", EarlyCard);
 document.querySelector("#app").append(document.createElement("early-card"));
 
 await new Promise((resolve) => requestAnimationFrame(resolve));
-const { LateCard } = await import("./late.tsx");
+const { LateCard, LateGlobalCard } = await import("./late.tsx");
 customElements.define("late-card", LateCard);
+customElements.define("late-global-card", LateGlobalCard);
 const lateCard = document.createElement("late-card");
 document.querySelector("#app").append(lateCard);
-const lateGlobal = document.createElement("article");
-lateGlobal.id = "late-global-card";
-lateGlobal.className = "text-white rounded-lg";
-lateGlobal.textContent = "Late global";
+const lateGlobal = document.createElement("late-global-card");
 document.querySelector("#app").append(lateGlobal);
 await lateCard.updateComplete;
+await lateGlobal.updateComplete;
 await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 window.__litsxLateCardReady = true;
 `,
@@ -1699,7 +1703,10 @@ window.__litsxLateCardReady = true;
         },
       ],
     },
-    plugins: litsxUnoCss({ unocss: { presets: [presetWind4()] } }),
+    plugins: litsxUnoCss({
+      litsx: { lightDomStyles: "global" },
+      unocss: { presets: [presetWind4()] },
+    }),
   });
   await server.listen();
 
@@ -1734,8 +1741,8 @@ window.__litsxLateCardReady = true;
 
     expect(result.componentStyles).toContain("var(--colors-white)");
     expect(result.componentStyles).toContain("var(--radius-lg)");
-    expect(result.componentStyles).toContain("--colors-white:");
-    expect(result.componentStyles).toContain("--radius-lg:");
+    expect(result.componentStyles).not.toContain("--colors-white:");
+    expect(result.componentStyles).not.toContain("--radius-lg:");
     expect(result.variable).not.toBe("");
     expect(result.className).toBe("text-white rounded-lg");
     expect(result.radius).not.toBe("0px");

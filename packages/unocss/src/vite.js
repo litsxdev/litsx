@@ -16,7 +16,7 @@ import {
 
 const RESOLVED_PREFLIGHT_MODULE_ID = `\0${UNO_CSS_PREFLIGHT_MODULE_ID}`;
 const GLOBAL_CSS_MODULE_ID = "virtual:uno.css";
-const RESOLVED_GLOBAL_CSS_MODULE_ID = `\0${GLOBAL_CSS_MODULE_ID}`;
+const RESOLVED_GLOBAL_CSS_MODULE_ID = "/__litsx_unocss_global.css";
 const GLOBAL_CSS_BUILD_SENTINEL = `:root{--${UNO_CSS_GLOBAL_BUILD_PLACEHOLDER}:0}`;
 const isCompiledComponentModule = (code) =>
   code.includes(UNO_CSS_COMPONENT_MODULE_MARKER);
@@ -199,7 +199,7 @@ function createUnoCssGlobalVitePlugin(context, engine) {
           acceptedPath: module.url,
           path: module.url,
           timestamp,
-          type: "css-update",
+          type: "js-update",
         },
       ],
     });
