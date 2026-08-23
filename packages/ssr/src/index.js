@@ -1,3 +1,4 @@
+import "./install-dom-shim.js";
 import fs from "node:fs/promises";
 import path from "node:path";
 import crypto from "node:crypto";
@@ -30,6 +31,12 @@ const DEV_TEMPLATE_BOOTSTRAP_MARKER = "<!--app-bootstrap-->";
 const DEFAULT_MAX_SUSPENSE_PASSES = 25;
 
 let ssrRuntimePromise;
+let ssrCssHookPromise;
+
+function ensureSsrCssHook() {
+  ssrCssHookPromise ??= import("@lit-labs/ssr-dom-shim/register-css-hook.js");
+  return ssrCssHookPromise;
+}
 
 async function loadSsrRuntime() {
   ssrRuntimePromise ??= Promise.all([
@@ -587,7 +594,7 @@ async function renderAuthoredDocument(options = {}) {
     throw new TypeError("LitSX authored document rendering requires a render(...) callback.");
   }
 
-  await import("@lit-labs/ssr/lib/install-global-dom-shim.js");
+  await ensureSsrCssHook();
   async function importModule(specifier) {
     const resolvedEntryPath = resolveFsPath(root, specifier);
     if (options.viteServer) {
@@ -668,7 +675,7 @@ async function resolveAuthoredRenderInput(options = {}) {
     throw new TypeError("LitSX authored SSR rendering requires a render(...) callback.");
   }
 
-  await import("@lit-labs/ssr/lib/install-global-dom-shim.js");
+  await ensureSsrCssHook();
   async function importModule(specifier) {
     const resolvedEntryPath = resolveFsPath(root, specifier);
     if (options.viteServer) {

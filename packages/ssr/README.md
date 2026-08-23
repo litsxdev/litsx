@@ -77,6 +77,35 @@ If you are rendering LitSX-authored source through a build tool, you will also
 need the relevant compiler integration such as
 [`@litsx/vite-plugin`](../vite-plugin/README.md).
 
+## Early DOM shim initialization
+
+The main `@litsx/ssr` entry installs Lit's server DOM globals synchronously,
+before it evaluates its own Lit-dependent modules. Applications that load the
+SSR runtime before their component modules do not need any extra setup.
+
+Frameworks that can evaluate application components or their own copy of Lit
+before loading the main SSR runtime should use the dedicated bootstrap entry:
+
+```js
+import "@litsx/ssr/install-dom-shim";
+
+// Keep application loading behind the shim's evaluation boundary.
+const { startServer } = await import("./server.js");
+await startServer();
+```
+
+The import is synchronous and idempotent. It preserves an existing DOM
+environment and keeps the first `HTMLElement` identity when multiple physical
+copies of the SSR dependency tree are present. Import it before Lit,
+`LitElement`, or compiled component modules are evaluated; an already-created
+class hierarchy cannot be changed retroactively.
+
+Do not import Lit's internal
+`@lit-labs/ssr/lib/install-global-dom-shim.js` subpath directly. The LitSX
+entry encapsulates that integration and has a browser no-op export so the SSR
+DOM shim is not included in browser bundles. The `@litsx/ssr/hydration` entry
+also never installs server globals.
+
 ## Basic Usage
 
 For most applications, `renderDocument(...)` should be your default server API:
