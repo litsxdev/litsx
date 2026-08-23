@@ -28,6 +28,7 @@
     "clean-lions-dedupe",
     "complete-ssr-support",
     "composed-static-metadata",
+    "early-ssr-dom-shim",
     "fair-buttons-hydrate",
     "few-guests-thank",
     "fix-next-pre-publish",

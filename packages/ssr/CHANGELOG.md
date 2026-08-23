@@ -1,5 +1,11 @@
 # @litsx/ssr
 
+## 1.0.0-next.2
+
+### Minor Changes
+
+- 668dcc4: Install one shared SSR DOM identity before Lit evaluates, reexport `html` from the initialized SSR entry, and expose the synchronous `@litsx/ssr/install-dom-shim` bootstrap entry for frameworks that load application components before the main SSR runtime.
+
 ## 1.0.0-next.1
 
 ### Patch Changes

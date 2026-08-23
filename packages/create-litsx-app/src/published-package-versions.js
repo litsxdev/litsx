@@ -4,6 +4,6 @@ export const publishedPackageVersions = {
   "@litsx/core": "^1.0.0-next.4",
   "@litsx/eslint-plugin": "^1.0.0-next.2",
   "@litsx/storybook": "^1.0.0-next.1",
-  "@litsx/ssr": "^1.0.0-next.1",
+  "@litsx/ssr": "^1.0.0-next.2",
   "@litsx/vite-plugin": "^1.0.0-next.0"
 };
