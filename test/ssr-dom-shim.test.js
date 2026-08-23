@@ -82,8 +82,6 @@ export class IndependentCard extends LitElement {
     return html\`<strong>independent tree</strong>\`;
   }
 }
-
-export const template = html\`<independent-card></independent-card>\`;
 `,
     );
 
@@ -95,16 +93,19 @@ export const template = html\`<independent-card></independent-card>\`;
     ).href;
     const componentUrl = pathToFileURL(componentPath).href;
     const output = runIsolatedModule(`
-      const { renderToString } = await import(${JSON.stringify(ssrEntryUrl)});
-      const { IndependentCard, template } = await import(${JSON.stringify(componentUrl)});
+      const { html, renderToString } = await import(${JSON.stringify(ssrEntryUrl)});
+      const { IndependentCard } = await import(${JSON.stringify(componentUrl)});
       const { annotateHydratableCustomElement } = await import(${JSON.stringify(elementsEntryUrl)});
       annotateHydratableCustomElement(IndependentCard, {
         tagName: "independent-card",
         moduleId: "/src/IndependentCard.tsx",
       });
-      const result = await renderToString(template, {
-        elements: { "independent-card": IndependentCard },
-      });
+      const result = await renderToString(
+        html\`<independent-card></independent-card>\`,
+        {
+          elements: { "independent-card": IndependentCard },
+        },
+      );
 
       if (!(IndependentCard.prototype instanceof globalThis.HTMLElement)) {
         throw new Error("The application component does not share the installed HTMLElement");
@@ -124,6 +125,19 @@ export const template = html\`<independent-card></independent-card>\`;
       tagName: "independent-card",
       moduleId: "/src/IndependentCard.tsx",
     }]);
+  });
+
+  it("reexports html only after installing the server DOM", () => {
+    const output = runIsolatedModule(`
+      const { html } = await import("@litsx/ssr");
+      const value = html\`<main>ready</main>\`;
+      process.stdout.write(String(
+        typeof globalThis.HTMLElement === "function" &&
+        value.strings[0] === "<main>ready</main>"
+      ));
+    `);
+
+    assert.strictEqual(output, "true");
   });
 
   it("is safe to import more than once", () => {

@@ -1,3 +1,5 @@
+export { html } from "lit";
+
 export interface LitsxSsrContext {
   /**
    * Prefix used when generating SSR root ids and hook instance ids.

@@ -1,4 +1,5 @@
 import "./install-dom-shim.js";
+export { html } from "lit";
 import fs from "node:fs/promises";
 import path from "node:path";
 import crypto from "node:crypto";

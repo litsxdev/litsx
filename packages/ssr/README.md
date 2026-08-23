@@ -82,6 +82,14 @@ need the relevant compiler integration such as
 The main `@litsx/ssr` entry installs Lit's server DOM globals synchronously,
 before it evaluates its own Lit-dependent modules. Applications that load the
 SSR runtime before their component modules do not need any extra setup.
+It also reexports Lit's `html` tag, so framework SSR code can obtain both the
+initialized DOM environment and the template tag from one import:
+
+```js
+import { html, renderToString } from "@litsx/ssr";
+
+const result = await renderToString(html`<app-root></app-root>`);
+```
 
 Frameworks that can evaluate application components or their own copy of Lit
 before loading the main SSR runtime should use the dedicated bootstrap entry:
