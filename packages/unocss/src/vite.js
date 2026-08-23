@@ -8,23 +8,27 @@ import {
   UNO_CSS_PREFLIGHT_MODULE_ID,
   withUnoCssCompiler,
 } from "./index.js";
-import { UNO_CSS_PREFLIGHT_BUILD_PLACEHOLDER } from "./protocol.js";
+import {
+  UNO_CSS_COMPONENT_MODULE_MARKER,
+  UNO_CSS_PREFLIGHT_BUILD_PLACEHOLDER,
+} from "./protocol.js";
 
 const RESOLVED_PREFLIGHT_MODULE_ID = `\0${UNO_CSS_PREFLIGHT_MODULE_ID}`;
+const isCompiledComponentModule = (code) =>
+  code.includes(UNO_CSS_COMPONENT_MODULE_MARKER);
+
 function createUnoCssTokenCollector(engine) {
   return {
     name: "litsx:unocss-token-collector",
     enforce: "pre",
     async transform(code, id) {
+      // Component modules are collected precisely by their per-component
+      // markup/style guard markers in the following materializer. Scanning the
+      // whole compiled module here would leak unrelated strings and sibling
+      // component utilities into the global token set.
+      if (isCompiledComponentModule(code)) return null;
       await engine.collect(code, id);
       return null;
-    },
-    async handleHotUpdate(hotContext) {
-      // Collect new tokens directly from the changed authored module. Relying
-      // only on the following transform pass leaves the existing preflight
-      // snapshots stale until Vite happens to evaluate that module again,
-      // which is observable in SSR middleware and other lazy module graphs.
-      await engine.collect(await hotContext.read(), hotContext.file);
     },
   };
 }
@@ -209,7 +213,22 @@ export function createUnoCssVitePlugins(options = {}) {
   const globalPlugins = [
     ...GlobalModeBuildPlugin(context),
     ...GlobalModeDevPlugin(context),
-  ];
+  ].map((plugin) => {
+    if (
+      !["unocss:global:build:scan", "unocss:global"].includes(plugin.name) ||
+      typeof plugin.transform !== "function"
+    ) {
+      return plugin;
+    }
+    const transform = plugin.transform;
+    return {
+      ...plugin,
+      transform(code, id) {
+        if (isCompiledComponentModule(code)) return null;
+        return transform.call(this, code, id);
+      },
+    };
+  });
 
   return [
     createUnoCssTokenCollector(engine),
@@ -231,8 +250,8 @@ export function withUnoCssViteCompiler(options = {}, integrationOptions = {}) {
 /**
  * Compose LitSX and the UnoCSS Vite context in the required extraction order.
  *
- * LitSX first emits the shared component stylesheet placeholder. The neutral
- * engine then extracts utilities through UnoCSS and replaces that placeholder.
+ * LitSX first emits component-owned markup/style markers. The neutral engine
+ * then materializes each marker through the resolved UnoCSS context.
  */
 export function litsxUnoCss(options = {}) {
   const {

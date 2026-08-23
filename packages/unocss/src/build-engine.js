@@ -6,6 +6,7 @@ import {
   decodeUnoCssGuardPayload,
   escapeUnoCssTemplateCss,
   UNO_CSS_GUARD_PATTERN,
+  UNO_CSS_DYNAMIC_WILDCARD,
   UNO_CSS_PLACEHOLDER,
   UNO_CSS_PREFLIGHT_BUILD_PLACEHOLDER,
 } from "./protocol.js";
@@ -46,6 +47,22 @@ function uniquePreflightLayers(generator) {
 
 async function resolveValue(value) {
   return typeof value === "function" ? value() : value;
+}
+
+function dynamicPatternMatcher(pattern) {
+  const source = pattern
+    .split(UNO_CSS_DYNAMIC_WILDCARD)
+    .map((part) => part.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&"))
+    .join("[^\\s]*");
+  return new RegExp(`^${source}$`, "u");
+}
+
+function resolveConfiguredSafelist(generator) {
+  const context = { generator, theme: generator.config.theme };
+  return generator.config.safelist
+    .flatMap((entry) => (typeof entry === "function" ? entry(context) : entry))
+    .map((entry) => entry.trim())
+    .filter(Boolean);
 }
 
 /**
@@ -150,10 +167,13 @@ export function createUnoCssBuildEngine(options = {}) {
     }
 
     const uno = await generator();
-    const extracted = await scan(code, id);
+    const extracted = hasPlaceholder ? await scan(code, id) : new Set();
+    const moduleCandidateSet = new Set(extracted);
     const dependencies = new Set();
     const resolvedGuards = new Map();
     const generatedCss = new Map();
+    const emittedCandidates = new Map();
+    let configuredSafelist;
     let transformed = code;
 
     for (const match of matches) {
@@ -187,6 +207,17 @@ export function createUnoCssBuildEngine(options = {}) {
         }
       }
 
+      if (payload.dynamicPatterns?.length > 0) {
+        configuredSafelist ??= resolveConfiguredSafelist(uno);
+        const matchers = payload.dynamicPatterns.map(dynamicPatternMatcher);
+        candidates = [
+          ...candidates,
+          ...configuredSafelist.filter((candidate) =>
+            matchers.some((matcher) => matcher.test(candidate)),
+          ),
+        ];
+      }
+
       if (payload.emit === "none") {
         transformed = transformed.replace(match[0], "");
         continue;
@@ -200,6 +231,13 @@ export function createUnoCssBuildEngine(options = {}) {
         continue;
       }
       const candidateSet = new Set(candidates);
+      if (payload.owner) {
+        let emitted = emittedCandidates.get(payload.owner);
+        if (!emitted)
+          emittedCandidates.set(payload.owner, (emitted = new Set()));
+        for (const candidate of emitted) candidateSet.delete(candidate);
+        for (const candidate of candidateSet) emitted.add(candidate);
+      }
       const candidatesKey = JSON.stringify([
         payload.scope || "",
         [...candidateSet].sort(),
@@ -222,8 +260,7 @@ export function createUnoCssBuildEngine(options = {}) {
     }
 
     if (hasPlaceholder) {
-      const candidates = moduleTokens.get(id) || extracted;
-      const generated = await uno.generate(new Set(candidates), {
+      const generated = await uno.generate(moduleCandidateSet, {
         preflights: false,
         safelist: true,
       });

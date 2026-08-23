@@ -1,13 +1,16 @@
 export const UNO_CSS_PLACEHOLDER = "@unocss-placeholder";
+export const UNO_CSS_COMPONENT_MODULE_MARKER =
+  "__LITSX_UNOCSS_COMPONENT_MODULE__";
+export const UNO_CSS_DYNAMIC_WILDCARD = "\u0000";
 export const UNO_CSS_PREFLIGHT_MODULE_ID = "virtual:@litsx/unocss/preflight";
 export const UNO_CSS_PREFLIGHT_EXPORT = "unoPreflightStyles";
 export const UNO_CSS_PREFLIGHT_BUILD_PLACEHOLDER =
   "__LITSX_UNOCSS_PREFLIGHT_BUILD_PLACEHOLDER__";
 
-const GUARD_MARKER_PREFIX = "__LITSX_UNOCSS_GUARD_";
+const UNO_CSS_GUARD_PREFIX = "__LITSX_UNOCSS_GUARD_";
 
 export const UNO_CSS_GUARD_PATTERN = new RegExp(
-  `/\\*${GUARD_MARKER_PREFIX}([A-Za-z0-9_-]+)__\\*/`,
+  `/\\*${UNO_CSS_GUARD_PREFIX}([A-Za-z0-9_-]+)__\\*/`,
   "g",
 );
 
@@ -20,7 +23,7 @@ export function decodeUnoCssGuardPayload(value) {
 }
 
 export function createUnoCssGuardMarker(payload) {
-  return `/*${GUARD_MARKER_PREFIX}${encodeUnoCssGuardPayload(payload)}__*/`;
+  return `/*${UNO_CSS_GUARD_PREFIX}${encodeUnoCssGuardPayload(payload)}__*/`;
 }
 
 export function escapeUnoCssTemplateCss(cssText) {

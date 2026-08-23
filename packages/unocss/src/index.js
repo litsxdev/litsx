@@ -2,6 +2,8 @@ import { createStaticGuardResolver } from "./static-guards.js";
 import {
   createUnoCssGuardMarker,
   decodeUnoCssGuardPayload,
+  UNO_CSS_COMPONENT_MODULE_MARKER,
+  UNO_CSS_DYNAMIC_WILDCARD,
   UNO_CSS_GUARD_PATTERN,
   UNO_CSS_PLACEHOLDER,
   UNO_CSS_PREFLIGHT_EXPORT,
@@ -243,6 +245,171 @@ function guardTemplate(payload, cssIdentifier, t) {
   );
 }
 
+function unwrapStringExpression(node, t) {
+  while (
+    node &&
+    (t.isTSAsExpression(node) ||
+      t.isTSSatisfiesExpression(node) ||
+      t.isTSNonNullExpression(node) ||
+      t.isParenthesizedExpression(node))
+  ) {
+    node = node.expression;
+  }
+  return node;
+}
+
+function combineStringParts(parts, limit = 4096) {
+  let values = [""];
+  for (const choices of parts) {
+    const next = [];
+    for (const prefix of values) {
+      for (const choice of choices) {
+        next.push(prefix + choice);
+        if (next.length > limit) return null;
+      }
+    }
+    values = next;
+  }
+  return values;
+}
+
+function finiteStringValues(node, t) {
+  node = unwrapStringExpression(node, t);
+  if (!node) return null;
+  if (t.isStringLiteral(node)) return [node.value];
+  if (t.isTemplateLiteral(node)) {
+    const parts = [];
+    for (let index = 0; index < node.quasis.length; index += 1) {
+      parts.push([
+        node.quasis[index].value.cooked ?? node.quasis[index].value.raw,
+      ]);
+      if (index < node.expressions.length) {
+        const values = finiteStringValues(node.expressions[index], t);
+        if (!values) return null;
+        parts.push(values);
+      }
+    }
+    return combineStringParts(parts);
+  }
+  if (t.isConditionalExpression(node)) {
+    const consequent = finiteStringValues(node.consequent, t);
+    const alternate = finiteStringValues(node.alternate, t);
+    return consequent && alternate ? [...consequent, ...alternate] : null;
+  }
+  if (t.isLogicalExpression(node)) {
+    const left = finiteStringValues(node.left, t);
+    const right = finiteStringValues(node.right, t);
+    return left && right ? [...left, ...right] : null;
+  }
+  if (t.isBinaryExpression(node, { operator: "+" })) {
+    const left = finiteStringValues(node.left, t);
+    const right = finiteStringValues(node.right, t);
+    return left && right ? combineStringParts([left, right]) : null;
+  }
+  return null;
+}
+
+function classPatternValues(node, t) {
+  const finite = finiteStringValues(node, t);
+  if (finite) return finite;
+  node = unwrapStringExpression(node, t);
+  if (t.isTemplateLiteral(node)) {
+    const parts = [];
+    for (let index = 0; index < node.quasis.length; index += 1) {
+      parts.push([
+        node.quasis[index].value.cooked ?? node.quasis[index].value.raw,
+      ]);
+      if (index < node.expressions.length) {
+        parts.push(classPatternValues(node.expressions[index], t));
+      }
+    }
+    return combineStringParts(parts) ?? [UNO_CSS_DYNAMIC_WILDCARD];
+  }
+  if (t.isConditionalExpression(node)) {
+    return [
+      ...classPatternValues(node.consequent, t),
+      ...classPatternValues(node.alternate, t),
+    ];
+  }
+  if (t.isLogicalExpression(node)) {
+    return [
+      ...classPatternValues(node.left, t),
+      ...classPatternValues(node.right, t),
+    ];
+  }
+  if (t.isBinaryExpression(node, { operator: "+" })) {
+    return (
+      combineStringParts([
+        classPatternValues(node.left, t),
+        classPatternValues(node.right, t),
+      ]) ?? [UNO_CSS_DYNAMIC_WILDCARD]
+    );
+  }
+  return [UNO_CSS_DYNAMIC_WILDCARD];
+}
+
+function collectMarkupCandidates(classPath, t) {
+  const candidates = new Set();
+  const dynamicPatterns = new Set();
+  classPath.traverse({
+    TaggedTemplateExpression(templatePath) {
+      const tagPath = templatePath.get("tag");
+      if (!tagPath.isIdentifier()) return;
+      const binding = tagPath.scope.getBinding(tagPath.node.name);
+      const importedHtml = Boolean(
+        binding?.path?.isImportSpecifier?.() &&
+        t.isIdentifier(binding.path.node.imported, { name: "html" }) &&
+        ["lit", "@litsx/ssr"].includes(
+          binding.path.parentPath?.node?.source?.value,
+        ),
+      );
+      if (tagPath.node.name !== "html" && !importedHtml) {
+        return;
+      }
+      const quasi = templatePath.node.quasi;
+      if (!t.isTemplateLiteral(quasi)) return;
+      const marker = (index) => `\u0001${index}\u0002`;
+      let source = "";
+      for (let index = 0; index < quasi.quasis.length; index += 1) {
+        source +=
+          quasi.quasis[index].value.cooked ?? quasi.quasis[index].value.raw;
+        if (index < quasi.expressions.length) source += marker(index);
+      }
+      const attributePattern =
+        /(?:^|[\s<])(?:class|className)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/gu;
+      for (const match of source.matchAll(attributePattern)) {
+        const value = match[1] ?? match[2] ?? match[3] ?? "";
+        const parts = [];
+        let offset = 0;
+        for (const placeholder of value.matchAll(/\u0001(\d+)\u0002/gu)) {
+          parts.push([value.slice(offset, placeholder.index)]);
+          parts.push(
+            classPatternValues(quasi.expressions[Number(placeholder[1])], t),
+          );
+          offset = placeholder.index + placeholder[0].length;
+        }
+        parts.push([value.slice(offset)]);
+        for (const expanded of combineStringParts(parts) ?? [
+          UNO_CSS_DYNAMIC_WILDCARD,
+        ]) {
+          for (const candidate of expanded.split(/\s+/u)) {
+            if (!candidate) continue;
+            if (candidate.includes(UNO_CSS_DYNAMIC_WILDCARD)) {
+              if (candidate !== UNO_CSS_DYNAMIC_WILDCARD) {
+                dynamicPatterns.add(candidate);
+              }
+            } else candidates.add(candidate);
+          }
+        }
+      }
+    },
+  });
+  return {
+    candidates: [...candidates],
+    dynamicPatterns: [...dynamicPatterns],
+  };
+}
+
 function getReplaceStylesArgument(path, t) {
   if (!path?.isCallExpression?.() || path.node.arguments.length !== 1) {
     return null;
@@ -396,15 +563,21 @@ export function createUnoCssAuthoringPlugin(options = {}) {
               stylePath,
               replacementPath = stylePath,
               emit = "component",
+              owner = null,
             ) => {
               const node = stylePath.node;
               if (t.isArrayExpression(node)) {
                 for (const elementPath of stylePath.get("elements")) {
                   if (!elementPath.node) continue;
                   if (elementPath.isSpreadElement()) {
-                    consume(elementPath.get("argument"), elementPath, emit);
+                    consume(
+                      elementPath.get("argument"),
+                      elementPath,
+                      emit,
+                      owner,
+                    );
                   } else {
-                    consume(elementPath, elementPath, emit);
+                    consume(elementPath, elementPath, emit, owner);
                   }
                 }
                 return;
@@ -436,6 +609,7 @@ export function createUnoCssAuthoringPlugin(options = {}) {
                     descriptor: result.descriptor,
                     dependencies: result.dependencies,
                     emit,
+                    owner,
                   },
                   ensureCssIdentifier(),
                   t,
@@ -447,7 +621,7 @@ export function createUnoCssAuthoringPlugin(options = {}) {
               const isLightDom = lightDomComponents.has(componentName);
               const emit =
                 isLightDom && strategy !== "scoped" ? strategy : "component";
-              consume(stylePath, stylePath, emit);
+              consume(stylePath, stylePath, emit, componentName);
             }
           },
         },
@@ -459,9 +633,9 @@ export function createUnoCssAuthoringPlugin(options = {}) {
 /**
  * Create the low-level Babel output plugin used by the UnoCSS adapter.
  *
- * The plugin contributes one shared CSSResult per compiled module and attaches
- * it to every generated LitSX component class. UnoCSS's shadow-dom mode then
- * replaces the placeholder with the utilities extracted from that module.
+ * The plugin contributes one CSSResult per compiled component. Its marker owns
+ * only utilities statically present in that component's class/className markup;
+ * dynamic maps are contributed explicitly through Component.styles guards.
  */
 export function createUnoCssOutputPlugin(options = {}) {
   const placeholder =
@@ -482,6 +656,13 @@ export function createUnoCssOutputPlugin(options = {}) {
       visitor: {
         Program: {
           exit(programPath, state) {
+            if (
+              state.file.metadata.litsxStyleIntegrations?.some(
+                (integration) => integration.name === "unocss",
+              )
+            ) {
+              return;
+            }
             if (programHasPlaceholder(programPath, placeholder)) {
               return;
             }
@@ -508,11 +689,9 @@ export function createUnoCssOutputPlugin(options = {}) {
               ),
               lightDom: containsLightDomMixin(classPath.node.superClass, t),
             }));
-            const hasShadowComponents = componentInfos.some(
-              ({ lightDom }) => !lightDom,
-            );
-            const hasScopedLightComponents = componentInfos.some(
-              ({ lightDomScope }) => Boolean(lightDomScope),
+            const hasComponentStyles = componentInfos.some(
+              ({ lightDom, lightDomScope }) =>
+                !lightDom || Boolean(lightDomScope),
             );
 
             const importedCssIdentifier = findImportedCssIdentifier(
@@ -522,16 +701,19 @@ export function createUnoCssOutputPlugin(options = {}) {
             const cssIdentifier =
               importedCssIdentifier ??
               programPath.scope.generateUidIdentifier("litsxUnoCss");
-            const stylesIdentifier =
-              programPath.scope.generateUidIdentifier("litsxUnoCssStyles");
             const preflightIdentifier = preflightModule
               ? programPath.scope.generateUidIdentifier("litsxUnoCssPreflight")
               : null;
             const insertedNodes = [];
-            if (
-              !importedCssIdentifier &&
-              (hasShadowComponents || hasScopedLightComponents)
-            ) {
+            insertedNodes.push(
+              t.expressionStatement(
+                t.unaryExpression(
+                  "void",
+                  t.stringLiteral(UNO_CSS_COMPONENT_MODULE_MARKER),
+                ),
+              ),
+            );
+            if (!importedCssIdentifier && hasComponentStyles) {
               insertedNodes.push(
                 t.importDeclaration(
                   [
@@ -544,10 +726,7 @@ export function createUnoCssOutputPlugin(options = {}) {
                 ),
               );
             }
-            if (
-              preflightIdentifier &&
-              (hasShadowComponents || hasScopedLightComponents)
-            ) {
+            if (preflightIdentifier && hasComponentStyles) {
               insertedNodes.push(
                 t.importDeclaration(
                   [
@@ -560,27 +739,6 @@ export function createUnoCssOutputPlugin(options = {}) {
                 ),
               );
             }
-            if (hasShadowComponents) {
-              insertedNodes.push(
-                t.variableDeclaration("const", [
-                  t.variableDeclarator(
-                    t.cloneNode(stylesIdentifier),
-                    t.taggedTemplateExpression(
-                      t.cloneNode(cssIdentifier),
-                      t.templateLiteral(
-                        [
-                          t.templateElement(
-                            { raw: placeholder, cooked: placeholder },
-                            true,
-                          ),
-                        ],
-                        [],
-                      ),
-                    ),
-                  ),
-                ]),
-              );
-            }
             insertAfterImports(programPath, insertedNodes);
 
             const components = [];
@@ -589,6 +747,11 @@ export function createUnoCssOutputPlugin(options = {}) {
               lightDomScope,
               lightDom,
             } of componentInfos) {
+              const owner = classPath.node.id?.name ?? null;
+              const { candidates, dynamicPatterns } = collectMarkupCandidates(
+                classPath,
+                t,
+              );
               if (lightDomScope) {
                 const scope = `[${LIGHT_DOM_SCOPE_ATTRIBUTE}="${lightDomScope}"]`;
                 scopeGuardMarkers(classPath, scope, t);
@@ -597,7 +760,9 @@ export function createUnoCssOutputPlugin(options = {}) {
                     "litsxUnoCssScopedStyles",
                   );
                 const scopedMarker = createUnoCssGuardMarker({
-                  moduleCandidates: true,
+                  candidates,
+                  dynamicPatterns,
+                  owner,
                   scope,
                 });
                 const scopedDeclaration = t.variableDeclaration("const", [
@@ -629,8 +794,52 @@ export function createUnoCssOutputPlugin(options = {}) {
                 continue;
               }
               if (lightDom) {
+                const lightDomStrategy =
+                  options.lightDomStyles?.strategy ?? options.lightDomStyles;
+                classPath.insertBefore(
+                  t.expressionStatement(
+                    t.unaryExpression(
+                      "void",
+                      t.stringLiteral(
+                        createUnoCssGuardMarker({
+                          candidates,
+                          dynamicPatterns,
+                          emit:
+                            lightDomStrategy === "global" ? "global" : "none",
+                          owner,
+                        }),
+                      ),
+                    ),
+                  ),
+                );
                 continue;
               }
+              const stylesIdentifier =
+                programPath.scope.generateUidIdentifier("litsxUnoCssStyles");
+              const marker = createUnoCssGuardMarker({
+                candidates,
+                dynamicPatterns,
+                owner,
+              });
+              classPath.insertBefore(
+                t.variableDeclaration("const", [
+                  t.variableDeclarator(
+                    t.cloneNode(stylesIdentifier),
+                    t.taggedTemplateExpression(
+                      t.cloneNode(cssIdentifier),
+                      t.templateLiteral(
+                        [
+                          t.templateElement(
+                            { raw: marker, cooked: marker },
+                            true,
+                          ),
+                        ],
+                        [],
+                      ),
+                    ),
+                  ),
+                ]),
+              );
               appendStyleReference(
                 classPath,
                 stylesIdentifier,
@@ -646,8 +855,8 @@ export function createUnoCssOutputPlugin(options = {}) {
             state.file.metadata.litsxStyleIntegrations.push({
               name: "unocss",
               strategy: preflightIdentifier
-                ? "shared-preflight-module-utilities"
-                : "module-shared",
+                ? "shared-preflight-component-utilities"
+                : "component-isolated",
               components,
             });
           },
@@ -669,7 +878,7 @@ export function withUnoCssCompiler(options = {}, integrationOptions = {}) {
     defaultDomMode: reactCompatDomMode ?? options.defaultDomMode,
     lightDomStyles: options.reactCompat
       ? "global"
-      : options.lightDomStyles ?? integrationOptions.lightDomStyles,
+      : (options.lightDomStyles ?? integrationOptions.lightDomStyles),
   };
   return {
     ...options,

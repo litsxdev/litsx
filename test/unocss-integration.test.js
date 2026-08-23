@@ -49,7 +49,12 @@ function createWorkspaceTempDirectory(prefix) {
 
 async function buildFixture(
   source,
-  { ssr = false, preset = presetWind3(), unoCss = {} } = {},
+  {
+    ssr = false,
+    preset = presetWind3(),
+    unoCss = {},
+    litsx: litsxOptions = {},
+  } = {},
 ) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-unocss-"));
   const entry = path.join(directory, "entry.tsx");
@@ -60,6 +65,7 @@ async function buildFixture(
       configFile: false,
       logLevel: "silent",
       plugins: litsxUnoCss({
+        litsx: litsxOptions,
         unocss: {
           presets: [preset],
           preflights: [],
@@ -96,6 +102,12 @@ async function buildFixture(
       (entry) => entry.type === "chunk" && entry.isEntry,
     );
     assert(chunk, "expected Vite to emit an entry chunk");
+    chunk.css = outputs
+      .filter(
+        (entry) => entry.type === "asset" && entry.fileName.endsWith(".css"),
+      )
+      .map((entry) => String(entry.source))
+      .join("\n");
     return chunk;
   } finally {
     fs.rmSync(directory, { recursive: true, force: true });
@@ -349,7 +361,7 @@ describe("@litsx/unocss integration", () => {
     );
   });
 
-  it("materializes ordinary module utilities without a Vite plugin", async () => {
+  it("materializes component markup utilities without a Vite plugin", async () => {
     const id = "/virtual/standalone-components.tsx";
     const compiled = transformLitsxSync(
       MULTI_COMPONENT_SOURCE,
@@ -520,7 +532,7 @@ TestButton.styles = [BUTTON];
     }
   });
 
-  it("attaches one shared stylesheet to every component in a module", () => {
+  it("attaches an isolated markup stylesheet to every component in a module", () => {
     const result = transformLitsxSync(
       MULTI_COMPONENT_SOURCE,
       withUnoCssCompiler({
@@ -529,28 +541,83 @@ TestButton.styles = [BUTTON];
       }),
     );
 
-    assert.strictEqual(count(result.code, UNO_CSS_PLACEHOLDER), 1);
-    assert.match(
-      result.code,
-      /const _litsxUnoCssStyles = css`@unocss-placeholder`;/,
-    );
+    assert.strictEqual(count(result.code, UNO_CSS_PLACEHOLDER), 0);
+    assert.strictEqual(count(result.code, "__LITSX_UNOCSS_GUARD_"), 2);
     assert.match(
       result.code,
       /static styles = \[super\.styles \?\? \[\], css`[\s\S]*?`, _litsxUnoCssStyles\];/,
     );
     assert.match(
       result.code,
-      /class InfoCard[\s\S]*?static styles = \[super\.styles \?\? \[\], _litsxUnoCssStyles\];/,
+      /class InfoCard[\s\S]*?static styles = \[super\.styles \?\? \[\], _litsxUnoCssStyles2\];/,
     );
     assert.deepStrictEqual(result.metadata.litsxStyleIntegrations, [
       {
         name: "unocss",
-        strategy: "module-shared",
+        strategy: "component-isolated",
         components: ["ActionButton", "InfoCard"],
       },
     ]);
     assert(result.map);
     assert.deepStrictEqual(result.map.sources, ["/virtual/components.tsx"]);
+  });
+
+  it("isolates markup and explicit style guards between components", async () => {
+    const source = `
+const FIRST_SIZES = { sm: "w-8", lg: "w-12" };
+const SECOND_SIZES = { sm: "h-8", lg: "h-12" };
+const UNUSED = { danger: "bg-pink-500" };
+
+export function FirstCard({ size = "sm" }) {
+  return <article class={FIRST_SIZES[size]}><span class="text-red-500">First</span></article>;
+}
+FirstCard.styles = [FIRST_SIZES];
+
+export function SecondCard({ size = "sm" }) {
+  return <article class={SECOND_SIZES[size]}><span class="text-blue-500">Second</span></article>;
+}
+SecondCard.styles = [SECOND_SIZES];
+`;
+    const directory = fs.mkdtempSync(
+      path.join(os.tmpdir(), "litsx-unocss-isolation-"),
+    );
+    const filename = path.join(directory, "isolated-components.tsx");
+    fs.writeFileSync(filename, source, "utf8");
+    let materialized;
+    try {
+      const compiled = transformLitsxSync(
+        source,
+        withUnoCssCompiler({ filename }),
+      );
+      const integration = await createUnoCssIntegration({
+        presets: [presetWind4()],
+        preflights: [],
+      });
+      materialized = await integration.materializeModule(
+        compiled.code,
+        filename,
+      );
+    } finally {
+      fs.rmSync(directory, { recursive: true, force: true });
+    }
+
+    const firstStart = materialized.code.indexOf("const _litsxUnoCssStyles =");
+    const secondStart = materialized.code.indexOf(
+      "const _litsxUnoCssStyles2 =",
+    );
+    const firstRegion = materialized.code.slice(firstStart, secondStart);
+    const secondRegion = materialized.code.slice(secondStart);
+
+    assert(firstStart > -1 && secondStart > firstStart);
+    assert.match(firstRegion, /\.w-8\{/);
+    assert.match(firstRegion, /\.w-12\{/);
+    assert.match(firstRegion, /\.text-red-500\{/);
+    assert.doesNotMatch(firstRegion, /\.h-8\{|\.h-12\{|\.text-blue-500\{/);
+    assert.match(secondRegion, /\.h-8\{/);
+    assert.match(secondRegion, /\.h-12\{/);
+    assert.match(secondRegion, /\.text-blue-500\{/);
+    assert.doesNotMatch(secondRegion, /\.w-8\{|\.w-12\{|\.text-red-500\{/);
+    assert.doesNotMatch(materialized.code, /\.bg-pink-500\{/);
   });
 
   it("uses the same output hook for SSR compilation", () => {
@@ -562,7 +629,7 @@ TestButton.styles = [BUTTON];
       }),
     );
 
-    assert.strictEqual(count(result.code, UNO_CSS_PLACEHOLDER), 1);
+    assert.strictEqual(count(result.code, "__LITSX_UNOCSS_GUARD_"), 2);
     assert.match(result.code, /class ActionButton/);
     assert.match(result.code, /class InfoCard/);
   });
@@ -583,12 +650,12 @@ TestButton.styles = [BUTTON];
     );
     assert.match(
       result.code,
-      /class InfoCard[\s\S]*?static styles = \[_litsxUnoCssPreflight, super\.styles \?\? \[\], _litsxUnoCssStyles\];/,
+      /class InfoCard[\s\S]*?static styles = \[_litsxUnoCssPreflight, super\.styles \?\? \[\], _litsxUnoCssStyles2\];/,
     );
     assert.deepStrictEqual(result.metadata.litsxStyleIntegrations, [
       {
         name: "unocss",
-        strategy: "shared-preflight-module-utilities",
+        strategy: "shared-preflight-component-utilities",
         components: ["ActionButton", "InfoCard"],
       },
     ]);
@@ -611,7 +678,7 @@ TestButton.styles = [BUTTON];
       withUnoCssCompiler(firstOptions),
     );
 
-    assert.strictEqual(count(result.code, UNO_CSS_PLACEHOLDER), 1);
+    assert.strictEqual(count(result.code, "__LITSX_UNOCSS_GUARD_"), 2);
     assert.strictEqual(result.metadata.preexistingIntegration, true);
   });
 
@@ -662,7 +729,10 @@ LightCard.lightDom = true;
       /class LightCard extends LightDomMixin\(LitElement\)/,
     );
     assert.match(result.code, /litsx\.lightDomStyleScope/);
-    assert.match(result.code, /static styles = \[super\.styles \?\? \[\], _litsxUnoCssScopedStyles\];/);
+    assert.match(
+      result.code,
+      /static styles = \[super\.styles \?\? \[\], _litsxUnoCssScopedStyles\];/,
+    );
     assert.doesNotMatch(result.code, /@unocss-placeholder/);
   });
 
@@ -777,8 +847,11 @@ export function CompatButton({ active }) {
     assert.doesNotMatch(result.code, /static styles|lightDomStyleScope/);
     assert.match(result.code, /bg-green-500/);
     assert.match(result.code, /bg-gray-500/);
-    assert.strictEqual(count(shadowResult.code, UNO_CSS_PLACEHOLDER), 1);
-    assert.match(shadowResult.code, /static styles = \[super\.styles \?\? \[\], _litsxUnoCssStyles\];/);
+    assert.strictEqual(count(shadowResult.code, "__LITSX_UNOCSS_GUARD_"), 1);
+    assert.match(
+      shadowResult.code,
+      /static styles = \[super\.styles \?\? \[\], _litsxUnoCssStyles\];/,
+    );
   });
 
   it("consumes local object, tuple, nested, template and finite-map guards before runtime", () => {
@@ -827,8 +900,13 @@ IsolatedButton.styles = replaceStyles([SIZES, css\`:host { all: initial; }\`]);
       withUnoCssCompiler({ filename: "/virtual/isolated-button.tsx" }),
     );
 
-    const classOutput = result.code.slice(result.code.indexOf("class IsolatedButton"));
-    assert.match(classOutput, /static styles = \[css`\/\*__LITSX_UNOCSS_GUARD_/);
+    const classOutput = result.code.slice(
+      result.code.indexOf("class IsolatedButton"),
+    );
+    assert.match(
+      classOutput,
+      /static styles = \[css`\/\*__LITSX_UNOCSS_GUARD_/,
+    );
     assert.match(classOutput, /all: initial/);
     assert.match(classOutput, /_litsxUnoCssStyles/);
     assert.doesNotMatch(classOutput, /super\.styles|replaceStyles\(/);
@@ -948,7 +1026,10 @@ TestSecond.styles = [CARD, BUTTON];
     );
     const payloads = [
       ...result.code.matchAll(new RegExp(UNO_CSS_GUARD_PATTERN.source, "g")),
-    ].map((match) => decodeUnoCssGuardPayload(match[1]).candidates);
+    ]
+      .map((match) => decodeUnoCssGuardPayload(match[1]))
+      .filter((payload) => payload.candidates.length > 0)
+      .map((payload) => payload.candidates);
 
     assert.deepStrictEqual(payloads[0], ["inline-flex", "bg-red-600"]);
     assert.deepStrictEqual(payloads[1].sort(), ["ring-1", "ring-2"]);
@@ -1056,6 +1137,7 @@ export function ShadowCard() {
     fs.writeFileSync(
       path.join(directory, "light-card.tsx"),
       `
+const UNUSED_CLASSES = { danger: "bg-pink-500" };
 export function LightCard() {
   return <article class="m-7 bg-green-600">Light</article>;
 }
@@ -1108,6 +1190,7 @@ LightCard.lightDom = true;
       assert.match(css, /\.text-white\{/);
       assert.match(css, /\.m-7\{/);
       assert.match(css, /\.bg-green-600\{/);
+      assert.doesNotMatch(css, /\.bg-pink-500\{/);
       assert.match(js, /\.bg-red-500\{/);
       assert.doesNotMatch(js, /@scope \(\[data-litsx-style-scope=/);
       assert.doesNotMatch(css, /LITSX_UNOCSS_LIGHT_DOM_BUILD_PLACEHOLDER/);
@@ -1132,7 +1215,7 @@ export function WindCard() {
     assert.match(chunk.code, /padding:calc\(var\(--spacing\) \* 4\)/);
   });
 
-  it("extracts module utilities from constants, maps and JSX ternaries", async () => {
+  it("extracts explicit style maps and JSX ternaries", async () => {
     const chunk = await buildFixture(
       `
 const sizes = {
@@ -1149,6 +1232,8 @@ export function DynamicButton({ size = "md", primary = false }) {
     </button>
   );
 }
+
+DynamicButton.styles = [sizes];
 `,
       { preset: presetWind4() },
     );
@@ -1161,6 +1246,61 @@ export function DynamicButton({ size = "md", primary = false }) {
     assert.match(chunk.code, /\.px-6\{/);
     assert.match(chunk.code, /\.bg-blue-600\{/);
     assert.match(chunk.code, /\.bg-red-600\{/);
+  });
+
+  it("does not duplicate local map utilities explicitly owned by Component.styles", async () => {
+    const chunk = await buildFixture(
+      `
+const ICON_ONLY_CLASSES = {
+  sm: "w-8 !px-0",
+  md: "w-10 !px-0",
+  lg: "w-12 !px-0",
+};
+
+export function IconButton({ size = "md" }) {
+  return <button class={ICON_ONLY_CLASSES[size]}>Icon</button>;
+}
+
+IconButton.styles = [ICON_ONLY_CLASSES];
+`,
+      {
+        preset: presetWind4(),
+        unoCss: { safelist: ["bg-pink-500"] },
+      },
+    );
+
+    assert.strictEqual(count(chunk.code, ".w-8{"), 1);
+    assert.strictEqual(count(chunk.code, ".w-10{"), 1);
+    assert.strictEqual(count(chunk.code, ".w-12{"), 1);
+    assert.strictEqual(count(chunk.code, ".\\\\!px-0{"), 1);
+    assert.doesNotMatch(chunk.code, /\.bg-pink-500\{/);
+  });
+
+  it("materializes only the imported delta of a partially local style guard", async () => {
+    const code = await buildGuardFixture({
+      "shared.ts": `export const SHARED = "inline-flex items-center";`,
+      "entry.tsx": `
+import { SHARED } from "./shared";
+
+const SIZES = {
+  sm: \`\${SHARED} h-8 px-3\`,
+  lg: \`\${SHARED} h-12 px-6\`,
+};
+
+export function MixedButton({ size = "sm" }) {
+  return <button class={SIZES[size]}>Save</button>;
+}
+
+MixedButton.styles = [SIZES];
+`,
+    });
+
+    assert.strictEqual(count(code, ".inline-flex{"), 1);
+    assert.strictEqual(count(code, ".items-center{"), 1);
+    assert.strictEqual(count(code, ".h-8{"), 1);
+    assert.strictEqual(count(code, ".h-12{"), 1);
+    assert.strictEqual(count(code, ".px-3{"), 1);
+    assert.strictEqual(count(code, ".px-6{"), 1);
   });
 
   it("generates Wind4 arbitrary data variants in module styles", async () => {
@@ -1190,26 +1330,61 @@ export function VariantButton() {
     );
   });
 
-  it("includes configured safelist utilities in module styles", async () => {
-    const chunk = await buildFixture(
-      `
-export function SafelistedButton({ size }) {
-  return <button class={\`h-\${size}\`}>Safelisted</button>;
+  it("injects the safelist only into components with non-finite class bindings", async () => {
+    const source = `
+export function DynamicBox({ color }) {
+  return <div class={\`bg-\${color}-600\`}>Dynamic</div>;
 }
-`,
-      {
-        preset: presetWind4(),
-        unoCss: {
-          safelist: ["h-12", "data-[appearance=primary]:bg-blue-600"],
-        },
-      },
+
+export function StaticBox() {
+  return <div class="p-4 [&>*]:p-2">Static</div>;
+}
+`;
+    const filename = "/virtual/component-safelist.tsx";
+    const compiled = transformLitsxSync(
+      source,
+      withUnoCssCompiler({ filename }),
+    );
+    const payloads = [
+      ...compiled.code.matchAll(new RegExp(UNO_CSS_GUARD_PATTERN.source, "g")),
+    ].map((match) => decodeUnoCssGuardPayload(match[1]));
+    const dynamicPayload = payloads.find(
+      (payload) => payload.owner === "DynamicBox",
+    );
+    const staticPayload = payloads.find(
+      (payload) => payload.owner === "StaticBox",
     );
 
-    assert.match(chunk.code, /\.h-12\{/);
-    assert.match(chunk.code, /data-\\\\\[appearance\\\\=primary\\\\\]/);
-    assert.match(
-      chunk.code,
-      /background-color:color-mix\([^;]*--colors-blue-600/,
+    assert.deepStrictEqual(dynamicPayload.dynamicPatterns, ["bg-\u0000-600"]);
+    assert.deepStrictEqual(staticPayload.dynamicPatterns, []);
+    assert(staticPayload.candidates.includes("[&>*]:p-2"));
+
+    const integration = await createUnoCssIntegration({
+      presets: [presetWind4()],
+      preflights: [],
+      safelist: ["bg-red-600", "bg-blue-600", "text-white", "p-8"],
+    });
+    const materialized = await integration.materializeModule(
+      compiled.code,
+      filename,
+    );
+    const dynamicStart = materialized.code.indexOf(
+      "const _litsxUnoCssStyles =",
+    );
+    const staticStart = materialized.code.indexOf(
+      "const _litsxUnoCssStyles2 =",
+    );
+    const dynamicRegion = materialized.code.slice(dynamicStart, staticStart);
+    const staticRegion = materialized.code.slice(staticStart);
+
+    assert(dynamicStart > -1 && staticStart > dynamicStart);
+    assert.match(dynamicRegion, /\.bg-red-600\{/);
+    assert.match(dynamicRegion, /\.bg-blue-600\{/);
+    assert.doesNotMatch(dynamicRegion, /\.text-white\{|\.p-8\{/);
+    assert.match(staticRegion, /\.p-4\{/);
+    assert.doesNotMatch(
+      staticRegion,
+      /\.bg-red-600\{|\.bg-blue-600\{|\.text-white\{|\.p-8\{/,
     );
   });
 
@@ -1420,7 +1595,9 @@ export { WindCard } from "./card.tsx";
   });
 
   it("updates the development preflight when a later module introduces Wind4 theme tokens", async () => {
-    const directory = createWorkspaceTempDirectory("litsx-unocss-wind4-serve-order-");
+    const directory = createWorkspaceTempDirectory(
+      "litsx-unocss-wind4-serve-order-",
+    );
     fs.writeFileSync(
       path.join(directory, "early.tsx"),
       `
@@ -1583,10 +1760,11 @@ WindButton.styles = [BUTTON];
 
     try {
       const before = await server.ssrLoadModule("/entry.tsx");
-      const readUtilities = (component) => component.styles
-        .flat(Infinity)
-        .map((style) => style?.cssText ?? "")
-        .join("\n");
+      const readUtilities = (component) =>
+        component.styles
+          .flat(Infinity)
+          .map((style) => style?.cssText ?? "")
+          .join("\n");
       assert.match(readUtilities(before.WindButton), /\.bg-red-500\{/);
 
       fs.writeFileSync(

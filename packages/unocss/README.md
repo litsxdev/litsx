@@ -20,9 +20,9 @@ export default defineConfig({
 });
 ```
 
-The adapter compiles LitSX first and adds one UnoCSS Shadow DOM placeholder per
-module for utilities found directly in that module. A project-level virtual
-import exports the preflight as a second `CSSResult`, preventing every
+The adapter compiles LitSX first and adds one UnoCSS marker per component for
+utilities found in that component's `class`/`className` markup. A project-level
+virtual import exports the preflight as a second `CSSResult`, preventing every
 production component module from embedding its own reset. Existing
 `Component.styles` values are preserved between the preflight and generated
 utilities.
@@ -109,8 +109,8 @@ const unocss = await createUnoCssIntegration({
 const compiled = await transformLitsx(
   source,
   withUnoCssCompiler(
-  { filename: id },
-  { preflightModule: UNO_CSS_PREFLIGHT_MODULE_ID },
+    { filename: id },
+    { preflightModule: UNO_CSS_PREFLIGHT_MODULE_ID },
   ),
 );
 
@@ -120,9 +120,9 @@ const preflightModule = unocss.createPreflightModuleSource(preflightCss);
 ```
 
 `materializeModule()` performs the complete module-local operation: it
-extracts ordinary utility candidates, resolves component-owned static guards,
-generates utility-only CSS, replaces LitSX placeholders, and returns the files
-that the build tool should watch. `invalidate(file)` returns the module ids
+materializes component-owned markup candidates, resolves component-owned
+static guards, generates utility-only CSS, replaces LitSX markers, and returns
+the files that the build tool should watch. `invalidate(file)` returns the module ids
 affected by a changed static dependency.
 
 The adapter owns only build lifecycle policy. Production adapters typically
@@ -172,6 +172,11 @@ adapter resolves that exact export and its statically reachable dependencies,
 generates a component-owned `CSSResult`, and removes the object from the
 runtime `styles` value. Other exports in `button.styles.ts` are not included.
 
+Markup and guard markers carry the component owner. If the same utility is
+present in both sources, it is emitted once for that component. A guard shared
+by two components is still materialized once for each owner, because each
+shadow root needs its own stylesheet.
+
 Supported sources include static strings, objects, arrays and tuples, nested
 structures, static template literals, enumerable conditional branches,
 constant composition, finite map indexing, named/aliased imports, reexports
@@ -193,17 +198,16 @@ leaking an invalid style into the browser.
 
 ## Static and dynamic utility names
 
-UnoCSS extracts every statically enumerable utility string that remains in a
-component module. The string does not have to be written directly on a JSX
-attribute: constants, lookup maps and ternary branches in that module are
-supported. Wind4 arbitrary variants such as
-`data-[size=lg]:h-12` are supported as well.
+UnoCSS automatically extracts complete utility strings written in a
+component's `class`/`className` markup, including finite literal branches such
+as ternaries. Wind4 arbitrary variants such as `data-[size=lg]:h-12` are
+supported as well. It does not scan every string in the source module: doing
+so would leak unrelated values and sibling-component utilities into each
+shadow root.
 
-Runtime-generated names still need a finite static source, as in every UnoCSS
-integration. A project `safelist` is included in generated component styles,
-but it is project-wide and therefore appears in every shadow-root stylesheet.
-To keep the output local, enumerate the possible names in the component module
-instead:
+Runtime-selected maps and runtime-generated names need an explicit finite
+source, as in every UnoCSS integration. Declare that source in
+`Component.styles` so ownership is unambiguous:
 
 ```tsx
 const sizes = {
@@ -215,7 +219,16 @@ const sizes = {
 export function Button({ size = "md" }) {
   return <button class={sizes[size]}>Save</button>;
 }
+
+Button.styles = [sizes];
 ```
+
+A project `safelist` belongs to the optional global `virtual:uno.css` sheet and
+the shared token/preflight calculation. For a non-finite component binding,
+LitSX also projects only matching safelist entries into that component. For
+example, `bg-${color}-600` selects `bg-red-600` but not `text-white` from the
+same safelist. A fully opaque `class={value}` has no safe static shape to match;
+enumerate its finite values through `Component.styles` instead.
 
 Strings in imported helpers are intentionally not discovered merely because
 render code imports them. Add the exact helper export to `Component.styles` to
@@ -247,10 +260,9 @@ export default createLitsxStorybookConfig({
 
 ## Granularity and SSR
 
-Utilities discovered normally from JSX remain module-granular because LitSX
-emits one ordinary utility placeholder per source module. Explicit
-`Component.styles` guards are materialized independently, so each component
-receives only the selected export's reachable utility rules. A shared guard can
+Utilities discovered from JSX and explicit `Component.styles` guards are
+component-granular. Two components in one source module receive independent
+utility sheets, and unrelated module strings are ignored. A shared guard can
 be owned by multiple components without making sibling exports part of either
 stylesheet.
 

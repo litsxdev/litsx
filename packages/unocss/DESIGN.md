@@ -7,8 +7,8 @@ UnoCSS: 66.8.1
 
 LitSX does not need an UnoCSS-specific compiler phase. The existing generic
 `authoringPlugins` hook consumes component-owned static guards before native
-lowering, while `outputPlugins` attaches the module utility `CSSResult`. The
-build-tool-neutral engine extracts and materializes module utilities and
+lowering, while `outputPlugins` attaches a component utility `CSSResult`. The
+build-tool-neutral engine materializes component utilities and
 imports one project-level virtual `CSSResult` containing the resolved
 preflight. The Vite adapter maps this engine onto the official UnoCSS context,
 virtual modules and HMR.
@@ -17,7 +17,7 @@ The integration verifies:
 
 - existing `Component.styles` composition
 - components without authored styles
-- multiple components per module with one CSS literal
+- multiple components per module with isolated CSS literals
 - native and react-compat compilation
 - Shadow DOM and light DOM classes
 - client and SSR Vite builds
@@ -43,10 +43,11 @@ The integration verifies:
 
 ## Granularity
 
-The build engine replaces the first `@unocss-placeholder` in a module with a
-stylesheet generated from the ordinary JSX candidates extracted from that
-module. Every component declared by the module references that shared
-stylesheet.
+The output plugin inspects each generated component independently and encodes
+only complete utility candidates from that component's `class`/`className`
+template bindings. The build engine replaces each marker with a stylesheet
+owned by that component. It never uses a whole-module extraction result as a
+shadow-root stylesheet.
 
 An explicit static value in `Component.styles` follows a more precise path.
 The authoring plugin resolves only that symbol/export, replaces it with an
@@ -56,12 +57,20 @@ that marker, and replaces it in the same materialization pass. Each guard
 therefore remains owned by the component whose styles declaration names it; no
 module-wide export scanning or user-code execution is involved.
 
-Shadow components keep one CSS copy in the JavaScript module. Scoped light-DOM
-components receive a component-owned marker whose rules are wrapped in CSS
+Markup and explicit guard markers share an owner identity. The build engine
+deduplicates their candidate union per owner, so a utility declared through
+both routes is emitted once without affecting sibling components.
+
+Non-finite class bindings retain their static shape as an internal pattern.
+The engine matches the configured safelist against that shape and adds only
+matching entries to the owning component. It does not copy the complete
+safelist into every shadow root.
+
+Shadow components keep one CSS copy per component in the JavaScript module.
+Scoped light-DOM components receive a component-owned marker whose rules are wrapped in CSS
 `@scope`; the nearest nested LitSX scope is the end boundary. Components in the
-same file still receive the module candidate union, while selector reach is
-isolated at runtime. Keeping one primary component per source file gives both
-candidate and selector granularity.
+same file receive separate candidate sets. Unrelated strings, unowned maps and
+the candidates of sibling components are not injected.
 
 ## Size measurement
 
@@ -79,14 +88,11 @@ px-4 bg-red-500 text-white p-8 shadow-lg
 | Utilities without preflights |   520 B | 259 B |
 | Utilities with preflights    | 2,679 B | 585 B |
 
-Generating the two fixture components independently produced 4,858 raw bytes.
-The shared module stylesheet produced 2,679 raw bytes, saving 2,179 bytes by
-deduplicating the preflight within that module.
-
-With the virtual module implementation, independently compiled component
-modules contain only their utility subsets and reference the same 2,158-byte
-preflight module. For the complete fixture utility set that is 2,678 raw CSS
-bytes rather than embedding the preflight in every module.
+The virtual module keeps the 2,158-byte preflight shared. Each component then
+contains only its utility subset. Utility rules may intentionally exist in two
+different component sheets when both shadow roots use them; they cannot be
+shared through document CSS. They are never duplicated twice inside the same
+component sheet.
 
 The adapter collects the token set through UnoCSS's own resolved context and
 attaches a generated preflight `CSSResult` alongside each module's utility-only
@@ -140,8 +146,8 @@ UnoCSS-specific behavior.
 `createUnoCssBuildEngine()` owns the behavior that must be identical in every
 tool:
 
-- candidate extraction and per-module token ownership
-- ordinary placeholder materialization
+- candidate extraction and per-component token ownership
+- component marker materialization
 - exact-export guard resolution and dependency tracking
 - utility-only CSS generation
 - resolved preflight generation
