@@ -1,6 +1,6 @@
 {
   "name": "@litsx/eslint-plugin",
-  "version": "1.0.0-next.1",
+  "version": "1.0.0-next.2",
   "description": "Official ESLint rules for standard LitSX JSX and TSX",
   "author": "LitSX Team",
   "type": "module",
@@ -47,7 +47,7 @@
   "dependencies": {
     "@babel/core": "^8.0.1",
     "@babel/eslint-parser": "^8.0.1",
-    "@litsx/authoring": "^1.0.0-next.2"
+    "@litsx/authoring": "^1.0.0-next.3"
   },
   "scripts": {
     "build": "../../node_modules/.bin/rollup --config rollup.config.js",

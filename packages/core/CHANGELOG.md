@@ -1,5 +1,13 @@
 # litsx
 
+## 1.0.0-next.4
+
+### Patch Changes
+
+- 7cd6053: Consume `adoptStyles` through the public `lit` peer instead of declaring a separate direct `@lit/reactive-element` dependency, reducing the risk of loading multiple Lit runtime copies.
+- Updated dependencies [7cd6053]
+  - @litsx/authoring@1.0.0-next.3
+
 ## 1.0.0-next.3
 
 ### Minor Changes

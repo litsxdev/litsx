@@ -25,6 +25,7 @@
     "bright-kiwis-parse",
     "calm-properties-compose",
     "calm-spreads-hydrate",
+    "clean-lions-dedupe",
     "complete-ssr-support",
     "composed-static-metadata",
     "fair-buttons-hydrate",
@@ -60,8 +61,10 @@
     "stable-server-component-elements",
     "standard-jsx-authoring",
     "steady-suspended-refs",
+    "strict-components-hooks",
     "style-contract-and-prop-ssr-fixes",
     "ten-windows-invite",
+    "tidy-eslint-jsx-rules",
     "tidy-resources-hydrate"
   ]
 }
