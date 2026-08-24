@@ -23,6 +23,8 @@ The internal encoding may contain Lit binding prefixes, but it is not public
 authored syntax and must never be presented as application source in diagnostics,
 examples, or website documentation.
 
-The `@litsx/authoring/internal/parser` export exists only to reparse generated
+The `@litsx/authoring/parser` export is the canonical parser helper for LitSX
+tooling. `@litsx/authoring/internal/parser` is an equivalent compatibility alias
+still consumed by compiler internals; both entrypoints reparse generated
 compiler IR. Application files and imported source dependencies are parsed with
-the standard Babel JSX/TypeScript parser and cannot use that encoding.
+the standard Babel JSX/TypeScript parser and cannot use that internal encoding.

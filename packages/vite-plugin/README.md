@@ -254,7 +254,7 @@ It does not:
 
 - own docs-site-specific module resolution
 - provide Rollup or esbuild plugins
-- replace runtime dependencies such as `lit` or `litsx`
+- replace runtime dependencies such as `lit` or `@litsx/core`
 - render HTML by itself; pair it with `@litsx/ssr` for scoped server rendering
 
 ## Stability

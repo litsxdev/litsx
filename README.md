@@ -32,9 +32,12 @@ truth when updating the website documentation.
 ### Core public packages
 
 - [`packages/core`](./packages/core): main runtime package, JSX runtime entrypoints, async boundaries, elements, and rendering helpers
+- [`packages/ssr`](./packages/ssr): scoped server rendering, streaming, document generation, and hydration orchestration
 - [`packages/compiler`](./packages/compiler): public programmatic compilation facade
 - [`packages/create-litsx-app`](./packages/create-litsx-app): project scaffolder
 - [`packages/eslint-plugin-litsx`](./packages/eslint-plugin-litsx): official ESLint integration for LitSX-authored source
+- [`packages/storybook`](./packages/storybook): Storybook framework integration for LitSX projects
+- [`packages/prop-types`](./packages/prop-types): shared PropTypes-to-Lit property metadata helpers
 - [`packages/authoring`](./packages/authoring): shared standard JSX semantics and internal generated-template helpers
 - [`packages/scoped-registry-shim`](./packages/scoped-registry-shim): internal shimmed scoped-registry runtime used by shadow hosts and renderer mounts
 - [`packages/vite-plugin`](./packages/vite-plugin): Vite integration

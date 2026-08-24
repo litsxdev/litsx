@@ -49,9 +49,10 @@ You can wire those pieces together manually, but this package exists so callers 
 If you do want to wire Babel directly, `@litsx/babel-preset-litsx` is the canonical source of truth for the native LitSX plugin order.
 
 The compiler's `lightDomStyles` option controls generic component-output
-routing. Integration-specific destination policies, such as UnoCSS preflight
-layers and document CSS ownership, are documented by the integration itself;
-see [`@litsx/unocss`](../unocss/README.md#vite-api).
+routing. Integration-specific destination policies, such as preflight layers
+and document CSS ownership, are documented by each integration; see
+[`@litsx/unocss`](../unocss/README.md#vite-api) and
+[`@litsx/tailwind`](../tailwind/README.md).
 
 For advanced integrations that need authored-input preparation without using the full compiler facade, `@litsx/compiler` also exports low-level helpers such as `prepareLitsxAuthoredInput(...)` and `ensureLitsxParserPlugins(...)`. Generated-template virtualization remains an internal compiler concern, not an authored-source parser.
 
@@ -104,6 +105,27 @@ type TransformLitsxResult = {
 
 Synchronous equivalent of `transformLitsx(...)`.
 
+### `createLitsxCompilationSession(options?)`
+
+Creates a reusable compiler session for build tools that transform many modules:
+
+```js
+import { createLitsxCompilationSession } from "@litsx/compiler";
+
+const session = createLitsxCompilationSession({
+  projectPath: process.cwd(),
+  transformOptions: { sourceMaps: true },
+});
+
+const result = await session.transform(source, { filename });
+session.invalidate([filename]);
+session.dispose();
+```
+
+The session reuses TypeScript analysis and compiler caches. Call `invalidate()`
+when watched files change and `dispose()` when the build or development server
+shuts down. `transformSync()` is also available on the session.
+
 ## Options
 
 ### `filename?: string`
@@ -113,6 +135,17 @@ Filename used for Babel metadata and sourcemaps. Provide this whenever possible.
 ### `parserPlugins?: string[]`
 
 Additional Babel parser plugins. If omitted, `.tsx` filenames automatically enable the `typescript` parser plugin.
+
+### `requireJsx?: boolean`
+
+Controls whether authored-input preparation always enables Babel's JSX parser.
+The default is `true`; set it to `false` only for integrations that deliberately
+pass non-JSX JavaScript or TypeScript through the shared authored-input helpers.
+
+### `ssr?: boolean`
+
+Enables the SSR form of final JSX template lowering. Build integrations should
+set this for their server pipeline and keep it disabled for browser output.
 
 ### `sourceMaps?: boolean`
 
@@ -191,6 +224,18 @@ Build-tool integrations must ensure that every package named by `transformDepend
 Additional Babel plugins appended after the default LitSX pipeline.
 
 Use this for bounded, consumer-specific post-processing on already-lowered output. Do not use it to replace the core LitSX transforms.
+
+## Utility CSS integration API
+
+`@litsx/compiler/utility-css` exposes the shared static-analysis primitives used
+by the official UnoCSS and Tailwind integrations. It can collect finite utility
+class candidates from component markup, resolve imported static guards, identify
+dynamic class patterns, and read compiler-emitted light-DOM metadata.
+
+This entrypoint is for CSS integration authors. Applications should install
+[`@litsx/unocss`](../unocss/README.md) or
+[`@litsx/tailwind`](../tailwind/README.md) instead of calling helpers such as
+`collectUtilityClassCandidates()` or `createStaticGuardResolver()` directly.
 
 ## Output Contract
 

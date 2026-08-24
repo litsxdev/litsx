@@ -60,9 +60,11 @@ That path gives you the smallest scaffold with:
 The scaffold includes:
 
 - `vite`
-- `litsx`
+- `lit`
+- `@litsx/core`
 - `@litsx/vite-plugin`
 - `@litsx/eslint-plugin`
+- `@webcomponents/scoped-custom-element-registry`
 - `eslint.config.js` with `recommended-flat`
 - `tsconfig.json` configured with `jsxImportSource: "@litsx/core"`
 - `npm run lint` wired to `eslint .`

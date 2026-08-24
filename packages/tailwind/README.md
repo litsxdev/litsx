@@ -4,6 +4,22 @@ Tailwind CSS v4 utilities for LitSX shadow DOM and light DOM components. The
 adapter uses the official `@tailwindcss/vite` plugin; it does not depend on
 Tailwind's private programmatic compiler APIs.
 
+## Installation
+
+For the supported Vite integration, install the adapter and its optional peer
+tooling together:
+
+```bash
+npm install -D @litsx/tailwind @litsx/vite-plugin \
+  @tailwindcss/vite tailwindcss vite
+```
+
+The Vite adapter supports Tailwind CSS 4.3+, Vite 7.3 or 8, and the LitSX 1.0
+prerelease line. Consumers of the bundler-neutral root entrypoint do not need
+Vite or `@tailwindcss/vite` at runtime.
+
+## Vite quick start
+
 ```js
 // vite.config.js
 import { defineConfig } from "vite";
@@ -35,6 +51,38 @@ official Vite plugin.
 
 `source(none)` is recommended because LitSX owns candidate routing. The entry
 still owns theme, preflight, plugins and custom CSS.
+
+## Public API
+
+### `@litsx/tailwind/vite`
+
+`litsxTailwind(options?)` is the supported high-level Vite entrypoint and returns
+the complete ordered plugin array. Pass it directly inside `plugins`, as shown
+above. Its options are:
+
+- `litsx`: options forwarded to `@litsx/vite-plugin`;
+- `tailwind`: options forwarded to the official `@tailwindcss/vite` plugin;
+- `integration`: LitSX candidate-routing options documented below.
+
+Advanced Vite integrations can compose the lower-level
+`withTailwindViteCompiler()`, `createTailwindVirtualPlugin()`, and
+`createTailwindPropertyCleanupPlugin()` primitives. Use them only when another
+framework owns plugin ordering; ordinary applications should use
+`litsxTailwind()`.
+
+### `@litsx/tailwind`
+
+The bundler-neutral entrypoint exposes:
+
+- `createTailwindContext(options?)` for the shared project-level candidate and
+  virtual-module registry;
+- `createTailwindAuthoringPlugin(options?)` for authored class analysis;
+- `createTailwindOutputPlugin(context, options?)` for compiler-output routing;
+- `withTailwindCompiler(options, context, integration?)` to add both compiler
+  contributions to an existing `TransformLitsxOptions` object.
+
+Framework adapters should create one context per project, configure it with the
+resolved project root, and reuse it across client, SSR, and watch transforms.
 
 ## Component ownership
 

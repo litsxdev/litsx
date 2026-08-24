@@ -77,6 +77,6 @@ const view = html`<button title=${text} @click=${handleClick}>
 - Listener options use the object-listener form (`{ handleEvent, capture, once, passive }`) understood by Lit.
 - Keeps source maps aligned with Babel defaults so editor tooling continues to work after the transform.
 - Spread lowering creates ordinary Lit attribute, property, boolean, and event parts, so the same output works in browser rendering and Lit SSR.
-- Hydratable spread output must use `@litsx/ssr` and `@litsx/ssr/client` as a
+- Hydratable spread output must use `@litsx/ssr` and `@litsx/ssr/hydration` as a
   pair because browser `ElementPart` routing and server Lit parts have different
   template shapes.
