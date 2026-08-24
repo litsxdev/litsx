@@ -1,0 +1,131 @@
+# `@litsx/tailwind`
+
+Tailwind CSS v4 utilities for LitSX shadow DOM and light DOM components. The
+adapter uses the official `@tailwindcss/vite` plugin; it does not depend on
+Tailwind's private programmatic compiler APIs.
+
+```js
+// vite.config.js
+import { defineConfig } from "vite";
+import { litsxTailwind } from "@litsx/tailwind/vite";
+
+export default defineConfig({
+  plugins: litsxTailwind({
+    integration: {
+      entry: "./src/tailwind.css",
+    },
+  }),
+});
+```
+
+```css
+/* src/tailwind.css */
+@import "tailwindcss" source(none);
+
+@theme {
+  --color-brand: oklch(62% 0.18 255);
+}
+```
+
+The main `@litsx/tailwind` entrypoint is bundler-neutral. It exposes the
+compiler contribution and integration context without importing Vite,
+`@tailwindcss/vite`, PostCSS, or Tailwind itself. The `/vite` entrypoint is the
+supported CSS materializer and composes the core protocol with Tailwind's
+official Vite plugin.
+
+`source(none)` is recommended because LitSX owns candidate routing. The entry
+still owns theme, preflight, plugins and custom CSS.
+
+## Component ownership
+
+Literal and statically enumerable classes referenced by a component belong to
+that component. This includes constants, maps, ternaries and imported finite
+values:
+
+```tsx
+const SIZE = {
+  sm: "h-8 px-3",
+  lg: "h-12 px-6",
+};
+
+export function UiButton({ size = "sm" }) {
+  return <button class={SIZE[size]}>Save</button>;
+}
+```
+
+For a shadow component, only these utilities are attached to its static Lit
+styles. A second component in the same source file does not receive them.
+
+Non-finite class construction needs a finite integration safelist:
+
+```tsx
+function Swatch({ color }) {
+  return <span class={`bg-${color}-600`} />;
+}
+```
+
+```js
+litsxTailwind({
+  integration: {
+    safelist: ["bg-red-600", "bg-green-600"],
+  },
+});
+```
+
+Only entries matching this component's `bg-*-600` pattern are included in its
+CSS. Unrelated safelist entries are not copied into the shadow root.
+
+`Component.styles` remains an explicit local guard for utilities that cannot
+be reached from markup. Finite strings, arrays, objects and imported constants
+are consumed at build time; they are not emitted as CSS twice:
+
+```tsx
+DynamicBox.styles = [
+  baseStyles,
+  { red: "bg-red-600", green: "bg-green-600" },
+];
+```
+
+## Shadow and light DOM
+
+Shadow components receive:
+
+- one shared preflight CSSResult;
+- one exact per-component utility CSSResult;
+- inherited `Component.styles` in their normal Lit order.
+
+The document receives preflight/theme once and an inert infrastructure sheet.
+The latter lets Tailwind register global `@property` definitions needed by
+utilities such as `shadow-*`, `ring-*` and `translate-*`, including components
+loaded lazily. Its utility selectors are nested under an inert id and cannot
+style application markup.
+
+Light DOM uses the compiler's normal policy:
+
+- `global` emits ordinary global utilities;
+- `scoped` emits utilities inside `@scope (...) to (...)`, stopping at nested
+  LitSX component roots;
+- React compatibility forces `global`, consistently with its light-DOM model.
+
+Scoped light DOM requires native CSS `@scope` support (Chrome/Edge 118+,
+Safari/iOS 17.4+, Firefox 146+). Use `global` when targeting older browsers,
+including Firefox ESR 140.
+
+## Options
+
+```ts
+litsxTailwind({
+  litsx: {},       // @litsx/vite-plugin options
+  tailwind: {},    // official @tailwindcss/vite options
+  integration: {
+    entry: "./src/tailwind.css",
+    sources: ["./src/**/*.{html,js,jsx,ts,tsx}"],
+    safelist: [],
+  },
+});
+```
+
+`sources` feeds only the inert shared infrastructure so lazy modules have the
+required Tailwind property registrations before they are imported. Exact
+component utilities still come exclusively from that component's markup,
+finite guards and matching safelist entries.

@@ -24,6 +24,7 @@
     "packages/storybook",
     "packages/ssr",
     "packages/typescript-session",
+    "packages/tailwind",
     "packages/unocss",
     "packages/vite-plugin"
   ],
@@ -43,6 +44,7 @@
     "@rollup/plugin-json": "^6.1.0",
     "@rollup/plugin-node-resolve": "^16.0.3",
     "@rollup/plugin-terser": "^1.0.0",
+    "@tailwindcss/vite": "^4.3.0",
     "@vitest/coverage-v8": "^4.1.11",
     "@webcomponents/scoped-custom-element-registry": "^0.0.10",
     "diff": "^9.0.0",
@@ -53,6 +55,7 @@
     "playwright": "^1.62.1",
     "prettier": "^3.9.6",
     "rollup": "^4.62.5",
+    "tailwindcss": "^4.3.0",
     "typescript": "^6.0.0",
     "unocss": "^66.8.1",
     "vite": "^8.2.2",
@@ -91,7 +94,7 @@
     "release:github": "node scripts/release/build-github-release.js",
     "release:github:backfill": "node scripts/release/backfill-github-releases.js",
     "release:publish": "yarn release:check && yarn release:smoke:scaffolds && yarn changeset:publish",
-    "release:test": "vitest run test/release-manifest.test.js test/create-litsx-app.test.js test/vite-plugin.test.js test/compiler.test.js test/compiler-authored-input.test.js test/ssr.test.js test/unocss-integration.test.js && yarn validate:ssr-performance"
+    "release:test": "vitest run test/release-manifest.test.js test/create-litsx-app.test.js test/vite-plugin.test.js test/compiler.test.js test/compiler-authored-input.test.js test/ssr.test.js test/unocss-integration.test.js test/tailwind-integration.test.js && yarn validate:ssr-performance"
   },
   "author": "LitSX Team",
   "license": "Apache-2.0",

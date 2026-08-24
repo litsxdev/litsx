@@ -19,6 +19,12 @@
       "import": "./src/authored-input.js",
       "require": "./dist/authored-input.cjs",
       "default": "./src/authored-input.js"
+    },
+    "./utility-css": {
+      "types": "./src/utility-css.d.ts",
+      "import": "./src/utility-css.js",
+      "require": "./dist/utility-css.cjs",
+      "default": "./src/utility-css.js"
     }
   },
   "files": [

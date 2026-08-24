@@ -16,6 +16,7 @@ export const npmReleasePackages = [
   "packages/babel-plugin-litsx-proptypes",
   "packages/babel-plugin-shared-hooks",
   "packages/typescript-session",
+  "packages/tailwind",
   "packages/unocss",
 ];
 

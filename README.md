@@ -39,6 +39,7 @@ truth when updating the website documentation.
 - [`packages/scoped-registry-shim`](./packages/scoped-registry-shim): internal shimmed scoped-registry runtime used by shadow hosts and renderer mounts
 - [`packages/vite-plugin`](./packages/vite-plugin): Vite integration
 - [`packages/unocss`](./packages/unocss): UnoCSS integration with destination-routed document and component styles
+- [`packages/tailwind`](./packages/tailwind): bundler-neutral Tailwind integration protocol plus an official Vite adapter for isolated shadow and scoped/global light DOM utilities
 
 ### Babel toolchain
 
