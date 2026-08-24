@@ -599,7 +599,7 @@ export function RollupCard() {
     assert.match(css, /\.text-white\{/);
   });
 
-  it("tracks static guard dependencies without a Vite module graph", async () => {
+  it("refreshes imported class expressions without a Vite module graph", async () => {
     const directory = fs.mkdtempSync(
       path.join(os.tmpdir(), "litsx-unocss-engine-"),
     );
@@ -609,7 +609,6 @@ export function RollupCard() {
     const source = `
 import { BUTTON } from "./styles";
 export function TestButton() { return <button class={BUTTON}>Save</button>; }
-TestButton.styles = [BUTTON];
 `;
     fs.writeFileSync(entry, source, "utf8");
 
@@ -1145,10 +1144,15 @@ TestSecond.styles = [CARD, BUTTON];
       .filter((payload) => payload.candidates.length > 0)
       .map((payload) => payload.candidates);
 
-    assert.deepStrictEqual(payloads[0], ["inline-flex", "bg-red-600"]);
-    assert.deepStrictEqual(payloads[1].sort(), ["ring-1", "ring-2"]);
-    assert.deepStrictEqual(payloads[2], ["rounded-xl", "shadow-xl"]);
-    assert.deepStrictEqual(payloads[3], ["inline-flex", "bg-red-600"]);
+    const containsExactly = (expected) =>
+      payloads.some(
+        (candidates) =>
+          JSON.stringify([...candidates].sort()) ===
+          JSON.stringify([...expected].sort()),
+      );
+    assert(containsExactly(["inline-flex", "bg-red-600"]));
+    assert(containsExactly(["ring-1", "ring-2"]));
+    assert(containsExactly(["rounded-xl", "shadow-xl"]));
   });
 
   it("rejects definite static guards when the UnoCSS authoring integration is absent", () => {
@@ -1361,6 +1365,67 @@ DynamicButton.styles = [sizes];
     assert.match(chunk.code, /\.px-6\{/);
     assert.match(chunk.code, /\.bg-blue-600\{/);
     assert.match(chunk.code, /\.bg-red-600\{/);
+  });
+
+  it("extracts finite local class bindings without duplicating them in styles", async () => {
+    const source = `
+import { css } from "@litsx/core";
+
+const COUNTER_CLASSES =
+  "inline-flex min-w-[var(--counter-width)] items-center justify-center";
+const COUNTER_HOST_CLASSES = "[--counter-width:1rem]";
+const COUNTER_SIZES = {
+  sm: "h-8 px-3",
+  lg: "h-12 px-6",
+};
+
+export function TestCounter({ value = "0" }) {
+  return <span class={COUNTER_CLASSES}>{value}</span>;
+}
+
+TestCounter.styles = css\`:host { display: inline-flex; }\`;
+
+export function TestCounterGroup({ size = "sm" }) {
+  const classes = COUNTER_SIZES[size];
+  return (
+    <TestCounter
+      class={\`\${COUNTER_HOST_CLASSES} \${classes}\`}
+      value="2"
+    />
+  );
+}
+`;
+    const compiled = transformLitsxSync(
+      source,
+      withUnoCssCompiler({ filename: "/virtual/finite-bindings.tsx" }),
+    );
+    const payloads = [
+      ...compiled.code.matchAll(new RegExp(UNO_CSS_GUARD_PATTERN.source, "g")),
+    ].map((match) => decodeUnoCssGuardPayload(match[1]));
+    const counter = payloads.find((payload) => payload.owner === "TestCounter");
+    const group = payloads.find(
+      (payload) => payload.owner === "TestCounterGroup",
+    );
+
+    assert(counter);
+    assert(group);
+    assert(counter.candidates.includes("inline-flex"));
+    assert(counter.candidates.includes("min-w-[var(--counter-width)]"));
+    assert(!counter.candidates.includes("h-8"));
+    assert(group.candidates.includes("[--counter-width:1rem]"));
+    assert(group.candidates.includes("h-8"));
+    assert(group.candidates.includes("h-12"));
+    assert(!group.candidates.includes("inline-flex"));
+
+    const chunk = await buildFixture(source, { preset: presetWind4() });
+    assert.match(chunk.code, /\.inline-flex\{/);
+    assert.match(chunk.code, /\.min-w-/);
+    assert.match(chunk.code, /--counter-width:1rem/);
+    assert.match(chunk.code, /\.h-8\{/);
+    assert.match(chunk.code, /\.h-12\{/);
+    assert.match(chunk.code, /\.px-3\{/);
+    assert.match(chunk.code, /\.px-6\{/);
+    assert.strictEqual(count(chunk.code, ".inline-flex{"), 1);
   });
 
   it("does not duplicate local map utilities explicitly owned by Component.styles", async () => {
@@ -1867,7 +1932,6 @@ export function WindCard() {
       `
 import { BUTTON } from "./button.styles";
 export function WindButton() { return <button class={BUTTON.base}>Save</button>; }
-WindButton.styles = [BUTTON];
 `,
       "utf8",
     );

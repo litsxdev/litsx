@@ -44,6 +44,7 @@ The integration verifies:
 - initial and lazy-module global utilities in Vite development and production
 - external `uno.config` resolution and configuration invalidation
 - exact-export static guards, aliases, barrels and transitive values
+- finite local and imported class expressions without duplicated style guards
 - component-local safelist projection for non-finite class patterns
 - removal of authoring guards from runtime `CSSResultGroup` values
 - preservation of authored strings, templates, regular expressions and
@@ -70,6 +71,17 @@ deduplicated per owner, so a utility declared through both routes is emitted
 once without affecting sibling components. A guard shared by two components
 is materialized once for each owner because each shadow root needs its own
 stylesheet.
+
+Finite values referenced directly by a class binding follow the same ownership
+rule without requiring a duplicate `Component.styles` entry. The output marker
+records only the exact expression and its dependencies. The engine refreshes
+that expression when an imported dependency changes; it never scans the whole
+module or includes sibling bindings.
+
+This callsite-driven form is the primary authoring contract. A finite utility
+map referenced by markup should not also be listed in `Component.styles`.
+`Component.styles` remains the escape hatch for opaque or non-finite bindings
+and the normal home for authored Lit CSS.
 
 Non-finite class bindings retain their static shape as an internal pattern.
 The engine matches the configured safelist against that shape and adds only

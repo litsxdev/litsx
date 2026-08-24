@@ -9,7 +9,10 @@ import {
   UNO_CSS_DYNAMIC_WILDCARD,
   UNO_CSS_PREFLIGHT_BUILD_PLACEHOLDER,
 } from "./protocol.js";
-import { resolveStaticGuardExport } from "./static-guards.js";
+import {
+  resolveStaticClassExpression,
+  resolveStaticGuardExport,
+} from "./static-guards.js";
 
 function normalizeDependency(file) {
   try {
@@ -219,6 +222,28 @@ export function createUnoCssBuildEngine(options = {}) {
         }
         candidates = resolved.candidates;
         dependencies.add(payload.descriptor.file);
+        for (const dependency of resolved.dependencies || []) {
+          dependencies.add(dependency);
+        }
+      }
+
+      for (const source of payload.staticSources || []) {
+        const sourceKey = JSON.stringify(source);
+        let resolved = resolvedGuards.get(sourceKey);
+        if (!resolved) {
+          try {
+            resolved = resolveStaticClassExpression(source);
+          } catch (error) {
+            throw new Error(
+              `@litsx/unocss could not refresh class expression ${source.expression ?? source.node?.type ?? "unknown"} ` +
+                `from ${source.file}: ${error.message}`,
+              { cause: error },
+            );
+          }
+          resolvedGuards.set(sourceKey, resolved);
+        }
+        candidates = [...candidates, ...resolved.candidates];
+        dependencies.add(source.file);
         for (const dependency of resolved.dependencies || []) {
           dependencies.add(dependency);
         }

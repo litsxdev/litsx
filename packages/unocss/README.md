@@ -247,10 +247,55 @@ resolution and preserves that behavior.
 Vite and `@litsx/vite-plugin` are optional peers. They are required only when
 importing `@litsx/unocss/vite`.
 
-## Component-owned static guards
+## Static class expressions and explicit guards
+
+Finite bindings referenced by a component's `class` or `className` markup are
+resolved automatically. The reference itself establishes component ownership;
+the integration does not scan unrelated strings or sibling components:
+
+```tsx
+const BASE_CLASSES = "inline-flex items-center";
+const SIZE_CLASSES = {
+  sm: "h-8 px-3",
+  lg: "h-12 px-6",
+};
+
+export function Button({ size = "sm" }) {
+  return <button class={`${BASE_CLASSES} ${SIZE_CLASSES[size]}`}>Save</button>;
+}
+```
+
+Local constants, finite maps, constant composition and exact resolvable imports
+are supported. Imported dependencies are watched and refreshed without pulling
+other exports into the component sheet. Repeating these bindings in
+`Component.styles` is unnecessary; if both routes contain the same candidate,
+it is emitted once.
+
+This is the recommended authoring form for a finite set of variants. Keep the
+runtime lookup and the utility inventory in one map and reference that map from
+`class`/`className`; do not repeat it in `Component.styles`:
+
+```tsx
+const APPEARANCE_CLASSES = {
+  default: "bg-slate-100 text-slate-900",
+  primary: "bg-blue-600 text-white",
+  danger: "bg-red-600 text-white",
+} as const;
+
+export function Button({ appearance = "default" }) {
+  return <button class={APPEARANCE_CLASSES[appearance]}>Save</button>;
+}
+```
+
+Reserve `Component.styles` for authored Lit CSS and for explicit guards when
+the class expression is opaque or cannot be finitely resolved. This keeps
+component ownership explicit without maintaining the same utility inventory
+twice.
+
+### Explicit guards
 
 An imported static utility map can be assigned to `Component.styles` to make
-its ownership explicit:
+utilities available when their runtime class expression cannot be enumerated:
 
 ```tsx
 // button.styles.ts
@@ -264,8 +309,8 @@ export const BUTTON_SIZE_CLASSES = {
 import { css } from "@litsx/core";
 import { BUTTON_SIZE_CLASSES } from "./button.styles";
 
-export function Button({ size = "md" }) {
-  return <button class={BUTTON_SIZE_CLASSES[size]}>Save</button>;
+export function Button({ className }) {
+  return <button class={className}>Save</button>;
 }
 
 Button.styles = [
@@ -278,7 +323,7 @@ Button.styles = [
 ];
 ```
 
-`BUTTON_SIZE_CLASSES` is an authoring guard, not a runtime Lit style. The
+`BUTTON_SIZE_CLASSES` is an explicit authoring guard, not a runtime Lit style. The
 adapter resolves that exact export and its statically reachable dependencies,
 generates a component-owned `CSSResult`, and removes the object from the
 runtime `styles` value. Other exports in `button.styles.ts` are not included.
@@ -309,29 +354,24 @@ leaking an invalid style into the browser.
 
 ## Static and dynamic utility names
 
-UnoCSS automatically extracts complete utility strings written in a
-component's `class`/`className` markup, including finite literal branches such
-as ternaries. Wind4 arbitrary variants such as `data-[size=lg]:h-12` are
-supported as well. It does not scan every string in the source module: doing
-so would leak unrelated values and sibling-component utilities into each
-shadow root.
+UnoCSS automatically extracts complete utility strings reachable from a
+component's `class`/`className` markup, including local constants, finite maps,
+exact imports and literal branches such as ternaries. Wind4 arbitrary variants
+such as `data-[size=lg]:h-12` are supported as well. It does not scan every
+string in the source module: doing so would leak unrelated values and
+sibling-component utilities into each shadow root.
 
-Runtime-selected maps and runtime-generated names need an explicit finite
-source, as in every UnoCSS integration. Declare that source in
-`Component.styles` so ownership is unambiguous:
+Runtime-generated names and opaque values need an explicit finite source, as in
+every UnoCSS integration. Declare that source in `Component.styles`:
 
 ```tsx
-const sizes = {
-  sm: "h-8 px-3",
-  md: "h-10 px-4",
-  lg: "h-12 px-6",
-};
+const colors = ["bg-red-600", "bg-blue-600"];
 
-export function Button({ size = "md" }) {
-  return <button class={sizes[size]}>Save</button>;
+export function Button({ color }) {
+  return <button class={`bg-${color}-600`}>Save</button>;
 }
 
-Button.styles = [sizes];
+Button.styles = [colors];
 ```
 
 A project `safelist` belongs to the shared token/preflight calculation and the
@@ -342,10 +382,10 @@ entries into that component. For example, `bg-${color}-600` selects
 `class={value}` has no safe static shape to match; enumerate its finite values
 through `Component.styles` instead.
 
-Strings in imported helpers are intentionally not discovered merely because
-render code imports them. Add the exact helper export to `Component.styles` to
-establish ownership. This avoids treating unrelated content, configuration or
-other exports from the same module as utility sources.
+Strings in imported helpers are not discovered merely because render code
+imports them. Only an exact binding referenced by the class expression is
+followed. Add an otherwise opaque helper export to `Component.styles` when its
+values cannot be reached statically from that expression.
 
 This package uses the compiler's generic `authoringPlugins` and
 `outputPlugins` hooks. There is no UnoCSS-specific behavior in

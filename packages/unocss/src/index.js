@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import { createStaticGuardResolver } from "./static-guards.js";
 import {
   createUnoCssGuardMarker,
@@ -259,6 +260,56 @@ function combineStringParts(parts, limit = 4096) {
   return values;
 }
 
+function inlineConstantBindings(
+  node,
+  scope,
+  t,
+  resolving = new Set(),
+  parent = null,
+) {
+  if (!node) return node;
+  if (t.isIdentifier(node)) {
+    const binding = scope.getBinding(node.name);
+    const isReference = !parent || t.isReferenced(node, parent);
+    const declaration = binding?.path?.isVariableDeclarator()
+      ? binding.path
+      : binding?.path?.parentPath;
+    if (
+      isReference &&
+      binding.constant &&
+      binding.constantViolations.length === 0 &&
+      declaration?.isVariableDeclarator() &&
+      declaration.node.init &&
+      !resolving.has(binding)
+    ) {
+      const nextResolving = new Set(resolving).add(binding);
+      return inlineConstantBindings(
+        declaration.node.init,
+        declaration.scope,
+        t,
+        nextResolving,
+        null,
+      );
+    }
+    return t.cloneNode(node);
+  }
+
+  const clone = t.cloneNode(node, false);
+  for (const key of t.VISITOR_KEYS[node.type] || []) {
+    const value = node[key];
+    if (Array.isArray(value)) {
+      clone[key] = value.map((child) =>
+        child
+          ? inlineConstantBindings(child, scope, t, resolving, node)
+          : child,
+      );
+    } else if (value) {
+      clone[key] = inlineConstantBindings(value, scope, t, resolving, node);
+    }
+  }
+  return clone;
+}
+
 function finiteStringValues(node, t) {
   node = unwrapStringExpression(node, t);
   if (!node) return null;
@@ -295,9 +346,11 @@ function finiteStringValues(node, t) {
   return null;
 }
 
-function classPatternValues(node, t) {
+function classPatternValues(node, t, resolveStatic) {
   const finite = finiteStringValues(node, t);
   if (finite) return finite;
+  const resolved = resolveStatic?.(node);
+  if (resolved) return resolved;
   node = unwrapStringExpression(node, t);
   if (t.isTemplateLiteral(node)) {
     const parts = [];
@@ -306,37 +359,74 @@ function classPatternValues(node, t) {
         node.quasis[index].value.cooked ?? node.quasis[index].value.raw,
       ]);
       if (index < node.expressions.length) {
-        parts.push(classPatternValues(node.expressions[index], t));
+        parts.push(
+          classPatternValues(node.expressions[index], t, resolveStatic),
+        );
       }
     }
     return combineStringParts(parts) ?? [UNO_CSS_DYNAMIC_WILDCARD];
   }
   if (t.isConditionalExpression(node)) {
     return [
-      ...classPatternValues(node.consequent, t),
-      ...classPatternValues(node.alternate, t),
+      ...classPatternValues(node.consequent, t, resolveStatic),
+      ...classPatternValues(node.alternate, t, resolveStatic),
     ];
   }
   if (t.isLogicalExpression(node)) {
     return [
-      ...classPatternValues(node.left, t),
-      ...classPatternValues(node.right, t),
+      ...classPatternValues(node.left, t, resolveStatic),
+      ...classPatternValues(node.right, t, resolveStatic),
     ];
   }
   if (t.isBinaryExpression(node, { operator: "+" })) {
     return (
       combineStringParts([
-        classPatternValues(node.left, t),
-        classPatternValues(node.right, t),
+        classPatternValues(node.left, t, resolveStatic),
+        classPatternValues(node.right, t, resolveStatic),
       ]) ?? [UNO_CSS_DYNAMIC_WILDCARD]
     );
   }
   return [UNO_CSS_DYNAMIC_WILDCARD];
 }
 
-function collectMarkupCandidates(classPath, t) {
+function collectMarkupCandidates(classPath, t, staticResolver, filename) {
   const candidates = new Set();
   const dynamicPatterns = new Set();
+  const staticCandidates = new Set();
+  const staticDependencies = new Set();
+  const staticSources = new Map();
+
+  const resolveStatic = (node, scope) => {
+    if (!staticResolver) return null;
+    let result;
+    let refreshable = true;
+    try {
+      result = staticResolver.resolveNode(node);
+    } catch {
+      refreshable = false;
+      try {
+        result = staticResolver.resolveNode(
+          inlineConstantBindings(node, scope, t),
+        );
+      } catch {
+        return null;
+      }
+    }
+    if (result.kind !== "static") return null;
+    for (const dependency of result.dependencies || []) {
+      staticDependencies.add(dependency);
+    }
+    if (filename && fs.existsSync(filename) && refreshable) {
+      const expressionNode = t.removePropertiesDeep(t.cloneNode(node, true));
+      const descriptor = { file: filename, node: expressionNode };
+      staticSources.set(JSON.stringify(descriptor), descriptor);
+      for (const candidate of result.candidates) {
+        staticCandidates.add(candidate);
+      }
+    }
+    return result.candidates;
+  };
+
   classPath.traverse({
     TaggedTemplateExpression(templatePath) {
       const tagPath = templatePath.get("tag");
@@ -368,9 +458,15 @@ function collectMarkupCandidates(classPath, t) {
         const parts = [];
         let offset = 0;
         for (const placeholder of value.matchAll(/\u0001(\d+)\u0002/gu)) {
+          const expressionIndex = Number(placeholder[1]);
+          const expressionPath = templatePath.get(
+            `quasi.expressions.${expressionIndex}`,
+          );
           parts.push([value.slice(offset, placeholder.index)]);
           parts.push(
-            classPatternValues(quasi.expressions[Number(placeholder[1])], t),
+            classPatternValues(quasi.expressions[expressionIndex], t, (node) =>
+              resolveStatic(node, expressionPath.scope),
+            ),
           );
           offset = placeholder.index + placeholder[0].length;
         }
@@ -390,9 +486,12 @@ function collectMarkupCandidates(classPath, t) {
       }
     },
   });
+  for (const candidate of staticCandidates) candidates.delete(candidate);
   return {
     candidates: [...candidates],
     dynamicPatterns: [...dynamicPatterns],
+    dependencies: [...staticDependencies],
+    staticSources: [...staticSources.values()],
   };
 }
 
@@ -620,8 +719,9 @@ export function createUnoCssAuthoringPlugin(options = {}) {
  * Create the low-level Babel output plugin used by the UnoCSS adapter.
  *
  * The plugin contributes one CSSResult per compiled component. Its marker owns
- * only utilities statically present in that component's class/className markup;
- * dynamic maps are contributed explicitly through Component.styles guards.
+ * only utilities statically reachable from that component's class/className
+ * bindings; non-finite values are contributed through explicit guards or a
+ * matching safelist.
  */
 export function createUnoCssOutputPlugin(options = {}) {
   const globalCssModule =
@@ -661,6 +761,13 @@ export function createUnoCssOutputPlugin(options = {}) {
             if (componentClasses.length === 0) {
               return;
             }
+
+            const filename = state.filename || state.file.opts.filename;
+            const staticResolver = createStaticGuardResolver({
+              source: state.file.code || "",
+              filename,
+              ast: state.file.ast,
+            });
 
             const componentInfos = componentClasses.map((classPath) => ({
               classPath,
@@ -735,9 +842,16 @@ export function createUnoCssOutputPlugin(options = {}) {
               lightDom,
             } of componentInfos) {
               const owner = classPath.node.id?.name ?? null;
-              const { candidates, dynamicPatterns } = collectMarkupCandidates(
+              const {
+                candidates,
+                dynamicPatterns,
+                dependencies,
+                staticSources,
+              } = collectMarkupCandidates(
                 classPath,
                 t,
+                staticResolver,
+                filename,
               );
               if (lightDomScope) {
                 const scope = `[${LIGHT_DOM_SCOPE_ATTRIBUTE}="${lightDomScope}"]`;
@@ -749,6 +863,8 @@ export function createUnoCssOutputPlugin(options = {}) {
                 const scopedMarker = createUnoCssGuardMarker({
                   candidates,
                   dynamicPatterns,
+                  dependencies,
+                  staticSources,
                   owner,
                   scope,
                 });
@@ -791,6 +907,8 @@ export function createUnoCssOutputPlugin(options = {}) {
                         createUnoCssGuardMarker({
                           candidates,
                           dynamicPatterns,
+                          dependencies,
+                          staticSources,
                           emit:
                             lightDomStrategy === "global" ? "global" : "none",
                           owner,
@@ -806,6 +924,8 @@ export function createUnoCssOutputPlugin(options = {}) {
               const marker = createUnoCssGuardMarker({
                 candidates,
                 dynamicPatterns,
+                dependencies,
+                staticSources,
                 owner,
               });
               classPath.insertBefore(

@@ -44,12 +44,19 @@ export declare const UNO_CSS_GUARD_PATTERN: RegExp;
 /** @internal Build-tool bridge for component-owned guard materialization. */
 export declare function decodeUnoCssGuardPayload(value: string): {
   candidates?: string[];
+  dynamicPatterns?: string[];
   descriptor?: {
     file: string;
     exportName?: string;
     localName?: string;
   } | null;
   dependencies?: string[];
+  staticSources?: Array<{
+    file: string;
+    expression?: string;
+    node?: unknown;
+  }>;
+  owner?: string | null;
   emit?: "component" | "global" | "none";
   scope?: string;
 };

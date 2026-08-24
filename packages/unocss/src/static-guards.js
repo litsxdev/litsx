@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
-import { parse } from "@babel/parser";
+import { parse, parseExpression } from "@babel/parser";
 
 const SOURCE_EXTENSIONS = ["", ".tsx", ".ts", ".jsx", ".mjs", ".js", ".cjs"];
 
@@ -46,6 +46,14 @@ function resolveSourceFile(importer, source) {
 
 function parseModule(source, filename) {
   return parse(source, {
+    sourceType: "module",
+    sourceFilename: filename,
+    plugins: ["jsx", "typescript", "importAttributes", "decorators-legacy"],
+  });
+}
+
+function parseStaticExpression(source, filename) {
+  return parseExpression(source, {
     sourceType: "module",
     sourceFilename: filename,
     plugins: ["jsx", "typescript", "importAttributes", "decorators-legacy"],
@@ -439,6 +447,18 @@ export function resolveStaticGuardExport(descriptor) {
   });
   if (descriptor.localName) return resolver.resolveLocal(descriptor.localName);
   return resolver.resolveExport(descriptor.file, descriptor.exportName);
+}
+
+export function resolveStaticClassExpression(descriptor) {
+  const source = fs.readFileSync(descriptor.file, "utf8");
+  const resolver = createStaticGuardResolver({
+    source,
+    filename: descriptor.file,
+  });
+  return resolver.resolveNode(
+    descriptor.node ??
+      parseStaticExpression(descriptor.expression, descriptor.file),
+  );
 }
 
 export { runtimeStyleExpression };
