@@ -72,10 +72,21 @@ describe("@litsx/tailwind Vite and context branches", () => {
 
     assert.equal(plugin.resolveId("unrelated"), null);
     const preflightId = plugin.resolveId(TAILWIND_PREFLIGHT_MODULE_ID);
+    const inlinePreflightId = plugin.resolveId(
+      `${TAILWIND_PREFLIGHT_MODULE_ID}?inline`,
+    );
     const infrastructureId = plugin.resolveId(
       TAILWIND_INFRASTRUCTURE_MODULE_ID,
     );
     assert.match(preflightId, /^\0@litsx\/tailwind\/preflight\.css$/u);
+    assert.match(
+      inlinePreflightId,
+      /^\0@litsx\/tailwind\/preflight\.css\?inline$/u,
+    );
+    assert.match(
+      plugin.load(inlinePreflightId),
+      /@import .*theme\\"dark\.css/u,
+    );
     assert.match(plugin.load(preflightId), /@import .*theme\\"dark\.css/u);
     assert.match(
       plugin.load(infrastructureId),

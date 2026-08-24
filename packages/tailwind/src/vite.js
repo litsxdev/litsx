@@ -55,12 +55,15 @@ function infrastructureCss(context) {
 }
 
 function resolveVirtualId(id) {
+  const queryIndex = id.indexOf("?");
+  const pathname = queryIndex === -1 ? id : id.slice(0, queryIndex);
+  const query = queryIndex === -1 ? "" : id.slice(queryIndex);
   if (
-    id === TAILWIND_INFRASTRUCTURE_MODULE_ID ||
-    id === TAILWIND_PREFLIGHT_MODULE_ID ||
-    id.startsWith(TAILWIND_COMPONENT_MODULE_PREFIX)
+    pathname === TAILWIND_INFRASTRUCTURE_MODULE_ID ||
+    pathname === TAILWIND_PREFLIGHT_MODULE_ID ||
+    pathname.startsWith(TAILWIND_COMPONENT_MODULE_PREFIX)
   ) {
-    return `${RESOLVED_PREFIX}${id.slice("virtual:@litsx/tailwind/".length)}`;
+    return `${RESOLVED_PREFIX}${pathname.slice("virtual:@litsx/tailwind/".length)}${query}`;
   }
   return null;
 }
