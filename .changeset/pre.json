@@ -32,6 +32,7 @@
     "early-ssr-dom-shim",
     "fair-buttons-hydrate",
     "few-guests-thank",
+    "finite-classes-flow",
     "fix-next-pre-publish",
     "fix-ssr-resource-hook-abi",
     "forwarded-server-refs",

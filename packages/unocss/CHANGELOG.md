@@ -1,5 +1,14 @@
 # @litsx/unocss
 
+## 1.0.0-next.3
+
+### Patch Changes
+
+- 225bfe6: Resolve finite local constants, maps, aliases, and exact imports referenced by
+  component class bindings without requiring duplicate `Component.styles`
+  guards. Preserve per-component ownership, dependency invalidation, HMR refresh,
+  and deduplication with explicit guards.
+
 ## 1.0.0-next.2
 
 ### Patch Changes
