@@ -6,18 +6,18 @@ export function setLitsxLazyAnalysisBabelTypes(nextTypes) {
   t = nextTypes;
 }
 
-function toKebab(name) {
+export function toKebab(name) {
   return componentNameToTagName(name);
 }
 
-function getJsxNameParts(node) {
+export function getJsxNameParts(node) {
   if (t.isJSXIdentifier(node)) return [node.__scopedOriginal || node.name];
   if (!t.isJSXMemberExpression(node)) return null;
   const objectParts = getJsxNameParts(node.object);
   return objectParts ? [...objectParts, node.property.name] : null;
 }
 
-function getExpressionKey(node) {
+export function getExpressionKey(node) {
   if (t.isIdentifier(node)) {
     return node.name;
   }
@@ -56,7 +56,7 @@ export function isLazyCallee(path, state) {
   return false;
 }
 
-function getReturnedExpression(node) {
+export function getReturnedExpression(node) {
   if (t.isArrowFunctionExpression(node) && t.isExpression(node.body)) {
     return node.body;
   }
@@ -74,14 +74,14 @@ function getReturnedExpression(node) {
   return null;
 }
 
-function isImportCall(node) {
+export function isImportCall(node) {
   return (
     t.isImportExpression?.(node) ||
     (t.isCallExpression(node) && t.isImport(node.callee))
   );
 }
 
-function isLoaderLike(node) {
+export function isLoaderLike(node) {
   if (!node) return false;
 
   if (t.isArrowFunctionExpression(node) || t.isFunctionExpression(node)) {
@@ -103,7 +103,7 @@ function isLoaderLike(node) {
   return false;
 }
 
-function resolveObjectPropertyEntry(objectNode, propertyName) {
+export function resolveObjectPropertyEntry(objectNode, propertyName) {
   return objectNode.properties.find((entry) => {
     if (!t.isObjectProperty(entry) || entry.computed) return false;
     return (
@@ -113,7 +113,7 @@ function resolveObjectPropertyEntry(objectNode, propertyName) {
   });
 }
 
-function collectIfReturns(statement, returns) {
+export function collectIfReturns(statement, returns) {
   const consequent = statement.consequent;
   const alternate = statement.alternate;
 
@@ -136,7 +136,7 @@ function collectIfReturns(statement, returns) {
   collect(alternate);
 }
 
-function collectSwitchReturns(statement, returns) {
+export function collectSwitchReturns(statement, returns) {
   statement.cases.forEach((switchCase) => {
     switchCase.consequent.forEach((entry) => {
       if (t.isReturnStatement(entry)) {
@@ -146,7 +146,7 @@ function collectSwitchReturns(statement, returns) {
   });
 }
 
-function resolveFunctionReturnNode(callNode, scope, state, seen) {
+export function resolveFunctionReturnNode(callNode, scope, state, seen) {
   const callee = callNode.callee;
   if (!t.isIdentifier(callee)) {
     return null;
@@ -194,7 +194,7 @@ function resolveFunctionReturnNode(callNode, scope, state, seen) {
   return returns;
 }
 
-function resolveObjectProperty(node, propertyName, scope, state, seen) {
+export function resolveObjectProperty(node, propertyName, scope, state, seen) {
   const objectNode = resolveValueNode(node, scope, state, seen);
   if (!objectNode || !t.isObjectExpression(objectNode)) {
     return null;
@@ -309,7 +309,7 @@ export function hasLazyOrigin(node, scope, state, seen = new Set()) {
   return false;
 }
 
-function createExpressionFromJSXName(node) {
+export function createExpressionFromJSXName(node) {
   if (t.isJSXIdentifier(node)) {
     const name = node.__scopedOriginal || node.name;
     return t.isValidIdentifier(name) ? t.identifier(name) : null;
@@ -323,7 +323,7 @@ function createExpressionFromJSXName(node) {
   return null;
 }
 
-function getSpecialMemberAttribute(openingElement) {
+export function getSpecialMemberAttribute(openingElement) {
   return (openingElement.attributes ?? []).find(
     (attribute) =>
       t.isJSXAttribute(attribute) &&
@@ -333,7 +333,7 @@ function getSpecialMemberAttribute(openingElement) {
   ) ?? null;
 }
 
-function isReactControlComponent(expression, scope) {
+export function isReactControlComponent(expression, scope) {
   if (t.isIdentifier(expression)) {
     const binding = scope.getBinding(expression.name);
     if (!binding?.path?.isImportSpecifier()) return false;
@@ -354,7 +354,7 @@ function isReactControlComponent(expression, scope) {
   );
 }
 
-function rewriteJSXName(node, tagName) {
+export function rewriteJSXName(node, tagName) {
   if (t.isJSXIdentifier(node)) {
     node.name = tagName;
     return;
@@ -367,13 +367,13 @@ function rewriteJSXName(node, tagName) {
   }
 }
 
-function getRenderedTagName(node) {
+export function getRenderedTagName(node) {
   if (t.isJSXIdentifier(node) && !/^[A-Z]/.test(node.name)) return null;
   const parts = getJsxNameParts(node);
   return parts ? parts.map(toKebabCase).join("-") : null;
 }
 
-function getLazyComponentReference(path) {
+export function getLazyComponentReference(path) {
   const opening = path.node.openingElement;
   if (!opening) return null;
 

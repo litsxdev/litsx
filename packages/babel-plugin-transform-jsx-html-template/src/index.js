@@ -12,6 +12,10 @@ import {
 let t;
 const RUNTIME_COMPONENT_BINDING_ATTRIBUTE = "litsx-runtime-component-binding";
 
+export function setJsxTemplateBabelTypes(types) {
+  t = types;
+}
+
 function isRestPropsMetadataKey(node) {
   return t.isCallExpression(node) &&
     t.isMemberExpression(node.callee) &&
@@ -608,3 +612,16 @@ function ensureTaggedImport(programPath, importName) {
     programPath.unshiftContainer("body", taggedImport);
   }
 }
+
+export {
+  collectGeneratedAnchorRanges,
+  containsJsxRefAttribute,
+  containsJsxSpreadAttribute,
+  containsRoutedComponentProps,
+  findInRanges,
+  indexToPosition,
+  isExternalRoutableImport,
+  isRestPropsMetadataKey,
+  isTaggedTemplate,
+  resolvePatchedIndex,
+};

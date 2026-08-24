@@ -206,6 +206,23 @@ describe("prop-types drop-in", () => {
     assert.strictEqual(mixed.type, Object);
   });
 
+  it("covers empty, invalid, optional, and guard-chaining descriptor branches", () => {
+    assert.strictEqual(PropTypes.oneOf().type, String);
+    assert.deepStrictEqual(PropTypes.oneOf("invalid").values, []);
+    assert.strictEqual(PropTypes.oneOf(["one", 2]).type, String);
+    assert.deepStrictEqual(PropTypes.oneOfType(null).types, []);
+    assert.deepStrictEqual(PropTypes.arrayOf(null).value, {});
+    assert.deepStrictEqual(PropTypes.arrayOf(123).value, {});
+    assert.deepStrictEqual(toPlain(PropTypes.string.optional()), { type: String });
+
+    const guarded = PropTypes.oneOf(["on", "off"]);
+    assert.strictEqual(guarded.hasChanged(undefined, "on"), true);
+    const chained = guarded.hasChanged(() => false);
+    assert.notStrictEqual(chained, guarded);
+    assert.strictEqual(chained.hasChanged("on", "off"), false);
+    assert.throws(() => chained.hasChanged("invalid", "on"), /Invalid value/);
+  });
+
   it("supports shorthand configurations in helpers", () => {
     const arrayOfStrings = PropTypes.arrayOf("string");
     assert.deepStrictEqual(arrayOfStrings.value, { type: String });

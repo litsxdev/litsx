@@ -18,6 +18,16 @@ import {
 import { EffectsController } from "../packages/core/src/effects-controller.js";
 import { SsrEffectsController } from "../packages/core/src/ssr-effects-controller.js";
 import { LITSX_SSR_CONTEXT } from "../packages/core/src/elements/index.js";
+import {
+  buildEffectQueues,
+  cleanupDisconnectedEffects,
+  finalizeConnectedEffects,
+  registerConnectedEffect,
+  registerEffect,
+  resetAdoptedConnectedEffects,
+  runConnectedEffects,
+  runEffectQueue,
+} from "../packages/core/src/runtime-effect-queues.js";
 
 class TestHost {
   constructor() {
@@ -46,6 +56,65 @@ afterEach(() => {
 });
 
 describe("runtime utility internals", () => {
+  it("covers effect queue registration, reuse, cleanup, and sparse records", () => {
+    const calls = [];
+    const host = { marker: "host" };
+    const controller = {
+      host,
+      cursor: 0,
+      connectedCursor: 0,
+      effects: [],
+      connectedEffects: [],
+    };
+    registerEffect(controller, function () { calls.push(this.marker); return "no cleanup"; }, undefined, false);
+    const reused = {
+      ...controller,
+      cursor: 0,
+      effects: [{ callback() {}, deps: [], hasRun: true, needsRun: false, layout: true }],
+    };
+    registerEffect(reused, () => {}, [], true);
+    controller.effects.push(undefined, {
+      callback() { calls.push("removed"); },
+      deps: [],
+      cleanup() { calls.push("cleanup removed"); },
+      hasRun: true,
+      needsRun: false,
+      layout: true,
+    });
+    controller.cursor = 2;
+    buildEffectQueues(controller);
+    assert.strictEqual(controller.passiveQueue.length, 1);
+    assert.deepStrictEqual(calls, ["cleanup removed"]);
+    runEffectQueue(controller, controller.passiveQueue);
+    assert.deepStrictEqual(calls, ["cleanup removed", "host"]);
+
+    const connectedController = {
+      host,
+      connectedCursor: 0,
+      connectedEffects: [],
+    };
+    registerConnectedEffect(connectedController, function () { calls.push("connected"); return () => calls.push("connected cleanup"); }, null);
+    connectedController.connectedCursor = 0;
+    registerConnectedEffect(connectedController, () => {}, [], false);
+    connectedController.connectedEffects.push(undefined);
+    runConnectedEffects(connectedController);
+    runConnectedEffects(connectedController);
+    runConnectedEffects(connectedController, true);
+    connectedController.connectedCursor = 0;
+    finalizeConnectedEffects(connectedController);
+    assert.strictEqual(connectedController.connectedEffects.length, 0);
+
+    const sparse = {
+      host,
+      effects: [undefined, { cleanup() { calls.push("effect cleanup"); }, hasRun: true }],
+      connectedEffects: [undefined, { active: false }, { active: true, cleanup() { calls.push("active cleanup"); } }],
+    };
+    cleanupDisconnectedEffects(sparse);
+    resetAdoptedConnectedEffects(sparse);
+    assert.strictEqual(sparse.connectedEffects[1].needsRun, true);
+    assert.strictEqual(sparse.connectedEffects[2].active, false);
+  });
+
   it("assigns and cleans up function and object refs while ignoring unsupported targets", () => {
     const calls = [];
     const functionRef = (value) => {
@@ -143,6 +212,8 @@ describe("runtime utility internals", () => {
     assert.strictEqual(resolveRuntimeHost(undefined), null);
     assert.strictEqual(directController, contextualController);
     assert.strictEqual(host.controllers.length, 1);
+    assert.throws(() => runWithHookHost("host", () => {}), /ReactiveControllerHost/);
+    assert.throws(() => runWithHookHost(host, null), /callback/);
   });
 
   it("selects the SSR controller only for hosts marked with SSR context", () => {
@@ -206,5 +277,18 @@ describe("runtime utility internals", () => {
     assert.strictEqual(state.isPending, false);
     assert.strictEqual(state.pendingCount, 0);
     assert.strictEqual(state.pendingTokens.size, 0);
+  });
+
+  it("makes transition completion idempotent and tolerates removed tokens", () => {
+    const callbacks = [];
+    globalThis.queueMicrotask = (callback) => callbacks.push(callback);
+    const state = createTransitionState({ host: null });
+    state.startTransition(() => "sync");
+    callbacks[0]();
+    callbacks[0]();
+    state.startTransition(() => "removed");
+    state.pendingTokens.clear();
+    callbacks[1]();
+    resetTransitionState(null);
   });
 });

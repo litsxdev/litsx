@@ -94,6 +94,8 @@ function walk(node, parent, visit) {
   }
 }
 
+export { componentFunctionName, jsxComponentNameParts, walk };
+
 export function createInvalidComponentNameDiagnostic(componentName, node) {
   let tagName;
   try {

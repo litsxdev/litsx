@@ -35,7 +35,7 @@ const PROFILE_ENABLED = process.env.LITSX_PROFILE === "1";
 const PRESET_PLUGIN_CACHE = new WeakMap();
 const DEFAULT_PRESET_PLUGIN_CACHE = new Map();
 
-function createStandaloneTsCompilerOptions(ts) {
+export function createStandaloneTsCompilerOptions(ts) {
   return {
     target: ts.ScriptTarget.ESNext,
     module: ts.ModuleKind.ESNext,
@@ -51,7 +51,7 @@ function createStandaloneTsCompilerOptions(ts) {
   };
 }
 
-function getSourceFeaturesCacheKey(sourceFeatures) {
+export function getSourceFeaturesCacheKey(sourceFeatures) {
   if (!sourceFeatures) {
     return "all";
   }
@@ -63,7 +63,7 @@ function getSourceFeaturesCacheKey(sourceFeatures) {
   ].join("");
 }
 
-function profilePhase(name, callback, profile = null) {
+export function profilePhase(name, callback, profile = null) {
   if (!PROFILE_ENABLED) {
     return callback();
   }
@@ -87,15 +87,15 @@ function profilePhase(name, callback, profile = null) {
   }
 }
 
-function normalizePluginList(plugins) {
+export function normalizePluginList(plugins) {
   return Array.isArray(plugins) ? plugins : [];
 }
 
-function shouldStripTypescriptSyntax(filename = "") {
+export function shouldStripTypescriptSyntax(filename = "") {
   return /\.tsx?$/.test(filename);
 }
 
-function reparseTemplateLoweringAst(source, options = {}) {
+export function reparseTemplateLoweringAst(source, options = {}) {
   return parseWithLitsxVirtualization(babelParser.parse, source, {
     sourceType: "module",
     plugins: ensureLitsxParserPlugins(
@@ -108,7 +108,7 @@ function reparseTemplateLoweringAst(source, options = {}) {
   });
 }
 
-function collectAuthoredTemplateAttributeMappings(
+export function collectAuthoredTemplateAttributeMappings(
   node,
   mappings = [],
   options = {},
@@ -164,7 +164,7 @@ function collectAuthoredTemplateAttributeMappings(
   return mappings;
 }
 
-function jsxTagName(name) {
+export function jsxTagName(name) {
   if (name?.type !== "JSXIdentifier") {
     return null;
   }
@@ -174,14 +174,14 @@ function jsxTagName(name) {
     : name.name;
 }
 
-function isChildrenExpression(node) {
+export function isChildrenExpression(node) {
   return node?.type === "MemberExpression" &&
     node.computed !== true &&
     node.property?.type === "Identifier" &&
     node.property.name === "children";
 }
 
-function componentNameFromFunctionNode(node) {
+export function componentNameFromFunctionNode(node) {
   if (
     node?.type === "FunctionDeclaration" &&
     node.id?.type === "Identifier" &&
@@ -193,7 +193,7 @@ function componentNameFromFunctionNode(node) {
   return null;
 }
 
-function componentNameFromVariableNode(node) {
+export function componentNameFromVariableNode(node) {
   if (
     node?.type === "VariableDeclarator" &&
     node.id?.type === "Identifier" &&
@@ -209,7 +209,7 @@ function componentNameFromVariableNode(node) {
 // The component lowering pass creates a class around the authored function.
 // Preserve direct anchors for the user-authored render boundary and template
 // nodes, because generated class members intentionally have no source location.
-function collectAuthoredRenderSourcemapMappings(
+export function collectAuthoredRenderSourcemapMappings(
   node,
   mappings = [],
   options = {},
@@ -306,7 +306,7 @@ function collectAuthoredRenderSourcemapMappings(
   return mappings;
 }
 
-function remapTemplateAttributeMappings(mappings = [], inputSourceMap = null) {
+export function remapTemplateAttributeMappings(mappings = [], inputSourceMap = null) {
   if (!Array.isArray(mappings) || mappings.length === 0 || !inputSourceMap) {
     return mappings;
   }
@@ -340,7 +340,7 @@ function remapTemplateAttributeMappings(mappings = [], inputSourceMap = null) {
   }
 }
 
-function mergeTemplateLoweringMetadata(
+export function mergeTemplateLoweringMetadata(
   firstPassMetadata = {},
   secondPassMetadata = {},
   firstPassMap = null,
@@ -458,11 +458,11 @@ function getMemoizedPresetPlugins(options, sourceFeatures = null, session = null
   return plugins;
 }
 
-function getSessionFeatureCacheKey(source, options = {}) {
+export function getSessionFeatureCacheKey(source, options = {}) {
   return `${options.filename || ""}:${source}`;
 }
 
-function createCompilerCaches() {
+export function createCompilerCaches() {
   return {
     sourceFeatures: new Map(),
     authoredInput: new Map(),
@@ -476,7 +476,7 @@ function createCompilerCaches() {
   };
 }
 
-function normalizeFinalSourceMap(map, source, options = {}) {
+export function normalizeFinalSourceMap(map, source, options = {}) {
   if (!map || typeof map !== "object") {
     return map ?? null;
   }

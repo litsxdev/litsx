@@ -34,6 +34,8 @@ function blocksReveal(boundary) {
   );
 }
 
+export { blocksReveal, normalizeRevealOrder, normalizeTail };
+
 /**
  * Coordinate reveal order across several sibling suspense boundaries.
  * SuspenseList controls when each boundary is allowed to reveal fallback or content.

@@ -513,6 +513,109 @@ describe("litsx effects controller", () => {
     assert.strictEqual(validity.reportValidity(), true);
   });
 
+  it("covers FACE fallback internals, superclass callbacks, and unchanged lifecycle state", () => {
+    const superCalls = [];
+    class BaseHost extends TestHost {
+      formAssociatedCallback(form) { superCalls.push(["associated", form]); return "associated"; }
+      formDisabledCallback(disabled) { superCalls.push(["disabled", disabled]); return "disabled"; }
+      formResetCallback() { superCalls.push(["reset"]); return "reset"; }
+      formStateRestoreCallback(state, mode) { superCalls.push(["restore", state, mode]); return "restore"; }
+    }
+    const FaceHost = applyStructuralHooks(BaseHost, [useFormValue]);
+    const host = new FaceHost();
+    const form = { id: "form" };
+
+    prepareEffects(host);
+    let control = readStructuralHook(host, useFormValue, [undefined]);
+    const updates = host.updates;
+    assert.strictEqual(host.formAssociatedCallback(form), "associated");
+    assert.strictEqual(host.formAssociatedCallback(form), "associated");
+    assert.strictEqual(host.formDisabledCallback(true), "disabled");
+    assert.strictEqual(host.formDisabledCallback(true), "disabled");
+    assert.strictEqual(host.formResetCallback(), "reset");
+    assert.strictEqual(host.formStateRestoreCallback(undefined, "autocomplete"), "restore");
+    assert.ok(host.updates > updates);
+    assert.deepStrictEqual(superCalls, [
+      ["associated", form], ["associated", form],
+      ["disabled", true], ["disabled", true],
+      ["reset"], ["restore", undefined, "autocomplete"],
+    ]);
+
+    prepareEffects(host);
+    control = readStructuralHook(host, useFormValue, ["ignored"]);
+    assert.strictEqual(control.value, undefined);
+    assert.strictEqual(control.restoreMode, "autocomplete");
+    assert.strictEqual(host.__internalsCalls[0][0], null);
+  });
+
+  it("covers FACE form value functional setters, same-value exits, and legacy setFormValue", () => {
+    class LegacyInternalsHost extends TestHost {
+      attachInternals() {
+        let first = true;
+        return {
+          setFormValue: (...args) => {
+            if (first && args.length === 2) {
+              first = false;
+              throw new TypeError("legacy one-argument ElementInternals");
+            }
+            this.__internalsCalls.push(args);
+          },
+          validity: null,
+          validationMessage: null,
+          willValidate: false,
+        };
+      }
+    }
+    const FaceHost = applyStructuralHooks(LegacyInternalsHost, [useFormValue]);
+    const host = new FaceHost();
+
+    prepareEffects(host);
+    const control = readStructuralHook(host, useFormValue, ["draft"]);
+    const initialUpdates = host.updates;
+    assert.strictEqual(control.setValue((value) => value), "draft");
+    assert.strictEqual(control.setValue((value) => `${value}-next`), "draft-next");
+    assert.strictEqual(control.setDefaultValue((value) => value), "draft");
+    assert.strictEqual(control.setDefaultValue(() => "fallback"), "fallback");
+    control.setFormValue(undefined);
+    control.setFormValue("submitted", "restore-token");
+    assert.ok(host.updates > initialUpdates);
+    assert.ok(host.__internalsCalls.some((args) => args.length === 1));
+    assert.ok(host.__internalsCalls.some((args) => args[0] === null));
+    assert.ok(host.__internalsCalls.some((args) => args[1] === "restore-token"));
+  });
+
+  it("covers FACE validity overloads, refresh changes, and unsupported internals", () => {
+    const FaceHost = applyStructuralHooks(TestHost, [useFormValidity]);
+    const host = new FaceHost();
+
+    prepareEffects(host);
+    const validity = readStructuralHook(host, useFormValidity);
+    const anchor = {};
+    validity.setValidity({ customError: true }, "broken", anchor);
+    validity.setValidity(null, undefined);
+    validity.setValidity({}, undefined, undefined);
+    assert.strictEqual(validity.checkValidity(), true);
+    assert.strictEqual(validity.reportValidity(), true);
+    assert.ok(host.__internalsValidityCalls.some((args) => args[2] === anchor));
+    assert.ok(host.__internalsCheckCalls > 0);
+    assert.ok(host.__internalsReportCalls > 0);
+
+    class ThrowingHost extends TestHost {
+      attachInternals() { throw new Error("unsupported"); }
+    }
+    const UnsupportedFaceHost = applyStructuralHooks(ThrowingHost, [useElementInternals, useFormValidity]);
+    const unsupportedHost = new UnsupportedFaceHost();
+    prepareEffects(unsupportedHost);
+    assert.deepStrictEqual(readStructuralHook(unsupportedHost, useElementInternals), {
+      supported: false,
+      internals: null,
+    });
+    const unsupportedValidity = readStructuralHook(unsupportedHost, useFormValidity);
+    unsupportedValidity.setValidity({ customError: true }, "ignored");
+    assert.strictEqual(unsupportedValidity.checkValidity(), true);
+    assert.strictEqual(unsupportedValidity.reportValidity(), true);
+  });
+
   it("returns the previous render value", () => {
     const host = new TestHost();
 

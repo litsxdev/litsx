@@ -12,14 +12,23 @@ import {
 import {
   __isLitsxScopedTemplate,
   __isLitsxServerComponentCall,
+  __getLitsxForwardedRefId,
+  __isLitsxForwardedRef,
+  __litsxForwardedRef,
   __litsxScopedTemplate,
   __litsxServerComponentCall,
+  annotateHydratableCustomElement,
   LITSX_MODULE_ID,
   LITSX_SCOPED_TEMPLATE,
   LITSX_SERVER_COMPONENT_CALL,
   LITSX_SERVER_COMPONENT,
   LITSX_SSR_CONTEXT,
   HydrationSuspenseMixin,
+  isCustomElementClass,
+  isHydratableCustomElementClass,
+  isLitsxComponentClass,
+  LITSX_COMPONENT,
+  LITSX_HYDRATABLE_TAG,
   LightDomMixin,
   mergePropertyDeclarations,
   ShadowDomMixin,
@@ -79,6 +88,36 @@ describe("litsx elements runtime", () => {
     assert.strictEqual(call[LITSX_SERVER_COMPONENT_CALL], true);
     assert.strictEqual(call.component, DemoCard);
     assert.deepStrictEqual(call.props, { slug: "x" });
+  });
+
+  it("validates component constructors, hydration metadata, and forwarded refs", () => {
+    assert.strictEqual(isCustomElementClass(null), false);
+    assert.strictEqual(isCustomElementClass(() => {}), false);
+    assert.strictEqual(isHydratableCustomElementClass(class {}), false);
+    assert.strictEqual(isLitsxComponentClass(class {}), false);
+
+    class DemoElement extends HTMLElement {}
+    DemoElement[LITSX_COMPONENT] = true;
+    assert.strictEqual(isCustomElementClass(DemoElement), true);
+    assert.strictEqual(isLitsxComponentClass(DemoElement), true);
+    assert.throws(() => annotateHydratableCustomElement({}), /custom element constructor/);
+    assert.strictEqual(annotateHydratableCustomElement(DemoElement, {
+      tagName: "  demo-element  ",
+      moduleId: "  /demo.js  ",
+    }), DemoElement);
+    assert.strictEqual(DemoElement[LITSX_HYDRATABLE_TAG], "demo-element");
+    assert.strictEqual(isHydratableCustomElementClass(DemoElement), true);
+    annotateHydratableCustomElement(DemoElement, { tagName: "ignored-element", moduleId: "/ignored.js" });
+    assert.strictEqual(DemoElement[LITSX_HYDRATABLE_TAG], "demo-element");
+
+    assert.throws(() => __litsxForwardedRef(null), /non-empty id/);
+    assert.throws(() => __litsxForwardedRef("   "), /non-empty id/);
+    const forwarded = __litsxForwardedRef(" target ");
+    assert.strictEqual(__isLitsxForwardedRef(forwarded), true);
+    assert.strictEqual(__isLitsxForwardedRef(null), false);
+    assert.strictEqual(__getLitsxForwardedRefId(forwarded), "target");
+    assert.strictEqual(__getLitsxForwardedRefId({}), null);
+    assert.deepStrictEqual(__litsxServerComponentCall(DemoElement).props, {});
   });
 
   it("merges inferred and authored property declarations when spreads require runtime resolution", () => {

@@ -542,6 +542,23 @@ function findExistingPropertiesAssignment(programPath, componentName, t) {
   }) || null;
 }
 
+export {
+  buildGeneratedPropertiesObject,
+  buildPropertyDescriptor,
+  buildRuntimeValidatorExpression,
+  ensureBlockBody,
+  extractPropTypeComponents,
+  findExistingPropertiesAssignment,
+  findExistingPropertiesHoist,
+  getImportSource,
+  getOrCreateRuntimeImport,
+  getPropertyKeyName,
+  inferOneOfType,
+  isPropTypesReference,
+  mergePropertiesObjects,
+  unwrapComponentFunction,
+};
+
 export default declare((api) => {
   api.assertVersion("^8.0.0");
   const t = api.types;

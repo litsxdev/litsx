@@ -422,6 +422,28 @@ function renderDevTemplateDocument(templateSource, context) {
   return document;
 }
 
+export {
+  appendToDocumentBody,
+  createDefaultDocument,
+  createDocumentResult,
+  createDocumentTemplateContext,
+  createHydrationData,
+  createSsrDevErrorDocument,
+  createSsrResult,
+  escapeHtmlAttribute,
+  escapeHtmlText,
+  escapeInlineScriptText,
+  escapeJsonScript,
+  formatSsrConsoleArguments,
+  injectMarkupBeforeCloseTag,
+  normalizeTagContents,
+  renderBootstrapScript,
+  renderClientEntryBootstrapScript,
+  renderDevTemplateDocument,
+  renderHtmlAttributes,
+  renderSsrDevConsoleDiagnostics,
+};
+
 function resolveFsPath(root, value) {
   if (!value) {
     return root;

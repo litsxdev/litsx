@@ -106,6 +106,8 @@ function moduleRecord(file) {
   return { file, variables, imports, exports, exportAll };
 }
 
+export { moduleRecord, resolveFile, unwrap };
+
 /**
  * Build a conservative, generic classifier for imported Component.styles
  * values. It only answers true when local source proves that a non-CSS plain

@@ -270,3 +270,12 @@ export function finalizeProgram(programPath, state) {
   }
 
 }
+
+export {
+  createLitElementImport,
+  createLitsxImport,
+  createLitsxInfrastructureImport,
+  createLitsxInternalRuntimeImport,
+  ensureNamedImport,
+  ensureNamedImportAcross,
+};

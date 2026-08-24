@@ -156,6 +156,20 @@ function refreshSharedValidity(host, sharedState) {
   return true;
 }
 
+export {
+  cloneValiditySnapshot,
+  createSharedFaceState,
+  ensureInternals,
+  getOrCreateFaceState,
+  readValidationMessage,
+  readWillValidate,
+  refreshSharedValidity,
+  requestHostUpdate,
+  sameValiditySnapshot,
+  syncInternalsValue,
+  updateSharedValiditySnapshot,
+};
+
 export function FormAssociatedMixin(Base) {
   return class FormAssociatedHost extends Base {
     static formAssociated = true;

@@ -19,6 +19,7 @@ import {
   prepareEffects,
   runWithHookHost,
 } from "../packages/core/src/runtime-controller.js";
+import { SsrEffectsController } from "../packages/core/src/ssr-effects-controller.js";
 
 const withSsrHost = (hook) => (host, ...args) =>
   runWithHookHost(host, () => hook(...args));
@@ -44,6 +45,17 @@ function createSsrHost(instanceId = "0") {
 }
 
 describe("SsrEffectsController", () => {
+  it("uses fallback ids and optional callbacks without an SSR context", () => {
+    const controller = new SsrEffectsController({}, null);
+    assert.strictEqual(controller.resolveId(), "litsx-0-0");
+    assert.strictEqual(controller.resolveExternalStore(null, () => "client"), "client");
+    assert.strictEqual(controller.resolveTransition()[1](), undefined);
+    assert.strictEqual(controller.startTransition(), undefined);
+    const [state, setState] = controller.resolveReducer((value) => value, 3);
+    assert.strictEqual(state, 3);
+    assert.strictEqual(setState(9), 3);
+  });
+
   it("keeps state, refs, memo values, and ids SSR-safe", () => {
     const host = createSsrHost("7");
 

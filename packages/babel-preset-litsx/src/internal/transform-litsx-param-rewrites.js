@@ -1,6 +1,6 @@
 let t;
 
-function isPropsAliasBinding(bindingInfo) {
+export function isPropsAliasBinding(bindingInfo) {
   return Boolean(
     bindingInfo &&
     typeof bindingInfo === "object" &&
@@ -12,7 +12,7 @@ export function setParamRewriteBabelTypes(nextTypes) {
   t = nextTypes;
 }
 
-function getBoundPropName(bindingInfo) {
+export function getBoundPropName(bindingInfo) {
   if (typeof bindingInfo === "string") {
     return bindingInfo;
   }
@@ -24,7 +24,7 @@ function getBoundPropName(bindingInfo) {
   return null;
 }
 
-function createDefaultSlotElement() {
+export function createDefaultSlotElement() {
   return t.jsxElement(
     t.jsxOpeningElement(t.jsxIdentifier("slot"), [], false),
     t.jsxClosingElement(t.jsxIdentifier("slot")),
@@ -33,14 +33,14 @@ function createDefaultSlotElement() {
   );
 }
 
-function isDirectJsxChildExpression(expressionPath) {
+export function isDirectJsxChildExpression(expressionPath) {
   return (
     expressionPath.listKey === "children" &&
     (expressionPath.parentPath?.isJSXElement() || expressionPath.parentPath?.isJSXFragment())
   );
 }
 
-function isImplicitChildrenExpression(node, bindings) {
+export function isImplicitChildrenExpression(node, bindings) {
   if (t.isIdentifier(node)) {
     return getBoundPropName(bindings.get(node.name)) === "children";
   }
@@ -57,7 +57,7 @@ function isImplicitChildrenExpression(node, bindings) {
   return false;
 }
 
-function isJsxContainerChildPath(path) {
+export function isJsxContainerChildPath(path) {
   return (
     path?.parentPath?.isJSXExpressionContainer() &&
     path.parentPath.listKey === "children" &&
@@ -65,7 +65,7 @@ function isJsxContainerChildPath(path) {
   );
 }
 
-function isSupportedImplicitChildrenReference(refPath, bindingInfo) {
+export function isSupportedImplicitChildrenReference(refPath, bindingInfo) {
   if (typeof bindingInfo === "string") {
     return bindingInfo === "children" && isJsxContainerChildPath(refPath);
   }
@@ -85,7 +85,7 @@ function isSupportedImplicitChildrenReference(refPath, bindingInfo) {
   return false;
 }
 
-function createThisMemberExpression(propName) {
+export function createThisMemberExpression(propName) {
   const computed = !t.isValidIdentifier(propName);
   return t.memberExpression(
     t.thisExpression(),
@@ -94,7 +94,7 @@ function createThisMemberExpression(propName) {
   );
 }
 
-function createPropsObjectExpression(bindingInfo, propertyMap = new Map()) {
+export function createPropsObjectExpression(bindingInfo, propertyMap = new Map()) {
   if (bindingInfo?.kind === "rest-alias" && bindingInfo.propertyName) {
     return createThisMemberExpression(bindingInfo.propertyName);
   }
@@ -128,7 +128,7 @@ function createPropsObjectExpression(bindingInfo, propertyMap = new Map()) {
   return t.objectExpression(properties);
 }
 
-function isObjectDestructuringInitializer(refPath) {
+export function isObjectDestructuringInitializer(refPath) {
   return (
     refPath.parentPath?.isVariableDeclarator() &&
     refPath.parentKey === "init" &&
@@ -172,7 +172,7 @@ export function transformJSXExpressions(jsxPath, bindings, state = null) {
   });
 }
 
-function registerLocalPropAliases(functionPath, bindings) {
+export function registerLocalPropAliases(functionPath, bindings) {
   let changed = true;
 
   while (changed) {
@@ -232,7 +232,7 @@ function registerLocalPropAliases(functionPath, bindings) {
   }
 }
 
-function shouldCapturePropReference(refPath, functionPath) {
+export function shouldCapturePropReference(refPath, functionPath) {
   const functionParent = refPath.getFunctionParent();
   if (!functionParent || functionParent === functionPath) {
     return false;

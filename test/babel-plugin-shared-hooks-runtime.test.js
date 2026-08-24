@@ -15,7 +15,7 @@ function createPlugin() {
   });
 }
 
-function run(source) {
+function run(source, transformPlugin = createPlugin(), pluginOptions = {}) {
   const ast = parser.parse(source, {
     sourceType: "module",
     plugins: ["typescript"],
@@ -23,7 +23,7 @@ function run(source) {
   const result = transformFromAstSync(ast, source, {
     configFile: false,
     babelrc: false,
-    plugins: [createPlugin()],
+    plugins: [[transformPlugin, pluginOptions]],
   });
   return result.code;
 }
@@ -463,5 +463,183 @@ describe("@litsx/babel-plugin-shared-hooks createRuntimeHooksTransform", () => {
       /import ReactDefault, \* as ReactNs from "@litsx\/core";|import \* as ReactNs, ReactDefault from "@litsx\/core";/
     );
     assert.doesNotMatch(code, /prepareEffects/);
+  });
+
+  it("lowers local structural hooks and propagates nested structural dependencies", () => {
+    const source = `
+      import { defineHook, useStyle } from "@litsx/core";
+
+      const useTheme = defineHook({
+        mixin: (Base) => class extends Base {},
+        use(name) {
+          useStyle("--theme", name);
+          return name;
+        }
+      });
+
+      function useCardTheme(name) {
+        return useTheme(name);
+      }
+
+      class Card extends HTMLElement {
+        render() {
+          return useCardTheme(this.theme);
+        }
+      }
+    `;
+
+    const code = run(source);
+
+    assert.match(code, /readStructuralHook\(useTheme, \[name\]\)/);
+    assert.match(code, /useCardTheme\[Symbol\.for\("litsx\.structuralHooks"\)\]/);
+    assert.match(code, /class Card extends applyStructuralHooks\(HTMLElement/);
+    assert.match(code, /renderWithHooks\(this/);
+  });
+
+  it("resolves named, namespaced, and structural custom hooks from imports", () => {
+    const transformPlugin = createRuntimeHooksTransform({
+      pluginName: "test-shared-hooks-runtime-imported-structural",
+      runtimeModule: "@litsx/core",
+      importSources: ["@litsx/core"],
+      helperNames: (name) => name === "useStyle",
+    });
+    const resolver = ({ source, importedName }) => {
+      if (source !== "./hooks.js") return false;
+      if (importedName === "useLayout") return { kind: "structural-hook" };
+      if (importedName === "useCard") return "structural-custom-hook";
+      return false;
+    };
+    const source = `
+      import { useLayout, useCard } from "./hooks.js";
+      import * as hooks from "./hooks.js";
+
+      class Card extends HTMLElement {
+        render() {
+          useLayout(this.size);
+          hooks.useLayout(this.size);
+          useCard(this.value);
+          hooks.useCard(this.value);
+          return null;
+        }
+      }
+    `;
+
+    const code = run(source, transformPlugin, {
+      structuralHookResolver: resolver,
+      customHookResolver: () => true,
+    });
+
+    assert.match(code, /readStructuralHook\(useLayout, \[this\.size\]\)/);
+    assert.match(code, /readStructuralHook\(hooks\.useLayout, \[this\.size\]\)/);
+    assert.match(code, /useCard\[Symbol\.for\("litsx\.structuralHooks"\)\]/);
+    assert.match(code, /hooks\.useCard\[Symbol\.for\("litsx\.structuralHooks"\)\]/);
+    assert.match(code, /applyStructuralHooks\(HTMLElement/);
+  });
+
+  it("rejects invalid structural hook definitions, aliases, containers, and dynamic namespace access", () => {
+    const transformPlugin = createRuntimeHooksTransform({
+      pluginName: "test-shared-hooks-runtime-structural-errors",
+      runtimeModule: "@litsx/core",
+      importSources: ["@litsx/core"],
+      helperNames: ["useStyle"],
+    });
+    const options = {
+      structuralHookResolver: ({ source, importedName }) =>
+        source === "./hooks.js" && importedName === "useLayout",
+    };
+
+    assert.throws(
+      () => run(`import { defineHook } from "@litsx/core"; const useBad = defineHook({ setup() {} });`, transformPlugin),
+      /no longer accepts structural fields setup/,
+    );
+    assert.throws(
+      () => run(`import { defineHook } from "@litsx/core"; const useBad = defineHook({});`, transformPlugin),
+      /requires a mixin, a use/,
+    );
+    assert.throws(
+      () => run(`import { useLayout } from "./hooks.js"; const alias = useLayout;`, transformPlugin, options),
+      /cannot be created through an alias/,
+    );
+    assert.throws(
+      () => run(`import { useLayout } from "./hooks.js"; const hooks = { useLayout };`, transformPlugin, options),
+      /cannot be stored in object or array containers/,
+    );
+    assert.throws(
+      () => run(`import { useLayout } from "./hooks.js"; const hooks = [useLayout];`, transformPlugin, options),
+      /cannot be stored in object or array containers/,
+    );
+    assert.throws(
+      () => run(`import * as hooks from "./hooks.js"; hooks["useLayout"]();`, transformPlugin, options),
+      /must use a static property/,
+    );
+    assert.throws(
+      () => run(`import { useLayout } from "./hooks.js"; useLayout();`, transformPlugin, options),
+      /LITSX_HOOK_INVALID_SCOPE/,
+    );
+  });
+
+  it("honors imported custom-hook resolution outcomes", () => {
+    const transformPlugin = createRuntimeHooksTransform({
+      pluginName: "test-shared-hooks-runtime-custom-resolution",
+      runtimeModule: "@litsx/core",
+      importSources: ["@litsx/core"],
+      helperNames: ["useStyle"],
+    });
+    const source = `
+      import { useRemote } from "remote-hooks";
+      import * as remote from "remote-hooks";
+      class Card { render() { useRemote(); remote.useRemote(); return null; } }
+    `;
+
+    assert.throws(
+      () => run(source, transformPlugin, {
+        customHookResolver: () => "unsupported-external-hook",
+      }),
+      /Cannot compile external hook/,
+    );
+    assert.throws(
+      () => run(source, transformPlugin, {
+        customHookResolver: () => "unresolved-custom-hook",
+      }),
+      /Unable to resolve imported custom hook/,
+    );
+
+    const untouched = run(source, transformPlugin, {
+      customHookResolver: () => false,
+    });
+    assert.doesNotMatch(untouched, /renderWithHooks/);
+
+    const transformed = run(source, transformPlugin, {
+      customHookResolver: () => true,
+    });
+    assert.match(transformed, /renderWithHooks/);
+  });
+
+  it("supports preserved runtime imports and helper call metadata", () => {
+    const transformPlugin = createRuntimeHooksTransform({
+      pluginName: "test-shared-hooks-runtime-metadata",
+      runtimeModule: "@litsx/core",
+      importSources: ["react", "@litsx/core"],
+      preservedRuntimeImportSources: ["react"],
+      helperNames: (name) => name === "useStyle",
+      callMetadataByHelper: new Map([
+        ["useStyle", (_path, _state, types) => types.stringLiteral("meta")],
+      ]),
+    });
+    const source = `
+      import ReactDefault, { useStyle as style } from "react";
+      class Card {
+        render() {
+          style("--a", 1);
+          ReactDefault.useStyle("meta", "--b", 2);
+          return null;
+        }
+      }
+    `;
+
+    const code = run(source, transformPlugin);
+    assert.match(code, /from "react"/);
+    assert.match(code, /style\("meta", "--a", 1\)/);
+    assert.match(code, /ReactDefault\.useStyle\("meta", "--b", 2\)/);
   });
 });

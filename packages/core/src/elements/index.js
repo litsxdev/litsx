@@ -446,6 +446,26 @@ function clearHydrationRenderBefore(host) {
   host[HYDRATION_RENDER_BEFORE] = null;
   host._$AG = false;
 }
+
+export {
+  assignShadowRootRegistry,
+  attachScopedShadowRoot,
+  clearHydrationRenderBefore,
+  createPlatformScopedRegistry,
+  cssTextFromStyle,
+  dedupeMixin,
+  defineScopedElements,
+  hasHydratableLitMarkers,
+  hasScopedElements,
+  initializeShadowRootRegistry,
+  isLitsxScopedRegistry,
+  isPlainObject,
+  isPlatformScopedRegistry,
+  isUsableScopedRegistry,
+  prepareLitHydration,
+  syncShadowRootCreationScope,
+};
+
 export const ShadowDomMixin = dedupeMixin((Base) =>
   class ShadowDomHost extends Base {
     static get scopedElements() {

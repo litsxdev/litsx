@@ -193,4 +193,37 @@ describe("react compat internal wrappers", () => {
     assert.strictEqual(getReactWrapperMetadata(forwardCall), null);
     assert.strictEqual(getReactWrapperMetadata(reactForwardCall), null);
   });
+
+  it("covers unbound, locally bound, nested-object, import-member, and locationless wrappers", () => {
+    assert.strictEqual(getReactWrapperMetadata(null), null);
+    const unsupported = getCallExpressions(`
+      const LocalReact = { memo(value) { return value; } };
+      const One = memo(function One() {});
+      const Two = LocalReact.memo(function Two() {});
+      const Three = getReact().memo(function Three() {});
+    `);
+    for (const call of unsupported) {
+      assert.strictEqual(getReactWrapperMetadata(call), null);
+    }
+
+    const [memberImport] = getCallExpressions(`
+      import { memo } from "react";
+      const Card = memo.memo(function Card() {});
+    `);
+    assert.strictEqual(getReactWrapperMetadata(memberImport)?.helperKind, "memo");
+
+    const [destructuredRef] = getCallExpressions(`
+      import { forwardRef } from "react";
+      const Card = forwardRef((props, { current }) => null);
+    `);
+    assert.deepStrictEqual(getReactWrapperMetadata(destructuredRef)?.options, {});
+
+    const [locationless] = getCallExpressions(`
+      import { memo } from "react";
+      const Card = memo(() => null, compare);
+    `);
+    locationless.node.loc = null;
+    const warnings = getReactWrapperMetadata(locationless).warnings;
+    assert.deepStrictEqual(warnings.map(({ line, column }) => [line, column]), [[null, null], [null, null]]);
+  });
 });

@@ -448,7 +448,7 @@ function mapLiteralTypeToLit(tsType) {
   return null;
 }
 
-function mapCheckerTypeToPropertyConfig(type, checker, cacheState = null, seen = new Set()) {
+export function mapCheckerTypeToPropertyConfig(type, checker, cacheState = null, seen = new Set()) {
   if (!type) return createPropertyConfig(t.identifier("Object"));
 
   const nonNullable = checker.getNonNullableType
@@ -553,7 +553,7 @@ function getBabelNodeSpanCacheKey(node) {
   return `${node.start}:${node.end}`;
 }
 
-function getCheckerTypeForBabelNode(node, typeResolver) {
+export function getCheckerTypeForBabelNode(node, typeResolver) {
   const cacheKey = getBabelNodeSpanCacheKey(node);
   if (!typeResolver || !cacheKey) {
     return null;
@@ -580,7 +580,7 @@ function getCheckerTypeForBabelNode(node, typeResolver) {
   }
 }
 
-function getCheckerPropertyMapForPattern(node, typeResolver) {
+export function getCheckerPropertyMapForPattern(node, typeResolver) {
   const cacheKey = getBabelNodeSpanCacheKey(node);
   if (!typeResolver || !cacheKey) {
     return null;
@@ -662,7 +662,7 @@ function findTypeDeclaration(programPath, name) {
   return null;
 }
 
-function getTypeLiteralMembers(node, programPath, seen = new Set()) {
+export function getTypeLiteralMembers(node, programPath, seen = new Set()) {
   if (!node) return [];
 
   if (t.isTSTypeAliasDeclaration(node)) {
@@ -707,7 +707,7 @@ function getTypeLiteralMembers(node, programPath, seen = new Set()) {
   return [];
 }
 
-function mapTsTypeToLit(tsType, programPath, seen = new Set()) {
+export function mapTsTypeToLit(tsType, programPath, seen = new Set()) {
   if (!tsType) return createPropertyConfig(t.identifier("Object"));
 
   if (t.isTSParenthesizedType(tsType)) {
@@ -798,7 +798,7 @@ function mapTsTypeToLit(tsType, programPath, seen = new Set()) {
   }
 }
 
-function inferTypeFromDefault(node) {
+export function inferTypeFromDefault(node) {
   if (t.isNumericLiteral(node)) {
     return t.identifier("Number");
   }
@@ -814,7 +814,7 @@ function inferTypeFromDefault(node) {
   return t.identifier("String");
 }
 
-function extractParamName(param) {
+export function extractParamName(param) {
   if (t.isIdentifier(param)) return param.name;
   if (t.isRestElement(param) && t.isIdentifier(param.argument)) {
     return param.argument.name;
@@ -843,7 +843,7 @@ function extractParamName(param) {
   return null;
 }
 
-function getTsLiteralPropertyTypes(typeAnnotation, programPath, seen = new Set()) {
+export function getTsLiteralPropertyTypes(typeAnnotation, programPath, seen = new Set()) {
   const map = new Map();
   if (!typeAnnotation) return map;
   const tsType =
@@ -1350,3 +1350,19 @@ export function extractProperties(functionPath, programPath, options = {}) {
 
   return { properties, propertyNames, bindings, defaults, nestedInitializers, restProps };
 }
+
+export {
+  clonePropertyConfig,
+  createResolvedTypeResolver,
+  createSpanNodeLookup,
+  findTsNodeAtSpan,
+  findTypeDeclaration,
+  getBabelNodeSpanCacheKey,
+  getTypeResolutionSessionKey,
+  getTypeResolverCacheKey,
+  hashSource,
+  mapLiteralTypeToLit,
+  normalizeInMemoryFiles,
+  normalizePropertyConfigInput,
+  normalizeTypescriptModule,
+};

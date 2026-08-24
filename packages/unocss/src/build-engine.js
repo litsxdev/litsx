@@ -82,6 +82,18 @@ function resolveConfiguredSafelist(generator) {
     .filter(Boolean);
 }
 
+export {
+  createResolvedPreflightConfig,
+  defaultPreflightLayerSelector,
+  dynamicPatternMatcher,
+  includesPreflightLayer,
+  normalizeDependency,
+  resolveConfiguredSafelist,
+  resolvePreflightLayerSelector,
+  resolveValue,
+  uniquePreflightLayers,
+};
+
 /**
  * Build-tool-neutral UnoCSS state machine.
  *

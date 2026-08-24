@@ -203,6 +203,22 @@ function wrapForJsxParent(path, expression, t) {
     : expression;
 }
 
+export {
+  addDirectiveImport,
+  attributeValueToExpression,
+  chooseLocalName,
+  createDecoratedRepeat,
+  findExistingImport,
+  getKeyAttribute,
+  getMapParts,
+  getReturnedElement,
+  isInsideMapCallback,
+  isMapCall,
+  lowerMapParts,
+  removeAttribute,
+  wrapForJsxParent,
+};
+
 export default declare((api) => {
   api.assertVersion("^8.0.0");
   const t = api.types;

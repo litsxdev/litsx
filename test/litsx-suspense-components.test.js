@@ -8,6 +8,8 @@ import {
   SuspenseListElement,
   renderWithHooks,
 } from "../packages/core/src/index.js";
+import { isSsrHost, isThenable } from "../packages/core/src/suspense-boundary.js";
+import { blocksReveal, normalizeRevealOrder, normalizeTail } from "../packages/core/src/suspense-list.js";
 
 const DOCUMENT_POSITION_PRECEDING =
   globalThis.Node?.DOCUMENT_POSITION_PRECEDING ?? 2;
@@ -87,6 +89,89 @@ afterEach(() => {
 });
 
 describe("litsx suspense components", () => {
+  it("normalizes suspense-list values and covers isolated disposition branches", async () => {
+    assert.strictEqual(normalizeRevealOrder(null), "together");
+    assert.strictEqual(normalizeRevealOrder("BACKWARDS"), "backwards");
+    assert.strictEqual(normalizeTail(null), "collapsed");
+    assert.strictEqual(normalizeTail("HIDDEN"), "hidden");
+    assert.strictEqual(blocksReveal(null), false);
+    assert.strictEqual(blocksReveal({ pending: false, resolved: false, showing: "content" }), true);
+    assert.strictEqual(blocksReveal({ pending: false, resolved: true, showing: "fallback" }), true);
+    assert.strictEqual(blocksReveal({ pending: false, resolved: true, showing: "hidden" }), true);
+    assert.strictEqual(blocksReveal({ pending: false, resolved: true, showing: "content" }), false);
+
+    const list = new SuspenseListElement();
+    list.requestUpdate = () => {};
+    const unknown = {};
+    assert.strictEqual(list.getFallbackDisposition(unknown), "show");
+    assert.strictEqual(list.getContentDisposition(unknown), "content");
+    list.registerBoundary(null);
+    list.registerBoundary(unknown);
+    list.registerBoundary(unknown);
+    list._boundaries.push({});
+    list.requestBoundaryRefresh();
+    await Promise.resolve();
+  });
+
+  it("covers suspense boundary defensive helper and state branches", async () => {
+    assert.strictEqual(isThenable(null), false);
+    assert.strictEqual(isThenable(1), false);
+    assert.strictEqual(isThenable(Object.assign(() => {}, { then() {} })), true);
+    assert.strictEqual(isSsrHost(null), false);
+
+    const boundary = new TestSuspenseBoundaryElement();
+    boundary.propagateSuspenseCapture(null, {});
+    const originalShadowRoot = globalThis.ShadowRoot;
+    globalThis.ShadowRoot = class ShadowRoot {};
+    try {
+      boundary.propagateSuspenseCapture({}, {});
+    } finally {
+      globalThis.ShadowRoot = originalShadowRoot;
+    }
+    boundary._isRevealing = true;
+    boundary.beginReveal();
+    boundary._isRevealing = false;
+    boundary.handleEvent({ type: "transitionend" });
+
+    boundary.parseTimeList = () => [];
+    assert.strictEqual(boundary.getMaxTimePair(undefined, undefined), 0);
+    delete boundary.parseTimeList;
+    assert.deepStrictEqual(boundary.parseTimeList("badms, bads"), [0, 0]);
+
+    boundary.pending = false;
+    boundary.resolved = false;
+    boundary.showing = "hidden";
+    boundary.notifyListState();
+
+    const first = createDeferred();
+    const second = createDeferred();
+    const queued = [];
+    globalThis.queueMicrotask = (callback) => queued.push(callback);
+    boundary.attachPendingPromise(first.promise);
+    boundary.attachPendingPromise(second.promise);
+    first.reject(new Error("stale"));
+    await first.promise.catch(() => {});
+    await Promise.resolve();
+    assert.deepStrictEqual(queued, []);
+    second.resolve();
+  });
+
+  it("renders null values and short-circuits a fallback suspended during render", () => {
+    const boundary = new TestSuspenseBoundaryElement();
+    boundary.withContentSuspenseCapture = () => ({ value: null });
+    boundary.invokeFallbackRenderer = () => ({ value: null });
+    boundary.render();
+    assert.strictEqual(boundary.resolved, true);
+
+    boundary._fallbackSuspendedDuringRender = false;
+    boundary.invokeFallbackRenderer = () => {
+      boundary._fallbackSuspendedDuringRender = true;
+      return { value: "ignored" };
+    };
+    const rendered = boundary.render();
+    assert.match(templateSource(rendered), /part="content"/);
+  });
+
   it("re-exports suspense boundary and list elements from the runtime index", () => {
     assert.strictEqual(typeof SuspenseBoundary, "function");
     assert.strictEqual(typeof SuspenseBoundaryElement, "function");

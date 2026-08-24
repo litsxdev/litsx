@@ -22,7 +22,7 @@ export function setServerComponentBabelTypes(nextTypes) {
   setSsrSharedBabelTypes(nextTypes);
 }
 
-function isCapitalizedComponentName(name) {
+export function isCapitalizedComponentName(name) {
   if (typeof name !== "string" || name.length === 0) {
     return false;
   }
@@ -31,7 +31,7 @@ function isCapitalizedComponentName(name) {
   return first === first.toUpperCase() && first !== first.toLowerCase();
 }
 
-function isAsyncFunctionNode(node) {
+export function isAsyncFunctionNode(node) {
   return Boolean(
     node &&
     node.async === true &&
@@ -41,7 +41,7 @@ function isAsyncFunctionNode(node) {
   );
 }
 
-function unwrapExpression(node) {
+export function unwrapExpression(node) {
   let current = node;
 
   while (current) {
@@ -66,7 +66,7 @@ function unwrapExpression(node) {
   return current;
 }
 
-function expressionIsRenderableTemplate(node) {
+export function expressionIsRenderableTemplate(node) {
   const expression = unwrapExpression(node);
   if (!expression) {
     return false;
@@ -104,7 +104,7 @@ function expressionIsRenderableTemplate(node) {
   return false;
 }
 
-function functionReturnsRenderableTemplate(node) {
+export function functionReturnsRenderableTemplate(node) {
   if (!node) {
     return false;
   }
@@ -162,7 +162,7 @@ function getAsyncBindingFromIdentifier(programPath, localName) {
   return null;
 }
 
-function getDefaultExportServerComponentName(programPath) {
+export function getDefaultExportServerComponentName(programPath) {
   const cached = programPath.getData("__litsxDefaultServerComponentName");
   if (cached !== undefined) {
     return cached;
@@ -406,7 +406,7 @@ function isAnnotateHydratableCustomElementCall(node) {
   );
 }
 
-function getStaticPropertyValue(objectNode, propertyName) {
+export function getStaticPropertyValue(objectNode, propertyName) {
   if (!t.isObjectExpression(objectNode)) {
     return null;
   }
@@ -430,7 +430,7 @@ function getStaticPropertyValue(objectNode, propertyName) {
   return null;
 }
 
-function resolutionsMatch(left, right) {
+export function resolutionsMatch(left, right) {
   if (!left || !right) {
     return false;
   }
@@ -442,7 +442,7 @@ function resolutionsMatch(left, right) {
   );
 }
 
-function resolveStableElementConstructor(node, scope, availableMap, programPath, seenBindings = new Set()) {
+export function resolveStableElementConstructor(node, scope, availableMap, programPath, seenBindings = new Set()) {
   const expression = unwrapExpression(node);
   if (!expression) {
     return null;
@@ -607,7 +607,7 @@ function resolveStableElementConstructor(node, scope, availableMap, programPath,
   return null;
 }
 
-function getStaticServerComponentElements(programPath, componentName, availableMap) {
+export function getStaticServerComponentElements(programPath, componentName, availableMap) {
   const cacheKey = `__litsxServerComponentElements:${componentName}`;
   const cached = programPath.getData(cacheKey);
   if (cached !== undefined) {
@@ -681,7 +681,7 @@ function getStaticServerComponentElements(programPath, componentName, availableM
   return entries;
 }
 
-function mergeScopedEntries(inferredEntries, explicitEntries) {
+export function mergeScopedEntries(inferredEntries, explicitEntries) {
   const merged = new Map();
 
   for (const entry of explicitEntries) {
@@ -697,7 +697,7 @@ function mergeScopedEntries(inferredEntries, explicitEntries) {
   return [...merged.values()];
 }
 
-function getForwardedRefParameterName(functionPath) {
+export function getForwardedRefParameterName(functionPath) {
   const parameter = functionPath.node.params?.[1];
   return t.isIdentifier(parameter) ? parameter.name : null;
 }
@@ -905,6 +905,20 @@ function markServerComponent(programPath, componentName) {
     ),
   );
 }
+
+export {
+  findServerComponentFunctionPath,
+  getAsyncBindingFromIdentifier,
+  getCurrentModuleId,
+  getImportedServerComponentBinding,
+  getOrCreateImportedServerComponentCache,
+  isAnnotateHydratableCustomElementCall,
+  isLocalComposableServerComponentBinding,
+  lowerForwardedServerComponentRefs,
+  markServerComponent,
+  resolveImportedDefaultServerComponent,
+  wrapRenderableReturns,
+};
 
 export default function transformLitsxServerComponents(api) {
   api.assertVersion("^8.0.0");

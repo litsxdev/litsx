@@ -11,7 +11,7 @@ const LIT_ELEMENT_HYDRATION_SUPPORT = Symbol.for(
   "@litsx/ssr/lit-element-hydration-support",
 );
 
-function findLitElementConstructor(ctor) {
+export function findLitElementConstructor(ctor) {
   let current = ctor;
   while (typeof current === "function" && current.prototype) {
     const prototype = current.prototype;
@@ -29,7 +29,7 @@ function findLitElementConstructor(ctor) {
   return null;
 }
 
-function ensureHydratableElementSupport(ctor) {
+export function ensureHydratableElementSupport(ctor) {
   const LitElement = findLitElementConstructor(ctor);
   if (!LitElement || LitElement[LIT_ELEMENT_HYDRATION_SUPPORT] === true) {
     return;
@@ -58,7 +58,7 @@ const SSR_RESOURCE_SNAPSHOT_BRIDGE = Symbol.for(
   "litsx.ssr.resourceSnapshotBridge",
 );
 
-function createResourceSnapshotBridge() {
+export function createResourceSnapshotBridge() {
   let resources = null;
   const restored = new Map();
 
@@ -101,7 +101,7 @@ export function prepareHydrationResources(hydrationData) {
   bridge.prepare(resources);
 }
 
-function normalizeClientImports(value) {
+export function normalizeClientImports(value) {
   const values = Array.isArray(value) ? value : value == null ? [] : [value];
   return [...new Set(values.filter((entry) => typeof entry === "string" && entry.length > 0))];
 }
@@ -135,7 +135,7 @@ const FORWARDED_REF_TARGET_ATTRIBUTE = "data-litsx-forwarded-ref-target";
 const FORWARDED_REF_PROPS_ATTRIBUTE = "data-litsx-forwarded-ref-props";
 const forwardedRefsByDocument = new WeakMap();
 
-function getForwardedRefs(documentRef) {
+export function getForwardedRefs(documentRef) {
   let refs = forwardedRefsByDocument.get(documentRef);
   if (!refs) {
     refs = new Map();
@@ -144,7 +144,7 @@ function getForwardedRefs(documentRef) {
   return refs;
 }
 
-function getForwardedRef(documentRef, id) {
+export function getForwardedRef(documentRef, id) {
   const refs = getForwardedRefs(documentRef);
   let ref = refs.get(id);
   if (!ref) {
@@ -154,7 +154,7 @@ function getForwardedRef(documentRef, id) {
   return ref;
 }
 
-function collectElementsIncludingShadowRoots(root) {
+export function collectElementsIncludingShadowRoots(root) {
   const elements = [];
   const seen = new Set();
   const visit = (node) => {
@@ -226,7 +226,7 @@ async function importClientModule(specifier) {
   return import(/* @vite-ignore */ specifier);
 }
 
-function isThenable(value) {
+export function isThenable(value) {
   return value != null && typeof value.then === "function";
 }
 
@@ -246,7 +246,7 @@ function getCustomElementRegistry() {
   return globalThis.customElements ?? null;
 }
 
-function isRegistrableHydrationExport(value) {
+export function isRegistrableHydrationExport(value) {
   return isHydratableCustomElementClass(value);
 }
 
@@ -287,7 +287,7 @@ function registerHydratableElement(ctor) {
   registry.define(tagName, ctor);
 }
 
-function collectHydratableModuleExports(moduleNamespace) {
+export function collectHydratableModuleExports(moduleNamespace) {
   if (!moduleNamespace || typeof moduleNamespace !== "object") {
     return [];
   }
@@ -304,7 +304,7 @@ function collectHydratableModuleExports(moduleNamespace) {
   return matches;
 }
 
-function resolveDocument(rootOrDocument) {
+export function resolveDocument(rootOrDocument) {
   if (!rootOrDocument) {
     return typeof document === "undefined" ? null : document;
   }
@@ -316,7 +316,7 @@ function resolveDocument(rootOrDocument) {
   return rootOrDocument.ownerDocument ?? null;
 }
 
-function readScriptText(documentRef, id) {
+export function readScriptText(documentRef, id) {
   if (!documentRef || !id || typeof documentRef.getElementById !== "function") {
     return null;
   }
@@ -325,7 +325,7 @@ function readScriptText(documentRef, id) {
   return typeof node?.textContent === "string" ? node.textContent : null;
 }
 
-function parseJsonScript(documentRef, id) {
+export function parseJsonScript(documentRef, id) {
   const text = readScriptText(documentRef, id);
   if (text == null || text.trim() === "") {
     return null;
@@ -340,7 +340,7 @@ function parseJsonScript(documentRef, id) {
   }
 }
 
-function normalizeHydrationRoots(value) {
+export function normalizeHydrationRoots(value) {
   if (!value || !Array.isArray(value.roots)) {
     return [];
   }
@@ -353,7 +353,7 @@ function normalizeHydrationRoots(value) {
   );
 }
 
-function normalizeHydrationPayload(value) {
+export function normalizeHydrationPayload(value) {
   const payload = value?.payload;
   if (payload == null) {
     return {
@@ -385,7 +385,7 @@ function normalizeHydrationPayload(value) {
   return payload;
 }
 
-function parseRootMarker(value) {
+export function parseRootMarker(value) {
   const text = String(value ?? "").trim();
   if (!text.startsWith(LITSX_ROOT_MARKER_PREFIX)) {
     return null;
@@ -413,7 +413,7 @@ function parseRootMarker(value) {
     : null;
 }
 
-function getChildNodes(container) {
+export function getChildNodes(container) {
   if (!container) {
     return [];
   }
@@ -421,15 +421,15 @@ function getChildNodes(container) {
   return container.childNodes ? [...container.childNodes] : [];
 }
 
-function isCommentNode(node) {
+export function isCommentNode(node) {
   return node?.nodeType === 8 || node?.constructor?.name === "Comment";
 }
 
-function isElementNode(node) {
+export function isElementNode(node) {
   return node?.nodeType === 1 || typeof node?.tagName === "string";
 }
 
-function findNextElementSibling(node) {
+export function findNextElementSibling(node) {
   let current = node?.nextSibling ?? null;
   while (current) {
     if (isElementNode(current)) {
@@ -441,7 +441,7 @@ function findNextElementSibling(node) {
   return null;
 }
 
-function findHydrationRootIdForElement(element) {
+export function findHydrationRootIdForElement(element) {
   if (!element) {
     return null;
   }
@@ -468,7 +468,7 @@ function findHydrationRootIdForElement(element) {
   return null;
 }
 
-function walkNodes(container, visit) {
+export function walkNodes(container, visit) {
   for (const node of getChildNodes(container)) {
     if (visit(node) === false) {
       return false;
@@ -485,7 +485,7 @@ function walkNodes(container, visit) {
   return true;
 }
 
-function queryHydrationRoot(container, id) {
+export function queryHydrationRoot(container, id) {
   if (!container || !id) {
     return null;
   }

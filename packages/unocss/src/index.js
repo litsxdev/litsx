@@ -595,6 +595,26 @@ function collectLightDomComponents(programPath, t, defaultDomMode) {
  * The replacement is already a CSSResult, so no non-Lit value can leak into
  * the native component lowering or the browser runtime.
  */
+export {
+  appendStyleReference,
+  classPatternValues,
+  combineStringParts,
+  composeStyleReferences,
+  containsLightDomMixin,
+  findImportedCssIdentifier,
+  findStaticStylesMember,
+  finiteStringValues,
+  getStaticRuntimeMetadataString,
+  guardTemplate,
+  inheritedStylesExpression,
+  inlineConstantBindings,
+  insertAfterImports,
+  isLitsxComponentClass,
+  isSymbolFor,
+  scopeGuardMarkers,
+  unwrapStringExpression,
+};
+
 export function createUnoCssAuthoringPlugin(options = {}) {
   return function litsxUnoCssAuthoringPlugin(api) {
     api.assertVersion("^8.0.0");

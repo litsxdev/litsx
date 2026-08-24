@@ -41,7 +41,7 @@ function isRenderingNoscriptFallback() {
   return getNoscriptFallbackRenderStack().at(-1) === true;
 }
 
-function makeRendererValueServerOnly(value) {
+export function makeRendererValueServerOnly(value) {
   if (isTemplateResult(value)) {
     return {
       ...value,
@@ -55,15 +55,15 @@ function makeRendererValueServerOnly(value) {
   return value;
 }
 
-function getScopedElements(ctor) {
+export function getScopedElements(ctor) {
   return ctor?.elements ?? ctor?.scopedElements ?? null;
 }
 
-function isLightDomElement(ctor) {
+export function isLightDomElement(ctor) {
   return Boolean(ctor?.[LITSX_LIGHT_DOM]);
 }
 
-function ensureSsrElementShape(element) {
+export function ensureSsrElementShape(element) {
   if (!element) {
     return;
   }
@@ -148,7 +148,7 @@ export async function collectRenderResult(result) {
   return output;
 }
 
-function getRenderIterator(result) {
+export function getRenderIterator(result) {
   if (result && typeof result[Symbol.asyncIterator] === "function") {
     return result[Symbol.asyncIterator]();
   }
@@ -252,14 +252,14 @@ export async function renderScopedTemplateToChunks(value, renderInfo = {}) {
   return createScopedRenderIterable(value, renderInfo);
 }
 
-function createHydrationPayload() {
+export function createHydrationPayload() {
   return {
     roots: {},
     instances: {},
   };
 }
 
-function assertJsonSerializable(value, path, ancestors = new Set()) {
+export function assertJsonSerializable(value, path, ancestors = new Set()) {
   if (value === null || typeof value === "string" || typeof value === "boolean") {
     return value;
   }
@@ -300,7 +300,7 @@ function assertJsonSerializable(value, path, ancestors = new Set()) {
   }
 }
 
-function isPlainSerializableObject(value) {
+export function isPlainSerializableObject(value) {
   if (!value || typeof value !== "object") {
     return false;
   }
@@ -309,7 +309,7 @@ function isPlainSerializableObject(value) {
   return prototype === Object.prototype || prototype === null || Array.isArray(value);
 }
 
-function assertSerializable(value, path) {
+export function assertSerializable(value, path) {
   if (
     value == null ||
     typeof value === "string" ||
@@ -337,7 +337,7 @@ function assertSerializable(value, path) {
   );
 }
 
-function trySerialize(value, path) {
+export function trySerialize(value, path) {
   try {
     return {
       ok: true,

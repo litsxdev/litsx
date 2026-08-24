@@ -715,3 +715,22 @@ export function createTaggedTemplate(node, opts, tag = "html") {
     node,
   );
 }
+
+export {
+  addKey,
+  addString,
+  collectNoscriptScopedElements,
+  copySourceLocation,
+  createComponentCallee,
+  createJsxReplacement,
+  escapeTemplateLiteralRawSegment,
+  getAttributeValue,
+  getTag,
+  isNoscriptElement,
+  isVoidHtmlTagName,
+  lowerEmbeddedJsx,
+  materializeChildExpression,
+  shouldLowerAuthoredComponentAttributeAsProperty,
+  stringifyJsxName,
+  trimString,
+};

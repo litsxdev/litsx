@@ -23,11 +23,11 @@ const REACT_COMPAT_SUPPORTED_HOOKS = new Set(["useContext"]);
 
 const IGNORED_CUSTOM_HOOK_SOURCES = new Set(["react", "@litsx/core"]);
 
-function isCustomHookName(name) {
+export function isCustomHookName(name) {
   return typeof name === "string" && /^use[A-Z0-9]/.test(name);
 }
 
-function isSupportedCustomHookBinding(bindingPath) {
+export function isSupportedCustomHookBinding(bindingPath) {
   if (!bindingPath) return false;
   if (bindingPath.isFunctionDeclaration() || bindingPath.isFunctionExpression()) {
     return true;
@@ -42,19 +42,19 @@ function isSupportedCustomHookBinding(bindingPath) {
   return false;
 }
 
-function pushHostExpression(state, expression) {
+export function pushHostExpression(state, expression) {
   if (!state.hostExpressions) {
     state.hostExpressions = [];
   }
   state.hostExpressions.push(expression);
 }
 
-function popHostExpression(state) {
+export function popHostExpression(state) {
   if (!state.hostExpressions) return;
   state.hostExpressions.pop();
 }
 
-function getFunctionFromBinding(binding) {
+export function getFunctionFromBinding(binding) {
   const bindingPath = binding.path;
   if (!bindingPath) return null;
 
@@ -79,7 +79,7 @@ function getFunctionFromBinding(binding) {
   return null;
 }
 
-function isCompatUseContextBinding(binding) {
+export function isCompatUseContextBinding(binding) {
   if (!binding?.path?.isImportSpecifier()) {
     return false;
   }
@@ -96,7 +96,7 @@ function isCompatUseContextBinding(binding) {
   );
 }
 
-function createRuntimeCall(state, hookType, callbackNode, depNodes) {
+export function createRuntimeCall(state, hookType, callbackNode, depNodes) {
   const calleeName = hookType === "useLayoutEffect" ? "useOnCommit" : "useAfterUpdate";
   const args = [t.cloneNode(callbackNode, true)];
 
@@ -107,7 +107,7 @@ function createRuntimeCall(state, hookType, callbackNode, depNodes) {
   return t.callExpression(t.identifier(calleeName), args);
 }
 
-function createMemoRuntimeCall(state, factoryNode, depNodes) {
+export function createMemoRuntimeCall(state, factoryNode, depNodes) {
   const args = [t.cloneNode(factoryNode, true)];
   if (Array.isArray(depNodes)) {
     args.push(t.arrayExpression(depNodes.map((node) => t.cloneNode(node, true))));
@@ -115,7 +115,7 @@ function createMemoRuntimeCall(state, factoryNode, depNodes) {
   return t.callExpression(t.identifier("useMemoValue"), args);
 }
 
-function createCallbackRuntimeCall(state, callbackNode, depNodes) {
+export function createCallbackRuntimeCall(state, callbackNode, depNodes) {
   const args = [t.cloneNode(callbackNode, true)];
   if (Array.isArray(depNodes)) {
     args.push(t.arrayExpression(depNodes.map((node) => t.cloneNode(node, true))));
@@ -123,7 +123,7 @@ function createCallbackRuntimeCall(state, callbackNode, depNodes) {
   return t.callExpression(t.identifier("useStableCallback"), args);
 }
 
-function createReducerRuntimeCall(state, argNodes) {
+export function createReducerRuntimeCall(state, argNodes) {
   const args = [];
 
   if (Array.isArray(argNodes)) {
@@ -137,7 +137,7 @@ function createReducerRuntimeCall(state, argNodes) {
   return t.callExpression(t.identifier("useReducedState"), args);
 }
 
-function createImperativeRuntimeCall(state, _refNode, factoryNode, depNodes) {
+export function createImperativeRuntimeCall(state, _refNode, factoryNode, depNodes) {
   const args = [
     t.callExpression(
       t.identifier(state.reactRefAdapterLocal || "toLitRef"),
@@ -153,7 +153,7 @@ function createImperativeRuntimeCall(state, _refNode, factoryNode, depNodes) {
   return t.callExpression(t.identifier("useExpose"), args);
 }
 
-function ensureReactRefAdapterImport(programPath, state) {
+export function ensureReactRefAdapterImport(programPath, state) {
   if (!state.imperativeNeeded) return;
   const moduleName = "@litsx/core/react-compat";
   const existing = programPath.get("body").find(
@@ -176,7 +176,7 @@ function ensureReactRefAdapterImport(programPath, state) {
   );
 }
 
-function createExternalStoreRuntimeCall(state, subscribeNode, getSnapshotNode, getServerSnapshotNode) {
+export function createExternalStoreRuntimeCall(state, subscribeNode, getSnapshotNode, getServerSnapshotNode) {
   const args = [
     t.cloneNode(subscribeNode, true),
     t.cloneNode(getSnapshotNode, true),
@@ -189,7 +189,7 @@ function createExternalStoreRuntimeCall(state, subscribeNode, getSnapshotNode, g
   return t.callExpression(t.identifier("useExternalStore"), args);
 }
 
-function parseDependencies(argPath) {
+export function parseDependencies(argPath) {
   if (!argPath) return { ok: true, deps: null };
   const arg = argPath.node;
   if (!t.isArrayExpression(arg)) return { ok: false };
@@ -232,7 +232,7 @@ function transformCustomHookDefinition(binding, state) {
   popHostExpression(state);
 }
 
-function attachCompiledCustomHookMetadata(programPath, state) {
+export function attachCompiledCustomHookMetadata(programPath, state) {
   for (const hookName of state.compiledCustomHookNames || []) {
     const binding = programPath.scope.getBinding(hookName);
     if (!binding?.path?.node) continue;
@@ -627,7 +627,7 @@ function processDeclaredCustomHooks(programPath, state) {
   }
 }
 
-function removeHookImports(programPath, state) {
+export function removeHookImports(programPath, state) {
   if (!state.hookIdentifiers || state.hookIdentifiers.size === 0) return;
 
   programPath.scope.crawl();
@@ -660,7 +660,7 @@ function removeHookImports(programPath, state) {
   });
 }
 
-function ensureRuntimeImport(programPath, state) {
+export function ensureRuntimeImport(programPath, state) {
   if (!state.runtimeNeeded) return;
 
   let existingImport = null;
@@ -850,7 +850,7 @@ export default declare((api, options = {}) => {
   };
 });
 
-function transformClass(classPath, state) {
+export function transformClass(classPath, state) {
   const classBodyPaths = classPath.get("body.body");
   const renderMethodPath = classBodyPaths.find(
     (bodyPath) =>

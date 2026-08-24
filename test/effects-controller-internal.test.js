@@ -1,6 +1,18 @@
 import assert from "assert";
 import { describe, it } from "vitest";
-import { EffectsController } from "../packages/core/src/effects-controller.js";
+import {
+  EffectsController,
+  cleanupExposedRefSlot,
+  cleanupExposedSlot,
+  cleanupImperativeSlot,
+  getExposedMethodRegistry,
+  getExposeRefTarget,
+  installExposedMethods,
+  installExposedRefMethods,
+  removeExposedMethod,
+  removeExposedRefMethod,
+  resolveLatestExposeImplementation,
+} from "../packages/core/src/effects-controller.js";
 
 class TestHost {
   constructor() {
@@ -24,6 +36,92 @@ class TestHost {
 }
 
 describe("effects controller internals", () => {
+  it("covers imperative and exposed-method defensive branches", () => {
+    cleanupImperativeSlot(undefined);
+    cleanupImperativeSlot({ assigned: false });
+    const assigned = { assigned: true, ref: { value: "old" }, target: {} };
+    cleanupImperativeSlot(assigned);
+    assert.deepStrictEqual(assigned, { assigned: false, ref: { value: undefined }, target: null });
+
+    assert.strictEqual(getExposedMethodRegistry(null), null);
+    assert.strictEqual(getExposedMethodRegistry("host"), null);
+    const host = {};
+    const registry = getExposedMethodRegistry(host);
+    assert.strictEqual(getExposedMethodRegistry(host), registry);
+    assert.strictEqual(resolveLatestExposeImplementation(new Map()), null);
+    const first = () => "first";
+    const second = () => "second";
+    assert.strictEqual(resolveLatestExposeImplementation(new Map([[2, second], [1, first]])), second);
+
+    const slot = { methodNames: [] };
+    assert.throws(() => installExposedMethods(host, 0, slot, null), /return an object/);
+    assert.throws(() => installExposedMethods(host, 0, slot, { bad: 1 }), /non-function/);
+    installExposedMethods("host", 0, slot, {});
+    const occupied = { existing() {} };
+    assert.throws(
+      () => installExposedMethods(occupied, 0, slot, { existing() {} }),
+      /already defines/
+    );
+
+    installExposedMethods(host, 0, slot, { ping: first, removed: first });
+    const staleWrapper = host.removed;
+    assert.strictEqual(host.ping(), "first");
+    installExposedMethods(host, 1, { methodNames: [] }, { ping: second });
+    assert.strictEqual(host.ping(), "second");
+    removeExposedMethod(host, 99, "missing");
+    removeExposedMethod(host, 1, "ping");
+    assert.strictEqual(host.ping(), "first");
+    installExposedMethods(host, 0, slot, { ping: first });
+    assert.strictEqual("removed" in host, false);
+    assert.strictEqual(staleWrapper(), undefined);
+    cleanupExposedSlot(host, 0, slot);
+    cleanupExposedSlot(host, 0, undefined);
+    assert.strictEqual("ping" in host, false);
+  });
+
+  it("covers exposed-ref ownership, replacement, and cleanup branches", () => {
+    const controller = new EffectsController(new TestHost());
+    const ref = { value: null };
+    const otherRef = { value: null };
+    const slot = { ref: null, methodNames: [] };
+    const first = function () { return `first:${this.marker}`; };
+    const second = function () { return `second:${this.marker}`; };
+
+    assert.strictEqual(getExposeRefTarget(controller, ref), getExposeRefTarget(controller, ref));
+    assert.throws(
+      () => installExposedRefMethods(controller, 0, slot, ref, undefined),
+      /return an object/
+    );
+    assert.throws(
+      () => installExposedRefMethods(controller, 0, slot, ref, { bad: false }),
+      /non-function/
+    );
+
+    installExposedRefMethods(controller, 0, slot, ref, { ping: first, removed: first });
+    const staleRefWrapper = ref.value.removed;
+    ref.value.marker = "target";
+    assert.strictEqual(ref.value.ping(), "first:target");
+    installExposedRefMethods(controller, 1, { ref: null, methodNames: [] }, ref, { ping: second });
+    assert.strictEqual(ref.value.ping(), "second:target");
+    removeExposedRefMethod(controller, 99, {}, "missing");
+    removeExposedRefMethod(controller, 1, { ref }, "ping");
+    assert.strictEqual(ref.value.ping(), "first:target");
+
+    installExposedRefMethods(controller, 0, slot, ref, { ping: first });
+    assert.strictEqual("removed" in ref.value, false);
+    assert.strictEqual(staleRefWrapper(), undefined);
+    const sparseSlot = { ref, methodNames: undefined };
+    cleanupExposedRefSlot(controller, 9, sparseSlot);
+    installExposedRefMethods(controller, 0, slot, otherRef, { ping: first });
+    assert.strictEqual(ref.value, undefined);
+    assert.strictEqual(typeof otherRef.value.ping, "function");
+    cleanupExposedRefSlot(controller, 0, slot);
+    assert.strictEqual(otherRef.value, undefined);
+    const emptySlot = { ref: null, methodNames: ["stale"] };
+    cleanupExposedRefSlot(controller, 0, emptySlot);
+    assert.deepStrictEqual(emptySlot, { ref: null, methodNames: [] });
+  });
+
   it("guards empty layout/passive queues and flushes suspense slots once", () => {
     const originalRAF = globalThis.requestAnimationFrame;
     const callbacks = [];
@@ -95,13 +193,21 @@ describe("effects controller internals", () => {
     assert.strictEqual(typeof host.reportValidity, "function");
     assert.strictEqual(host.reportValidity(), true);
 
-    controller.registerExposeRef(ref, () => ({ focus() { return "ref"; } }), ["ref-api"]);
-    assert.deepStrictEqual(registered[2].deps, ["ref-api"]);
-    assert.strictEqual(registered[2].layout, true);
-
+    controller.registerExpose({ reset() { return "reset"; } }, null);
     registered[2].callback();
+    assert.strictEqual(host.reset(), "reset");
+
+    controller.registerExposeRef(ref, () => ({ focus() { return "ref"; } }), ["ref-api"]);
+    assert.deepStrictEqual(registered[3].deps, ["ref-api"]);
+    assert.strictEqual(registered[3].layout, true);
+
+    registered[3].callback();
     assert.strictEqual(typeof ref.value.focus, "function");
     assert.strictEqual(ref.value.focus(), "ref");
+
+    controller.registerExposeRef(ref, { blur() { return "blur"; } }, undefined);
+    registered[4].callback();
+    assert.strictEqual(ref.value.blur(), "blur");
 
     controller.transitionState = { pendingCount: 0, isPending: true };
     controller.resolvePendingTransitions();

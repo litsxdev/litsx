@@ -887,5 +887,21 @@ export function applyVirtualAttributeReplacements(editable, replacements = []) {
 }
 
 export {
+  encodeEditorVirtualAttributeName,
+  findReplacementByVirtualPosition,
+  isLikelyJsxTagStart,
   isReservedVirtualAttributeName,
+  isWhitespace,
+  previousSignificantIndex,
+  readJsxTagName,
+  readPreviousWord,
+  sanitizeIdentifierTailChar,
+  scanBalancedBraces,
+  scanBalancedBracesWithJsx,
+  scanBlockComment,
+  scanJsxElement,
+  scanJsxTag,
+  scanLineComment,
+  scanQuotedString,
+  scanTemplateLiteral,
 };

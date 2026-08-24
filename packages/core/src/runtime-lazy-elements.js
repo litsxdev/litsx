@@ -104,6 +104,15 @@ function resolveLazyLoaderResult(registry, tag, result) {
   return defineScopedElement(registry, tag, result);
 }
 
+export {
+  defineScopedElement,
+  getElementRegistry,
+  getElementRegistryFromRoot,
+  isCustomElementConstructor,
+  isUsableRegistry,
+  resolveLazyLoaderResult,
+};
+
 export function ensureLazyElement(host, tag, value) {
   if (typeof tag !== "string" || tag.length === 0) {
     throw new TypeError("ensureLazyElement requires a non-empty tag name.");

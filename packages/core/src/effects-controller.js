@@ -275,6 +275,19 @@ function installExposedRefMethods(controller, slotIndex, slot, ref, handle) {
   assignRef(ref, target.handle);
 }
 
+export {
+  cleanupExposedRefSlot,
+  cleanupExposedSlot,
+  cleanupImperativeSlot,
+  getExposedMethodRegistry,
+  getExposeRefTarget,
+  installExposedMethods,
+  installExposedRefMethods,
+  removeExposedMethod,
+  removeExposedRefMethod,
+  resolveLatestExposeImplementation,
+};
+
 /**
  * @internal
  */

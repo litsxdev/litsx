@@ -201,6 +201,13 @@ function renderSoftSuspenseAttempt(host, render) {
   }
 }
 
+export {
+  getHostSuspenseCapture,
+  getSoftSuspenseState,
+  isThenable,
+  renderSoftSuspenseAttempt,
+};
+
 export function renderWithHooks(host, render) {
   return runWithHookHost(host, () => {
     prepareEffects(host);

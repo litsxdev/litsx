@@ -172,6 +172,16 @@ function bindingFunctionReferencesThisProp(binding, propName) {
   return referencesProp;
 }
 
+export {
+  bindingFunctionReferencesThisProp,
+  createForwardedTargetRefSyncStatement,
+  createManagedRefLookupExpression,
+  createThisMemberExpression,
+  isComponentJsxName,
+  isRefAttributeOnStandardElement,
+  isStandardElementJsxName,
+};
+
 export function hasExplicitRefForwarding(functionPath, propName) {
   if (!propName) {
     return false;

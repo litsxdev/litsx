@@ -10,6 +10,8 @@ import {
   createProject,
   inferPackageManager,
   renderProjectFiles,
+  toClassName,
+  toPackageName,
 } from "../packages/create-litsx-app/src/index.js";
 import { publishedPackageVersions } from "../packages/create-litsx-app/src/published-package-versions.js";
 import { transformLitsxSync } from "../packages/compiler/src/index.js";
@@ -41,6 +43,32 @@ afterEach(() => {
 });
 
 describe("create-litsx-app", () => {
+  it("normalizes empty, punctuated, numeric, and trailing project names", () => {
+    assert.strictEqual(toPackageName(null), "litsx-app");
+    assert.strictEqual(toPackageName("---"), "litsx-app");
+    assert.strictEqual(toPackageName(" A__B--9! "), "a-b-9");
+    assert.strictEqual(toPackageName("z9"), "z9");
+    assert.strictEqual(toClassName(""), "AppRoot");
+    assert.strictEqual(toClassName("alpha--9 beta"), "Alpha9Beta");
+  });
+
+  it("renders workspace overrides and creates into an existing empty directory", () => {
+    const sparsePackage = {};
+    applyLocalWorkspaceOverrides(sparsePackage);
+    assert.deepStrictEqual(sparsePackage, {});
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-existing-empty-"));
+    tempDirs.push(dir);
+    const rendered = renderProjectFiles(path.join(dir, "workspace-app"), { localWorkspacePackages: true });
+    const packageJson = JSON.parse(rendered.files.get("package.json"));
+    assert.match(packageJson.dependencies["@litsx/core"], /^workspace:/);
+    const created = createProject(dir, { template: "component" });
+    assert.strictEqual(created.template, "component");
+
+    const missing = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "litsx-parent-")), "new-project");
+    tempDirs.push(path.dirname(missing));
+    assert.strictEqual(createProject(missing).template, "app");
+  });
+
   it("renders the app profile by default", () => {
     const result = renderProjectFiles("/tmp/my-litsx-app");
 

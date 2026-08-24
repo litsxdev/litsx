@@ -636,6 +636,37 @@ function transformOpeningElement(path, state, t) {
   }
 }
 
+export {
+  classifyDeclaredProperty,
+  classifyLocalProperty,
+  getAttributeName,
+  getComponentPropsType,
+  getGlobalElementType,
+  getIntrinsicElementPropsType,
+  getLocalComponentFunctionPath,
+  getObjectPropertyName,
+  getPropertyType,
+  getReactBoundaryKind,
+  getRootJsxIdentifier,
+  getTagName,
+  getTsNode,
+  getTypeOfSymbol,
+  hasExplicitPrimitiveAttributeValue,
+  isAttributePrimitiveType,
+  isBooleanType,
+  isComponentName,
+  isExternalComponentRequiringRuntimeRouting,
+  isInsideSvg,
+  isNamespaceComponentMember,
+  isPascalCaseName,
+  isReactContextMember,
+  jsxNameToExpression,
+  nonNullableParts,
+  normalizeHtmlAttributeName,
+  renameAttribute,
+  transformOpeningElement,
+};
+
 export default declare((api, options = {}) => {
   api.assertVersion("^8.0.0");
   const t = api.types;

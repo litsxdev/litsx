@@ -222,6 +222,20 @@ function transformElementRuntimeCall(callPath, state, t) {
   );
 }
 
+export {
+  createAttribute,
+  createJsxElement,
+  expressionToChild,
+  expressionToChildren,
+  importedName,
+  isUndefined,
+  memberToJsxName,
+  normalizeProps,
+  propertyName,
+  transformElementRuntimeCall,
+  typeToJsxName,
+};
+
 export default declare((api) => {
   api.assertVersion("^8.0.0");
   const t = api.types;

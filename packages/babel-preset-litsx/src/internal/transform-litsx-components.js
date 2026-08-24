@@ -65,7 +65,11 @@ import {
 
 let t;
 
-function isCapitalizedComponentName(name) {
+export function setComponentBabelTypes(nextTypes) {
+  t = nextTypes;
+}
+
+export function isCapitalizedComponentName(name) {
   if (typeof name !== "string" || name.length === 0) {
     return false;
   }
@@ -282,7 +286,6 @@ export function createTransformFunctionToClassPlugin(defaultPluginOptions = {}) 
 }
 
 export default createTransformFunctionToClassPlugin();
-export { isCapitalizedComponentName };
 
 function updateTransformState(state, classNode) {
   if (!state || !classNode) {
@@ -313,11 +316,13 @@ function updateTransformState(state, classNode) {
 }
 
 // Verifica si el nodo está dentro de otra función o clase
-function isInsideFunctionOrClass(path) {
+export function isInsideComponentFunctionOrClass(path) {
   return path.findParent(
     (p) => p.isFunctionDeclaration() || p.isFunctionExpression() || p.isArrowFunctionExpression() || p.isClassDeclaration()
   );
 }
+
+const isInsideFunctionOrClass = isInsideComponentFunctionOrClass;
 
 function getOrCreateTypeResolver(state) {
   if (state.__litsxTypeResolver !== undefined) {
@@ -332,7 +337,7 @@ function getOrCreateTypeResolver(state) {
   return state.__litsxTypeResolver;
 }
 
-function fileLikelyNeedsTypeResolver(state) {
+export function fileLikelyNeedsTypeResolver(state) {
   const filename = state?.file?.opts?.filename || "";
   if (/\.(?:[cm]?ts|tsx)$/i.test(filename)) {
     return true;
@@ -342,7 +347,7 @@ function fileLikelyNeedsTypeResolver(state) {
   return /\b(?:type|interface|enum)\b/.test(source);
 }
 
-function functionNeedsTypeResolver(functionPath, state) {
+export function functionNeedsTypeResolver(functionPath, state) {
   const params = functionPath.get("params");
   if (!Array.isArray(params) || params.length === 0) {
     return false;
@@ -355,7 +360,7 @@ function functionNeedsTypeResolver(functionPath, state) {
   return params.some((paramPath) => containsTypeResolutionSyntax(paramPath));
 }
 
-function containsTypeResolutionSyntax(path) {
+export function containsTypeResolutionSyntax(path) {
   if (!path?.node) {
     return false;
   }
@@ -405,7 +410,7 @@ function getTypeResolverForFunction(functionPath, state) {
   return getOrCreateTypeResolver(state);
 }
 
-function isUseEmitCall(callPath) {
+export function isUseEmitCall(callPath) {
   const calleePath = callPath.get("callee");
   if (calleePath.isMemberExpression?.() && !calleePath.node.computed) {
     const objectPath = calleePath.get("object");
@@ -426,7 +431,7 @@ function isUseEmitCall(callPath) {
   return importedName === "useEmit" && source === "@litsx/core";
 }
 
-function getEventMapNames(typeNode, programPath, seen = new Set()) {
+export function getEventMapNames(typeNode, programPath, seen = new Set()) {
   if (!typeNode) return [];
   if (t.isTSTypeLiteral(typeNode)) {
     return typeNode.members
@@ -450,7 +455,7 @@ function getEventMapNames(typeNode, programPath, seen = new Set()) {
   return [];
 }
 
-function readExplicitEventMetadata(node) {
+export function readExplicitEventMetadata(node) {
   let value = node;
   if (t.isTSAsExpression(value) || t.isTSTypeAssertion(value)) value = value.expression;
   if (!t.isObjectExpression(value)) return null;
@@ -681,7 +686,7 @@ function transformFunction(functionPath, programPath, className, options = {}) {
   return classNode;
 }
 
-function collectNoscriptOnlyElementCandidates(functionPath) {
+export function collectNoscriptOnlyElementCandidates(functionPath) {
   const source = functionPath.hub?.file?.code;
   const { start, end } = functionPath.node || {};
   if (
@@ -714,7 +719,7 @@ function collectNoscriptOnlyElementCandidates(functionPath) {
   return new Set([...nested].filter((candidate) => !regular.has(candidate)));
 }
 
-function ensureClassIdentifier(classNode, fallbackName) {
+export function ensureClassIdentifier(classNode, fallbackName) {
   if (classNode.id && t.isIdentifier(classNode.id)) {
     return classNode.id;
   }

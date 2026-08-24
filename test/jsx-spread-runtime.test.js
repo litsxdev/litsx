@@ -400,4 +400,127 @@ describe("jsxSpreadElement", () => {
     assert.strictEqual(element.getAttribute("spellcheck"), "true");
     assert.strictEqual(element.getAttribute("contenteditable"), "true");
   });
+
+  it("covers explicit binding prefixes, aliases, SVG booleans, and unsafe names", () => {
+    const container = document.createElement("div");
+    const payload = { id: 7 };
+    let clicks = 0;
+
+    render(jsxSpreadElement("label", [{
+      htmlFor: "field",
+      ".payload": payload,
+      "?hidden": true,
+      "@click": () => { clicks += 1; },
+      "bad name": "ignored",
+      constructor: "ignored",
+      children: "ignored",
+    }]), container);
+    const label = container.querySelector("label");
+    assert.strictEqual(label.getAttribute("for"), "field");
+    assert.strictEqual(label.payload, payload);
+    assert.strictEqual(label.hidden, true);
+    assert.strictEqual(label.hasAttribute("bad name"), false);
+    label.click();
+    assert.strictEqual(clicks, 1);
+
+    render(jsxSpreadElement("circle", [{ focusable: false, customFlag: true }], {
+      namespace: "svg",
+    }), container);
+    const circle = container.querySelector("circle");
+    assert.strictEqual(circle.getAttribute("focusable"), "false");
+    assert.strictEqual(circle.getAttribute("customFlag"), "true");
+  });
+
+  it("infers component properties and React-compatible custom events", () => {
+    class Api {
+      onSave = null;
+      enabled = false;
+    }
+    Api.elementProperties = new Map([
+      ["onSave", { attribute: false }],
+      ["enabled", { type: Boolean, attribute: "is-enabled" }],
+      ["label", { type: String, attribute: false }],
+      [42, { attribute: "numeric" }],
+    ]);
+    Api.finalize = () => {};
+
+    const container = document.createElement("div");
+    let changes = 0;
+    const callback = () => {};
+    render(jsxSpreadElement("section", [{
+      onSave: callback,
+      onValueChange: () => { changes += 1; },
+      "is-enabled": "",
+      label: "ready",
+      checked: true,
+      payload: { ok: true },
+    }], { component: Api, reactCompatEvents: true }), container);
+
+    const element = container.querySelector("section");
+    assert.strictEqual(element.onSave, callback);
+    assert.strictEqual(element.hasAttribute("is-enabled"), true);
+    assert.strictEqual(element.label, "ready");
+    assert.strictEqual(element.hasAttribute("checked"), true);
+    assert.deepStrictEqual(element.payload, { ok: true });
+    element.dispatchEvent(new Event("value-change"));
+    assert.strictEqual(changes, 1);
+  });
+
+  it("updates and clears events, refs, styles, properties, and inner HTML", () => {
+    const container = document.createElement("div");
+    const firstRef = [];
+    const secondRef = { value: undefined };
+    let first = 0;
+    let second = 0;
+    const view = (source) => jsxSpreadElement("article", [source], { component: true });
+
+    render(view({
+      "on:click": () => { first += 1; },
+      ref: (value) => firstRef.push(value),
+      active: true,
+      style: { color: "red !important", WebkitTransform: "scale(1)", "--gone": "yes" },
+      dangerouslySetInnerHTML: { __html: "<b>first</b>" },
+    }), container);
+    const element = container.querySelector("article");
+    element.click();
+
+    const nextListener = () => { second += 1; };
+    render(view({
+      "on:click": nextListener,
+      ref: secondRef,
+      style: { color: "blue", WebkitTransform: null },
+      dangerouslySetInnerHTML: { __html: null },
+    }), container);
+    const updatedElement = container.querySelector("article");
+    updatedElement.click();
+    assert.strictEqual(first, 1);
+    assert.strictEqual(second, 1);
+    assert.deepStrictEqual(firstRef, [element, undefined]);
+    assert.strictEqual(secondRef.value, updatedElement);
+    assert.strictEqual(updatedElement.active, undefined);
+    assert.strictEqual(updatedElement.style.color, "blue");
+    assert.strictEqual(updatedElement.style.getPropertyValue("--gone"), "");
+    assert.strictEqual(updatedElement.innerHTML, "");
+
+    render(view({}), container);
+    container.querySelector("article").click();
+    assert.strictEqual(second, 1);
+    assert.strictEqual(secondRef.value, undefined);
+    assert.strictEqual(container.querySelector("article").hasAttribute("style"), false);
+  });
+
+  it("adapts refs and ignores invalid sources", () => {
+    const container = document.createElement("div");
+    const values = [];
+    const refAdapter = (original) => (element) => {
+      values.push([original, element]);
+    };
+
+    render(jsxSpreadElement("input", [null, 1, { ref: "token", value: "ok" }], {
+      void: true,
+      refAdapter,
+    }, "ignored child"), container);
+    assert.strictEqual(container.querySelector("input").value, "ok");
+    assert.strictEqual(values[0][0], "token");
+  });
 });

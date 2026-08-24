@@ -3,8 +3,20 @@ import * as t from "@babel/types";
 import babelTraverse from "@babel/traverse";
 import parser from "./helpers/litsx-parser.js";
 import {
+  createDefaultSlotElement,
+  createPropsObjectExpression,
+  createThisMemberExpression,
+  getBoundPropName,
+  isDirectJsxChildExpression,
+  isImplicitChildrenExpression,
+  isJsxContainerChildPath,
+  isObjectDestructuringInitializer,
+  isPropsAliasBinding,
+  isSupportedImplicitChildrenReference,
+  registerLocalPropAliases,
   replaceParamReferences,
   setParamRewriteBabelTypes,
+  shouldCapturePropReference,
   transformJSXExpressions,
 } from "../packages/babel-preset-litsx/src/internal/transform-litsx-param-rewrites.js";
 
@@ -323,5 +335,163 @@ describe("native param rewrite internals", () => {
     assert.strictEqual(untouchedInit.object.object.type, "ThisExpression");
     assert.strictEqual(untouchedInit.object.property.name, "alias");
     assert.strictEqual(untouchedInit.property.name, "missing");
+  });
+
+  it("classifies binding metadata and creates stable prop expressions", () => {
+    const alias = {
+      kind: "alias",
+      properties: new Map([
+        ["title", true],
+        ["aria-label", true],
+        ["", true],
+        [42, true],
+      ]),
+    };
+    const rest = { kind: "rest-alias", propertyName: "rest", properties: new Map() };
+
+    assert.strictEqual(isPropsAliasBinding(alias), true);
+    assert.strictEqual(isPropsAliasBinding(rest), true);
+    assert.strictEqual(isPropsAliasBinding({ kind: "other" }), false);
+    assert.strictEqual(isPropsAliasBinding(null), false);
+    assert.strictEqual(getBoundPropName("title"), "title");
+    assert.strictEqual(getBoundPropName({ bindKey: "count" }), "count");
+    assert.strictEqual(getBoundPropName({}), null);
+    assert.strictEqual(getBoundPropName(null), null);
+
+    const identifierMember = createThisMemberExpression("title");
+    const computedMember = createThisMemberExpression("aria-label");
+    assert.strictEqual(identifierMember.computed, false);
+    assert.strictEqual(identifierMember.property.name, "title");
+    assert.strictEqual(computedMember.computed, true);
+    assert.strictEqual(computedMember.property.value, "aria-label");
+
+    assert.strictEqual(createPropsObjectExpression("other"), null);
+    assert.strictEqual(createPropsObjectExpression(rest).property.name, "rest");
+    const snapshot = createPropsObjectExpression(
+      alias,
+      new Map([
+        ["title", true],
+        ["count", true],
+      ])
+    );
+    assert.deepStrictEqual(
+      snapshot.properties.map((property) => property.key.name ?? property.key.value),
+      ["aria-label", "count", "title"]
+    );
+    assert.strictEqual(createPropsObjectExpression("props", new Map()).properties.length, 0);
+    assert.strictEqual(createDefaultSlotElement().openingElement.name.name, "slot");
+  });
+
+  it("recognizes supported implicit children only in direct JSX child containers", () => {
+    const ast = parser.parse(`
+      function Panel(props, children) {
+        const indirect = children;
+        return <><section>{children}{props.children}{props["children"]}</section>{children}</>;
+      }
+    `, { sourceType: "module" });
+    const containers = [];
+    const references = [];
+    traverse(ast, {
+      JSXExpressionContainer(path) {
+        containers.push(path);
+      },
+      Identifier(path) {
+        if ((path.node.name === "children" || path.node.name === "props") && path.isReferencedIdentifier()) {
+          references.push(path);
+        }
+      },
+    });
+
+    const bindings = new Map([
+      ["children", "children"],
+      ["props", { kind: "alias", properties: new Map([["children", true]]) }],
+    ]);
+    assert.strictEqual(isDirectJsxChildExpression(containers[0]), true);
+    assert.strictEqual(isDirectJsxChildExpression({ listKey: "body", parentPath: null }), false);
+    assert.strictEqual(isImplicitChildrenExpression(t.identifier("children"), bindings), true);
+    assert.strictEqual(isImplicitChildrenExpression(t.identifier("other"), bindings), false);
+    assert.strictEqual(
+      isImplicitChildrenExpression(t.memberExpression(t.identifier("props"), t.identifier("children")), bindings),
+      true
+    );
+    assert.strictEqual(
+      isImplicitChildrenExpression(t.memberExpression(t.identifier("props"), t.stringLiteral("children"), true), bindings),
+      false
+    );
+
+    const directChild = references.find(
+      (path) => path.node.name === "children" && isJsxContainerChildPath(path)
+    );
+    const propsChild = references.find(
+      (path) => path.node.name === "props" && path.parentPath?.isMemberExpression() && !path.parentPath.node.computed
+    );
+    const indirect = references.find(
+      (path) => path.node.name === "children" && !isJsxContainerChildPath(path)
+    );
+    assert.ok(!isJsxContainerChildPath(null));
+    assert.strictEqual(isSupportedImplicitChildrenReference(directChild, "children"), true);
+    assert.strictEqual(isSupportedImplicitChildrenReference(indirect, "children"), false);
+    assert.strictEqual(isSupportedImplicitChildrenReference(propsChild, bindings.get("props")), true);
+    assert.strictEqual(isSupportedImplicitChildrenReference(propsChild, { kind: "other" }), false);
+  });
+
+  it("detects destructuring initializers and nested function capture boundaries", () => {
+    const ast = parser.parse(`
+      function Card(props) {
+        const { title } = props;
+        const direct = props;
+        function nested() { return props; }
+        const arrow = () => props;
+      }
+    `, { sourceType: "module" });
+    let functionPath;
+    const propsReferences = [];
+    traverse(ast, {
+      FunctionDeclaration(path) {
+        if (path.node.id.name === "Card") functionPath = path;
+      },
+      Identifier(path) {
+        if (path.node.name === "props" && path.isReferencedIdentifier()) propsReferences.push(path);
+      },
+    });
+
+    assert.strictEqual(isObjectDestructuringInitializer(propsReferences[0]), true);
+    assert.strictEqual(isObjectDestructuringInitializer(propsReferences[1]), false);
+    assert.strictEqual(shouldCapturePropReference(propsReferences[1], functionPath), false);
+    assert.strictEqual(shouldCapturePropReference(propsReferences[2], functionPath), true);
+    assert.strictEqual(shouldCapturePropReference(propsReferences[3], functionPath), false);
+  });
+
+  it("registers transitive aliases and supported destructured property forms", () => {
+    const { functionPath } = getPaths(`
+      function Card(props) {
+        const alias = props;
+        const second = alias;
+        const { title: heading, count = 0, "aria-label": aria, missing, ...rest } = second;
+        const ignored = unknown;
+        function nested() { const nestedAlias = props; }
+        return <div />;
+      }
+    `);
+    const bindingInfo = {
+      kind: "alias",
+      properties: new Map([
+        ["title", true],
+        ["count", true],
+        ["aria-label", true],
+      ]),
+    };
+    const bindings = new Map([["props", bindingInfo]]);
+
+    registerLocalPropAliases(functionPath, bindings);
+
+    assert.strictEqual(bindings.get("alias"), bindingInfo);
+    assert.strictEqual(bindings.get("second"), bindingInfo);
+    assert.strictEqual(bindings.get("heading"), "title");
+    assert.strictEqual(bindings.get("count"), "count");
+    assert.strictEqual(bindings.get("aria"), "aria-label");
+    assert.strictEqual(bindings.has("missing"), false);
+    assert.strictEqual(bindings.has("ignored"), false);
+    assert.strictEqual(bindings.has("nestedAlias"), false);
   });
 });

@@ -30,6 +30,8 @@ function isSsrHost(host) {
   return Boolean(host?.[LITSX_SSR_CONTEXT]);
 }
 
+export { isSsrHost, isThenable };
+
 /**
  * Define a fallback boundary around a subtree that may suspend.
  * SuspenseBoundary is the native Lit<sup>sx</sup> primitive for asynchronous UI coordination.

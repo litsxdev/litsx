@@ -30,11 +30,13 @@ const DEFAULT_MODULE_RESOLUTION_OPTIONS = {
   esModuleInterop: true,
   allowSyntheticDefaultImports: true,
 };
-function normalizeFilePath(value) {
+export function normalizeHookFilePath(value) {
   return normalizeStableIdentityPath(value);
 }
 
-function getNodeModulesPackageName(filename) {
+const normalizeFilePath = normalizeHookFilePath;
+
+export function getNodeModulesPackageName(filename) {
   const normalized = normalizeFilePath(filename);
   const marker = "/node_modules/";
   const markerIndex = normalized.lastIndexOf(marker);
@@ -47,7 +49,7 @@ function getNodeModulesPackageName(filename) {
   return segments[0] || null;
 }
 
-function getDeclarationImplementationBase(filename) {
+export function getDeclarationImplementationBase(filename) {
   if (typeof filename !== "string") {
     return null;
   }
@@ -61,7 +63,7 @@ function getDeclarationImplementationBase(filename) {
   return null;
 }
 
-function isSymbolForMarker(node, markerKey) {
+export function isSymbolForMarker(node, markerKey) {
   return (
     node?.type === "CallExpression" &&
     node.callee?.type === "MemberExpression" &&
@@ -76,7 +78,7 @@ function isSymbolForMarker(node, markerKey) {
   );
 }
 
-function isStructuralRuntimeHelperSource(sourceValue) {
+export function isStructuralRuntimeHelperSource(sourceValue) {
   return (
     sourceValue === "./structural-hooks-runtime.js" ||
     sourceValue === "./structural-hooks-runtime" ||
@@ -88,7 +90,7 @@ function getTraverse() {
   return traverse.default || traverse;
 }
 
-function normalizeInMemoryFiles(files) {
+export function normalizeInMemoryHookFiles(files) {
   const normalized = new Map();
   if (!files || typeof files !== "object") {
     return normalized;
@@ -100,7 +102,9 @@ function normalizeInMemoryFiles(files) {
   return normalized;
 }
 
-function createStructuralHookResolver(options = {}) {
+const normalizeInMemoryFiles = normalizeInMemoryHookFiles;
+
+export function createStructuralHookResolver(options = {}) {
   const inMemoryFiles = normalizeInMemoryFiles(options.inMemoryFiles);
   const compilationSession = options.__litsxCompilationSession || null;
   const moduleCache =

@@ -6,9 +6,13 @@ import { ensureRuntimeNamedImports } from "./runtime-imports.js";
 import { ensureHooksRenderWrapper } from "./render-boundary.js";
 let t;
 
+export function setUseRefBabelTypes(nextTypes) {
+  t = nextTypes;
+}
+
 const RUNTIME_MODULE = "@litsx/core";
 
-function ensureRuntimeImport(programPath, importedName, localName, t, runtimeModule = RUNTIME_MODULE) {
+export function ensureRuntimeImport(programPath, importedName, localName, t, runtimeModule = RUNTIME_MODULE) {
   const runtimeImports = programPath
     .get("body")
     .filter(
@@ -57,7 +61,7 @@ function ensureRuntimeImport(programPath, importedName, localName, t, runtimeMod
   );
 }
 
-function createGetter(name) {
+export function createGetter(name) {
   const selectorLiteral = t.stringLiteral(`[data-ref="${name}"]`);
 
   const renderRootQuery = t.optionalCallExpression(
@@ -88,7 +92,7 @@ function createGetter(name) {
   );
 }
 
-function ensureGetter(classPath, name) {
+export function ensureGetter(classPath, name) {
   const classBody = classPath.get("body.body");
 
   const hasGetter = classBody.some(
@@ -113,7 +117,7 @@ function ensureGetter(classPath, name) {
   classPath.get("body").pushContainer("body", createGetter(name));
 }
 
-function isComponentJsxName(nameNode) {
+export function isComponentJsxName(nameNode) {
   if (t.isJSXMemberExpression(nameNode)) {
     return true;
   }
@@ -129,7 +133,7 @@ function isComponentJsxName(nameNode) {
   );
 }
 
-function isComponentRefAttribute(attrPath) {
+export function isComponentRefAttribute(attrPath) {
   const openingElement = attrPath.parentPath;
   if (!openingElement?.isJSXOpeningElement()) {
     return false;
@@ -138,7 +142,7 @@ function isComponentRefAttribute(attrPath) {
   return isComponentJsxName(openingElement.node.name);
 }
 
-function getFunctionRefBindingPath(binding) {
+export function getFunctionRefBindingPath(binding) {
   const bindingPath = binding?.path;
   if (!bindingPath) {
     return null;
@@ -158,7 +162,7 @@ function getFunctionRefBindingPath(binding) {
   return null;
 }
 
-function getFunctionRefCallbackNode(bindingPath) {
+export function getFunctionRefCallbackNode(bindingPath) {
   if (bindingPath?.isFunctionDeclaration()) {
     const id = bindingPath.node.id;
     return id ? t.identifier(id.name) : null;
@@ -172,7 +176,7 @@ function getFunctionRefCallbackNode(bindingPath) {
   return null;
 }
 
-function insertAfterFunctionRefBinding(bindingPath, statement, renderBody) {
+export function insertAfterFunctionRefBinding(bindingPath, statement, renderBody) {
   if (bindingPath?.isFunctionDeclaration()) {
     bindingPath.insertAfter(statement);
     return true;
@@ -194,7 +198,7 @@ function insertAfterFunctionRefBinding(bindingPath, statement, renderBody) {
   return false;
 }
 
-function createRefAssignmentCallback(refExpression) {
+export function createRefAssignmentCallback(refExpression) {
   const refIdentifier = t.identifier("refValue");
   const nodeIdentifier = t.identifier("node");
 
@@ -240,7 +244,7 @@ function createRefAssignmentCallback(refExpression) {
   );
 }
 
-function isSoftSuspenseRenderScope(functionPath) {
+export function isSoftSuspenseRenderScope(functionPath) {
   const parentPath = functionPath?.parentPath;
   return Boolean(
     functionPath?.isArrowFunctionExpression?.() &&
@@ -249,7 +253,7 @@ function isSoftSuspenseRenderScope(functionPath) {
   );
 }
 
-function insertBeforeRefRender(attrPath, methodPath, statements) {
+export function insertBeforeRefRender(attrPath, methodPath, statements) {
   const functionPath = attrPath.getFunctionParent();
   const renderScope = functionPath === methodPath || isSoftSuspenseRenderScope(functionPath)
     ? functionPath
@@ -281,12 +285,12 @@ function insertBeforeRefRender(attrPath, methodPath, statements) {
   return false;
 }
 
-function getComponentRefAttributeName(attrPath) {
+export function getComponentRefAttributeName(attrPath) {
   void attrPath;
   return ".ref";
 }
 
-function getSupportedHookImportLocal(calleePath, scope, importSources, supportedHookNames, t) {
+export function getSupportedHookImportLocal(calleePath, scope, importSources, supportedHookNames, t) {
   if (calleePath.isMemberExpression({ computed: false })) {
     const objectPath = calleePath.get("object");
     const propertyPath = calleePath.get("property");
@@ -395,15 +399,15 @@ function processPendingMutableRefCalls(state, t) {
   state.pendingMutableCalls.length = 0;
 }
 
-function hasQuotedRefAttributeSuffix(value) {
+export function hasQuotedRefAttributeSuffix(value) {
   return /(^|[\s<])ref="$/.test(value);
 }
 
-function hasBareRefAttributeSuffix(value) {
+export function hasBareRefAttributeSuffix(value) {
   return /(^|[\s<])ref=$/.test(value);
 }
 
-function replaceTemplateCallbackRef(templatePath, index, refName) {
+export function replaceTemplateCallbackRef(templatePath, index, refName) {
   const { quasis, expressions } = templatePath.node.quasi;
   const previous = quasis[index];
   const next = quasis[index + 1];
@@ -445,7 +449,7 @@ function replaceTemplateRef(classPath, refName) {
   return replaceTemplateRefWithName(classPath, refName, refName);
 }
 
-function isHtmlTemplateRefExpression(refPath) {
+export function isHtmlTemplateRefExpression(refPath) {
   const taggedTemplatePath = refPath.findParent((path) => path.isTaggedTemplateExpression());
   if (!taggedTemplatePath || !t.isIdentifier(taggedTemplatePath.node.tag, { name: "html" })) {
     return false;
@@ -469,7 +473,7 @@ function isHtmlTemplateRefExpression(refPath) {
   );
 }
 
-function hasTemplateRef(classPath, refName) {
+export function hasTemplateRef(classPath, refName) {
   let found = false;
 
   classPath.traverse({
@@ -495,7 +499,7 @@ function hasTemplateRef(classPath, refName) {
   return found;
 }
 
-function replaceTemplateRefWithName(classPath, refName, replacementName) {
+export function replaceTemplateRefWithName(classPath, refName, replacementName) {
   let replaced = false;
 
   classPath.traverse({
@@ -562,7 +566,7 @@ function replaceTemplateRefWithName(classPath, refName, replacementName) {
   return replaced;
 }
 
-function analyzeRefUsage(referencePaths, refName) {
+export function analyzeRefUsage(referencePaths, refName) {
   let hasCurrentWrite = false;
   let hasOpaqueUsage = false;
 

@@ -37,7 +37,7 @@ function cacheTemplate(cache, key, strings) {
   return strings;
 }
 
-function normalizeName(rawName, nativeHtml, reactCompatEvents = false) {
+export function normalizeName(rawName, nativeHtml, reactCompatEvents = false) {
   if (rawName === "className") return { kind: "attribute", name: "class" };
   if (rawName === "htmlFor" && nativeHtml) return { kind: "attribute", name: "for" };
   const prefix = rawName[0];
@@ -76,19 +76,19 @@ function normalizeName(rawName, nativeHtml, reactCompatEvents = false) {
   };
 }
 
-function resolveConstructor(tagName, component, element) {
+export function resolveConstructor(tagName, component, element) {
   if (typeof component === "function") return component;
   return element?.constructor ?? globalThis.customElements?.get?.(tagName);
 }
 
-function getComponentProperties(tagName, component, element) {
+export function getComponentProperties(tagName, component, element) {
   const constructor = resolveConstructor(tagName, component, element);
   constructor?.finalize?.();
   const properties = constructor?.elementProperties;
   return properties && typeof properties.has === "function" ? properties : null;
 }
 
-function getDeclaredComponentBinding(tagName, name, component, element) {
+export function getDeclaredComponentBinding(tagName, name, component, element) {
   const properties = getComponentProperties(tagName, component, element);
   if (!properties) return null;
   if (properties.has(name)) {
@@ -113,7 +113,7 @@ function getDeclaredComponentBinding(tagName, name, component, element) {
   return null;
 }
 
-function hasComponentProperty(tagName, name, component, element) {
+export function hasComponentProperty(tagName, name, component, element) {
   if (element && name in element) return true;
   const constructor = resolveConstructor(tagName, component, element);
   const properties = getComponentProperties(tagName, component, element);
@@ -124,7 +124,7 @@ function hasDeclaredComponentProperty(tagName, name, component, element) {
   return getDeclaredComponentBinding(tagName, name, component, element) != null;
 }
 
-function routeComponentRestProps(
+export function routeComponentRestProps(
   tagName,
   sources,
   component,
@@ -176,7 +176,7 @@ function routeComponentRestProps(
   return routed;
 }
 
-function shallowEqualRecords(left, right) {
+export function shallowEqualRecords(left, right) {
   if (left === right) return true;
   if (!left || !right || typeof left !== "object" || typeof right !== "object") return false;
   const leftKeys = Object.keys(left);
@@ -185,7 +185,7 @@ function shallowEqualRecords(left, right) {
   return leftKeys.every((key) => Object.prototype.hasOwnProperty.call(right, key) && Object.is(left[key], right[key]));
 }
 
-function inferDescriptor(tagName, rawName, value, component, element, namespace, reactCompatEvents = false) {
+export function inferDescriptor(tagName, rawName, value, component, element, namespace, reactCompatEvents = false) {
   const nativeHtml = namespace !== "svg" && !tagName.includes("-") && !component;
   const descriptor = normalizeName(rawName, nativeHtml, reactCompatEvents);
   if (!SAFE_BINDING_NAME.test(descriptor.name)) return null;
@@ -247,7 +247,7 @@ function inferClientDescriptor(tagName, rawName, value, component, element, name
   return descriptor;
 }
 
-const descriptorKey = (descriptor) =>
+export const descriptorKey = (descriptor) =>
   descriptor.name === "style" && (descriptor.kind === "style" || descriptor.kind === "attribute")
     ? "style:style"
     : `${descriptor.kind}:${descriptor.name}`;
@@ -307,19 +307,19 @@ function mergeSourcesReverse(tagName, sources, component, element, seen, namespa
   return bindings;
 }
 
-function bindingPrefix(descriptor) {
+export function bindingPrefix(descriptor) {
   if (descriptor.kind === "property") return `.${descriptor.name}`;
   if (descriptor.kind === "boolean") return `?${descriptor.name}`;
   if (descriptor.kind === "event") return `@${descriptor.name}`;
   return descriptor.name;
 }
 
-function assignRef(value, element) {
+export function assignRef(value, element) {
   if (typeof value === "function") value(element);
   else if (value && typeof value === "object") value.value = element;
 }
 
-function adaptRefBindings(bindings, adapter) {
+export function adaptRefBindings(bindings, adapter) {
   if (typeof adapter !== "function") return bindings;
   for (const binding of bindings) {
     if (
@@ -387,15 +387,15 @@ function getServerStrings(tagName, bindings, isVoid, hasChildren, innerHtml) {
   return innerHtml ? strings : cacheTemplate(SERVER_STRINGS_CACHE, signature, strings);
 }
 
-function serializedValue(value) {
+export function serializedValue(value) {
   return value == null || value === false ? null : value === true ? "" : String(value);
 }
 
-function booleanAttributeValue(value) {
+export function booleanAttributeValue(value) {
   return value !== false && value != null;
 }
 
-function eventOptions(descriptor, value) {
+export function eventOptions(descriptor, value) {
   const listener = value && typeof value === "object" ? value : null;
   return {
     capture: descriptor.capture === true || listener?.capture === true,
@@ -404,13 +404,13 @@ function eventOptions(descriptor, value) {
   };
 }
 
-function cssPropertyName(name) {
+export function cssPropertyName(name) {
   return name.includes("-")
     ? name
     : name.replace(/(?:^(webkit|moz|ms|o)|)(?=[A-Z])/g, "-$&").toLowerCase();
 }
 
-function clearBinding(element, descriptor, previous) {
+export function clearBinding(element, descriptor, previous) {
   if (!element) return;
   if (descriptor.kind === "event") element.removeEventListener(descriptor.name, previous.value, eventOptions(descriptor, previous.value));
   else if (descriptor.kind === "ref") assignRef(previous.value, undefined);
@@ -423,7 +423,7 @@ function clearBinding(element, descriptor, previous) {
   else if (descriptor.kind !== "inner-html") element.removeAttribute(descriptor.name);
 }
 
-function applyStyleBinding(element, value, previous) {
+export function applyStyleBinding(element, value, previous) {
   // A runtime JSX spread is attached to Lit's ElementPart, where an attribute
   // directive cannot run. Apply styleMap's DOM update semantics directly;
   // serialization still goes through the official directive on the server.
@@ -456,7 +456,7 @@ function applyStyleBinding(element, value, previous) {
   return nextNames;
 }
 
-function applyBinding(element, descriptor, value, previous, adoptAttributes) {
+export function applyBinding(element, descriptor, value, previous, adoptAttributes) {
   if (descriptor.kind === "attribute") {
     if (adoptAttributes) return;
     const next = descriptor.booleanValue && value != null ? String(value) : serializedValue(value);

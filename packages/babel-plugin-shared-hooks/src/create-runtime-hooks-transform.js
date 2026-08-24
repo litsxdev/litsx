@@ -30,7 +30,7 @@ function assertValidHookAuthoring(programPath) {
   throw error;
 }
 
-function isCustomHookName(name) {
+export function isCustomHookName(name) {
   return typeof name === "string" && /^use[A-Z0-9]/.test(name);
 }
 
@@ -38,21 +38,21 @@ function cloneForClassEntry(node, t) {
   return t.cloneNode(node, true);
 }
 
-function createStructuralHookExpression(entry, t) {
+export function createStructuralHookExpression(entry, t) {
   if (entry?.type === "spread") {
     return t.spreadElement(t.cloneNode(entry.argument, true));
   }
   return cloneForClassEntry(entry.definition, t);
 }
 
-function createRuntimeMetadataSymbolExpression(t, symbolKey) {
+export function createRuntimeMetadataSymbolExpression(t, symbolKey) {
   return t.callExpression(
     t.memberExpression(t.identifier("Symbol"), t.identifier("for")),
     [t.stringLiteral(symbolKey)],
   );
 }
 
-function isRuntimeMetadataSymbolFor(node, t, symbolKey) {
+export function isRuntimeMetadataSymbolFor(node, t, symbolKey) {
   return (
     t.isCallExpression(node) &&
     t.isMemberExpression(node.callee) &&
@@ -64,7 +64,7 @@ function isRuntimeMetadataSymbolFor(node, t, symbolKey) {
   );
 }
 
-function addStructuralHookToCurrentPlan(state, entry) {
+export function addStructuralHookToCurrentPlan(state, entry) {
   if (state.activeStructuralHooks) {
     state.activeStructuralHooks.push(entry);
   }
@@ -92,7 +92,7 @@ function addStructuralHookToCurrentPlan(state, entry) {
   }
 }
 
-function getImportedStructuralCustomHookDependencyArgument(
+export function getImportedStructuralCustomHookDependencyArgument(
   calleePath,
   state,
   t,
@@ -116,7 +116,7 @@ function getImportedStructuralCustomHookDependencyArgument(
   return null;
 }
 
-function addCustomHookStructuralDependenciesToCurrentPlan(
+export function addCustomHookStructuralDependenciesToCurrentPlan(
   calleePath,
   state,
   t,
@@ -153,7 +153,7 @@ function addCustomHookStructuralDependenciesToCurrentPlan(
   });
 }
 
-function createDefineStructuralHookEntriesStatement(
+export function createDefineStructuralHookEntriesStatement(
   hookName,
   entries,
   t,
@@ -175,7 +175,7 @@ function createDefineStructuralHookEntriesStatement(
   );
 }
 
-function createMarkLitsxHookStatement(hookName, t) {
+export function createMarkLitsxHookStatement(hookName, t) {
   return t.expressionStatement(
     t.assignmentExpression(
       "=",
@@ -189,7 +189,7 @@ function createMarkLitsxHookStatement(hookName, t) {
   );
 }
 
-function isHookMarkerAssignmentStatement(statementPath, hookName, state, t) {
+export function isHookMarkerAssignmentStatement(statementPath, hookName, state, t) {
   if (!statementPath?.isExpressionStatement()) {
     return false;
   }
@@ -209,7 +209,7 @@ function isHookMarkerAssignmentStatement(statementPath, hookName, state, t) {
   return t.isBooleanLiteral(expression.right, { value: true });
 }
 
-function isCompiledCustomHookBinding(binding, state, t) {
+export function isCompiledCustomHookBinding(binding, state, t) {
   if (!binding?.identifier?.name) {
     return false;
   }
@@ -261,7 +261,7 @@ function isCompiledLitsxComponentClass(classPath, state, t) {
   });
 }
 
-function attachStructuralCustomHookMetadata(programPath, state, t) {
+export function attachStructuralCustomHookMetadata(programPath, state, t) {
   for (const [hookName, entries] of state.structuralCustomHookDependencies) {
     if (!entries || entries.length === 0) {
       continue;
@@ -284,7 +284,7 @@ function attachStructuralCustomHookMetadata(programPath, state, t) {
   }
 }
 
-function attachStructuralHookMetadata(programPath, state, t) {
+export function attachStructuralHookMetadata(programPath, state, t) {
   for (const [hookName, entries] of state.structuralHookDependencies) {
     if (!entries || entries.length === 0) {
       continue;
@@ -304,7 +304,7 @@ function attachStructuralHookMetadata(programPath, state, t) {
   }
 }
 
-function attachCompiledCustomHookMetadata(programPath, state, t) {
+export function attachCompiledCustomHookMetadata(programPath, state, t) {
   for (const hookName of state.compiledCustomHookNames || []) {
     const binding = programPath.scope.getBinding(hookName);
     if (!binding?.path?.node) {
@@ -320,19 +320,19 @@ function attachCompiledCustomHookMetadata(programPath, state, t) {
   }
 }
 
-function enterRuntimeScope(state) {
+export function enterRuntimeScope(state) {
   state.runtimeScopeDepth = (state.runtimeScopeDepth || 0) + 1;
 }
 
-function exitRuntimeScope(state) {
+export function exitRuntimeScope(state) {
   state.runtimeScopeDepth = Math.max(0, (state.runtimeScopeDepth || 0) - 1);
 }
 
-function isInsideRuntimeScope(state) {
+export function isInsideRuntimeScope(state) {
   return (state.runtimeScopeDepth || 0) > 0;
 }
 
-function isSupportedCustomHookBinding(bindingPath) {
+export function isSupportedCustomHookBinding(bindingPath) {
   if (!bindingPath) return false;
   if (
     bindingPath.isFunctionDeclaration() ||
@@ -351,7 +351,7 @@ function isSupportedCustomHookBinding(bindingPath) {
   return false;
 }
 
-function getFunctionFromBinding(binding) {
+export function getFunctionFromBinding(binding) {
   const bindingPath = binding.path;
   if (!bindingPath) return null;
 
@@ -376,7 +376,7 @@ function getFunctionFromBinding(binding) {
   return null;
 }
 
-function detectRuntimeHelperFromCallee(calleePath, state, t) {
+export function detectRuntimeHelperFromCallee(calleePath, state, t) {
   if (calleePath.isIdentifier()) {
     const helperName = state.hookIdentifiers.get(calleePath.node.name);
     return helperName === undefined ? null : helperName;
@@ -404,7 +404,7 @@ function detectRuntimeHelperFromCallee(calleePath, state, t) {
   return null;
 }
 
-function isCustomHookCall(calleePath, state, t) {
+export function isCustomHookCall(calleePath, state, t) {
   if (calleePath.isIdentifier()) {
     const name = calleePath.node.name;
     if (state.hookIdentifiers.has(name)) {
@@ -471,7 +471,7 @@ function transformCustomHookDefinition(binding, state, t) {
   }
 }
 
-function localCustomHookUsesRuntime(binding, state, t, seen = new WeakSet()) {
+export function localCustomHookUsesRuntime(binding, state, t, seen = new WeakSet()) {
   if (!binding || !isSupportedCustomHookBinding(binding.path)) {
     return false;
   }
@@ -588,7 +588,7 @@ function processDeclaredCustomHooks(programPath, state, t) {
   }
 }
 
-function getImportSource(bindingPath) {
+export function getImportSource(bindingPath) {
   if (!bindingPath) {
     return null;
   }
@@ -602,7 +602,7 @@ function getImportSource(bindingPath) {
   return sourceNode ? sourceNode.value : null;
 }
 
-function createCallMetadata(callPath, state, t, helperName) {
+export function createCallMetadata(callPath, state, t, helperName) {
   const factory = state.callMetadataByHelper?.get(helperName);
   if (typeof factory !== "function") {
     return null;
@@ -611,7 +611,7 @@ function createCallMetadata(callPath, state, t, helperName) {
   return factory(callPath, state, t);
 }
 
-function appendHelperMetadataArgument(callPath, state, t, helperName) {
+export function appendHelperMetadataArgument(callPath, state, t, helperName) {
   const metadata = createCallMetadata(callPath, state, t, helperName);
   if (!metadata) {
     return false;
@@ -627,7 +627,7 @@ function appendHelperMetadataArgument(callPath, state, t, helperName) {
   return true;
 }
 
-function isDefineHookCallee(calleePath, state) {
+export function isDefineHookCallee(calleePath, state) {
   if (calleePath.isIdentifier()) {
     return state.defineHookIdentifiers?.has(calleePath.node.name) === true;
   }
@@ -648,7 +648,7 @@ function isDefineHookCallee(calleePath, state) {
   return false;
 }
 
-function isStructuralHookBinding(binding, state) {
+export function isStructuralHookBinding(binding, state) {
   if (!binding?.path?.isVariableDeclarator()) {
     return false;
   }
@@ -659,7 +659,7 @@ function isStructuralHookBinding(binding, state) {
   return isDefineHookCallee(initPath.get("callee"), state);
 }
 
-function getStructuralHookCallInfo(callPath, calleePath, state, t) {
+export function getStructuralHookCallInfo(callPath, calleePath, state, t) {
   if (calleePath.isMemberExpression({ computed: false })) {
     const object = calleePath.get("object");
     const property = calleePath.get("property");
@@ -709,7 +709,7 @@ function getStructuralHookCallInfo(callPath, calleePath, state, t) {
   };
 }
 
-function isImportedStructuralHook(state, source, importedName) {
+export function isImportedStructuralHook(state, source, importedName) {
   const result = getImportedStructuralHookInfo(state, source, importedName);
   return (
     result === true ||
@@ -718,7 +718,7 @@ function isImportedStructuralHook(state, source, importedName) {
   );
 }
 
-function getImportedStructuralHookInfo(state, source, importedName) {
+export function getImportedStructuralHookInfo(state, source, importedName) {
   const resolver = state.structuralHookResolver;
   return (
     typeof resolver === "function" &&
@@ -730,7 +730,7 @@ function getImportedStructuralHookInfo(state, source, importedName) {
   );
 }
 
-function isImportedStructuralCustomHook(state, source, importedName) {
+export function isImportedStructuralCustomHook(state, source, importedName) {
   const resolver = state.structuralHookResolver;
   return (
     typeof resolver === "function" &&
@@ -797,7 +797,7 @@ function shouldTransformCustomHookCall(calleePath, state, t) {
   return false;
 }
 
-function resolveImportedRuntimeCustomHook(state, source, importedName) {
+export function resolveImportedRuntimeCustomHook(state, source, importedName) {
   if (isImportedStructuralCustomHook(state, source, importedName)) {
     return true;
   }
@@ -812,7 +812,7 @@ function resolveImportedRuntimeCustomHook(state, source, importedName) {
   });
 }
 
-function assertImportedCustomHookResolution(result, path, localName, source) {
+export function assertImportedCustomHookResolution(result, path, localName, source) {
   if (result === "unsupported-external-hook") {
     throw path.buildCodeFrameError(
       `Cannot compile external hook "${localName}" from "${source}". Its implementation is not marked as LitSX-compatible and may depend on React's hook runtime. Use a LitSX adapter or a package compiled with LitSX hook metadata.`,
@@ -825,7 +825,7 @@ function assertImportedCustomHookResolution(result, path, localName, source) {
   }
 }
 
-function isStructuralHookReference(path, state) {
+export function isStructuralHookReference(path, state) {
   if (path.isIdentifier()) {
     const name = path.node.name;
     if (state.structuralHookIdentifiers?.has(name)) {
@@ -850,7 +850,7 @@ function isStructuralHookReference(path, state) {
   return false;
 }
 
-function containsStructuralHookReference(path, state) {
+export function containsStructuralHookReference(path, state) {
   if (!path?.node) {
     return false;
   }
@@ -878,7 +878,7 @@ function containsStructuralHookReference(path, state) {
   return found;
 }
 
-function rejectStructuralHookAlias(path, state) {
+export function rejectStructuralHookAlias(path, state) {
   const initPath = path.get("init");
   if (!initPath?.node || isDefineHookCallee(initPath.get("callee"), state)) {
     return;
@@ -906,7 +906,7 @@ function rejectStructuralHookAlias(path, state) {
   );
 }
 
-function rejectStructuralHookContainer(path, state) {
+export function rejectStructuralHookContainer(path, state) {
   if (!path.node?.loc) {
     return;
   }
@@ -947,7 +947,7 @@ function rejectStructuralHookContainer(path, state) {
   );
 }
 
-function rejectDynamicStructuralNamespaceAccess(path, state) {
+export function rejectDynamicStructuralNamespaceAccess(path, state) {
   if (!path.isMemberExpression({ computed: true })) {
     return;
   }
@@ -963,7 +963,7 @@ function rejectDynamicStructuralNamespaceAccess(path, state) {
   );
 }
 
-function isStructuralCustomHookCall(calleePath, state) {
+export function isStructuralCustomHookCall(calleePath, state) {
   if (calleePath.isIdentifier()) {
     return state.structuralCustomHookIdentifiers.has(calleePath.node.name);
   }
@@ -984,7 +984,7 @@ function isStructuralCustomHookCall(calleePath, state) {
   return false;
 }
 
-function collectStructuralHookDeclaration(path, state, t) {
+export function collectStructuralHookDeclaration(path, state, t) {
   const initPath = path.get("init");
   if (!initPath?.isCallExpression()) {
     return;
@@ -1001,7 +1001,7 @@ function collectStructuralHookDeclaration(path, state, t) {
   }
 }
 
-function validateStructuralHookDefinition(declaratorPath) {
+export function validateStructuralHookDefinition(declaratorPath) {
   const objectPath = getStructuralDefinitionObjectPath(declaratorPath);
   if (!objectPath) {
     return;
@@ -1042,13 +1042,13 @@ function validateStructuralHookDefinition(declaratorPath) {
   }
 }
 
-function getStructuralDefinitionObjectPath(declaratorPath) {
+export function getStructuralDefinitionObjectPath(declaratorPath) {
   const initPath = declaratorPath.get("init");
   const firstArg = initPath?.get("arguments.0");
   return firstArg?.isObjectExpression() ? firstArg : null;
 }
 
-function getObjectFunctionPath(objectPath, propertyName) {
+export function getObjectFunctionPath(objectPath, propertyName) {
   const properties = objectPath?.get("properties") || [];
   for (const propertyPath of properties) {
     if (!propertyPath.isObjectProperty() && !propertyPath.isObjectMethod()) {
@@ -1465,6 +1465,19 @@ function transformClass(classPath, state, t) {
     }
   }
 }
+
+export {
+  assertValidHookAuthoring,
+  ensureHelperImports,
+  mergeRuntimeImports,
+  processDeclaredCustomHooks,
+  processRuntimeCall,
+  shouldTransformCustomHookCall,
+  transformClass,
+  transformCustomHookDefinition,
+  transformStructuralHookCall,
+  transformStructuralHookDefinitionUse,
+};
 
 export function createRuntimeHooksTransform({
   pluginName,

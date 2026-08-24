@@ -504,4 +504,115 @@ describe("@litsx/storybook", () => {
       },
     );
   });
+
+  it("rejects every unsupported meta and named-export shape", async () => {
+    const plugin = litsxStoryRegistrationPlugin({
+      storybookCsfLoader: createPassingCsfLoader(),
+    });
+    const cases = [
+      ["export default function () {}", /default export must be a plain object/],
+      ["const meta = other; export default meta;", /default export must be a plain object/],
+      ["const first = second; const second = first; export default first;", /default export must be a plain object/],
+      ['export default { get title() { return "x"; } };', /only supports plain object properties/],
+      ['export default { 1: "x" };', /identifier or string-literal property keys/],
+      ['export default { title: "x" }; export { Story } from "./story";', /re-exports are not supported/],
+      ['export default { title: "x" }; export const { Story } = stories;', /identifier bindings/],
+      ['export default { title: "x" }; export const StoryCard = () => null;', /must be a plain object literal/],
+      ['export default { title: "x" }; function StoryCard() {} export { StoryCard };', /must resolve to a plain object literal/],
+      ['export default { title: "x" }; export class StoryCard {}', /must be object literals/],
+    ];
+
+    for (const [source, expected] of cases) {
+      await assert.rejects(
+        () => plugin.transform.handler(source, "/virtual/catalog.stories.tsx"),
+        expected,
+      );
+    }
+  });
+
+  it("accepts local object aliases and string-literal story keys", async () => {
+    const plugin = litsxStoryRegistrationPlugin({
+      storybookCsfLoader: createPassingCsfLoader(),
+    });
+    const source = [
+      'const meta = { "title": "Catalog/Aliases" };',
+      "const story = { render: () => <div /> };",
+      "export default meta;",
+      "export { story as Default };",
+    ].join("\n");
+
+    await assert.doesNotReject(() =>
+      plugin.transform.handler(source, "\0catalog.stories.tsx"),
+    );
+  });
+
+  it("normalizes CSF loader failures with nested, flat, and absent locations", async () => {
+    const source = 'export default { title: "Catalog/Failure" };';
+    const variants = [
+      Object.assign(new Error("nested"), { loc: { line: 4, column: 2 } }),
+      Object.assign(new Error("flat"), { line: 5, column: 3 }),
+      {},
+    ];
+
+    for (const failure of variants) {
+      const plugin = litsxStoryRegistrationPlugin({
+        storybookCsfLoader() {
+          return { parse() { throw failure; } };
+        },
+      });
+      await assert.rejects(
+        () => plugin.transform.handler(source, "/virtual/failure.stories.tsx"),
+        (error) => {
+          assert.equal(error.code, "LITSX_STORYBOOK_INVALID_CSF");
+          assert.equal(error.cause, failure);
+          if (failure.loc || failure.line) {
+            assert.equal(typeof error.line, "number");
+            assert.equal(typeof error.column, "number");
+          } else {
+            assert.match(error.message, /Unknown Storybook parsing error/);
+            assert.equal(error.loc, undefined);
+          }
+          return true;
+        },
+      );
+    }
+  });
+
+  it("composes custom Storybook hooks and tolerates absent plugin arrays", async () => {
+    const existingIndexer = { test: /legacy/, createIndex() {} };
+    const existingPlugin = { name: "base" };
+    const config = createLitsxStorybookConfig({
+      stories: ["custom/**/*.stories.tsx"],
+      addons: ["custom-addon"],
+      storybook: {
+        async experimental_indexers(indexers) {
+          return [...indexers, existingIndexer];
+        },
+        async viteFinal(viteConfig) {
+          return { ...viteConfig, plugins: [existingPlugin] };
+        },
+      },
+      compiler: { sourceMaps: false, jsxTemplate: "ignored" },
+      vitePlugins: { beforeLitsx: {}, afterLitsx: null },
+    });
+
+    assert.deepEqual(config.stories, ["custom/**/*.stories.tsx"]);
+    assert.deepEqual(config.addons, ["custom-addon"]);
+    assert.deepEqual(
+      await config.experimental_indexers([]),
+      [existingIndexer, litsxStoriesIndexer],
+    );
+    const viteConfig = await config.viteFinal({ optimizeDeps: undefined });
+    assert.equal(viteConfig.plugins[1], existingPlugin);
+
+    const empty = withLitsxStorybookViteConfig({}, {}, {
+      beforeLitsx: null,
+      afterLitsx: "invalid",
+    });
+    assert.deepEqual(empty.optimizeDeps, {});
+    assert.deepEqual(empty.plugins.map(({ name }) => name), [
+      "litsx-story-registration",
+      "litsx",
+    ]);
+  });
 });

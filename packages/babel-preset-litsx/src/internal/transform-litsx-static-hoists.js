@@ -12,7 +12,7 @@ export function setStaticHoistsBabelTypes(types) {
   t = types;
 }
 
-function isLightDomHoist(statement) {
+export function isLightDomHoist(statement) {
   if (!t.isExpressionStatement(statement)) return false;
   if (!t.isCallExpression(statement.expression)) return false;
   if (!t.isIdentifier(statement.expression.callee, { name: "__litsx_static_lightDom" })) {
@@ -73,7 +73,7 @@ function createComposedElementsExpression(expression) {
   ]);
 }
 
-function getGeneratedPropertiesExpression(statement) {
+export function getGeneratedPropertiesExpression(statement) {
   if (!t.isExpressionStatement(statement)) return null;
   if (!t.isCallExpression(statement.expression)) return null;
   const isHoistedProperties = t.isIdentifier(
@@ -134,7 +134,7 @@ function getStaticPropertyKey(property) {
   return null;
 }
 
-function normalizeAuthoredProperty(property) {
+export function normalizeAuthoredProperty(property) {
   const next = t.cloneNode(property, true);
   if (
     t.isObjectProperty(next) &&
@@ -213,7 +213,7 @@ function mergeKnownPropertyDeclarations(inferred, authored) {
   return t.objectExpression(properties);
 }
 
-function createPropertiesExpression(inferred, authored) {
+export function createPropertiesExpression(inferred, authored) {
   const base = t.objectExpression(
     inferred.map((property) => t.cloneNode(property, true)),
   );
@@ -247,7 +247,7 @@ function createPropertiesExpression(inferred, authored) {
   };
 }
 
-function getGeneratedStylesExpression(statement) {
+export function getGeneratedStylesExpression(statement) {
   if (!t.isExpressionStatement(statement)) return null;
   if (!t.isCallExpression(statement.expression)) return null;
   const callee = statement.expression.callee;
@@ -278,7 +278,7 @@ function getGeneratedStylesExpression(statement) {
   };
 }
 
-function getStaticHoistExpression(statement, functionPath) {
+export function getStaticHoistExpression(statement, functionPath) {
   if (!t.isExpressionStatement(statement)) return null;
   if (!t.isCallExpression(statement.expression)) return null;
   if (!t.isIdentifier(statement.expression.callee)) return null;
@@ -323,7 +323,7 @@ function getStaticHoistExpression(statement, functionPath) {
   };
 }
 
-function createExposeHoistMembers(expression) {
+export function createExposeHoistMembers(expression) {
   const { methodsExpression } = normalizeExposeHoistExpression(expression);
 
   return methodsExpression.properties.map((property) =>
@@ -331,7 +331,7 @@ function createExposeHoistMembers(expression) {
   );
 }
 
-function normalizeExposeHoistExpression(expression) {
+export function normalizeExposeHoistExpression(expression) {
   if (t.isObjectExpression(expression)) {
     return {
       methodsExpression: t.cloneNode(expression),
@@ -347,7 +347,7 @@ function createExposeClassMethod(property) {
   return method;
 }
 
-function normalizeExposePropertyToClassMethod(property) {
+export function normalizeExposePropertyToClassMethod(property) {
   if (t.isSpreadElement(property)) {
     throw new Error("Component.expose = ... does not accept spread elements.");
   }
@@ -416,7 +416,7 @@ export function assertStaticHoistsStayTopLevel(functionPath) {
   });
 }
 
-function containsUnsafeCssCall(node) {
+export function containsUnsafeCssCall(node) {
   if (!node || typeof node !== "object") return false;
   if (
     t.isCallExpression(node) &&
@@ -433,7 +433,7 @@ function containsUnsafeCssCall(node) {
   });
 }
 
-function isStaticStylesExpression(node, functionPath, seenBindings = new Set()) {
+export function isStaticStylesExpression(node, functionPath, seenBindings = new Set()) {
   if (t.isClassExpression(node)) {
     return true;
   }

@@ -750,4 +750,34 @@ describe("native properties internals", () => {
     assert.strictEqual(aliasEntries.ready.type, "Boolean");
     assert.strictEqual(mapEntries.meta.type, "String");
   });
+
+  it("infers opaque prop aliases with defaults and nested destructuring", () => {
+    const source = `
+      function OpaqueCard(props) {
+        const alias = props;
+        const aliasAgain = alias;
+        const [ignored] = aliasAgain;
+        const {
+          title,
+          "label": renamed,
+          count = 1,
+          nested: { value },
+          list: [first],
+          [dynamic]: computed,
+          ...rest
+        } = aliasAgain;
+        return <article>{title}{renamed}{count}{value}{first}{computed}{rest.extra}</article>;
+      }
+    `;
+    const { functionPath, programPath } = getFunctionAndProgramPaths(source, ["jsx"]);
+    const result = extractProperties(functionPath, programPath, {});
+    const names = result.properties.map((property) => property.key.name ?? property.key.value);
+    assert.ok(names.includes("title"));
+    assert.ok(names.includes("label"));
+    assert.ok(names.includes("count"));
+    assert.ok(names.includes("nested"));
+    assert.ok(names.includes("list"));
+    assert.strictEqual(result.defaults.get("count").value, 1);
+    assert.ok(result.nestedInitializers.length >= 2);
+  });
 });

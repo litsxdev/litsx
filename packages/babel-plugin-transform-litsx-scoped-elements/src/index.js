@@ -9,6 +9,10 @@ import { normalizeFilePath } from "@litsx/typescript-session";
 import { buildAvailableMap, setTypes, toKebab } from "./shared.js";
 
 let t;
+
+export function setScopedElementsBabelTypes(nextTypes) {
+  t = nextTypes;
+}
 const SHADOW_MIXIN = "ShadowDomMixin";
 const LIGHT_MIXIN = "LightDomMixin";
 const ANNOTATE_HYDRATABLE_CUSTOM_ELEMENT = "annotateHydratableCustomElement";
@@ -54,7 +58,7 @@ export default function transformFunctionToClassPlugin(api, options = {}) {
   };
 }
 
-function resolveTopLevelClassPath(nodePath) {
+export function resolveTopLevelClassPath(nodePath) {
   if (nodePath.isClassDeclaration()) {
     return nodePath;
   }
@@ -316,7 +320,7 @@ function ensureRuntimeInfrastructureImport(programPath, importName) {
   ));
 }
 
-function createRelativeModuleSpecifier(fromFilename, targetFilename) {
+export function createRelativeModuleSpecifier(fromFilename, targetFilename) {
   const fromDir = path.dirname(fromFilename);
   let relativePath = normalizeFilePath(path.relative(fromDir, targetFilename));
   if (!relativePath.startsWith(".") && !relativePath.startsWith("/")) {
@@ -325,7 +329,7 @@ function createRelativeModuleSpecifier(fromFilename, targetFilename) {
   return relativePath;
 }
 
-function ensureUniqueLocalName(programPath, baseName) {
+export function ensureUniqueLocalName(programPath, baseName) {
   programPath.scope.crawl();
   if (!programPath.scope.hasBinding(baseName)) {
     return baseName;
@@ -339,7 +343,7 @@ function ensureUniqueLocalName(programPath, baseName) {
   return `__litsxImported${baseName}${index}`;
 }
 
-function ensureImportedElementCandidates(programPath, fromFilename, importedCandidates) {
+export function ensureImportedElementCandidates(programPath, fromFilename, importedCandidates) {
   const localEntries = [];
 
   importedCandidates.forEach((candidate) => {
@@ -697,7 +701,7 @@ function detectElementsFromClass(classPath, programPath, availableMap, precomput
 // A noscript fallback is rendered by @litsx/ssr in an ephemeral scoped
 // registry. It must not become part of the host's browser registry or its
 // hydration metadata, even though its template is represented with html``.
-function isInsideNoscriptFallback(path) {
+export function isInsideScopedNoscriptFallback(path) {
   for (let current = path; current; current = current.parentPath) {
     if (
       current.isJSXElement?.() &&
@@ -715,7 +719,9 @@ function isInsideNoscriptFallback(path) {
   return false;
 }
 
-function maybeInsertSsrRenderLight(openingPath, programPath, entry, options) {
+const isInsideNoscriptFallback = isInsideScopedNoscriptFallback;
+
+export function maybeInsertSsrRenderLight(openingPath, programPath, entry, options) {
   if (options?.ssr !== true || entry?.lightDom !== true) {
     return;
   }
@@ -742,11 +748,11 @@ function maybeInsertSsrRenderLight(openingPath, programPath, entry, options) {
   ];
 }
 
-function isWhitespaceJsxText(node) {
+export function isWhitespaceJsxText(node) {
   return t.isJSXText(node) && node.value.trim() === "";
 }
 
-function isRenderLightExpression(node) {
+export function isRenderLightExpression(node) {
   if (!t.isJSXExpressionContainer(node)) {
     return false;
   }
@@ -758,7 +764,7 @@ function isRenderLightExpression(node) {
   );
 }
 
-function ensureRenderLightImport(programPath) {
+export function ensureRenderLightImport(programPath) {
   const existing = programPath.get("body").find(
     (nodePath) =>
       nodePath.isImportDeclaration() &&
@@ -793,7 +799,7 @@ function ensureRenderLightImport(programPath) {
   return t.identifier(localName);
 }
 
-function maybeInsertSsrRenderLightTemplate(quasi, tagName, programPath, entry, options = {}) {
+export function maybeInsertSsrRenderLightTemplate(quasi, tagName, programPath, entry, options = {}) {
   if (options?.ssr !== true || entry?.lightDom !== true) {
     return false;
   }
@@ -866,3 +872,21 @@ function replaceInTemplate(quasi, originalName, kebabName) {
 
   return changed;
 }
+
+export {
+  annotateImportedLightDomEntries,
+  consumeStaticIr,
+  createClassProperty,
+  createElementRegistryValue,
+  detectElementsFromClass,
+  getLightDomExports,
+  getNamespaceMemberInfo,
+  hasMixinInSuperChain,
+  hasNamedImport,
+  hasStaticElementsMember,
+  insertClassProperty,
+  normalizeStaticIr,
+  replaceInTemplate,
+  resolveImportSource,
+  transformClass,
+};

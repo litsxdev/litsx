@@ -97,6 +97,8 @@ function toClassName(input) {
     .join("") || "AppRoot";
 }
 
+export { toClassName, toPackageName };
+
 function createBasePackageJson(packageName) {
   return {
     name: packageName,
