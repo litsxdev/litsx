@@ -19,7 +19,8 @@
     "@litsx/storybook": "0.1.2",
     "@litsx/typescript-session": "0.2.4",
     "@litsx/unocss": "0.0.0",
-    "@litsx/vite-plugin": "0.3.2"
+    "@litsx/vite-plugin": "0.3.2",
+    "@litsx/tailwind": "1.0.0-next.0"
   },
   "changesets": [
     "bright-kiwis-parse",
@@ -67,6 +68,7 @@
     "steady-suspended-refs",
     "strict-components-hooks",
     "style-contract-and-prop-ssr-fixes",
+    "tailwind-shadows-scope",
     "ten-windows-invite",
     "tidy-eslint-jsx-rules",
     "tidy-resources-hydrate"

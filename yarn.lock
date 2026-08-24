@@ -1592,7 +1592,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@litsx/compiler@npm:^1.0.0-next.0, @litsx/compiler@npm:^1.0.0-next.1, @litsx/compiler@npm:^1.0.0-next.2, @litsx/compiler@npm:^1.0.0-next.4, @litsx/compiler@workspace:packages/compiler":
+"@litsx/compiler@npm:^1.0.0-next.0, @litsx/compiler@npm:^1.0.0-next.1, @litsx/compiler@npm:^1.0.0-next.4, @litsx/compiler@npm:^1.0.0-next.5, @litsx/compiler@workspace:packages/compiler":
   version: 0.0.0-use.local
   resolution: "@litsx/compiler@workspace:packages/compiler"
   dependencies:
@@ -1686,7 +1686,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@litsx/tailwind@workspace:packages/tailwind"
   dependencies:
-    "@litsx/compiler": "npm:^1.0.0-next.4"
+    "@litsx/compiler": "npm:^1.0.0-next.5"
     postcss: "npm:^8.5.6"
   peerDependencies:
     "@litsx/vite-plugin": ^1.0.0-next.0
@@ -1718,7 +1718,7 @@ __metadata:
   resolution: "@litsx/unocss@workspace:packages/unocss"
   dependencies:
     "@babel/parser": "npm:^8.0.4"
-    "@litsx/compiler": "npm:^1.0.0-next.2"
+    "@litsx/compiler": "npm:^1.0.0-next.5"
   peerDependencies:
     "@litsx/vite-plugin": ^1.0.0-next.0
     unocss: ">=66"
