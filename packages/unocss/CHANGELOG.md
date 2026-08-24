@@ -1,5 +1,12 @@
 # @litsx/unocss
 
+## 1.0.0-next.2
+
+### Patch Changes
+
+- bda0de0: Isolate generated utilities per component: inject finite candidates from that component's JSX markup and explicit `Component.styles` guards, plus only safelist entries matching its non-finite class patterns. Deduplicate overlapping markup/guard candidates and keep sibling or unrelated module strings out of shadow roots.
+- 837ba4c: Route UnoCSS preflight layers independently to document and component outputs, keeping the `theme` layer global by default so custom properties inherit through nested shadow roots. Materialize `virtual:uno.css` from the shared LitSX token lifecycle in production and development. Remove the legacy public placeholder protocol so author strings containing `@unocss-placeholder` remain untouched.
+
 ## 1.0.0-next.1
 
 ### Patch Changes
