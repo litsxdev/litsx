@@ -1,5 +1,13 @@
 # @litsx/compiler
 
+## 1.0.0-next.6
+
+### Patch Changes
+
+- c9d0c29: Keep structural-hook import resolution independent from declaration-oriented compiler caches so custom hooks wrapping built-in structural hooks compile reliably in Vite and SSR sessions.
+- Updated dependencies [c9d0c29]
+  - @litsx/babel-preset-litsx@1.0.0-next.5
+
 ## 1.0.0-next.5
 
 ### Minor Changes

@@ -1,5 +1,15 @@
 # @litsx/tailwind
 
+## 1.0.0-next.2
+
+### Patch Changes
+
+- 5efc754: Resolve queried Tailwind preflight virtual modules during real Vite builds, and
+  cover parallel component, client/SSR, and multi-entry style isolation alongside
+  the equivalent shared-engine UnoCSS behavior.
+- Updated dependencies [c9d0c29]
+  - @litsx/compiler@1.0.0-next.6
+
 ## 1.0.0-next.1
 
 ### Minor Changes
