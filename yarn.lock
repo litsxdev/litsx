@@ -1512,7 +1512,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@litsx/babel-plugin-transform-jsx-html-template@npm:^1.0.0-next.4, @litsx/babel-plugin-transform-jsx-html-template@workspace:packages/babel-plugin-transform-jsx-html-template":
+"@litsx/babel-plugin-transform-jsx-html-template@npm:^1.0.0-next.4, @litsx/babel-plugin-transform-jsx-html-template@npm:^1.0.0-next.5, @litsx/babel-plugin-transform-jsx-html-template@workspace:packages/babel-plugin-transform-jsx-html-template":
   version: 0.0.0-use.local
   resolution: "@litsx/babel-plugin-transform-jsx-html-template@workspace:packages/babel-plugin-transform-jsx-html-template"
   dependencies:
@@ -1579,7 +1579,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@litsx/compiler@npm:^1.0.0-next.0, @litsx/compiler@npm:^1.0.0-next.1, @litsx/compiler@npm:^1.0.0-next.4, @litsx/compiler@npm:^1.0.0-next.5, @litsx/compiler@npm:^1.0.0-next.6, @litsx/compiler@workspace:packages/compiler":
+"@litsx/compiler@npm:^1.0.0-next.0, @litsx/compiler@npm:^1.0.0-next.1, @litsx/compiler@npm:^1.0.0-next.4, @litsx/compiler@npm:^1.0.0-next.7, @litsx/compiler@workspace:packages/compiler":
   version: 0.0.0-use.local
   resolution: "@litsx/compiler@workspace:packages/compiler"
   dependencies:
@@ -1588,7 +1588,7 @@ __metadata:
     "@babel/plugin-transform-typescript": "npm:^8.0.1"
     "@babel/types": "npm:^8.0.4"
     "@litsx/authoring": "npm:^1.0.0-next.3"
-    "@litsx/babel-plugin-transform-jsx-html-template": "npm:^1.0.0-next.4"
+    "@litsx/babel-plugin-transform-jsx-html-template": "npm:^1.0.0-next.5"
     "@litsx/babel-preset-litsx": "npm:^1.0.0-next.5"
     "@litsx/babel-preset-react-compat": "npm:^1.0.0-next.3"
     "@litsx/typescript-session": "npm:^1.0.0-next.0"
@@ -1673,7 +1673,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@litsx/tailwind@workspace:packages/tailwind"
   dependencies:
-    "@litsx/compiler": "npm:^1.0.0-next.6"
+    "@litsx/compiler": "npm:^1.0.0-next.7"
     postcss: "npm:^8.5.6"
   peerDependencies:
     "@litsx/vite-plugin": ^1.0.0-next.0
@@ -1705,7 +1705,7 @@ __metadata:
   resolution: "@litsx/unocss@workspace:packages/unocss"
   dependencies:
     "@babel/parser": "npm:^8.0.4"
-    "@litsx/compiler": "npm:^1.0.0-next.5"
+    "@litsx/compiler": "npm:^1.0.0-next.7"
   peerDependencies:
     "@litsx/vite-plugin": ^1.0.0-next.0
     unocss: ">=66"
