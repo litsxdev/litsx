@@ -304,6 +304,29 @@ describe("@litsx/babel-plugin-transform-jsx-html-template", () => {
     );
   });
 
+  it("uses the normalized opening name for PascalCase component closing tags", () => {
+    const source = `
+      const view = (
+        <QuartzCard heading="Preset">
+          <span>Demo</span>
+        </QuartzCard>
+      );
+    `;
+
+    const ast = parser.parse(source, { sourceType: "module" });
+    const { code } = transformFromAstSync(ast, source, {
+      configFile: false,
+      babelrc: false,
+      plugins: [plugin],
+    });
+
+    assert.match(
+      code,
+      /html`<quartz-card heading="Preset"><span>Demo<\/span><\/quartz-card>`/
+    );
+    assert.doesNotMatch(code, /<\/QuartzCard>/);
+  });
+
   it("keeps Lit-style prefixed attributes on kebab-case custom elements", () => {
     const source = `
       const view = (

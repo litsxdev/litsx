@@ -668,10 +668,14 @@ function detectElementsFromClass(classPath, programPath, availableMap, precomput
       hasRenderableTemplate = true;
 
       const quasi = path.node.quasi;
+      const authoredComponentTags = new Set(
+        quasi.__litsxAuthoredComponentTags || [],
+      );
 
       availableMap.forEach((entry, originalName) => {
         const candidateTagName = toKebab(originalName);
         const replaced = replaceInTemplate(quasi, originalName, candidateTagName);
+        const authoredComponentTag = authoredComponentTags.has(candidateTagName);
         const insertedRenderLight = maybeInsertSsrRenderLightTemplate(
           quasi,
           candidateTagName,
@@ -679,7 +683,7 @@ function detectElementsFromClass(classPath, programPath, availableMap, precomput
           entry,
           options,
         );
-        if (replaced || insertedRenderLight) {
+        if (replaced || authoredComponentTag || insertedRenderLight) {
           const tagName = componentNameToTagName(originalName);
           used.set(originalName, {
             ...entry,

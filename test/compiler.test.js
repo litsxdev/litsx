@@ -2486,6 +2486,24 @@ describe("@litsx/compiler", () => {
     }
   }, 20000);
 
+  it("uses the resolved custom-element name for both imported component tags", () => {
+    const result = transformLitsxSync(
+      [
+        'import { QuartzCard } from "./quartz-card";',
+        "export const CardStory = () => (",
+        '  <QuartzCard heading="Preset">',
+        "    <span>Demo content</span>",
+        "  </QuartzCard>",
+        ");",
+      ].join("\n"),
+      { filename: "/virtual/example.stories.tsx" },
+    );
+
+    assert.match(result.code, /<quartz-card heading="Preset">/);
+    assert.match(result.code, /<\/quartz-card>/);
+    assert.doesNotMatch(result.code, /<\/QuartzCard>/);
+  });
+
   it("does not warn for external PascalCase imports that carry LitSX component metadata", () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-external-pascal-compiled-"));
     const nodeModulesDir = path.join(tempDir, "node_modules", "fancy-litsx");

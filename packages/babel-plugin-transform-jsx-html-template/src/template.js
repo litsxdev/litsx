@@ -278,6 +278,32 @@ function isNoscriptElement(node) {
   return t.isJSXIdentifier(node?.openingElement?.name, { name: "noscript" });
 }
 
+function collectAuthoredComponentTagNames(node, tags = new Set()) {
+  if (!node || typeof node !== "object") {
+    return tags;
+  }
+
+  if (t.isJSXElement(node)) {
+    const { name, isComponent, isAuthoredComponentTag } = getTag(
+      node.openingElement,
+    );
+    if (!isComponent && isAuthoredComponentTag) {
+      tags.add(name);
+    }
+  }
+
+  for (const key of t.VISITOR_KEYS?.[node.type] ?? []) {
+    const value = node[key];
+    if (Array.isArray(value)) {
+      value.forEach((child) => collectAuthoredComponentTagNames(child, tags));
+    } else {
+      collectAuthoredComponentTagNames(value, tags);
+    }
+  }
+
+  return tags;
+}
+
 function collectNoscriptScopedElements(node) {
   const elements = new Map();
 
@@ -668,7 +694,7 @@ const transforms = {
     }
 
     if (!node.closingElement) return;
-    addString(strings, keys, `</${stringifyJsxName(node.closingElement.name)}>`, node.closingElement);
+    addString(strings, keys, `</${name}>`, node.closingElement);
   },
   JSXSpreadChild() {
     throw new Error("JSXSpreadChild is not supported");
@@ -688,6 +714,7 @@ const transforms = {
 };
 
 export function buildTemplate(node, opts) {
+  const authoredComponentTags = collectAuthoredComponentTagNames(node);
   const strings = [];
   const keys = [];
   transforms[node.type]({ node, strings, keys }, opts);
@@ -696,11 +723,15 @@ export function buildTemplate(node, opts) {
     strings.push(t.templateElement({ raw: "", cooked: "" }, false));
   }
 
-  return copySourceLocation(
+  const template = copySourceLocation(
     t.templateLiteral(strings, keys),
     node,
     node,
   );
+  if (authoredComponentTags.size > 0) {
+    template.__litsxAuthoredComponentTags = [...authoredComponentTags];
+  }
+  return template;
 }
 
 export function createTaggedTemplate(node, opts, tag = "html") {
