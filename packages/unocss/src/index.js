@@ -490,6 +490,16 @@ export function createUnoCssOutputPlugin(options = {}) {
               filename,
               ast: state.file.ast,
             });
+            const globalUtilities = collectUtilityClassCandidates(
+              programPath,
+              t,
+              staticResolver,
+              filename,
+              {
+                dynamicWildcard: UNO_CSS_DYNAMIC_WILDCARD,
+                excludeLitsxComponentClasses: true,
+              },
+            );
 
             const componentInfos = componentClasses.map((classPath) => ({
               classPath,
@@ -529,6 +539,25 @@ export function createUnoCssOutputPlugin(options = {}) {
                 ),
               ),
             );
+            if (
+              globalUtilities.candidates.length > 0 ||
+              globalUtilities.dynamicPatterns.length > 0 ||
+              globalUtilities.staticSources.length > 0
+            ) {
+              insertedNodes.push(
+                t.expressionStatement(
+                  t.unaryExpression(
+                    "void",
+                    t.stringLiteral(
+                      createUnoCssGuardMarker({
+                        ...globalUtilities,
+                        emit: "global",
+                      }),
+                    ),
+                  ),
+                ),
+              );
+            }
             if (!importedCssIdentifier && hasComponentStyles) {
               insertedNodes.push(
                 t.importDeclaration(

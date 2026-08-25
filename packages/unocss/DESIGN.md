@@ -101,6 +101,11 @@ This distinction prevents global extraction from leaking utilities between
 two components in the same file while still giving preflight generation all
 the information it needs.
 
+For mixed modules, the compiler emits a separate global guard for class
+candidates found outside compiled LitSX component classes. This lets Storybook
+and other free light-DOM templates contribute to document CSS without making
+the Vite adapter scan the whole module or leak component-owned candidates.
+
 ## Size measurement
 
 For the fixture utilities:

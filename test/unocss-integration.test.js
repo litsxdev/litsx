@@ -1214,6 +1214,33 @@ BadImport.styles = [BUTTON_SIZES];
     assert(chunk.map.sources.some((source) => source.endsWith("entry.tsx")));
   });
 
+  it("keeps free light DOM utilities global in mixed component modules", async () => {
+    const chunk = await buildFixture(
+      `
+export function InteractiveExample() {
+  return <button class="rounded-lg bg-red-500 p-4">Component</button>;
+}
+
+export const PaletteStory = {
+  render: () => (
+    <section class="grid gap-3 rounded-lg border border-blue-500 bg-green-500 p-6">
+      Story content
+    </section>
+  ),
+};
+`,
+      { preset: presetWind4() },
+    );
+
+    assert.match(chunk.code, /\.bg-red-500\{/);
+    assert.match(chunk.css, /\.gap-3\{/);
+    assert.match(chunk.css, /\.rounded-lg\{/);
+    assert.match(chunk.css, /\.border-blue-500\{/);
+    assert.match(chunk.css, /\.bg-green-500\{/);
+    assert.match(chunk.css, /\.p-6\{/);
+    assert.doesNotMatch(chunk.css, /\.bg-red-500\{/);
+  });
+
   it("emits one preflight module across independently compiled component modules", async () => {
     const chunk = await buildCrossModuleFixture();
 

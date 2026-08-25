@@ -60,7 +60,10 @@ export declare function collectUtilityClassCandidates(
   types: any,
   staticResolver: any,
   filename?: string,
-  options?: { dynamicWildcard?: string },
+  options?: {
+    dynamicWildcard?: string;
+    excludeLitsxComponentClasses?: boolean;
+  },
 ): UtilityClassCandidates;
 export declare function isSymbolFor(
   node: unknown,

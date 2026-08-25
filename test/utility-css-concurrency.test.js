@@ -131,6 +131,82 @@ async function buildTailwindEntries() {
   }
 }
 
+async function buildMixedTailwindModule() {
+  const directory = fs.mkdtempSync(
+    path.join(os.tmpdir(), "litsx-tailwind-mixed-"),
+  );
+  const sourceDirectory = path.join(directory, "src");
+  const entry = path.join(sourceDirectory, "mixed.tsx");
+  const tailwindEntry = path.join(sourceDirectory, "tailwind.css");
+  const tailwindCss = fileURLToPath(
+    import.meta.resolve("tailwindcss/index.css"),
+  );
+  fs.mkdirSync(sourceDirectory);
+  fs.writeFileSync(
+    tailwindEntry,
+    `@import "${tailwindCss}" source(none);\n`,
+    "utf8",
+  );
+  fs.writeFileSync(
+    entry,
+    `
+export function DemoCard() {
+  return <article class="bg-red-500 p-3">Component</article>;
+}
+
+export const DemoStory = {
+  render: () => (
+    <section class="grid gap-7 border-blue-500 bg-green-500 p-6">
+      Story
+    </section>
+  ),
+};
+`,
+    "utf8",
+  );
+
+  try {
+    const result = await build({
+      configFile: false,
+      root: directory,
+      logLevel: "silent",
+      plugins: litsxTailwind({
+        integration: { entry: tailwindEntry },
+      }),
+      build: {
+        write: false,
+        minify: false,
+        rollupOptions: {
+          input: entry,
+          external(id) {
+            return (
+              id === "lit" || id.startsWith("lit/") || id.startsWith("@litsx/")
+            );
+          },
+        },
+      },
+    });
+    const outputs = Array.isArray(result)
+      ? result.flatMap((item) => item.output)
+      : result.output;
+    return {
+      code: outputs
+        .filter((output) => output.type === "chunk")
+        .map((output) => output.code)
+        .join("\n"),
+      css: outputs
+        .filter(
+          (output) =>
+            output.type === "asset" && output.fileName.endsWith(".css"),
+        )
+        .map((output) => String(output.source))
+        .join("\n"),
+    };
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+}
+
 describe("utility CSS concurrency isolation", () => {
   it("keeps parallel Tailwind modules isolated in one shared context", async () => {
     const context = createTailwindContext();
@@ -244,5 +320,18 @@ describe("utility CSS concurrency isolation", () => {
     assert.match(blue, /\.bg-blue-500/u);
     assert.match(blue, /\.m-7/u);
     assert.doesNotMatch(blue, /\.bg-red-500|\.p-3/u);
+  });
+
+  it("materializes free light DOM utilities from a mixed Tailwind module globally", async () => {
+    const output = await buildMixedTailwindModule();
+
+    assert.match(output.code, /\.bg-red-500/u);
+    assert.match(output.code, /\.p-3/u);
+    assert.match(output.css, /\.grid/u);
+    assert.match(output.css, /\.gap-7/u);
+    assert.match(output.css, /\.border-blue-500/u);
+    assert.match(output.css, /\.bg-green-500/u);
+    assert.match(output.css, /\.p-6/u);
+    assert.doesNotMatch(output.css, /\.bg-red-500|\.p-3/u);
   });
 });

@@ -104,6 +104,25 @@ export function UiButton({ size = "sm" }) {
 For a shadow component, only these utilities are attached to its static Lit
 styles. A second component in the same source file does not receive them.
 
+Free JSX outside a LitSX component class belongs to the document instead. This
+includes Storybook `render` functions and other light-DOM templates. In a mixed
+module, LitSX emits those utilities globally while keeping component-owned
+utilities in the component's own shadow or light-DOM destination:
+
+```tsx
+export function UiCard() {
+  return <article class="bg-brand p-4">Component</article>;
+}
+
+export const CardStory = {
+  render: () => <section class="grid gap-3">Story</section>,
+};
+```
+
+Here `bg-brand` and `p-4` remain owned by `UiCard`; `grid` and `gap-3` are
+generated in the global stylesheet. A class used by both destinations is
+generated in both because each destination must be independently usable.
+
 Non-finite class construction needs a finite integration safelist:
 
 ```tsx
@@ -128,10 +147,7 @@ be reached from markup. Finite strings, arrays, objects and imported constants
 are consumed at build time; they are not emitted as CSS twice:
 
 ```tsx
-DynamicBox.styles = [
-  baseStyles,
-  { red: "bg-red-600", green: "bg-green-600" },
-];
+DynamicBox.styles = [baseStyles, { red: "bg-red-600", green: "bg-green-600" }];
 ```
 
 ## Shadow and light DOM
@@ -163,8 +179,8 @@ including Firefox ESR 140.
 
 ```ts
 litsxTailwind({
-  litsx: {},       // @litsx/vite-plugin options
-  tailwind: {},    // official @tailwindcss/vite options
+  litsx: {}, // @litsx/vite-plugin options
+  tailwind: {}, // official @tailwindcss/vite options
   integration: {
     entry: "./src/tailwind.css",
     sources: ["./src/**/*.{html,js,jsx,ts,tsx}"],
@@ -174,6 +190,7 @@ litsxTailwind({
 ```
 
 `sources` feeds only the inert shared infrastructure so lazy modules have the
-required Tailwind property registrations before they are imported. Exact
-component utilities still come exclusively from that component's markup,
-finite guards and matching safelist entries.
+required Tailwind property registrations before they are imported. It is not a
+fallback global utility scanner. Exact component utilities come exclusively
+from that component's markup, finite guards and matching safelist entries;
+utilities in free light-DOM JSX are routed separately to the global sheet.

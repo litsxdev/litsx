@@ -14,8 +14,9 @@ function compile(source, integration = {}) {
       integration,
     ),
   );
-  const keys = [...result.code.matchAll(/tailwind\/component\/([a-z0-9]+)\.css/gu)]
-    .map((match) => match[1]);
+  const keys = [
+    ...result.code.matchAll(/tailwind\/component\/([a-z0-9]+)\.css/gu),
+  ].map((match) => match[1]);
   return {
     code: result.code,
     payloads: [...new Set(keys)].map((key) => context.get(key)),
@@ -37,14 +38,68 @@ export function UiCounter() {
 }
 `);
     assert.strictEqual(payloads.length, 2);
-    const button = payloads.find((payload) => payload.candidates.includes("h-8"));
-    const counter = payloads.find((payload) => payload.candidates.includes("inline-flex"));
+    const button = payloads.find((payload) =>
+      payload.candidates.includes("h-8"),
+    );
+    const counter = payloads.find((payload) =>
+      payload.candidates.includes("inline-flex"),
+    );
     assert.deepStrictEqual(button.candidates, ["h-12", "h-8", "px-3", "px-6"]);
     assert(counter.candidates.includes("min-w-[var(--counter-width)]"));
     assert(!button.candidates.includes("inline-flex"));
     assert(!counter.candidates.includes("h-8"));
     assert.match(code, /unsafeCSS/);
     assert.match(code, /tailwind\/preflight\.css\?inline/);
+  });
+
+  it("keeps free light DOM utilities global in mixed component modules", () => {
+    const { payloads } = compile(`
+export function InteractiveExample() {
+  return <button class="rounded-lg bg-red-500 p-4">Component</button>;
+}
+
+export const PaletteStory = {
+  render: () => (
+    <section class="grid gap-3 rounded-lg border border-blue-500 bg-green-500 p-6">
+      Story content
+    </section>
+  ),
+};
+`);
+    assert.strictEqual(payloads.length, 2);
+    const component = payloads.find((payload) => payload.mode === "shadow");
+    const global = payloads.find((payload) => payload.mode === "global");
+    assert.deepStrictEqual(component.candidates, [
+      "bg-red-500",
+      "p-4",
+      "rounded-lg",
+    ]);
+    assert.deepStrictEqual(global.candidates, [
+      "bg-green-500",
+      "border",
+      "border-blue-500",
+      "gap-3",
+      "grid",
+      "p-6",
+      "rounded-lg",
+    ]);
+  });
+
+  it("routes only matching safelist entries for free dynamic light DOM JSX", () => {
+    const { payloads } = compile(
+      `
+export const DynamicStory = {
+  render: ({ color }) => <div class={\`bg-\${color}-600\`} />,
+};
+`,
+      { safelist: ["bg-red-600", "bg-green-600", "text-white", "p-8"] },
+    );
+    assert.strictEqual(payloads.length, 1);
+    assert.strictEqual(payloads[0].mode, "global");
+    assert.deepStrictEqual(payloads[0].candidates, [
+      "bg-green-600",
+      "bg-red-600",
+    ]);
   });
 
   it("uses only matching safelist entries for a dynamic component", () => {
@@ -59,8 +114,12 @@ export function StaticBox() {
 `,
       { safelist: ["bg-red-600", "bg-green-600", "text-white", "p-8"] },
     );
-    const dynamic = payloads.find((payload) => payload.candidates.includes("bg-red-600"));
-    const statik = payloads.find((payload) => payload.candidates.includes("p-4"));
+    const dynamic = payloads.find((payload) =>
+      payload.candidates.includes("bg-red-600"),
+    );
+    const statik = payloads.find((payload) =>
+      payload.candidates.includes("p-4"),
+    );
     assert.deepStrictEqual(dynamic.candidates, ["bg-green-600", "bg-red-600"]);
     assert.deepStrictEqual(statik.candidates, ["p-4"]);
   });

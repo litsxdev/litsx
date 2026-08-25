@@ -374,6 +374,12 @@ export function Button({ color }) {
 Button.styles = [colors];
 ```
 
+A module may contain both compiled LitSX components and free light-DOM
+templates, including Storybook `render` functions. The compiler records the
+free-template candidates as a separate global contribution: utilities used by
+the story reach `virtual:uno.css`, while utilities owned only by a shadow
+component remain in that component's `CSSResult`.
+
 A project `safelist` belongs to the shared token/preflight calculation and the
 global `virtual:uno.css` sheet when document output is enabled. For a
 non-finite component binding, LitSX also projects only matching safelist

@@ -267,6 +267,14 @@ export function collectUtilityClassCandidates(
   };
 
   classPath.traverse({
+    "ClassDeclaration|ClassExpression"(nestedClassPath) {
+      if (
+        options.excludeLitsxComponentClasses === true &&
+        isLitsxComponentClass(nestedClassPath, t)
+      ) {
+        nestedClassPath.skip();
+      }
+    },
     TaggedTemplateExpression(templatePath) {
       const tagPath = templatePath.get("tag");
       if (!tagPath.isIdentifier()) return;

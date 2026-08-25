@@ -316,7 +316,6 @@ export function createTailwindOutputPlugin(context, options = {}) {
                   classes.push(classPath);
               },
             });
-            if (classes.length === 0) return;
             const filename =
               state.filename || state.file.opts.filename || "unknown.tsx";
             const resolver = createStaticGuardResolver({
@@ -324,12 +323,46 @@ export function createTailwindOutputPlugin(context, options = {}) {
               filename,
               ast: state.file.ast,
             });
+            const globalUtilities = collectUtilityClassCandidates(
+              programPath,
+              t,
+              resolver,
+              filename,
+              { excludeLitsxComponentClasses: true },
+            );
+            const globalPatterns =
+              globalUtilities.dynamicPatterns.map(wildcardPattern);
+            const globalCandidates = new Set(globalUtilities.candidates);
+            for (const safeCandidate of context.safelist) {
+              if (
+                globalPatterns.some((pattern) => pattern.test(safeCandidate))
+              ) {
+                globalCandidates.add(safeCandidate);
+              }
+            }
+            if (classes.length === 0 && globalCandidates.size === 0) return;
             const imports = [
               t.importDeclaration(
                 [],
                 t.stringLiteral(TAILWIND_INFRASTRUCTURE_MODULE_ID),
               ),
             ];
+            if (globalCandidates.size > 0) {
+              const key = context.register(filename, "@global", {
+                candidates: [...globalCandidates].sort(),
+                dependencies: [...new Set(globalUtilities.dependencies)],
+                mode: "global",
+                scope: null,
+              });
+              imports.push(
+                t.importDeclaration(
+                  [],
+                  t.stringLiteral(
+                    `${TAILWIND_COMPONENT_MODULE_PREFIX}${key}.css`,
+                  ),
+                ),
+              );
+            }
             let unsafeCssIdentifier;
             let preflightResultIdentifier;
             const ensureUnsafeCss = () => {
