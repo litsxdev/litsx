@@ -110,7 +110,7 @@ export function createStructuralHookResolver(options = {}) {
   const moduleCache =
     compilationSession?.importedHookModuleAnalysisCache || new Map();
   const resolvedImportCache =
-    compilationSession?.resolvedImportCache || new Map();
+    compilationSession?.resolvedHookImportCache || new Map();
   const providedTypescriptSession =
     options?.typescriptSession?.projectSession ||
     options?.typescriptSession ||

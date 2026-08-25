@@ -1278,6 +1278,46 @@ describe("@litsx/compiler", () => {
     }
   }, 20000);
 
+  it("isolates structural hook resolution from declaration-oriented import caches", () => {
+    const session = createLitsxCompilationSession({
+      transformOptions: { jsxTemplate: false },
+    });
+    const filename = path.join(
+      process.cwd(),
+      "test",
+      "fixtures",
+      "structural-cache-consumer.tsx",
+    );
+    const cacheKey = `${filename.replaceAll("\\", "/")}::@litsx/core`;
+    const coreDeclaration = path
+      .join(process.cwd(), "packages", "core", "src", "index.d.ts")
+      .replaceAll("\\", "/");
+    session.resolvedImportCache.set(cacheKey, coreDeclaration);
+
+    try {
+      const result = session.transformSync(
+        [
+          'import { useElementInternals } from "@litsx/core";',
+          "export function useCustomInternals() {",
+          "  return useElementInternals();",
+          "}",
+        ].join("\n"),
+        { filename },
+      );
+
+      assert.match(
+        result.code,
+        /readStructuralHook\(useElementInternals, \[\]\)/,
+      );
+      assert.match(
+        result.code,
+        /useCustomInternals\[Symbol\.for\("litsx\.structuralHooks"\)\]/,
+      );
+    } finally {
+      session.dispose();
+    }
+  }, 20000);
+
   it("strips top-level TypeScript declarations from compiled .tsx output", () => {
     const source = [
       "interface ButtonProps {",
@@ -3124,10 +3164,12 @@ describe("@litsx/compiler", () => {
 
     session.sourceFeaturesCache.set("/virtual/a:src", {});
     session.authoredInputCache.set("/virtual/a:src", {});
+    session.resolvedHookImportCache.set("/virtual/a::dependency", "/dependency.js");
     session.invalidate();
 
     assert.strictEqual(session.sourceFeaturesCache.size, 0);
     assert.strictEqual(session.authoredInputCache.size, 0);
+    assert.strictEqual(session.resolvedHookImportCache.size, 0);
     assert.deepStrictEqual(invalidateSpy.mock.calls[0], [{ host: true }]);
 
     session.dispose();

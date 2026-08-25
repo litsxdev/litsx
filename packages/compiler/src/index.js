@@ -469,6 +469,7 @@ export function createCompilerCaches() {
     importedModuleAnalyses: new Map(),
     importedHookModuleAnalyses: new Map(),
     resolvedImports: new Map(),
+    resolvedHookImports: new Map(),
     presetPluginsByOptions: {
       default: new Map(),
       byOptions: new WeakMap(),
@@ -597,6 +598,7 @@ export function createLitsxCompilationSession(sessionOptions = {}) {
     importedModuleAnalysisCache: caches.importedModuleAnalyses,
     importedHookModuleAnalysisCache: caches.importedHookModuleAnalyses,
     resolvedImportCache: caches.resolvedImports,
+    resolvedHookImportCache: caches.resolvedHookImports,
     transform(source, options = {}) {
       return transformLitsx(source, {
         ...this.transformOptions,
@@ -620,6 +622,7 @@ export function createLitsxCompilationSession(sessionOptions = {}) {
         this.importedModuleAnalysisCache.clear();
         this.importedHookModuleAnalysisCache.clear();
         this.resolvedImportCache.clear();
+        this.resolvedHookImportCache.clear();
         this.typescriptSession?.invalidate?.({ host: true });
         return;
       }
@@ -641,6 +644,11 @@ export function createLitsxCompilationSession(sessionOptions = {}) {
         for (const key of [...this.resolvedImportCache.keys()]) {
           if (key.startsWith(`${normalizedFile}::`)) {
             this.resolvedImportCache.delete(key);
+          }
+        }
+        for (const key of [...this.resolvedHookImportCache.keys()]) {
+          if (key.startsWith(`${normalizedFile}::`)) {
+            this.resolvedHookImportCache.delete(key);
           }
         }
         if (/\.[cm]?[jt]sx?$/.test(file)) {

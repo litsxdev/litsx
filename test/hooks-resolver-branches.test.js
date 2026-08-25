@@ -145,7 +145,10 @@ describe("imported hook resolver branch behavior", () => {
   });
 
   it("honors path mappings, index resolution, TypeScript syntax, and shared caches", () => {
-    const session = { importedHookModuleAnalysisCache: new Map(), resolvedImportCache: new Map() };
+    const session = {
+      importedHookModuleAnalysisCache: new Map(),
+      resolvedHookImportCache: new Map(),
+    };
     const resolver = createStructuralHookResolver({
       __litsxCompilationSession: session,
       compilerOptions: {
@@ -168,6 +171,6 @@ describe("imported hook resolver branch behavior", () => {
     assert.equal(resolver({ filename: "/app/main.ts", source: "exact", importedName: "useTyped" }).kind, "structural-hook");
     assert.equal(resolver({ filename: "/app/main.ts", source: "broken/hooks", importedName: "useTyped" }), false);
     assert.ok(session.importedHookModuleAnalysisCache.size > 0);
-    assert.ok(session.resolvedImportCache.size > 0);
+    assert.ok(session.resolvedHookImportCache.size > 0);
   });
 });
