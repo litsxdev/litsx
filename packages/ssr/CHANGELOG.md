@@ -1,5 +1,15 @@
 # @litsx/ssr
 
+## 1.0.0-next.3
+
+### Patch Changes
+
+- d44536e: Render empty registered light-DOM roots during SSR so hydration adopts their
+  existing child nodes instead of creating the light tree on the client.
+- Updated dependencies [d44536e]
+  - @litsx/core@1.0.0-next.5
+  - @litsx/compiler@1.0.0-next.8
+
 ## 1.0.0-next.2
 
 ### Minor Changes

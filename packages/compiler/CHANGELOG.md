@@ -1,5 +1,21 @@
 # @litsx/compiler
 
+## 1.0.0-next.8
+
+### Patch Changes
+
+- d44536e: Add native inline SVG to the public LitSX JSX contract. Type SVG elements and
+  attributes without a permissive global index, serialize JSX-friendly SVG
+  attribute aliases, preserve SVG namespaces for dynamic fragments and spreads,
+  and return descendants of `foreignObject` to HTML across client rendering, SSR,
+  and hydration. React compatibility also lowers React's full SVG camelCase alias
+  set, namespaced XLink/XML attributes, `className`, events, and spread props onto
+  the same SVG-safe runtime contract.
+- Updated dependencies [d44536e]
+  - @litsx/authoring@1.0.0-next.4
+  - @litsx/babel-plugin-transform-jsx-html-template@1.0.0-next.6
+  - @litsx/babel-preset-litsx@1.0.0-next.6
+
 ## 1.0.0-next.7
 
 ### Patch Changes

@@ -1,6 +1,6 @@
 {
   "name": "@litsx/ssr",
-  "version": "1.0.0-next.2",
+  "version": "1.0.0-next.3",
   "description": "Scoped SSR runtime for LitSX",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -63,8 +63,8 @@
     "@lit-labs/ssr": "^4.0.0",
     "@lit-labs/ssr-client": "^1.1.7",
     "@lit-labs/ssr-dom-shim": "^1.6.0",
-    "@litsx/compiler": "^1.0.0-next.1",
-    "@litsx/core": "^1.0.0-next.1",
+    "@litsx/compiler": "^1.0.0-next.8",
+    "@litsx/core": "^1.0.0-next.5",
     "@litsx/vite-plugin": "^1.0.0-next.0"
   },
   "devDependencies": {
