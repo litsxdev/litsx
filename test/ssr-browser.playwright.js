@@ -10,6 +10,7 @@ import {
   litsxUnoCss,
   withUnoCssViteCompiler,
 } from "../packages/unocss/src/vite.js";
+import { litsxTailwind } from "../packages/tailwind/src/vite.js";
 import { html } from "lit";
 import { presetWind4 } from "unocss";
 
@@ -1775,6 +1776,171 @@ window.__litsxLateCardReady = true;
     expect(result.themeProbe).toBe("quartz-theme-still-present");
     expect(result.viteStyleIds.filter((id) => id?.endsWith("/src/theme.css"))).toHaveLength(1);
     expect(result.viteStyleIds.filter((id) => id === "/__litsx_unocss_global.css")).toHaveLength(1);
+  } finally {
+    await server.close();
+    await fs.rm(tempDir, { recursive: true, force: true });
+  }
+});
+
+test("preserves ordinary CSS while late Tailwind modules materialize utilities", async ({
+  page,
+}) => {
+  const tempRoot = path.join(repoRoot, "test-results");
+  await fs.mkdir(tempRoot, { recursive: true });
+  const tempDir = await fs.mkdtemp(
+    path.join(tempRoot, "litsx-tailwind-serve-order-"),
+  );
+  const srcDir = path.join(tempDir, "src");
+  await fs.mkdir(srcDir, { recursive: true });
+  await fs.writeFile(
+    path.join(tempDir, "index.html"),
+    `<main id="app"></main><script type="module" src="/src/main.js"></script>`,
+  );
+  await fs.writeFile(
+    path.join(srcDir, "tailwind.css"),
+    `@import "tailwindcss" source(none);`,
+  );
+  await fs.writeFile(
+    path.join(srcDir, "theme.css"),
+    `:root { --quartz-tailwind-probe: quartz-tailwind-still-present; }`,
+  );
+  await fs.writeFile(
+    path.join(srcDir, "early.tsx"),
+    `
+export function EarlyTailwindCard() {
+  return <article id="early-tailwind-card" class="p-4">Early</article>;
+}
+`,
+  );
+  await fs.writeFile(
+    path.join(srcDir, "late.tsx"),
+    `
+export function LateTailwindCard() {
+  return <article id="late-tailwind-card" class="rounded-lg bg-blue-500 p-6">Late</article>;
+}
+
+export function LateTailwindGlobalCard() {
+  return <article id="late-tailwind-global-card" class="rounded-xl bg-green-500 p-8">Late global</article>;
+}
+LateTailwindGlobalCard.lightDom = true;
+`,
+  );
+  await fs.writeFile(
+    path.join(srcDir, "main.js"),
+    `
+import "./theme.css";
+import { EarlyTailwindCard } from "./early.tsx";
+
+customElements.define("early-tailwind-card", EarlyTailwindCard);
+const earlyCard = document.createElement("early-tailwind-card");
+document.querySelector("#app").append(earlyCard);
+await earlyCard.updateComplete;
+await new Promise((resolve) => requestAnimationFrame(resolve));
+window.__litsxInitialTailwindThemeProbe = getComputedStyle(document.documentElement)
+  .getPropertyValue("--quartz-tailwind-probe")
+  .trim();
+const { LateTailwindCard, LateTailwindGlobalCard } = await import("./late.tsx");
+customElements.define("late-tailwind-card", LateTailwindCard);
+customElements.define("late-tailwind-global-card", LateTailwindGlobalCard);
+const lateCard = document.createElement("late-tailwind-card");
+const lateGlobalCard = document.createElement("late-tailwind-global-card");
+document.querySelector("#app").append(lateCard, lateGlobalCard);
+await lateCard.updateComplete;
+await lateGlobalCard.updateComplete;
+await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+window.__litsxLateTailwindReady = true;
+`,
+  );
+
+  const server = await createServer({
+    configFile: false,
+    root: tempDir,
+    cacheDir: path.join(tempDir, ".vite-cache"),
+    logLevel: "silent",
+    server: {
+      host: "127.0.0.1",
+      strictPort: false,
+    },
+    resolve: {
+      alias: [
+        {
+          find: /^lit$/,
+          replacement: path.resolve(repoRoot, "node_modules/lit/index.js"),
+        },
+        {
+          find: "@litsx/core/elements",
+          replacement: path.resolve(
+            repoRoot,
+            "packages/core/src/elements/index.js",
+          ),
+        },
+        {
+          find: "@litsx/core",
+          replacement: path.resolve(repoRoot, "packages/core/src/index.js"),
+        },
+      ],
+    },
+    plugins: litsxTailwind({
+      litsx: { lightDomStyles: "global" },
+      integration: {
+        entry: "./src/tailwind.css",
+        sources: [],
+      },
+    }),
+  });
+  await server.listen();
+
+  try {
+    await page.goto(server.resolvedUrls.local[0]);
+    await page.waitForFunction(() => window.__litsxLateTailwindReady === true);
+    await page.waitForFunction(
+      () =>
+        getComputedStyle(
+          document.querySelector("#late-tailwind-global-card"),
+        ).padding === "32px",
+    );
+    const result = await page.evaluate(() => {
+      const earlyHost = document.querySelector("early-tailwind-card");
+      const lateHost = document.querySelector("late-tailwind-card");
+      const earlyCard = earlyHost?.shadowRoot?.querySelector(
+        "#early-tailwind-card",
+      );
+      const lateCard = lateHost?.shadowRoot?.querySelector(
+        "#late-tailwind-card",
+      );
+      const lateGlobalCard = document.querySelector(
+        "#late-tailwind-global-card",
+      );
+      return {
+        initialThemeProbe: window.__litsxInitialTailwindThemeProbe,
+        themeProbe: getComputedStyle(document.documentElement)
+          .getPropertyValue("--quartz-tailwind-probe")
+          .trim(),
+        earlyPadding: getComputedStyle(earlyCard).padding,
+        latePadding: getComputedStyle(lateCard).padding,
+        lateRadius: getComputedStyle(lateCard).borderRadius,
+        globalPadding: getComputedStyle(lateGlobalCard).padding,
+        globalRadius: getComputedStyle(lateGlobalCard).borderRadius,
+        viteStyleIds: [...document.querySelectorAll("style[data-vite-dev-id]")]
+          .map((style) => style.getAttribute("data-vite-dev-id")),
+      };
+    });
+
+    expect(result.initialThemeProbe).toBe("quartz-tailwind-still-present");
+    expect(result.themeProbe).toBe("quartz-tailwind-still-present");
+    expect(result.earlyPadding).toBe("16px");
+    expect(result.latePadding).toBe("24px");
+    expect(result.lateRadius).not.toBe("0px");
+    expect(result.globalPadding).toBe("32px");
+    expect(result.globalRadius).not.toBe("0px");
+    expect(
+      result.viteStyleIds.filter((id) => id?.endsWith("/src/theme.css")),
+    ).toHaveLength(1);
+    const tailwindStyleIds = result.viteStyleIds.filter((id) =>
+      id?.includes("@litsx/tailwind/"),
+    );
+    expect(tailwindStyleIds.length).toBeGreaterThan(0);
+    expect(new Set(tailwindStyleIds).size).toBe(tailwindStyleIds.length);
   } finally {
     await server.close();
     await fs.rm(tempDir, { recursive: true, force: true });
