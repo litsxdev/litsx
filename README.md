@@ -173,7 +173,8 @@ React behavior rather than silently approximating them.
 `@litsx/ssr` renders LitSX component trees without globally registering scoped
 children. For most applications, `renderDocument(...)` is the server entry
 point and `@litsx/ssr/hydration` reconnects the existing server DOM in the
-browser.
+browser. Vite-backed SSR development is an opt-in adapter at
+`@litsx/vite-plugin/ssr`; the SSR package itself has no Vite dependency.
 
 ```tsx
 import { renderDocument } from "@litsx/ssr";

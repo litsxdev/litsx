@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { expect, test } from "@playwright/test";
 import { createServer } from "vite";
-import { createSsrDevServer } from "../packages/ssr/src/index.js";
+import { createSsrDevServer } from "../packages/vite-plugin/src/ssr.js";
 import { LITSX_HYDRATION_PAYLOAD_PROPERTY } from "../packages/ssr/src/hydration.js";
 import { __litsxNoscript } from "../packages/core/src/index.js";
 import {

@@ -125,7 +125,7 @@ Includes:
 
 - document-first SSR with `@litsx/ssr`
 - browser hydration with `@litsx/ssr/hydration`
-- a local SSR dev server entry in `dev.mjs`
+- a Vite-owned SSR dev server entry using `@litsx/vite-plugin/ssr` in `dev.mjs`
 - a static document render entry in `render.mjs`
 - a minimal authored LitSX SSR component under `src/`
 
@@ -197,6 +197,7 @@ Use `create-litsx-app` when you want:
 If you are integrating LitSX into an existing toolchain, use:
 
 - [`@litsx/vite-plugin`](../vite-plugin/README.md) for Vite
+- [`@litsx/vite-plugin/ssr`](../vite-plugin/README.md#ssr-development-adapter) for Vite-backed SSR development
 - [`@litsx/compiler`](../compiler/README.md) for lower-level programmatic compilation
 
 Treat individual transform packages as advanced integration pieces rather than as the baseline app setup.

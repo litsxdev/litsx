@@ -1643,14 +1643,9 @@ __metadata:
     "@lit-labs/ssr-dom-shim": "npm:^1.6.0"
     "@litsx/compiler": "npm:^1.0.0-next.9"
     "@litsx/core": "npm:^1.0.0-next.6"
-    "@litsx/vite-plugin": "npm:^1.0.0-next.1"
     lit: "npm:^3.3.3"
   peerDependencies:
     lit: ">=3"
-    vite: ^7.3.2 || ^8.0.0
-  peerDependenciesMeta:
-    vite:
-      optional: true
   languageName: unknown
   linkType: soft
 
@@ -1719,13 +1714,17 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@litsx/vite-plugin@npm:^1.0.0-next.0, @litsx/vite-plugin@npm:^1.0.0-next.1, @litsx/vite-plugin@workspace:packages/vite-plugin":
+"@litsx/vite-plugin@npm:^1.0.0-next.0, @litsx/vite-plugin@workspace:packages/vite-plugin":
   version: 0.0.0-use.local
   resolution: "@litsx/vite-plugin@workspace:packages/vite-plugin"
   dependencies:
     "@litsx/compiler": "npm:^1.0.0-next.9"
   peerDependencies:
+    "@litsx/ssr": ^1.0.0-next.4
     vite: ^7.3.2 || ^8.0.0
+  peerDependenciesMeta:
+    "@litsx/ssr":
+      optional: true
   languageName: unknown
   linkType: soft
 

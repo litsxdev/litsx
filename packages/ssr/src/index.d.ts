@@ -470,17 +470,27 @@ export interface LitsxSsrMaxSuspensePassesError extends Error {
   maxPasses: number;
 }
 
-/**
- * Values passed to `createSsrDevServer(...).render(...)`.
- */
-export interface LitsxSsrDevRenderContext {
+/** Values passed to an authored SSR entry's `render(...)` callback. */
+export interface LitsxSsrAuthoredRenderContext {
   html: typeof import("lit").html;
   clientEntry: string | null;
   root: string;
 }
 
+/** @deprecated Use `LitsxSsrAuthoredRenderContext`. */
+export type LitsxSsrDevRenderContext = LitsxSsrAuthoredRenderContext;
+
 export type LitsxSsrModuleLoader = (
   specifier: string,
+) => Promise<Record<string, unknown>>;
+
+/**
+ * Integration hook for loading one already-resolved authored server module.
+ * Bundler adapters can provide their loader without exposing a
+ * bundler-specific server object to `@litsx/ssr`.
+ */
+export type LitsxSsrAuthoredModuleLoader = (
+  resolvedPath: string,
 ) => Promise<Record<string, unknown>>;
 
 export type LitsxSsrElementResolver =
@@ -492,7 +502,7 @@ export type LitsxSsrElementRegistry = Record<string, LitsxSsrElementResolver>;
 
 export interface LitsxSsrAuthoredDocumentOptions extends Omit<LitsxSsrDocumentOptions, "template" | "elements"> {
   /**
-   * Filesystem root passed to Vite and used to resolve authored entries.
+   * Filesystem root used to resolve authored entries.
    */
   root?: string;
 
@@ -502,13 +512,19 @@ export interface LitsxSsrAuthoredDocumentOptions extends Omit<LitsxSsrDocumentOp
   clientEntry?: string;
 
   /**
-   * Optional HTML template file used by the dev server document shell.
+   * Optional integration loader for resolved authored server modules.
+   * When omitted, LitSX compiles modules through `@litsx/compiler`.
+   */
+  loadModule?: LitsxSsrAuthoredModuleLoader;
+
+  /**
+   * Optional HTML template file used by the authored document shell.
    *
    * The file must contain `<!--app-html-->`. LitSX also recognizes
    * `<!--app-head-->`, `<!--app-bootstrap-->`, and `<!--app-title-->`.
    *
-   * When omitted, `createSsrDevServer(...)` falls back to the same document
-   * shell behavior as `renderDocument(...)`.
+   * When omitted, authored document rendering uses the standard
+   * `renderDocument(...)` shell.
    */
   template?:
     | string
@@ -523,9 +539,9 @@ export interface LitsxSsrAuthoredDocumentOptions extends Omit<LitsxSsrDocumentOp
    * `loader(...)` helper.
    *
    * `loader(specifier)` resolves the authored module relative to `root` and
-   * returns the SSR-ready module namespace for that file. In dev it resolves
-   * through Vite SSR. Outside the dev server it compiles the authored module
-   * to a temporary SSR module before importing it.
+   * returns the SSR-ready module namespace for that file. A configured
+   * `loadModule(...)` integration owns loading; otherwise LitSX compiles the
+   * authored module to a temporary SSR module before importing it.
    */
   elements?:
     | LitsxSsrElementRegistry
@@ -538,7 +554,7 @@ export interface LitsxSsrAuthoredDocumentOptions extends Omit<LitsxSsrDocumentOp
    * browser entry path when one is configured, otherwise `null`. `root` is
    * the filesystem root used to resolve authored modules and templates.
    */
-  render(context: LitsxSsrDevRenderContext): unknown | Promise<unknown>;
+  render(context: LitsxSsrAuthoredRenderContext): unknown | Promise<unknown>;
 }
 
 export interface LitsxAuthoredSsrEntry<T> {
@@ -561,6 +577,12 @@ export interface LitsxSsrAuthoredRenderOptions extends Omit<LitsxSsrRenderOption
   clientEntry?: string;
 
   /**
+   * Optional integration loader for resolved authored server modules.
+   * When omitted, LitSX compiles modules through `@litsx/compiler`.
+   */
+  loadModule?: LitsxSsrAuthoredModuleLoader;
+
+  /**
    * Optional scoped element resolvers keyed by custom element tag name.
    *
    * This follows the same contract as `renderDocument(...)`: either pass a
@@ -575,7 +597,7 @@ export interface LitsxSsrAuthoredRenderOptions extends Omit<LitsxSsrRenderOption
    * Produce the SSR root value using Lit's `html` helper plus any authored
    * elements resolved through `elements(...)`.
    */
-  render(context: LitsxSsrDevRenderContext): unknown | Promise<unknown>;
+  render(context: LitsxSsrAuthoredRenderContext): unknown | Promise<unknown>;
 }
 
 export declare function createEntry<T extends object>(options: T): T & LitsxAuthoredSsrEntry<T>;
@@ -600,68 +622,32 @@ export declare function createDocumentContext(
   options?: LitsxSsrDocumentOptions,
 ): LitsxSsrDocumentTemplateContext;
 
+export interface LitsxSsrConsoleMessage {
+  method: string;
+  args: unknown[];
+}
+
+/**
+ * Capture console calls for one asynchronous SSR operation without suppressing
+ * their normal server output. Intended for development-tool adapters.
+ */
+export declare function captureCurrentSsrConsole<T>(
+  run: () => T | Promise<T>,
+  messages?: LitsxSsrConsoleMessage[],
+): Promise<{ result: T; messages: LitsxSsrConsoleMessage[] }>;
+
+/** Development-tool document helpers used by server adapters. */
+export declare function appendToDocumentBody(document: string, content: string): string;
+export declare function createSsrDevErrorDocument(error: unknown): string;
+export declare function renderSsrDevConsoleDiagnostics(
+  messages: LitsxSsrConsoleMessage[],
+): string;
+
 export declare class LitsxSsrMaxSuspensePassesError extends Error {
   constructor(maxPasses: number);
   name: "LitsxSsrMaxSuspensePassesError";
   code: typeof LITSX_SSR_MAX_SUSPENSE_PASSES_ERROR;
   maxPasses: number;
-}
-
-export interface LitsxSsrDevServerOptions extends LitsxSsrAuthoredDocumentOptions {
-  /**
-   * Host used by the Vite dev server.
-   */
-  host?: string;
-
-  /**
-   * Preferred port used by the Vite dev server.
-   */
-  port?: number;
-
-  /**
-   * Forwarded to Vite `server.strictPort`.
-   */
-  strictPort?: boolean;
-
-  /**
-   * Forwarded to the underlying Vite `logLevel`.
-   */
-  logLevel?: string;
-
-  /**
-   * Extra Vite `server` options merged into the created dev server.
-   */
-  server?: Record<string, unknown>;
-
-  /**
-   * Extra top-level Vite options merged into the created dev server config.
-   */
-  vite?: Record<string, unknown>;
-
-  /**
-   * Extra `@litsx/vite-plugin` options merged into the LitSX plugin instance.
-   */
-  litsx?: Record<string, unknown>;
-
-  /**
-   * Extra Vite plugins appended after the LitSX plugin.
-   */
-  plugins?: unknown[];
-}
-
-interface LitsxSsrInternalAuthoredDocumentOptions extends LitsxSsrAuthoredDocumentOptions {
-  /**
-   * Optional location for the compiled temporary SSR module.
-   */
-  compiledServerPath?: string;
-
-  /**
-   * Optional Vite SSR server used to resolve authored modules through Vite's
-   * SSR pipeline instead of compiling them directly.
-   *
-   * This is primarily used internally by `createSsrDevServer(...)`.
-   */
-  viteServer?: import("vite").ViteDevServer | undefined;
 }
 
 export interface LitsxSsrStreamResult {
@@ -796,35 +782,6 @@ export declare function renderDocument(
 export declare function renderDocument(
   options: LitsxSsrAuthoredDocumentOptions & LitsxAuthoredSsrEntry<LitsxSsrAuthoredDocumentOptions>,
 ): Promise<LitsxSsrDocumentResult>;
-
-/**
- * Create a Vite-backed development server for authored LitSX SSR entrypoints.
- *
- * @usage Use this for local SSR development when authored `.tsx` modules are
- * resolved through `elements(loader)` and you want Vite to serve the hydrated page.
- * @param options Dev-server, document-template, authored entry, and render callback configuration.
- * @returns A configured Vite dev server instance that still needs `listen()`.
- * @example
- * const server = await createSsrDevServer({
- *   root: process.cwd(),
- *   template: "./index.html",
- *   clientEntry: "./src/main.js",
- *   elements(loader) {
- *     return {
- *       "app-root": async () =>
- *         (await loader("./src/App.tsx")).AppRoot,
- *     };
- *   },
- *   render({ html }) {
- *     return html`<app-root></app-root>`;
- *   },
- * });
- *
- * await server.listen();
- */
-export declare function createSsrDevServer(
-  options: LitsxSsrDevServerOptions,
-): Promise<import("vite").ViteDevServer>;
 
 /**
  * Render a Lit or LitSX value to a Web Stream using the scoped LitSX SSR runtime.

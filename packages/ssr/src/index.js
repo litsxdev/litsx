@@ -396,7 +396,7 @@ function injectMarkupBeforeCloseTag(document, closeTag, markup) {
 function renderDevTemplateDocument(templateSource, context) {
   if (!templateSource.includes(DEV_TEMPLATE_HTML_MARKER)) {
     throw new TypeError(
-      `createSsrDevServer(...) HTML templates must contain ${DEV_TEMPLATE_HTML_MARKER}.`,
+      `Authored SSR HTML templates must contain ${DEV_TEMPLATE_HTML_MARKER}.`,
     );
   }
 
@@ -429,6 +429,7 @@ function renderDevTemplateDocument(templateSource, context) {
 
 export {
   appendToDocumentBody,
+  captureCurrentSsrConsole,
   createDefaultDocument,
   createDocumentResult,
   createDocumentTemplateContext,
@@ -494,9 +495,18 @@ async function loadCompiledServerModule(compiledPath) {
   return import(`${pathToFileURL(compiledPath).href}?t=${Date.now()}`);
 }
 
-async function loadServerModuleFromVite(viteServer, root, entryPath) {
-  const moduleId = toPublicPath(root, entryPath) ?? entryPath;
-  return viteServer.ssrLoadModule(moduleId);
+async function loadAuthoredServerModule(options, root, specifier) {
+  const resolvedEntryPath = resolveFsPath(root, specifier);
+  if (typeof options.loadModule === "function") {
+    return options.loadModule(resolvedEntryPath);
+  }
+
+  const compiledServerPath = resolveFsPath(
+    root,
+    createServerOutputPath(root, resolvedEntryPath),
+  );
+  await compileServerEntry(resolvedEntryPath, compiledServerPath);
+  return loadCompiledServerModule(compiledServerPath);
 }
 
 function createDefaultAssetResolver(root, customResolver = null) {
@@ -721,17 +731,7 @@ async function renderAuthoredDocument(options = {}) {
 
   await ensureSsrCssHook();
   async function importModule(specifier) {
-    const resolvedEntryPath = resolveFsPath(root, specifier);
-    if (options.viteServer) {
-      return loadServerModuleFromVite(options.viteServer, root, resolvedEntryPath);
-    }
-
-    const compiledServerPath = resolveFsPath(
-      root,
-      createServerOutputPath(root, resolvedEntryPath),
-    );
-    await compileServerEntry(resolvedEntryPath, compiledServerPath);
-    return loadCompiledServerModule(compiledServerPath);
+    return loadAuthoredServerModule(options, root, specifier);
   }
 
   const [{ html }, resolvedElementRegistry] = await Promise.all([
@@ -802,17 +802,7 @@ async function resolveAuthoredRenderInput(options = {}) {
 
   await ensureSsrCssHook();
   async function importModule(specifier) {
-    const resolvedEntryPath = resolveFsPath(root, specifier);
-    if (options.viteServer) {
-      return loadServerModuleFromVite(options.viteServer, root, resolvedEntryPath);
-    }
-
-    const compiledServerPath = resolveFsPath(
-      root,
-      createServerOutputPath(root, resolvedEntryPath),
-    );
-    await compileServerEntry(resolvedEntryPath, compiledServerPath);
-    return loadCompiledServerModule(compiledServerPath);
+    return loadAuthoredServerModule(options, root, specifier);
   }
 
   const [{ html }, resolvedElementRegistry] = await Promise.all([
@@ -1128,96 +1118,4 @@ export async function renderToStream(value, options = {}) {
     stream,
     allReady,
   };
-}
-
-/**
- * Create a Vite-backed local development server for authored LitSX SSR.
- *
- * The server:
- * - compiles the authored server entry for SSR
- * - evaluates it through the scoped LitSX SSR runtime
- * - renders a full HTML document through `renderDocument(...)`
- * - serves the result through Vite with LitSX client sourcemaps enabled
- *
- * This is intended for local development and examples, not production builds.
- * Callers provide a `render(...)` callback that returns the SSR root template,
- * and can optionally use `elements(loader)` to resolve authored LitSX elements
- * through the same SSR-aware pipeline as the main server entry.
- */
-export async function createSsrDevServer(options = {}) {
-  const { createServer } = await import("vite");
-  const { createLitsxViteAssetResolver, litsx } = await import("@litsx/vite-plugin");
-  const root = resolveFsPath(process.cwd(), options.root ?? process.cwd());
-  const viteServer = await createServer({
-    root,
-    appType: "custom",
-    logLevel: options.logLevel ?? "info",
-    server: {
-      host: options.host ?? "127.0.0.1",
-      port: options.port ?? 5177,
-      strictPort: options.strictPort ?? false,
-      ...(options.server || {}),
-    },
-    plugins: [
-      litsx({
-        ssr: true,
-        sourceMaps: true,
-        ...(options.litsx || {}),
-      }),
-      ...((options.plugins || [])),
-    ],
-    ...(options.vite || {}),
-  });
-
-  viteServer.middlewares.use(async (req, res) => {
-    const requestUrl = new URL(req.url ?? "/", "http://127.0.0.1");
-    if (
-      (req.method !== "GET" && req.method !== "HEAD") ||
-      (requestUrl.pathname !== "/" && requestUrl.pathname !== "/index.html")
-    ) {
-      next();
-      return;
-    }
-
-    const messages = [];
-    try {
-      const assetResolver = options.assetResolver ?? createLitsxViteAssetResolver({
-        root,
-        base: viteServer.config.base,
-      });
-      const { result } = await captureCurrentSsrConsole(
-        () => renderAuthoredDocument({
-          ...options,
-          root,
-          viteServer,
-          assetResolver,
-        }),
-        messages,
-      );
-      const document = await viteServer.transformIndexHtml(
-        requestUrl.pathname,
-        appendToDocumentBody(result.document, renderSsrDevConsoleDiagnostics(messages)),
-      );
-      res.statusCode = 200;
-      res.setHeader("Content-Type", "text/html; charset=utf-8");
-      res.end(document);
-    } catch (error) {
-      viteServer.ssrFixStacktrace(error);
-      viteServer.config.logger.error(
-        error instanceof Error && error.stack ? error.stack : String(error),
-      );
-      const document = await viteServer.transformIndexHtml(
-        requestUrl.pathname,
-        appendToDocumentBody(
-          createSsrDevErrorDocument(error),
-          renderSsrDevConsoleDiagnostics(messages),
-        ),
-      );
-      res.statusCode = 500;
-      res.setHeader("Content-Type", "text/html; charset=utf-8");
-      res.end(document);
-    }
-  });
-
-  return viteServer;
 }

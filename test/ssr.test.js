@@ -15,7 +15,6 @@ import {
 import {
   createDocumentContext,
   createEntry,
-  createSsrDevServer,
   LitsxSsrMaxSuspensePassesError,
   renderDocument,
   renderBootstrap,
@@ -229,45 +228,6 @@ describe("@litsx/ssr", () => {
     assert.match(result.html, /<noscript><noscript-card><template shadowroot="open" shadowrootmode="open"><section id="noscript-card">SSR card<\/section><\/template><\/noscript-card><\/noscript>/);
     assert.doesNotMatch(result.html, /data-litsx-root|\/src\/NoscriptCard\.tsx/);
     assert.deepStrictEqual(result.clientImports, []);
-  });
-
-  it("surfaces SSR console output and render errors in the dev-server response", async () => {
-    let shouldFail = false;
-    const server = await createSsrDevServer({
-      root: process.cwd(),
-      host: "127.0.0.1",
-      port: 0,
-      logLevel: "silent",
-      render({ html }) {
-        if (shouldFail) {
-          console.warn("SSR diagnostic before failure");
-          throw new Error("SSR render exploded");
-        }
-
-        console.log("SSR diagnostic value", { id: 42 });
-        return html`<main>ready</main>`;
-      },
-    });
-    await server.listen();
-
-    try {
-      const url = server.resolvedUrls.local[0];
-      const success = await fetch(url);
-      const successDocument = await success.text();
-      assert.strictEqual(success.status, 200);
-      assert.match(successDocument, /\[LitSX SSR\]/);
-      assert.match(successDocument, /SSR diagnostic value/);
-
-      shouldFail = true;
-      const failure = await fetch(url);
-      const failureDocument = await failure.text();
-      assert.strictEqual(failure.status, 500);
-      assert.match(failureDocument, /LitSX SSR error/);
-      assert.match(failureDocument, /SSR render exploded/);
-      assert.match(failureDocument, /SSR diagnostic before failure/);
-    } finally {
-      await server.close();
-    }
   });
 
   it("renders scoped LitSX elements with nested declarative shadow DOM", async () => {

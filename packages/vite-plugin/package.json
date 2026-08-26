@@ -13,6 +13,12 @@
       "import": "./src/index.js",
       "require": "./dist/index.cjs",
       "default": "./src/index.js"
+    },
+    "./ssr": {
+      "types": "./src/ssr.d.ts",
+      "import": "./src/ssr.js",
+      "require": "./dist/ssr.cjs",
+      "default": "./src/ssr.js"
     }
   },
   "files": [
@@ -42,7 +48,13 @@
     "directory": "packages/vite-plugin"
   },
   "peerDependencies": {
+    "@litsx/ssr": "^1.0.0-next.4",
     "vite": "^7.3.2 || ^8.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@litsx/ssr": {
+      "optional": true
+    }
   },
   "dependencies": {
     "@litsx/compiler": "^1.0.0-next.9"

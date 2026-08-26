@@ -34,7 +34,7 @@ If you are starting from scratch, the normal SSR flow is:
 
 1. render a full HTML document on the server with `renderDocument(...)`
 2. point `clientEntry` at your normal browser entry
-3. use `createSsrDevServer(...)` during local development
+3. use `createSsrDevServer(...)` from `@litsx/vite-plugin/ssr` when developing with Vite
 
 Minimal server entry:
 
@@ -74,8 +74,9 @@ npm install @litsx/ssr lit @litsx/core
 ```
 
 If you are rendering LitSX-authored source through a build tool, you will also
-need the relevant compiler integration such as
-[`@litsx/vite-plugin`](../vite-plugin/README.md).
+need the relevant compiler integration. Vite development servers use
+`createSsrDevServer(...)` from
+[`@litsx/vite-plugin/ssr`](../vite-plugin/README.md#ssr-development-adapter).
 
 ## Early DOM shim initialization
 
@@ -420,58 +421,17 @@ export async function ProductPage(props, ssrContext) {
 `options.context` in `@litsx/ssr` remains SSR metadata config such as
 `idPrefix`. It is not the request execution context and does not inject one.
 
-## Dev Helper
+## Build-tool adapters
 
-`@litsx/ssr` also exposes `createSsrDevServer(...)` for authored LitSX SSR
-examples and local development. It resolves authored `.tsx` modules through
-`elements(loader)`, renders a fragment through your `render(...)` callback,
-injects that fragment into an HTML template, and serves the result through Vite
-with LitSX client sourcemaps enabled.
+`@litsx/ssr` deliberately has no Vite dependency. It compiles authored modules
+through `@litsx/compiler` by default and exposes a bundler-neutral
+`loadModule(resolvedPath)` option for integrations that own another module
+pipeline.
 
-Minimal example:
-
-```js
-import { createSsrDevServer } from "@litsx/ssr";
-
-const server = await createSsrDevServer({
-  root: process.cwd(),
-  template: "./index.html",
-  clientEntry: "./src/main.js",
-  elements(loader) {
-    return {
-      "demo-app": async () =>
-        (await loader("./src/components.tsx")).DemoApp,
-    };
-  },
-  render({ html }) {
-    return html`<demo-app .title=${"Hello SSR"}></demo-app>`;
-  },
-});
-
-await server.listen();
-server.printUrls();
-```
-
-Use this helper for local development and examples. Use `renderDocument(...)`
-or `renderToString(...)` directly in production integrations.
-
-During development, console calls evaluated while rendering on the server keep
-their normal terminal output and are also replayed in the browser console with
-the `[LitSX SSR]` prefix. If rendering fails, the response is a readable error
-page with the fixed SSR stack trace instead of an empty or generic Vite
-response.
-
-When you provide a template file, `createSsrDevServer(...)` expects
-`<!--app-html-->` and will also fill `<!--app-head-->`,
-`<!--app-bootstrap-->`, and `<!--app-title-->` when present.
-
-For the simple case, `elements(loader)` is just the scoped registry for the
-tags returned by `render(...)`. The `loader(...)` helper exists so authored
-`.tsx` modules resolve through the same SSR-aware Vite pipeline the dev
-helper already uses internally.
-
-If you need total control over the emitted bootstrap script, pass `bootstrap`
-explicitly. That low-level override takes precedence over `clientEntry`.
+The official Vite composition, including `createSsrDevServer(...)`, lives at
+[`@litsx/vite-plugin/ssr`](../vite-plugin/README.md#ssr-development-adapter).
+This keeps Vite server lifecycle, middleware, module loading, HTML transforms,
+and asset resolution out of the SSR package.
 
 ## Authored Config Contract
 
@@ -481,6 +441,8 @@ accept the same authored LitSX configuration object:
 - `root`: filesystem base used to resolve authored modules and template files
 - `clientEntry`: optional browser bootstrap module, normalized relative to
   `root`
+- `loadModule(resolvedPath)`: optional build-tool module loader; when omitted,
+  SSR compiles authored modules through `@litsx/compiler`
 - `elements(loader)`: scoped element registry, or a factory that receives the
   SSR-aware `loader(...)`
 - `render({ html, clientEntry, root })`: callback that returns the Lit render
@@ -495,9 +457,9 @@ When you provide `elements(loader)`, LitSX passes a SSR-aware loader with this
 behavior:
 
 - `loader(specifier)` resolves `specifier` relative to `root`
-- in dev, it loads the authored module through Vite SSR
-- outside the dev server, it compiles the authored module to a temporary SSR
-  module and imports that result
+- with a build-tool adapter, it delegates to the configured `loadModule(...)`
+- otherwise it compiles the authored module to a temporary SSR module and
+  imports that result
 - it returns the SSR-ready module namespace for the authored file
 
 That means authored `.tsx` modules work through the same API in:
@@ -505,11 +467,13 @@ That means authored `.tsx` modules work through the same API in:
 - `renderDocument(...)`
 - `renderToString(...)`
 - `renderToStream(...)`
-- `createSsrDevServer(...)`
+
+The Vite adapter preserves this same contract through
+`@litsx/vite-plugin/ssr`.
 
 ## Template Marker Contract
 
-When `createSsrDevServer(...)` receives `template: "./index.html"`, the
+When authored document rendering receives `template: "./index.html"`, the
 template file follows a small explicit contract:
 
 - `<!--app-html-->` is required and is replaced with the rendered SSR fragment

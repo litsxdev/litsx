@@ -51,21 +51,14 @@
     "directory": "packages/ssr"
   },
   "peerDependencies": {
-    "lit": ">=3",
-    "vite": "^7.3.2 || ^8.0.0"
-  },
-  "peerDependenciesMeta": {
-    "vite": {
-      "optional": true
-    }
+    "lit": ">=3"
   },
   "dependencies": {
     "@lit-labs/ssr": "^4.0.0",
     "@lit-labs/ssr-client": "^1.1.7",
     "@lit-labs/ssr-dom-shim": "^1.6.0",
     "@litsx/compiler": "^1.0.0-next.9",
-    "@litsx/core": "^1.0.0-next.6",
-    "@litsx/vite-plugin": "^1.0.0-next.1"
+    "@litsx/core": "^1.0.0-next.6"
   },
   "devDependencies": {
     "lit": "^3.3.3"

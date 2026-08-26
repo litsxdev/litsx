@@ -1,4 +1,4 @@
-import { createSsrDevServer } from "@litsx/ssr";
+import { createSsrDevServer } from "@litsx/vite-plugin/ssr";
 
 const server = await createSsrDevServer({
   root: new URL(".", import.meta.url).pathname,

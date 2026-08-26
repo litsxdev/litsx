@@ -1646,7 +1646,7 @@ export function defineAppElements() {
   );
   files.set(
     "dev.mjs",
-    `import { createSsrDevServer } from "@litsx/ssr";
+    `import { createSsrDevServer } from "@litsx/vite-plugin/ssr";
 ${styleImport}${styleSetup}
 
 const server = await createSsrDevServer({
@@ -1681,7 +1681,8 @@ server.printUrls();
     `import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { createSsrDevServer, html, renderDocument } from "@litsx/ssr";
+import { html, renderDocument } from "@litsx/ssr";
+import { createSsrDevServer } from "@litsx/vite-plugin/ssr";
 ${styleImport}${styleSetup}
 
 const exampleDir = path.dirname(fileURLToPath(import.meta.url));
@@ -1762,7 +1763,7 @@ Run \`npm run render\` when you want a prerendered document in \`dist/index.html
 
 - document-first server rendering with \`renderDocument(...)\`
 - authored prerender/build flow with \`renderDocument(createEntry({...}))\`
-- local SSR development with \`createSsrDevServer(...)\`
+- local SSR development with \`createSsrDevServer(...)\` from \`@litsx/vite-plugin/ssr\`
 - automatic hydration bootstrap through \`clientEntry\`
 - a shared \`index.html\` shell for dev SSR and static prerender output
 - the same hero and guide components as the standard app scaffold

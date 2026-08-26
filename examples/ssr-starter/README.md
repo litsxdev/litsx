@@ -3,7 +3,7 @@
 Minimal SSR example using the productized public APIs:
 
 - `renderDocument(...)`
-- `createSsrDevServer(...)`
+- `createSsrDevServer(...)` from `@litsx/vite-plugin/ssr`
 - automatic hydration bootstrap via `clientEntry`
 
 This example is intended as the shortest end-to-end walkthrough of the current
@@ -11,7 +11,7 @@ LitSX SSR flow.
 
 The split of responsibility is:
 
-- `dev.mjs` tells the dev helper which authored root to render
+- `dev.mjs` tells the Vite SSR adapter which authored root to render
 - `index.html` owns the surrounding document shell
 - `render.mjs` prerenders the same root into the same shell for static output
 

@@ -493,7 +493,7 @@ describe("create-litsx-app", () => {
     );
     assert.match(
       devSource,
-      /import \{ createSsrDevServer \} from "@litsx\/ssr";/,
+      /import \{ createSsrDevServer \} from "@litsx\/vite-plugin\/ssr";/,
     );
     assert.match(devSource, /template: "\.\/index\.html"/);
     assert.match(devSource, /clientEntry: "\.\/src\/main\.js"/);
@@ -506,12 +506,15 @@ describe("create-litsx-app", () => {
     assert.doesNotMatch(devSource, /LitSX SSR status/);
     assert.match(
       renderSource,
-      /import \{ createSsrDevServer, html, renderDocument \} from "@litsx\/ssr";/,
+      /import \{ html, renderDocument \} from "@litsx\/ssr";/,
+    );
+    assert.match(
+      renderSource,
+      /import \{ createSsrDevServer \} from "@litsx\/vite-plugin\/ssr";/,
     );
     assert.match(renderSource, /viteServer\.ssrLoadModule/);
     assert.match(renderSource, /renderDocument\(/);
     assert.doesNotMatch(renderSource, /createServer/);
-    assert.doesNotMatch(renderSource, /@litsx\/vite-plugin/);
     assert.doesNotMatch(renderSource, /install-global-dom-shim/);
     assert.doesNotMatch(renderSource, /__litsxScopedTemplate/);
     assert.match(
@@ -530,6 +533,7 @@ describe("create-litsx-app", () => {
     assert.match(readme, /renderDocument/);
     assert.match(readme, /renderDocument/);
     assert.match(readme, /createSsrDevServer/);
+    assert.match(readme, /@litsx\/vite-plugin\/ssr/);
     assert.match(readme, /dist\/index\.html/);
     assert.match(readme, /automatic hydration bootstrap through `clientEntry`/);
     assert.match(

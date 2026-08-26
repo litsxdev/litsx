@@ -103,6 +103,43 @@ Behavior:
 - falls back to the incoming `moduleId` when it cannot make the path
   project-relative
 
+## SSR development adapter
+
+The opt-in `@litsx/vite-plugin/ssr` entrypoint composes Vite with
+`@litsx/ssr` without making the SSR package depend on a specific bundler.
+
+```js
+import { createSsrDevServer } from "@litsx/vite-plugin/ssr";
+
+const server = await createSsrDevServer({
+  root: process.cwd(),
+  template: "./index.html",
+  clientEntry: "./src/main.js",
+  elements(loader) {
+    return {
+      "demo-app": async () =>
+        (await loader("./src/components.tsx")).DemoApp,
+    };
+  },
+  render({ html }) {
+    return html`<demo-app .title=${"Hello SSR"}></demo-app>`;
+  },
+});
+
+await server.listen();
+server.printUrls();
+```
+
+This subpath requires `@litsx/ssr`, declared as an optional peer so normal
+client-only Vite users do not install SSR. It owns Vite server creation,
+`ssrLoadModule(...)`, LitSX SSR plugin configuration, asset resolution,
+`transformIndexHtml(...)`, and development error/console presentation.
+
+`@litsx/ssr` remains usable without Vite and accepts a generic
+`loadModule(resolvedPath)` integration hook. Importing
+`createSsrDevServer` from `@litsx/ssr` is no longer supported; migrate the
+import to `@litsx/vite-plugin/ssr`.
+
 ## Options
 
 `@litsx/vite-plugin` accepts all `@litsx/compiler` options except `filename`, which is supplied from the Vite module id.
@@ -255,12 +292,12 @@ If you are already on Vite, `@litsx/vite-plugin` should be the default choice.
 
 This package only provides Vite integration.
 
-It does not:
+The main entrypoint does not:
 
 - own docs-site-specific module resolution
 - provide Rollup or esbuild plugins
 - replace runtime dependencies such as `lit` or `@litsx/core`
-- render HTML by itself; pair it with `@litsx/ssr` for scoped server rendering
+- render HTML by itself; the opt-in `/ssr` adapter composes `@litsx/ssr`
 
 ## Stability
 

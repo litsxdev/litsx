@@ -187,7 +187,7 @@ describe("@litsx/ssr public configuration branches", () => {
     assert.match(result.html, /<main>loader<\/main>/);
   });
 
-  it("uses authored template callbacks and Vite-backed element loaders", async () => {
+  it("uses authored template callbacks and integration-provided element loaders", async () => {
     class ViteElement extends LitElement {
       static [LITSX_MODULE_ID] = "/component.tsx";
 
@@ -199,11 +199,9 @@ describe("@litsx/ssr public configuration branches", () => {
     const loadedIds = [];
     const result = await renderDocument(createEntry({
       root: process.cwd(),
-      viteServer: {
-        async ssrLoadModule(moduleId) {
-          loadedIds.push(moduleId);
-          return ViteElement;
-        },
+      async loadModule(moduleId) {
+        loadedIds.push(moduleId);
+        return ViteElement;
       },
       elements(load) {
         return { "vite-element": () => load("component.tsx") };
@@ -217,7 +215,7 @@ describe("@litsx/ssr public configuration branches", () => {
       },
     }));
 
-    assert.deepStrictEqual(loadedIds, ["/component.tsx"]);
+    assert.deepStrictEqual(loadedIds, [path.join(process.cwd(), "component.tsx")]);
     assert.match(result.document, /<article data-title="callback template">/);
     assert.match(result.document, /<p>vite element<\/p>/);
   });

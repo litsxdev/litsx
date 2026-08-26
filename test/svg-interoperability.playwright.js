@@ -1,6 +1,6 @@
 import path from "node:path";
 import { expect, test } from "@playwright/test";
-import { createSsrDevServer } from "../packages/ssr/src/index.js";
+import { createSsrDevServer } from "../packages/vite-plugin/src/ssr.js";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 const fixtureRoot = path.join(repoRoot, "test/fixtures/svg-interoperability");
