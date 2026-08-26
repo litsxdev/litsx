@@ -1729,6 +1729,71 @@ LightCard.lightDom = true;
     }
   });
 
+  it("materializes imported TypeScript utility contracts for light DOM SSR", async () => {
+    const directory = createWorkspaceTempDirectory("litsx-unocss-ts-contract-ssr-");
+    fs.writeFileSync(
+      path.join(directory, "layout.ts"),
+      `
+export const deepFreeze = <T>(value: T): T => value;
+export const PAGE_LAYOUT = "grid max-w-3xl gap-6 grid-cols-[minmax(0,1fr)_2fr]";
+`,
+      "utf8",
+    );
+    fs.writeFileSync(
+      path.join(directory, "entry.tsx"),
+      `
+import { PAGE_LAYOUT } from "./layout.ts";
+
+export function LightContractCard() {
+  return <main class={PAGE_LAYOUT}>Light contract</main>;
+}
+LightContractCard.lightDom = true;
+`,
+      "utf8",
+    );
+    const server = await createServer({
+      configFile: false,
+      root: directory,
+      logLevel: "silent",
+      appType: "custom",
+      server: { middlewareMode: true },
+      resolve: {
+        alias: [
+          {
+            find: "@litsx/core/elements",
+            replacement: path.resolve("packages/core/src/elements/index.js"),
+          },
+          {
+            find: "@litsx/core",
+            replacement: path.resolve("packages/core/src/index.js"),
+          },
+        ],
+      },
+      plugins: litsxUnoCss({ unocss: { presets: [presetWind3()] } }),
+    });
+
+    try {
+      const module = await server.ssrLoadModule("/entry.tsx");
+      const rendered = await renderToString(
+        html`<light-contract-card></light-contract-card>`,
+        { elements: { "light-contract-card": module.LightContractCard } },
+      );
+      const css = module.LightContractCard.styles
+        .flat(Infinity)
+        .map((style) => style?.cssText ?? "")
+        .join("\n");
+
+      assert.match(rendered.html, /data-litsx-style-scope="[a-z0-9]+"/);
+      assert.match(css, /display:grid/);
+      assert.match(css, /max-width:48rem/);
+      assert.match(css, /gap:1\.5rem/);
+      assert.match(css, /grid-template-columns:minmax\(0,1fr\) 2fr/);
+    } finally {
+      await server.close();
+      fs.rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   it("resolves Wind4 theme tokens across SSR component modules", async () => {
     const directory = createWorkspaceTempDirectory("litsx-unocss-wind4-ssr-");
     fs.writeFileSync(

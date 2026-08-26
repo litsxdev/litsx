@@ -62,6 +62,41 @@ describe("compiler authored input helpers", () => {
     );
   });
 
+  it("parses TypeScript-only module ids without enabling JSX", () => {
+    const source = "export const deepFreeze = <T>(value: T): T => value;";
+
+    for (const filename of [
+      "/virtual/module.ts",
+      "/virtual/module.mts?import",
+      "/virtual/module.cts?v=123",
+    ]) {
+      const result = prepareLitsxAuthoredInput(source, { filename });
+      assert.strictEqual(result.moduleAnalysis.exports[0]?.exportName, "deepFreeze");
+    }
+  });
+
+  it("keeps JSX parsing for JSX extensions and explicit overrides", () => {
+    for (const filename of [
+      "/virtual/TestView.jsx",
+      "/virtual/TestView.tsx",
+      "/virtual/TestView.mtsx?import",
+      "/virtual/TestView.ctsx?v=1",
+    ]) {
+      assert.doesNotThrow(() =>
+        prepareLitsxAuthoredInput(
+          "export const TestView = () => <div />;",
+          { filename },
+        ),
+      );
+    }
+    assert.doesNotThrow(() =>
+      prepareLitsxAuthoredInput(
+        "export const TestView = () => <div />;",
+        { filename: "/virtual/TestView.ts", requireJsx: true },
+      ),
+    );
+  });
+
   it("collects native className and React memo authored warnings", () => {
     const source = [
       "import React, { memo } from 'react';",
@@ -224,6 +259,32 @@ describe("compiler authored input helpers", () => {
     assert.strictEqual(first.inputAst, second.inputAst);
     assert.strictEqual(first.filename, second.filename);
       assert.strictEqual(first.moduleAnalysis, second.moduleAnalysis);
+    } finally {
+      session.dispose();
+    }
+  });
+
+  it("keeps explicit JSX overrides isolated in compilation-session caches", () => {
+    const source = "export const identity = <T>(value: T): T => value;";
+    const session = createLitsxCompilationSession({
+      transformOptions: { jsxTemplate: false },
+    });
+
+    try {
+      assert.doesNotThrow(() =>
+        createLitsxTransformConfig(source, {
+          filename: "/virtual/identity.ts",
+          requireJsx: false,
+          __litsxCompilationSession: session,
+        }),
+      );
+      assert.throws(() =>
+        createLitsxTransformConfig(source, {
+          filename: "/virtual/identity.ts",
+          requireJsx: true,
+          __litsxCompilationSession: session,
+        }),
+      );
     } finally {
       session.dispose();
     }

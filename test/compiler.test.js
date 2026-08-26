@@ -3170,6 +3170,25 @@ describe("@litsx/compiler", () => {
     }
   }, 20_000);
 
+  it("transforms generic TypeScript without JSX through async and sync paths", async () => {
+    const source = "export const deepFreeze = <T>(value: T): T => value;";
+    const options = { filename: "/virtual/module.ts?import" };
+
+    const syncResult = transformLitsxSync(source, options);
+    const asyncResult = await transformLitsx(source, options);
+
+    for (const result of [syncResult, asyncResult]) {
+      assert.match(result.code, /const deepFreeze = value => value/);
+      assert.doesNotMatch(result.code, /<T>/);
+    }
+
+    const tsxResult = transformLitsxSync(
+      "const identity = <T,>(value: T): T => value; export const TestView = () => <div>{identity('ready')}</div>;",
+      { filename: "/virtual/TestView.tsx?import" },
+    );
+    assert.match(tsxResult.code, /html`<div>/);
+  }, 20_000);
+
   it("clears compiler caches and overlay state when invalidating and disposing a session", () => {
     const session = createLitsxCompilationSession({
       transformOptions: {

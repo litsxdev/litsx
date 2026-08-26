@@ -31,10 +31,13 @@ describe("compiler helper branch matrix", () => {
     expect(shouldStripTypescriptSyntax()).toBe(false);
     expect(shouldStripTypescriptSyntax("a.ts")).toBe(true);
     expect(shouldStripTypescriptSyntax("a.tsx")).toBe(true);
+    expect(shouldStripTypescriptSyntax("a.mts?import")).toBe(true);
+    expect(shouldStripTypescriptSyntax("a.ctsx?v=1")).toBe(true);
     expect(shouldStripTypescriptSyntax("a.js")).toBe(false);
     expect(profilePhase("x", () => 4)).toBe(4);
-    expect(getSessionFeatureCacheKey("code")).toBe(":code");
-    expect(getSessionFeatureCacheKey("code", { filename: "a.tsx" })).toBe("a.tsx:code");
+    expect(getSessionFeatureCacheKey("code")).toBe(":jsx:code");
+    expect(getSessionFeatureCacheKey("code", { filename: "a.tsx" })).toBe("a.tsx:jsx:code");
+    expect(getSessionFeatureCacheKey("code", { filename: "a.ts" })).toBe("a.ts:no-jsx:code");
     expect(createCompilerCaches()).toMatchObject({ sourceFeatures: expect.any(Map), presetPluginsByOptions: { default: expect.any(Map), byOptions: expect.any(WeakMap) } });
   });
 

@@ -7,6 +7,11 @@ const patchLitAttributeSourcemap = vi.fn();
 const createLitsxPresetPlugins = vi.fn();
 const detectLitsxSourceFeatures = vi.fn();
 const prepareLitsxAuthoredInput = vi.fn();
+const resolveLitsxRequireJsx = vi.fn((filename, override) =>
+  typeof override === "boolean"
+    ? override
+    : !/\.(?:ts|mts|cts)(?:[?#]|$)/.test(filename ?? ""),
+);
 const mergeLitsxWarnings = vi.fn();
 const ensureTypescriptModule = vi.fn();
 const createProjectTsSession = vi.fn();
@@ -41,6 +46,10 @@ vi.mock("@litsx/typescript-session", () => ({
 vi.mock("../packages/compiler/src/authored-input.js", () => ({
   ensureLitsxParserPlugins: vi.fn(),
   prepareLitsxAuthoredInput,
+}));
+
+vi.mock("../packages/compiler/src/filename-syntax.js", () => ({
+  resolveLitsxRequireJsx,
 }));
 
 vi.mock("../packages/compiler/src/warnings.js", () => ({

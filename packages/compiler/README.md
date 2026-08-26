@@ -134,13 +134,17 @@ Filename used for Babel metadata and sourcemaps. Provide this whenever possible.
 
 ### `parserPlugins?: string[]`
 
-Additional Babel parser plugins. If omitted, `.tsx` filenames automatically enable the `typescript` parser plugin.
+Additional Babel parser plugins. If omitted, `.ts`, `.mts`, `.cts`, `.tsx`,
+`.mtsx`, and `.ctsx` filenames automatically enable the `typescript` parser
+plugin. Vite query strings are ignored when resolving the extension.
 
 ### `requireJsx?: boolean`
 
-Controls whether authored-input preparation always enables Babel's JSX parser.
-The default is `true`; set it to `false` only for integrations that deliberately
-pass non-JSX JavaScript or TypeScript through the shared authored-input helpers.
+Explicitly overrides whether authored-input preparation enables Babel's JSX
+parser. When omitted, `.ts`, `.mts`, and `.cts` use TypeScript-only parsing;
+`.jsx`, `.tsx`, `.mtsx`, and `.ctsx` enable JSX. Other extensions preserve the
+previous JSX-enabled default. Set this option when a custom filename convention
+needs different behavior.
 
 ### `ssr?: boolean`
 

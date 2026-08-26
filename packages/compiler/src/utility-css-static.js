@@ -2,8 +2,22 @@ import fs from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { parse, parseExpression } from "@babel/parser";
+import { ensureLitsxParserPlugins } from "./authored-input.js";
+import { resolveLitsxRequireJsx } from "./filename-syntax.js";
 
-const SOURCE_EXTENSIONS = ["", ".tsx", ".ts", ".jsx", ".mjs", ".js", ".cjs"];
+const SOURCE_EXTENSIONS = [
+  "",
+  ".tsx",
+  ".mtsx",
+  ".ctsx",
+  ".ts",
+  ".mts",
+  ".cts",
+  ".jsx",
+  ".mjs",
+  ".js",
+  ".cjs",
+];
 
 function unwrap(node) {
   while (
@@ -48,7 +62,13 @@ function parseModule(source, filename) {
   return parse(source, {
     sourceType: "module",
     sourceFilename: filename,
-    plugins: ["jsx", "typescript", "importAttributes", "decorators-legacy"],
+    plugins: [
+      ...ensureLitsxParserPlugins(filename, [], {
+        requireJsx: resolveLitsxRequireJsx(filename),
+      }),
+      "importAttributes",
+      "decorators-legacy",
+    ],
   });
 }
 
@@ -56,7 +76,13 @@ function parseStaticExpression(source, filename) {
   return parseExpression(source, {
     sourceType: "module",
     sourceFilename: filename,
-    plugins: ["jsx", "typescript", "importAttributes", "decorators-legacy"],
+    plugins: [
+      ...ensureLitsxParserPlugins(filename, [], {
+        requireJsx: resolveLitsxRequireJsx(filename),
+      }),
+      "importAttributes",
+      "decorators-legacy",
+    ],
   });
 }
 

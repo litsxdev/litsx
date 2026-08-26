@@ -151,6 +151,40 @@ describe("@litsx/vite-plugin", () => {
     assert.strictEqual(optimizedDependency, null);
   });
 
+  it("transforms generic TypeScript module ids with Vite query strings", async () => {
+    const plugin = litsx();
+    const result = await plugin.transform(
+      "export const deepFreeze = <T>(value: T): T => value;",
+      "/virtual/module.ts?import",
+    );
+
+    assert.ok(result);
+    assert.match(result.code, /const deepFreeze = value => value/);
+  });
+
+  it("transforms generic TypeScript during optimize-deps scanning", async () => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-vite-ts-scan-"));
+    const filename = path.join(directory, "module.ts");
+    fs.writeFileSync(
+      filename,
+      "export const deepFreeze = <T>(value: T): T => value;",
+      "utf8",
+    );
+    const plugin = litsx();
+    plugin.configResolved({ root: directory, cacheDir: path.join(directory, ".vite") });
+    const config = plugin.config({ optimizeDeps: { rolldownOptions: {} } });
+    const scanPlugin = config.optimizeDeps.rolldownOptions.plugins.at(-1);
+
+    try {
+      const result = await scanPlugin.load(filename);
+      assert.ok(result);
+      assert.match(result.code, /const deepFreeze = value => value/);
+    } finally {
+      plugin.buildEnd();
+      fs.rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   it("runs react-compat for allowlisted dependencies in client and SSR pipelines", async () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-vite-react-dep-"));
     try {

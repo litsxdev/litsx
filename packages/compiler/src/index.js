@@ -24,6 +24,7 @@ import {
   ensureLitsxParserPlugins,
   prepareLitsxAuthoredInput,
 } from "./authored-input.js";
+import { resolveLitsxRequireJsx } from "./filename-syntax.js";
 import { mergeLitsxWarnings } from "./warnings.js";
 export {
   ensureLitsxParserPlugins,
@@ -92,7 +93,7 @@ export function normalizePluginList(plugins) {
 }
 
 export function shouldStripTypescriptSyntax(filename = "") {
-  return /\.tsx?$/.test(filename);
+  return /\.(?:[cm]?ts|[cm]?tsx)$/.test(String(filename).split(/[?#]/, 1)[0]);
 }
 
 export function reparseTemplateLoweringAst(source, options = {}) {
@@ -101,7 +102,12 @@ export function reparseTemplateLoweringAst(source, options = {}) {
     plugins: ensureLitsxParserPlugins(
       options.filename,
       options.parserPlugins,
-      { requireJsx: true },
+      {
+        requireJsx: resolveLitsxRequireJsx(
+          options.filename,
+          options.requireJsx,
+        ),
+      },
     ),
     sourceFileName: options.filename,
     litsxSourceMap: false,
@@ -459,7 +465,11 @@ function getMemoizedPresetPlugins(options, sourceFeatures = null, session = null
 }
 
 export function getSessionFeatureCacheKey(source, options = {}) {
-  return `${options.filename || ""}:${source}`;
+  const requireJsx = resolveLitsxRequireJsx(
+    options.filename,
+    options.requireJsx,
+  );
+  return `${options.filename || ""}:${requireJsx ? "jsx" : "no-jsx"}:${source}`;
 }
 
 export function createCompilerCaches() {
@@ -726,7 +736,10 @@ export function createLitsxTransformConfig(source, options = {}) {
         }],
         ...outputPlugins,
         ...(shouldStripTypescriptSyntax(filename)
-          ? [[transformTypescript, { isTSX: true, allowDeclareFields: true }]]
+          ? [[transformTypescript, {
+              isTSX: resolveLitsxRequireJsx(filename, options.requireJsx),
+              allowDeclareFields: true,
+            }]]
           : []),
       ]
     : [];
@@ -763,7 +776,10 @@ export function createLitsxTransformConfig(source, options = {}) {
             ...presetPlugins,
             ...outputPlugins,
             ...(shouldStripTypescriptSyntax(filename)
-              ? [[transformTypescript, { isTSX: true, allowDeclareFields: true }]]
+              ? [[transformTypescript, {
+                  isTSX: resolveLitsxRequireJsx(filename, options.requireJsx),
+                  allowDeclareFields: true,
+                }]]
               : []),
           ],
     },

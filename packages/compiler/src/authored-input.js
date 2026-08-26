@@ -7,13 +7,17 @@ import {
 } from "@litsx/authoring";
 import { analyzeLitsxModule } from "./module-analysis.js";
 import { mergeLitsxWarnings } from "./warnings.js";
+import {
+  normalizeLitsxSyntaxFilename,
+  resolveLitsxRequireJsx,
+} from "./filename-syntax.js";
 
 function normalizeParserPlugins(filename, parserPlugins = []) {
   if (Array.isArray(parserPlugins) && parserPlugins.length > 0) {
     return parserPlugins;
   }
 
-  if (typeof filename === "string" && /\.tsx?$/.test(filename)) {
+  if (/\.(?:[cm]?ts|[cm]?tsx)$/.test(normalizeLitsxSyntaxFilename(filename))) {
     return ["typescript"];
   }
 
@@ -99,7 +103,7 @@ export function prepareLitsxAuthoredInput(
   };
   const filename = options.filename;
   const parserPlugins = ensureLitsxParserPlugins(filename, options.parserPlugins, {
-    requireJsx: options.requireJsx !== false,
+    requireJsx: resolveLitsxRequireJsx(filename, options.requireJsx),
   });
   const parsedAst = runtimeImpl.parse(source, {
     sourceType: "module",
