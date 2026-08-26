@@ -39,9 +39,18 @@ describe("core element helper branches", () => {
         return rendered;
       },
     };
-    const part = { parentNode: host };
+    let committed = null;
+    const part = {
+      parentNode: host,
+      _$setValue(value) {
+        committed = value;
+      },
+    };
     assert.strictEqual(instance.update(part), rendered);
-    assert.strictEqual(host._$litPart$, part);
+    assert.notStrictEqual(host._$litPart$, part);
+    host._$litPart$._$setValue("updated");
+    assert.strictEqual(committed, "updated");
+    assert.doesNotThrow(() => host._$litPart$.setConnected(false));
     assert.strictEqual(host._$needsHydration, false);
     assert.strictEqual(host._$AG, false);
   });

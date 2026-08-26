@@ -462,10 +462,15 @@ class AdoptLightDomDirective extends Directive {
       return noChange;
     }
 
-    // renderLight() is owned by the parent's ChildPart. Teach LitElement to
-    // reuse that exact part for later child updates instead of creating a
-    // second root part over the same light-DOM nodes.
-    host._$litPart$ = part;
+    // renderLight() is owned by the parent's ChildPart. Delegate later child
+    // updates to that exact part, but keep LitElement from treating it as a
+    // RootPart whose connection lifecycle the child controls.
+    host._$litPart$ = {
+      _$setValue(value) {
+        part._$setValue(value);
+      },
+      setConnected() {},
+    };
     host._$needsHydration = false;
     host._$AG = false;
     clearHydrationRenderBefore(host);

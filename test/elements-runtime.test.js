@@ -1,7 +1,8 @@
 // @vitest-environment happy-dom
 
 import assert from "assert";
-import { LitElement, html } from "lit";
+import { LitElement, html, render } from "lit";
+import { html as staticHtml, unsafeStatic } from "lit/static-html.js";
 import { describe, it } from "vitest";
 import { connectLightDomRegistry } from "../packages/scoped-registry-shim/src/index.js";
 import {
@@ -24,6 +25,7 @@ import {
   LITSX_SERVER_COMPONENT,
   LITSX_SSR_CONTEXT,
   HydrationSuspenseMixin,
+  __litsxAdoptLightDom,
   isCustomElementClass,
   isHydratableCustomElementClass,
   isLitsxComponentClass,
@@ -49,6 +51,51 @@ function defineTestElement(tagName, ctor) {
 }
 
 describe("litsx elements runtime", () => {
+  it("leaves adopted light-DOM part connection ownership with the parent", async () => {
+    const tagName = nextTag("litsx-runtime-adopted-light-child");
+    const staticTag = unsafeStatic(tagName);
+
+    class AdoptedLightChild extends LightDomMixin(LitElement) {
+      constructor() {
+        super();
+        this.label = "initial";
+      }
+
+      render() {
+        return html`<span data-label>${this.label}</span>`;
+      }
+    }
+
+    customElements.define(tagName, AdoptedLightChild);
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    render(
+      staticHtml`<${staticTag}>${__litsxAdoptLightDom()}</${staticTag}>`,
+      container,
+    );
+
+    const host = container.querySelector(tagName);
+    await host.updateComplete;
+    assert.strictEqual(host.querySelector("[data-label]")?.textContent, "initial");
+
+    host.label = "before reconnect";
+    host.requestUpdate();
+    await host.updateComplete;
+    assert.strictEqual(
+      host.querySelector("[data-label]")?.textContent,
+      "before reconnect",
+    );
+
+    host.remove();
+    container.appendChild(host);
+    host.label = "updated";
+    host.requestUpdate();
+    await host.updateComplete;
+
+    assert.strictEqual(host.querySelector("[data-label]")?.textContent, "updated");
+    container.remove();
+  });
+
   it("contains hydration-only suspensions at the generated host boundary", async () => {
     const suspension = Promise.resolve();
     class Base {

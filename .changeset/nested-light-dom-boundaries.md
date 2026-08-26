@@ -11,7 +11,8 @@
 Infer nested LitSX light-DOM hydration boundaries in both server and browser
 templates, including pure Lit parents authored in project-local JavaScript or
 TypeScript modules. Hydration now adopts the server-rendered child part so
-subsequent child updates preserve node identity.
+subsequent child updates preserve node identity, while disconnecting and
+reconnecting the child leaves connection ownership with the parent render.
 
 Keep statically enumerable Tailwind candidates in real Vite builds and attach
 scoped light-DOM utilities to their owning host without leaking them into the
