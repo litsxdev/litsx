@@ -2,7 +2,7 @@ import type { CSSResultGroup, LitElement, ReactiveElement, TemplateResult } from
 import type { DirectiveResult } from "lit/directive.js";
 import type { Ref } from "lit/directives/ref.js";
 export { css } from "lit";
-export { createRef, ref } from "lit/directives/ref.js";
+export { ref } from "lit/directives/ref.js";
 
 export interface LitsxJsxNode {
   $$typeof: symbol;
@@ -29,9 +29,30 @@ export type LitsxStyleInfo = Readonly<
   Record<string, string | number | null | undefined>
 >;
 
+declare const LITSX_REF_TARGET: unique symbol;
+
+/** Write capability carried by LitSX-created ref objects for safe JSX assignment. */
+interface LitsxRefTarget<T> {
+  readonly [LITSX_REF_TARGET]: (value: T | undefined) => void;
+}
+
+/** A Lit ref object whose public value is updated by the JSX ref directive. */
+export interface LitsxRefObject<T> extends LitsxRefTarget<T> {
+  readonly value?: T;
+}
+
+/** A mutable ref object returned by `useRef`. */
+export interface LitsxMutableRef<T> extends LitsxRefTarget<T> {
+  value: T | undefined;
+}
+
+/** Create a Lit-native object ref with a target-aware JSX write contract. */
+export declare function createRef<T = Element>(): LitsxRefObject<T>;
+
 /** A Lit-native ref. Assignment uses `.value`; cleanup publishes `undefined`. */
 export type LitsxRef<T> =
-  | Ref<T>
+  | (Ref<T> & { readonly [LITSX_REF_TARGET]?: never })
+  | LitsxRefTarget<T>
   | {
       bivarianceHack(value: T | undefined): void;
     }["bivarianceHack"];
@@ -313,10 +334,11 @@ export type LitsxNativeAttributeAliases<TElement> =
     : {};
 
 export type LitsxElementProps<TElement = HTMLElement> =
-  & LitsxBaseAttributes
+  & Omit<LitsxBaseAttributes, "ref">
   & LitsxDomAttributes<TElement>
   & LitsxNativeAttributeAliases<TElement>
-  & LitsxHostElementProps<TElement>;
+  & LitsxHostElementProps<TElement>
+  & { ref?: LitsxRef<TElement> };
 
 export type LitsxSvgLength = string | number;
 
@@ -438,10 +460,12 @@ type LitsxOverlappingIntrinsicElementProps<
       LitsxElementProps<HTMLElementTagNameMap[TagName]>,
       keyof LitsxDomAttributes<HTMLElementTagNameMap[TagName]> | "ref"
     >
-  & LitsxDomAttributes<HTMLElementTagNameMap[TagName] | SVGElementTagNameMap[TagName]>
+  & LitsxDomAttributes<HTMLElementTagNameMap[TagName]>
   & LitsxSvgPresentationAttributes
   & LitsxSvgSpecificAttributes<TagName>
-  & { ref?: LitsxRef<HTMLElementTagNameMap[TagName] | SVGElementTagNameMap[TagName]> };
+  // TypeScript resolves intrinsic names without JSX parent-namespace context.
+  // Follow the platform's HTML JSX convention for overlapping names such as `a`.
+  & { ref?: LitsxRef<HTMLElementTagNameMap[TagName]> };
 
 export type LitsxErrorBoundaryElementProps =
   & LitsxBaseAttributes
@@ -902,7 +926,7 @@ export declare function useStyle(
  */
 export declare function useRef<T>(
   initialValue?: T
-): { value: T | undefined };
+): LitsxMutableRef<T>;
 /**
  * Generate a stable id for the current component instance.
  */

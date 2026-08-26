@@ -113,6 +113,20 @@ useOnCommit(() => inputRef.value?.focus(), []);
 return <input ref={inputRef} />;
 ```
 
+A ref object may deliberately hold any of several compatible targets and be
+shared by those intrinsic elements:
+
+```tsx
+const targetRef = useRef<HTMLButtonElement | HTMLAnchorElement>();
+
+return active
+  ? <button ref={targetRef}>Continue</button>
+  : <a ref={targetRef} href="/continue">Continue</a>;
+```
+
+The union must contain every destination that receives the ref; an
+anchor-only ref is still rejected on `<button>`.
+
 Component refs travel through the `.ref` property until they reach their final
 host, forwarded element, or `useExpose` handle. Object refs, callback refs,
 spreads, SSR, and hydration share the same `.value`/`undefined` lifecycle. The
@@ -490,6 +504,12 @@ export function CheckIcon({ shapes }) {
 CamelCase SVG presentation attributes such as `strokeWidth` are emitted with
 their native dashed spelling. No manual `svg` template tag, JSX augmentation,
 or `jsxSpreadElement()` call is required.
+
+TypeScript's `JSX.IntrinsicElements` lookup does not receive the parent DOM
+namespace. For names present in both HTML and SVG maps, such as `a`, `script`,
+`style`, and `title`, LitSX therefore follows the normal HTML intrinsic target
+for event and ref types. The compiler still emits the correct SVG namespace
+when those tags occur below `<svg>`.
 
 The compiler lowers the reader call and installs the required capability:
 

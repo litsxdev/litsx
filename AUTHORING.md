@@ -346,6 +346,17 @@ return <input ref={input} />;
 - SSR does not serialize a ref value; hydration attaches the client ref to the
   existing server-rendered node.
 
+One object ref can target multiple intrinsic elements when its type explicitly
+contains all of them:
+
+```tsx
+const target = useRef<HTMLButtonElement | HTMLAnchorElement>();
+
+return linked
+  ? <a ref={target} href="/details">Details</a>
+  : <button ref={target}>Details</button>;
+```
+
 The React compatibility layer creates stable `.current`/`null` facades and
 adapts object refs, callback refs, `createRef`, `forwardRef`,
 `useImperativeHandle`, spreads, SSR, hydration, and React 19 callback cleanup.

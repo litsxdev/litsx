@@ -1,9 +1,11 @@
 import {
+  createRef,
   defineHook,
   lazy,
   SuspenseBoundary,
   SuspenseList,
   useHost,
+  useRef,
   type LitsxStyleInfo,
 } from "@litsx/core";
 
@@ -58,6 +60,9 @@ function TranslatedButton() {
 }
 
 export function Screen() {
+  const targetRef = useRef<HTMLButtonElement | HTMLAnchorElement>();
+  const litTargetRef = createRef<HTMLButtonElement | HTMLAnchorElement>();
+
   return (
     <section class="screen-shell">
       <div style={{ color: "red", width: "20px" }} />
@@ -99,6 +104,10 @@ export function Screen() {
         disabled
         ref={(node: HTMLButtonElement | undefined) => void node}
       >click</button>
+      <a href="/details" ref={targetRef}>Details</a>
+      <button ref={targetRef}>Open</button>
+      <a href="/alternate" ref={litTargetRef}>Alternate</a>
+      <button ref={litTargetRef}>Alternate action</button>
       <suspense-boundary
         fallback={<span>loading inline</span>}
       >

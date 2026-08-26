@@ -1,4 +1,4 @@
-import { ErrorBoundary, lazy, SuspenseBoundary, SuspenseList } from "@litsx/core";
+import { ErrorBoundary, lazy, SuspenseBoundary, SuspenseList, useRef } from "@litsx/core";
 
 type ButtonProps = {
   label: string;
@@ -11,6 +11,8 @@ function ActionButton({ label }: ButtonProps) {
 const LazyActionButton = lazy(async () => ({ default: ActionButton }));
 
 export function BrokenScreen() {
+  const anchorRef = useRef<HTMLAnchorElement>();
+
   return (
     <>
       {/* @ts-expect-error invalid reveal order */}
@@ -54,6 +56,12 @@ export function BrokenScreen() {
 
       {/* @ts-expect-error boolean style property values are not part of Lit styleMap */}
       <div style={{ display: true }} />
+
+      {/* @ts-expect-error an anchor-only ref cannot receive a button */}
+      <button ref={anchorRef}>Wrong target</button>
+
+      {/* @ts-expect-error overlapping intrinsic tag names use the HTML DOM target */}
+      <a ref={(node: SVGAElement | undefined) => void node}>Wrong namespace ref</a>
     </>
   );
 }
