@@ -1,5 +1,20 @@
 # @litsx/ssr
 
+## 1.0.0-next.5
+
+### Patch Changes
+
+- ac35124: Move the Vite-backed `createSsrDevServer` integration from `@litsx/ssr` to the
+  opt-in `@litsx/vite-plugin/ssr` entrypoint. `@litsx/ssr` now exposes a generic
+  authored-module loader contract and no longer declares, imports, or types Vite.
+  Update generated SSR projects to use the new entrypoint. This intentionally
+  removes the prerelease `createSsrDevServer` export from `@litsx/ssr`; migrate
+  imports to `@litsx/vite-plugin/ssr`.
+- Updated dependencies [ee1f0b9]
+- Updated dependencies [26ac3c6]
+  - @litsx/compiler@1.0.0-next.11
+  - @litsx/core@1.0.0-next.7
+
 ## 1.0.0-next.4
 
 ### Patch Changes

@@ -1,5 +1,19 @@
 # @litsx/unocss
 
+## 1.0.0-next.7
+
+### Patch Changes
+
+- ee1f0b9: Preserve bare side-effect imports so ordinary Vite CSS and `virtual:uno.css`
+  remain linked in dev, Storybook, and production builds. Compile expression-bodied
+  local PascalCase story hosts as Lit elements, and keep optimize-deps compilation
+  away from dependencies, generated chunks, assets, virtual ids, and prebundled
+  cache output.
+- Updated dependencies [ee1f0b9]
+- Updated dependencies [ac35124]
+  - @litsx/compiler@1.0.0-next.11
+  - @litsx/vite-plugin@1.0.0-next.2
+
 ## 1.0.0-next.6
 
 ### Patch Changes
