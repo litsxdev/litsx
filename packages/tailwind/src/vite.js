@@ -67,7 +67,9 @@ function resolveVirtualId(id) {
 
 function componentKey(id) {
   if (!id.startsWith(`${RESOLVED_PREFIX}component/`)) return null;
-  const basename = id.slice(`${RESOLVED_PREFIX}component/`.length).split("?", 1)[0];
+  const basename = id
+    .slice(`${RESOLVED_PREFIX}component/`.length)
+    .split("?", 1)[0];
   return basename.endsWith(".css") ? basename.slice(0, -4) : null;
 }
 
@@ -115,8 +117,10 @@ export function createTailwindVirtualPlugin(context) {
       const key = componentKey(id);
       if (!key) return null;
       const payload = context.get(key);
-      if (!payload) this.error(`Missing Tailwind component metadata for ${key}.`);
-      for (const dependency of payload.dependencies ?? []) this.addWatchFile(dependency);
+      if (!payload)
+        this.error(`Missing Tailwind component metadata for ${key}.`);
+      for (const dependency of payload.dependencies ?? [])
+        this.addWatchFile(dependency);
       return componentCss(context, payload);
     },
   };
@@ -135,7 +139,10 @@ export function createTailwindPropertyCleanupPlugin() {
 
       const root = postcss.parse(code, { from: id });
       root.walkAtRules((rule) => {
-        if (rule.name === "property" || (rule.name === "layer" && rule.params.trim() === "properties")) {
+        if (
+          rule.name === "property" ||
+          (rule.name === "layer" && rule.params.trim() === "properties")
+        ) {
           rule.remove();
         }
       });
@@ -144,9 +151,27 @@ export function createTailwindPropertyCleanupPlugin() {
   };
 }
 
-export function withTailwindViteCompiler(options = {}, integration = {}, context) {
+export function withTailwindViteCompiler(
+  options = {},
+  integration = {},
+  context,
+) {
   const resolvedContext = context ?? createTailwindContext(integration);
   return withTailwindCompiler(options, resolvedContext, integration);
+}
+
+export function createTailwindVitePlugins(
+  tailwindOptions = {},
+  integration = {},
+  context,
+) {
+  const resolvedContext = context ?? createTailwindContext(integration);
+  const officialPlugins = tailwindcss(tailwindOptions);
+  return [
+    createTailwindVirtualPlugin(resolvedContext),
+    ...(Array.isArray(officialPlugins) ? officialPlugins : [officialPlugins]),
+    createTailwindPropertyCleanupPlugin(),
+  ];
 }
 
 export function litsxTailwind(options = {}) {
@@ -154,12 +179,9 @@ export function litsxTailwind(options = {}) {
   const tailwindOptions = options.tailwind ?? {};
   const integration = options.integration ?? {};
   const context = createTailwindContext(integration);
-  const officialPlugins = tailwindcss(tailwindOptions);
   return [
     litsx(withTailwindCompiler(litsxOptions, context, integration)),
-    createTailwindVirtualPlugin(context),
-    ...(Array.isArray(officialPlugins) ? officialPlugins : [officialPlugins]),
-    createTailwindPropertyCleanupPlugin(),
+    ...createTailwindVitePlugins(tailwindOptions, integration, context),
   ];
 }
 

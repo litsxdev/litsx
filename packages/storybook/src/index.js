@@ -108,12 +108,7 @@ function createRegistrationSource(moduleAnalysis = null, options = {}) {
   return `\n\n${[...imports, ...definitions].join("\n")}\n`;
 }
 
-const AUTHORED_MODULE_SUFFIXES = [
-  ".tsx",
-  ".jsx",
-  "/index.tsx",
-  "/index.jsx",
-];
+const AUTHORED_MODULE_SUFFIXES = [".tsx", ".jsx", "/index.tsx", "/index.jsx"];
 
 async function fileExists(filename) {
   try {
@@ -376,8 +371,11 @@ function validateObjectExpressionShape(objectExpression, filename, label) {
 }
 
 function validateLitsxStoryModule(source, filename, compilerOptions = {}) {
+  const validationOptions = { ...compilerOptions };
+  delete validationOptions.authoringPlugins;
+  delete validationOptions.outputPlugins;
   const { inputAst } = prepareLitsxAuthoredInput(source, {
-    ...compilerOptions,
+    ...validationOptions,
     filename,
     requireJsx: true,
   });

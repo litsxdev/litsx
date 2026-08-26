@@ -1,6 +1,13 @@
 import fs from "fs";
 import path from "path";
 import { publishedPackageVersions } from "./published-package-versions.js";
+import {
+  appendStylingReadme,
+  applyStylingFiles,
+  applyStylingPackageBits,
+  normalizeStyling,
+  styleClasses,
+} from "./styling.js";
 
 const LOCAL_WORKSPACE_PACKAGE_NAMES = [
   "@litsx/compiler",
@@ -8,6 +15,8 @@ const LOCAL_WORKSPACE_PACKAGE_NAMES = [
   "@litsx/eslint-plugin",
   "@litsx/storybook",
   "@litsx/ssr",
+  "@litsx/tailwind",
+  "@litsx/unocss",
   "@litsx/vite-plugin",
 ];
 export function inferPackageManager(userAgent = "") {
@@ -27,13 +36,11 @@ export function inferPackageManager(userAgent = "") {
 }
 
 export function createNextStepCommands(targetDir, packageManager = "npm") {
-  const installCommand = packageManager === "yarn"
-    ? "yarn"
-    : `${packageManager} install`;
+  const installCommand =
+    packageManager === "yarn" ? "yarn" : `${packageManager} install`;
 
-  const runCommand = packageManager === "yarn"
-    ? "yarn"
-    : `${packageManager} run`;
+  const runCommand =
+    packageManager === "yarn" ? "yarn" : `${packageManager} run`;
 
   return [
     `cd ${targetDir}`,
@@ -42,6 +49,40 @@ export function createNextStepCommands(targetDir, packageManager = "npm") {
     `${runCommand} lint`,
     `${runCommand} typecheck`,
   ];
+}
+
+export function parseCliArgs(args = []) {
+  const result = {
+    help: false,
+    targetDir: undefined,
+    template: undefined,
+    styling: undefined,
+    visualTests: false,
+  };
+
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg === "--help" || arg === "-h") {
+      result.help = true;
+    } else if (arg === "--visual-tests") {
+      result.visualTests = true;
+    } else if (arg === "--template" || arg === "--styles") {
+      const value = args[index + 1];
+      if (!value || value.startsWith("--")) {
+        throw new Error(`Missing value for ${arg}.`);
+      }
+      result[arg === "--template" ? "template" : "styling"] = value;
+      index += 1;
+    } else if (arg.startsWith("--")) {
+      throw new Error(`Unknown option "${arg}".`);
+    } else if (result.targetDir) {
+      throw new Error(`Unexpected positional argument "${arg}".`);
+    } else {
+      result.targetDir = arg;
+    }
+  }
+
+  return result;
 }
 
 export function applyLocalWorkspaceOverrides(packageJson) {
@@ -60,15 +101,15 @@ export function applyLocalWorkspaceOverrides(packageJson) {
 }
 
 function toPackageName(input) {
-  const normalized = String(input || "").trim().toLowerCase();
+  const normalized = String(input || "")
+    .trim()
+    .toLowerCase();
   let packageName = "";
   let previousWasDash = false;
 
   for (const char of normalized) {
-    const isAlphaNumeric = (
-      (char >= "a" && char <= "z") ||
-      (char >= "0" && char <= "9")
-    );
+    const isAlphaNumeric =
+      (char >= "a" && char <= "z") || (char >= "0" && char <= "9");
 
     if (isAlphaNumeric) {
       packageName += char;
@@ -90,11 +131,13 @@ function toPackageName(input) {
 }
 
 function toClassName(input) {
-  return input
-    .split(/[^a-zA-Z0-9]+/)
-    .filter(Boolean)
-    .map((segment) => segment[0].toUpperCase() + segment.slice(1))
-    .join("") || "AppRoot";
+  return (
+    input
+      .split(/[^a-zA-Z0-9]+/)
+      .filter(Boolean)
+      .map((segment) => segment[0].toUpperCase() + segment.slice(1))
+      .join("") || "AppRoot"
+  );
 }
 
 export { toClassName, toPackageName };
@@ -120,7 +163,7 @@ function createBasePackageJson(packageName) {
     },
     dependencies: {
       "@webcomponents/scoped-custom-element-registry": "^0.0.10",
-      "lit": "^3.2.1",
+      lit: "^3.2.1",
       "@litsx/core": publishedPackageVersions["@litsx/core"],
     },
     devDependencies: {
@@ -128,13 +171,13 @@ function createBasePackageJson(packageName) {
       "@litsx/vite-plugin": publishedPackageVersions["@litsx/vite-plugin"],
       "@vitest/browser": "^4.1.11",
       "@vitest/browser-playwright": "^4.1.11",
-      "eslint": "^10.9.0",
-      "playwright": "^1.62.1",
-      "prettier": "^3.8.3",
-      "typescript": "^6.0.0",
-      "vite": "^8.0.3",
-      "vitest": "^4.1.11"
-    }
+      eslint: "^10.9.0",
+      playwright: "^1.62.1",
+      prettier: "^3.8.3",
+      typescript: "^6.0.0",
+      vite: "^8.0.3",
+      vitest: "^4.1.11",
+    },
   };
 }
 
@@ -160,13 +203,16 @@ function createSsrPackageJson(packageName) {
 
 function addVisualTestingPackageBits(packageJson) {
   packageJson.scripts["test:visual"] = "playwright test";
-  packageJson.scripts["test:visual:update"] = "playwright test --update-snapshots";
+  packageJson.scripts["test:visual:update"] =
+    "playwright test --update-snapshots";
   packageJson.scripts["storybook:static"] = "storybook build";
   packageJson.devDependencies["@playwright/test"] = "^1.62.1";
 }
 
 function addVisualTestingFiles(files) {
-  files.set("playwright.config.js", `import { defineConfig, devices } from "@playwright/test";
+  files.set(
+    "playwright.config.js",
+    `import { defineConfig, devices } from "@playwright/test";
 
 export default defineConfig({
   testDir: "./tests/visual",
@@ -195,8 +241,11 @@ export default defineConfig({
     },
   ],
 });
-`);
-  files.set("tests/visual/storybook.spec.js", `import { expect, test } from "@playwright/test";
+`,
+  );
+  files.set(
+    "tests/visual/storybook.spec.js",
+    `import { expect, test } from "@playwright/test";
 
 test.describe("storybook visual smoke", () => {
   test("status pill story stays stable", async ({ page }) => {
@@ -205,8 +254,11 @@ test.describe("storybook visual smoke", () => {
     await expect(page.locator("#storybook-root")).toHaveScreenshot("status-pill-default.png");
   });
 });
-`);
-  files.set("Dockerfile.visual", `FROM mcr.microsoft.com/playwright:v1.62.1-jammy
+`,
+  );
+  files.set(
+    "Dockerfile.visual",
+    `FROM mcr.microsoft.com/playwright:v1.62.1-jammy
 
 WORKDIR /app
 
@@ -220,20 +272,26 @@ ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 ENV TZ=UTC
 
 CMD ["npm", "run", "test:visual"]
-`);
-  files.set(".dockerignore", `node_modules
+`,
+  );
+  files.set(
+    ".dockerignore",
+    `node_modules
 dist
 storybook-static
 playwright-report
 test-results
-`);
+`,
+  );
 }
 
 function createBaseFiles(packageName, className, includeStorybook) {
   const files = new Map();
 
   files.set("package.json", "");
-  files.set("tsconfig.json", `{
+  files.set(
+    "tsconfig.json",
+    `{
   "compilerOptions": {
     "module": "ESNext",
     "moduleResolution": "Bundler",
@@ -249,8 +307,11 @@ function createBaseFiles(packageName, className, includeStorybook) {
   },
   "include": ${JSON.stringify(includeStorybook ? ["src", ".storybook"] : ["src"], null, 2)}
 }
-`);
-  files.set("index.html", `<!doctype html>
+`,
+  );
+  files.set(
+    "index.html",
+    `<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
@@ -262,8 +323,11 @@ function createBaseFiles(packageName, className, includeStorybook) {
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>
-`);
-  files.set("vite.config.js", `import { litsx } from "@litsx/vite-plugin";
+`,
+  );
+  files.set(
+    "vite.config.js",
+    `import { litsx } from "@litsx/vite-plugin";
 import { defineConfig } from "vite";
 
 export default defineConfig({
@@ -272,8 +336,11 @@ export default defineConfig({
     dedupe: ["lit", "lit-html", "lit-element", "@lit/reactive-element"],
   },
 });
-`);
-  files.set("vitest.config.js", `import { playwright } from "@vitest/browser-playwright";
+`,
+  );
+  files.set(
+    "vitest.config.js",
+    `import { playwright } from "@vitest/browser-playwright";
 import { defineConfig } from "vitest/config";
 import { litsx } from "@litsx/vite-plugin";
 
@@ -299,14 +366,20 @@ export default defineConfig({
     },
   },
 });
-`);
-  files.set("eslint.config.js", `import litsx from "@litsx/eslint-plugin";
+`,
+  );
+  files.set(
+    "eslint.config.js",
+    `import litsx from "@litsx/eslint-plugin";
 
 export default [
   litsx.configs["recommended-flat"],
 ];
-`);
-  files.set("public/title.svg", `<svg class="litsx-logo" width="144" height="40" viewBox="0 0 144 40" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="LitSX">
+`,
+  );
+  files.set(
+    "public/title.svg",
+    `<svg class="litsx-logo" width="144" height="40" viewBox="0 0 144 40" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="LitSX">
   <defs>
     <linearGradient id="sxGradient" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="40%" stop-color="#6a5cff"/>
@@ -345,8 +418,11 @@ export default [
     </tspan>
   </text>
 </svg>
-`);
-  files.set("public/litsx-wordmark.svg", `<svg width="210" height="64" viewBox="0 0 210 64" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="LitSX">
+`,
+  );
+  files.set(
+    "public/litsx-wordmark.svg",
+    `<svg width="210" height="64" viewBox="0 0 210 64" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="LitSX">
   <defs>
     <linearGradient id="flameGradient" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" stop-color="#ff8a00"/>
@@ -399,13 +475,25 @@ export default [
     <tspan dx="-4" dy="-12" font-size="18">sx</tspan>
   </text>
 </svg>
-`);
-  files.set("public/flame_512.png", fs.readFileSync(new URL("./assets/flame_512.png", import.meta.url)));
-  files.set("src/vendor.d.ts", `export {};
-`);
-  files.set("src/styles.d.ts", `declare module "*.css";
-`);
-  files.set("src/main.js", `import "@webcomponents/scoped-custom-element-registry";
+`,
+  );
+  files.set(
+    "public/flame_512.png",
+    fs.readFileSync(new URL("./assets/flame_512.png", import.meta.url)),
+  );
+  files.set(
+    "src/vendor.d.ts",
+    `export {};
+`,
+  );
+  files.set(
+    "src/styles.d.ts",
+    `declare module "*.css";
+`,
+  );
+  files.set(
+    "src/main.js",
+    `import "@webcomponents/scoped-custom-element-registry";
 import { ${className} } from "./${packageName}";
 import "./styles/tokens.css";
 
@@ -417,8 +505,11 @@ customElements.define(
 const app = document.querySelector("#app");
 if (!app) throw new Error("Missing #app mount point");
 app.innerHTML = "<app-root></app-root>";
-`);
-  files.set(`src/${packageName}.test.js`, `import { afterEach, describe, expect, it } from "vitest";
+`,
+  );
+  files.set(
+    `src/${packageName}.test.js`,
+    `import { afterEach, describe, expect, it } from "vitest";
 import { ${className} } from "./${packageName}";
 
 const tagName = "test-${packageName}";
@@ -455,21 +546,24 @@ describe("${className}", () => {
     expect(root?.querySelector("starter-guide")).toBeTruthy();
   });
 });
-`);
+`,
+  );
 
   return files;
 }
 
-function createAppProfileFiles(packageName, className) {
-  const files = createComponentProfileFiles(packageName, className);
+function createAppProfileFiles(packageName, className, styling) {
+  const files = createComponentProfileFiles(packageName, className, styling);
 
-  files.set(`src/${packageName}.tsx`, `import { css } from "@litsx/core";
+  files.set(
+    `src/${packageName}.tsx`,
+    `import { css } from "@litsx/core";
 import { LitsxHero } from "./components/litsx-hero";
 import { StarterGuide } from "./components/starter-guide";
 
 export const ${className} = () => {
   return (
-    <main class="shell">
+    <main class="${styleClasses(styling, "shell", "relative mx-auto max-w-5xl py-7")}">
       <LitsxHero
         eyebrow={"Application starter"}
         tagline={"Web components with a sharper authoring experience. Less ceremony. More signal."}
@@ -497,8 +591,11 @@ ${className}.styles = css\`
       position: relative;
     }
   \`;
-`);
-  files.set("README.md", `# ${packageName}
+`,
+  );
+  files.set(
+    "README.md",
+    `# ${packageName}
 
 Generated with \`create-litsx-app --template app\`.
 
@@ -524,21 +621,24 @@ Generated with \`create-litsx-app --template app\`.
 - routed onboarding actions with \`on:primary-action\` and \`on:secondary-action\`
 - a home-style starter layout with \`LitsxHero\` and \`StarterGuide\`
 - component-owned styling with \`Component.styles = css\`...\`\`
-`);
+`,
+  );
 
   return files;
 }
 
-function createComponentProfileFiles(packageName, className) {
+function createComponentProfileFiles(packageName, className, styling) {
   const files = createBaseFiles(packageName, className, false);
 
-  files.set(`src/${packageName}.tsx`, `import { css } from "@litsx/core";
+  files.set(
+    `src/${packageName}.tsx`,
+    `import { css } from "@litsx/core";
 import { LitsxHero } from "./components/litsx-hero";
 import { StarterGuide } from "./components/starter-guide";
 
 export const ${className} = () => {
   return (
-    <main class="shell">
+    <main class="${styleClasses(styling, "shell", "relative mx-auto max-w-5xl py-7")}">
       <LitsxHero
         eyebrow={"Design system starter"}
         tagline={"Web components with a sharper authoring experience. Less ceremony. More signal."}
@@ -566,8 +666,11 @@ ${className}.styles = css\`
       position: relative;
     }
   \`;
-`);
-  files.set("src/components/guide-card.tsx", `import { css, type LitsxRenderable } from "@litsx/core";
+`,
+  );
+  files.set(
+    "src/components/guide-card.tsx",
+    `import { css, type LitsxRenderable } from "@litsx/core";
 
 type GuideCardProps = {
   eyebrow?: string;
@@ -581,7 +684,7 @@ export const GuideCard = ({
   contentRenderer = () => null,
 }: GuideCardProps) => {
   return (
-    <article class="guide-card">
+    <article class="${styleClasses(styling, "guide-card", "rounded-3xl border border-slate-200 bg-white/95 p-6 shadow-xl")}">
       <p class="guide-card__eyebrow">{eyebrow}</p>
       <h2>{titleRenderer()}</h2>
       {contentRenderer()}
@@ -636,8 +739,15 @@ GuideCard.styles = css\`
       to { opacity: 1; transform: translateY(0); }
     }
   \`;
-`);
-  files.set("src/components/litsx-button.tsx", `import { css } from "@litsx/core";
+`,
+  );
+  const buttonClassExpression =
+    styling === "css"
+      ? 'type === "primary" ? "primary" : ""'
+      : 'type === "primary" ? "primary font-bold" : "font-bold"';
+  files.set(
+    "src/components/litsx-button.tsx",
+    `import { css } from "@litsx/core";
 
 type LitsxButtonProps = {
   type?: "primary" | "secondary";
@@ -648,7 +758,7 @@ export const LitsxButton = ({
   type = "secondary",
   label = "",
 }: LitsxButtonProps) => {
-  return <button class={type === "primary" ? "primary" : ""}>{label}</button>;
+  return <button class={${buttonClassExpression}}>{label}</button>;
 };
 
 LitsxButton.styles = css\`
@@ -707,8 +817,11 @@ LitsxButton.styles = css\`
         0 10px 22px color-mix(in srgb, var(--litsx-c-brand-1) 18%, transparent);
     }
   \`;
-`);
-  files.set("src/components/litsx-hero.tsx", `import { css, useEmit } from "@litsx/core";
+`,
+  );
+  files.set(
+    "src/components/litsx-hero.tsx",
+    `import { css, useEmit } from "@litsx/core";
 import { LitsxButton } from "./litsx-button";
 
 type LitsxHeroProps = {
@@ -726,7 +839,7 @@ export const LitsxHero = ({
 }: LitsxHeroProps) => {
   const emit = useEmit();
   return (
-    <section class="LitsxHero">
+    <section class="${styleClasses(styling, "LitsxHero", "px-6 py-12 sm:px-12 sm:py-20")}">
       <div class="container">
         <div class="main">
           <p class="eyebrow">{eyebrow}</p>
@@ -950,8 +1063,12 @@ LitsxHero.styles = css\`
       }
     }
   \`;
-`);
-  files.set("src/components/starter-guide.tsx", `import { css, SuspenseBoundary, SuspenseList, useOnConnect, useRef, useState } from "@litsx/core";
+`,
+  );
+  files.set(
+    "src/components/starter-guide.tsx",
+    `import { css, SuspenseBoundary, SuspenseList, useOnConnect, useRef, useState } from "@litsx/core";
+import { isServer } from "lit";
 import { GuideCard } from "./guide-card";
 
 type DeferredStep = {
@@ -994,7 +1111,7 @@ function suspendUntil(
 export const StarterGuide = () => {
   const delays: number[] = [180, 220, 240];
   const pendingStepsRef = useRef<Map<number, DeferredStep> | null>(null);
-  const [revealedCount, setRevealedCount] = useState(0);
+  const [revealedCount, setRevealedCount] = useState(isServer ? delays.length : 0);
   const pendingSteps = resolvePendingSteps(pendingStepsRef);
 
   if (revealedCount > 0) {
@@ -1049,7 +1166,7 @@ export const StarterGuide = () => {
 
   return (
     <section class="guide" aria-label="Getting started with LitSX">
-      <SuspenseList class="guide-list" reveal-order="forwards" tail="hidden">
+      <SuspenseList class="${styleClasses(styling, "guide-list", "grid gap-5 lg:grid-cols-3")}" reveal-order="forwards" tail="hidden">
         <SuspenseBoundary
           fallback={null}
         >
@@ -1139,8 +1256,11 @@ StarterGuide.styles = css\`
       }
     }
   \`;
-`);
-  files.set("src/styles/tokens.css", `:root {
+`,
+  );
+  files.set(
+    "src/styles/tokens.css",
+    `:root {
   --litsx-c-brand-1: #f05a28;
   --litsx-c-brand-2: #ff7446;
   --litsx-flame-a: #ff8a00;
@@ -1169,8 +1289,11 @@ body {
   background-size: cover;
   color: var(--color-text);
 }
-`);
-  files.set("README.md", `# ${packageName}
+`,
+  );
+  files.set(
+    "README.md",
+    `# ${packageName}
 
 Generated with \`create-litsx-app --template component\`.
 
@@ -1190,26 +1313,35 @@ Generated with \`create-litsx-app --template component\`.
 - Official \`@litsx/eslint-plugin\` linting preset
 - A starter component-library structure under \`src/components\`
 - Shared hero, guide and button primitives without Storybook overhead
-`);
+`,
+  );
 
   return files;
 }
 
-function createDesignSystemProfileFiles(packageName, className) {
-  const files = createComponentProfileFiles(packageName, className);
+function createDesignSystemProfileFiles(packageName, className, styling) {
+  const files = createComponentProfileFiles(packageName, className, styling);
 
-  files.set(".storybook/main.js", `import { createLitsxStorybookConfig } from "@litsx/storybook";
+  files.set(
+    ".storybook/main.js",
+    `import { createLitsxStorybookConfig } from "@litsx/storybook";
 
 export default createLitsxStorybookConfig();
-`);
-  files.set(".storybook/preview.js", `import "@webcomponents/scoped-custom-element-registry";
+`,
+  );
+  files.set(
+    ".storybook/preview.js",
+    `import "@webcomponents/scoped-custom-element-registry";
 import "../src/styles/tokens.css";
 
 export const parameters = {
   layout: "centered",
 };
-`);
-  files.set("src/stories/litsx-button.stories.tsx", `import { LitsxButton } from "../components/litsx-button";
+`,
+  );
+  files.set(
+    "src/stories/litsx-button.stories.tsx",
+    `import { LitsxButton } from "../components/litsx-button";
 
 type LitsxButtonStoryArgs = {
   label?: string;
@@ -1233,8 +1365,11 @@ export const Secondary = {
 export const Primary = {
   args: { label: "Getting Started", type: "primary" },
 };
-`);
-  files.set("src/stories/litsx-hero.stories.tsx", `import { LitsxHero } from "../components/litsx-hero";
+`,
+  );
+  files.set(
+    "src/stories/litsx-hero.stories.tsx",
+    `import { LitsxHero } from "../components/litsx-hero";
 
 const meta = {
   title: "Marketing/LitsxHero",
@@ -1258,8 +1393,11 @@ const meta = {
 
 export default meta;
 export const Default = {};
-`);
-  files.set("src/stories/starter-guide.stories.tsx", `import { StarterGuide } from "../components/starter-guide";
+`,
+  );
+  files.set(
+    "src/stories/starter-guide.stories.tsx",
+    `import { StarterGuide } from "../components/starter-guide";
 
 const meta = {
   title: "Getting Started/StarterGuide",
@@ -1269,8 +1407,11 @@ const meta = {
 
 export default meta;
 export const Default = {};
-`);
-  files.set("src/stories/starter-guide.docs.mdx", `import { Meta, Canvas } from "@storybook/addon-docs/blocks";
+`,
+  );
+  files.set(
+    "src/stories/starter-guide.docs.mdx",
+    `import { Meta, Canvas } from "@storybook/addon-docs/blocks";
 import * as StarterGuideStories from "./starter-guide.stories";
 
 <Meta of={StarterGuideStories} />
@@ -1287,8 +1428,11 @@ The \`StarterGuide\` component demonstrates LitSX suspense primitives in a way t
 - focused loading states with \`SuspenseBoundary\`
 - component-owned styling with \`Component.styles = css\`...\`\`
 - onboarding copy that points directly at the generated project structure
-`);
-  files.set("README.md", `# ${packageName}
+`,
+  );
+  files.set(
+    "README.md",
+    `# ${packageName}
 
 Generated with \`create-litsx-app --template design-system\`.
 
@@ -1310,17 +1454,29 @@ Generated with \`create-litsx-app --template design-system\`.
 - Official \`@litsx/eslint-plugin\` linting preset
 - Storybook for web components with MDX docs
 - Starter hero, guide and button primitives with matching stories
-`);
+`,
+  );
 
   return files;
 }
 
-function createSsrProfileFiles(packageName, className) {
-  const files = createAppProfileFiles(packageName, className);
+function createSsrProfileFiles(packageName, className, styling) {
+  const files = createAppProfileFiles(packageName, className, styling);
   const tagName = packageName;
+  const styleImport =
+    styling === "css"
+      ? ""
+      : 'import { createLitsxStyleIntegration } from "./litsx.style.js";\n';
+  const styleSetup =
+    styling === "css"
+      ? ""
+      : "\nconst styling = createLitsxStyleIntegration({ sourceMaps: true });\n";
+  const devStyleOptions = styling === "css" ? "" : "\n  ...styling,";
 
   files.delete("vite.config.js");
-  files.set("index.html", `<!doctype html>
+  files.set(
+    "index.html",
+    `<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8">
@@ -1369,9 +1525,12 @@ function createSsrProfileFiles(packageName, className) {
     <!--app-bootstrap-->
   </body>
 </html>
-`);
+`,
+  );
 
-  files.set("jsconfig.json", `{
+  files.set(
+    "jsconfig.json",
+    `{
   "compilerOptions": {
     "module": "ESNext",
     "moduleResolution": "Bundler",
@@ -1387,13 +1546,21 @@ function createSsrProfileFiles(packageName, className) {
     "render.mjs"
   ]
 }
-`);
-  files.set("src/main.js", `const { defineAppElements } = await import("./${packageName}");
+`,
+  );
+  files.set(
+    "src/main.js",
+    `export {};
+
+const { defineAppElements } = await import("./${packageName}");
 defineAppElements();
 
 document.body.dataset.hydrated = "true";
-`);
-  files.set(`src/${packageName}.test.js`, `import { afterEach, describe, expect, it } from "vitest";
+`,
+  );
+  files.set(
+    `src/${packageName}.test.js`,
+    `import { afterEach, describe, expect, it } from "vitest";
 import { ${className}, defineAppElements } from "./${packageName}";
 
 const tagName = "${tagName}";
@@ -1401,6 +1568,7 @@ const tagName = "${tagName}";
 defineAppElements();
 
 describe("${className}", () => {
+  /** @type {(HTMLElement & { updateComplete: Promise<unknown> }) | null} */
   let host = null;
 
   afterEach(() => {
@@ -1409,7 +1577,9 @@ describe("${className}", () => {
   });
 
   it("renders the SSR starter shell in a real browser DOM", async () => {
-    host = document.createElement(tagName);
+    host = /** @type {HTMLElement & { updateComplete: Promise<unknown> }} */ (
+      document.createElement(tagName)
+    );
     document.body.append(host);
 
     await host.updateComplete;
@@ -1420,8 +1590,11 @@ describe("${className}", () => {
     expect(root?.textContent ?? "").toContain("SSR for authored web components");
   });
 });
-`);
-  files.set(`src/${packageName}.tsx`, `import { css } from "@litsx/core";
+`,
+  );
+  files.set(
+    `src/${packageName}.tsx`,
+    `import { css } from "@litsx/core";
 import { LitsxHero } from "./components/litsx-hero";
 import { StarterGuide } from "./components/starter-guide";
 
@@ -1432,7 +1605,7 @@ export function ${className}({
   secondaryLabel = "View on GitHub",
 }) {
   return (
-    <main class="shell">
+    <main class="${styleClasses(styling, "shell", "relative mx-auto max-w-5xl py-7")}">
       <LitsxHero
         eyebrow={eyebrow}
         tagline={tagline}
@@ -1469,8 +1642,12 @@ export function defineAppElements() {
     customElements.define("${tagName}", ${className} as any);
   }
 }
-`);
-  files.set("dev.mjs", `import { createSsrDevServer } from "@litsx/ssr";
+`,
+  );
+  files.set(
+    "dev.mjs",
+    `import { createSsrDevServer } from "@litsx/ssr";
+${styleImport}${styleSetup}
 
 const server = await createSsrDevServer({
   root: new URL(".", import.meta.url).pathname,
@@ -1478,7 +1655,7 @@ const server = await createSsrDevServer({
   clientEntry: "./src/main.js",
   host: "127.0.0.1",
   port: 5177,
-  logLevel: "info",
+  logLevel: "info",${devStyleOptions}
   elements(loader) {
     return {
       "${tagName}": async () =>
@@ -1497,40 +1674,56 @@ const server = await createSsrDevServer({
 
 await server.listen();
 server.printUrls();
-`);
-  files.set("render.mjs", `import fs from "node:fs/promises";
+`,
+  );
+  files.set(
+    "render.mjs",
+    `import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { renderDocument } from "@litsx/ssr";
+import { createSsrDevServer, html, renderDocument } from "@litsx/ssr";
+${styleImport}${styleSetup}
 
 const exampleDir = path.dirname(fileURLToPath(import.meta.url));
 const outputDir = path.join(exampleDir, "dist");
 const outputPath = path.join(outputDir, "index.html");
 
 export async function renderAppDocument() {
-  const result = await renderDocument({
+  const template = await fs.readFile(path.join(exampleDir, "index.html"), "utf8");
+  const viteServer = await createSsrDevServer({
     root: exampleDir,
-    template: "./index.html",
-    clientEntry: "./src/main.js",
-    elements(loader) {
-      return {
-        "${tagName}": async () =>
-          (await loader("./src/${packageName}.tsx")).${className},
-      };
-    },
-    render({ html }) {
-      return html\`<${tagName}
+    logLevel: "silent",${devStyleOptions}
+    vite: { server: { middlewareMode: true } },
+  });
+
+  try {
+    const { ${className} } = await viteServer.ssrLoadModule("/src/${packageName}.tsx");
+    const result = await renderDocument(
+      html\`<${tagName}
         .eyebrow=\${"SSR starter"}
         .tagline=\${"SSR for authored web components. Render the document on the server, then hydrate the same authored tree in the browser."}
         .primaryLabel=\${"SSR docs"}
         .secondaryLabel=\${"View on GitHub"}
-      ></${tagName}>\`;
-    },
-  });
+      ></${tagName}>\`,
+      {
+        clientEntry: "/src/main.js",
+        elements: { "${tagName}": ${className} },
+        template({ bootstrap, head, html, hydrationScript, modulePreloads }) {
+          return template
+            .replace("<!--app-head-->", \`\${head}\${modulePreloads}\${hydrationScript}\`)
+            .replace("<!--app-html-->", html)
+            .replace("<!--app-bootstrap-->", bootstrap);
+        },
+      },
+    );
+    const document = await viteServer.transformIndexHtml("/index.html", result.document);
 
-  await fs.mkdir(outputDir, { recursive: true });
-  await fs.writeFile(outputPath, result.document);
-  return result;
+    await fs.mkdir(outputDir, { recursive: true });
+    await fs.writeFile(outputPath, document);
+    return { ...result, document };
+  } finally {
+    await viteServer.close();
+  }
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
@@ -1539,8 +1732,11 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   console.log(\`client imports: \${result.clientImports.join(", ")}\`);
   console.log(\`hydration roots: \${result.hydrationData?.roots.length ?? 0}\`);
 }
-`);
-  files.set("README.md", `# ${packageName}
+`,
+  );
+  files.set(
+    "README.md",
+    `# ${packageName}
 
 Generated with \`create-litsx-app --template ssr\`.
 
@@ -1565,22 +1761,24 @@ Run \`npm run render\` when you want a prerendered document in \`dist/index.html
 ## What This Template Shows
 
 - document-first server rendering with \`renderDocument(...)\`
-- authored prerender/build flow with \`renderDocument({...})\`
+- authored prerender/build flow with \`renderDocument(createEntry({...}))\`
 - local SSR development with \`createSsrDevServer(...)\`
 - automatic hydration bootstrap through \`clientEntry\`
 - a shared \`index.html\` shell for dev SSR and static prerender output
 - the same hero and guide components as the standard app scaffold
 - SSR-specific copy, routes, and entrypoints
 - standard JSX authoring in \`src/${packageName}.tsx\`
-`);
+`,
+  );
 
   return files;
 }
 
 function createPackageJson(packageName, template, options = {}) {
-  const packageJson = template === "ssr"
-    ? createSsrPackageJson(packageName)
-    : createBasePackageJson(packageName);
+  const packageJson =
+    template === "ssr"
+      ? createSsrPackageJson(packageName)
+      : createBasePackageJson(packageName);
 
   if (template === "design-system") {
     packageJson.scripts.storybook = "storybook dev -p 6006";
@@ -1590,7 +1788,7 @@ function createPackageJson(packageName, template, options = {}) {
       "@storybook/addon-a11y": "^10.5.10",
       "@storybook/addon-docs": "^10.5.10",
       "@storybook/web-components-vite": "^10.5.10",
-      "storybook": "^10.5.10",
+      storybook: "^10.5.10",
     });
   }
 
@@ -1598,34 +1796,54 @@ function createPackageJson(packageName, template, options = {}) {
     addVisualTestingPackageBits(packageJson);
   }
 
+  applyStylingPackageBits(
+    packageJson,
+    options.styling,
+    publishedPackageVersions,
+  );
+
   return packageJson;
 }
 
 export function renderProjectFiles(targetDir, options = {}) {
   const template = options.template ?? "app";
   const visualTests = Boolean(options.visualTests);
+  const styling = normalizeStyling(options.styling);
 
   if (!["app", "component", "design-system", "ssr"].includes(template)) {
-    throw new Error(`Unknown template "${template}". Expected "app", "component", "design-system" or "ssr".`);
+    throw new Error(
+      `Unknown template "${template}". Expected "app", "component", "design-system" or "ssr".`,
+    );
   }
 
   const packageName = toPackageName(path.basename(targetDir));
   const className = toClassName(packageName);
-  const packageJson = createPackageJson(packageName, template, { visualTests });
+  const packageJson = createPackageJson(packageName, template, {
+    visualTests,
+    styling,
+  });
   if (options.localWorkspacePackages) {
     applyLocalWorkspaceOverrides(packageJson);
   }
-  const files = template === "app"
-    ? createAppProfileFiles(packageName, className)
-    : template === "component"
-      ? createComponentProfileFiles(packageName, className)
-      : template === "design-system"
-        ? createDesignSystemProfileFiles(packageName, className)
-        : createSsrProfileFiles(packageName, className);
+  const files =
+    template === "app"
+      ? createAppProfileFiles(packageName, className, styling)
+      : template === "component"
+        ? createComponentProfileFiles(packageName, className, styling)
+        : template === "design-system"
+          ? createDesignSystemProfileFiles(packageName, className, styling)
+          : createSsrProfileFiles(packageName, className, styling);
+
+  applyStylingFiles(files, styling, {
+    includeStorybook: template === "design-system",
+    includeVite: template !== "ssr",
+  });
 
   if (visualTests) {
     addVisualTestingFiles(files);
   }
+
+  files.set("README.md", appendStylingReadme(files.get("README.md"), styling));
 
   files.set("package.json", `${JSON.stringify(packageJson, null, 2)}\n`);
 
@@ -1633,6 +1851,7 @@ export function renderProjectFiles(targetDir, options = {}) {
     packageName,
     className,
     template,
+    styling,
     visualTests,
     files,
   };
@@ -1650,7 +1869,8 @@ export function createProject(targetDir, options = {}) {
     fs.mkdirSync(absoluteTargetDir, { recursive: true });
   }
 
-  const { files, packageName, className, template, visualTests } = renderProjectFiles(absoluteTargetDir, options);
+  const { files, packageName, className, template, styling, visualTests } =
+    renderProjectFiles(absoluteTargetDir, options);
 
   for (const [relativePath, contents] of files) {
     const destination = path.join(absoluteTargetDir, relativePath);
@@ -1667,6 +1887,7 @@ export function createProject(targetDir, options = {}) {
     packageName,
     className,
     template,
+    styling,
     visualTests,
   };
 }

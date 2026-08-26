@@ -3,6 +3,7 @@ import path from "node:path";
 import { describe, it } from "vitest";
 import { createTailwindContext } from "../packages/tailwind/src/context.js";
 import {
+  createTailwindVitePlugins,
   createTailwindPropertyCleanupPlugin,
   createTailwindVirtualPlugin,
   litsxTailwind,
@@ -217,6 +218,26 @@ describe("@litsx/tailwind Vite and context branches", () => {
     );
     assert.equal(compiler.authoringPlugins.length, 1);
     assert.equal(compiler.outputPlugins.length, 1);
+
+    const splitContext = createTailwindContext({ entry: "tailwindcss" });
+    const splitPlugins = createTailwindVitePlugins(
+      { optimize: false },
+      { entry: "tailwindcss" },
+      splitContext,
+    ).flat(Infinity);
+    assert(
+      splitPlugins.some((plugin) => plugin.name === "@tailwindcss/vite:scan"),
+    );
+    assert(
+      splitPlugins.some(
+        (plugin) => plugin.name === "litsx:tailwind-virtual-css",
+      ),
+    );
+    assert(
+      createTailwindVitePlugins()
+        .flat(Infinity)
+        .some((plugin) => plugin.name === "litsx:tailwind-virtual-css"),
+    );
 
     const plugins = litsxTailwind({
       litsx: {},

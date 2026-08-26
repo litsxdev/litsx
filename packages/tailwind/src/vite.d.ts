@@ -17,6 +17,11 @@ export declare function withTailwindViteCompiler(
   integration?: LitsxTailwindIntegrationOptions,
   context?: LitsxTailwindContext,
 ): LitsxVitePluginOptions;
+export declare function createTailwindVitePlugins(
+  tailwindOptions?: Record<string, unknown>,
+  integration?: LitsxTailwindIntegrationOptions,
+  context?: LitsxTailwindContext,
+): PluginOption[];
 export declare function createTailwindVirtualPlugin(
   context: LitsxTailwindContext,
 ): PluginOption;

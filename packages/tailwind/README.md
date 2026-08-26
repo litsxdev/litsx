@@ -65,10 +65,9 @@ above. Its options are:
 - `integration`: LitSX candidate-routing options documented below.
 
 Advanced Vite integrations can compose the lower-level
-`withTailwindViteCompiler()`, `createTailwindVirtualPlugin()`, and
-`createTailwindPropertyCleanupPlugin()` primitives. Use them only when another
-framework owns plugin ordering; ordinary applications should use
-`litsxTailwind()`.
+`withTailwindViteCompiler()` and `createTailwindVitePlugins()` helpers. Pass a
+shared context to both when another framework owns the LitSX plugin ordering,
+as Storybook does. Ordinary applications should use `litsxTailwind()`.
 
 ### `@litsx/tailwind`
 

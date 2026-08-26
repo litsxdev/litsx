@@ -77,6 +77,7 @@ Depending on the selected template, it can also include:
 - MDX docs for stories
 - Playwright visual tests
 - starter design-system or component-library structure
+- first-party Tailwind CSS or UnoCSS integration
 
 ## Usage
 
@@ -86,6 +87,8 @@ npx create-litsx-app my-design-system --template design-system
 npx create-litsx-app my-components --template component
 npx create-litsx-app my-app-shell --template app
 npx create-litsx-app my-ssr-app --template ssr
+npx create-litsx-app my-tailwind-app --styles tailwind
+npx create-litsx-app my-uno-system --template design-system --styles unocss
 npx create-litsx-app my-design-system --template design-system --visual-tests
 ```
 
@@ -127,6 +130,19 @@ Includes:
 - a minimal authored LitSX SSR component under `src/`
 
 ## Optional Flags
+
+### `--styles css|tailwind|unocss`
+
+Selects the generated styling profile. `css` is the backward-compatible
+default and keeps authored `Component.styles` as the primary styling surface.
+`tailwind` wires `@litsx/tailwind`, Tailwind CSS 4 and the official Vite
+adapter. `unocss` wires `@litsx/unocss` with the Wind 3 preset.
+
+The selected integration is applied consistently to the app build, browser
+tests, Storybook when present, and SSR development/prerendering. Generated
+components include statically discoverable utility classes in the Tailwind and
+UnoCSS profiles while retaining authored CSS for the starter's bespoke visual
+details.
 
 ### `--visual-tests`
 

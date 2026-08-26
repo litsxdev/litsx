@@ -89,7 +89,7 @@
     "release:check": "yarn check:lit-dedupe && yarn release:build:public && yarn release:check:undeclared-runtime-deps && node scripts/release/check-release-packages.js",
     "release:check:generated-sync": "node scripts/release/check-generated-artifacts.js",
     "hooks:install": "node scripts/hooks/install-hooks.mjs",
-    "release:smoke:scaffolds": "node scripts/release/smoke-scaffolds.js",
+    "release:smoke:scaffolds": "node scripts/release/smoke-scaffolds.js && node scripts/test/scaffold-style-matrix.js",
     "release:artifacts": "node scripts/release/build-release-artifacts.js",
     "release:github": "node scripts/release/build-github-release.js",
     "release:github:backfill": "node scripts/release/backfill-github-releases.js",

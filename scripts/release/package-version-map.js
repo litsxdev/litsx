@@ -36,6 +36,7 @@ export const packageDirsByName = new Map([
   ],
   ["@litsx/babel-plugin-shared-hooks", "packages/babel-plugin-shared-hooks"],
   ["@litsx/typescript-session", "packages/typescript-session"],
+  ["@litsx/tailwind", "packages/tailwind"],
   ["@litsx/unocss", "packages/unocss"],
 ]);
 
