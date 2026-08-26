@@ -1579,7 +1579,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@litsx/compiler@npm:^1.0.0-next.4, @litsx/compiler@npm:^1.0.0-next.9, @litsx/compiler@workspace:packages/compiler":
+"@litsx/compiler@npm:^1.0.0-next.10, @litsx/compiler@npm:^1.0.0-next.9, @litsx/compiler@workspace:packages/compiler":
   version: 0.0.0-use.local
   resolution: "@litsx/compiler@workspace:packages/compiler"
   dependencies:
@@ -1659,7 +1659,7 @@ __metadata:
   resolution: "@litsx/storybook@workspace:packages/storybook"
   dependencies:
     "@litsx/authoring": "npm:^1.0.0-next.3"
-    "@litsx/compiler": "npm:^1.0.0-next.4"
+    "@litsx/compiler": "npm:^1.0.0-next.10"
     "@litsx/vite-plugin": "npm:^1.0.0-next.0"
     "@storybook/web-components-vite": "npm:10.5.10"
     storybook: "npm:10.5.10"
@@ -1674,7 +1674,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@litsx/tailwind@workspace:packages/tailwind"
   dependencies:
-    "@litsx/compiler": "npm:^1.0.0-next.9"
+    "@litsx/compiler": "npm:^1.0.0-next.10"
     postcss: "npm:^8.5.6"
   peerDependencies:
     "@litsx/vite-plugin": ^1.0.0-next.1

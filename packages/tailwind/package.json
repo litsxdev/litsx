@@ -1,6 +1,6 @@
 {
   "name": "@litsx/tailwind",
-  "version": "1.0.0-next.4",
+  "version": "1.0.0-next.5",
   "description": "Bundler-neutral Tailwind CSS integration protocol for LitSX components",
   "author": "LitSX Team",
   "type": "module",
@@ -71,7 +71,7 @@
     }
   },
   "dependencies": {
-    "@litsx/compiler": "^1.0.0-next.9",
+    "@litsx/compiler": "^1.0.0-next.10",
     "postcss": "^8.5.6"
   },
   "scripts": {
