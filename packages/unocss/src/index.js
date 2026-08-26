@@ -497,7 +497,7 @@ export function createUnoCssOutputPlugin(options = {}) {
               filename,
               {
                 dynamicWildcard: UNO_CSS_DYNAMIC_WILDCARD,
-                excludeLitsxComponentClasses: true,
+                excludeClassBodies: true,
               },
             );
 

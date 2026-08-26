@@ -213,9 +213,10 @@ function writeHybridUtilityBoundary(directory) {
   fs.writeFileSync(
     path.join(directory, "plain-lit-leaf.ts"),
     `
-import { LitElement, html } from "lit";
+import { LitElement, css, html } from "lit";
 export class PlainLitLeaf extends LitElement {
-  render() { return html\`<strong data-plain-leaf>leaf</strong>\`; }
+  static styles = css\`.pure-lit-owned { color: green; }\`;
+  render() { return html\`<strong class="pure-lit-owned bg-green-500" data-plain-leaf>leaf</strong>\`; }
 }
 `,
     "utf8",
@@ -239,7 +240,7 @@ import { LitElement, html } from "lit";
 import { HybridLightChild } from "./hybrid-light-child.tsx";
 export class PureLitParent extends LitElement {
   static elements = { "hybrid-light-child": HybridLightChild };
-  render() { return html\`<hybrid-light-child></hybrid-light-child>\`; }
+  render() { return html\`<main class="p-8"><hybrid-light-child></hybrid-light-child></main>\`; }
 }
 `,
     "utf8",
@@ -488,6 +489,8 @@ describe("utility CSS concurrency isolation", () => {
     assert.match(materialized, /\.p-4/u);
     assert.match(materialized, /\.p-6/u);
     assert.match(materialized, /data-litsx-style-scope/u);
+    assert.doesNotMatch(materialized, /\.bg-green-500\s*\{/u);
+    assert.doesNotMatch(materialized, /\.p-8\s*\{/u);
     assert.strictEqual((materialized.match(/\.bg-red-500\s*\{/gu) ?? []).length, 1);
     assert.strictEqual((materialized.match(/\.bg-blue-500\s*\{/gu) ?? []).length, 1);
   });
@@ -505,6 +508,8 @@ describe("utility CSS concurrency isolation", () => {
     assert.match(materialized, /\.p-4/u);
     assert.match(materialized, /\.p-6/u);
     assert.match(materialized, /data-litsx-style-scope/u);
+    assert.doesNotMatch(materialized, /\.bg-green-500\s*\{/u);
+    assert.doesNotMatch(materialized, /\.p-8\s*\{/u);
     const redRules = [
       ...materialized.matchAll(/\.bg-red-500\s*\{[^}]*\}/gu),
     ].map((match) => match[0]);

@@ -62,7 +62,7 @@ export declare function collectUtilityClassCandidates(
   filename?: string,
   options?: {
     dynamicWildcard?: string;
-    excludeLitsxComponentClasses?: boolean;
+    excludeClassBodies?: boolean;
     retainStaticCandidates?: boolean;
   },
 ): UtilityClassCandidates;

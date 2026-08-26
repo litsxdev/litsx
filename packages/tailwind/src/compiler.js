@@ -329,7 +329,7 @@ export function createTailwindOutputPlugin(context, options = {}) {
               resolver,
               filename,
               {
-                excludeLitsxComponentClasses: true,
+                excludeClassBodies: true,
                 retainStaticCandidates: true,
               },
             );
