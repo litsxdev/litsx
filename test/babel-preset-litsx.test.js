@@ -54,6 +54,30 @@ beforeAll(async () => {
 });
 
 describe("@litsx/babel-preset-litsx", () => {
+  it("lowers mixed HTML and SVG with canonical attributes and SVG dynamic fragments", () => {
+    const source = [
+      "type Shape = { d: string };",
+      "type Props = { viewBox: string; strokeWidth: number; d: string; shapes: Shape[] };",
+      "export const TestSvg = ({ viewBox, strokeWidth, d, shapes }: Props) => (",
+      "  <section><svg viewBox={viewBox} strokeWidth={strokeWidth}>",
+      "    <path d={d} strokeLinecap=\"round\" />",
+      "    {shapes.map((shape) => <path d={shape.d} />)}",
+      "    <foreignObject width={20}><div>HTML</div></foreignObject>",
+      "  </svg></section>",
+      ");",
+    ].join("\n");
+
+    const result = compileWithNativePreset(source, {
+      parserPlugins: ["typescript"],
+    });
+
+    assert.match(result.code, /<svg viewBox="\$\{viewBox\}" stroke-width="\$\{strokeWidth\}">/);
+    assert.match(result.code, /<path d="\$\{d\}" stroke-linecap="round">/);
+    assert.match(result.code, /shapes\.map\(shape => svg`<path d="\$\{shape\.d\}"><\/path>`\)/);
+    assert.match(result.code, /<foreignObject width="\$\{20\}"><div>HTML<\/div><\/foreignObject>/);
+    assert.doesNotMatch(result.code, /\.viewBox=|\.strokeWidth=|\.d=/);
+  });
+
   it("defaults to final html template lowering", () => {
     const source = [
       "export const TestGreeting = ({ label }) => {",

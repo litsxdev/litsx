@@ -43,6 +43,34 @@ syntax. The removed `.litsx` extension and in-function `static ...` declarations
 are not compatibility syntax. The former magic calls `staticProps(...)` and
 `staticStyles(...)` are removed as well; use top-level component assignments.
 
+### Inline SVG
+
+SVG is part of the native JSX contract and can be mixed with HTML without a
+file-level option or local `JSX.IntrinsicElements` augmentation:
+
+```tsx
+export function StatusIcon({ paths }) {
+  return (
+    <span class="status-icon">
+      <svg viewBox="0 0 24 24" aria-hidden="true" strokeWidth={2}>
+        {paths.map((path) => <path d={path.d} />)}
+        <foreignObject x={0} y={0} width={24} height={8}>
+          <div>HTML fallback</div>
+        </foreignObject>
+      </svg>
+    </span>
+  );
+}
+```
+
+The compiler enters the SVG namespace at `<svg>` and returns to HTML for the
+descendants of `<foreignObject>`. JSX-friendly presentation names such as
+`strokeWidth`, `strokeLinecap`, and `strokeLinejoin` serialize as the native
+`stroke-width`, `stroke-linecap`, and `stroke-linejoin` attributes. Dynamic
+children, conditional branches, spreads, SSR, and hydration use the same
+namespace rules; `jsxTemplateOptions.tag: "svg"` is only for sources whose root
+template is deliberately an SVG fragment, not for ordinary inline SVG.
+
 ## Components and metadata
 
 Top-level PascalCase functions and function-valued declarations are component

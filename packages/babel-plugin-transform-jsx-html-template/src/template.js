@@ -160,9 +160,14 @@ function addKey(strings, keys, key) {
 
 function createJsxReplacement(node, opts) {
   const hasTagOption = Object.prototype.hasOwnProperty.call(opts || {}, "tag");
-  const tag = hasTagOption ? opts.tag : "html";
+  const tag = hasTagOption
+    ? opts.tag
+    : opts?.jsxNamespace === "svg"
+      ? "svg"
+      : "html";
 
   if (tag) {
+    opts?.__litsxTaggedImports?.add?.(tag);
     return createTaggedTemplate(node, opts, tag);
   }
 

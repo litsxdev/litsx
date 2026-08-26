@@ -14,6 +14,9 @@
   "include": [
     "./litsx-jsx-runtime.tsx",
     "./litsx-jsx-runtime-errors.tsx",
+    "./litsx-pure-lit-components.tsx",
+    "./litsx-svg.tsx",
+    "./litsx-svg-errors.tsx",
     "./litsx-static-hoists.tsx",
     "./litsx-styling.ts",
     "./litsx-styling-errors.ts",

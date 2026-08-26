@@ -6,7 +6,12 @@ import crypto from "node:crypto";
 import { pathToFileURL } from "node:url";
 import { formatWithOptions } from "node:util";
 import { collectSoftSuspenseThenables } from "@litsx/core";
-import { __litsxScopedTemplate } from "@litsx/core/elements";
+import {
+  __litsxScopedTemplate,
+  LITSX_LIGHT_DOM,
+} from "@litsx/core/elements";
+import { isTemplateResult } from "lit/directive-helpers.js";
+import { renderLight } from "@lit-labs/ssr-client/directives/render-light.js";
 import {
   captureCurrentSsrConsole,
   withCurrentSsrRuntimeState,
@@ -593,7 +598,104 @@ function normalizeSsrRenderable(value, elements) {
     return value;
   }
 
-  return __litsxScopedTemplate(value, Object.fromEntries(entries));
+  const resolvedElements = Object.fromEntries(entries);
+  return __litsxScopedTemplate(
+    injectSsrLightDomRenderDirectives(value, resolvedElements),
+    resolvedElements,
+  );
+}
+
+function createTemplateStrings(strings) {
+  const cooked = [...strings];
+  const raw = Object.freeze([...strings]);
+  Object.defineProperty(cooked, "raw", {
+    configurable: false,
+    enumerable: false,
+    value: raw,
+    writable: false,
+  });
+  return Object.freeze(cooked);
+}
+
+function escapeRegExpPattern(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function injectSsrLightDomRenderDirectives(value, elements) {
+  if (Array.isArray(value)) {
+    let changed = false;
+    const entries = value.map((entry) => {
+      const nextEntry = injectSsrLightDomRenderDirectives(entry, elements);
+      changed ||= nextEntry !== entry;
+      return nextEntry;
+    });
+    return changed ? entries : value;
+  }
+
+  if (!isTemplateResult(value)) {
+    return value;
+  }
+
+  let nestedValuesChanged = false;
+  const nestedValues = value.values.map((entry) => {
+    const nextEntry = injectSsrLightDomRenderDirectives(entry, elements);
+    nestedValuesChanged ||= nextEntry !== entry;
+    return nextEntry;
+  });
+  if (!Array.isArray(value.strings)) {
+    return nestedValuesChanged ? { ...value, values: nestedValues } : value;
+  }
+  const expressionValues = nestedValues;
+  let source = value.strings
+    .map((string, index) =>
+      index < expressionValues.length
+        ? `${string}\u0000LITSX_EXPR_${index}\u0000`
+        : string
+    )
+    .join("");
+  const lightDomTags = Object.entries(elements)
+    .filter(([, ctor]) => Boolean(ctor?.[LITSX_LIGHT_DOM]))
+    .map(([tagName]) => tagName);
+
+  let insertionCount = 0;
+  for (const tagName of lightDomTags) {
+    const escapedTagName = escapeRegExpPattern(tagName);
+    const emptyElementPattern = new RegExp(
+      `(<${escapedTagName}(?:\\s[^>]*)?>)([\\t\\n\\f\\r ]*)<\\/${escapedTagName}>`,
+      "gi",
+    );
+    source = source.replace(
+      emptyElementPattern,
+      (_match, opening, whitespace) =>
+        `${opening}\u0000LITSX_LIGHT_${insertionCount++}\u0000${whitespace}</${tagName}>`,
+    );
+  }
+
+  if (insertionCount === 0) {
+    return nestedValuesChanged ? { ...value, values: nestedValues } : value;
+  }
+
+  const strings = [];
+  const values = [];
+  const markerPattern = /\u0000LITSX_(EXPR|LIGHT)_(\d+)\u0000/g;
+  let offset = 0;
+  let match;
+  while ((match = markerPattern.exec(source)) !== null) {
+    strings.push(source.slice(offset, match.index));
+    values.push(
+      match[1] === "EXPR"
+        ? expressionValues[Number(match[2])]
+        : renderLight(),
+    );
+    offset = match.index + match[0].length;
+  }
+  strings.push(source.slice(offset));
+
+  return {
+    ...value,
+    strings: createTemplateStrings(strings),
+    values,
+  };
 }
 
 function isClassLikeValue(value) {

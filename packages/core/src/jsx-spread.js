@@ -3,10 +3,11 @@ import {
   isBooleanValueHostAttributeName,
   isNativeDomEventHandlerPropertyName,
   isStandardHostAttributeName,
+  normalizeSvgAttributeName,
   resolveExplicitJsxEventName,
   resolveStandardJsxEventName,
 } from "@litsx/authoring";
-import { html, isServer, noChange, nothing } from "lit";
+import { html, isServer, noChange, nothing, svg } from "lit";
 import { Directive, PartType, directive } from "lit/directive.js";
 import { ifDefined } from "lit/directives/if-defined.js";
 import { ref } from "lit/directives/ref.js";
@@ -25,6 +26,11 @@ const CLIENT_RUNTIME = Symbol.for("@litsx/ssr/client-runtime");
 const REST_PROPS = Symbol.for("litsx.restProps");
 const MAX_DIGEST_MAPPINGS = 2048;
 const MAX_TEMPLATE_STRINGS = 2048;
+const ATTRIBUTE_NAMESPACES = new Map([
+  ["xlink", "http://www.w3.org/1999/xlink"],
+  ["xml", "http://www.w3.org/XML/1998/namespace"],
+  ["xmlns", "http://www.w3.org/2000/xmlns/"],
+]);
 
 function templateStrings(values) {
   Object.defineProperty(values, "raw", { value: Object.freeze([...values]) });
@@ -37,7 +43,7 @@ function cacheTemplate(cache, key, strings) {
   return strings;
 }
 
-export function normalizeName(rawName, nativeHtml, reactCompatEvents = false) {
+export function normalizeName(rawName, nativeHtml, reactCompatEvents = false, namespace = "html") {
   if (rawName === "className") return { kind: "attribute", name: "class" };
   if (rawName === "htmlFor" && nativeHtml) return { kind: "attribute", name: "for" };
   const prefix = rawName[0];
@@ -71,7 +77,11 @@ export function normalizeName(rawName, nativeHtml, reactCompatEvents = false) {
   }
   return {
     kind: "inferred",
-    name: nativeHtml ? (HTML_ATTRIBUTE_ALIASES.get(rawName) ?? rawName.toLowerCase()) : rawName,
+    name: nativeHtml
+      ? (HTML_ATTRIBUTE_ALIASES.get(rawName) ?? rawName.toLowerCase())
+      : namespace === "svg"
+        ? normalizeSvgAttributeName(rawName)
+        : rawName,
     propertyName: rawName,
   };
 }
@@ -187,7 +197,7 @@ export function shallowEqualRecords(left, right) {
 
 export function inferDescriptor(tagName, rawName, value, component, element, namespace, reactCompatEvents = false) {
   const nativeHtml = namespace !== "svg" && !tagName.includes("-") && !component;
-  const descriptor = normalizeName(rawName, nativeHtml, reactCompatEvents);
+  const descriptor = normalizeName(rawName, nativeHtml, reactCompatEvents, namespace);
   if (!SAFE_BINDING_NAME.test(descriptor.name)) return null;
   if (descriptor.kind === "custom-event-candidate") {
     return hasComponentProperty(tagName, descriptor.propertyName, component, element)
@@ -199,6 +209,14 @@ export function inferDescriptor(tagName, rawName, value, component, element, nam
   if (name === "ref") return { kind: "ref", name };
   if (name === "dangerouslySetInnerHTML") return { kind: "inner-html", name };
   if (name === "style" && value && typeof value === "object") return { kind: "style", name };
+  // Native SVG bindings are attributes unless authoring explicitly selected a
+  // property with the `.name` prefix. SVG DOM properties are commonly readonly
+  // SVGAnimated* wrappers and cannot be used as an inference source.
+  if (namespace === "svg") {
+    return typeof value === "boolean"
+      ? { kind: "attribute", name, booleanValue: true }
+      : { kind: "attribute", name };
+  }
   const declaredBinding = !nativeHtml
     ? getDeclaredComponentBinding(tagName, propertyName, component, element)
     : null;
@@ -228,11 +246,11 @@ function inferClientDescriptor(tagName, rawName, value, component, element, name
     cache = new Map();
     CLIENT_DESCRIPTOR_CACHE.set(constructor, cache);
   }
-  const cacheKey = `${reactCompatEvents ? "react" : "native"}:${rawName}`;
+  const cacheKey = `${namespace === "svg" ? "svg" : "html"}:${reactCompatEvents ? "react" : "native"}:${rawName}`;
   if (cache.has(cacheKey)) return cache.get(cacheKey);
   const descriptor = inferDescriptor(tagName, rawName, value, component, element, namespace, reactCompatEvents);
   const nativeHtml = namespace !== "svg" && !tagName.includes("-") && !component;
-  const normalized = normalizeName(rawName, nativeHtml, reactCompatEvents);
+  const normalized = normalizeName(rawName, nativeHtml, reactCompatEvents, namespace);
   const valueDependent = normalized.kind === "inferred" && (
     normalized.name === "style" || (
       normalized.name !== "ref" && normalized.name !== "dangerouslySetInnerHTML" &&
@@ -360,8 +378,8 @@ function registerDigestMapping(serverStrings, clientStrings) {
   if (mappings.size > MAX_DIGEST_MAPPINGS) mappings.delete(mappings.keys().next().value);
 }
 
-function getClientStrings(tagName, isVoid, hasChildren) {
-  const signature = `${tagName}|${isVoid ? 1 : 0}|${hasChildren ? 1 : 0}`;
+function getClientStrings(tagName, isVoid, hasChildren, namespace) {
+  const signature = `${namespace}|${tagName}|${isVoid ? 1 : 0}|${hasChildren ? 1 : 0}`;
   let strings = CLIENT_STRINGS_CACHE.get(signature);
   if (!strings) {
     strings = templateStrings(hasChildren ? [`<${tagName} `, ">", `</${tagName}>`] : [`<${tagName} `, isVoid ? ">" : `></${tagName}>`]);
@@ -370,9 +388,9 @@ function getClientStrings(tagName, isVoid, hasChildren) {
   return strings;
 }
 
-function getServerStrings(tagName, bindings, isVoid, hasChildren, innerHtml) {
+function getServerStrings(tagName, bindings, isVoid, hasChildren, innerHtml, namespace) {
   const innerMarkup = innerHtml?.value?.__html == null ? "" : String(innerHtml.value.__html);
-  const signature = `${tagName}|${isVoid ? 1 : 0}|${hasChildren ? 1 : 0}|${innerMarkup}|${bindings.map(({ descriptor }) => descriptorKey(descriptor)).join("|")}`;
+  const signature = `${namespace}|${tagName}|${isVoid ? 1 : 0}|${hasChildren ? 1 : 0}|${innerMarkup}|${bindings.map(({ descriptor }) => descriptorKey(descriptor)).join("|")}`;
   let strings = SERVER_STRINGS_CACHE.get(signature);
   if (strings) return strings;
   const next = [`<${tagName} @__litsx_spread=` , ""];
@@ -420,7 +438,35 @@ export function clearBinding(element, descriptor, previous) {
     }
   }
   else if (descriptor.kind === "property") element[descriptor.name] = typeof element[descriptor.name] === "boolean" ? false : undefined;
-  else if (descriptor.kind !== "inner-html") element.removeAttribute(descriptor.name);
+  else if (descriptor.kind !== "inner-html") removeElementAttribute(element, descriptor.name);
+}
+
+function namespacedAttribute(name) {
+  const separator = name.indexOf(":");
+  if (separator <= 0) return null;
+  const namespace = ATTRIBUTE_NAMESPACES.get(name.slice(0, separator));
+  return namespace
+    ? { namespace, localName: name.slice(separator + 1) }
+    : null;
+}
+
+function removeElementAttribute(element, name) {
+  const namespaced = namespacedAttribute(name);
+  if (namespaced) element.removeAttributeNS(namespaced.namespace, namespaced.localName);
+  else element.removeAttribute(name);
+}
+
+function setElementAttribute(element, name, value) {
+  const namespaced = namespacedAttribute(name);
+  if (namespaced) element.setAttributeNS(namespaced.namespace, name, value);
+  else element.setAttribute(name, value);
+}
+
+function getElementAttribute(element, name) {
+  const namespaced = namespacedAttribute(name);
+  return namespaced
+    ? element.getAttributeNS(namespaced.namespace, namespaced.localName)
+    : element.getAttribute(name);
 }
 
 export function applyStyleBinding(element, value, previous) {
@@ -460,8 +506,10 @@ export function applyBinding(element, descriptor, value, previous, adoptAttribut
   if (descriptor.kind === "attribute") {
     if (adoptAttributes) return;
     const next = descriptor.booleanValue && value != null ? String(value) : serializedValue(value);
-    if (next == null) element.removeAttribute(descriptor.name);
-    else if (element.getAttribute(descriptor.name) !== next) element.setAttribute(descriptor.name, next);
+    if (next == null) removeElementAttribute(element, descriptor.name);
+    else if (getElementAttribute(element, descriptor.name) !== next) {
+      setElementAttribute(element, descriptor.name, next);
+    }
   } else if (descriptor.kind === "boolean") {
     if (!adoptAttributes) element.toggleAttribute(descriptor.name, booleanAttributeValue(value));
   } else if (descriptor.kind === "property") {
@@ -541,7 +589,9 @@ export function jsxSpreadElement(tagName, sources, options = {}, children = noth
   tagName = String(tagName);
   const isVoid = options.void === true;
   const hasChildren = !isVoid && children !== nothing;
-  const clientStrings = getClientStrings(tagName, isVoid, hasChildren);
+  const namespace = options.namespace === "svg" ? "svg" : "html";
+  const templateTag = namespace === "svg" ? svg : html;
+  const clientStrings = getClientStrings(tagName, isVoid, hasChildren, namespace);
   // `server: true` is a compiler hint carried by modules transformed through
   // an SSR-configured Vite pipeline. Those same modules can execute in the
   // browser during hydration, where the client runtime must still select the
@@ -553,7 +603,7 @@ export function jsxSpreadElement(tagName, sources, options = {}, children = noth
   if (clientRuntime) {
     const values = [jsxSpread(tagName, sources, options)];
     if (hasChildren) values.push(children);
-    return html(clientStrings, ...values);
+    return templateTag(clientStrings, ...values);
   }
   const descriptors = adaptRefBindings(
     mergeSources(tagName, sources, options.component, undefined, options.namespace, options.reactCompatEvents === true),
@@ -562,9 +612,9 @@ export function jsxSpreadElement(tagName, sources, options = {}, children = noth
   const innerHtml = descriptors.find(({ descriptor }) => descriptor.kind === "inner-html");
   const bindings = innerHtml ? descriptors.filter(({ descriptor }) => descriptor.kind !== "inner-html") : descriptors;
   const serverHasChildren = !isVoid && (innerHtml != null || hasChildren);
-  const strings = getServerStrings(tagName, bindings, isVoid, serverHasChildren, innerHtml);
+  const strings = getServerStrings(tagName, bindings, isVoid, serverHasChildren, innerHtml, namespace);
   registerDigestMapping(strings, clientStrings);
   const values = [nothing, ...bindings.map(({ descriptor, value }) => serverBindingValue(descriptor, value))];
   if (serverHasChildren && !innerHtml) values.push(children);
-  return html(strings, ...values);
+  return templateTag(strings, ...values);
 }

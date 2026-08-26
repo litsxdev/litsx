@@ -309,6 +309,29 @@ For editor and TypeScript support, point JSX at `@litsx/core` directly:
 
 That gives the IDE a stable JSX runtime surface even when Babel later rewrites the implementation to Lit templates and scoped elements.
 
+Pure Lit component classes can also be used directly as JSX destinations. The
+JSX runtime projects their declared reactive properties and data fields added by
+standard mixins while preserving the authored TypeScript types:
+
+```tsx
+class StatusBadge extends LitElement {
+  static properties = {
+    tone: { type: String },
+    model: { attribute: false },
+  };
+
+  declare tone: "neutral" | "positive";
+  declare model: { id: string } | null;
+}
+
+<StatusBadge tone="positive" model={{ id: "ready" }} />;
+```
+
+These properties are optional at the JSX callsite, matching custom-element
+construction and Lit defaults. Standard host attributes and typed refs remain
+available, while inherited `LitElement` runtime APIs and component methods are
+not exposed as authored props.
+
 Layout work runs immediately during `hostUpdated()`, while passive effects are deferred to the next frame to avoid blocking rendering. Cleanups execute when dependencies change, before the effect runs again, and once when the host disconnects.
 
 ## Working with the Babel plugins
@@ -446,6 +469,27 @@ export function SaveButton() {
   return <button>{i18n.t("save")}</button>;
 }
 ```
+
+Inline SVG uses that same JSX contract. LitSX types `SVGElementTagNameMap`,
+switches namespaces automatically at `<svg>`/`<foreignObject>`, and preserves
+the namespace for dynamic fragments and spreads:
+
+```tsx
+export function CheckIcon({ shapes }) {
+  return (
+    <svg viewBox="0 0 24 24" strokeWidth={2} aria-hidden="true">
+      {shapes.map((shape) => <path d={shape.d} />)}
+      <foreignObject width={24} height={8}>
+        <div>HTML</div>
+      </foreignObject>
+    </svg>
+  );
+}
+```
+
+CamelCase SVG presentation attributes such as `strokeWidth` are emitted with
+their native dashed spelling. No manual `svg` template tag, JSX augmentation,
+or `jsxSpreadElement()` call is required.
 
 The compiler lowers the reader call and installs the required capability:
 

@@ -440,6 +440,28 @@ describe("@litsx/babel-plugin-transform-jsx-html-template", () => {
     assert.match(code, /jsxSpreadElement\("div", \[htmlProps\], \{\s*component: false,\s*void: false\s*\}/);
   });
 
+  it("uses svg templates for JSX nested in SVG expressions and html inside foreignObject", () => {
+    const source = `
+      const x = <main>
+        <svg viewBox={viewBox}>
+          {shapes.map((shape) => <path d={shape.d} />)}
+          <foreignObject>{htmlNodes.map((node) => <div>{node.label}</div>)}</foreignObject>
+        </svg>
+      </main>;
+    `;
+    const ast = parser.parse(source, { sourceType: "module" });
+
+    const { code } = transformFromAstSync(ast, source, {
+      configFile: false,
+      babelrc: false,
+      plugins: [plugin],
+    });
+
+    assert.match(code, /import \{ (?:html, svg|svg, html) \} from "lit"/);
+    assert.match(code, /shapes\.map\(shape => svg`<path d="\$\{shape\.d\}"><\/path>`\)/);
+    assert.match(code, /htmlNodes\.map\(node => html`<div>\$\{node\.label\}<\/div>`\)/);
+  });
+
   it("passes an authored component constructor for spread prop inference", () => {
     const source = `const x = <ThirdPartyButton {...props}></ThirdPartyButton>;`;
     const ast = parser.parse(source, { sourceType: "module" });

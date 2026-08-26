@@ -18,6 +18,7 @@ import type {
   SuspenseList,
   SuspenseListProps,
 } from "./index.js";
+import type { LitElement } from "lit";
 
 export declare const Fragment: unique symbol;
 export declare const LITSX_JSX_TYPE: unique symbol;
@@ -67,8 +68,12 @@ export namespace JSX {
       ? Complete extends true ? Events : {}
       : {};
 
-  type LitsxComponentAuthoredAttributes<TProps, TEvents extends Record<string, unknown>> =
-    LitsxBaseAttributes &
+  type LitsxComponentAuthoredAttributes<
+    TProps,
+    TEvents extends Record<string, unknown>,
+    TBaseAttributes = LitsxBaseAttributes,
+  > =
+    TBaseAttributes &
     (keyof TEvents extends never
       ? LitsxExplicitCustomEventAttributes
       : Omit<LitsxDomAttributes<EventTarget>, `on:${Extract<keyof TEvents, string>}`> &
@@ -76,19 +81,73 @@ export namespace JSX {
 
   type LitsxNormalizeManagedProps<TProps> = 0 extends (1 & TProps) ? {} : TProps;
 
-  type LitsxComponentElementProps<TProps, TEvents extends Record<string, unknown> = {}> =
+  type LitsxExactStaticPropertyKeys<Component> =
+    Component extends { readonly properties: infer Declarations }
+      ? string extends keyof Declarations ? never : Extract<keyof Declarations, string>
+      : never;
+
+  type LitsxOwnDataPropertyKeys<Instance> = {
+    [Key in Exclude<Extract<keyof Instance, string>, keyof LitElement>]:
+      Instance[Key] extends (...args: any[]) => unknown ? never : Key;
+  }[Exclude<Extract<keyof Instance, string>, keyof LitElement>];
+
+  type LitsxPureLitElementProps<Component> =
+    Component extends abstract new (...args: any[]) => infer Instance
+      ? Instance extends LitElement
+        ? Partial<Pick<
+            Instance,
+            Extract<
+              LitsxExactStaticPropertyKeys<Component> | LitsxOwnDataPropertyKeys<Instance>,
+              keyof Instance
+            >
+          >>
+        : {}
+      : {};
+
+  type LitsxManagedComponentProps<Component, Props> =
+    LitsxNormalizeManagedProps<Props> & LitsxPureLitElementProps<Component>;
+
+  type LitsxManagedBaseAttributes<Component> =
+    Component extends abstract new (...args: any[]) => LitElement
+      ? Omit<LitsxBaseAttributes, "ref">
+      : LitsxBaseAttributes;
+
+  type LitsxPureLitRefAttributes<Component> =
+    Component extends abstract new (...args: any[]) => infer Instance
+      ? { ref?: LitsxRef<Instance> }
+      : {};
+
+  type LitsxComponentElementProps<
+    TProps,
+    TEvents extends Record<string, unknown> = {},
+    TBaseAttributes = LitsxBaseAttributes,
+  > =
     LitsxNormalizeManagedProps<TProps> &
-    LitsxComponentAuthoredAttributes<LitsxNormalizeManagedProps<TProps>, TEvents>;
+    LitsxComponentAuthoredAttributes<
+      LitsxNormalizeManagedProps<TProps>,
+      TEvents,
+      TBaseAttributes
+    >;
 
   type LibraryManagedAttributes<Component, Props> =
     Component extends typeof ErrorBoundary ? LitsxErrorBoundaryElementProps :
     Component extends typeof SuspenseBoundary ? LitsxSuspenseBoundaryElementProps :
     Component extends typeof SuspenseList ? LitsxBoundaryElementProps<SuspenseList, SuspenseListProps> :
-    LitsxComponentElementProps<Props, LitsxComponentEventMap<Component>>;
+    LitsxComponentElementProps<
+      LitsxManagedComponentProps<Component, Props>,
+      LitsxComponentEventMap<Component>,
+      LitsxManagedBaseAttributes<Component>
+    >;
 }
 
 export type LitsxComponentProps<T> =
   T extends typeof ErrorBoundary ? LitsxErrorBoundaryElementProps :
   T extends typeof SuspenseBoundary ? LitsxSuspenseBoundaryElementProps :
   T extends typeof SuspenseList ? JSX.LitsxBoundaryElementProps<SuspenseList, SuspenseListProps> :
-  Record<string, unknown>;
+  T extends abstract new (...args: any[]) => LitElement
+    ? JSX.LitsxComponentElementProps<
+        JSX.LitsxPureLitElementProps<T>,
+        JSX.LitsxComponentEventMap<T>,
+        Omit<LitsxBaseAttributes, "ref"> & JSX.LitsxPureLitRefAttributes<T>
+      >
+    : Record<string, unknown>;

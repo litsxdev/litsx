@@ -6,6 +6,7 @@ import {
   isBooleanValueHostAttributeName,
   isNativeDomEventHandlerPropertyName,
   isStandardHostAttributeName,
+  normalizeSvgAttributeName,
   resolveExplicitJsxEventName,
 } from "@litsx/authoring";
 import {
@@ -419,7 +420,9 @@ function transformOpeningElement(path, state, t) {
   if (t.isJSXMemberExpression(tagNode) && !isNamespaceComponentMember(path, tagNode, t)) return;
   const tagName = getTagName(tagNode, t);
   const component = isComponentName(tagNode, t);
-  const svg = tagName === "svg" || isInsideSvg(path, t);
+  // foreignObject itself is an SVG element; only its descendants switch back
+  // to the HTML namespace.
+  const svg = tagName === "svg" || tagName === "foreignObject" || isInsideSvg(path, t);
   // A custom element name contains a hyphen by definition. Keep both custom
   // elements and SVG out of HTML attribute-name/boolean inference.
   const nativeHtml = Boolean(tagName && !tagName.includes("-") && !svg);
@@ -444,8 +447,15 @@ function transformOpeningElement(path, state, t) {
   const targetType = component
     ? getComponentPropsType(typeResolver, tagNode)
     : tagName && typeResolver && tsTagNode
-      ? getGlobalElementType(typeResolver, tagName, tsTagNode, svg) ||
-        getIntrinsicElementPropsType(typeResolver, tagName, tsTagNode)
+      ? svg
+        // SVG DOM interfaces expose readonly SVGAnimated* properties for many
+        // authored attributes. The JSX contract is the source of truth here:
+        // treating those DOM properties as Lit property bindings drops them
+        // during SSR and attempts to assign readonly values in the browser.
+        ? getIntrinsicElementPropsType(typeResolver, tagName, tsTagNode) ||
+          getGlobalElementType(typeResolver, tagName, tsTagNode, svg)
+        : getGlobalElementType(typeResolver, tagName, tsTagNode, svg) ||
+          getIntrinsicElementPropsType(typeResolver, tagName, tsTagNode)
       : null;
   let routeRuntimeComponentBinding = component && path.node.attributes.some(
     (attribute) => t.isJSXSpreadAttribute(attribute)
@@ -591,7 +601,9 @@ function transformOpeningElement(path, state, t) {
 
     const htmlAttributeName = nativeHtml
       ? normalizeHtmlAttributeName(rawName)
-      : rawName;
+      : svg
+        ? normalizeSvgAttributeName(rawName)
+        : rawName;
 
     if (nativeHtml && isBooleanHostAttributeName(htmlAttributeName)) {
       if (hasExplicitPrimitiveAttributeValue(attribute, typeResolver, t)) {
@@ -608,6 +620,15 @@ function transformOpeningElement(path, state, t) {
       !attribute.value
     ) {
       attribute.value = t.jsxExpressionContainer(t.booleanLiteral(true));
+      if (htmlAttributeName !== rawName) renameAttribute(attribute, htmlAttributeName, t);
+      continue;
+    }
+
+    // Native SVG JSX is attribute-oriented. lib.dom exposes many of these as
+    // readonly SVGAnimated* properties, but assigning those properties is not
+    // equivalent and SSR cannot serialize them. Explicit `.property` syntax
+    // remains available and was handled above.
+    if (svg) {
       if (htmlAttributeName !== rawName) renameAttribute(attribute, htmlAttributeName, t);
       continue;
     }

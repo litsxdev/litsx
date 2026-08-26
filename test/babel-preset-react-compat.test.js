@@ -107,6 +107,35 @@ describe("@litsx/babel-preset-react-compat", () => {
     assert.match(code, /<input type="checkbox" \?checked=\$\{this\.enabled\} @change=\$\{this\.onEnabledChange\}>/);
   });
 
+  it("normalizes the React SVG attribute and event surface", () => {
+    const source = `
+      export const ReactIcon = ({ box, width, href, lang, onClick, props }) => (
+        <svg
+          className="icon"
+          viewBox={box}
+          strokeWidth={width}
+          strokeLinecap="round"
+          glyphOrientationHorizontal="90"
+          tabIndex={0}
+          spellCheck={false}
+          xmlLang={lang}
+          xmlnsXlink="http://www.w3.org/1999/xlink"
+          onClick={onClick}
+        >
+          <use xlinkHref={href} {...props} />
+          <path fillRule="evenodd" d="M0 0" />
+        </svg>
+      );
+    `;
+
+    const code = run(source);
+
+    assert.match(code, /<svg class="icon" viewBox="\$\{box\}" stroke-width="\$\{width\}" stroke-linecap="round" glyph-orientation-horizontal="90" tabindex="\$\{0\}" spellcheck="\$\{false\}" xml:lang="\$\{lang\}" xmlns:xlink="http:\/\/www\.w3\.org\/1999\/xlink" @click=\$\{onClick\}>/);
+    assert.match(code, /jsxSpreadElement\("use", \[\{\s*"xlink:href": href\s*\}, props\], \{[\s\S]*namespace: "svg",[\s\S]*reactCompatEvents: true/);
+    assert.match(code, /<path fill-rule="evenodd" d="M0 0"><\/path>/);
+    assert.doesNotMatch(code, /strokeWidth=|strokeLinecap=|xmlLang=|xmlnsXlink=|glyphOrientationHorizontal=/);
+  });
+
   it("keeps onX component props distinct from React DOM events", () => {
     const source = `
       const TestChild = ({ onAction }) => <button onClick={onAction}>Run</button>;

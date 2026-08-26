@@ -199,6 +199,14 @@ const result = await renderDocument(createEntry({
 }));
 ```
 
+When an entry in `elements(loader)` is a LitSX light-DOM component, an empty
+registered host such as `<app-root></app-root>` automatically renders its light
+DOM on the server. This gives hydration real SSR nodes to adopt instead of
+creating the component's children during its first client update. An explicit
+`renderLight()` directive is still accepted and is never duplicated. Hosts
+with authored children are left unchanged, because those children may be
+intentional projected content.
+
 If you need finer control over the HTML shell, `renderToString(...)` remains
 available as the lower-level API:
 

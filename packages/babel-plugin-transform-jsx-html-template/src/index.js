@@ -173,13 +173,34 @@ function hasBindingAnywhere(programPath, name) {
   return found;
 }
 
+function getPathJsxNamespace(path) {
+  let current = path.parentPath;
+  while (current) {
+    if (current.isJSXElement?.()) {
+      const name = current.node.openingElement?.name;
+      if (t.isJSXIdentifier(name, { name: "foreignObject" })) return "html";
+      if (t.isJSXIdentifier(name, { name: "svg" })) return "svg";
+    }
+    current = current.parentPath;
+  }
+  return null;
+}
+
 function replaceNode(path, state) {
   if (path.parentPath?.isJSXElement() || path.parentPath?.isJSXFragment()) {
     return;
   }
 
   const hasTagOption = Object.prototype.hasOwnProperty.call(state.opts, "tag");
-  const tag = hasTagOption ? state.opts.tag : "html";
+  const pathNamespace = hasTagOption ? null : getPathJsxNamespace(path);
+  const templateOptions = pathNamespace
+    ? { ...state.opts, jsxNamespace: pathNamespace }
+    : state.opts;
+  const tag = hasTagOption
+    ? state.opts.tag
+    : pathNamespace === "svg"
+      ? "svg"
+      : "html";
   const sourceFileName =
     state.file?.opts?.sourceFileName ??
     state.file?.opts?.filename ??
@@ -210,7 +231,8 @@ function replaceNode(path, state) {
   );
 
   if (tag) {
-    path.replaceWith(createTaggedTemplate(path.node, state.opts, tag));
+    templateOptions.__litsxTaggedImports?.add?.(tag);
+    path.replaceWith(createTaggedTemplate(path.node, templateOptions, tag));
     if (typeof tag === "string" && tag.length > 0) {
       state.__litsxNeedsTaggedImport = true;
       if (!state.__litsxTaggedImportName) {
@@ -220,7 +242,7 @@ function replaceNode(path, state) {
     return;
   }
 
-  path.replaceWith(buildTemplate(path.node, state.opts));
+  path.replaceWith(buildTemplate(path.node, templateOptions));
 }
 
 function indexToPosition(text, index) {
@@ -458,6 +480,7 @@ export default function transformJsxHtmlTemplatePlugin(api) {
             styleResolverName,
             __litsxRuntimeNeeds: {},
             __litsxNeedsNoscriptRuntime: false,
+            __litsxTaggedImports: new Set(),
           };
           if (state.opts.componentRestProps === true) {
             annotateReparsedRestRoutes(
@@ -469,7 +492,10 @@ export default function transformJsxHtmlTemplatePlugin(api) {
         exit(programPath, state) {
           const importName = state.__litsxTaggedImportName;
           if (state.__litsxNeedsTaggedImport && importName) {
-            ensureTaggedImport(programPath, importName);
+            state.opts.__litsxTaggedImports.add(importName);
+          }
+          for (const taggedImport of state.opts.__litsxTaggedImports) {
+            ensureTaggedImport(programPath, taggedImport);
           }
           if (state.__litsxNeedsSpreadHelper) {
             ensureNamedImport(programPath, "@litsx/core", "jsxSpreadElement");

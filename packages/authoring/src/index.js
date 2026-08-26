@@ -28,6 +28,7 @@ export {
   isBooleanValueHostAttributeName,
   isStandardHostAttributeName,
 } from "./host-attributes.js";
+export { normalizeSvgAttributeName } from "./svg-attributes.js";
 export {
   collectImplicitChildrenProjectionIssues,
   LITSX_IMPLICIT_CHILDREN_DUPLICATE_CODE,

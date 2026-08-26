@@ -44,6 +44,14 @@ This preset is the supported public entrypoint for React migration. React event 
 
 React `onClick`-style names are interpreted as events only on DOM and custom-element tags. An `onAction` passed to `<Child>` remains an ordinary component property. Native LitSX uses `on:event` instead, so the React convention never leaks into the native pipeline.
 
+React-authored inline SVG uses the same namespace-safe output as native LitSX.
+The compatibility pipeline converts React's SVG camelCase aliases, including
+the extended presentation set, and preserves namespaced `xlink*`, `xml*`, and
+`xmlnsXlink` attributes through direct bindings and spreads. `className`,
+`onClick`-style events, dynamic SVG children, SSR, and hydration pass through
+their existing React compatibility stages before the final Lit SVG template is
+created.
+
 `propTypes` support here should be read as migration compatibility only. Native LitSX authoring should use TypeScript prop inference or explicit `Component.properties = ...` assignments instead of `Component.propTypes = { ... }`.
 
 React context support here should also be read as migration compatibility only. It lowers onto `@lit/context` through the LitSX runtime surface; it is not a native LitSX authoring primitive.

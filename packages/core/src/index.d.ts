@@ -1,5 +1,6 @@
 import type { CSSResultGroup, LitElement, ReactiveElement, TemplateResult } from "lit";
 import type { DirectiveResult } from "lit/directive.js";
+import type { Ref } from "lit/directives/ref.js";
 export { css } from "lit";
 export { createRef, ref } from "lit/directives/ref.js";
 
@@ -30,7 +31,7 @@ export type LitsxStyleInfo = Readonly<
 
 /** A Lit-native ref. Assignment uses `.value`; cleanup publishes `undefined`. */
 export type LitsxRef<T> =
-  | { value: T | undefined }
+  | Ref<T>
   | {
       bivarianceHack(value: T | undefined): void;
     }["bivarianceHack"];
@@ -317,6 +318,131 @@ export type LitsxElementProps<TElement = HTMLElement> =
   & LitsxNativeAttributeAliases<TElement>
   & LitsxHostElementProps<TElement>;
 
+export type LitsxSvgLength = string | number;
+
+/** JSX-friendly SVG presentation attributes serialized with native SVG names. */
+export interface LitsxSvgPresentationAttributes {
+  clipPath?: string;
+  clipRule?: "nonzero" | "evenodd" | "inherit";
+  color?: string;
+  colorInterpolation?: string;
+  colorInterpolationFilters?: string;
+  cursor?: string;
+  display?: string;
+  dominantBaseline?: string;
+  fill?: string;
+  fillOpacity?: string | number;
+  fillRule?: "nonzero" | "evenodd" | "inherit";
+  filter?: string;
+  floodColor?: string;
+  floodOpacity?: string | number;
+  fontFamily?: string;
+  fontSize?: LitsxSvgLength;
+  fontWeight?: string | number;
+  markerEnd?: string;
+  markerMid?: string;
+  markerStart?: string;
+  mask?: string;
+  opacity?: string | number;
+  pointerEvents?: string;
+  shapeRendering?: string;
+  stopColor?: string;
+  stopOpacity?: string | number;
+  stroke?: string;
+  strokeDasharray?: string | number;
+  strokeDashoffset?: LitsxSvgLength;
+  strokeLinecap?: "butt" | "round" | "square" | "inherit";
+  strokeLinejoin?: "arcs" | "bevel" | "miter" | "miter-clip" | "round" | "inherit";
+  strokeMiterlimit?: string | number;
+  strokeOpacity?: string | number;
+  strokeWidth?: LitsxSvgLength;
+  textAnchor?: "start" | "middle" | "end" | "inherit";
+  transform?: string;
+  vectorEffect?: string;
+  visibility?: string;
+}
+
+export interface LitsxSvgViewportAttributes {
+  x?: LitsxSvgLength;
+  y?: LitsxSvgLength;
+  width?: LitsxSvgLength;
+  height?: LitsxSvgLength;
+}
+
+export type LitsxSvgSpecificAttributes<TagName extends keyof SVGElementTagNameMap> =
+  TagName extends "svg" ? LitsxSvgViewportAttributes & {
+    viewBox?: string;
+    preserveAspectRatio?: string;
+    xmlns?: string;
+  } :
+  TagName extends "path" ? {
+    d?: string;
+    pathLength?: string | number;
+  } :
+  TagName extends "circle" ? {
+    cx?: LitsxSvgLength;
+    cy?: LitsxSvgLength;
+    r?: LitsxSvgLength;
+    pathLength?: string | number;
+  } :
+  TagName extends "ellipse" ? {
+    cx?: LitsxSvgLength;
+    cy?: LitsxSvgLength;
+    rx?: LitsxSvgLength;
+    ry?: LitsxSvgLength;
+    pathLength?: string | number;
+  } :
+  TagName extends "line" ? {
+    x1?: LitsxSvgLength;
+    x2?: LitsxSvgLength;
+    y1?: LitsxSvgLength;
+    y2?: LitsxSvgLength;
+    pathLength?: string | number;
+  } :
+  TagName extends "polygon" | "polyline" ? {
+    points?: string;
+    pathLength?: string | number;
+  } :
+  TagName extends "rect" ? LitsxSvgViewportAttributes & {
+    rx?: LitsxSvgLength;
+    ry?: LitsxSvgLength;
+    pathLength?: string | number;
+  } :
+  TagName extends "use" ? LitsxSvgViewportAttributes & {
+    href?: string;
+  } :
+  TagName extends "foreignObject" ? LitsxSvgViewportAttributes :
+  TagName extends "clipPath" ? {
+    clipPathUnits?: "userSpaceOnUse" | "objectBoundingBox";
+  } :
+  TagName extends "mask" ? LitsxSvgViewportAttributes & {
+    maskUnits?: "userSpaceOnUse" | "objectBoundingBox";
+    maskContentUnits?: "userSpaceOnUse" | "objectBoundingBox";
+  } :
+  {};
+
+export type LitsxSvgElementProps<
+  TagName extends keyof SVGElementTagNameMap,
+  TElement extends SVGElement = SVGElementTagNameMap[TagName],
+> =
+  & Omit<LitsxBaseAttributes, "ref">
+  & LitsxDomAttributes<TElement>
+  & LitsxSvgPresentationAttributes
+  & LitsxSvgSpecificAttributes<TagName>
+  & { ref?: LitsxRef<TElement> };
+
+type LitsxOverlappingIntrinsicElementProps<
+  TagName extends keyof HTMLElementTagNameMap & keyof SVGElementTagNameMap,
+> =
+  & Omit<
+      LitsxElementProps<HTMLElementTagNameMap[TagName]>,
+      keyof LitsxDomAttributes<HTMLElementTagNameMap[TagName]> | "ref"
+    >
+  & LitsxDomAttributes<HTMLElementTagNameMap[TagName] | SVGElementTagNameMap[TagName]>
+  & LitsxSvgPresentationAttributes
+  & LitsxSvgSpecificAttributes<TagName>
+  & { ref?: LitsxRef<HTMLElementTagNameMap[TagName] | SVGElementTagNameMap[TagName]> };
+
 export type LitsxErrorBoundaryElementProps =
   & LitsxBaseAttributes
   & LitsxDomAttributes<ErrorBoundary>
@@ -349,9 +475,14 @@ export type LitsxCustomIntrinsicElements = {
 };
 
 export type LitsxIntrinsicElements = {
-  [TagName in keyof HTMLElementTagNameMap]: LitsxElementProps<
-    HTMLElementTagNameMap[TagName]
-  >;
+  [TagName in keyof HTMLElementTagNameMap | keyof SVGElementTagNameMap]:
+    TagName extends keyof HTMLElementTagNameMap
+      ? TagName extends keyof SVGElementTagNameMap
+        ? LitsxOverlappingIntrinsicElementProps<TagName>
+        : LitsxElementProps<HTMLElementTagNameMap[TagName]>
+      : TagName extends keyof SVGElementTagNameMap
+        ? LitsxSvgElementProps<TagName>
+        : never;
 } & LitsxCustomIntrinsicElements;
 
 export type LitsxComponent<

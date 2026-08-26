@@ -427,8 +427,33 @@ describe("jsxSpreadElement", () => {
       namespace: "svg",
     }), container);
     const circle = container.querySelector("circle");
+    assert.strictEqual(circle.namespaceURI, "http://www.w3.org/2000/svg");
     assert.strictEqual(circle.getAttribute("focusable"), "false");
     assert.strictEqual(circle.getAttribute("customFlag"), "true");
+
+    render(jsxSpreadElement("path", [{
+      d: "M0 0h10",
+      strokeWidth: 2,
+      strokeLinecap: "round",
+    }], { namespace: "svg" }), container);
+    const path = container.querySelector("path");
+    assert.strictEqual(path.namespaceURI, "http://www.w3.org/2000/svg");
+    assert.strictEqual(path.getAttribute("stroke-width"), "2");
+    assert.strictEqual(path.getAttribute("stroke-linecap"), "round");
+    assert.strictEqual(path.hasAttribute("strokeWidth"), false);
+
+    render(jsxSpreadElement("use", [{
+      xlinkHref: "#shape",
+      xmlLang: "en",
+    }], { namespace: "svg", reactCompatEvents: true }), container);
+    const use = container.querySelector("use");
+    assert.strictEqual(
+      use.getAttributeNS("http://www.w3.org/1999/xlink", "href"),
+      "#shape",
+    );
+    // happy-dom currently drops the XML namespace identity from setAttributeNS;
+    // Chromium coverage verifies it below the public SSR/hydration pipeline.
+    assert.strictEqual(use.getAttribute("xml:lang"), "en");
   });
 
   it("infers component properties and React-compatible custom events", () => {

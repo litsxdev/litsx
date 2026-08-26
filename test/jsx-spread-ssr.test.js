@@ -251,9 +251,20 @@ describe("jsxSpreadElement SSR", () => {
 
     const svgOutput = renderToString(jsxSpreadElement(
       "circle",
-      [{ focusable: false }],
+      [{ focusable: false, strokeWidth: 2, strokeLinejoin: "round" }],
       { namespace: "svg" },
     ));
     assert.match(svgOutput, /focusable="false"/);
+    assert.match(svgOutput, /stroke-width="2"/);
+    assert.match(svgOutput, /stroke-linejoin="round"/);
+    assert.doesNotMatch(svgOutput, /strokeWidth/);
+
+    const reactSvgOutput = renderToString(jsxSpreadElement(
+      "use",
+      [{ xlinkHref: "#shape", xmlLang: "en" }],
+      { namespace: "svg", reactCompatEvents: true },
+    ));
+    assert.match(reactSvgOutput, /xlink:href="#shape"/);
+    assert.match(reactSvgOutput, /xml:lang="en"/);
   });
 });
