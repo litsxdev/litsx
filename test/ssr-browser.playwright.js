@@ -1652,8 +1652,13 @@ LateGlobalCard.lightDom = true;
 `,
   );
   await fs.writeFile(
+    path.join(srcDir, "theme.css"),
+    `:root { --quartz-theme-probe: quartz-theme-still-present; }`,
+  );
+  await fs.writeFile(
     path.join(srcDir, "main.js"),
     `
+import "./theme.css";
 import "virtual:uno.css";
 import { EarlyCard } from "./early.tsx";
 
@@ -1661,6 +1666,11 @@ customElements.define("early-card", EarlyCard);
 document.querySelector("#app").append(document.createElement("early-card"));
 
 await new Promise((resolve) => requestAnimationFrame(resolve));
+window.__litsxInitialThemeProbe = getComputedStyle(document.documentElement)
+  .getPropertyValue("--quartz-theme-probe")
+  .trim();
+window.__litsxInitialStyleIds = [...document.querySelectorAll("style[data-vite-dev-id]")]
+  .map((style) => style.getAttribute("data-vite-dev-id"));
 const { LateCard, LateGlobalCard } = await import("./late.tsx");
 customElements.define("late-card", LateCard);
 customElements.define("late-global-card", LateGlobalCard);
@@ -1736,9 +1746,23 @@ window.__litsxLateCardReady = true;
         componentStyles,
         globalRadius: getComputedStyle(globalCard).borderRadius,
         globalColor: getComputedStyle(globalCard).color,
+        themeProbe: getComputedStyle(document.documentElement)
+          .getPropertyValue("--quartz-theme-probe")
+          .trim(),
+        initialThemeProbe: window.__litsxInitialThemeProbe,
+        initialStyleIds: window.__litsxInitialStyleIds,
+        viteStyleIds: [...document.querySelectorAll("style[data-vite-dev-id]")]
+          .map((style) => style.getAttribute("data-vite-dev-id")),
       };
     });
 
+    expect(
+      result.initialThemeProbe,
+      JSON.stringify({
+        initialThemeProbe: result.initialThemeProbe,
+        initialStyleIds: result.initialStyleIds,
+      }),
+    ).toBe("quartz-theme-still-present");
     expect(result.componentStyles).toContain("var(--colors-white)");
     expect(result.componentStyles).toContain("var(--radius-lg)");
     expect(result.componentStyles).not.toContain("--colors-white:");
@@ -1748,6 +1772,9 @@ window.__litsxLateCardReady = true;
     expect(result.radius).not.toBe("0px");
     expect(result.globalRadius).not.toBe("0px");
     expect(result.globalColor).not.toBe("rgb(0, 0, 0)");
+    expect(result.themeProbe).toBe("quartz-theme-still-present");
+    expect(result.viteStyleIds.filter((id) => id?.endsWith("/src/theme.css"))).toHaveLength(1);
+    expect(result.viteStyleIds.filter((id) => id === "/__litsx_unocss_global.css")).toHaveLength(1);
   } finally {
     await server.close();
     await fs.rm(tempDir, { recursive: true, force: true });

@@ -70,6 +70,14 @@ function isRenderableJsx(node) {
   return t.isJSXElement(node) || t.isJSXFragment(node);
 }
 
+function isStoryModule(options) {
+  const filename = options.state?.file?.opts?.filename;
+  return (
+    typeof filename === "string" &&
+    /\.stories\.[cm]?[jt]sx?$/i.test(filename.split(/[?#]/, 1)[0])
+  );
+}
+
 function collectReturnStatement(functionPath, bindings, state, allowNullRender = false) {
   let returnStatement = null;
 
@@ -97,6 +105,22 @@ function collectReturnStatement(functionPath, bindings, state, allowNullRender =
 
 export function prepareComponentRender(functionPath, node, propertyNames, bindings, nestedInitializers, options = {}) {
   throwFirstImplicitChildrenProjectionIssue(functionPath);
+
+  // Babel does not expose a ReturnStatement for expression-bodied arrows.
+  // Story modules commonly use that form for local PascalCase preview hosts,
+  // but promoting it globally would change the meaning of ordinary helpers.
+  if (
+    isStoryModule(options) &&
+    t.isArrowFunctionExpression(node) &&
+    !t.isBlockStatement(node.body) &&
+    (
+      isRenderableJsx(node.body) ||
+      (options.allowNullRender === true && t.isNullLiteral(node.body))
+    )
+  ) {
+    node.body = t.blockStatement([t.returnStatement(node.body)]);
+    node.expression = false;
+  }
 
   const returnStatement = collectReturnStatement(
     functionPath,

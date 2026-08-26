@@ -29,6 +29,7 @@ export default function transformTypescriptNamespaceCollisions(api) {
 
           for (const statementPath of path.get("body")) {
             if (!statementPath.isImportDeclaration()) continue;
+            const hadSpecifiers = statementPath.node.specifiers.length > 0;
             const declarationIsTypeOnly = statementPath.node.importKind === "type";
             for (const specifierPath of statementPath.get("specifiers")) {
               const localName = specifierPath.node.local?.name;
@@ -37,7 +38,7 @@ export default function transformTypescriptNamespaceCollisions(api) {
                 specifierPath.remove();
               }
             }
-            if (statementPath.node.specifiers.length === 0) {
+            if (hadSpecifiers && statementPath.node.specifiers.length === 0) {
               statementPath.remove();
             }
           }

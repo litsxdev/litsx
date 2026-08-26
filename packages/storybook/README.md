@@ -37,3 +37,9 @@ asset processor, or analyzer supplies either plugin.
 Storybook's contextual `makeTitle` callback when indexing stories and provides
 a safe identity fallback when the Vite registration transform validates CSF
 without an indexer context.
+
+Local PascalCase hosts used by a story may be function declarations or block-
+or expression-bodied arrow components. LitSX compiles and registers top-level
+hosts; nested local components remain scoped through their owning component's
+element registry. Multiple story instances therefore reuse the same constructor
+without duplicate global registration.

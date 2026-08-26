@@ -71,6 +71,9 @@ Default behavior:
 - transforms project-local `.js`, `.jsx`, `.ts`, and `.tsx`
 - leaves modules outside the Vite root untouched unless selected through
   `include` or `reactCompat.transformDependencies`
+- limits optimize-deps compilation to authored project files; dependency,
+  prebundle-cache, generated-chunk, asset, and virtual module ids are not
+  treated as LitSX authoring input
 - returns `{ code, map }`
 - delegates compilation to `@litsx/compiler`
 

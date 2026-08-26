@@ -37,6 +37,8 @@ The compilation path handles:
 - ordinary JSX props with destination-aware Lit binding inference
 - explicit `on:event` listeners and component static assignments
 - compiler-generated Lit binding forms such as `@click`, `.value`, and `?disabled`
+- expression-bodied PascalCase arrow hosts in `*.stories.*` modules
+- JavaScript side-effect imports such as CSS and virtual stylesheet entrypoints
 - Babel plugin ordering
 - sourcemap composition across generated-template reparsing and template lowering
 

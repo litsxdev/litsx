@@ -79,13 +79,25 @@ const LIT_DEDUPE_PACKAGES = [
 function getNodeModulesPackageName(id) {
   const filename = String(id || "").split("?", 1)[0].replaceAll("\\", "/");
   const marker = "/node_modules/";
-  const markerIndex = filename.lastIndexOf(marker);
+  const searchableFilename = filename.startsWith("/") ? filename : `/${filename}`;
+  const markerIndex = searchableFilename.lastIndexOf(marker);
   if (markerIndex === -1) return null;
-  const segments = filename.slice(markerIndex + marker.length).split("/");
+  const segments = searchableFilename.slice(markerIndex + marker.length).split("/");
   if (segments[0]?.startsWith("@")) {
     return segments.length >= 2 ? `${segments[0]}/${segments[1]}` : null;
   }
   return segments[0] || null;
+}
+
+function shouldTransformOptimizeDeps(id, include, root, cacheDir) {
+  if (typeof id !== "string" || !id || id.startsWith("\0")) return false;
+  if (getNodeModulesPackageName(id)) return false;
+  if (cacheDir && isInsideProjectRoot(id, cacheDir)) return false;
+  if (root && !isInsideProjectRoot(id, root)) return false;
+
+  if (typeof include === "function") return include(id);
+  if (include instanceof RegExp) return include.test(id);
+  return /\.[cm]?[jt]sx?(?:\?|$)/.test(id);
 }
 
 function getTransformDependencies(options = {}) {
@@ -273,10 +285,9 @@ export function litsx(options = {}) {
     return {
       name: "litsx-optimize-deps",
       async load(filePath) {
-        if (!shouldTransform(
+        if (!shouldTransformOptimizeDeps(
           filePath,
           include,
-          transformDependencies,
           projectRoot,
           projectCacheDir,
         )) {

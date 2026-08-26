@@ -429,6 +429,14 @@ export default createLitsxStorybookConfig({
 The same `integration` object must reach both halves of the split API. Omit it
 from both calls when the defaults are sufficient.
 
+`virtual:uno.css` is a side-effect CSS entry. Keep it as a bare import in the
+preview or application entry; LitSX preserves that import through compilation,
+so Vite links the emitted stylesheet in production and retains it across dev
+updates. Ordinary CSS imports beside it remain independently owned by Vite.
+Utilities in dynamically imported story components stay in the corresponding
+component output, while the linked global sheet supplies document utilities and
+theme variables.
+
 ## Granularity and SSR
 
 Utilities discovered from JSX and explicit `Component.styles` guards are

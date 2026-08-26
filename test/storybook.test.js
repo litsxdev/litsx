@@ -3,6 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, it } from "vitest";
+import { transformLitsxSync } from "../packages/compiler/src/index.js";
 
 import {
   createLitsxStorybookConfig,
@@ -105,10 +106,12 @@ describe("@litsx/storybook", () => {
       "export const Playground = Default;",
       "",
     ].join("\n");
+    const storyFile = createStoryFile(source);
+    const compiledSource = transformLitsxSync(source, { filename: storyFile }).code;
 
     const transformed = await plugin.transform.handler(
-      source,
-      "/project/src/stories/catalog.stories.tsx",
+      compiledSource,
+      storyFile,
     );
 
     assert.strictEqual(plugin.enforce, "post");
@@ -134,6 +137,10 @@ describe("@litsx/storybook", () => {
     );
     assert.match(
       transformed.code,
+      /class VdsDrawerStory extends (?:ShadowDomMixin\()?LitElement/,
+    );
+    assert.match(
+      transformed.code,
       /customElements\.define\("vds-modal-story", VdsModalStory\);/,
     );
     assert.match(
@@ -149,8 +156,8 @@ describe("@litsx/storybook", () => {
       /customElements\.define\("vds-ignored-story", VdsIgnoredStory\);/,
     );
     const standardTsx = await plugin.transform.handler(
-      source,
-      "/project/src/stories/catalog.stories.tsx",
+      compiledSource,
+      storyFile,
     );
     assert.match(
       standardTsx.code,

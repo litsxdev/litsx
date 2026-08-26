@@ -1345,6 +1345,83 @@ LightCard.lightDom = true;
     }
   });
 
+  it("links side-effect UnoCSS and ordinary CSS imports in app builds with dynamic stories", async () => {
+    const directory = fs.mkdtempSync(
+      path.join(os.tmpdir(), "litsx-unocss-storybook-build-"),
+    );
+    fs.writeFileSync(
+      path.join(directory, "index.html"),
+      '<main id="app"></main><script type="module" src="/main.js"></script>',
+      "utf8",
+    );
+    fs.writeFileSync(
+      path.join(directory, "preview.css"),
+      ":root { --preview-theme: ready; }",
+      "utf8",
+    );
+    fs.writeFileSync(
+      path.join(directory, "main.js"),
+      [
+        'import "./preview.css";',
+        'import "virtual:uno.css";',
+        'window.loadStory = () => import("./catalog.stories.tsx");',
+      ].join("\n"),
+      "utf8",
+    );
+    fs.writeFileSync(
+      path.join(directory, "catalog.stories.tsx"),
+      [
+        'export default { title: "Catalog/Dynamic" };',
+        'const DynamicStoryPreview = () => <main class="grid max-w-3xl gap-6">Story</main>;',
+        'export const Playground = { render: () => <DynamicStoryPreview /> };',
+      ].join("\n"),
+      "utf8",
+    );
+
+    try {
+      const result = await build({
+        configFile: false,
+        root: directory,
+        logLevel: "silent",
+        plugins: litsxUnoCss({
+          unocss: { presets: [presetWind4()], preflights: [] },
+        }),
+        build: {
+          write: false,
+          minify: false,
+          rollupOptions: {
+            external(id) {
+              return id === "lit" || id.startsWith("lit/") || id.startsWith("@litsx/");
+            },
+          },
+        },
+      });
+      const outputs = Array.isArray(result)
+        ? result.flatMap((item) => item.output)
+        : result.output;
+      const html = outputs.find((item) => item.fileName === "index.html");
+      const cssAssets = outputs.filter(
+        (item) => item.type === "asset" && item.fileName.endsWith(".css"),
+      );
+      const css = cssAssets.map((item) => String(item.source)).join("\n");
+      const dynamicJs = outputs
+        .filter((item) => item.type === "chunk" && item.isDynamicEntry)
+        .map((item) => item.code)
+        .join("\n");
+
+      assert(html && html.type === "asset");
+      assert.match(String(html.source), /<link rel="stylesheet"[^>]+\.css/);
+      assert.match(css, /--preview-theme:\s*ready/);
+      assert.match(css, /--container-3xl:/);
+      assert.match(dynamicJs, /\.grid\{/);
+      assert.match(dynamicJs, /\.max-w-3xl\{/);
+      assert.match(dynamicJs, /\.gap-6\{/);
+      assert.strictEqual(cssAssets.length, 1);
+    } finally {
+      fs.rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   it("keeps Wind4 on-demand theme variables out of component output", async () => {
     const chunk = await buildFixture(
       `

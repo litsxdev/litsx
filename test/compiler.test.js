@@ -236,6 +236,46 @@ describe("@litsx/compiler", () => {
     assert.doesNotMatch(result.code, /defaultOpen="\$\{args\.defaultOpen\}"/);
   }, 20000);
 
+  it("compiles expression-bodied local story hosts in complete CSF modules", () => {
+    const source = [
+      'export default { title: "Layout/Product page" };',
+      "const ProductPageLayoutPreview = ({ composition = 'grid' }) => (",
+      "  <main data-composition={composition}><section /></main>",
+      ");",
+      "export const Playground = {",
+      "  render: (args) => <ProductPageLayoutPreview composition={args.composition} />,",
+      "};",
+    ].join("\n");
+
+    const result = transformLitsxSync(source, {
+      filename: "/virtual/product-page-layout.stories.tsx",
+    });
+
+    assert.match(result.code, /class ProductPageLayoutPreview extends LitElement/);
+    assert.match(result.code, /static properties = \{[\s\S]*composition:/);
+    assert.match(
+      result.code,
+      /<product-page-layout-preview composition="\$\{args\.composition\}"><\/product-page-layout-preview>/,
+    );
+  }, 20000);
+
+  it("preserves side-effect imports while removing colliding TypeScript-only imports", () => {
+    const source = [
+      'import "./theme.css";',
+      'import "virtual:uno.css";',
+      'import type { PreviewCard } from "./preview-types.js";',
+      "export function PreviewCard() { return <article>Ready</article>; }",
+    ].join("\n");
+
+    const result = transformLitsxSync(source, {
+      filename: "/virtual/preview-card.tsx",
+    });
+
+    assert.match(result.code, /import "\.\/theme\.css";/);
+    assert.match(result.code, /import "virtual:uno\.css";/);
+    assert.doesNotMatch(result.code, /preview-types/);
+  });
+
   it("preserves imported component property and attribute contracts across direct props and spreads", () => {
     const buttonTypes = [
       "export type ButtonProps = {",

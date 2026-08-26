@@ -457,6 +457,42 @@ export function ConsumerCard({ label = "Ready" }) {
     }
   });
 
+  it("never compiles dependency or prebundled chunks during optimizeDeps scanning", async () => {
+    const transformSync = vi.fn();
+    const session = {
+      transform: vi.fn(),
+      transformSync,
+      getTypecheckSession: vi.fn(),
+      invalidate: vi.fn(),
+      dispose: vi.fn(),
+    };
+    const sessionSpy = vi
+      .spyOn(compilerModule, "createLitsxCompilationSession")
+      .mockReturnValue(session);
+    const plugin = litsx();
+    const config = plugin.config({ optimizeDeps: { rolldownOptions: {} } });
+    const scanPlugin = config.optimizeDeps.rolldownOptions.plugins.at(-1);
+    plugin.configResolved({
+      root: "/project",
+      cacheDir: "/project/node_modules/.vite",
+    });
+
+    try {
+      for (const id of [
+        "/project/node_modules/minified-dep/index.tsx",
+        "node_modules/minified-dep/index.tsx",
+        "/project/node_modules/.vite/deps/chunk-ABCD.tsx",
+        "/outside/generated/chunk-ABCD.tsx",
+        "\0virtual:generated.tsx",
+      ]) {
+        assert.strictEqual(await scanPlugin.load(id), null, id);
+      }
+      assert.strictEqual(transformSync.mock.calls.length, 0);
+    } finally {
+      sessionSpy.mockRestore();
+    }
+  });
+
   it("supports custom function-based include filters", async () => {
     const plugin = litsx({
       include(id) {
