@@ -16,17 +16,13 @@ Source stays standard `.jsx` or `.tsx`; the LitSX compiler turns it into Lit
 elements and templates. There is no custom file format or authored `.property`,
 `?boolean`, or `@event` syntax.
 
-> **Release status:** LitSX 1.0 is currently published as a prerelease under the
-> npm `next` tag. The npm `latest` tag and its README continue to represent the
-> stable release until 1.0 is promoted.
-
 ## Quick start
 
 Create a Vite application with the supported TypeScript, ESLint, and LitSX
 configuration:
 
 ```sh
-npx create-litsx-app@next my-app --template app
+npx create-litsx-app my-app --template app
 cd my-app
 npm install
 npm run dev

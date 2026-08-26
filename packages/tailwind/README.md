@@ -14,9 +14,9 @@ npm install -D @litsx/tailwind @litsx/vite-plugin \
   @tailwindcss/vite tailwindcss vite
 ```
 
-The Vite adapter supports Tailwind CSS 4.3+, Vite 7.3 or 8, and the LitSX 1.0
-prerelease line. Consumers of the bundler-neutral root entrypoint do not need
-Vite or `@tailwindcss/vite` at runtime.
+The Vite adapter supports Tailwind CSS 4.3+, Vite 7.3 or 8, and LitSX 1.0.
+Consumers of the bundler-neutral root entrypoint do not need Vite or
+`@tailwindcss/vite` at runtime.
 
 ## Vite quick start
 
