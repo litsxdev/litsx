@@ -435,6 +435,28 @@ describe("standard JSX authoring", () => {
     assert.doesNotMatch(code, /LitsxStaticHoistsMixin|__litsxStatic|litsx\.static\.styles/);
   });
 
+  it("composes inherited, detected, and explicitly authored elements in precedence order", () => {
+    const source = `
+      import DetectedChild from "./DetectedChild.js";
+      const OwnChild = class extends HTMLElement {};
+
+      function ElementMatrix() {
+        return <DetectedChild />;
+      }
+      ElementMatrix.elements = { "own-child": OwnChild };
+    `;
+
+    const { code } = transformLitsxSync(source, {
+      filename: "/tmp/litsx-element-composition.tsx",
+      jsxTemplate: false,
+    });
+
+    assert.match(
+      code,
+      /static elements = \{\s*\.\.\.\(super\.elements \?\? \{\}\),\s*"detected-child": DetectedChild,\s*"own-child": OwnChild\s*\}/,
+    );
+  });
+
   it("recognizes aliased and namespace replaceStyles imports", () => {
     const source = `
       import { css, replaceStyles as resetStyles } from "@litsx/core";

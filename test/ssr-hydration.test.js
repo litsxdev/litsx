@@ -240,6 +240,37 @@ describe("@litsx/ssr/hydration", () => {
     assert.strictEqual(register.mock.calls.length, 1);
   });
 
+  it("enables registered pure custom-element roots after registration", async () => {
+    const { hydratePage } = await import("../packages/ssr/src/hydration.js");
+    const registry = createCustomElementsRegistry();
+    const { documentRef, rootElement } = createRootAttributeDocument({
+      tagName: "PLAIN-LIT-ROOT",
+    });
+    const attributes = new Set(["defer-hydration"]);
+    rootElement.hasAttribute = (name) => attributes.has(name);
+    rootElement.removeAttribute = vi.fn((name) => attributes.delete(name));
+    globalThis.customElements = registry;
+
+    class PlainLitRoot {}
+
+    await hydratePage({
+      document: documentRef,
+      hydrationData: {
+        version: 1,
+        roots: [{ id: "litsx-root-0", tagName: "plain-lit-root" }],
+        payload: { roots: {}, instances: {} },
+      },
+      register() {
+        registry.define("plain-lit-root", PlainLitRoot);
+      },
+    });
+
+    assert.strictEqual(attributes.has("defer-hydration"), false);
+    assert.deepStrictEqual(rootElement.removeAttribute.mock.calls, [
+      ["defer-hydration"],
+    ]);
+  });
+
   it("recreates a forwarded client ref before custom elements upgrade", async () => {
     const { hydrate, prepareForwardedRefs } = await import("../packages/ssr/src/hydration.js");
     const createElement = (attributes = {}) => ({

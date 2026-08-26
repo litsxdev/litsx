@@ -109,6 +109,14 @@ function transformClass(classPath, programPath, options = {}, availableMap = bui
   });
   const needsElements = detectedElements.length > 0;
   const hasExistingElementsStatic = hasStaticElementsMember(node);
+  if (hasExistingElementsStatic && needsElements) {
+    mergeDetectedElementsIntoStaticMember(
+      node,
+      detectedElements,
+      programPath,
+      options,
+    );
+  }
   const elementsStatic = hasExistingElementsStatic
     ? null
     : createClassProperty(
@@ -209,12 +217,7 @@ function hasMixinInSuperChain(node, mixinName) {
 function createClassProperty(name, elements, programPath, options = {}, allowEmpty = false) {
   if (!elements || (elements.length === 0 && !allowEmpty)) return null;
 
-  const properties = elements.map((entry) =>
-    t.objectProperty(
-      t.stringLiteral(entry.tagName),
-      createElementRegistryValue(entry, programPath, options)
-    )
-  );
+  const properties = createElementRegistryProperties(elements, programPath, options);
 
   const inheritedElements = t.logicalExpression(
     "??",
@@ -233,6 +236,105 @@ function createClassProperty(name, elements, programPath, options = {}, allowEmp
   );
   property.static = true;
   return property;
+}
+
+function createElementRegistryProperties(elements, programPath, options = {}) {
+  return elements.map((entry) =>
+    t.objectProperty(
+      t.stringLiteral(entry.tagName),
+      createElementRegistryValue(entry, programPath, options)
+    )
+  );
+}
+
+function isInheritedElementsSpread(property) {
+  if (!t.isSpreadElement(property)) {
+    return false;
+  }
+  const argument = property.argument;
+  return (
+    t.isLogicalExpression(argument, { operator: "??" }) &&
+    t.isMemberExpression(argument.left) &&
+    t.isSuper(argument.left.object) &&
+    t.isIdentifier(argument.left.property, { name: "elements" })
+  );
+}
+
+function readStaticObjectPropertyName(property) {
+  if (!t.isObjectProperty(property) && !t.isObjectMethod(property)) {
+    return null;
+  }
+  if (t.isIdentifier(property.key) && !property.computed) {
+    return property.key.name;
+  }
+  return t.isStringLiteral(property.key) ? property.key.value : null;
+}
+
+function mergeDetectedElementsIntoStaticMember(
+  node,
+  elements,
+  programPath,
+  options = {},
+) {
+  const member = node.body.body.find((entry) => {
+    if (!entry.static) return false;
+    return (
+      (t.isIdentifier(entry.key) && entry.key.name === "elements") ||
+      (t.isStringLiteral(entry.key) && entry.key.value === "elements")
+    );
+  });
+  if (!member || !("value" in member)) {
+    return false;
+  }
+
+  const authoredValue = member.value;
+  const authoredProperties = t.isObjectExpression(authoredValue)
+    ? authoredValue.properties
+    : [];
+  const authoredNames = new Set(
+    authoredProperties.map(readStaticObjectPropertyName).filter(Boolean),
+  );
+  const detectedProperties = createElementRegistryProperties(
+    elements.filter((entry) => !authoredNames.has(entry.tagName)),
+    programPath,
+    options,
+  );
+  if (detectedProperties.length === 0) {
+    return false;
+  }
+
+  if (t.isObjectExpression(authoredValue)) {
+    const inheritedIndex = authoredProperties.findIndex(isInheritedElementsSpread);
+    if (inheritedIndex >= 0) {
+      authoredProperties.splice(inheritedIndex + 1, 0, ...detectedProperties);
+    } else {
+      authoredProperties.unshift(
+        t.spreadElement(
+          t.logicalExpression(
+            "??",
+            t.memberExpression(t.super(), t.identifier("elements")),
+            t.objectExpression([]),
+          ),
+        ),
+        ...detectedProperties,
+      );
+    }
+    return true;
+  }
+
+  const inheritedElements = t.logicalExpression(
+    "??",
+    t.memberExpression(t.super(), t.identifier("elements")),
+    t.objectExpression([]),
+  );
+  member.value = t.objectExpression([
+    t.spreadElement(inheritedElements),
+    ...detectedProperties,
+    ...(authoredValue
+      ? [t.spreadElement(t.logicalExpression("??", authoredValue, t.objectExpression([])))]
+      : []),
+  ]);
+  return true;
 }
 
 function createElementRegistryValue(entry, programPath, options = {}) {

@@ -107,6 +107,36 @@ describe("@litsx/babel-plugin-transform-litsx-scoped-elements", () => {
     assert(elementEntry, "expected fancy-button entry in elements");
   });
 
+  it("merges detected tags after inherited and before authored elements", () => {
+    const source = `
+      import { LitElement } from 'lit';
+      import FancyButton from './FancyButton.js';
+      class OwnButton extends HTMLElement {}
+
+      class MyElement extends LitElement {
+        static elements = { "own-button": OwnButton };
+        render() {
+          return <FancyButton />;
+        }
+      }
+    `;
+
+    const inputAst = parser.parse(source, {
+      sourceType: "module",
+      plugins: ["classProperties"],
+    });
+    const { code } = transformFromAstSync(inputAst, source, {
+      configFile: false,
+      babelrc: false,
+      plugins: [plugin],
+    });
+
+    assert.match(
+      code,
+      /static elements = \{\s*\.\.\.\(super\.elements \?\? \{\}\),\s*"fancy-button": FancyButton,\s*"own-button": OwnButton\s*\}/,
+    );
+  });
+
   it("handles React-style function components with useRef", () => {
     const source = `
       import { useRef, useEffect } from 'react';

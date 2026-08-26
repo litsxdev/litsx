@@ -62,19 +62,20 @@ export class PlainLitCounter extends LitElement {
 
 export class LightLitCounter extends PlainLitCounter {}
 
-type LitElementConstructor = typeof LitElement;
+type LitElementConstructor = new (...args: any[]) => LitElement;
 
 export const CapabilityMixin = <BaseConstructor extends LitElementConstructor>(
   Base: BaseConstructor,
 ) =>
   class CapabilityHost extends Base {
     static properties = {
+      ...((Base as any).properties ?? {}),
       tone: { type: String, reflect: true },
       enabled: { type: Boolean, reflect: true },
     };
 
     static styles = [
-      Base.styles ?? [],
+      (Base as any).styles ?? [],
       css`
         .value {
           color: rgb(0, 128, 0);

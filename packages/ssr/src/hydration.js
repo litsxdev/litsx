@@ -618,6 +618,26 @@ export function applyHydrationPayload(
   return roots;
 }
 
+function enableRegisteredHydrationRoots(roots) {
+  const registry = getCustomElementRegistry();
+  if (!registry) {
+    return roots;
+  }
+
+  for (const root of Array.isArray(roots) ? roots : []) {
+    const tagName = root?.element?.tagName?.toLowerCase?.() ?? root?.tagName;
+    const ctor = tagName ? registry.get?.(tagName) : null;
+    if (!ctor) {
+      continue;
+    }
+
+    ensureHydratableElementSupport(ctor);
+    root.element.removeAttribute?.("defer-hydration");
+  }
+
+  return roots;
+}
+
 /**
  * Resolve a single LitSX hydration root by id from the current SSR metadata.
  */
@@ -705,6 +725,8 @@ async function hydrateImpl(
       registerHydrationModule(moduleNamespace);
     }
   });
+
+  enableRegisteredHydrationRoots(hydrationRoots);
 
   return hydrationRoots.length > 0 ? hydrationRoots : root;
 }

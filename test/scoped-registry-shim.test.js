@@ -1115,6 +1115,34 @@ describe("@litsx/scoped-registry-shim shim runtime", () => {
     globalElement.remove();
   });
 
+  it("upgrades an existing global stand-in inside an unowned shadow root after a late definition", () => {
+    const tagName = nextTag();
+    const host = document.createElement("section");
+    const shadowRoot = host.attachShadow({ mode: "open" });
+
+    ensureLightDomProxy(tagName);
+    shadowRoot.innerHTML = `<${tagName}></${tagName}>`;
+    document.body.appendChild(host);
+
+    const element = shadowRoot.querySelector(tagName);
+    assert(element);
+    assert.strictEqual(Object.getPrototypeOf(element), HTMLElement.prototype);
+
+    class GlobalElement extends HTMLElement {
+      connectedCallback() {
+        this.connected = true;
+      }
+    }
+
+    customElements.define(tagName, GlobalElement);
+
+    assert.strictEqual(element, shadowRoot.querySelector(tagName));
+    assert.strictEqual(Object.getPrototypeOf(element), GlobalElement.prototype);
+    assert.equal(element.connected, true);
+
+    host.remove();
+  });
+
   it("keeps scoped hosts isolated after a global definition claims the same tag", () => {
     const tagName = nextTag();
     const firstHost = document.createElement("section");

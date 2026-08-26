@@ -207,6 +207,13 @@ creating the component's children during its first client update. An explicit
 with authored children are left unchanged, because those children may be
 intentional projected content.
 
+This automatic insertion currently applies to registered document roots.
+Nested light-DOM custom elements must expose a client/server-stable
+`renderLight()` part in their parent Lit template; adding it only during SSR
+changes the template digest and cannot hydrate. Pure Lit integrations should
+therefore treat a nested `LightDomMixin` boundary as an explicit integration
+point until the compiler can emit that directive symmetrically.
+
 If you need finer control over the HTML shell, `renderToString(...)` remains
 available as the lower-level API:
 
@@ -727,6 +734,14 @@ The SSR/hydration invariants for that contract are:
 - light DOM and slot projection follow the DOM produced by SSR; client
   bootstraps must not reshuffle projected children between registration and
   hydration
+
+The pure-Lit interoperability matrix also keeps initial context values
+conservative when a `litsx-context-provider` is authored inside an uncompiled
+Lit `LightDomMixin` template. Provider updates after hydration use the normal
+composed `@lit/context` protocol, but that pure-Lit template does not enter the
+LitSX SSR provider stack automatically. Compiled react-compat providers are
+handled by the built-in scoped renderer and are covered separately in the
+browser suite.
 
 Importing `@litsx/ssr/hydration` is also the supported client bootstrap entry:
 it installs `@lit-labs/ssr-client/lit-element-hydrate-support.js` as its first

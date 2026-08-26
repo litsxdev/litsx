@@ -122,6 +122,38 @@ describe("react context compat runtime", () => {
     assert.match(nestedReader.shadowRoot.textContent, /contrast/);
   });
 
+  it("retries subscribed consumers when a connected provider initializes late", async () => {
+    ensureProviderElement();
+    const ThemeContext = createContext("light");
+    const readerTag = nextTag("litsx-context-reader");
+
+    class ContextReader extends LitElement {
+      render() {
+        return renderWithHooks(
+          this,
+          () => html`<span>${useContext(ThemeContext)}</span>`,
+        );
+      }
+    }
+
+    defineElement(readerTag, ContextReader);
+
+    const provider = document.createElement("litsx-context-provider");
+    const reader = document.createElement(readerTag);
+    provider.appendChild(reader);
+    document.body.appendChild(provider);
+
+    await reader.updateComplete;
+    assert.match(reader.shadowRoot.textContent, /light/);
+
+    provider.value = "late";
+    provider.context = ThemeContext;
+    await flush();
+    await reader.updateComplete;
+
+    assert.match(reader.shadowRoot.textContent, /late/);
+  });
+
   it("supports renderContext and rejects context changes after initialization", async () => {
     ensureProviderElement();
     const ThemeContext = createContext("light");

@@ -179,6 +179,10 @@ function getRuntime() {
         this._whenDefinedPromises.delete(tagName);
       }
 
+      if (this === globalRegistry && document.documentElement) {
+        upgradeConnectedTree(document.documentElement, globalRegistry);
+      }
+
       return elementClass;
     }
 
@@ -624,6 +628,13 @@ function getRuntime() {
       for (const child of current.children ?? []) {
         pending.push({ node: child, registry: childRegistry });
       }
+      if (current.shadowRoot) {
+        const shadowRegistry = registryFromScope(current.shadowRoot) ??
+          (currentRegistry === globalRegistry ? globalRegistry : null);
+        if (shadowRegistry) {
+          pending.push({ node: current.shadowRoot, registry: shadowRegistry });
+        }
+      }
     }
   }
 
@@ -658,6 +669,13 @@ function getRuntime() {
       const childRegistry = current[HOST_REGISTRY] ?? currentRegistry ?? registryForNode(current);
       for (const child of current.children ?? []) {
         pending.push({ node: child, registry: childRegistry });
+      }
+      if (current.shadowRoot) {
+        const shadowRegistry = registryFromScope(current.shadowRoot) ??
+          (currentRegistry === globalRegistry ? globalRegistry : null);
+        if (shadowRegistry) {
+          pending.push({ node: current.shadowRoot, registry: shadowRegistry });
+        }
       }
     }
   }

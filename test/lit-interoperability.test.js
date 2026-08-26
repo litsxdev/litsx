@@ -58,6 +58,54 @@ describe("pure Lit component interoperability", () => {
     assert.doesNotMatch(pureLitSource, /@litsx\/core/);
   });
 
+  it("composes transitive structural mixins and authored Lit metadata", () => {
+    const filename = path.join(fixtureRoot, "src/matrix-components.tsx");
+    const source = fs.readFileSync(filename, "utf8");
+    const result = transformLitsxSync(source, {
+      filename,
+      projectPath: path.join(fixtureRoot, "tsconfig.json"),
+    });
+
+    assert.match(
+      result.code,
+      /class MatrixComplexLeaf extends ShadowDomMixin\(applyStructuralHooks\(LitElement,/,
+    );
+    assert.strictEqual(
+      result.code.match(/useAlpha\[Symbol\.for\("litsx\.structuralHooks"\)\]/g)
+        ?.length,
+      2,
+    );
+    assert.match(
+      result.code,
+      /\.\.\.\(useBeta\[Symbol\.for\("litsx\.structuralHooks"\)\] \|\| \[useBeta\]\)/,
+    );
+    assert.match(
+      result.code,
+      /\.\.\.\(useFormValue\[Symbol\.for\("litsx\.structuralHooks"\)\] \|\| \[useFormValue\]\)/,
+    );
+    assert.match(result.code, /\.\.\.\(super\.elements \?\? \{\}\)/);
+    assert.match(result.code, /"plain-lit-terminal": PlainLitTerminal/);
+    assert.match(result.code, /"own-marker": OwnMarker/);
+    assert.match(
+      result.code,
+      /static styles = \[super\.styles \?\? \[\], css`/,
+    );
+    assert.match(result.code, /"plain-lit-context-bridge": PlainLitContextBridge/);
+    assert.match(
+      result.code,
+      /"litsx-context-provider": LitsxContextProviderElement/,
+    );
+    assert.deepStrictEqual(result.warnings ?? [], []);
+  });
+
+  it.todo(
+    "emits client-visible renderLight markers for nested light-DOM component boundaries",
+  );
+
+  it.todo(
+    "keeps a non-default initial context value identical across light-DOM SSR and hydration",
+  );
+
   it("SSR renders nested pure Lit classes with inherited properties and styles", async () => {
     class PlainLitLabel extends LitElement {
       static properties = {
