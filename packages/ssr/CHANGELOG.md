@@ -1,5 +1,21 @@
 # @litsx/ssr
 
+## 1.0.0-next.4
+
+### Patch Changes
+
+- 613492d: Complete the supported Lit/LitSX interoperability matrix across pure Lit
+  components, standard and structural mixins, scoped light/shadow trees, SSR,
+  and hydration. Detected scoped elements now compose with inherited and authored
+  registries, hook context subscriptions initialize safely during render and
+  retry late providers, late global definitions reach unowned shadow roots, and
+  registered pure custom-element roots are enabled after hydration registration.
+- Updated dependencies [613492d]
+- Updated dependencies [c16b18d]
+  - @litsx/core@1.0.0-next.6
+  - @litsx/compiler@1.0.0-next.9
+  - @litsx/vite-plugin@1.0.0-next.1
+
 ## 1.0.0-next.3
 
 ### Patch Changes

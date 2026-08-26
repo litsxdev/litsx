@@ -1,5 +1,27 @@
 # @litsx/unocss
 
+## 1.0.0-next.6
+
+### Patch Changes
+
+- c16b18d: Infer nested LitSX light-DOM hydration boundaries in both server and browser
+  templates, including pure Lit parents authored in project-local JavaScript or
+  TypeScript modules. Hydration now adopts the server-rendered child part so
+  subsequent child updates preserve node identity, while disconnecting and
+  reconnecting the child leaves connection ownership with the parent render.
+
+  Keep statically enumerable Tailwind candidates in real Vite builds and attach
+  scoped light-DOM utilities to their owning host without leaking them into the
+  document or sibling components.
+
+  Treat pure Lit class bodies as opaque in both utility integrations. Their
+  templates and static styles remain owned by Lit; only LitSX component classes
+  and genuinely free document JSX participate in utility extraction.
+
+- Updated dependencies [c16b18d]
+  - @litsx/compiler@1.0.0-next.9
+  - @litsx/vite-plugin@1.0.0-next.1
+
 ## 1.0.0-next.5
 
 ### Patch Changes

@@ -1,6 +1,6 @@
 {
   "name": "@litsx/core",
-  "version": "1.0.0-next.5",
+  "version": "1.0.0-next.6",
   "description": "Native LitSX runtime primitives, JSX runtime entrypoints, and web component utilities",
   "author": "LitSX Team",
   "type": "module",
@@ -82,7 +82,7 @@
     "@lit-labs/ssr-client": "^1.1.7",
     "@lit/context": "^1.1.6",
     "@litsx/authoring": "^1.0.0-next.4",
-    "@litsx/scoped-registry-shim": "^1.0.0-next.1"
+    "@litsx/scoped-registry-shim": "^1.0.0-next.2"
   },
   "devDependencies": {
     "lit": "^3.3.3"
