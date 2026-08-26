@@ -24,6 +24,10 @@ const shadowHost = document.querySelector("hybrid-host");
 const lightHost = document.querySelector("hybrid-light-host");
 const shadowCounter = shadowHost?.shadowRoot?.querySelector("plain-lit-counter");
 const mixedBadge = shadowHost?.shadowRoot?.querySelector("mixed-lit-badge");
+const pureLightParent = shadowHost?.shadowRoot?.querySelector("pure-lit-light-parent");
+const nestedLightBridge = pureLightParent?.shadowRoot?.querySelector("matrix-light-bridge");
+const nestedLightSection = nestedLightBridge?.querySelector("[data-pure-lit-light-parent], plain-lit-context-bridge") ?? nestedLightBridge?.firstElementChild;
+const nestedLightButton = nestedLightBridge?.querySelector("[data-matrix-light-update]");
 const lightCounter = lightHost?.querySelector("light-lit-counter");
 const pureBridge = document.querySelector("plain-lit-bridge");
 const pureLeaf = pureBridge?.shadowRoot?.querySelector("matrix-complex-leaf");
@@ -39,6 +43,14 @@ window.__litInteropBeforeHydration = {
   shadowButton: shadowCounter?.shadowRoot?.querySelector("[data-counter]"),
   mixedBadge,
   mixedValue: mixedBadge?.shadowRoot?.querySelector(".value"),
+  pureLightParent,
+  pureLightParentSection: pureLightParent?.shadowRoot?.querySelector("[data-pure-lit-light-parent]"),
+  nestedLightBridge,
+  nestedLightSection,
+  nestedLightButton,
+  nestedLightComments: [...(nestedLightBridge?.childNodes ?? [])]
+    .filter((node) => node.nodeType === 8)
+    .map((node) => node.data),
   lightCounter,
   lightButton: lightCounter?.shadowRoot?.querySelector("[data-counter]"),
   pureBridge,
@@ -66,6 +78,8 @@ for (const [name, element] of [
   ["light-host", lightHost],
   ["shadow-counter", shadowCounter],
   ["mixed-badge", mixedBadge],
+  ["pure-light-parent", pureLightParent],
+  ["nested-light-bridge", nestedLightBridge],
   ["light-counter", lightCounter],
   ["pure-bridge", pureBridge],
   ["pure-leaf", pureLeaf],
@@ -157,7 +171,7 @@ window.__litInteropHydrated = true;
     await page.goto(baseUrl);
     await waitForHydration(page);
 
-    const result = await page.evaluate(() => {
+    const result = await page.evaluate(async () => {
       const before = window.__litInteropBeforeHydration;
       const shadowHost = document.querySelector("hybrid-host");
       const lightHost = document.querySelector("hybrid-light-host");
@@ -165,6 +179,15 @@ window.__litInteropHydrated = true;
         shadowHost.shadowRoot.querySelector("plain-lit-counter");
       const mixedBadge = shadowHost.shadowRoot.querySelector("mixed-lit-badge");
       const lightCounter = lightHost.querySelector("light-lit-counter");
+      const pureLightParent =
+        shadowHost.shadowRoot.querySelector("pure-lit-light-parent");
+      const nestedLightBridge =
+        pureLightParent.shadowRoot.querySelector("matrix-light-bridge");
+      const nestedLightSection =
+        nestedLightBridge.querySelector("plain-lit-context-bridge") ??
+        nestedLightBridge.firstElementChild;
+      const nestedLightButton =
+        nestedLightBridge.querySelector("[data-matrix-light-update]");
 
       return {
         constructors: {
@@ -173,6 +196,8 @@ window.__litInteropHydrated = true;
           mixedBadge: mixedBadge.constructor.name,
           lightHost: lightHost.constructor.name,
           lightCounter: lightCounter.constructor.name,
+          pureLightParent: pureLightParent.constructor.name,
+          nestedLightBridge: nestedLightBridge.constructor.name,
         },
         identity: {
           shadowHost: shadowHost === before.shadowHost,
@@ -188,7 +213,36 @@ window.__litInteropHydrated = true;
           lightButton:
             lightCounter.shadowRoot.querySelector("[data-counter]") ===
             before.lightButton,
+          pureLightParent: pureLightParent === before.pureLightParent,
+          pureLightParentSection:
+            pureLightParent.shadowRoot.querySelector("[data-pure-lit-light-parent]") ===
+            before.pureLightParentSection,
+          nestedLightBridge: nestedLightBridge === before.nestedLightBridge,
+          nestedLightSection: nestedLightSection === before.nestedLightSection,
+          nestedLightButton: nestedLightButton === before.nestedLightButton,
         },
+        nestedLightDiagnostics: {
+          beforeComments: before.nestedLightComments,
+          afterComments: [...nestedLightBridge.childNodes]
+            .filter((node) => node.nodeType === 8)
+            .map((node) => node.data),
+          hasRootPart: nestedLightBridge["_$litPart$"] != null,
+          needsHydration: nestedLightBridge._$needsHydration ?? null,
+          html: nestedLightBridge.innerHTML,
+        },
+        nestedLightUpdate: await (async () => {
+          nestedLightButton.click();
+          await nestedLightBridge.updateComplete;
+          return {
+            text: nestedLightButton.textContent.trim(),
+            sameButton:
+              nestedLightBridge.querySelector("[data-matrix-light-update]") ===
+              nestedLightButton,
+            sameSection:
+              nestedLightBridge.querySelector("plain-lit-context-bridge") ===
+              nestedLightSection,
+          };
+        })(),
       };
     });
 
@@ -198,8 +252,13 @@ window.__litInteropHydrated = true;
       mixedBadge: "MixedLitBadge",
       lightHost: "HybridLightHost",
       lightCounter: "LightLitCounter",
+      pureLightParent: "PureLitLightParent",
+      nestedLightBridge: "MatrixLightBridge",
     });
-    expect(result.identity).toEqual({
+    expect(
+      result.identity,
+      JSON.stringify(result.nestedLightDiagnostics),
+    ).toEqual({
       shadowHost: true,
       lightHost: true,
       shadowCounter: true,
@@ -208,6 +267,16 @@ window.__litInteropHydrated = true;
       mixedValue: true,
       lightCounter: true,
       lightButton: true,
+      pureLightParent: true,
+      pureLightParentSection: true,
+      nestedLightBridge: true,
+      nestedLightSection: true,
+      nestedLightButton: true,
+    });
+    expect(result.nestedLightUpdate).toEqual({
+      text: "1",
+      sameButton: true,
+      sameSection: true,
     });
     expect(pageErrors).toEqual([]);
   });

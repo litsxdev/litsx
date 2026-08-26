@@ -20,6 +20,7 @@ import {
   createUnoCssBuildEngine,
   withUnoCssCompiler,
 } from "../packages/unocss/src/index.js";
+import { litsxUnoCss } from "../packages/unocss/src/vite.js";
 
 function componentKey(code) {
   return code.match(/tailwind\/component\/([a-z0-9]+)\.css/u)?.[1] ?? null;
@@ -207,6 +208,145 @@ export const DemoStory = {
   }
 }
 
+function writeHybridUtilityBoundary(directory) {
+  const entry = path.join(directory, "entry.ts");
+  fs.writeFileSync(
+    path.join(directory, "plain-lit-leaf.ts"),
+    `
+import { LitElement, html } from "lit";
+export class PlainLitLeaf extends LitElement {
+  render() { return html\`<strong data-plain-leaf>leaf</strong>\`; }
+}
+`,
+    "utf8",
+  );
+  fs.writeFileSync(
+    path.join(directory, "hybrid-light-child.tsx"),
+    `
+import { PlainLitLeaf } from "./plain-lit-leaf.ts";
+const TONES = { red: "bg-red-500 p-4", blue: "bg-blue-500 p-6" };
+export function HybridLightChild({ tone = "red" }) {
+  return <section class={TONES[tone]}><PlainLitLeaf /></section>;
+}
+HybridLightChild.lightDom = true;
+`,
+    "utf8",
+  );
+  fs.writeFileSync(
+    path.join(directory, "pure-lit-parent.ts"),
+    `
+import { LitElement, html } from "lit";
+import { HybridLightChild } from "./hybrid-light-child.tsx";
+export class PureLitParent extends LitElement {
+  static elements = { "hybrid-light-child": HybridLightChild };
+  render() { return html\`<hybrid-light-child></hybrid-light-child>\`; }
+}
+`,
+    "utf8",
+  );
+  fs.writeFileSync(
+    entry,
+    `export { PureLitParent } from "./pure-lit-parent.ts";\n`,
+    "utf8",
+  );
+  return entry;
+}
+
+function collectBuildOutput(result) {
+  const outputs = Array.isArray(result)
+    ? result.flatMap((item) => item.output)
+    : result.output;
+  return {
+    code: outputs
+      .filter((output) => output.type === "chunk")
+      .map((output) => output.code)
+      .join("\n"),
+    css: outputs
+      .filter(
+        (output) =>
+          output.type === "asset" && output.fileName.endsWith(".css"),
+      )
+      .map((output) => String(output.source))
+      .join("\n"),
+  };
+}
+
+async function buildHybridTailwindBoundary() {
+  const directory = fs.mkdtempSync(
+    path.join(os.tmpdir(), "litsx-tailwind-hybrid-"),
+  );
+  const tailwindEntry = path.join(directory, "tailwind.css");
+  const tailwindCss = fileURLToPath(
+    import.meta.resolve("tailwindcss/index.css"),
+  );
+  const entry = writeHybridUtilityBoundary(directory);
+
+  fs.writeFileSync(
+    tailwindEntry,
+    `@import "${tailwindCss}" source(none);\n`,
+    "utf8",
+  );
+
+  try {
+    const result = await build({
+      configFile: false,
+      root: directory,
+      logLevel: "silent",
+      plugins: litsxTailwind({
+        integration: { entry: tailwindEntry },
+      }),
+      build: {
+        write: false,
+        minify: false,
+        lib: { entry, formats: ["es"], fileName: "entry" },
+        rollupOptions: {
+          external(id) {
+            return (
+              id === "lit" || id.startsWith("lit/") || id.startsWith("@litsx/")
+            );
+          },
+        },
+      },
+    });
+    return collectBuildOutput(result);
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+}
+
+async function buildHybridUnoCssBoundary() {
+  const directory = fs.mkdtempSync(
+    path.join(os.tmpdir(), "litsx-unocss-hybrid-"),
+  );
+  const entry = writeHybridUtilityBoundary(directory);
+
+  try {
+    const result = await build({
+      configFile: false,
+      root: directory,
+      logLevel: "silent",
+      plugins: litsxUnoCss({
+        unocss: { presets: [presetWind4()], preflights: [] },
+      }),
+      build: {
+        write: false,
+        minify: false,
+        lib: { entry, formats: ["es"], fileName: "entry" },
+        rollupOptions: {
+          external(id) {
+            return (
+              id === "lit" || id.startsWith("lit/") || id.startsWith("@litsx/")
+            );
+          },
+        },
+      },
+    });
+    return collectBuildOutput(result);
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+}
+
 describe("utility CSS concurrency isolation", () => {
   it("keeps parallel Tailwind modules isolated in one shared context", async () => {
     const context = createTailwindContext();
@@ -333,5 +473,47 @@ describe("utility CSS concurrency isolation", () => {
     assert.match(output.css, /\.bg-green-500/u);
     assert.match(output.css, /\.p-6/u);
     assert.doesNotMatch(output.css, /\.bg-red-500|\.p-3/u);
+  });
+
+  it("keeps Tailwind utilities and inferred light-DOM ownership across a Lit/LitSX/Lit chain", async () => {
+    const output = await buildHybridTailwindBoundary();
+    const materialized = `${output.code}\n${output.css}`;
+
+    assert.match(output.code, /__litsxRenderLight/u);
+    assert.match(output.code, /<hybrid-light-child>\$\{__litsxRenderLight\(\)\}<\/hybrid-light-child>/u);
+    assert.match(output.code, /LightDomMixin/u);
+    assert.match(output.code, /PlainLitLeaf/u);
+    assert.match(materialized, /\.bg-red-500/u);
+    assert.match(materialized, /\.bg-blue-500/u);
+    assert.match(materialized, /\.p-4/u);
+    assert.match(materialized, /\.p-6/u);
+    assert.match(materialized, /data-litsx-style-scope/u);
+    assert.strictEqual((materialized.match(/\.bg-red-500\s*\{/gu) ?? []).length, 1);
+    assert.strictEqual((materialized.match(/\.bg-blue-500\s*\{/gu) ?? []).length, 1);
+  });
+
+  it("keeps UnoCSS utilities and inferred light-DOM ownership across a Lit/LitSX/Lit chain", async () => {
+    const output = await buildHybridUnoCssBoundary();
+    const materialized = `${output.code}\n${output.css}`;
+
+    assert.match(output.code, /__litsxRenderLight/u);
+    assert.match(output.code, /<hybrid-light-child>\$\{__litsxRenderLight\(\)\}<\/hybrid-light-child>/u);
+    assert.match(output.code, /LightDomMixin/u);
+    assert.match(output.code, /PlainLitLeaf/u);
+    assert.match(materialized, /\.bg-red-500/u);
+    assert.match(materialized, /\.bg-blue-500/u);
+    assert.match(materialized, /\.p-4/u);
+    assert.match(materialized, /\.p-6/u);
+    assert.match(materialized, /data-litsx-style-scope/u);
+    const redRules = [
+      ...materialized.matchAll(/\.bg-red-500\s*\{[^}]*\}/gu),
+    ].map((match) => match[0]);
+    const blueRules = [
+      ...materialized.matchAll(/\.bg-blue-500\s*\{[^}]*\}/gu),
+    ].map((match) => match[0]);
+    assert.strictEqual(redRules.length, 2);
+    assert.strictEqual(blueRules.length, 2);
+    assert.strictEqual(new Set(redRules).size, redRules.length);
+    assert.strictEqual(new Set(blueRules).size, blueRules.length);
   });
 });

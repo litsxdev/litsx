@@ -1,4 +1,6 @@
-import { adoptStyles } from "lit";
+import { adoptStyles, isServer, noChange } from "lit";
+import { Directive, directive } from "lit/directive.js";
+import { renderLight as litSsrRenderLight } from "@lit-labs/ssr-client/directives/render-light.js";
 import {
   connectLightDomRegistry,
   createLightDomRegistry,
@@ -447,6 +449,37 @@ function clearHydrationRenderBefore(host) {
   host._$AG = false;
 }
 
+export const __litsxRenderLight = litSsrRenderLight;
+
+class AdoptLightDomDirective extends Directive {
+  render() {
+    return noChange;
+  }
+
+  update(part) {
+    const host = part.parentNode;
+    if (!host || typeof host.render !== "function") {
+      return noChange;
+    }
+
+    // renderLight() is owned by the parent's ChildPart. Teach LitElement to
+    // reuse that exact part for later child updates instead of creating a
+    // second root part over the same light-DOM nodes.
+    host._$litPart$ = part;
+    host._$needsHydration = false;
+    host._$AG = false;
+    clearHydrationRenderBefore(host);
+    return host.render();
+  }
+}
+
+const adoptLightDom = directive(AdoptLightDomDirective);
+
+/** @internal Used by LightDomMixin to adopt a compiler-emitted boundary. */
+export function __litsxAdoptLightDom() {
+  return adoptLightDom();
+}
+
 export {
   assignShadowRootRegistry,
   attachScopedShadowRoot,
@@ -588,7 +621,9 @@ export const LightDomMixin = dedupeMixin((Base) =>
     }
 
     renderLight() {
-      return typeof this.render === "function" ? this.render() : undefined;
+      return isServer
+        ? (typeof this.render === "function" ? this.render() : undefined)
+        : __litsxAdoptLightDom();
     }
 
     connectedCallback(...args) {

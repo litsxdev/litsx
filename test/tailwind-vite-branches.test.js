@@ -113,7 +113,8 @@ describe("@litsx/tailwind Vite and context branches", () => {
       `${componentId}?inline`,
     );
     assert.deepEqual(watched, ["/src/tokens.js"]);
-    assert.match(component, /@scope \(\[data-scope="card"\]\)/u);
+    assert.doesNotMatch(component, /@scope/u);
+    assert.match(component, /@tailwind utilities source\(none\)/u);
     assert.match(component, /content-\[\\"quoted\\"\]/u);
     assert.equal(plugin.load("\0@litsx/tailwind/component/not-css"), null);
 

@@ -1527,11 +1527,11 @@ describe("@litsx/babel-preset-litsx", () => {
 
     assert.match(
       result.code,
-      /import \{ renderLight \} from "@lit-labs\/ssr-client\/directives\/render-light\.js";/,
+      /import \{[^}]*__litsxRenderLight[^}]*\} from "@litsx\/core\/elements";/,
     );
     assert.match(
       result.code,
-      /return html`<light-child>\$\{renderLight\(\)\}<\/light-child>`;/,
+      /return html`<light-child>\$\{__litsxRenderLight\(\)\}<\/light-child>`;/,
     );
   });
 
@@ -1572,11 +1572,11 @@ describe("@litsx/babel-preset-litsx", () => {
 
     assert.match(
       result.code,
-      /import \{ renderLight \} from "@lit-labs\/ssr-client\/directives\/render-light\.js";/,
+      /import \{[^}]*__litsxRenderLight[^}]*\} from "@litsx\/core\/elements";/,
     );
     assert.match(
       result.code,
-      /return html`<light-child>\$\{renderLight\(\)\}<\/light-child>`;/,
+      /return html`<light-child>\$\{__litsxRenderLight\(\)\}<\/light-child>`;/,
     );
   });
 

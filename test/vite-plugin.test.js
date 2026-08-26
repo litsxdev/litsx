@@ -119,11 +119,36 @@ describe("@litsx/vite-plugin", () => {
     assert.ok(result.map);
   }, 30000);
 
-  it("ignores non-matching files by default", async () => {
+  it("transforms project JavaScript and TypeScript but ignores files outside the Vite root", async () => {
     const plugin = litsx();
-    const result = await plugin.transform("export const value = 1;", "/virtual/value.js");
+    plugin.configResolved({ root: "/virtual", cacheDir: "/virtual/.vite-cache" });
 
-    assert.strictEqual(result, null);
+    const javascript = await plugin.transform(
+      "export const value = 1;",
+      "/virtual/value.js",
+    );
+    const typescript = await plugin.transform(
+      "export const value: number = 1;",
+      "/virtual/value.ts",
+    );
+    const external = await plugin.transform(
+      "export const value = 1;",
+      "/workspace/runtime.js",
+    );
+    const dependency = await plugin.transform(
+      "export const value = 1;",
+      "/virtual/node_modules/plain-package/index.js",
+    );
+    const optimizedDependency = await plugin.transform(
+      "export const value = 1;",
+      "/virtual/.vite-cache/deps/lit.js?v=abc123",
+    );
+
+    assert.ok(javascript);
+    assert.ok(typescript);
+    assert.strictEqual(external, null);
+    assert.strictEqual(dependency, null);
+    assert.strictEqual(optimizedDependency, null);
   });
 
   it("runs react-compat for allowlisted dependencies in client and SSR pipelines", async () => {

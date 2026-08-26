@@ -49,13 +49,13 @@ function inheritedStylesExpression(t) {
 
 function composeStyles(existing, before, after, t) {
   return t.arrayExpression([
-    ...before.map((addition) => t.cloneNode(addition)),
+    ...before.filter(Boolean).map((addition) => t.cloneNode(addition)),
     ...(existing
       ? t.isArrayExpression(existing)
         ? existing.elements.map((element) => t.cloneNode(element, true))
         : [t.cloneNode(existing, true)]
       : []),
-    ...after.map((addition) => t.cloneNode(addition)),
+    ...after.filter(Boolean).map((addition) => t.cloneNode(addition)),
   ]);
 }
 
@@ -328,7 +328,10 @@ export function createTailwindOutputPlugin(context, options = {}) {
               t,
               resolver,
               filename,
-              { excludeLitsxComponentClasses: true },
+              {
+                excludeLitsxComponentClasses: true,
+                retainStaticCandidates: true,
+              },
             );
             const globalPatterns =
               globalUtilities.dynamicPatterns.map(wildcardPattern);
@@ -370,13 +373,6 @@ export function createTailwindOutputPlugin(context, options = {}) {
               unsafeCssIdentifier = programPath.scope.generateUidIdentifier(
                 "litsxTailwindUnsafeCss",
               );
-              const preflightText = programPath.scope.generateUidIdentifier(
-                "litsxTailwindPreflightText",
-              );
-              preflightResultIdentifier =
-                programPath.scope.generateUidIdentifier(
-                  "litsxTailwindPreflight",
-                );
               imports.push(
                 t.importDeclaration(
                   [
@@ -387,6 +383,20 @@ export function createTailwindOutputPlugin(context, options = {}) {
                   ],
                   t.stringLiteral("lit"),
                 ),
+              );
+              return unsafeCssIdentifier;
+            };
+            const ensurePreflight = () => {
+              if (preflightResultIdentifier) return preflightResultIdentifier;
+              const unsafeCss = ensureUnsafeCss();
+              const preflightText = programPath.scope.generateUidIdentifier(
+                "litsxTailwindPreflightText",
+              );
+              preflightResultIdentifier =
+                programPath.scope.generateUidIdentifier(
+                  "litsxTailwindPreflight",
+                );
+              imports.push(
                 t.importDeclaration(
                   [t.importDefaultSpecifier(t.cloneNode(preflightText))],
                   t.stringLiteral(`${TAILWIND_PREFLIGHT_MODULE_ID}?inline`),
@@ -394,13 +404,13 @@ export function createTailwindOutputPlugin(context, options = {}) {
                 t.variableDeclaration("const", [
                   t.variableDeclarator(
                     t.cloneNode(preflightResultIdentifier),
-                    t.callExpression(t.cloneNode(unsafeCssIdentifier), [
+                    t.callExpression(t.cloneNode(unsafeCss), [
                       t.cloneNode(preflightText),
                     ]),
                   ),
                 ]),
               );
-              return unsafeCssIdentifier;
+              return preflightResultIdentifier;
             };
 
             for (const classPath of classes) {
@@ -410,6 +420,7 @@ export function createTailwindOutputPlugin(context, options = {}) {
                 t,
                 resolver,
                 filename,
+                { retainStaticCandidates: true },
               );
               const guards = collectGuardCandidates(classPath);
               const patterns = extracted.dynamicPatterns.map(wildcardPattern);
@@ -451,7 +462,7 @@ export function createTailwindOutputPlugin(context, options = {}) {
                 scope,
               });
               const moduleId = `${TAILWIND_COMPONENT_MODULE_PREFIX}${key}.css`;
-              if (mode === "shadow") {
+              if (mode === "shadow" || mode === "scoped") {
                 const unsafeCss = ensureUnsafeCss();
                 const cssText = programPath.scope.generateUidIdentifier(
                   "litsxTailwindCssText",
@@ -470,14 +481,30 @@ export function createTailwindOutputPlugin(context, options = {}) {
                     t.variableDeclarator(
                       t.cloneNode(cssResult),
                       t.callExpression(t.cloneNode(unsafeCss), [
-                        t.cloneNode(cssText),
+                        mode === "scoped"
+                          ? t.templateLiteral(
+                              [
+                                t.templateElement(
+                                  {
+                                    raw: `@scope (${scope}) to ([data-litsx-style-scope]) {\n`,
+                                    cooked: `@scope (${scope}) to ([data-litsx-style-scope]) {\n`,
+                                  },
+                                ),
+                                t.templateElement(
+                                  { raw: "\n}", cooked: "\n}" },
+                                  true,
+                                ),
+                              ],
+                              [t.cloneNode(cssText)],
+                            )
+                          : t.cloneNode(cssText),
                       ]),
                     ),
                   ]),
                 );
                 appendStyles(
                   classPath,
-                  preflightResultIdentifier,
+                  mode === "shadow" ? ensurePreflight() : null,
                   cssResult,
                   t,
                 );

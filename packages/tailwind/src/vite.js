@@ -33,12 +33,9 @@ function inlineSources(candidates) {
 
 function componentCss(context, payload) {
   const utilities = "@tailwind utilities source(none);";
-  const body = payload.mode === "scoped"
-    ? `@scope (${payload.scope}) to ([data-litsx-style-scope]) {\n${utilities}\n}`
-    : utilities;
   return [
     referenceDirective(context.entry),
-    body,
+    utilities,
     inlineSources(payload.candidates),
   ].join("\n");
 }
@@ -130,9 +127,12 @@ export function createTailwindPropertyCleanupPlugin() {
     name: "litsx:tailwind-component-property-cleanup",
     enforce: "pre",
     async transform(code, id) {
-      if (!id.startsWith(`${RESOLVED_PREFIX}component/`) || !code.includes("@property")) {
+      const key = componentKey(id);
+      if (!key) {
         return null;
       }
+      if (!code.includes("@property")) return null;
+
       const root = postcss.parse(code, { from: id });
       root.walkAtRules((rule) => {
         if (rule.name === "property" || (rule.name === "layer" && rule.params.trim() === "properties")) {

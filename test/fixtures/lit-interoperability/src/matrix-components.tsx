@@ -162,7 +162,18 @@ Object.defineProperty(PlainLitBridge, "elements", {
 });
 
 export function MatrixLightBridge() {
-  return <PlainLitContextBridge context={MatrixContext} />;
+  const [updates, setUpdates] = useState(0);
+  return (
+    <>
+      <button
+        data-matrix-light-update
+        on:click={() => setUpdates((value) => value + 1)}
+      >
+        {updates}
+      </button>
+      <PlainLitContextBridge context={MatrixContext} />
+    </>
+  );
 }
 
 MatrixLightBridge.lightDom = true;

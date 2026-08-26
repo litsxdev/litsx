@@ -63,6 +63,7 @@ export declare function collectUtilityClassCandidates(
   options?: {
     dynamicWildcard?: string;
     excludeLitsxComponentClasses?: boolean;
+    retainStaticCandidates?: boolean;
   },
 ): UtilityClassCandidates;
 export declare function isSymbolFor(

@@ -1,5 +1,6 @@
 import fs from "fs/promises";
 import { createLitsxCompilationSession } from "@litsx/compiler";
+import { realpathSync } from "node:fs";
 import path from "node:path";
 
 function normalizeSlashes(value) {
@@ -96,14 +97,37 @@ function getTransformDependencies(options = {}) {
   ));
 }
 
-function shouldTransform(id, include, transformDependencies = []) {
+function isInsideProjectRoot(id, root) {
+  if (!root) return true;
+  const filename = String(id || "").split("?", 1)[0];
+  const canonicalize = (value) => {
+    const resolved = path.resolve(value);
+    try {
+      return realpathSync.native(resolved);
+    } catch {
+      return resolved;
+    }
+  };
+  const relative = path.relative(canonicalize(root), canonicalize(filename));
+  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+}
+
+function shouldTransform(
+  id,
+  include,
+  transformDependencies = [],
+  root = null,
+  cacheDir = null,
+) {
+  if (cacheDir && isInsideProjectRoot(id, cacheDir)) {
+    return false;
+  }
   const packageName = getNodeModulesPackageName(id);
-  if (
-    packageName &&
-    transformDependencies.includes(packageName) &&
-    /\.[cm]?[jt]sx?(?:\?|$)/.test(id)
-  ) {
-    return true;
+  if (packageName) {
+    return (
+      transformDependencies.includes(packageName) &&
+      /\.[cm]?[jt]sx?(?:\?|$)/.test(id)
+    );
   }
 
   if (typeof include === "function") {
@@ -114,7 +138,10 @@ function shouldTransform(id, include, transformDependencies = []) {
     return include.test(id);
   }
 
-  return /\.[jt]sx$/.test(id);
+  return (
+    isInsideProjectRoot(id, root) &&
+    /\.[cm]?[jt]sx?(?:\?|$)/.test(id)
+  );
 }
 
 function formatWarningLocation(warning) {
@@ -227,6 +254,8 @@ export function litsx(options = {}) {
     ...compilerOptions
   } = options;
   const transformDependencies = getTransformDependencies(options);
+  let projectRoot = null;
+  let projectCacheDir = null;
   let session = null;
   const warnedEntries = new Set();
 
@@ -244,7 +273,13 @@ export function litsx(options = {}) {
     return {
       name: "litsx-optimize-deps",
       async load(filePath) {
-        if (!shouldTransform(filePath, include, transformDependencies)) {
+        if (!shouldTransform(
+          filePath,
+          include,
+          transformDependencies,
+          projectRoot,
+          projectCacheDir,
+        )) {
           return null;
         }
 
@@ -267,6 +302,10 @@ export function litsx(options = {}) {
   return {
     name: "litsx",
     enforce: "pre",
+    configResolved(config) {
+      projectRoot = config.root;
+      projectCacheDir = config.cacheDir;
+    },
     config(userConfig) {
       const optimizeDeps = withoutRollupOptimizeDepsOptions(userConfig.optimizeDeps);
       const rolldownOptions = optimizeDeps.rolldownOptions ?? {};
@@ -300,12 +339,17 @@ export function litsx(options = {}) {
       };
     },
     async transform(code, id) {
-      if (!shouldTransform(id, include, transformDependencies)) {
+      if (!shouldTransform(
+        id,
+        include,
+        transformDependencies,
+        projectRoot,
+        projectCacheDir,
+      )) {
         return null;
       }
 
       let result;
-
       try {
         result = await getSession().transform(code, {
           ...compilerOptions,

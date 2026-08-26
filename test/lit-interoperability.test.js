@@ -98,13 +98,16 @@ describe("pure Lit component interoperability", () => {
     assert.deepStrictEqual(result.warnings ?? [], []);
   });
 
-  it.todo(
-    "emits client-visible renderLight markers for nested light-DOM component boundaries",
-  );
+  it("emits client-visible renderLight markers for nested light-DOM component boundaries", () => {
+    const filename = path.join(fixtureRoot, "src/matrix-components.tsx");
+    const source = fs.readFileSync(filename, "utf8");
+    const result = transformLitsxSync(source, {
+      filename,
+      projectPath: path.join(fixtureRoot, "tsconfig.json"),
+    });
 
-  it.todo(
-    "keeps a non-default initial context value identical across light-DOM SSR and hydration",
-  );
+    assert.match(result.code, /__litsxRenderLight/);
+  });
 
   it("SSR renders nested pure Lit classes with inherited properties and styles", async () => {
     class PlainLitLabel extends LitElement {

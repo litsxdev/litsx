@@ -4,6 +4,7 @@ import {
   MixedLitBadge,
   PlainLitCounter,
 } from "./plain-lit-elements.ts";
+import { PureLitLightParent } from "./pure-lit-light-parent.ts";
 
 export type HybridHostProps = {
   initialCount?: number;
@@ -30,6 +31,7 @@ export function HybridHost({ initialCount = 2 }: HybridHostProps) {
       </PlainLitCounter>
       <MixedLitBadge {...badgeProps} />
       <output data-host-count>{count}</output>
+      <PureLitLightParent />
     </section>
   );
 }

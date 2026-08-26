@@ -85,6 +85,12 @@ export declare function __isLitsxScopedTemplate(
   value: unknown
 ): value is LitsxScopedTemplate;
 
+/** @internal Compiler-emitted universal light-DOM boundary directive. */
+export declare const __litsxRenderLight: () => unknown;
+
+/** @internal LightDomMixin boundary-adoption directive. */
+export declare function __litsxAdoptLightDom(): unknown;
+
 export interface LitsxServerComponentCall<
   TComponent = unknown,
   TProps extends Record<string, unknown> = Record<string, unknown>,

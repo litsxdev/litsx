@@ -69,6 +69,7 @@ async function buildFixture(
   try {
     const result = await build({
       configFile: false,
+      root: directory,
       logLevel: "silent",
       plugins: litsxUnoCss({
         litsx: litsxOptions,
@@ -316,6 +317,7 @@ export { InfoCard } from "./card.tsx";
   try {
     const result = await build({
       configFile: false,
+      root: directory,
       logLevel: "silent",
       plugins: litsxUnoCss({
         unocss: { presets: [presetWind3()] },

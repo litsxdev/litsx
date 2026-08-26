@@ -207,12 +207,16 @@ creating the component's children during its first client update. An explicit
 with authored children are left unchanged, because those children may be
 intentional projected content.
 
-This automatic insertion currently applies to registered document roots.
-Nested light-DOM custom elements must expose a client/server-stable
-`renderLight()` part in their parent Lit template; adding it only during SSR
-changes the template digest and cannot hydrate. Pure Lit integrations should
-therefore treat a nested `LightDomMixin` boundary as an explicit integration
-point until the compiler can emit that directive symmetrically.
+The compiler also infers nested light-DOM boundaries from the child component.
+It emits the same `renderLight()` part in server and browser templates, and the
+client hands that part to the child `LightDomMixin` after hydration. This keeps
+SSR descendants, event bindings, and subsequent child-owned updates on the
+same Lit part. The Vite plugin applies this transform to project-local Lit
+`.js` and `.ts` modules as well as JSX/TSX, so a pure Lit parent can consume an
+imported LitSX light-DOM child without writing `renderLight()` manually.
+
+Authored children remain an explicit ownership boundary and are never replaced
+by automatic light rendering.
 
 If you need finer control over the HTML shell, `renderToString(...)` remains
 available as the lower-level API:

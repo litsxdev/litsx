@@ -108,7 +108,10 @@ export function createReactCompatPresetPlugins(options = {}) {
     reactUnsupportedHooks,
     [reactDomAttributes, options.reactDomAttributes || {}],
     [reactEvents, options.reactEvents || {}],
-    [transformLitsxScopedElements, options.transformLitsxScopedElements || {}],
+    [transformLitsxScopedElements, {
+      reactCompat: true,
+      ...(options.transformLitsxScopedElements || {}),
+    }],
   ];
 
   if (options.jsxTemplate !== false) {

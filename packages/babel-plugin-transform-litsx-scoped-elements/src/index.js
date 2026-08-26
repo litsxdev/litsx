@@ -16,8 +16,8 @@ export function setScopedElementsBabelTypes(nextTypes) {
 const SHADOW_MIXIN = "ShadowDomMixin";
 const LIGHT_MIXIN = "LightDomMixin";
 const ANNOTATE_HYDRATABLE_CUSTOM_ELEMENT = "annotateHydratableCustomElement";
-const RENDER_LIGHT_MODULE = "@lit-labs/ssr-client/directives/render-light.js";
-const RENDER_LIGHT_IMPORT = "renderLight";
+const RENDER_LIGHT_MODULE = "@litsx/core/elements";
+const RENDER_LIGHT_IMPORT = "__litsxRenderLight";
 const NOSCRIPT_PRIMITIVE = "__litsxNoscript";
 const IMPORT_RESOLUTION_EXTENSIONS = [
   ".jsx",
@@ -106,6 +106,7 @@ function transformClass(classPath, programPath, options = {}, availableMap = bui
     hasRenderableTemplate,
   } = detectElementsFromClass(classPath, programPath, availableMap, precomputedCandidates, {
     ssr: options?.ssr === true,
+    reactCompat: options?.reactCompat === true,
   });
   const needsElements = detectedElements.length > 0;
   const hasExistingElementsStatic = hasStaticElementsMember(node);
@@ -594,7 +595,14 @@ function getLightDomExports(fileName) {
 
   let ast;
   try {
-    ast = parseWithLitsxVirtualization(babelParser.parse, sourceText, { sourceType: "module" });
+    const plugins = /\.[cm]?tsx?$/.test(normalizedFileName)
+      ? ["typescript"]
+      : [];
+    ast = parseWithLitsxVirtualization(babelParser.parse, sourceText, {
+      sourceType: "module",
+      plugins,
+      sourceFilename: normalizedFileName,
+    });
   } catch {
     const empty = new Set();
     LIGHT_DOM_EXPORTS_BY_FILE.set(normalizedFileName, empty);
@@ -630,6 +638,24 @@ function getLightDomExports(fileName) {
   }
 
   for (const node of ast.program?.body ?? []) {
+    const exportedClass = t.isExportNamedDeclaration(node) &&
+      t.isClassDeclaration(node.declaration)
+      ? node.declaration
+      : t.isExportDefaultDeclaration(node) && t.isClassDeclaration(node.declaration)
+        ? node.declaration
+        : t.isClassDeclaration(node)
+          ? node
+          : null;
+    if (
+      exportedClass?.id?.name &&
+      hasMixinInSuperChain(exportedClass.superClass, LIGHT_MIXIN)
+    ) {
+      const exportedName = t.isExportDefaultDeclaration(node)
+        ? "default"
+        : exportedNamesByLocal.get(exportedClass.id.name);
+      if (exportedName) lightDomExports.add(exportedName);
+    }
+
     if (
       !t.isExpressionStatement(node) ||
       !t.isAssignmentExpression(node.expression, { operator: "=" }) ||
@@ -828,7 +854,10 @@ export function isInsideScopedNoscriptFallback(path) {
 const isInsideNoscriptFallback = isInsideScopedNoscriptFallback;
 
 export function maybeInsertSsrRenderLight(openingPath, programPath, entry, options) {
-  if (options?.ssr !== true || entry?.lightDom !== true) {
+  if (
+    entry?.lightDom !== true ||
+    options?.reactCompat === true
+  ) {
     return;
   }
 
@@ -866,7 +895,9 @@ export function isRenderLightExpression(node) {
   const expression = node.expression;
   return (
     t.isCallExpression(expression) &&
-    t.isIdentifier(expression.callee, { name: RENDER_LIGHT_IMPORT })
+    t.isIdentifier(expression.callee) &&
+    (expression.callee.name === RENDER_LIGHT_IMPORT ||
+      expression.callee.name === "renderLight")
   );
 }
 
@@ -906,7 +937,10 @@ export function ensureRenderLightImport(programPath) {
 }
 
 export function maybeInsertSsrRenderLightTemplate(quasi, tagName, programPath, entry, options = {}) {
-  if (options?.ssr !== true || entry?.lightDom !== true) {
+  if (
+    entry?.lightDom !== true ||
+    options?.reactCompat === true
+  ) {
     return false;
   }
 

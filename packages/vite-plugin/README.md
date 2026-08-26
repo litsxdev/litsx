@@ -37,7 +37,10 @@ export default defineConfig({
 });
 ```
 
-This transforms standard `.jsx` and `.tsx` modules before the rest of the Vite pipeline.
+This transforms project-local `.js`, `.jsx`, `.ts`, and `.tsx` modules before
+the rest of the Vite pipeline. Processing ordinary Lit modules lets the plugin
+emit hydration boundaries when a Lit template consumes a LitSX light-DOM
+component. Dependencies remain excluded unless explicitly allowlisted.
 
 ## What the Plugin Handles
 
@@ -65,7 +68,9 @@ Returns a Vite plugin with:
 
 Default behavior:
 
-- transforms `.jsx` and `.tsx`
+- transforms project-local `.js`, `.jsx`, `.ts`, and `.tsx`
+- leaves modules outside the Vite root untouched unless selected through
+  `include` or `reactCompat.transformDependencies`
 - returns `{ code, map }`
 - delegates compilation to `@litsx/compiler`
 

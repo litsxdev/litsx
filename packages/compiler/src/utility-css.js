@@ -333,7 +333,9 @@ export function collectUtilityClassCandidates(
     },
   });
 
-  for (const candidate of staticCandidates) candidates.delete(candidate);
+  if (options.retainStaticCandidates !== true) {
+    for (const candidate of staticCandidates) candidates.delete(candidate);
+  }
   return {
     candidates: [...candidates],
     dynamicPatterns: [...dynamicPatterns],

@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import babelTraverse from "@babel/traverse";
 import * as t from "@babel/types";
 import { describe, it } from "vitest";
@@ -8,9 +11,12 @@ import {
   createClassProperty,
   createElementRegistryValue,
   createRelativeModuleSpecifier,
+  detectElementsFromClass,
   ensureImportedElementCandidates,
   ensureRenderLightImport,
   ensureUniqueLocalName,
+  getLightDomExports,
+  getNamespaceMemberInfo,
   hasMixinInSuperChain,
   hasNamedImport,
   hasStaticElementsMember,
@@ -44,6 +50,55 @@ function inspect(source) {
 }
 
 describe("scoped-elements helper branch behavior", () => {
+  it("discovers authored and compiled light-DOM exports across module shapes", () => {
+    const directory = fs.mkdtempSync(
+      path.join(os.tmpdir(), "litsx-light-dom-exports-"),
+    );
+    const write = (name, source) => {
+      const filename = path.join(directory, name);
+      fs.writeFileSync(filename, source, "utf8");
+      return filename;
+    };
+
+    try {
+      const named = write(
+        "named.ts",
+        "export class NamedLight extends LightDomMixin(LitElement) {}",
+      );
+      const fallback = write(
+        "default.ts",
+        "export default class DefaultLight extends Outer(LightDomMixin(LitElement)) {}",
+      );
+      const aliased = write(
+        "aliased.js",
+        "class LocalLight extends LightDomMixin(Base) {} export { LocalLight as AliasedLight };",
+      );
+      const authored = write(
+        "authored.js",
+        "function Card() {} Card.lightDom = true; export { Card as CardAlias }; function Hidden() {} Hidden.lightDom = true;",
+      );
+      const hidden = write(
+        "hidden.js",
+        "class HiddenLight extends LightDomMixin(Base) {} export const value = 1;",
+      );
+      const invalid = write("invalid.ts", "export class");
+
+      assert.deepEqual([...getLightDomExports(named)], ["NamedLight"]);
+      assert.deepEqual([...getLightDomExports(fallback)], ["default"]);
+      assert.deepEqual([...getLightDomExports(aliased)], ["AliasedLight"]);
+      assert.deepEqual([...getLightDomExports(authored)], ["CardAlias"]);
+      assert.deepEqual([...getLightDomExports(hidden)], []);
+      assert.deepEqual([...getLightDomExports(invalid)], []);
+      assert.deepEqual([...getLightDomExports(invalid)], []);
+      assert.deepEqual(
+        [...getLightDomExports(path.join(directory, "missing.js"))],
+        [],
+      );
+    } finally {
+      fs.rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   it("resolves only top-level and exported class declarations", () => {
     const sample = inspect("class Direct {} export class Exported {} const Expression = class {}; function nested() { class Inner {} }");
     const body = sample.program.get("body");
@@ -51,6 +106,14 @@ describe("scoped-elements helper branch behavior", () => {
     assert.equal(resolveTopLevelClassPath(body[1]).node.id.name, "Exported");
     assert.equal(resolveTopLevelClassPath(body[2]), null);
     assert.equal(resolveTopLevelClassPath(body[3]), null);
+    assert.deepEqual(
+      detectElementsFromClass(body[0], sample.program, new Map(), []),
+      { elements: [], hasRenderableTemplate: false },
+    );
+    assert.equal(
+      getNamespaceMemberInfo(t.jsxIdentifier("NotMember"), new Map()),
+      null,
+    );
   });
 
   it("creates relative specifiers and collision-free local names", () => {
@@ -89,7 +152,16 @@ describe("scoped-elements helper branch behavior", () => {
 
   it("inserts SSR renderLight into empty or self-closing light-DOM JSX", () => {
     const sample = inspect("const a = <Light />; const b = <Light>   </Light>; const c = <Light>child</Light>; const d = <Light>{renderLight()}</Light>;");
-    assert.doesNotThrow(() => maybeInsertSsrRenderLight(sample.openings[0], sample.program, { lightDom: true }, { ssr: false }));
+    maybeInsertSsrRenderLight(sample.openings[0], sample.program, { lightDom: true }, { ssr: false });
+    assert.equal(sample.openings[0].node.selfClosing, false);
+    const compat = inspect("const value = <Light />;");
+    maybeInsertSsrRenderLight(
+      compat.openings[0],
+      compat.program,
+      { lightDom: true },
+      { reactCompat: true },
+    );
+    assert.equal(compat.openings[0].node.selfClosing, true);
     assert.doesNotThrow(() => maybeInsertSsrRenderLight(sample.openings[0], sample.program, { lightDom: false }, { ssr: true }));
     maybeInsertSsrRenderLight(sample.openings[0], sample.program, { lightDom: true }, { ssr: true });
     assert.equal(sample.openings[0].node.selfClosing, false);
@@ -105,22 +177,30 @@ describe("scoped-elements helper branch behavior", () => {
     assert.equal(isRenderLightExpression(t.jsxExpressionContainer(t.callExpression(t.identifier("renderLight"), []))), true);
     assert.equal(isRenderLightExpression(t.jsxText("")), false);
     assert.equal(isRenderLightExpression(t.jsxExpressionContainer(t.identifier("x"))), false);
+    assert.doesNotThrow(() =>
+      maybeInsertSsrRenderLight(
+        { parentPath: null },
+        sample.program,
+        { lightDom: true },
+        {},
+      ),
+    );
   });
 
   it("reuses, augments, or creates renderLight imports", () => {
-    const existing = inspect("import { renderLight as localRender } from '@lit-labs/ssr-client/directives/render-light.js';");
+    const existing = inspect("import { __litsxRenderLight as localRender } from '@litsx/core/elements';");
     assert.equal(ensureRenderLightImport(existing.program).name, "localRender");
-    const augment = inspect("import { other } from '@lit-labs/ssr-client/directives/render-light.js'; const renderLight = 1;");
-    assert.equal(ensureRenderLightImport(augment.program).name, "__litsxImportedrenderLight1");
-    const fresh = inspect("const renderLight = 1;");
-    assert.equal(ensureRenderLightImport(fresh.program).name, "__litsxImportedrenderLight1");
+    const augment = inspect("import { other } from '@litsx/core/elements'; const __litsxRenderLight = 1;");
+    assert.equal(ensureRenderLightImport(augment.program).name, "__litsxImported__litsxRenderLight1");
+    const fresh = inspect("const __litsxRenderLight = 1;");
+    assert.equal(ensureRenderLightImport(fresh.program).name, "__litsxImported__litsxRenderLight1");
   });
 
   it("injects renderLight expressions into matching static templates", () => {
     const sample = inspect("const a = html`before<x-light></x-light>after`; const b = html`<x-light attr=${value}></x-light>`; const c = html`<x-other></x-other>`;");
-    assert.equal(maybeInsertSsrRenderLightTemplate(sample.tagged[0].node.quasi, "x-light", sample.program, { lightDom: true }, { ssr: false }), false);
+    assert.equal(maybeInsertSsrRenderLightTemplate(sample.tagged[0].node.quasi, "x-light", sample.program, { lightDom: true }, { ssr: false }), true);
     assert.equal(maybeInsertSsrRenderLightTemplate(sample.tagged[0].node.quasi, "x-light", sample.program, { lightDom: false }, { ssr: true }), false);
-    assert.equal(maybeInsertSsrRenderLightTemplate(sample.tagged[0].node.quasi, "x-light", sample.program, { lightDom: true }, { ssr: true }), true);
+    assert.equal(maybeInsertSsrRenderLightTemplate(sample.tagged[0].node.quasi, "x-light", sample.program, { lightDom: true }, { ssr: true }), false);
     assert.equal(sample.tagged[0].node.quasi.expressions.length, 1);
     assert.equal(maybeInsertSsrRenderLightTemplate(sample.tagged[1].node.quasi, "x-light", sample.program, { lightDom: true }, { ssr: true }), false);
     assert.equal(maybeInsertSsrRenderLightTemplate(sample.tagged[2].node.quasi, "x-light", sample.program, { lightDom: true }, { ssr: true }), false);

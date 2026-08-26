@@ -138,13 +138,18 @@ DynamicBox.styles = [GUARDED];
     assert.match(code, /static styles = \[.*_litsxTailwindGuard``/s);
   });
 
-  it("routes scoped and global light DOM without shadow CSSResults", () => {
+  it("routes scoped light DOM through a host-owned CSSResult and global light DOM through the document", () => {
     const scoped = compile(`
 export function LightCard() { return <div class="p-4" />; }
 LightCard.lightDom = true;
 `);
-    assert.match(scoped.code, /import "virtual:@litsx\/tailwind\/component\//);
-    assert.doesNotMatch(scoped.code, /unsafeCSS/);
+    assert.match(
+      scoped.code,
+      /import .* from "virtual:@litsx\/tailwind\/component\/.*\.css\?inline"/,
+    );
+    assert.match(scoped.code, /unsafeCSS/);
+    assert.match(scoped.code, /@scope \(\[data-litsx-style-scope=/);
+    assert.match(scoped.code, /static styles = \[super\.styles \?\? \[\],/);
     assert.strictEqual(scoped.payloads[0].mode, "scoped");
     assert.match(scoped.payloads[0].scope, /data-litsx-style-scope/);
 

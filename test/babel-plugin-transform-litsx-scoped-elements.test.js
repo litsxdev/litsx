@@ -1,5 +1,6 @@
 import assert from "assert";
 import * as babelCore from "@babel/core";
+import path from "node:path";
 import parser from "./helpers/litsx-parser.js";
 import { beforeAll } from 'vitest';
 import { interopDefault } from "./helpers/interop-default.js";
@@ -25,6 +26,7 @@ function transformWithNativePreset(source, options = {}) {
     filename,
     parserPlugins = [],
     plugins = [],
+    ssr,
   } = options;
 
   const inputAst = parser.parse(source, {
@@ -36,7 +38,7 @@ function transformWithNativePreset(source, options = {}) {
     configFile: false,
     babelrc: false,
     filename,
-    presets: [[nativePreset, { jsxTemplate: false }]],
+    presets: [[nativePreset, { jsxTemplate: false, ssr }]],
     plugins,
   });
 }
@@ -233,6 +235,95 @@ describe("@litsx/babel-plugin-transform-litsx-scoped-elements", () => {
 
     assert.match(code, /ShadowDomMixin\(LitElement\)/);
     assert.match(code, /"fancy-button": FancyButton/);
+  });
+
+  it("emits symmetric light-DOM boundaries for server and client templates", () => {
+    const filename = path.join(
+      import.meta.dirname,
+      "fixtures/lit-interoperability/src/light-boundary-parent.tsx",
+    );
+    const source = `
+      import { PlainLitContextBridge } from "./matrix-lit-elements.ts";
+
+      export function LightBoundaryParent() {
+        return <PlainLitContextBridge />;
+      }
+    `;
+
+    const client = transformWithNativePreset(source, {
+      filename,
+      parserPlugins: ["typescript"],
+    }).code;
+    const server = transformWithNativePreset(source, {
+      filename,
+      parserPlugins: ["typescript"],
+      ssr: true,
+    }).code;
+
+    assert.match(
+      client,
+      /import \{[^}]*__litsxRenderLight[^}]*\} from "@litsx\/core\/elements";/,
+    );
+    assert.match(
+      client,
+      /<plain-lit-context-bridge>\{__litsxRenderLight\(\)\}<\/plain-lit-context-bridge>/,
+    );
+    assert.match(
+      server,
+      /import \{[^}]*__litsxRenderLight[^}]*\} from "@litsx\/core\/elements";/,
+    );
+    assert.match(
+      server,
+      /<plain-lit-context-bridge>\{__litsxRenderLight\(\)\}<\/plain-lit-context-bridge>/,
+    );
+  });
+
+  it("infers a light-DOM boundary from an independently compiled LitSX class", () => {
+    const filename = path.join(
+      import.meta.dirname,
+      "fixtures/lit-interoperability/src/compiled-light-parent.ts",
+    );
+    const source = `
+      import { LitElement, html } from "lit";
+      import { CompiledLightChild } from "./compiled-light-child.js";
+
+      export class CompiledLightParent extends LitElement {
+        static elements = { "compiled-light-child": CompiledLightChild };
+        render() {
+          return html\`<compiled-light-child></compiled-light-child>\`;
+        }
+      }
+    `;
+
+    const { code } = transformWithNativePreset(source, {
+      filename,
+      parserPlugins: ["typescript"],
+    });
+
+    assert.match(
+      code,
+      /html`<compiled-light-child>\$\{__litsxRenderLight\(\)\}<\/compiled-light-child>`/,
+    );
+  });
+
+  it("leaves react-compat light-DOM ownership to its compatibility runtime", () => {
+    const source = `
+      function NestedValue() {
+        return <span>value</span>;
+      }
+
+      export function CompatRoot() {
+        return <NestedValue />;
+      }
+    `;
+
+    const { code } = transformWithReactCompatPreset(source, {
+      filename: "/virtual/react-light-boundary.tsx",
+      parserPlugins: ["typescript"],
+    });
+
+    assert.doesNotMatch(code, /__litsxRenderLight/);
+    assert.match(code, /<nested-value \/>/);
   });
 
   it("registers scoped element aliases created from namespace imports cast as any", () => {
@@ -644,7 +735,7 @@ describe("@litsx/babel-plugin-transform-litsx-scoped-elements", () => {
     assert.match(code, /class TestScreen extends ShadowDomMixin\(LitElement\)/);
     assert.match(
       code,
-      /return <section>\s*<suspense-boundary \.fallback=\{\(\) => <span>loading<\/span>\} \.content=\{\(\) => <span>ready<\/span>\}><\/suspense-boundary>\s*<\/section>;/s
+      /return <section>\s*<suspense-boundary \.fallback=\{\(\) => <span>loading<\/span>\} \.content=\{\(\) => <span>ready<\/span>\}>\{__litsxRenderLight\(\)\}<\/suspense-boundary>\s*<\/section>;/s
     );
     assert.match(
       code,
@@ -675,7 +766,7 @@ describe("@litsx/babel-plugin-transform-litsx-scoped-elements", () => {
     assert.match(code, /class TestScreen extends ShadowDomMixin\(LitElement\)/);
     assert.match(
       code,
-      /keyed\(this\.cycle,\s*<suspense-boundary \.fallback=\{\(\) => <span>loading<\/span>\} \.content=\{\(\) => <span>ready<\/span>\}><\/suspense-boundary>\s*\)/s
+      /keyed\(this\.cycle,\s*<suspense-boundary \.fallback=\{\(\) => <span>loading<\/span>\} \.content=\{\(\) => <span>ready<\/span>\}>\{__litsxRenderLight\(\)\}<\/suspense-boundary>\s*\)/s
     );
     assert.match(
       code,

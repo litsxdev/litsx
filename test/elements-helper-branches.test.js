@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
+import { noChange } from "lit";
 import { describe, it } from "vitest";
 import {
+  __litsxAdoptLightDom,
   assignShadowRootRegistry,
   attachScopedShadowRoot,
   clearHydrationRenderBefore,
@@ -15,11 +17,41 @@ import {
   isPlainObject,
   isPlatformScopedRegistry,
   isUsableScopedRegistry,
+  LightDomMixin,
   prepareLitHydration,
   syncShadowRootCreationScope,
 } from "../packages/core/src/elements/index.js";
 
 describe("core element helper branches", () => {
+  it("adopts only valid light-DOM host parts", () => {
+    const result = __litsxAdoptLightDom();
+    const DirectiveClass = result._$litDirective$;
+    const instance = new DirectiveClass({});
+    assert.strictEqual(instance.render(), noChange);
+    assert.strictEqual(instance.update({ parentNode: null }), noChange);
+    assert.strictEqual(instance.update({ parentNode: {} }), noChange);
+
+    const rendered = {};
+    const host = {
+      _$needsHydration: true,
+      _$AG: true,
+      render() {
+        return rendered;
+      },
+    };
+    const part = { parentNode: host };
+    assert.strictEqual(instance.update(part), rendered);
+    assert.strictEqual(host._$litPart$, part);
+    assert.strictEqual(host._$needsHydration, false);
+    assert.strictEqual(host._$AG, false);
+  });
+
+  it("allows server light-DOM hosts without a render method", () => {
+    class Base {}
+    const Host = LightDomMixin(Base);
+    assert.strictEqual(new Host().renderLight(), undefined);
+  });
+
   it("classifies registry and plain-object shapes", () => {
     const litsx = { _getDefinition() {} };
     assert.strictEqual(isLitsxScopedRegistry(litsx), true);
