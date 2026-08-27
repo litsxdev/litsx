@@ -24,6 +24,7 @@
   },
   "changesets": [
     "bright-kiwis-parse",
+    "calm-forms-register",
     "calm-mixed-templates",
     "calm-properties-compose",
     "calm-quartz-boundaries",

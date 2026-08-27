@@ -1,5 +1,11 @@
 # @litsx/scoped-registry-shim
 
+## 1.0.0-next.3
+
+### Patch Changes
+
+- e596790: Preserve `formAssociated = true` when a scoped custom-element proxy exists before its concrete definition is registered.
+
 ## 1.0.0-next.2
 
 ### Patch Changes
