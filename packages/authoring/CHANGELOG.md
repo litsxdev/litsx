@@ -1,5 +1,12 @@
 # @litsx/jsx-authoring
 
+## 1.0.0-next.5
+
+### Patch Changes
+
+- 2e50e3a: Replace the Core framework-component allowlist with class-owned metadata. Core light-DOM primitives now declare and type `LITSX_LIGHT_DOM`, while compiler and scoped-element analysis follow component and light-DOM metadata through package exports and barrels, including dependencies in `node_modules`. Package metadata analysis resolves authored `import` targets without requiring `require` build artifacts to exist. Opaque packages are no longer trusted merely because an export has the same name as a Core primitive.
+- ae3e94c: Recognize official framework JSX components such as `SuspenseBoundary` by their exported symbol and `@litsx/core` module identity. This prevents external PascalCase inference warnings when bundlers expose Core through artifacts whose runtime component metadata cannot be inspected, while preserving warnings for same-named exports from unrelated packages.
+
 ## 1.0.0-next.4
 
 ### Patch Changes

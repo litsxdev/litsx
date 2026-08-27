@@ -1,5 +1,18 @@
 # @litsx/storybook
 
+## 1.0.0-next.4
+
+### Patch Changes
+
+- e3b14a0: Recognize resolvable Lit component classes imported from external packages, including `node_modules`. Direct and namespace `LitElement` imports, aliases, inheritance, analyzable mixin chains, named/default reexports, `export *` barrels, and JavaScript or TypeScript module extensions no longer emit the external PascalCase inference warning. Opaque components and classes using unrelated same-named bases continue to warn.
+- ae3e94c: Recognize official framework JSX components such as `SuspenseBoundary` by their exported symbol and `@litsx/core` module identity. This prevents external PascalCase inference warnings when bundlers expose Core through artifacts whose runtime component metadata cannot be inspected, while preserving warnings for same-named exports from unrelated packages.
+- Updated dependencies [e3b14a0]
+- Updated dependencies [2e50e3a]
+- Updated dependencies [ae3e94c]
+  - @litsx/compiler@1.0.0-next.12
+  - @litsx/vite-plugin@1.0.0-next.3
+  - @litsx/authoring@1.0.0-next.5
+
 ## 1.0.0-next.3
 
 ### Patch Changes

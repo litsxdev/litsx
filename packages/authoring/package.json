@@ -1,6 +1,6 @@
 {
   "name": "@litsx/authoring",
-  "version": "1.0.0-next.4",
+  "version": "1.0.0-next.5",
   "description": "Shared standard JSX semantics and internal compiler encoding for LitSX",
   "author": "LitSX Team",
   "homepage": "https://litsx.dev/",

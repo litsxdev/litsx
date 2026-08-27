@@ -1480,7 +1480,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@litsx/authoring@npm:^1.0.0-next.3, @litsx/authoring@npm:^1.0.0-next.4, @litsx/authoring@workspace:packages/authoring":
+"@litsx/authoring@npm:^1.0.0-next.3, @litsx/authoring@npm:^1.0.0-next.4, @litsx/authoring@npm:^1.0.0-next.5, @litsx/authoring@workspace:packages/authoring":
   version: 0.0.0-use.local
   resolution: "@litsx/authoring@workspace:packages/authoring"
   dependencies:
@@ -1529,14 +1529,14 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@litsx/babel-plugin-transform-litsx-scoped-elements@npm:^1.0.0-next.2, @litsx/babel-plugin-transform-litsx-scoped-elements@npm:^1.0.0-next.4, @litsx/babel-plugin-transform-litsx-scoped-elements@workspace:packages/babel-plugin-transform-litsx-scoped-elements":
+"@litsx/babel-plugin-transform-litsx-scoped-elements@npm:^1.0.0-next.4, @litsx/babel-plugin-transform-litsx-scoped-elements@npm:^1.0.0-next.5, @litsx/babel-plugin-transform-litsx-scoped-elements@workspace:packages/babel-plugin-transform-litsx-scoped-elements":
   version: 0.0.0-use.local
   resolution: "@litsx/babel-plugin-transform-litsx-scoped-elements@workspace:packages/babel-plugin-transform-litsx-scoped-elements"
   dependencies:
     "@babel/core": "npm:^8.0.1"
     "@babel/parser": "npm:^8.0.4"
     "@babel/plugin-syntax-jsx": "npm:^8.0.1"
-    "@litsx/authoring": "npm:^1.0.0-next.3"
+    "@litsx/authoring": "npm:^1.0.0-next.5"
     "@litsx/babel-plugin-shared-hooks": "npm:^1.0.0-next.3"
     "@litsx/typescript-session": "npm:^1.0.0-next.0"
   peerDependencies:
@@ -1544,7 +1544,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@litsx/babel-preset-litsx@npm:^1.0.0-next.4, @litsx/babel-preset-litsx@npm:^1.0.0-next.7, @litsx/babel-preset-litsx@workspace:packages/babel-preset-litsx":
+"@litsx/babel-preset-litsx@npm:^1.0.0-next.4, @litsx/babel-preset-litsx@npm:^1.0.0-next.8, @litsx/babel-preset-litsx@workspace:packages/babel-preset-litsx":
   version: 0.0.0-use.local
   resolution: "@litsx/babel-preset-litsx@workspace:packages/babel-preset-litsx"
   dependencies:
@@ -1552,10 +1552,10 @@ __metadata:
     "@babel/parser": "npm:^8.0.4"
     "@babel/plugin-syntax-jsx": "npm:^8.0.1"
     "@babel/traverse": "npm:^8.0.4"
-    "@litsx/authoring": "npm:^1.0.0-next.4"
+    "@litsx/authoring": "npm:^1.0.0-next.5"
     "@litsx/babel-plugin-shared-hooks": "npm:^1.0.0-next.3"
     "@litsx/babel-plugin-transform-jsx-html-template": "npm:^1.0.0-next.6"
-    "@litsx/babel-plugin-transform-litsx-scoped-elements": "npm:^1.0.0-next.2"
+    "@litsx/babel-plugin-transform-litsx-scoped-elements": "npm:^1.0.0-next.5"
     "@litsx/typescript-session": "npm:^1.0.0-next.0"
   peerDependencies:
     "@babel/core": ^8.0.0
@@ -1579,7 +1579,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@litsx/compiler@npm:^1.0.0-next.10, @litsx/compiler@npm:^1.0.0-next.11, @litsx/compiler@workspace:packages/compiler":
+"@litsx/compiler@npm:^1.0.0-next.10, @litsx/compiler@npm:^1.0.0-next.11, @litsx/compiler@npm:^1.0.0-next.12, @litsx/compiler@workspace:packages/compiler":
   version: 0.0.0-use.local
   resolution: "@litsx/compiler@workspace:packages/compiler"
   dependencies:
@@ -1587,9 +1587,9 @@ __metadata:
     "@babel/parser": "npm:^8.0.4"
     "@babel/plugin-transform-typescript": "npm:^8.0.1"
     "@babel/types": "npm:^8.0.4"
-    "@litsx/authoring": "npm:^1.0.0-next.4"
+    "@litsx/authoring": "npm:^1.0.0-next.5"
     "@litsx/babel-plugin-transform-jsx-html-template": "npm:^1.0.0-next.6"
-    "@litsx/babel-preset-litsx": "npm:^1.0.0-next.7"
+    "@litsx/babel-preset-litsx": "npm:^1.0.0-next.8"
     "@litsx/babel-preset-react-compat": "npm:^1.0.0-next.4"
     "@litsx/typescript-session": "npm:^1.0.0-next.0"
     source-map-js: "npm:^1.2.1"
@@ -1602,7 +1602,7 @@ __metadata:
   dependencies:
     "@lit-labs/ssr-client": "npm:^1.1.7"
     "@lit/context": "npm:^1.1.6"
-    "@litsx/authoring": "npm:^1.0.0-next.4"
+    "@litsx/authoring": "npm:^1.0.0-next.5"
     "@litsx/scoped-registry-shim": "npm:^1.0.0-next.2"
     lit: "npm:^3.3.3"
   peerDependencies:
@@ -1653,9 +1653,9 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@litsx/storybook@workspace:packages/storybook"
   dependencies:
-    "@litsx/authoring": "npm:^1.0.0-next.3"
-    "@litsx/compiler": "npm:^1.0.0-next.11"
-    "@litsx/vite-plugin": "npm:^1.0.0-next.2"
+    "@litsx/authoring": "npm:^1.0.0-next.5"
+    "@litsx/compiler": "npm:^1.0.0-next.12"
+    "@litsx/vite-plugin": "npm:^1.0.0-next.3"
     "@storybook/web-components-vite": "npm:10.5.10"
     storybook: "npm:10.5.10"
   peerDependencies:
@@ -1714,11 +1714,11 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@litsx/vite-plugin@npm:^1.0.0-next.2, @litsx/vite-plugin@workspace:packages/vite-plugin":
+"@litsx/vite-plugin@npm:^1.0.0-next.3, @litsx/vite-plugin@workspace:packages/vite-plugin":
   version: 0.0.0-use.local
   resolution: "@litsx/vite-plugin@workspace:packages/vite-plugin"
   dependencies:
-    "@litsx/compiler": "npm:^1.0.0-next.11"
+    "@litsx/compiler": "npm:^1.0.0-next.12"
   peerDependencies:
     "@litsx/ssr": ^1.0.0-next.5
     vite: ^7.3.2 || ^8.0.0

@@ -1,5 +1,17 @@
 # @litsx/vite-plugin
 
+## 1.0.0-next.3
+
+### Patch Changes
+
+- e3b14a0: Recognize resolvable Lit component classes imported from external packages, including `node_modules`. Direct and namespace `LitElement` imports, aliases, inheritance, analyzable mixin chains, named/default reexports, `export *` barrels, and JavaScript or TypeScript module extensions no longer emit the external PascalCase inference warning. Opaque components and classes using unrelated same-named bases continue to warn.
+- 2e50e3a: Replace the Core framework-component allowlist with class-owned metadata. Core light-DOM primitives now declare and type `LITSX_LIGHT_DOM`, while compiler and scoped-element analysis follow component and light-DOM metadata through package exports and barrels, including dependencies in `node_modules`. Package metadata analysis resolves authored `import` targets without requiring `require` build artifacts to exist. Opaque packages are no longer trusted merely because an export has the same name as a Core primitive.
+- ae3e94c: Recognize official framework JSX components such as `SuspenseBoundary` by their exported symbol and `@litsx/core` module identity. This prevents external PascalCase inference warnings when bundlers expose Core through artifacts whose runtime component metadata cannot be inspected, while preserving warnings for same-named exports from unrelated packages.
+- Updated dependencies [e3b14a0]
+- Updated dependencies [2e50e3a]
+- Updated dependencies [ae3e94c]
+  - @litsx/compiler@1.0.0-next.12
+
 ## 1.0.0-next.2
 
 ### Patch Changes

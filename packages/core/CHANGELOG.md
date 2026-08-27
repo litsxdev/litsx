@@ -1,5 +1,18 @@
 # litsx
 
+## 1.0.0-next.8
+
+### Patch Changes
+
+- cf37bd8: Let an explicitly authored component `ref` prop replace the generic managed
+  JSX base ref contract. Exact LitSX object and callback refs can now be forwarded
+  without intersecting their target with `LitsxRef<unknown>`, while incorrect
+  targets, intrinsic ref safety, union refs, and `undefined` cleanup remain intact.
+- 2e50e3a: Replace the Core framework-component allowlist with class-owned metadata. Core light-DOM primitives now declare and type `LITSX_LIGHT_DOM`, while compiler and scoped-element analysis follow component and light-DOM metadata through package exports and barrels, including dependencies in `node_modules`. Package metadata analysis resolves authored `import` targets without requiring `require` build artifacts to exist. Opaque packages are no longer trusted merely because an export has the same name as a Core primitive.
+- Updated dependencies [2e50e3a]
+- Updated dependencies [ae3e94c]
+  - @litsx/authoring@1.0.0-next.5
+
 ## 1.0.0-next.7
 
 ### Patch Changes
