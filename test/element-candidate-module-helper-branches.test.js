@@ -1,12 +1,16 @@
 import assert from "node:assert/strict";
 import babelTraverse from "@babel/traverse";
 import * as t from "@babel/types";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { describe, it, vi } from "vitest";
 import parser from "./helpers/litsx-parser.js";
 import {
   buildModuleAnalysis,
   getOrCreateAvailableNames,
   getOrCreateHelperPaths,
+  getOrCreateModuleAnalysis,
   importedBindingHasLightDomHoist,
   isCompiledComponentExport,
   isExternalCompilationImport,
@@ -278,5 +282,78 @@ describe("element candidate module helper branches", () => {
     assert.equal(importedBindingHasLightDomHoist(null, ctx), false);
     assert.equal(importedBindingHasLightDomHoist({ resolvedSource: "/x.js", importedName: "*" }, ctx), false);
     assert.equal(importedBindingHasLightDomHoist({ resolvedSource: "/missing.js", importedName: "Thing" }, ctx), false);
+  });
+
+  it("follows compiled, Lit, and light-DOM identity through real import and export graphs", () => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-component-graph-"));
+    const components = path.join(directory, "components.js");
+    const barrel = path.join(directory, "barrel.js");
+    const bridge = path.join(directory, "bridge.js");
+    const cycleA = path.join(directory, "cycle-a.js");
+    const cycleB = path.join(directory, "cycle-b.js");
+    const malformed = path.join(directory, "malformed.js");
+    try {
+      fs.writeFileSync(components, `
+        import { LitElement } from "lit";
+        export class CompiledCard extends LitElement {
+          static [Symbol.for("litsx.component")] = true;
+        }
+        export class LightCard extends LitElement {
+          static [Symbol.for("litsx.lightDom")] = true;
+        }
+        export default class DefaultCard extends LitElement {
+          static [Symbol.for("litsx.component")] = true;
+          static lightDom = true;
+        }
+      `);
+      fs.writeFileSync(barrel, `
+        export { CompiledCard as ReexportedCard, LightCard as ReexportedLight } from "./components.js";
+        export * from "./components.js";
+      `);
+      fs.writeFileSync(bridge, `
+        import DefaultCard, { CompiledCard as LocalCard, LightCard as LocalLight } from "./components.js";
+        export { DefaultCard as ImportedDefault, LocalCard as ImportedCard, LocalLight as ImportedLight };
+      `);
+      fs.writeFileSync(cycleA, `export * from "./cycle-b.js";`);
+      fs.writeFileSync(cycleB, `export * from "./cycle-a.js";`);
+      fs.writeFileSync(malformed, `export class Broken {`);
+
+      const ctx = context({
+        rootFilename: path.join(directory, "root.tsx"),
+        getCompilerOptions: () => ({}),
+      });
+      const componentAnalysis = getOrCreateModuleAnalysis(components, ctx);
+      const barrelAnalysis = getOrCreateModuleAnalysis(barrel, ctx);
+      const bridgeAnalysis = getOrCreateModuleAnalysis(bridge, ctx);
+      assert.strictEqual(getOrCreateModuleAnalysis(components, ctx), componentAnalysis);
+
+      for (const [analysis, exportName] of [
+        [componentAnalysis, "CompiledCard"],
+        [componentAnalysis, "default"],
+        [barrelAnalysis, "CompiledCard"],
+        [barrelAnalysis, "ReexportedCard"],
+        [bridgeAnalysis, "ImportedCard"],
+        [bridgeAnalysis, "ImportedDefault"],
+      ]) {
+        assert.equal(isCompiledComponentExport(analysis, exportName, ctx), true, exportName);
+        assert.equal(isProvableComponentExport(analysis, exportName, ctx), true, exportName);
+      }
+      for (const [analysis, exportName] of [
+        [barrelAnalysis, "LightCard"],
+        [barrelAnalysis, "ReexportedLight"],
+        [bridgeAnalysis, "ImportedLight"],
+        [componentAnalysis, "default"],
+      ]) {
+        assert.equal(isLightDomComponentExport(analysis, exportName, ctx), true, exportName);
+      }
+      assert.equal(isLitComponentExport(bridgeAnalysis, "ImportedCard", ctx), true);
+      assert.equal(isCompiledComponentExport(getOrCreateModuleAnalysis(cycleA, ctx), "Missing", ctx), false);
+      assert.equal(isLitComponentExport(getOrCreateModuleAnalysis(cycleA, ctx), "Missing", ctx), false);
+      assert.equal(isLightDomComponentExport(getOrCreateModuleAnalysis(cycleA, ctx), "Missing", ctx), false);
+      assert.equal(getOrCreateModuleAnalysis(malformed, ctx), null);
+      assert.equal(getOrCreateModuleAnalysis(path.join(directory, "missing.js"), ctx), null);
+    } finally {
+      fs.rmSync(directory, { recursive: true, force: true });
+    }
   });
 });

@@ -65,4 +65,36 @@ describe("@litsx/vite-plugin/ssr", () => {
       await server.close();
     }
   });
+
+  it("passes through unrelated requests and normalizes opaque render failures", async () => {
+    let shouldThrowOpaque = false;
+    const server = await createSsrDevServer({
+      vite: {
+        logLevel: "silent",
+        server: { host: "127.0.0.1", port: 0, strictPort: false },
+      },
+      render({ html }) {
+        if (shouldThrowOpaque) throw "opaque SSR failure";
+        return html`<main>default options</main>`;
+      },
+    });
+    await server.listen();
+    try {
+      const url = server.resolvedUrls.local[0];
+      const head = await fetch(url, { method: "HEAD" });
+      assert.equal(head.status, 200);
+
+      const unrelated = await fetch(new URL("/missing", url));
+      assert.equal(unrelated.status, 404);
+      const post = await fetch(url, { method: "POST" });
+      assert.notEqual(post.status, 200);
+
+      shouldThrowOpaque = true;
+      const failure = await fetch(url);
+      assert.equal(failure.status, 500);
+      assert.match(await failure.text(), /opaque SSR failure/);
+    } finally {
+      await server.close();
+    }
+  }, 30000);
 });

@@ -114,6 +114,8 @@ describe("hydration helper branch behavior", () => {
     nested.shadowRoot = { childNodes: [shadowChild] };
     const documentRef = { nodeType: 9, documentElement: rootElement };
     assert.deepEqual(collectElementsIncludingShadowRoots(documentRef), [rootElement, nested, shadowChild]);
+    rootElement.childNodes.push({ nodeType: 3 });
+    assert.deepEqual(collectElementsIncludingShadowRoots(documentRef), [rootElement, nested, shadowChild]);
     assert.deepEqual(collectElementsIncludingShadowRoots(null), []);
   });
 
@@ -185,9 +187,14 @@ describe("hydration helper branch behavior", () => {
     assert.equal(isElementNode({ tagName: "DIV" }), true);
     assert.equal(isElementNode(comment), false);
     assert.equal(findNextElementSibling(comment), other);
+    assert.equal(findNextElementSibling({ nextSibling: { nodeType: 3 } }), null);
     assert.equal(findNextElementSibling(other), null);
     assert.equal(findHydrationRootIdForElement(target), "direct");
     assert.equal(findHydrationRootIdForElement(other), "commented");
+    const nodeValueMarker = { nodeType: 8, nodeValue: "litsx-root id=node-value" };
+    const nodeValueTarget = element();
+    link([nodeValueMarker, nodeValueTarget]);
+    assert.equal(findHydrationRootIdForElement(nodeValueTarget), "node-value");
     assert.equal(findHydrationRootIdForElement(blockedTarget), null);
     assert.equal(findHydrationRootIdForElement(null), null);
 
@@ -200,6 +207,7 @@ describe("hydration helper branch behavior", () => {
     assert.equal(queryHydrationRoot(tree, "direct"), target);
     assert.equal(queryHydrationRoot(tree, "shadow"), shadowTarget);
     assert.equal(queryHydrationRoot({ childNodes: [comment, other] }, "commented"), other);
+    assert.equal(queryHydrationRoot({ childNodes: [nodeValueMarker, nodeValueTarget] }, "node-value"), nodeValueTarget);
     assert.equal(queryHydrationRoot(tree, "missing"), null);
     assert.equal(queryHydrationRoot(null, "id"), null);
     assert.equal(queryHydrationRoot(tree, ""), null);
@@ -259,10 +267,39 @@ describe("hydration helper branch behavior", () => {
     assert.throws(() => resolveHydrationRoot(tree, "missing", { hydrationData }), /did not include/);
     assert.throws(() => resolveHydrationRoots(tree, { hydrationData: { roots: [{ id: "missing" }] } }), /Failed to find/);
     assert.throws(() => resolveHydrationRoots(tree, { hydrationData: { roots: [{ id: "one", tagName: "x-other" }] } }), /expected/);
+    assert.equal(resolveHydrationRoots(tree, { hydrationData: { roots: [{ id: "one", tagName: "" }] } })[0].element, root);
+    const tagless = element({ "data-litsx-root": "tagless" });
+    assert.equal(resolveHydrationRoots({ childNodes: [tagless] }, { hydrationData: { roots: [{ id: "tagless", tagName: "x-tagless" }] } })[0].element, tagless);
     assert.equal(applyHydrationPayload(resolved, hydrationData), resolved);
     assert.equal(root.value, 2);
     assert.equal(applyHydrationPayload(resolved, hydrationData), resolved);
     assert.throws(() => applyHydrationPayload(resolved, { payload: { roots: { one: { props: { value: 3 } } }, instances: {} } }), /already been applied/);
     assert.equal(applyHydrationPayload([{ id: "missing", element: root }], { payload: { roots: {}, instances: {} } }).length, 1);
+    for (const props of [null, [], "invalid"]) {
+      const target = element();
+      applyHydrationPayload([{ id: "negative", element: target }], {
+        payload: { roots: { negative: { props } }, instances: {} },
+      });
+      assert.equal(target.value, undefined);
+    }
+  });
+
+  it("honors the ambient document defaults without requiring explicit roots", () => {
+    const previousDocument = globalThis.document;
+    const documentRef = {
+      nodeType: 9,
+      documentElement: element(),
+      getElementById() { return null; },
+    };
+    try {
+      globalThis.document = documentRef;
+      assert.equal(resolveDocument(), documentRef);
+      assert.deepEqual(readClientImports(), []);
+      assert.deepEqual(readHydrationData(), null);
+      assert.deepEqual(readHydrationPayload(), { roots: {}, instances: {} });
+      prepareForwardedRefs();
+    } finally {
+      globalThis.document = previousDocument;
+    }
   });
 });

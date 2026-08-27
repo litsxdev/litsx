@@ -89,6 +89,23 @@ describe("@litsx/vite-plugin", () => {
     );
   });
 
+  it("rejects malformed asset ids and falls back from incomplete manifests", () => {
+    const resolver = createLitsxViteAssetResolver({
+      root: "/repo",
+      base: "",
+      manifest: {
+        "src/empty.ts": { file: "" },
+        "src/non-string.ts": { file: 42 },
+      },
+    });
+    assert.strictEqual(resolver(null), null);
+    assert.strictEqual(resolver(""), null);
+    assert.strictEqual(resolver("/repo"), null);
+    assert.strictEqual(resolver("/repo/src/empty.ts"), "/src/empty.ts");
+    assert.strictEqual(resolver("/repo/src/non-string.ts"), "/src/non-string.ts");
+    assert.strictEqual(createLitsxViteAssetResolver()({}), null);
+  });
+
   it("transforms jsx and returns code with a sourcemap", async () => {
     const plugin = litsx({ sourceMaps: true });
     const source = [
@@ -509,6 +526,43 @@ export function ConsumerCard({ label = "Ready" }) {
     );
   });
 
+  it("normalizes sparse Vite config and every SSR noExternal shape", () => {
+    const plugin = litsx({
+      reactCompat: {
+        transformDependencies: ["runtime-kit", "", 42, "runtime-kit"],
+      },
+    });
+    const sparse = plugin.config({});
+    assert.deepEqual(sparse.resolve.dedupe, [
+      "lit",
+      "lit-html",
+      "lit-element",
+      "@lit/reactive-element",
+      "@lit/context",
+    ]);
+    assert.deepEqual(sparse.optimizeDeps.exclude, ["runtime-kit"]);
+    assert.deepEqual(sparse.ssr.noExternal, ["runtime-kit"]);
+
+    assert.strictEqual(plugin.config({ ssr: { noExternal: true } }).ssr.noExternal, true);
+    assert.deepEqual(plugin.config({ ssr: { noExternal: false } }).ssr.noExternal, ["runtime-kit"]);
+    assert.deepEqual(plugin.config({ ssr: { noExternal: "existing" } }).ssr.noExternal, ["existing", "runtime-kit"]);
+    assert.deepEqual(plugin.config({ resolve: { dedupe: "invalid" } }).resolve.dedupe, sparse.resolve.dedupe);
+
+    const plain = litsx();
+    assert.strictEqual(plain.config({}).ssr, undefined);
+    plain.handleHotUpdate({ file: "/virtual/not-started.ts" });
+    plain.buildEnd();
+  });
+
+  it("rejects malformed optimize-deps ids before reading the filesystem", async () => {
+    const plugin = litsx({ include: (id) => id.endsWith(".allowed") });
+    plugin.configResolved({ root: "/project", cacheDir: "/project/.vite" });
+    const scanPlugin = plugin.config({}).optimizeDeps.rolldownOptions.plugins.at(-1);
+    for (const id of [null, "", "\0virtual.allowed", "/project/.vite/cache.allowed", "/outside/file.allowed", "/project/node_modules/pkg/file.allowed", "/project/file.ts"] ) {
+      assert.strictEqual(await scanPlugin.load(id), null, String(id));
+    }
+  });
+
   it("skips optimizeDeps transforms for files outside the include filter", async () => {
     const transformSync = vi.fn();
     const session = {
@@ -721,6 +775,30 @@ export function ConsumerCard({ label = "Ready" }) {
     }
   });
 
+  it("formats completely opaque warnings without inventing a location", async () => {
+    const transform = vi.fn(async () => ({
+      code: "export const value = 1;",
+      map: null,
+      metadata: { litsxWarnings: [{}] },
+    }));
+    const sessionSpy = vi
+      .spyOn(compilerModule, "createLitsxCompilationSession")
+      .mockReturnValue({
+        transform,
+        transformSync: vi.fn(),
+        invalidate: vi.fn(),
+        dispose: vi.fn(),
+      });
+    const warn = vi.fn();
+    try {
+      const plugin = litsx();
+      await plugin.transform.call({ warn }, "export const value = 1;", "/virtual/opaque.jsx");
+      assert.equal(warn.mock.calls[0][0], "[LITSX_WARNING] /virtual/opaque.jsx LitSX emitted a warning during compilation.");
+    } finally {
+      sessionSpy.mockRestore();
+    }
+  });
+
   it("dedupes repeated LitSX warnings within the same plugin session", async () => {
     const transform = vi.fn(async () => ({
       code: "export const value = 1;",
@@ -872,6 +950,27 @@ export function ConsumerCard({ label = "Ready" }) {
       assert.strictEqual(result.loc, undefined);
       assert.strictEqual(result.frame, undefined);
       assert.match(result.message, /plain failure/);
+    } finally {
+      sessionSpy.mockRestore();
+    }
+  });
+
+  it("normalizes opaque compiler failures and out-of-range source locations", async () => {
+    const transform = vi.fn(async () => {
+      throw { message: "", loc: { line: 99, column: -4 }, stack: "", code: "" };
+    });
+    const sessionSpy = vi
+      .spyOn(compilerModule, "createLitsxCompilationSession")
+      .mockReturnValue({ transform, transformSync: vi.fn(), invalidate: vi.fn(), dispose: vi.fn() });
+    const error = vi.fn((value) => value);
+    try {
+      const plugin = litsx();
+      const result = await plugin.transform.call({ error }, "one line", "/virtual/Opaque.jsx");
+      assert.match(result.message, /Unknown compiler error/);
+      assert.deepEqual(result.loc, { file: "/virtual/Opaque.jsx", line: 99, column: -4 });
+      assert.equal(result.frame, undefined);
+      assert.equal(result.stack, undefined);
+      assert.equal(result.code, undefined);
     } finally {
       sessionSpy.mockRestore();
     }

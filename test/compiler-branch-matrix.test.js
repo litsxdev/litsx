@@ -142,4 +142,62 @@ describe("compiler branch matrix", () => {
       );
     }
   });
+
+  it("preserves uncommon but valid authored component and prop shapes", () => {
+    const sources = [
+      `type Props = { "aria-label"?: string; 0?: number; readonlyValue?: string };
+       export const LiteralKeys = ({ "aria-label": ariaLabel = "label", 0: zero = 0, readonlyValue }: Props) =>
+         <button aria-label={ariaLabel} data-zero={zero}>{readonlyValue}</button>;`,
+      `type Props<T> = Readonly<{ value?: T; children?: unknown }>;
+       export function GenericPanel<T extends string = string>(props: Props<T>) {
+         const { value = "fallback" as T } = props;
+         return <article data-value={value}>{props.children}</article>;
+       }`,
+      `interface Props { nested?: { label?: string }; list?: string[] }
+       export const DeepDefaults = ({ nested: { label = "x" } = {}, list: [first = "y", ...tail] = [] }: Props = {}) =>
+         <section data-tail={tail.length}>{label}{first}</section>;`,
+      `export function OpaqueProps(props) {
+         const { title: renamed = "ready", ...forwarded } = props;
+         return <main {...forwarded}>{renamed}{props.count}{props["status"]}</main>;
+       }`,
+      `type Props = { enabled?: boolean; count?: number; payload?: Record<string, unknown>; changed?: (event: Event) => void };
+       export const AttributeMatrix = ({ enabled = false, count = 0, payload = {}, changed }: Props) =>
+         <input disabled={enabled} value={count} data-payload={payload} on:change={changed} aria-hidden={undefined} />;`,
+      `const LocalItem = ({ value }) => <span>{value}</span>;
+       export function ExpressionMatrix({ ready, values }) {
+         return <>{ready && <LocalItem value="yes" />}{ready ? <b /> : <i />}{values.map(value => <LocalItem key={value} value={value} />)}</>;
+       }`,
+      `export const FunctionBody = function NamedOutput({ value = 1 }) {
+         if (value < 0) return null;
+         if (value === 0) return <></>;
+         return <output>{value}</output>;
+       };`,
+      `export default ({ title = "default" }: { title?: string }) => <header><h1>{title}</h1></header>;`,
+      `export class IgnoredClass { method() { return <aside />; } }
+       export const ActualComponent = () => <main />;`,
+      `const factories = { make: () => <strong /> };
+       export const HelperCalls = ({ render = factories.make }) => <section>{render?.()}{factories.make()}</section>;`,
+      `export const SvgMatrix = ({ color = "red" }) => <svg viewBox="0 0 10 10"><defs><linearGradient id="g" /></defs><use href="#g" fill={color} /></svg>;`,
+      `export const SpreadMatrix = (props) => <div {...null} {...undefined} {...props} class="base" className={props.className} />;`,
+    ];
+
+    for (const [index, source] of sources.entries()) {
+      const result = compile(source, { filename: `/virtual/uncommon-${index}.tsx` });
+      assert.equal(typeof result.code, "string");
+      assert.ok(result.code.length > 0);
+    }
+  });
+
+  it("accepts non-JSX TypeScript syntax without manufacturing JSX parsing", () => {
+    const sources = [
+      "export const identity = <T>(value: T): T => value;",
+      "export const tuple = <A, B>(left: A, right: B): readonly [A, B] => [left, right] as const;",
+      "export interface Contract<T extends object> { value: T; readonly ready?: boolean }",
+      "export const utilities = { grid: 'grid gap-6', width: 'max-w-3xl' } as const;",
+    ];
+    for (const [index, source] of sources.entries()) {
+      const result = compile(source, { filename: `/virtual/plain-${index}.ts` });
+      assert.equal(typeof result.code, "string");
+    }
+  });
 });

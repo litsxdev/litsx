@@ -3,6 +3,27 @@ import path from 'node:path';
 import process from 'node:process';
 
 const MINIMUM_BRANCH_COVERAGE = 80;
+const PACKAGE_BRANCH_THRESHOLDS = {
+  'packages/authoring': 93,
+  'packages/babel-plugin-litsx-proptypes': 87,
+  'packages/babel-plugin-shared-hooks': 90,
+  'packages/babel-plugin-transform-jsx-html-template': 94,
+  'packages/babel-plugin-transform-litsx-scoped-elements': 90,
+  'packages/babel-preset-litsx': 89,
+  'packages/babel-preset-react-compat': 88,
+  'packages/compiler': 90,
+  'packages/core': 91,
+  'packages/create-litsx-app': 99,
+  'packages/eslint-plugin-litsx': 81,
+  'packages/prop-types': 90,
+  'packages/scoped-registry-shim': 83,
+  'packages/ssr': 87,
+  'packages/storybook': 89,
+  'packages/tailwind': 93,
+  'packages/typescript-session': 94,
+  'packages/unocss': 91,
+  'packages/vite-plugin': 95,
+};
 const enforce = process.argv.includes('--enforce');
 const coveragePath = path.resolve('coverage/coverage-final.json');
 
@@ -40,19 +61,20 @@ const coverage = JSON.parse(await readFile(coveragePath, 'utf8'));
 const packages = collectBranchCoverage(coverage);
 const failures = [];
 
-console.log(`Minimum branch coverage per package: ${MINIMUM_BRANCH_COVERAGE}%`);
+console.log(`Default minimum branch coverage per package: ${MINIMUM_BRANCH_COVERAGE}%`);
 
 for (const [packageName, { covered, total }] of [...packages].sort(([a], [b]) => a.localeCompare(b))) {
   const percentage = total === 0 ? 100 : (covered / total) * 100;
-  const status = percentage >= MINIMUM_BRANCH_COVERAGE ? 'PASS' : 'FAIL';
-  console.log(`${status} ${packageName}: ${percentage.toFixed(2)}% (${covered}/${total})`);
+  const threshold = PACKAGE_BRANCH_THRESHOLDS[packageName] ?? MINIMUM_BRANCH_COVERAGE;
+  const status = percentage >= threshold ? 'PASS' : 'FAIL';
+  console.log(`${status} ${packageName}: ${percentage.toFixed(2)}% (${covered}/${total}; minimum ${threshold}%)`);
 
-  if (percentage < MINIMUM_BRANCH_COVERAGE) {
+  if (percentage < threshold) {
     failures.push(packageName);
   }
 }
 
 if (enforce && failures.length > 0) {
-  console.error(`\nPackages below ${MINIMUM_BRANCH_COVERAGE}% branch coverage: ${failures.join(', ')}`);
+  console.error(`\nPackages below their branch coverage threshold: ${failures.join(', ')}`);
   process.exitCode = 1;
 }

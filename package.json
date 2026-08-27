@@ -72,7 +72,7 @@
     "bench:transform-litsx": "node scripts/bench/transform-litsx.js",
     "bench:ssr": "LITSX_PROFILE=1 node scripts/bench/ssr-complex-pages.js",
     "validate:ssr-performance": "LITSX_PROFILE=1 node scripts/bench/ssr-complex-pages.js --check",
-    "coverage": "vitest run --coverage && yarn coverage:packages",
+    "coverage": "vitest run --coverage && yarn coverage:packages:check",
     "coverage:packages": "node scripts/test/check-package-coverage.js",
     "coverage:packages:check": "node scripts/test/check-package-coverage.js --enforce",
     "changeset": "changeset",

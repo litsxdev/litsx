@@ -6,10 +6,13 @@ import path from "node:path";
 import {
   attachSourceFileVersion,
   createInMemoryProgramKey,
+  createInMemoryTsSession,
   createProjectHostKey,
   createProjectProgramKey,
+  createProjectTsSession,
   createResolvedModule,
   createSessionBase,
+  createStandaloneTsSession,
   createStandaloneProgramKey,
   getCachedSourceFile,
   getCachedSourceText,
@@ -177,6 +180,126 @@ describe("TypeScript session helper branches", () => {
       fs.writeFileSync(filename, "export const value = 12345;");
       const changed = getCachedDiskSourceFile(filename, ts.ScriptTarget.Latest, create, read);
       expect(changed).not.toBe(one);
+    } finally {
+      fs.rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("exercises transformed in-memory files, empty configs, overlays, and common accessors", () => {
+    const createSourceFile = vi.fn((fileName, text) => ({ fileName, text }));
+    const program = {
+      getSourceFile: vi.fn((fileName) => fileName === "/virtual/main.ts" ? { fileName } : undefined),
+      getTypeChecker: vi.fn(() => ({ kind: "checker" })),
+    };
+    const fakeTs = {
+      ScriptKind: ts.ScriptKind,
+      Extension: ts.Extension,
+      createSourceFile,
+      resolveModuleName: vi.fn(() => ({ resolvedModule: undefined })),
+      createProgram: vi.fn(() => program),
+    };
+    const transformSourceText = vi.fn((_fileName, sourceText) => `${sourceText}\n// transformed`);
+    const session = createInMemoryTsSession({
+      typescript: fakeTs,
+      sourceFilename: "/virtual/main.ts",
+      defaultLibFileName: "/virtual/lib.d.ts",
+      rootNames: ["/virtual/main.ts"],
+      compilerOptions: {},
+      transformSourceText,
+    });
+
+    const first = session.getProgram("export const value = 1;");
+    expect(session.getProgram("export const value = 1;")).toBe(first);
+    expect(session.getChecker("export const value = 2;")).toEqual({ kind: "checker" });
+    expect(session.getSourceFile("/virtual/main.ts", "export const value = 3;")).toEqual({
+      fileName: "/virtual/main.ts",
+    });
+    expect(session.host.readFile("/virtual/missing.ts")).toBeUndefined();
+    expect(session.host.getSourceFile("/virtual/missing.ts", 99)).toBeUndefined();
+
+    session.setOverlayFile("/virtual/extra.ts", "overlay");
+    expect(session.host.readFile("/virtual/extra.ts")).toBe("overlay");
+    expect(session.host.getSourceFile("/virtual/extra.ts", 99)?.text).toBe("overlay");
+    expect(session.host.fileExists("/virtual/extra.ts")).toBe(true);
+    expect(session.host.fileExists("/virtual/nope.ts")).toBe(false);
+    expect(session.host.getDefaultLibFileName()).toBe("/virtual/lib.d.ts");
+    expect(session.host.getCurrentDirectory()).toBe("/virtual");
+    expect(session.getTypeResolver("/virtual/missing.ts", "missing")).toBeNull();
+    expect(transformSourceText).not.toHaveBeenCalledWith("/virtual/extra.ts", "overlay");
+  });
+
+  it("supports sparse project hosts and both incremental builder return shapes", () => {
+    const sourceFiles = new Map([["/src/main.ts", { fileName: "/src/main.ts" }]]);
+    const baseHost = {
+      readFile: vi.fn((fileName) => fileName === "/src/main.ts" ? "export const value = 1;" : undefined),
+      getSourceFile: vi.fn((fileName) => sourceFiles.get(fileName)),
+    };
+    const directBuilderProgram = { getTypeChecker: vi.fn(), getSourceFile: vi.fn() };
+    const wrappedProgram = { getTypeChecker: vi.fn(), getSourceFile: vi.fn() };
+    const fakeTs = {
+      sys: { useCaseSensitiveFileNames: false },
+      ScriptKind: ts.ScriptKind,
+      Extension: ts.Extension,
+      createCompilerHost: vi.fn(() => ({ ...baseHost })),
+      createSourceFile: vi.fn((fileName, text) => ({ fileName, text })),
+      resolveModuleName: vi.fn((_name, _containing, _options, host) => {
+        expect(host.directoryExists("/src")).toBe(true);
+        expect(host.getDirectories("/src")).toEqual([]);
+        expect(host.realpath("/src/main.ts")).toBe("/src/main.ts");
+        return { resolvedModule: undefined };
+      }),
+      createProgram: vi.fn(() => wrappedProgram),
+      createIncrementalProgram: vi
+        .fn()
+        .mockReturnValueOnce({ getProgram: () => wrappedProgram })
+        .mockReturnValueOnce(directBuilderProgram),
+    };
+    const config = {
+      typescript: fakeTs,
+      parsedCommandLine: {
+        options: {},
+        fileNames: ["/src/main.ts"],
+        projectReferences: [],
+      },
+      transformSourceText: (_fileName, sourceText) => `${sourceText}\n// transformed`,
+    };
+    const session = createProjectTsSession(config);
+
+    expect(session.getProgram()).toBe(wrappedProgram);
+    expect(session.host.useCaseSensitiveFileNames()).toBe(false);
+    expect(session.host.readFile("/src/main.ts")).toContain("transformed");
+    session.setOverlayFile("/src/overlay.ts", "overlay");
+    expect(session.host.readFile("/src/overlay.ts")).toBe("overlay");
+    expect(session.host.fileExists("/src/overlay.ts")).toBe(true);
+    expect(session.host.fileExists("/src/missing.ts")).toBe(false);
+    expect(session.host.getSourceFile("/src/overlay.ts", 99)?.version).toBe("overlay");
+    expect(session.host.getSourceFile("/src/missing.ts", 99)).toBeUndefined();
+    session.host.resolveModuleNames(["./missing"], "/src/main.ts");
+    expect(session.getProgram()).toBe(wrappedProgram);
+    expect(session.getProgram()).toBe(wrappedProgram);
+    expect(session.getProgram()).toBe(directBuilderProgram);
+  });
+
+  it("uses transformed and missing standalone sources through the public host", () => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-ts-standalone-"));
+    const filename = path.join(directory, "entry.ts");
+    const missing = path.join(directory, "missing.ts");
+    try {
+      fs.writeFileSync(filename, "export const value = 1;");
+      const session = createStandaloneTsSession({
+        typescript: ts,
+        compilerOptions: {},
+        transformSourceText: (_fileName, sourceText) => `${sourceText}\n// transformed`,
+      });
+      session.getProgram(filename);
+      expect(session.host.readFile(filename)).toContain("transformed");
+      expect(session.host.getSourceFile(filename, ts.ScriptTarget.Latest)?.text).toContain("transformed");
+      expect(session.host.readFile(missing)).toBeUndefined();
+      expect(session.host.getSourceFile(missing, ts.ScriptTarget.Latest)).toBeUndefined();
+      session.setOverlayFile(missing, "export const overlay = true;");
+      expect(session.host.fileExists(missing)).toBe(true);
+      expect(session.host.readFile(missing)).toContain("overlay");
+      expect(session.host.getSourceFile(missing, ts.ScriptTarget.Latest)?.text).toContain("overlay");
     } finally {
       fs.rmSync(directory, { recursive: true, force: true });
     }
