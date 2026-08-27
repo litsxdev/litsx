@@ -49,6 +49,7 @@ describe("prop-types helper branches", () => {
     assert.equal(inferOneOfType(t.arrayExpression([t.stringLiteral("a"), null, t.stringLiteral("b")]), t), "String");
     assert.equal(inferOneOfType(t.arrayExpression([t.numericLiteral(1)]), t), "Number");
     assert.equal(inferOneOfType(t.arrayExpression([t.booleanLiteral(true)]), t), "Boolean");
+    assert.equal(inferOneOfType(t.arrayExpression([t.bigIntLiteral(1n), t.nullLiteral()] ), t), "Object");
     assert.equal(inferOneOfType(t.arrayExpression([t.stringLiteral("a"), t.numericLiteral(1)]), t), "Object");
     assert.equal(inferOneOfType(t.arrayExpression([t.identifier("value")]), t), "Object");
   });
@@ -90,6 +91,11 @@ describe("prop-types helper branches", () => {
     ensureBlockBody(arrow, t);
     assert.ok(arrow.get("body").isBlockStatement());
     ensureBlockBody(arrow, t);
+
+    const wrapped = inspect(`export default memo(() => <div />); export function Named() { return <span />; }`);
+    assert.ok(unwrapComponentFunction(wrapped.program.get("body.0")).isArrowFunctionExpression());
+    assert.ok(unwrapComponentFunction(wrapped.program.get("body.1")).isFunctionDeclaration());
+    assert.equal(unwrapComponentFunction(inspect("factory();").program.get("body.0.expression")), null);
   });
 
   it("merges descriptor objects and finds existing property declarations", () => {
@@ -111,5 +117,18 @@ describe("prop-types helper branches", () => {
     assert.ok(findExistingPropertiesAssignment(sample.program, "Card", t));
     assert.equal(findExistingPropertiesAssignment(sample.program, "Missing", t), null);
     assert.ok(findExistingPropertiesHoist(sample.program.get("body.0.body"), t));
+
+    const irregular = mergePropertiesObjects(
+      t.objectExpression([t.spreadElement(t.identifier("generated")), t.objectMethod("method", t.identifier("skip"), [], t.blockStatement([]))]),
+      t.objectExpression([
+        t.objectMethod("method", t.identifier("method"), [], t.blockStatement([])),
+        t.objectProperty(t.booleanLiteral(true), t.objectExpression([]), true),
+      ]),
+      t,
+    );
+    assert.equal(irregular.properties.length, 4);
+
+    const noHoist = inspect(`function Empty() { const value = 1; value; other(); __litsx_static_properties(); }`);
+    assert.equal(findExistingPropertiesHoist(noHoist.program.get("body.0.body"), t), null);
   });
 });

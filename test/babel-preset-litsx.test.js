@@ -528,6 +528,17 @@ describe("@litsx/babel-preset-litsx", () => {
       false,
     );
 
+    for (const source of [
+      null,
+      'import from "./empty";',
+      'import { useBroken }',
+      'import * nope from "./hooks"; nope.useFeature();',
+      'import * as from "./hooks"; hooks.useFeature();',
+      'import * as 123bad from "./hooks"; bad.useFeature();',
+    ]) {
+      assert.strictEqual(detectLitsxSourceFeatures(source, {}).hooks, false);
+    }
+
     assert.deepStrictEqual(
       detectLitsxSourceFeatures(
         [

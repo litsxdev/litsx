@@ -117,10 +117,11 @@ function getRuntime() {
         // with the registry-local definition.
       }
 
-      const formAssociated =
-        standInClass?.formAssociated ??
-        (elementClass.formAssociated ||
-          formAssociatedTags.has(tagName));
+      const formAssociated = Boolean(
+        standInClass?.formAssociated ||
+        elementClass.formAssociated ||
+        formAssociatedTags.has(tagName)
+      );
 
       if (formAssociated) {
         formAssociatedTags.add(tagName);

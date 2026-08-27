@@ -200,6 +200,34 @@ describe("@litsx/ssr/hydration", () => {
     assert.strictEqual(registry.define.mock.calls.length, 0);
   });
 
+  it("rejects hydratable registration when no custom-element registry is available", async () => {
+    const { registerHydrationModule } = await import("../packages/ssr/src/hydration.js");
+    const ProductCard = createHydratableComponent("product-card");
+
+    assert.throws(
+      () => registerHydrationModule({ ProductCard }),
+      /globalThis\.customElements is not available/,
+    );
+  });
+
+  it("propagates ordinary registration errors and awaits suspended registration", async () => {
+    const { hydrate } = await import("../packages/ssr/src/hydration.js");
+    const hydrationData = { version: 1, roots: [], payload: { roots: {}, instances: {} } };
+    await assert.rejects(
+      () => hydrate(null, { hydrationData, register() { throw new Error("registration failed"); } }),
+      /registration failed/,
+    );
+
+    let resolved = false;
+    await hydrate(null, {
+      hydrationData,
+      register() {
+        throw Promise.resolve().then(() => { resolved = true; });
+      },
+    });
+    assert.equal(resolved, true);
+  });
+
   it("accepts async loaders in registerHydrationModules", async () => {
     const { registerHydrationModules } = await import("../packages/ssr/src/hydration.js");
     const registry = createCustomElementsRegistry();
@@ -340,6 +368,12 @@ describe("@litsx/ssr/hydration", () => {
       "import:/assets/a.js",
       "import:/assets/b.js",
     ]);
+  });
+
+  it("supports default hydrate and hydrateDocument arguments without a browser document", async () => {
+    const { hydrate, hydrateDocument } = await import("../packages/ssr/src/hydration.js");
+    assert.strictEqual(await hydrate(), null);
+    assert.strictEqual(await hydrateDocument(), null);
   });
 
   it("restores SSR resources synchronously before registration and module imports", async () => {
@@ -941,6 +975,17 @@ describe("@litsx/ssr/hydration", () => {
           },
         ),
       /requires a root id or an element marked as a LitSX SSR root/,
+    );
+  });
+
+  it("rejects explicit hydrateRoot ids missing from metadata", async () => {
+    const { hydrateRoot } = await import("../packages/ssr/src/hydration.js");
+    await assert.rejects(
+      () => hydrateRoot(null, {
+        rootId: "missing-root",
+        hydrationData: { version: 1, roots: [] },
+      }),
+      /Hydration metadata did not include root "missing-root"/,
     );
   });
 });

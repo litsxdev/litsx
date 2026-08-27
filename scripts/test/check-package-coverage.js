@@ -2,23 +2,23 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 
-const MINIMUM_BRANCH_COVERAGE = 80;
+const MINIMUM_BRANCH_COVERAGE = 90;
 const PACKAGE_BRANCH_THRESHOLDS = {
   'packages/authoring': 93,
-  'packages/babel-plugin-litsx-proptypes': 87,
+  'packages/babel-plugin-litsx-proptypes': 90,
   'packages/babel-plugin-shared-hooks': 90,
   'packages/babel-plugin-transform-jsx-html-template': 94,
   'packages/babel-plugin-transform-litsx-scoped-elements': 90,
-  'packages/babel-preset-litsx': 89,
-  'packages/babel-preset-react-compat': 88,
+  'packages/babel-preset-litsx': 90,
+  'packages/babel-preset-react-compat': 90,
   'packages/compiler': 90,
   'packages/core': 91,
   'packages/create-litsx-app': 99,
-  'packages/eslint-plugin-litsx': 81,
+  'packages/eslint-plugin-litsx': 90,
   'packages/prop-types': 90,
-  'packages/scoped-registry-shim': 83,
-  'packages/ssr': 87,
-  'packages/storybook': 89,
+  'packages/scoped-registry-shim': 90,
+  'packages/ssr': 90,
+  'packages/storybook': 90,
   'packages/tailwind': 93,
   'packages/typescript-session': 94,
   'packages/unocss': 91,

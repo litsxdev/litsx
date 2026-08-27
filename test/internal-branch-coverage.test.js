@@ -4,6 +4,7 @@ import { describe, it } from "vitest";
 import { extractUseStateInfo } from "../packages/babel-plugin-shared-hooks/src/use-state-analysis.js";
 import reactHookExportAliases from "../packages/babel-preset-react-compat/src/internal/react-hook-export-aliases.js";
 import reactPolymorphicElements from "../packages/babel-preset-react-compat/src/internal/react-polymorphic-elements.js";
+import reactRefs from "../packages/babel-preset-react-compat/src/internal/react-refs.js";
 import {
   attachStaticIr,
   collectStaticIr,
@@ -64,6 +65,17 @@ describe("static IR and stable identity branches", () => {
     assert.equal(getStaticIr(null), null);
     assert.equal(consumeStaticIr(null), null);
     assert.equal(setStaticIrInferredProperties(null, []), null);
+    assert.deepEqual(normalizeStaticIr({
+      properties: {
+        inferred: [{ name: "missing", expression: null }],
+        authored: [{ name: "title", expression: null }],
+      },
+      elements: { localCandidates: ["x-card"], importedCandidates: [] },
+    }).properties, {
+      inferred: [{ name: "missing", expression: null }],
+      authored: [{ name: "title", expression: null }],
+    });
+    assert.deepEqual(normalizeStaticIr({}), createEmptyStaticIr());
 
     const functionPath = {
       node: {
@@ -161,11 +173,48 @@ describe("React compatibility branch plugins", () => {
     assert.match(code, /from "\.\/remote\.js"/);
   });
 
+  it("handles string export names and unsupported binding shapes", () => {
+    const code = transform(`
+      class a {}
+      let b;
+      const c = 1;
+      export { a as "PublicClass", b as PublicValue, c as useThing };
+    `, reactHookExportAliases);
+    assert.match(code, /class PublicClass/);
+    assert.match(code, /export let PublicValue/);
+    assert.match(code, /export const useThing = 1/);
+  });
+
   it("rejects alias promotion collisions", () => {
     assert.throws(
       () => transform(`const a = () => null; const PublicPanel = 1; export { a as PublicPanel };`, reactHookExportAliases),
       /collides with another declaration/,
     );
+  });
+
+  it("rewrites createRef across collisions, existing runtime imports, and negative callee shapes", () => {
+    const code = transform(`
+      import React, { createRef, keep } from "react";
+      import { existing } from "@litsx/core/react-compat";
+      const createReactRef = "collision";
+      const first = createRef();
+      const second = React.createRef();
+      const untouched = React["createRef"]();
+      const local = { createRef() {} };
+      local.createRef();
+      keep;
+    `, reactRefs);
+    assert.match(code, /createReactRef as _createReactRef/);
+    assert.match(code, /const first = _createReactRef\(\)/);
+    assert.match(code, /const second = _createReactRef\(\)/);
+    assert.match(code, /React\["createRef"\]\(\)/);
+    assert.match(code, /local\.createRef\(\)/);
+
+    const soleImport = transform(`
+      import { createRef } from "react";
+      export const ref = createRef();
+    `, reactRefs);
+    assert.doesNotMatch(soleImport, /from "react"/);
   });
 
   it("lowers polymorphic string, identifier, member, and Radix Slot branches", () => {
@@ -183,12 +232,17 @@ describe("React compatibility branch plugins", () => {
 
   it("ignores unsupported polymorphic declarations and JSX names", () => {
     const source = `
+      import { Slot as ForeignSlot } from "another-package";
       const BadTag = flag ? "not valid!" : lookup[key];
+      const ForeignTag = flag ? ForeignSlot : "div";
+      const ComputedTag = flag ? UI[key] : "span";
       const NotConditional = "div";
-      export const View = () => <><BadTag /><NotConditional /><UI.Member /></>;
+      export const View = () => <><BadTag /><ForeignTag /><ComputedTag /><NotConditional /><UI.Member /></>;
     `;
     const code = transform(source, reactPolymorphicElements);
     assert.match(code, /<BadTag \/>/);
+    assert.match(code, /flag \? <ForeignSlot \/> : <div \/>/);
+    assert.match(code, /<ComputedTag \/>/);
     assert.match(code, /<NotConditional \/>/);
   });
 });

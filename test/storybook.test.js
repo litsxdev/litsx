@@ -76,6 +76,17 @@ describe("@litsx/storybook", () => {
     assert.ok(indexInputs.every((entry) => entry.title === "Catalog/Card"));
   });
 
+  it("accepts an injected CSF loader with no parsed index", async () => {
+    const fileName = createStoryFile(
+      'export default { title: "Catalog/Empty" }; export const Default = { render: () => <div /> };',
+    );
+    const plugin = litsxStoryRegistrationPlugin({
+      storybookCsfLoader: () => ({ parse: () => null }),
+    });
+    const transformed = await plugin.transform.handler(fs.readFileSync(fileName, "utf8"), fileName);
+    assert.equal(transformed, null);
+  });
+
   it("generates a pretransform that auto-registers imported and local story elements", async () => {
     const plugin = litsxStoryRegistrationPlugin({
       storybookCsfLoader: createPassingCsfLoader(),

@@ -225,5 +225,24 @@ describe("react compat internal wrappers", () => {
     locationless.node.loc = null;
     const warnings = getReactWrapperMetadata(locationless).warnings;
     assert.deepStrictEqual(warnings.map(({ line, column }) => [line, column]), [[null, null], [null, null]]);
+
+    const [unknownMember, namedMember] = getCallExpressions(`
+      import React, { React as NamedReact } from "react";
+      const One = React.unknown(function One() {});
+      const Two = NamedReact.memo(function Two() {});
+    `);
+    assert.strictEqual(getReactWrapperMetadata(unknownMember), null);
+    assert.strictEqual(getReactWrapperMetadata(namedMember), null);
+
+    const [unboundMember, mismatchedMember, sharedMemoFirst] = getCallExpressions(`
+      import { other as ReactMemo, memo } from "react";
+      const One = MissingReact.memo(function One() {});
+      const Two = ReactMemo.memo(function Two() {});
+      const Three = memo(function Three() {});
+      const Four = memo(function Four() {});
+    `);
+    assert.strictEqual(getReactWrapperMetadata(unboundMember), null);
+    assert.strictEqual(getReactWrapperMetadata(mismatchedMember), null);
+    assert.strictEqual(getReactWrapperMetadata(sharedMemoFirst)?.helperKind, "memo");
   });
 });

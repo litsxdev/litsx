@@ -182,6 +182,27 @@ describe("react compat internal error boundary", () => {
     assert.match(code, /\.content=\{\(\) => null\}/);
   });
 
+  it("recognizes the unimported framework boundary name", () => {
+    const code = run(`export const View = () => <ErrorBoundary />;`);
+    assert.match(code, /import \{ ErrorBoundary \} from "@litsx\/core"/);
+    assert.match(code, /\.fallback=\{\(\) => null\}/);
+    assert.match(code, /\.content=\{\(\) => null\}/);
+  });
+
+  it("handles absent attribute arrays and string-named imports defensively", () => {
+    const source = `export const View = () => <ErrorBoundary />;`;
+    const ast = parser.parse(source, { sourceType: "module" });
+    ast.program.body[0].declaration.declarations[0].init.body.openingElement.attributes = null;
+    const code = runAst(ast, source);
+    assert.match(code, /\.fallback=\{\(\) => null\}/);
+
+    const stringImport = run(`
+      import { "ErrorBoundary" as Boundary } from "react";
+      export const Other = () => <Boundary />;
+    `);
+    assert.match(stringImport, /<Boundary \/>/);
+  });
+
   it("treats empty fallback and onError expressions as boolean true instead of crashing", () => {
     const source = [
       "import { ErrorBoundary } from 'react';",

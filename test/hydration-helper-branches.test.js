@@ -204,10 +204,12 @@ describe("hydration helper branch behavior", () => {
     assert.equal(walkNodes(tree, (node) => { visited.push(node); return true; }), true);
     assert.ok(visited.includes(shadowTarget));
     assert.equal(walkNodes(tree, () => false), false);
+    assert.equal(walkNodes({ childNodes: [{ nodeType: 1, childNodes: [target] }] }, (node) => node !== target), false);
     assert.equal(queryHydrationRoot(tree, "direct"), target);
     assert.equal(queryHydrationRoot(tree, "shadow"), shadowTarget);
     assert.equal(queryHydrationRoot({ childNodes: [comment, other] }, "commented"), other);
     assert.equal(queryHydrationRoot({ childNodes: [nodeValueMarker, nodeValueTarget] }, "node-value"), nodeValueTarget);
+    assert.equal(queryHydrationRoot({ childNodes: [{ nodeType: 8, data: "litsx-root id=other" }] }, "wanted"), null);
     assert.equal(queryHydrationRoot(tree, "missing"), null);
     assert.equal(queryHydrationRoot(null, "id"), null);
     assert.equal(queryHydrationRoot(tree, ""), null);

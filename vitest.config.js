@@ -18,9 +18,6 @@ export default defineConfig({
       : ['default'],
     coverage: {
       reporter: ['text', 'html', 'json-summary', 'json'],
-      thresholds: {
-        branches: 90.5,
-      },
       include: ['packages/*/src/**', 'packages/react/*/src/**', 'packages/shared/*/src/**'],
       exclude: [
         '**/node_modules/**',

@@ -1238,6 +1238,48 @@ describe("@litsx/ssr", () => {
     assert.match(result.document, /<meta name="adapter-page" content="yes">/);
   });
 
+  it("handles sparse, declined, and invalid generic custom-element adapter results", async () => {
+    class ExternalCard extends HTMLElement {}
+    annotateHydratableCustomElement(ExternalCard, {
+      tagName: "external-card",
+      moduleId: "external-card-lib",
+    });
+    const value = __litsxScopedTemplate(html`<external-card></external-card>`, {
+      "external-card": ExternalCard,
+    });
+
+    const declined = await renderToString(value, {
+      renderCustomElementSsr: () => ({ mode: "passthrough" }),
+    });
+    assert.doesNotMatch(declined.html, /template shadowroot/);
+
+    const sparse = await renderToString(value, {
+      renderCustomElementSsr: () => ({
+        mode: "handled",
+        host: {
+          attributes: { hidden: true, absent: false, empty: null, count: 2 },
+          props: { ready: true },
+        },
+        assets: { clientImports: null, modulePreloads: {}, head: "ignored" },
+        artifacts: null,
+      }),
+    });
+    assert.match(sparse.html, /\shidden(?:\s|>)/);
+    assert.match(sparse.html, /count="2"/);
+    assert.doesNotMatch(sparse.html, /absent=/);
+    assert.equal(sparse.hydrationData.payload.roots["litsx-root-0"].props.ready, true);
+
+    await assert.rejects(
+      () => renderToString(value, {
+        renderCustomElementSsr: () => ({
+          mode: "handled",
+          content: { kind: "light-dom", html: "<p>unsupported</p>" },
+        }),
+      }),
+      /only support shadow-dom content/,
+    );
+  });
+
   it("accepts promised renderable values", async () => {
     const result = await renderToString(Promise.resolve(html`<main>ready</main>`));
     assert.match(result.html, /<main>ready<\/main>/);
