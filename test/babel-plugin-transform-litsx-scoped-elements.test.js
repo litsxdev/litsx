@@ -447,7 +447,10 @@ describe("@litsx/babel-plugin-transform-litsx-scoped-elements", () => {
         JSON.stringify({
           name: "light-dom-package",
           type: "module",
-          exports: "./index.js",
+          exports: {
+            import: "./index.js",
+            require: "./dist/index.cjs",
+          },
         }),
       );
       fs.writeFileSync(

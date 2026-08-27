@@ -134,6 +134,7 @@ describe("scoped-elements helper branch behavior", () => {
     const packageDir = path.join(directory, "node_modules", "metadata-package");
     const sourceEntry = path.join(packageDir, "src", "index.mjs");
     const requireEntry = path.join(packageDir, "dist", "index.cjs");
+    const sourceOnlyEntry = path.join(packageDir, "src", "source-only.mjs");
     const featureEntry = path.join(packageDir, "feature.js");
 
     try {
@@ -141,6 +142,7 @@ describe("scoped-elements helper branch behavior", () => {
       fs.mkdirSync(path.dirname(requireEntry), { recursive: true });
       fs.writeFileSync(sourceEntry, "export class SourceComponent {};");
       fs.writeFileSync(requireEntry, "module.exports = {};");
+      fs.writeFileSync(sourceOnlyEntry, "export class SourceOnlyComponent {};");
       fs.writeFileSync(featureEntry, "export const feature = true;");
       fs.writeFileSync(
         path.join(packageDir, "package.json"),
@@ -155,6 +157,10 @@ describe("scoped-elements helper branch behavior", () => {
             "./feature": {
               default: "./feature.js",
             },
+            "./source-only": {
+              import: "./src/source-only.mjs",
+              require: "./dist/source-only.cjs",
+            },
           },
         }),
       );
@@ -162,6 +168,7 @@ describe("scoped-elements helper branch behavior", () => {
       const consumer = path.join(directory, "consumer.js");
       assert.equal(resolveImportSource(consumer, "metadata-package"), fs.realpathSync(sourceEntry));
       assert.equal(resolveImportSource(consumer, "metadata-package/feature"), fs.realpathSync(featureEntry));
+      assert.equal(resolveImportSource(consumer, "metadata-package/source-only"), fs.realpathSync(sourceOnlyEntry));
       assert.equal(resolveImportSource(consumer, "missing-metadata-package"), null);
       assert.equal(resolveImportSource("", "metadata-package"), null);
     } finally {

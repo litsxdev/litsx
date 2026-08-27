@@ -631,12 +631,41 @@ function findPackageRoot(resolvedEntry, packageName) {
   }
 }
 
+function findPackageFromLookupPaths(requireFromFile, packageName) {
+  const lookupPaths = requireFromFile.resolve.paths(packageName) ?? [];
+  for (const lookupPath of lookupPaths) {
+    const root = path.join(lookupPath, packageName);
+    const manifestPath = path.join(root, "package.json");
+    try {
+      const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+      if (manifest.name === packageName) {
+        return { root: fs.realpathSync(root), manifest };
+      }
+    } catch {
+      // Continue through Node's package lookup paths.
+    }
+  }
+  return null;
+}
+
 function resolvePackageImportSource(fromFilename, sourceValue) {
   const { packageName, exportKey } = splitPackageSpecifier(sourceValue);
   try {
-    const resolvedEntry = createRequire(fromFilename).resolve(sourceValue);
-    const packageInfo = findPackageRoot(resolvedEntry, packageName);
+    const requireFromFile = createRequire(fromFilename);
+    let resolvedEntry = null;
+    try {
+      resolvedEntry = requireFromFile.resolve(sourceValue);
+    } catch {
+      // The package may expose an authored `import` target before its `require`
+      // build artifact exists. Locate its manifest independently below.
+    }
+    const packageInfo = (
+      resolvedEntry ? findPackageRoot(resolvedEntry, packageName) : null
+    ) ?? findPackageFromLookupPaths(requireFromFile, packageName);
     if (!packageInfo) {
+      if (!resolvedEntry) {
+        return null;
+      }
       try {
         return fs.statSync(resolvedEntry).isFile()
           ? normalizeFilePath(resolvedEntry)
@@ -666,7 +695,7 @@ function resolvePackageImportSource(fromFilename, sourceValue) {
         // Fall back to the entry resolved by Node.
       }
     }
-    return normalizeFilePath(resolvedEntry);
+    return resolvedEntry ? normalizeFilePath(resolvedEntry) : null;
   } catch {
     return null;
   }
