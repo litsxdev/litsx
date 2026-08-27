@@ -84,6 +84,15 @@ A member expression imported through a namespace is also an element. For
 example, `Controls.Toggle` and `Controls.OtherComponent` receive stable scoped
 tags derived from the namespace and member names.
 
+PascalCase components imported from packages are checked before LitSX reports
+external web-component inference. The compiler accepts LitSX component
+metadata, official framework exports, and source it can prove extends Lit's
+real `LitElement`, including aliases, analyzable mixin and inheritance chains,
+and package barrels. This applies equally to dependencies in `node_modules`.
+Opaque package output that exposes none of those proofs still produces
+`LITSX_EXTERNAL_PASCAL_COMPONENT_INFERRED`; package authors can preserve a
+machine-readable contract by publishing LitSX component metadata.
+
 The derived tag must already be a valid custom-element name. LitSX never invents
 a framework prefix, so single-word component names are rejected:
 

@@ -43,8 +43,12 @@ describe("element candidate resolution branch behavior", () => {
     assert.equal(isRelativeSpecifier("./local"), true);
     assert.equal(isRelativeSpecifier("../parent"), true);
     assert.equal(isRelativeSpecifier("/absolute"), true);
-    assert.equal(hasSupportedExtension("view.tsx"), true);
-    assert.equal(hasSupportedExtension("view.mjs"), false);
+    for (const extension of [
+      ".tsx", ".mtsx", ".ctsx", ".jsx", ".mjs", ".cjs", ".js", ".mts", ".cts", ".ts",
+    ]) {
+      assert.equal(hasSupportedExtension(`view${extension}`), true, extension);
+    }
+    assert.equal(hasSupportedExtension("view.css"), false);
     assert.equal(toRelativeModuleSpecifier("/a/root.ts", "/a/card.ts"), "./card.ts");
     assert.equal(toRelativeModuleSpecifier("/a/root.ts", "/other/card.ts"), "../other/card.ts");
     assert.equal(toImportRecordKey({ sourceFile: "a", importedName: "B", tagName: "b-card" }), "a:B:b-card");

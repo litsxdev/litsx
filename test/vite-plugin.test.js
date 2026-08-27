@@ -158,6 +158,42 @@ describe("@litsx/vite-plugin", () => {
     }
   }, 30000);
 
+  it("does not surface external-component warnings for verifiable Lit dependencies", async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-vite-lit-component-"));
+    const packageDir = path.join(tempDir, "node_modules", "plain-lit-package");
+    const filename = path.join(tempDir, "Example.stories.tsx");
+    const warn = vi.fn();
+
+    try {
+      fs.mkdirSync(packageDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(packageDir, "package.json"),
+        JSON.stringify({ name: "plain-lit-package", type: "module", exports: "./index.js" }),
+      );
+      fs.writeFileSync(
+        path.join(packageDir, "index.js"),
+        [
+          'import { LitElement as LitBase } from "lit";',
+          "export class PlainLitCard extends LitBase {}",
+        ].join("\n"),
+      );
+      const source = [
+        'import { PlainLitCard as StoryCard } from "plain-lit-package";',
+        "export const TestStory = () => <StoryCard />;",
+      ].join("\n");
+      fs.writeFileSync(filename, source);
+
+      const plugin = litsx({ jsxTemplate: false });
+      plugin.configResolved({ root: tempDir, cacheDir: path.join(tempDir, ".vite") });
+      const result = await plugin.transform.call({ warn }, source, filename);
+
+      assert.ok(result);
+      assert.deepStrictEqual(warn.mock.calls, []);
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  }, 30000);
+
   it("transforms project JavaScript and TypeScript but ignores files outside the Vite root", async () => {
     const plugin = litsx();
     plugin.configResolved({ root: "/virtual", cacheDir: "/virtual/.vite-cache" });

@@ -10,6 +10,8 @@ import {
   importedBindingHasLightDomHoist,
   isCompiledComponentExport,
   isExternalCompilationImport,
+  isLitComponentExport,
+  isProvableComponentExport,
   resolveDirectImportRequirement,
   resolveExportedHelper,
   resolveImportedElementRequirement,
@@ -115,6 +117,61 @@ describe("element candidate module helper branches", () => {
     assert.equal(isCompiledComponentExport(compiled, "Card", context(), new Set(["/compiled.js:Card"])), false);
     const localPlain = { ...compiled, compiledComponentLocals: new Set(), exportBindings: new Map([["Plain", { localName: "Plain" }]]) };
     assert.equal(isCompiledComponentExport(localPlain, "Plain", context()), false);
+  });
+
+  it("proves Lit component exports from actual Lit imports and inheritance chains", () => {
+    const ctx = context();
+    const analysis = buildModuleAnalysis(program(`
+      import { LitElement as LitBase } from "lit";
+      import * as Lit from "lit-element";
+      import { LitElement as FakeBase } from "not-lit";
+      class SharedBase extends LitBase {}
+      class LocalLitElement {}
+      export class DirectCard extends LitBase {}
+      export class NamespaceCard extends Lit["LitElement"] {}
+      export class DerivedCard extends SharedBase {}
+      export class MixedCard extends withTheme(Lit.LitElement) {}
+      const ExpressionCard = class extends LitBase {};
+      export class FakeImportedCard extends FakeBase {}
+      export class FakeLocalCard extends LocalLitElement {}
+      export { ExpressionCard };
+    `), "/app/package.js", ctx);
+
+    assert.ok(analysis.classBindings.has("SharedBase"));
+    for (const exportName of [
+      "DirectCard",
+      "NamespaceCard",
+      "DerivedCard",
+      "MixedCard",
+      "ExpressionCard",
+    ]) {
+      assert.equal(isLitComponentExport(analysis, exportName, ctx), true, exportName);
+      assert.equal(isProvableComponentExport(analysis, exportName, ctx), true, exportName);
+    }
+    assert.equal(isLitComponentExport(analysis, "FakeImportedCard", ctx), false);
+    assert.equal(isLitComponentExport(analysis, "FakeLocalCard", ctx), false);
+    assert.equal(isLitComponentExport(analysis, "MissingCard", ctx), false);
+
+    const anonymousDefault = buildModuleAnalysis(
+      program('import { LitElement } from "lit"; export default class extends LitElement {}'),
+      "/app/default.js",
+      context(),
+    );
+    assert.equal(isLitComponentExport(anonymousDefault, "default", context()), true);
+
+    const starLitBase = buildModuleAnalysis(
+      program('export * from "lit";'),
+      "/app/lit-star.js",
+      context(),
+    );
+    assert.equal(isLitComponentExport(starLitBase, "LitElement", context()), true);
+
+    const cycle = buildModuleAnalysis(program(`
+      class CycleA extends CycleB {}
+      class CycleB extends CycleA {}
+      export { CycleA };
+    `), "/app/cycle.js", context());
+    assert.equal(isLitComponentExport(cycle, "CycleA", context()), false);
   });
 
   it("classifies and deduplicates external PascalCase inference warnings", () => {

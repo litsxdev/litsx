@@ -2751,6 +2751,103 @@ describe("@litsx/compiler", () => {
     }
   }, 20000);
 
+  it("does not warn for verifiable Lit component exports from external packages", () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-external-lit-components-"));
+    const packageDir = path.join(tempDir, "node_modules", "plain-lit-package");
+    const fakePackageDir = path.join(tempDir, "node_modules", "fake-lit-package");
+    const filename = path.join(tempDir, "consumer.tsx");
+
+    try {
+      for (const [directory, name] of [
+        [packageDir, "plain-lit-package"],
+        [fakePackageDir, "fake-lit-package"],
+      ]) {
+        fs.mkdirSync(directory, { recursive: true });
+        fs.writeFileSync(
+          path.join(directory, "package.json"),
+          JSON.stringify({ name, type: "module", exports: "./index.js" }),
+        );
+      }
+
+      fs.writeFileSync(
+        path.join(packageDir, "lit-base.js"),
+        [
+          'import { LitElement as LitBase } from "lit";',
+          "export class PackageLitBase extends LitBase {}",
+        ].join("\n"),
+      );
+      fs.writeFileSync(
+        path.join(packageDir, "reexported-lit-base.js"),
+        'export { LitElement as ReexportedLitBase } from "lit";',
+      );
+      fs.writeFileSync(
+        path.join(packageDir, "components.mjs"),
+        [
+          'import * as Lit from "lit";',
+          'import { PackageLitBase } from "./lit-base.js";',
+          'import * as Bases from "./lit-base.js";',
+          'import { ReexportedLitBase } from "./reexported-lit-base.js";',
+          "const withTheme = (Base) => class extends Base {};",
+          "export class DirectLitCard extends Lit.LitElement {}",
+          "export class DerivedLitCard extends PackageLitBase {}",
+          "export class NamespaceBaseCard extends Bases.PackageLitBase {}",
+          "export class ReexportedBaseCard extends ReexportedLitBase {}",
+          "export class MixedLitCard extends withTheme(Lit.LitElement) {}",
+          "export const ExpressionLitCard = class extends Lit.LitElement {};",
+          "export default class DefaultLitCard extends Lit.LitElement {}",
+        ].join("\n"),
+      );
+      fs.writeFileSync(
+        path.join(packageDir, "index.js"),
+        [
+          'export * from "./components.mjs";',
+          'export { default as DefaultLitCard } from "./components.mjs";',
+        ].join("\n"),
+      );
+      fs.writeFileSync(
+        path.join(fakePackageDir, "index.js"),
+        [
+          'import { LitElement } from "not-lit";',
+          "export class FakeLitCard extends LitElement {}",
+          "export class OpaqueCard extends HTMLElement {}",
+        ].join("\n"),
+      );
+
+      const source = [
+        'import { DirectLitCard, DerivedLitCard as RenamedLitCard, NamespaceBaseCard, ReexportedBaseCard, MixedLitCard, ExpressionLitCard, DefaultLitCard } from "plain-lit-package";',
+        'import * as PlainLit from "plain-lit-package";',
+        'import { FakeLitCard, OpaqueCard } from "fake-lit-package";',
+        "const NamespaceLitCard = PlainLit.DirectLitCard;",
+        "export function TestHost() {",
+        "  return <>",
+        "    <DirectLitCard />",
+        "    <RenamedLitCard />",
+        "    <NamespaceBaseCard />",
+        "    <ReexportedBaseCard />",
+        "    <MixedLitCard />",
+        "    <ExpressionLitCard />",
+        "    <DefaultLitCard />",
+        "    <NamespaceLitCard />",
+        "    <FakeLitCard />",
+        "    <OpaqueCard />",
+        "  </>;",
+        "}",
+      ].join("\n");
+
+      const result = transformLitsxSync(source, {
+        filename,
+        jsxTemplate: false,
+      });
+
+      assert.deepStrictEqual(
+        result.metadata.litsxWarnings.map((warning) => warning.componentName),
+        ["FakeLitCard", "OpaqueCard"],
+      );
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  }, 20000);
+
   it("does not warn for external PascalCase imports reexported from compiled LitSX modules", () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-external-pascal-reexported-"));
     const nodeModulesDir = path.join(tempDir, "node_modules", "fancy-litsx");

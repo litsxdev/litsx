@@ -18,8 +18,14 @@ import {
 const traverse = babelTraverse.default || babelTraverse;
 const IMPORT_RESOLUTION_EXTENSIONS = [
   ".tsx",
+  ".mtsx",
+  ".ctsx",
   ".jsx",
+  ".mjs",
+  ".cjs",
   ".js",
+  ".mts",
+  ".cts",
   ".ts",
 ];
 const DEFAULT_MODULE_RESOLUTION_OPTIONS = {
@@ -35,6 +41,13 @@ const DEFAULT_MODULE_RESOLUTION_OPTIONS = {
 let t;
 
 const NOSCRIPT_COMPONENT_ATTRIBUTE = "data-litsx-noscript-component";
+function isLitElementModule(sourceSpecifier) {
+  return (
+    sourceSpecifier === "lit" ||
+    sourceSpecifier === "lit-element" ||
+    sourceSpecifier === "lit-element/lit-element.js"
+  );
+}
 
 export function isInsideNoscriptFallback(path) {
   return Boolean(path.findParent((parent) =>
@@ -443,13 +456,21 @@ export function buildModuleAnalysis(programPath, filename, context) {
   const helperPaths = getOrCreateHelperPaths(programPath);
   const importBindings = new Map();
   const exportBindings = new Map();
+  const exportAllRecords = [];
   const componentMarkerLocals = new Set();
   const compiledComponentLocals = new Set();
+  const classBindings = new Map();
 
-  const markCompiledClassIfNeeded = (classPath) => {
-    if (!classPath?.isClassDeclaration?.() || !classPath.node.id?.name) {
+  const recordClass = (classPath, bindingName = classPath?.node?.id?.name) => {
+    if (
+      !classPath ||
+      (!classPath.isClassDeclaration?.() && !classPath.isClassExpression?.()) ||
+      !bindingName
+    ) {
       return;
     }
+
+    classBindings.set(bindingName, classPath);
 
     const hasCompiledMarker = classPath.get("body.body").some((memberPath) => {
       if (!memberPath.isClassProperty()) {
@@ -465,7 +486,7 @@ export function buildModuleAnalysis(programPath, filename, context) {
     });
 
     if (hasCompiledMarker) {
-      compiledComponentLocals.add(classPath.node.id.name);
+      compiledComponentLocals.add(bindingName);
     }
   };
 
@@ -507,13 +528,23 @@ export function buildModuleAnalysis(programPath, filename, context) {
     }
 
     if (nodePath.isClassDeclaration()) {
-      markCompiledClassIfNeeded(nodePath);
+      recordClass(nodePath);
+    }
+
+    if (nodePath.isVariableDeclaration()) {
+      nodePath.get("declarations").forEach((declaratorPath) => {
+        const localName = declaratorPath.node.id?.name;
+        const initPath = declaratorPath.get("init");
+        if (localName && initPath?.isClassExpression?.()) {
+          recordClass(initPath, localName);
+        }
+      });
     }
 
     if (nodePath.isExportNamedDeclaration()) {
       const declarationPath = nodePath.get("declaration");
       if (declarationPath?.isClassDeclaration?.()) {
-        markCompiledClassIfNeeded(declarationPath);
+        recordClass(declarationPath);
       }
       if (declarationPath?.node) {
         if (declarationPath.isFunctionDeclaration() || declarationPath.isClassDeclaration()) {
@@ -526,6 +557,10 @@ export function buildModuleAnalysis(programPath, filename, context) {
             const localName = declaratorPath.node.id?.name;
             if (localName) {
               exportBindings.set(localName, { localName });
+              const initPath = declaratorPath.get("init");
+              if (initPath?.isClassExpression?.()) {
+                recordClass(initPath, localName);
+              }
             }
           });
         }
@@ -544,6 +579,7 @@ export function buildModuleAnalysis(programPath, filename, context) {
             specifierPath.node.local?.name ?? specifierPath.node.local?.value ?? exportedName;
           exportBindings.set(exportedName, {
             reexportSource: resolveImportSource(filename, sourceValue, context),
+            reexportSourceValue: sourceValue,
             importedName: localName === "default" ? "default" : localName,
           });
           return;
@@ -556,6 +592,15 @@ export function buildModuleAnalysis(programPath, filename, context) {
         }
       });
 
+      return;
+    }
+
+    if (nodePath.isExportAllDeclaration()) {
+      const sourceValue = nodePath.node.source?.value;
+      if (sourceValue) {
+        const resolvedSource = resolveImportSource(filename, sourceValue, context);
+        exportAllRecords.push({ sourceValue, resolvedSource });
+      }
       return;
     }
 
@@ -573,6 +618,9 @@ export function buildModuleAnalysis(programPath, filename, context) {
       declarationPath.isFunctionDeclaration() ||
       declarationPath.isClassDeclaration()
     ) {
+      if (declarationPath.isClassDeclaration()) {
+        recordClass(declarationPath);
+      }
       const localName = declarationPath.node.id?.name;
       if (localName) {
         exportBindings.set("default", { localName });
@@ -584,7 +632,8 @@ export function buildModuleAnalysis(programPath, filename, context) {
 
     if (
       declarationPath.isArrowFunctionExpression() ||
-      declarationPath.isFunctionExpression()
+      declarationPath.isFunctionExpression() ||
+      declarationPath.isClassExpression()
     ) {
       exportBindings.set("default", { path: declarationPath });
     }
@@ -597,8 +646,10 @@ export function buildModuleAnalysis(programPath, filename, context) {
     helperPaths,
     importBindings,
     exportBindings,
+    exportAllRecords,
     compatPascalNames: new Set(),
     compiledComponentLocals,
+    classBindings,
   };
 }
 
@@ -616,7 +667,15 @@ export function isCompiledComponentExport(moduleAnalysis, importedName, context,
 
   const exportInfo = moduleAnalysis.exportBindings.get(importedName);
   if (!exportInfo) {
-    return false;
+    return (moduleAnalysis.exportAllRecords || []).some(({ resolvedSource }) =>
+      resolvedSource &&
+      isCompiledComponentExport(
+        getOrCreateModuleAnalysis(resolvedSource, context),
+        importedName,
+        context,
+        nextSeen,
+      )
+    );
   }
 
   if (exportInfo.localName) {
@@ -651,6 +710,188 @@ export function isCompiledComponentExport(moduleAnalysis, importedName, context,
   return false;
 }
 
+function isOfficialLitElementImport(importInfo, importedName = importInfo?.importedName) {
+  return (
+    importedName === "LitElement" &&
+    isLitElementModule(importInfo?.sourceValue)
+  );
+}
+
+function getMemberPropertyName(node) {
+  if (!t.isMemberExpression(node)) {
+    return null;
+  }
+  if (!node.computed && t.isIdentifier(node.property)) {
+    return node.property.name;
+  }
+  if (node.computed && t.isStringLiteral(node.property)) {
+    return node.property.value;
+  }
+  return null;
+}
+
+function isLitElementSuperClass(superClass, moduleAnalysis, context, seen) {
+  const expression = unwrapNamespaceAliasExpression(superClass);
+  if (!expression) {
+    return false;
+  }
+
+  if (t.isCallExpression(expression)) {
+    return Boolean(
+      expression.arguments[0] &&
+      isLitElementSuperClass(expression.arguments[0], moduleAnalysis, context, seen)
+    );
+  }
+
+  if (t.isMemberExpression(expression)) {
+    const object = unwrapNamespaceAliasExpression(expression.object);
+    const propertyName = getMemberPropertyName(expression);
+    if (!t.isIdentifier(object) || !propertyName) {
+      return false;
+    }
+    const importInfo = moduleAnalysis.importBindings.get(object.name);
+    if (importInfo?.importedName !== "*") {
+      return false;
+    }
+    if (propertyName === "LitElement" && isLitElementModule(importInfo.sourceValue)) {
+      return true;
+    }
+    return importInfo.resolvedSource
+      ? isLitComponentExport(
+          getOrCreateModuleAnalysis(importInfo.resolvedSource, context),
+          propertyName,
+          context,
+          seen,
+        )
+      : false;
+  }
+
+  if (!t.isIdentifier(expression)) {
+    return false;
+  }
+
+  const importInfo = moduleAnalysis.importBindings.get(expression.name);
+  if (importInfo) {
+    if (isOfficialLitElementImport(importInfo)) {
+      return true;
+    }
+    if (importInfo.resolvedSource && importInfo.importedName !== "*") {
+      return isLitComponentExport(
+        getOrCreateModuleAnalysis(importInfo.resolvedSource, context),
+        importInfo.importedName,
+        context,
+        seen,
+      );
+    }
+    return false;
+  }
+
+  const localClassPath = moduleAnalysis.classBindings?.get(expression.name);
+  return localClassPath
+    ? isLitComponentClass(localClassPath, moduleAnalysis, context, seen)
+    : false;
+}
+
+function isLitComponentClass(classPath, moduleAnalysis, context, seen) {
+  const localName = classPath?.node?.id?.name ?? "default";
+  const visitKey = `lit-class:${moduleAnalysis.filename}:${localName}`;
+  if (seen.has(visitKey)) {
+    return false;
+  }
+  const nextSeen = new Set(seen);
+  nextSeen.add(visitKey);
+  return isLitElementSuperClass(
+    classPath?.node?.superClass,
+    moduleAnalysis,
+    context,
+    nextSeen,
+  );
+}
+
+export function isLitComponentExport(moduleAnalysis, importedName, context, seen = new Set()) {
+  if (!moduleAnalysis || !importedName) {
+    return false;
+  }
+
+  const visitKey = `lit-export:${moduleAnalysis.filename}:${importedName}`;
+  if (seen.has(visitKey)) {
+    return false;
+  }
+  const nextSeen = new Set(seen);
+  nextSeen.add(visitKey);
+
+  const exportInfo = moduleAnalysis.exportBindings.get(importedName);
+  if (!exportInfo) {
+    return (moduleAnalysis.exportAllRecords || []).some((record) => {
+      if (importedName === "LitElement" && isLitElementModule(record.sourceValue)) {
+        return true;
+      }
+      return Boolean(
+        record.resolvedSource &&
+        isLitComponentExport(
+          getOrCreateModuleAnalysis(record.resolvedSource, context),
+          importedName,
+          context,
+          nextSeen,
+        )
+      );
+    });
+  }
+
+  if (
+    exportInfo.path?.isClassDeclaration?.() ||
+    exportInfo.path?.isClassExpression?.()
+  ) {
+    return isLitComponentClass(exportInfo.path, moduleAnalysis, context, nextSeen);
+  }
+
+  if (exportInfo.localName) {
+    const localClassPath = moduleAnalysis.classBindings?.get(exportInfo.localName);
+    if (localClassPath) {
+      return isLitComponentClass(localClassPath, moduleAnalysis, context, nextSeen);
+    }
+
+    const importInfo = moduleAnalysis.importBindings.get(exportInfo.localName);
+    if (isOfficialLitElementImport(importInfo)) {
+      return true;
+    }
+    if (importInfo?.resolvedSource && importInfo.importedName !== "*") {
+      return isLitComponentExport(
+        getOrCreateModuleAnalysis(importInfo.resolvedSource, context),
+        importInfo.importedName,
+        context,
+        nextSeen,
+      );
+    }
+    return false;
+  }
+
+  if (
+    exportInfo.importedName === "LitElement" &&
+    isLitElementModule(exportInfo.reexportSourceValue)
+  ) {
+    return true;
+  }
+
+  if (exportInfo.reexportSource && exportInfo.importedName) {
+    return isLitComponentExport(
+      getOrCreateModuleAnalysis(exportInfo.reexportSource, context),
+      exportInfo.importedName,
+      context,
+      nextSeen,
+    );
+  }
+
+  return false;
+}
+
+export function isProvableComponentExport(moduleAnalysis, importedName, context) {
+  return (
+    isCompiledComponentExport(moduleAnalysis, importedName, context) ||
+    isLitComponentExport(moduleAnalysis, importedName, context)
+  );
+}
+
 export function isExternalCompilationImport(requirement) {
   if (!requirement?.sourceFile || !requirement?.sourceSpecifier) {
     return false;
@@ -682,7 +923,7 @@ export function warnExternalPascalComponentInference(candidateName, requirement,
   }
 
   const importedModule = getOrCreateModuleAnalysis(requirement.sourceFile, context);
-  if (isCompiledComponentExport(importedModule, requirement.importedName, context)) {
+  if (isProvableComponentExport(importedModule, requirement.importedName, context)) {
     return;
   }
 
