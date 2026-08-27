@@ -1,5 +1,7 @@
 import assert from "assert";
 import * as babelCore from "@babel/core";
+import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import parser from "./helpers/litsx-parser.js";
 import { beforeAll } from 'vitest';
@@ -431,6 +433,60 @@ describe("@litsx/babel-plugin-transform-litsx-scoped-elements", () => {
     assert.match(code, /import \{[^}]*LightDomMixin[^}]*\} from "@litsx\/core\/elements";/);
     assert.match(code, /class LightCard extends LightDomMixin\(LitElement\)/);
     assert.doesNotMatch(code, /static elements\s*=/);
+  });
+
+  it("reads light DOM metadata from an imported component through a barrel", () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-light-dom-metadata-"));
+    const dependencyDir = path.join(tempDir, "node_modules", "light-dom-package");
+    const filename = path.join(tempDir, "host.js");
+
+    try {
+      fs.mkdirSync(dependencyDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(dependencyDir, "package.json"),
+        JSON.stringify({
+          name: "light-dom-package",
+          type: "module",
+          exports: "./index.js",
+        }),
+      );
+      fs.writeFileSync(
+        path.join(dependencyDir, "light-child.js"),
+        [
+          'import { LitElement } from "lit";',
+          "export class LightChild extends LitElement {",
+          '  static [Symbol.for("litsx.component")] = true;',
+          '  static [Symbol.for("litsx.lightDom")] = true;',
+          "}",
+        ].join("\n"),
+      );
+      fs.writeFileSync(
+        path.join(dependencyDir, "index.js"),
+        'export { LightChild } from "./light-child.js";',
+      );
+
+      const source = `
+        import { LitElement } from "lit";
+        import { LightChild } from "light-dom-package";
+
+        class HostElement extends LitElement {
+          render() {
+            return <LightChild />;
+          }
+        }
+      `;
+      const ast = parser.parse(source, { sourceType: "module" });
+      const { code } = transformFromAstSync(ast, source, {
+        configFile: false,
+        babelrc: false,
+        filename,
+        plugins: [plugin],
+      });
+
+      assert.match(code, /<light-child>\{__litsxRenderLight\(\)\}<\/light-child>/);
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
   });
 
   it("reuses an existing ShadowDomMixin import", () => {

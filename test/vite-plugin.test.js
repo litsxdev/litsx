@@ -119,7 +119,7 @@ describe("@litsx/vite-plugin", () => {
     assert.ok(result.map);
   }, 30000);
 
-  it("does not surface external-component warnings for Core framework primitives", async () => {
+  it("does not surface external-component warnings for Core primitives with metadata", async () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-vite-core-boundary-"));
     const coreDir = path.join(tempDir, "node_modules", "@litsx", "core");
     const filename = path.join(tempDir, "Example.stories.tsx");
@@ -133,7 +133,12 @@ describe("@litsx/vite-plugin", () => {
       );
       fs.writeFileSync(
         path.join(coreDir, "index.js"),
-        "export class SuspenseBoundary extends HTMLElement {}",
+        [
+          "export class SuspenseBoundary extends HTMLElement {",
+          '  static [Symbol.for("litsx.component")] = true;',
+          '  static [Symbol.for("litsx.lightDom")] = true;',
+          "}",
+        ].join("\n"),
       );
       const source = [
         'import { SuspenseBoundary as AsyncBoundary } from "@litsx/core";',

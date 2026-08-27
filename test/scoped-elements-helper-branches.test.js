@@ -77,6 +77,30 @@ describe("scoped-elements helper branch behavior", () => {
         "authored.js",
         "function Card() {} Card.lightDom = true; export { Card as CardAlias }; function Hidden() {} Hidden.lightDom = true;",
       );
+      const symbol = write(
+        "symbol.js",
+        'export class SymbolLight { static [Symbol.for("litsx.lightDom")] = true; }',
+      );
+      const staticField = write(
+        "static-field.js",
+        "export class StaticLight { static lightDom = true; }",
+      );
+      const anonymous = write(
+        "anonymous.js",
+        'export default class { static [Symbol.for("litsx.lightDom")] = true; }',
+      );
+      const assignedSymbol = write(
+        "assigned-symbol.js",
+        'class AssignedLight {} AssignedLight[Symbol.for("litsx.lightDom")] = true; export { AssignedLight };',
+      );
+      const namedBarrel = write(
+        "named-barrel.js",
+        'export { SymbolLight as BarrelLight } from "./symbol.js";',
+      );
+      const starBarrel = write(
+        "star-barrel.js",
+        'export * from "./static-field.js"; export * from "./anonymous.js";',
+      );
       const hidden = write(
         "hidden.js",
         "class HiddenLight extends LightDomMixin(Base) {} export const value = 1;",
@@ -87,6 +111,12 @@ describe("scoped-elements helper branch behavior", () => {
       assert.deepEqual([...getLightDomExports(fallback)], ["default"]);
       assert.deepEqual([...getLightDomExports(aliased)], ["AliasedLight"]);
       assert.deepEqual([...getLightDomExports(authored)], ["CardAlias"]);
+      assert.deepEqual([...getLightDomExports(symbol)], ["SymbolLight"]);
+      assert.deepEqual([...getLightDomExports(staticField)], ["StaticLight"]);
+      assert.deepEqual([...getLightDomExports(anonymous)], ["default"]);
+      assert.deepEqual([...getLightDomExports(assignedSymbol)], ["AssignedLight"]);
+      assert.deepEqual([...getLightDomExports(namedBarrel)], ["BarrelLight"]);
+      assert.deepEqual([...getLightDomExports(starBarrel)], ["StaticLight"]);
       assert.deepEqual([...getLightDomExports(hidden)], []);
       assert.deepEqual([...getLightDomExports(invalid)], []);
       assert.deepEqual([...getLightDomExports(invalid)], []);
@@ -94,6 +124,46 @@ describe("scoped-elements helper branch behavior", () => {
         [...getLightDomExports(path.join(directory, "missing.js"))],
         [],
       );
+    } finally {
+      fs.rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("resolves package import conditions without depending on ESM-only APIs", () => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-package-resolution-"));
+    const packageDir = path.join(directory, "node_modules", "metadata-package");
+    const sourceEntry = path.join(packageDir, "src", "index.mjs");
+    const requireEntry = path.join(packageDir, "dist", "index.cjs");
+    const featureEntry = path.join(packageDir, "feature.js");
+
+    try {
+      fs.mkdirSync(path.dirname(sourceEntry), { recursive: true });
+      fs.mkdirSync(path.dirname(requireEntry), { recursive: true });
+      fs.writeFileSync(sourceEntry, "export class SourceComponent {};");
+      fs.writeFileSync(requireEntry, "module.exports = {};");
+      fs.writeFileSync(featureEntry, "export const feature = true;");
+      fs.writeFileSync(
+        path.join(packageDir, "package.json"),
+        JSON.stringify({
+          name: "metadata-package",
+          type: "module",
+          exports: {
+            ".": {
+              import: "./src/index.mjs",
+              require: "./dist/index.cjs",
+            },
+            "./feature": {
+              default: "./feature.js",
+            },
+          },
+        }),
+      );
+
+      const consumer = path.join(directory, "consumer.js");
+      assert.equal(resolveImportSource(consumer, "metadata-package"), fs.realpathSync(sourceEntry));
+      assert.equal(resolveImportSource(consumer, "metadata-package/feature"), fs.realpathSync(featureEntry));
+      assert.equal(resolveImportSource(consumer, "missing-metadata-package"), null);
+      assert.equal(resolveImportSource("", "metadata-package"), null);
     } finally {
       fs.rmSync(directory, { recursive: true, force: true });
     }

@@ -40,6 +40,7 @@ function isSsrHost(host) {
  */
 export class ErrorBoundary extends LightDomMixin(LitElement) {
   static [Symbol.for("litsx.component")] = true;
+  static [Symbol.for("litsx.lightDom")] = true;
 
   static properties = {
     failed: { type: Boolean, reflect: true },

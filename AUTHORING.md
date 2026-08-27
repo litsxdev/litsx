@@ -86,9 +86,11 @@ tags derived from the namespace and member names.
 
 PascalCase components imported from packages are checked before LitSX reports
 external web-component inference. The compiler accepts LitSX component
-metadata, official framework exports, and source it can prove extends Lit's
-real `LitElement`, including aliases, analyzable mixin and inheritance chains,
-and package barrels. This applies equally to dependencies in `node_modules`.
+metadata and source it can prove extends Lit's real `LitElement`, including
+aliases, analyzable mixin and inheritance chains, and package barrels. Core
+runtime primitives use the same metadata contract as every other package; the
+compiler does not maintain a framework-component name list. This applies
+equally to dependencies in `node_modules`.
 Opaque package output that exposes none of those proofs still produces
 `LITSX_EXTERNAL_PASCAL_COMPONENT_INFERRED`; package authors can preserve a
 machine-readable contract by publishing LitSX component metadata.
@@ -117,6 +119,23 @@ Toggle.properties = {
 Toggle.shadowRootOptions = { mode: "open", delegatesFocus: true };
 Toggle.lightDom = true;
 ```
+
+Published class components declare the equivalent runtime-readable contract on
+the constructor itself. `litsx.component` proves component identity, while
+`litsx.lightDom` tells build tooling and runtime consumers that the component
+owns light-DOM content:
+
+```js
+export class ToggleElement extends LitElement {
+  static [Symbol.for("litsx.component")] = true;
+  static [Symbol.for("litsx.lightDom")] = true;
+}
+```
+
+`@litsx/core` exports these identities as `LITSX_COMPONENT` and
+`LITSX_LIGHT_DOM` for runtime inspection. Package barrels must preserve the
+class export; LitSX follows named/default reexports and `export *` without
+special-casing package or component names.
 
 Use the `css` export from `@litsx/core` for component styles. It is Lit's real
 `css` tag, so editors can recognize and decorate the template and Lit receives a

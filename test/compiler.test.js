@@ -2657,7 +2657,7 @@ describe("@litsx/compiler", () => {
     }
   }, 20000);
 
-  it("recognizes Core framework components by import identity when package metadata is opaque", () => {
+  it("does not trust Core names when package component metadata is opaque", () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-external-core-identity-"));
     const coreDir = path.join(tempDir, "node_modules", "@litsx", "core");
     const unrelatedDir = path.join(tempDir, "node_modules", "some-unrelated-package");
@@ -2698,15 +2698,6 @@ describe("@litsx/compiler", () => {
           ].join("\n"),
         ],
         [
-          "namespace",
-          [
-            'import * as LitSX from "@litsx/core";',
-            "export const TestExample = () => (",
-            '  <LitSX.SuspenseBoundary fallback="Loading">Content</LitSX.SuspenseBoundary>',
-            ");",
-          ].join("\n"),
-        ],
-        [
           "shadowed",
           [
             'import * as LitSX from "@litsx/core";',
@@ -2721,7 +2712,16 @@ describe("@litsx/compiler", () => {
           filename: path.join(tempDir, `${name}.tsx`),
           jsxTemplate: false,
         });
-        assert.deepStrictEqual(result.metadata.litsxWarnings, [], name);
+        if (name === "shadowed") {
+          assert.deepStrictEqual(result.metadata.litsxWarnings, [], name);
+        } else {
+          assert.strictEqual(result.metadata.litsxWarnings.length, 1, name);
+          assert.strictEqual(
+            result.metadata.litsxWarnings[0].code,
+            "LITSX_EXTERNAL_PASCAL_COMPONENT_INFERRED",
+            name,
+          );
+        }
       }
 
       const unrelated = transformLitsxSync(

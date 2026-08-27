@@ -51,6 +51,7 @@ import {
 import {
   LITSX_COMPONENT,
   LITSX_HOST_TYPE_ID,
+  LITSX_LIGHT_DOM,
 } from "../packages/core/src/elements/index.js";
 import { LITSX_HOOK } from "../packages/core/src/index.js";
 import { withSuspenseCapture } from "../packages/core/src/runtime-suspense.js";
@@ -2150,6 +2151,10 @@ describe("litsx effects controller", () => {
     assert.strictEqual(isLitsxComponentClass(ErrorBoundary), true);
     assert.strictEqual(isLitsxComponentClass(SuspenseBoundary), true);
     assert.strictEqual(isLitsxComponentClass(SuspenseList), true);
+    for (const Boundary of [ErrorBoundary, SuspenseBoundary, SuspenseList]) {
+      assert.strictEqual(Object.hasOwn(Boundary, LITSX_LIGHT_DOM), true);
+      assert.strictEqual(Boundary[LITSX_LIGHT_DOM], true);
+    }
   });
 
   it("registers direct custom element constructors in the scoped registry", () => {

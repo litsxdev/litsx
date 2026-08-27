@@ -11,6 +11,7 @@ import {
   isCompiledComponentExport,
   isExternalCompilationImport,
   isLitComponentExport,
+  isLightDomComponentExport,
   isProvableComponentExport,
   resolveDirectImportRequirement,
   resolveExportedHelper,
@@ -172,6 +173,27 @@ describe("element candidate module helper branches", () => {
       export { CycleA };
     `), "/app/cycle.js", context());
     assert.equal(isLitComponentExport(cycle, "CycleA", context()), false);
+  });
+
+  it("reads light DOM mode from component metadata instead of framework names", () => {
+    const ctx = context();
+    const analysis = buildModuleAnalysis(program(`
+      class SymbolLightCard {
+        static [Symbol.for("litsx.lightDom")] = true;
+      }
+      export class PublicLightCard {
+        static lightDom = true;
+      }
+      export class OpaqueCard {}
+      export { SymbolLightCard as AliasedLightCard };
+    `), "/app/light-components.js", ctx);
+
+    assert.ok(analysis.lightDomComponentLocals.has("SymbolLightCard"));
+    assert.ok(analysis.lightDomComponentLocals.has("PublicLightCard"));
+    assert.equal(isLightDomComponentExport(analysis, "AliasedLightCard", ctx), true);
+    assert.equal(isLightDomComponentExport(analysis, "PublicLightCard", ctx), true);
+    assert.equal(isLightDomComponentExport(analysis, "OpaqueCard", ctx), false);
+    assert.equal(isLightDomComponentExport(null, "PublicLightCard", ctx), false);
   });
 
   it("classifies and deduplicates external PascalCase inference warnings", () => {

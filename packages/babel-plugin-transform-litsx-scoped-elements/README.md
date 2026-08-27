@@ -17,6 +17,8 @@ Automatically wires the Lit<sup>sx</sup> DOM mixins for LitElement classes so co
 - Adds the required `@litsx/core/elements` import only when a component needs a LitSX DOM mixin, keeping untouched classes minimal.
 - Updates matching closing tags and leaves unrelated JSX nodes unchanged.
 - Detects scoped usage inside `html` tagged template literals as well, ensuring templates converted by the JSX plugin still register components.
+- Reads `Symbol.for("litsx.lightDom")` metadata from imported class components,
+  including packages in `node_modules` and named/default or `export *` barrels.
 
 ## Install
 
@@ -71,6 +73,9 @@ class MyElement extends ShadowDomMixin(LitElement) {
 
 - Imported and locally declared sibling components can both be collected into `static elements`.
 - `Component.lightDom = true` remains a root-mode choice. Scoped children keep their ordinary tag names and are resolved against the nearest contextual host, so nested light hosts may map the same tag to different constructors.
+- Published class components declare the equivalent build/runtime contract as
+  `static [Symbol.for("litsx.lightDom")] = true`; consumers do not need a
+  package-specific configuration or component-name allowlist.
 - The light DOM registry shim is activated lazily only for hosts that actually declare or dynamically require `static elements`; plain light DOM components do not pay its global runtime cost.
 - Classes that already wrap the superclass with another mixin still work; the plugin nests the Lit<sup>sx</sup> DOM mixin around the existing expression.
 - The helper pairs nicely with other Lit<sup>SX</sup> transforms such as the JSX-to-template and function-to-class plugins.

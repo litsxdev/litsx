@@ -5,6 +5,7 @@ export type LitsxConstructor<TInstance = object> = abstract new (
 export declare const LITSX_COMPONENT: unique symbol;
 export declare const LITSX_EVENTS: unique symbol;
 export declare const LITSX_HOST_TYPE_ID: unique symbol;
+export declare const LITSX_LIGHT_DOM: unique symbol;
 export declare const LITSX_LIGHT_DOM_STYLE_SCOPE: unique symbol;
 export declare const LITSX_HYDRATABLE_TAG: unique symbol;
 export declare const LITSX_SCOPED_TEMPLATE: unique symbol;
@@ -27,6 +28,7 @@ export interface LitsxEventDeclaration<
 
 export interface LitsxComponentStatic<Events extends Record<string, unknown> = Record<string, unknown>> {
   readonly [LITSX_COMPONENT]: true;
+  readonly [LITSX_LIGHT_DOM]?: true;
   readonly [LITSX_EVENTS]?: LitsxEventDeclaration<Events, boolean>;
   readonly events?: LitsxEventDeclaration<Events, boolean>;
 }

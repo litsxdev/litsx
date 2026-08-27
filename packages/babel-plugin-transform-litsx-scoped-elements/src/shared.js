@@ -1,9 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import {
-  isLitsxCoreLightDomComponentExport,
-  toKebabCase,
-} from "@litsx/authoring";
+import { toKebabCase } from "@litsx/authoring";
 import { normalizeFilePath } from "@litsx/typescript-session";
 
 let t;
@@ -29,19 +26,11 @@ export function buildAvailableMap(programPath, options = {}) {
 
   programPath.get("body").forEach((nodePath) => {
     if (nodePath.isImportDeclaration()) {
-      const isCoreImport = nodePath.node.source.value === "@litsx/core";
       nodePath.node.specifiers.forEach((specifier) => {
         if (t.isImportSpecifier(specifier) || t.isImportDefaultSpecifier(specifier)) {
-          const importedName =
-            isCoreImport && t.isImportSpecifier(specifier)
-              ? specifier.imported.name
-              : null;
           availableMap.set(specifier.local.name, {
             originalName: specifier.local.name,
-            lightDom: isLitsxCoreLightDomComponentExport(
-              nodePath.node.source.value,
-              importedName,
-            ),
+            lightDom: false,
             moduleId: resolveImportModuleId(filename, nodePath.node.source.value),
           });
           return;

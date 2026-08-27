@@ -95,6 +95,7 @@ export declare const LITSX_HOOK: unique symbol;
 export declare const LITSX_COMPONENT: unique symbol;
 export declare const LITSX_EVENTS: unique symbol;
 export declare const LITSX_HOST_TYPE_ID: unique symbol;
+export declare const LITSX_LIGHT_DOM: unique symbol;
 export declare const LITSX_LIGHT_DOM_STYLE_SCOPE: unique symbol;
 export declare const LITSX_HYDRATABLE_TAG: unique symbol;
 export interface LitsxHook {
@@ -113,6 +114,7 @@ export interface LitsxEventDeclaration<
 }
 export interface LitsxComponentStatic<Events extends Record<string, unknown> = Record<string, unknown>> {
   readonly [LITSX_COMPONENT]: true;
+  readonly [LITSX_LIGHT_DOM]?: true;
   readonly [LITSX_EVENTS]?: LitsxEventDeclaration<Events, boolean>;
   readonly events?: LitsxEventDeclaration<Events, boolean>;
 }
@@ -563,6 +565,7 @@ export interface SuspenseListProps {
  */
 export declare class ErrorBoundary extends LitElement {
   static readonly [LITSX_COMPONENT]: true;
+  static readonly [LITSX_LIGHT_DOM]: true;
   failed: boolean;
   error: unknown;
   onError: ((error: unknown) => void) | null;
@@ -581,6 +584,7 @@ export declare class ErrorBoundary extends LitElement {
  */
 export declare class SuspenseBoundary extends LitElement {
   static readonly [LITSX_COMPONENT]: true;
+  static readonly [LITSX_LIGHT_DOM]: true;
   pending: boolean;
   resolved: boolean;
   showing: string;
@@ -600,6 +604,7 @@ export declare class SuspenseBoundary extends LitElement {
  */
 export declare class SuspenseList extends ReactiveElement {
   static readonly [LITSX_COMPONENT]: true;
+  static readonly [LITSX_LIGHT_DOM]: true;
   revealOrder: "forwards" | "backwards" | "together";
   tail: "collapsed" | "hidden";
 }

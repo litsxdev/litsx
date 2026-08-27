@@ -96,6 +96,10 @@ LitSX source still needs to be compiled. Vite applications should normally use
   - Standard custom-element host attributes (`class`, `id`, `style`, `slot`, `part`, global HTML attributes, `aria-*`, and `data-*`) remain on the host even when they are absent from the component's functional props. They are excluded from compiled object-rest forwarding bags; declared component props still take precedence.
   - Spread sources and explicit attributes retain authored JSX order. The final value wins, and a final `undefined` removes the corresponding host attribute.
   - Compiled components with an object-rest parameter publish `Symbol.for("litsx.restProps")` metadata. `jsxSpreadElement` uses it to keep declared reactive props on the component host while routing undeclared inputs through one compact reactive object for forwarding to an inner element.
+  - Component constructors publish `LITSX_COMPONENT`. Light-DOM constructors
+    additionally publish `LITSX_LIGHT_DOM`; compiler and scoped-element tooling
+    read these class-owned identities through package barrels without a Core
+    component-name allowlist.
   - `on:event` is the explicit JSX event channel. The destination constructor, reactive component API, and native DOM properties determine whether ordinary JSX names become Lit property, boolean-attribute, or attribute bindings.
   - `onX` names are ordinary component properties/callbacks. React-style `onClick` event conversion belongs exclusively to react-compat. Native handler properties such as `onclick` remain available and are assigned as properties.
   - Hydratable spread output should be rendered with `@litsx/ssr` and hydrated with `@litsx/ssr/hydration` so the two template shapes are reconciled without replacing DOM nodes.

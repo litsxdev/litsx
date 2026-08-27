@@ -4,6 +4,7 @@ import { isLitElementSuperClass } from "@litsx/babel-plugin-shared-hooks";
 import { componentNameToTagName } from "@litsx/authoring";
 import { parseWithLitsxVirtualization } from "@litsx/authoring/parser";
 import fs from "node:fs";
+import { createRequire } from "node:module";
 import path from "node:path";
 import { normalizeFilePath } from "@litsx/typescript-session";
 import { buildAvailableMap, setTypes, toKebab } from "./shared.js";
@@ -20,9 +21,15 @@ const RENDER_LIGHT_MODULE = "@litsx/core/elements";
 const RENDER_LIGHT_IMPORT = "__litsxRenderLight";
 const NOSCRIPT_PRIMITIVE = "__litsxNoscript";
 const IMPORT_RESOLUTION_EXTENSIONS = [
+  ".mtsx",
+  ".ctsx",
   ".jsx",
+  ".mjs",
+  ".cjs",
   ".js",
   ".tsx",
+  ".mts",
+  ".cts",
   ".ts",
 ];
 
@@ -508,10 +515,9 @@ export function ensureImportedElementCandidates(programPath, fromFilename, impor
 }
 
 function annotateImportedLightDomEntries(programPath, availableMap) {
-  const filename = normalizeFilePath(programPath.hub.file?.opts?.filename || "");
-  if (!filename) {
-    return;
-  }
+  const filename = normalizeFilePath(
+    programPath.hub.file?.opts?.filename || path.join(process.cwd(), "__litsx_entry__.js")
+  );
 
   programPath.get("body").forEach((nodePath) => {
     if (!nodePath.isImportDeclaration()) {
@@ -546,15 +552,16 @@ function annotateImportedLightDomEntries(programPath, availableMap) {
 }
 
 function resolveImportSource(fromFilename, sourceValue) {
-  if (
-    typeof sourceValue !== "string" ||
-    !(
-      sourceValue.startsWith("./") ||
-      sourceValue.startsWith("../") ||
-      sourceValue.startsWith("/")
-    )
-  ) {
+  if (typeof sourceValue !== "string" || !fromFilename) {
     return null;
+  }
+
+  const isRelative =
+    sourceValue.startsWith("./") ||
+    sourceValue.startsWith("../") ||
+    sourceValue.startsWith("/");
+  if (!isRelative) {
+    return resolvePackageImportSource(fromFilename, sourceValue);
   }
 
   const basePath = sourceValue.startsWith("/")
@@ -576,7 +583,138 @@ function resolveImportSource(fromFilename, sourceValue) {
   }) ?? null;
 }
 
+function splitPackageSpecifier(sourceValue) {
+  const parts = sourceValue.split("/");
+  const packageName = sourceValue.startsWith("@")
+    ? parts.slice(0, 2).join("/")
+    : parts[0];
+  const remainder = parts.slice(sourceValue.startsWith("@") ? 2 : 1).join("/");
+  return {
+    packageName,
+    exportKey: remainder ? `./${remainder}` : ".",
+  };
+}
+
+function selectImportExportTarget(value) {
+  if (typeof value === "string") {
+    return value;
+  }
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  for (const condition of ["import", "module", "default", "node", "require"]) {
+    const target = selectImportExportTarget(value[condition]);
+    if (target) {
+      return target;
+    }
+  }
+  return null;
+}
+
+function findPackageRoot(resolvedEntry, packageName) {
+  let current = path.dirname(resolvedEntry);
+  while (true) {
+    const manifestPath = path.join(current, "package.json");
+    try {
+      const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+      if (manifest.name === packageName) {
+        return { root: current, manifest };
+      }
+    } catch {
+      // Keep walking until the package boundary is found.
+    }
+    const parent = path.dirname(current);
+    if (parent === current) {
+      return null;
+    }
+    current = parent;
+  }
+}
+
+function resolvePackageImportSource(fromFilename, sourceValue) {
+  const { packageName, exportKey } = splitPackageSpecifier(sourceValue);
+  try {
+    const resolvedEntry = createRequire(fromFilename).resolve(sourceValue);
+    const packageInfo = findPackageRoot(resolvedEntry, packageName);
+    if (!packageInfo) {
+      try {
+        return fs.statSync(resolvedEntry).isFile()
+          ? normalizeFilePath(resolvedEntry)
+          : null;
+      } catch {
+        return null;
+      }
+    }
+
+    const { root, manifest } = packageInfo;
+    const exportDefinition = manifest.exports;
+    const keyedExport = exportDefinition && typeof exportDefinition === "object" &&
+      !Array.isArray(exportDefinition) &&
+      Object.keys(exportDefinition).some((key) => key.startsWith("."))
+      ? exportDefinition[exportKey]
+      : exportKey === "." ? exportDefinition : null;
+    const target = selectImportExportTarget(keyedExport) || (
+      exportKey === "." && (manifest.module || manifest.main)
+    );
+    if (typeof target === "string") {
+      const candidate = path.resolve(root, target);
+      try {
+        if (fs.statSync(candidate).isFile()) {
+          return normalizeFilePath(candidate);
+        }
+      } catch {
+        // Fall back to the entry resolved by Node.
+      }
+    }
+    return normalizeFilePath(resolvedEntry);
+  } catch {
+    return null;
+  }
+}
+
 const LIGHT_DOM_EXPORTS_BY_FILE = new Map();
+
+function isSymbolForMetadata(node, key) {
+  return (
+    t.isCallExpression(node) &&
+    t.isMemberExpression(node.callee) &&
+    !node.callee.computed &&
+    t.isIdentifier(node.callee.object, { name: "Symbol" }) &&
+    t.isIdentifier(node.callee.property, { name: "for" }) &&
+    node.arguments.length === 1 &&
+    t.isStringLiteral(node.arguments[0], { value: key })
+  );
+}
+
+function classDeclaresLightDom(node) {
+  return (
+    hasMixinInSuperChain(node?.superClass, LIGHT_MIXIN) ||
+    (node?.body?.body ?? []).some((member) => (
+      t.isClassProperty(member) &&
+      member.static === true &&
+      t.isBooleanLiteral(member.value, { value: true }) &&
+      (
+        (
+          member.computed === true &&
+          isSymbolForMetadata(member.key, "litsx.lightDom")
+        ) ||
+        (
+          member.computed !== true &&
+          t.isIdentifier(member.key, { name: "lightDom" })
+        )
+      )
+    ))
+  );
+}
+
+function addExportedLocal(exportedNamesByLocal, localName, exportedName) {
+  if (!localName || !exportedName) {
+    return;
+  }
+  const names = exportedNamesByLocal.get(localName) ?? new Set();
+  names.add(exportedName);
+  exportedNamesByLocal.set(localName, names);
+}
 
 function getLightDomExports(fileName) {
   const normalizedFileName = normalizeFilePath(fileName);
@@ -584,13 +722,14 @@ function getLightDomExports(fileName) {
     return LIGHT_DOM_EXPORTS_BY_FILE.get(normalizedFileName);
   }
 
+  const lightDomExports = new Set();
+  LIGHT_DOM_EXPORTS_BY_FILE.set(normalizedFileName, lightDomExports);
+
   let sourceText = "";
   try {
     sourceText = fs.readFileSync(normalizedFileName, "utf8");
   } catch {
-    const empty = new Set();
-    LIGHT_DOM_EXPORTS_BY_FILE.set(normalizedFileName, empty);
-    return empty;
+    return lightDomExports;
   }
 
   let ast;
@@ -604,12 +743,9 @@ function getLightDomExports(fileName) {
       sourceFilename: normalizedFileName,
     });
   } catch {
-    const empty = new Set();
-    LIGHT_DOM_EXPORTS_BY_FILE.set(normalizedFileName, empty);
-    return empty;
+    return lightDomExports;
   }
 
-  const lightDomExports = new Set();
   const exportedNamesByLocal = new Map();
   for (const node of ast.program?.body ?? []) {
     if (t.isExportNamedDeclaration(node)) {
@@ -618,12 +754,14 @@ function getLightDomExports(fileName) {
         (t.isFunctionDeclaration(declaration) || t.isClassDeclaration(declaration)) &&
         declaration.id?.name
       ) {
-        exportedNamesByLocal.set(declaration.id.name, declaration.id.name);
+        addExportedLocal(exportedNamesByLocal, declaration.id.name, declaration.id.name);
       }
       for (const specifier of node.specifiers ?? []) {
         const localName = specifier.local?.name;
         const exportedName = specifier.exported?.name ?? specifier.exported?.value;
-        if (localName && exportedName) exportedNamesByLocal.set(localName, exportedName);
+        if (!node.source) {
+          addExportedLocal(exportedNamesByLocal, localName, exportedName);
+        }
       }
       continue;
     }
@@ -633,7 +771,7 @@ function getLightDomExports(fileName) {
       (t.isFunctionDeclaration(node.declaration) || t.isClassDeclaration(node.declaration)) &&
       node.declaration.id?.name
     ) {
-      exportedNamesByLocal.set(node.declaration.id.name, "default");
+      addExportedLocal(exportedNamesByLocal, node.declaration.id.name, "default");
     }
   }
 
@@ -648,31 +786,78 @@ function getLightDomExports(fileName) {
           : null;
     if (
       exportedClass?.id?.name &&
-      hasMixinInSuperChain(exportedClass.superClass, LIGHT_MIXIN)
+      classDeclaresLightDom(exportedClass)
     ) {
-      const exportedName = t.isExportDefaultDeclaration(node)
-        ? "default"
-        : exportedNamesByLocal.get(exportedClass.id.name);
-      if (exportedName) lightDomExports.add(exportedName);
+      const exportedNames = t.isExportDefaultDeclaration(node)
+        ? new Set(["default"])
+        : exportedNamesByLocal.get(exportedClass.id.name) ?? new Set();
+      exportedNames.forEach((exportedName) => lightDomExports.add(exportedName));
+    } else if (
+      t.isExportDefaultDeclaration(node) &&
+      t.isClassDeclaration(node.declaration) &&
+      !node.declaration.id &&
+      classDeclaresLightDom(node.declaration)
+    ) {
+      lightDomExports.add("default");
     }
 
+    const assignmentLeft = t.isExpressionStatement(node) &&
+      t.isAssignmentExpression(node.expression, { operator: "=" })
+      ? node.expression.left
+      : null;
     if (
-      !t.isExpressionStatement(node) ||
-      !t.isAssignmentExpression(node.expression, { operator: "=" }) ||
-      !t.isMemberExpression(node.expression.left) ||
-      node.expression.left.computed ||
-      !t.isIdentifier(node.expression.left.object) ||
-      !t.isIdentifier(node.expression.left.property, { name: "lightDom" }) ||
+      !t.isMemberExpression(assignmentLeft) ||
+      !t.isIdentifier(assignmentLeft.object) ||
+      !(
+        (
+          !assignmentLeft.computed &&
+          t.isIdentifier(assignmentLeft.property, { name: "lightDom" })
+        ) ||
+        (
+          assignmentLeft.computed &&
+          isSymbolForMetadata(assignmentLeft.property, "litsx.lightDom")
+        )
+      ) ||
       !t.isBooleanLiteral(node.expression.right, { value: true })
     ) {
       continue;
     }
 
-    const exportedName = exportedNamesByLocal.get(node.expression.left.object.name);
-    if (exportedName) lightDomExports.add(exportedName);
+    const exportedNames = exportedNamesByLocal.get(assignmentLeft.object.name) ?? new Set();
+    exportedNames.forEach((exportedName) => lightDomExports.add(exportedName));
   }
 
-  LIGHT_DOM_EXPORTS_BY_FILE.set(normalizedFileName, lightDomExports);
+  for (const node of ast.program?.body ?? []) {
+    if (!node.source?.value) {
+      continue;
+    }
+    const resolvedSource = resolveImportSource(normalizedFileName, node.source.value);
+    if (!resolvedSource) {
+      continue;
+    }
+    const sourceExports = getLightDomExports(resolvedSource);
+
+    if (t.isExportAllDeclaration(node)) {
+      sourceExports.forEach((exportedName) => {
+        if (exportedName !== "default") {
+          lightDomExports.add(exportedName);
+        }
+      });
+      continue;
+    }
+
+    if (!t.isExportNamedDeclaration(node)) {
+      continue;
+    }
+    for (const specifier of node.specifiers ?? []) {
+      const importedName = specifier.local?.name ?? specifier.local?.value;
+      const exportedName = specifier.exported?.name ?? specifier.exported?.value;
+      if (importedName && exportedName && sourceExports.has(importedName)) {
+        lightDomExports.add(exportedName);
+      }
+    }
+  }
+
   return lightDomExports;
 }
 

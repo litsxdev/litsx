@@ -4,7 +4,6 @@ import babelTraverse from "@babel/traverse";
 import jsxSyntaxPlugin from "@babel/plugin-syntax-jsx";
 import {
   componentNameToTagName,
-  isLitsxCoreFrameworkComponentExport,
 } from "@litsx/authoring";
 import fs from "node:fs";
 import path from "node:path";
@@ -459,6 +458,7 @@ export function buildModuleAnalysis(programPath, filename, context) {
   const exportAllRecords = [];
   const componentMarkerLocals = new Set();
   const compiledComponentLocals = new Set();
+  const lightDomComponentLocals = new Set();
   const classBindings = new Map();
 
   const recordClass = (classPath, bindingName = classPath?.node?.id?.name) => {
@@ -487,6 +487,25 @@ export function buildModuleAnalysis(programPath, filename, context) {
 
     if (hasCompiledMarker) {
       compiledComponentLocals.add(bindingName);
+    }
+
+    const hasLightDomMarker = classPath.get("body.body").some((memberPath) => (
+      memberPath.isClassProperty() &&
+      memberPath.node.static === true &&
+      (
+        (
+          memberPath.node.computed === true &&
+          isSymbolForMarker(memberPath.node.key, "litsx.lightDom")
+        ) ||
+        (
+          memberPath.node.computed !== true &&
+          t.isIdentifier(memberPath.node.key, { name: "lightDom" })
+        )
+      ) &&
+      t.isBooleanLiteral(memberPath.node.value, { value: true })
+    ));
+    if (hasLightDomMarker) {
+      lightDomComponentLocals.add(bindingName);
     }
   };
 
@@ -649,6 +668,7 @@ export function buildModuleAnalysis(programPath, filename, context) {
     exportAllRecords,
     compatPascalNames: new Set(),
     compiledComponentLocals,
+    lightDomComponentLocals,
     classBindings,
   };
 }
@@ -892,6 +912,60 @@ export function isProvableComponentExport(moduleAnalysis, importedName, context)
   );
 }
 
+export function isLightDomComponentExport(moduleAnalysis, importedName, context, seen = new Set()) {
+  if (!moduleAnalysis || !importedName) {
+    return false;
+  }
+
+  const visitKey = `light-dom-export:${moduleAnalysis.filename}:${importedName}`;
+  if (seen.has(visitKey)) {
+    return false;
+  }
+  const nextSeen = new Set(seen);
+  nextSeen.add(visitKey);
+
+  const exportInfo = moduleAnalysis.exportBindings.get(importedName);
+  if (!exportInfo) {
+    return (moduleAnalysis.exportAllRecords || []).some(({ resolvedSource }) => (
+      resolvedSource &&
+      isLightDomComponentExport(
+        getOrCreateModuleAnalysis(resolvedSource, context),
+        importedName,
+        context,
+        nextSeen,
+      )
+    ));
+  }
+
+  if (exportInfo.localName) {
+    if (moduleAnalysis.lightDomComponentLocals?.has(exportInfo.localName)) {
+      return true;
+    }
+    const importInfo = moduleAnalysis.importBindings.get(exportInfo.localName);
+    return Boolean(
+      importInfo?.resolvedSource &&
+      importInfo.importedName !== "*" &&
+      isLightDomComponentExport(
+        getOrCreateModuleAnalysis(importInfo.resolvedSource, context),
+        importInfo.importedName,
+        context,
+        nextSeen,
+      )
+    );
+  }
+
+  if (exportInfo.reexportSource && exportInfo.importedName) {
+    return isLightDomComponentExport(
+      getOrCreateModuleAnalysis(exportInfo.reexportSource, context),
+      exportInfo.importedName,
+      context,
+      nextSeen,
+    );
+  }
+
+  return false;
+}
+
 export function isExternalCompilationImport(requirement) {
   if (!requirement?.sourceFile || !requirement?.sourceSpecifier) {
     return false;
@@ -910,15 +984,6 @@ export function warnExternalPascalComponentInference(candidateName, requirement,
   }
 
   if (!requirement?.sourceFile || !requirement?.importedName) {
-    return;
-  }
-
-  if (
-    isLitsxCoreFrameworkComponentExport(
-      requirement.sourceSpecifier,
-      requirement.importedName,
-    )
-  ) {
     return;
   }
 
@@ -1327,10 +1392,16 @@ export function importedBindingHasLightDomHoist(importInfo, context) {
   );
 
   if (exportInfo?.path) {
-    return helperPathHasLightDomHoist(exportInfo.path);
+    return (
+      helperPathHasLightDomHoist(exportInfo.path) ||
+      isLightDomComponentExport(importedModule, importInfo.importedName, context)
+    );
   }
 
-  return helperPathHasLightDomHoist(importedModule.helperPaths.get(localName));
+  return (
+    helperPathHasLightDomHoist(importedModule.helperPaths.get(localName)) ||
+    isLightDomComponentExport(importedModule, importInfo.importedName, context)
+  );
 }
 
 function collectCandidateResult(functionPath, programPath, options = {}) {

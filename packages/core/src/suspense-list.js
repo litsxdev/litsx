@@ -70,6 +70,7 @@ export { blocksReveal, normalizeRevealOrder, normalizeTail };
  */
 export class SuspenseList extends LightDomMixin(ReactiveElement) {
   static [Symbol.for("litsx.component")] = true;
+  static [Symbol.for("litsx.lightDom")] = true;
 
   static properties = {
     revealOrder: { type: String, attribute: "reveal-order" },
