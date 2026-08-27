@@ -119,6 +119,45 @@ describe("@litsx/vite-plugin", () => {
     assert.ok(result.map);
   }, 30000);
 
+  it("does not surface external-component warnings for Core framework primitives", async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-vite-core-boundary-"));
+    const coreDir = path.join(tempDir, "node_modules", "@litsx", "core");
+    const filename = path.join(tempDir, "Example.stories.tsx");
+    const warn = vi.fn();
+
+    try {
+      fs.mkdirSync(coreDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(coreDir, "package.json"),
+        JSON.stringify({ name: "@litsx/core", type: "module", exports: "./index.js" }),
+      );
+      fs.writeFileSync(
+        path.join(coreDir, "index.js"),
+        "export class SuspenseBoundary extends HTMLElement {}",
+      );
+      const source = [
+        'import { SuspenseBoundary as AsyncBoundary } from "@litsx/core";',
+        "export const TestStory = () => (",
+        '  <AsyncBoundary fallback="Loading">Content</AsyncBoundary>',
+        ");",
+      ].join("\n");
+      fs.writeFileSync(filename, source);
+
+      const plugin = litsx({ jsxTemplate: false });
+      plugin.configResolved({ root: tempDir, cacheDir: path.join(tempDir, ".vite") });
+      const result = await plugin.transform.call(
+        { warn },
+        source,
+        filename,
+      );
+
+      assert.ok(result);
+      assert.deepStrictEqual(warn.mock.calls, []);
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  }, 30000);
+
   it("transforms project JavaScript and TypeScript but ignores files outside the Vite root", async () => {
     const plugin = litsx();
     plugin.configResolved({ root: "/virtual", cacheDir: "/virtual/.vite-cache" });

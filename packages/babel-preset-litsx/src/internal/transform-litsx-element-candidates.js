@@ -2,7 +2,10 @@ import { declare } from "@babel/helper-plugin-utils";
 import * as babelParser from "@babel/parser";
 import babelTraverse from "@babel/traverse";
 import jsxSyntaxPlugin from "@babel/plugin-syntax-jsx";
-import { componentNameToTagName } from "@litsx/authoring";
+import {
+  componentNameToTagName,
+  isLitsxCoreFrameworkComponentExport,
+} from "@litsx/authoring";
 import fs from "node:fs";
 import path from "node:path";
 import { normalizeFilePath } from "@litsx/typescript-session";
@@ -666,6 +669,15 @@ export function warnExternalPascalComponentInference(candidateName, requirement,
   }
 
   if (!requirement?.sourceFile || !requirement?.importedName) {
+    return;
+  }
+
+  if (
+    isLitsxCoreFrameworkComponentExport(
+      requirement.sourceSpecifier,
+      requirement.importedName,
+    )
+  ) {
     return;
   }
 

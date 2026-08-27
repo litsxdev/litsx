@@ -17,6 +17,8 @@ import {
   isNativeDomEventHandlerPropertyName,
   isBooleanHostAttributeName,
   isBooleanValueHostAttributeName,
+  isLitsxCoreFrameworkComponentExport,
+  isLitsxCoreLightDomComponentExport,
   isStandardHostAttributeName,
   isStandardDomEventPropName,
   resolveExplicitJsxEventName,
@@ -33,6 +35,37 @@ import {
 import parser from "./helpers/litsx-parser.js";
 
 describe("@litsx/authoring", () => {
+  it("identifies framework JSX components by Core module and exported symbol", () => {
+    assert.strictEqual(
+      isLitsxCoreFrameworkComponentExport("@litsx/core", "SuspenseBoundary"),
+      true,
+    );
+    assert.strictEqual(
+      isLitsxCoreFrameworkComponentExport("@litsx/core", "ErrorBoundary"),
+      true,
+    );
+    assert.strictEqual(
+      isLitsxCoreFrameworkComponentExport("@litsx/core", "SuspenseList"),
+      true,
+    );
+    assert.strictEqual(
+      isLitsxCoreFrameworkComponentExport("some-unrelated-package", "SuspenseBoundary"),
+      false,
+    );
+    assert.strictEqual(
+      isLitsxCoreFrameworkComponentExport("@litsx/core", "AsyncBoundary"),
+      false,
+    );
+    assert.strictEqual(
+      isLitsxCoreLightDomComponentExport("@litsx/core", "SuspenseBoundary"),
+      true,
+    );
+    assert.strictEqual(
+      isLitsxCoreLightDomComponentExport("some-unrelated-package", "SuspenseBoundary"),
+      false,
+    );
+  });
+
   it("classifies the shared custom-element host attribute contract", () => {
     for (const name of [
       "class", "id", "style", "slot", "part", "exportparts", "role",

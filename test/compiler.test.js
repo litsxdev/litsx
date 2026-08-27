@@ -2657,6 +2657,100 @@ describe("@litsx/compiler", () => {
     }
   }, 20000);
 
+  it("recognizes Core framework components by import identity when package metadata is opaque", () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-external-core-identity-"));
+    const coreDir = path.join(tempDir, "node_modules", "@litsx", "core");
+    const unrelatedDir = path.join(tempDir, "node_modules", "some-unrelated-package");
+
+    try {
+      for (const [packageDir, packageName] of [
+        [coreDir, "@litsx/core"],
+        [unrelatedDir, "some-unrelated-package"],
+      ]) {
+        fs.mkdirSync(packageDir, { recursive: true });
+        fs.writeFileSync(
+          path.join(packageDir, "package.json"),
+          JSON.stringify({ name: packageName, type: "module", exports: "./index.js" }),
+        );
+        fs.writeFileSync(
+          path.join(packageDir, "index.js"),
+          "export class SuspenseBoundary extends HTMLElement {}",
+        );
+      }
+
+      const cases = [
+        [
+          "direct",
+          [
+            'import { SuspenseBoundary } from "@litsx/core";',
+            "export const TestExample = () => (",
+            '  <SuspenseBoundary fallback="Loading">Content</SuspenseBoundary>',
+            ");",
+          ].join("\n"),
+        ],
+        [
+          "aliased",
+          [
+            'import { SuspenseBoundary as AsyncBoundary } from "@litsx/core";',
+            "export const TestExample = () => (",
+            '  <AsyncBoundary fallback="Loading">Content</AsyncBoundary>',
+            ");",
+          ].join("\n"),
+        ],
+        [
+          "namespace",
+          [
+            'import * as LitSX from "@litsx/core";',
+            "export const TestExample = () => (",
+            '  <LitSX.SuspenseBoundary fallback="Loading">Content</LitSX.SuspenseBoundary>',
+            ");",
+          ].join("\n"),
+        ],
+        [
+          "shadowed",
+          [
+            'import * as LitSX from "@litsx/core";',
+            "function SuspenseBoundary() { return <section>Local</section>; }",
+            "export function TestExample() { return <SuspenseBoundary />; }",
+          ].join("\n"),
+        ],
+      ];
+
+      for (const [name, source] of cases) {
+        const result = transformLitsxSync(source, {
+          filename: path.join(tempDir, `${name}.tsx`),
+          jsxTemplate: false,
+        });
+        assert.deepStrictEqual(result.metadata.litsxWarnings, [], name);
+      }
+
+      const unrelated = transformLitsxSync(
+        [
+          'import { SuspenseBoundary } from "some-unrelated-package";',
+          "export const TestExample = () => (",
+          '  <SuspenseBoundary fallback="Loading">Content</SuspenseBoundary>',
+          ");",
+        ].join("\n"),
+        {
+          filename: path.join(tempDir, "unrelated.tsx"),
+          jsxTemplate: false,
+        },
+      );
+
+      assert.strictEqual(unrelated.metadata.litsxWarnings.length, 1);
+      assert.strictEqual(
+        unrelated.metadata.litsxWarnings[0].code,
+        "LITSX_EXTERNAL_PASCAL_COMPONENT_INFERRED",
+      );
+      assert.strictEqual(
+        unrelated.metadata.litsxWarnings[0].sourceSpecifier,
+        "some-unrelated-package",
+      );
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  }, 20000);
+
   it("does not warn for external PascalCase imports reexported from compiled LitSX modules", () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-external-pascal-reexported-"));
     const nodeModulesDir = path.join(tempDir, "node_modules", "fancy-litsx");

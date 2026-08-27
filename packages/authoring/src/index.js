@@ -24,6 +24,10 @@ export {
   collectReactMemoWarnings,
 } from "./authored-semantics.js";
 export {
+  isLitsxCoreFrameworkComponentExport,
+  isLitsxCoreLightDomComponentExport,
+} from "./framework-components.js";
+export {
   isBooleanHostAttributeName,
   isBooleanValueHostAttributeName,
   isStandardHostAttributeName,

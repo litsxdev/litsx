@@ -11,6 +11,7 @@ Application source is standard `.jsx` or `.tsx`. This package centralizes:
 - `on:event` parsing and event-name normalization
 - standard `onX` callback and native DOM event-property classification
 - component and implicit-children semantic analysis
+- framework-component identity by package export, including Core light-DOM primitives
 - strict component-name validation against the custom-elements contract
 - synchronous hook-scope and stable hook-order diagnostics
 - internal encoding used between LitSX compiler passes

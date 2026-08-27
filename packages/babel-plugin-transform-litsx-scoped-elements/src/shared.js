@@ -1,14 +1,12 @@
 import fs from "node:fs";
 import path from "node:path";
-import { toKebabCase } from "@litsx/authoring";
+import {
+  isLitsxCoreLightDomComponentExport,
+  toKebabCase,
+} from "@litsx/authoring";
 import { normalizeFilePath } from "@litsx/typescript-session";
 
 let t;
-const CORE_LIGHT_DOM_EXPORTS = new Set([
-  "ErrorBoundary",
-  "SuspenseBoundary",
-  "SuspenseList",
-]);
 const IMPORT_RESOLUTION_EXTENSIONS = [
   ".jsx",
   ".js",
@@ -40,7 +38,10 @@ export function buildAvailableMap(programPath, options = {}) {
               : null;
           availableMap.set(specifier.local.name, {
             originalName: specifier.local.name,
-            lightDom: Boolean(importedName && CORE_LIGHT_DOM_EXPORTS.has(importedName)),
+            lightDom: isLitsxCoreLightDomComponentExport(
+              nodePath.node.source.value,
+              importedName,
+            ),
             moduleId: resolveImportModuleId(filename, nodePath.node.source.value),
           });
           return;
