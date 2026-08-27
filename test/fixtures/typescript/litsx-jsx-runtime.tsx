@@ -6,6 +6,7 @@ import {
   SuspenseList,
   useHost,
   useRef,
+  type LitsxRef,
   type LitsxStyleInfo,
 } from "@litsx/core";
 
@@ -59,6 +60,27 @@ function TranslatedButton() {
   return <button>{useTranslatedLabel("save")}</button>;
 }
 
+export type ForwardedFormProps = {
+  ref?: LitsxRef<HTMLFormElement>;
+};
+
+export function ForwardedForm({ ref }: ForwardedFormProps) {
+  return <form ref={ref}>Form</form>;
+}
+
+function ForwardedFormStory() {
+  const formRef = useRef<HTMLFormElement>();
+
+  return (
+    <>
+      <ForwardedForm ref={formRef} />
+      <ForwardedForm
+        ref={(value: HTMLFormElement | undefined) => void value}
+      />
+    </>
+  );
+}
+
 export function Screen() {
   const targetRef = useRef<HTMLButtonElement | HTMLAnchorElement>();
   const litTargetRef = createRef<HTMLButtonElement | HTMLAnchorElement>();
@@ -99,6 +121,7 @@ export function Screen() {
         on:change={(event?: CustomEvent) => void event}
       />
       <TranslatedButton />
+      <ForwardedFormStory />
       <LazyActionButton label="Lazy action" disabled />
       <button
         disabled

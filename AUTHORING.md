@@ -357,6 +357,11 @@ return linked
   : <button ref={target}>Details</button>;
 ```
 
+An authored component may narrow the generic component ref by declaring a
+`ref?: LitsxRef<T>` prop. That declaration replaces the base ref contract in
+managed JSX attributes, so an exact `useRef<T>()` or callback ref is accepted
+while refs for unrelated targets remain rejected.
+
 The React compatibility layer creates stable `.current`/`null` facades and
 adapts object refs, callback refs, `createRef`, `forwardRef`,
 `useImperativeHandle`, spreads, SSR, hydration, and React 19 callback cleanup.

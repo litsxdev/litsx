@@ -127,6 +127,26 @@ return active
 The union must contain every destination that receives the ref; an
 anchor-only ref is still rejected on `<button>`.
 
+When a component explicitly forwards a ref, its authored prop type is the
+source of truth. Managed JSX attributes replace the generic base ref instead
+of intersecting both contracts:
+
+```tsx
+type ContactFormProps = {
+  ref?: LitsxRef<HTMLFormElement>;
+};
+
+function ContactForm({ ref }: ContactFormProps) {
+  return <form ref={ref}>Continue</form>;
+}
+
+const formRef = useRef<HTMLFormElement>();
+return <ContactForm ref={formRef} />;
+```
+
+Object and callback refs must still match the declared target. Cleanup remains
+`undefined`, consistently with intrinsic refs.
+
 Component refs travel through the `.ref` property until they reach their final
 host, forwarded element, or `useExpose` handle. Object refs, callback refs,
 spreads, SSR, and hydration share the same `.value`/`undefined` lifecycle. The

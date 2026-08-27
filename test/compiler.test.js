@@ -208,6 +208,28 @@ describe("@litsx/compiler", () => {
     assert.doesNotMatch(result.code, /type\s+[A-Za-z0-9_]+/);
   }, 20000);
 
+  it("preserves exact authored component ref props through managed JSX attributes", () => {
+    const source = [
+      'import { useRef, type LitsxRef } from "@litsx/core";',
+      "type ContactFormProps = { ref?: LitsxRef<HTMLFormElement> };",
+      "export function ContactForm({ ref }: ContactFormProps) {",
+      "  return <form ref={ref}>Form</form>;",
+      "}",
+      "export function FormStory() {",
+      "  const formRef = useRef<HTMLFormElement>();",
+      "  return <ContactForm ref={formRef} />;",
+      "}",
+    ].join("\n");
+
+    const result = transformLitsxSync(source, {
+      filename: "/virtual/forwarded-form.tsx",
+    });
+
+    assert.match(result.code, /static properties = \{[\s\S]*ref: \{[\s\S]*attribute: false/);
+    assert.match(result.code, /<form \$\{ref\(this\.ref\)\}>Form<\/form>/);
+    assert.match(result.code, /<contact-form \.ref=\$\{formRef\}><\/contact-form>/);
+  }, 20000);
+
   it("infers authored local story host bindings from their prop API", () => {
     const source = [
       "const VdsDrawerStory = ({ defaultOpen = false, heading = '', description = '' }) => {",

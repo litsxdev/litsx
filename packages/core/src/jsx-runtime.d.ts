@@ -73,7 +73,7 @@ export namespace JSX {
     TEvents extends Record<string, unknown>,
     TBaseAttributes = LitsxBaseAttributes,
   > =
-    TBaseAttributes &
+    Omit<TBaseAttributes, Extract<keyof TProps, "ref">> &
     (keyof TEvents extends never
       ? LitsxExplicitCustomEventAttributes
       : Omit<LitsxDomAttributes<EventTarget>, `on:${Extract<keyof TEvents, string>}`> &

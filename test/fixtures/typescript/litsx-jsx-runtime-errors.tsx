@@ -1,4 +1,5 @@
 import { ErrorBoundary, lazy, SuspenseBoundary, SuspenseList, useRef } from "@litsx/core";
+import { ForwardedForm } from "./litsx-jsx-runtime.js";
 
 type ButtonProps = {
   label: string;
@@ -12,6 +13,7 @@ const LazyActionButton = lazy(async () => ({ default: ActionButton }));
 
 export function BrokenScreen() {
   const anchorRef = useRef<HTMLAnchorElement>();
+  const buttonRef = useRef<HTMLButtonElement>();
 
   return (
     <>
@@ -62,6 +64,12 @@ export function BrokenScreen() {
 
       {/* @ts-expect-error overlapping intrinsic tag names use the HTML DOM target */}
       <a ref={(node: SVGAElement | undefined) => void node}>Wrong namespace ref</a>
+
+      {/* @ts-expect-error exact authored component refs reject the wrong target */}
+      <ForwardedForm ref={buttonRef} />
+
+      {/* @ts-expect-error callback refs preserve the authored component target */}
+      <ForwardedForm ref={(value: HTMLButtonElement | undefined) => void value} />
     </>
   );
 }
