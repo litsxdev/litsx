@@ -51,6 +51,11 @@ dependencies require a separate Vite integration that deliberately transpiles
 them. `reactCompat.transformDependencies` remains reserved for source packages
 that must actually pass through the React migration pipeline.
 
+The same bounded analysis leaves a package export such as `useFormat(value)` as
+an ordinary function when its reachable implementation is fully visible and
+contains no LitSX or React hooks. Opaque and React-backed `use*` graphs retain
+the external-hook diagnostic.
+
 ## What the Plugin Handles
 
 The plugin applies the supported LitSX compilation pipeline through `@litsx/compiler`, including:

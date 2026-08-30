@@ -1388,6 +1388,92 @@ describe("@litsx/compiler", () => {
     assert.doesNotMatch(result.code, /useFormat\(this, "x"\)/);
   }, 20000);
 
+  it("preserves provably ordinary use-prefixed functions from external package barrels", () => {
+    const tempDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), "litsx-external-use-function-"),
+    );
+
+    try {
+      const packageDir = path.join(tempDir, "node_modules", "format-utils");
+      fs.mkdirSync(packageDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(packageDir, "package.json"),
+        JSON.stringify({
+          name: "format-utils",
+          type: "module",
+          exports: {
+            ".": "./index.js",
+            "./opaque": "./opaque.js",
+            "./react": "./react.js",
+          },
+        }),
+      );
+      fs.writeFileSync(
+        path.join(packageDir, "format.js"),
+        [
+          "export function useFormat(value) { return value.trim().toLowerCase(); }",
+          "export function useSlug(value) { return useFormat(value).replaceAll(' ', '-'); }",
+        ].join("\n"),
+      );
+      fs.writeFileSync(
+        path.join(packageDir, "index.js"),
+        'export * from "./format.js";',
+      );
+      fs.writeFileSync(
+        path.join(packageDir, "opaque.js"),
+        'import { useRemote } from "opaque-hooks"; export function useOpaque() { return useRemote(); }',
+      );
+      fs.writeFileSync(
+        path.join(packageDir, "react.js"),
+        'import { useState } from "react"; export function useReactValue() { return useState(0)[0]; }',
+      );
+      const sourceDir = path.join(tempDir, "src");
+      fs.mkdirSync(sourceDir, { recursive: true });
+      const filename = path.join(sourceDir, "FormatPreview.tsx");
+      const source = [
+        'import { useFormat } from "format-utils";',
+        'import * as FormatUtils from "format-utils";',
+        "export function FormatPreview() {",
+        "  const label = useFormat(' Ready ');",
+        "  const slug = FormatUtils.useSlug('Hello World');",
+        "  return <span>{label}:{slug}</span>;",
+        "}",
+      ].join("\n");
+      fs.writeFileSync(filename, source);
+
+      const result = transformLitsxSync(source, {
+        filename,
+        jsxTemplate: false,
+      });
+
+      assert.match(result.code, /const label = useFormat\(' Ready '\);/);
+      assert.match(result.code, /const slug = FormatUtils\.useSlug\('Hello World'\);/);
+      assert.doesNotMatch(result.code, /useFormat\(this|useSlug\(this/);
+
+      for (const [specifier, importedName] of [
+        ["format-utils/opaque", "useOpaque"],
+        ["format-utils/react", "useReactValue"],
+      ]) {
+        const incompatibleSource = [
+          `import { ${importedName} } from "${specifier}";`,
+          "export function InvalidPreview() {",
+          `  const value = ${importedName}();`,
+          "  return <span>{value}</span>;",
+          "}",
+        ].join("\n");
+        assert.throws(
+          () => transformLitsxSync(incompatibleSource, {
+            filename: path.join(sourceDir, `${importedName}.tsx`),
+            jsxTemplate: false,
+          }),
+          /Cannot compile external hook/,
+        );
+      }
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  }, 30000);
+
   it("does not thread host through local use-prefixed functions without LitSX runtime hooks", () => {
     const source = [
       "function useFormat(input: string) {",

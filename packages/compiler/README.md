@@ -106,11 +106,18 @@ responsible for stripping its types before execution.
 
 The compiler can additionally verify uncompiled external ESM source on demand
 when an application imports a `use*` export. Verification follows only that
-export's imports and reexports and accepts it only when the graph reaches
-official LitSX runtime or structural hooks. A readable file, a `use*` name, or
-the absence of React imports is not sufficient. React hooks, missing exports,
-unresolvable modules, and opaque implementations remain rejected. Already
-compiled hook metadata remains authoritative.
+export's imports and reexports, classifying the call as a LitSX hook when the
+graph reaches official runtime or structural hooks. A readable file, a `use*`
+name, or the absence of React imports is not sufficient. React hooks, missing
+exports, unresolvable modules, and opaque implementations remain rejected.
+Already compiled hook metadata remains authoritative.
+
+An external function whose name starts with `use` is preserved as an ordinary
+call when LitSX can prove that its complete reachable `use*` call graph is
+available and contains neither LitSX nor React hooks. This supports utility APIs
+such as `useFormat(value)` without treating naming alone as hook metadata. If
+any reachable `use*` call is opaque, unresolved, or React-backed, compilation
+still stops at the safe boundary.
 
 External source verification supports ESM imports, named reexports, namespace
 imports, barrels, and `export *` across `.js`, `.mjs`, `.jsx`, `.ts`, `.mts`,

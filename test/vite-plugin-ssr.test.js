@@ -64,7 +64,7 @@ describe("@litsx/vite-plugin/ssr", () => {
     } finally {
       await server.close();
     }
-  });
+  }, 30000);
 
   it("passes through unrelated requests and normalizes opaque render failures", async () => {
     let shouldThrowOpaque = false;

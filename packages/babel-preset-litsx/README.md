@@ -92,7 +92,9 @@ automatic generated styles for light-DOM components. Authored
   preset, verified hooks receive `Symbol.for("litsx.hook")` metadata. Imported
   external ESM hooks may also be classified from the exact, resolved export
   graph when it demonstrably reaches official `@litsx/core` hooks. Arbitrary
-  `use*` exports and React hook graphs are still rejected.
+  `use*` exports are preserved as ordinary calls only when their reachable
+  `use*` graph is fully analyzable and contains no framework hooks. React and
+  opaque hook graphs are still rejected.
 - `transformDependencies` is a React-compat migration boundary, not a native
   package trust list and not a declaration that a dependency is precompiled.
   Native packages should use the compiler's library build contract instead.

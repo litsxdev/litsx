@@ -130,7 +130,9 @@ describe("imported hook resolver branch behavior", () => {
       inMemoryFiles: {
         "/app/node_modules/pkg/index.js": `
           import { useState } from "@litsx/core";
+          import * as core from "@litsx/core";
           export function useSource() { return useState(0); }
+          export function useNamespaceSource() { return core.useState(0); }
           export function useCompiled() { return 1; }
           useCompiled[Symbol.for("litsx.hook")] = true;
           export function useStructural() { return 1; }
@@ -140,7 +142,31 @@ describe("imported hook resolver branch behavior", () => {
         "/app/node_modules/pkg/bad.js": `export function useBad( {`,
         "/app/node_modules/pkg/react.js": `
           import { useState } from "react";
+          import * as React from "react";
           export function useReactState() { return useState(0); }
+          export function useReactNamespace() { return React.useState(0); }
+        `,
+        "/app/node_modules/pkg/plain.js": `
+          export function useFormat(value) { return value.trim().toLowerCase(); }
+        `,
+        "/app/node_modules/pkg/plain-reexport.js": `
+          export { useFormat as useSlug } from "./plain.js";
+        `,
+        "/app/node_modules/pkg/plain-barrel.js": `
+          export * from "./plain-reexport.js";
+        `,
+        "/app/node_modules/pkg/plain-consumer.js": `
+          import { useFormat } from "./plain.js";
+          export function useNormalized(value) { return useFormat(value); }
+        `,
+        "/app/node_modules/pkg/opaque.js": `
+          import { useRemote } from "opaque-hooks";
+          export function useOpaque() { return useRemote(); }
+        `,
+        "/app/node_modules/pkg/mixed.js": `
+          import { useState } from "@litsx/core";
+          import { useRemote } from "opaque-hooks";
+          export function useMixed() { useState(0); return useRemote(); }
         `,
         "/app/packages/pkg/index.js": `
           import { useState } from "@litsx/core";
@@ -151,11 +177,19 @@ describe("imported hook resolver branch behavior", () => {
     });
     const resolveRuntime = (source, importedName) => resolver({ filename: "/app/main.js", source, importedName, runtimeCustomOnly: true });
     assert.equal(resolveRuntime("./node_modules/pkg/index.js", "useSource"), "runtime-custom-hook");
+    assert.equal(resolveRuntime("./node_modules/pkg/index.js", "useNamespaceSource"), "runtime-custom-hook");
     assert.equal(resolveRuntime("./node_modules/pkg/index.js", "useCompiled"), "runtime-custom-hook");
-    assert.equal(resolveRuntime("./node_modules/pkg/index.js", "useUnsupported"), "unsupported-external-hook");
+    assert.equal(resolveRuntime("./node_modules/pkg/index.js", "useUnsupported"), false);
     assert.equal(resolveRuntime("./node_modules/pkg/index.js", "missing"), "unsupported-external-hook");
     assert.equal(resolveRuntime("./node_modules/pkg/bad.js", "useBad"), "unsupported-external-hook");
     assert.equal(resolveRuntime("./node_modules/pkg/react.js", "useReactState"), "unsupported-external-hook");
+    assert.equal(resolveRuntime("./node_modules/pkg/react.js", "useReactNamespace"), "unsupported-external-hook");
+    assert.equal(resolveRuntime("./node_modules/pkg/plain.js", "useFormat"), false);
+    assert.equal(resolveRuntime("./node_modules/pkg/plain-reexport.js", "useSlug"), false);
+    assert.equal(resolveRuntime("./node_modules/pkg/plain-barrel.js", "useSlug"), false);
+    assert.equal(resolveRuntime("./node_modules/pkg/plain-consumer.js", "useNormalized"), false);
+    assert.equal(resolveRuntime("./node_modules/pkg/opaque.js", "useOpaque"), "unsupported-external-hook");
+    assert.equal(resolveRuntime("./node_modules/pkg/mixed.js", "useMixed"), "unsupported-external-hook");
     assert.equal(resolveRuntime("./packages/pkg/index.js", "useSource"), "runtime-custom-hook");
     assert.equal(
       session.importedHookModuleAnalysisCache.has(
@@ -256,7 +290,7 @@ describe("imported hook resolver branch behavior", () => {
       };
 
       assert.equal(browserResolver(input), "runtime-custom-hook");
-      assert.equal(defaultResolver(input), "unsupported-external-hook");
+      assert.equal(defaultResolver(input), false);
       assert.equal(session.resolvedHookImportCache.size, 2);
     } finally {
       fs.rmSync(tempDir, { recursive: true, force: true });
