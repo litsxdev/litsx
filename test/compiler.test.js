@@ -41,6 +41,65 @@ function findPosition(text, needle) {
   return positionFromIndex(text, index);
 }
 
+function writeExternalNavigationPackage(root, packageName, extension) {
+  const packageDir = path.join(root, "node_modules", packageName);
+  const sourceDir = path.join(packageDir, "src");
+  fs.mkdirSync(sourceDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(packageDir, "package.json"),
+    JSON.stringify({
+      name: packageName,
+      type: "module",
+      exports: {
+        "./navigation": {
+          browser: `./src/navigation-client.${extension}`,
+          default: `./src/navigation-server.${extension}`,
+        },
+      },
+    }),
+  );
+  const typedIdentity = extension === "ts"
+    ? "const identity = <T>(value: T): T => value;"
+    : "const identity = (value) => value;";
+  fs.writeFileSync(
+    path.join(sourceDir, `internal-hook.${extension}`),
+    [
+      'import { useHost, useOnConnect, useState } from "@litsx/core";',
+      typedIdentity,
+      "const initialState = { path: '/', push: (_path) => {} };",
+      "const subscribe = () => () => {};",
+      "export function useNavigation() {",
+      "  const host = useHost();",
+      "  const [state] = useState(host, identity(initialState));",
+      "  useOnConnect(host, subscribe, []);",
+      "  return state;",
+      "}",
+    ].join("\n"),
+  );
+  fs.writeFileSync(
+    path.join(sourceDir, `navigation-client.${extension}`),
+    `export * from "./internal-hook.${extension}";`,
+  );
+  fs.writeFileSync(
+    path.join(sourceDir, `navigation-server.${extension}`),
+    [
+      'import { useState } from "react";',
+      "export function useNavigation() { return useState('/server'); }",
+    ].join("\n"),
+  );
+  fs.writeFileSync(
+    path.join(sourceDir, `index.${extension}`),
+    `export { useNavigation } from "./navigation-client.${extension}";`,
+  );
+  return {
+    hookFilename: path.join(sourceDir, `internal-hook.${extension}`),
+    hookSource: fs.readFileSync(
+      path.join(sourceDir, `internal-hook.${extension}`),
+      "utf8",
+    ),
+  };
+}
+
 describe("@litsx/compiler", () => {
   it("does not duplicate runtime helpers across separate core imports", () => {
     const source = [
@@ -776,6 +835,81 @@ describe("@litsx/compiler", () => {
     assert.match(consumerResult.code, /const value = useDemo\("x"\);/);
     assert.doesNotMatch(consumerResult.code, /prepareEffects|useDemo\(this,/);
   }, 20000);
+
+  it("compiles external JS and TS hook sources through browser exports without an allowlist", async () => {
+    const tempDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), "litsx-external-hook-source-"),
+    );
+
+    try {
+      const jsPackage = writeExternalNavigationPackage(
+        tempDir,
+        "litsx-navigation-js",
+        "js",
+      );
+      const tsPackage = writeExternalNavigationPackage(
+        tempDir,
+        "litsx-navigation-ts",
+        "ts",
+      );
+      const tsconfigPath = path.join(tempDir, "tsconfig.json");
+      fs.writeFileSync(
+        tsconfigPath,
+        JSON.stringify({
+          compilerOptions: {
+            module: "ESNext",
+            moduleResolution: "Bundler",
+            customConditions: ["browser"],
+            allowJs: true,
+            jsx: "react-jsx",
+            jsxImportSource: "@litsx/core",
+          },
+          include: ["src", "node_modules/litsx-navigation-*"],
+        }),
+      );
+      const sourceDir = path.join(tempDir, "src");
+      fs.mkdirSync(sourceDir, { recursive: true });
+      const session = createLitsxCompilationSession({ projectPath: tsconfigPath });
+
+      for (const [packageName, mode] of [
+        ["litsx-navigation-js", "sync"],
+        ["litsx-navigation-ts", "async"],
+      ]) {
+        const filename = path.join(sourceDir, `${packageName}.tsx`);
+        const source = [
+          `import { useNavigation } from "${packageName}/navigation";`,
+          "export function NavigationConsumer() {",
+          "  const navigation = useNavigation();",
+          "  return <button onclick={() => navigation.push('/next')}>Next</button>;",
+          "}",
+        ].join("\n");
+        fs.writeFileSync(filename, source);
+        const result = mode === "sync"
+          ? session.transformSync(source, { filename, jsxTemplate: false })
+          : await session.transform(source, { filename, jsxTemplate: false });
+
+        assert.match(result.code, /renderWithHooks\(this, \(\) => \{/);
+        assert.match(result.code, /const navigation = useNavigation\(\);/);
+        assert.doesNotMatch(result.code, /useNavigation\(this/);
+      }
+
+      for (const fixture of [jsPackage, tsPackage]) {
+        const compiled = transformLitsxSync(fixture.hookSource, {
+          filename: fixture.hookFilename,
+          jsxTemplate: false,
+        });
+        assert.match(
+          compiled.code,
+          /useNavigation\[Symbol\.for\("litsx\.hook"\)\] = true;/,
+        );
+        assert.doesNotMatch(compiled.code, /<T>|: T/);
+      }
+
+      session.dispose();
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  }, 30000);
 
   it("recognizes precompiled LitSX runtime custom hooks from published metadata", () => {
     const hookSource = [

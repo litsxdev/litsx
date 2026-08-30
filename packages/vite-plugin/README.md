@@ -42,6 +42,15 @@ the rest of the Vite pipeline. Processing ordinary Lit modules lets the plugin
 emit hydration boundaries when a Lit template consumes a LitSX light-DOM
 component. Dependencies remain excluded unless explicitly allowlisted.
 
+When a project module imports an external native LitSX custom hook, the compiler
+may verify that exact export and its transitive ESM hook graph without adding
+the package to an allowlist. This bounded analysis lets the caller compile and
+does not make Vite transform or scan the rest of `node_modules`. Library authors
+should still publish JavaScript produced by `@litsx/compiler`; raw TypeScript
+dependencies require a separate Vite integration that deliberately transpiles
+them. `reactCompat.transformDependencies` remains reserved for source packages
+that must actually pass through the React migration pipeline.
+
 ## What the Plugin Handles
 
 The plugin applies the supported LitSX compilation pipeline through `@litsx/compiler`, including:

@@ -89,6 +89,65 @@ const result = transformLitsxSync(source, {
 });
 ```
 
+## Compiling library hooks
+
+`transformLitsx(...)` and `transformLitsxSync(...)` are also the canonical
+library-compilation API. They analyze modules semantically, so a custom hook
+without JSX belongs in `.js`, `.mjs`, `.ts`, or `.mts`; it does not need to be
+renamed to `.jsx` or `.tsx`. Passing such a module to the compiler emits normal
+JavaScript and marks every verified runtime custom hook with
+`hook[Symbol.for("litsx.hook")] = true`.
+
+Package authors should compile every executable component and hook module and
+publish the resulting JavaScript. This is the recommended, self-contained
+distribution contract. TypeScript source can be supplied to the compiler, but
+publishing raw `.ts` or `.mts` means the consuming build integration is also
+responsible for stripping its types before execution.
+
+The compiler can additionally verify uncompiled external ESM source on demand
+when an application imports a `use*` export. Verification follows only that
+export's imports and reexports and accepts it only when the graph reaches
+official LitSX runtime or structural hooks. A readable file, a `use*` name, or
+the absence of React imports is not sufficient. React hooks, missing exports,
+unresolvable modules, and opaque implementations remain rejected. Already
+compiled hook metadata remains authoritative.
+
+External source verification supports ESM imports, named reexports, namespace
+imports, barrels, and `export *` across `.js`, `.mjs`, `.jsx`, `.ts`, `.mts`,
+and `.tsx`. `.jsx` and `.tsx` are for modules that actually contain JSX.
+CommonJS-authored `require()`/`module.exports` hook graphs are not a source
+analysis contract; publish compiled ESM output for those packages. A `.cts`
+module using TypeScript's ESM-shaped syntax can be compiled, but its final
+CommonJS module emission remains the responsibility of the surrounding build.
+
+Package exports are resolved with the consumer TypeScript project's module
+resolution options. With `moduleResolution: "Bundler"`, conditions such as
+`browser`, `import`, `default`, and entries in `customConditions` therefore
+select the same entrypoint used by the consumer program. Resolution and module
+analysis are cached per compilation session and configuration; no general
+`node_modules` scan occurs. Installed packages, symlinks, and workspaces use the
+same semantic rule rather than a trust decision based on their physical path.
+
+For conditional exports, point each condition at the corresponding compiled
+artifact, for example:
+
+```json
+{
+  "exports": {
+    "./navigation": {
+      "browser": "./dist/navigation-client.js",
+      "default": "./dist/navigation-server.js"
+    }
+  }
+}
+```
+
+Packages that previously published uncompiled hook JavaScript without metadata
+should add an official compiler pass to their library build. They may continue
+to publish verifiable source during migration, but precompiled JavaScript is the
+portable contract and avoids making each consumer responsible for library
+emission.
+
 ## API
 
 ### `transformLitsx(source, options?)`

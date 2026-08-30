@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
 import * as t from "@babel/types";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { describe, it } from "vitest";
 import {
   createStructuralHookResolver,
@@ -117,10 +120,17 @@ describe("imported hook resolver branch behavior", () => {
     assert.equal(resolve("./runtime", "missing"), "unresolved-custom-hook");
   });
 
-  it("recognizes compiled metadata and rejects unsupported external hooks", () => {
+  it("recognizes external LitSX hook graphs and rejects unsupported external hooks", () => {
+    const session = {
+      importedHookModuleAnalysisCache: new Map(),
+      resolvedHookImportCache: new Map(),
+    };
     const resolver = createStructuralHookResolver({
+      __litsxCompilationSession: session,
       inMemoryFiles: {
         "/app/node_modules/pkg/index.js": `
+          import { useState } from "@litsx/core";
+          export function useSource() { return useState(0); }
           export function useCompiled() { return 1; }
           useCompiled[Symbol.for("litsx.hook")] = true;
           export function useStructural() { return 1; }
@@ -128,13 +138,31 @@ describe("imported hook resolver branch behavior", () => {
           export function useUnsupported() { return 1; }
         `,
         "/app/node_modules/pkg/bad.js": `export function useBad( {`,
+        "/app/node_modules/pkg/react.js": `
+          import { useState } from "react";
+          export function useReactState() { return useState(0); }
+        `,
+        "/app/packages/pkg/index.js": `
+          import { useState } from "@litsx/core";
+          export function useSource() { return useState(0); }
+        `,
+        "/app/node_modules/unrelated/bad.js": `export function useBroken( {`,
       },
     });
     const resolveRuntime = (source, importedName) => resolver({ filename: "/app/main.js", source, importedName, runtimeCustomOnly: true });
+    assert.equal(resolveRuntime("./node_modules/pkg/index.js", "useSource"), "runtime-custom-hook");
     assert.equal(resolveRuntime("./node_modules/pkg/index.js", "useCompiled"), "runtime-custom-hook");
     assert.equal(resolveRuntime("./node_modules/pkg/index.js", "useUnsupported"), "unsupported-external-hook");
     assert.equal(resolveRuntime("./node_modules/pkg/index.js", "missing"), "unsupported-external-hook");
     assert.equal(resolveRuntime("./node_modules/pkg/bad.js", "useBad"), "unsupported-external-hook");
+    assert.equal(resolveRuntime("./node_modules/pkg/react.js", "useReactState"), "unsupported-external-hook");
+    assert.equal(resolveRuntime("./packages/pkg/index.js", "useSource"), "runtime-custom-hook");
+    assert.equal(
+      session.importedHookModuleAnalysisCache.has(
+        "/app/node_modules/unrelated/bad.js",
+      ),
+      false,
+    );
     assert.equal(resolver({ filename: "/app/main.js", source: "./node_modules/pkg/index.js", importedName: "useStructural" }), "structural-custom-hook");
 
     const transformed = createStructuralHookResolver({
@@ -172,5 +200,66 @@ describe("imported hook resolver branch behavior", () => {
     assert.equal(resolver({ filename: "/app/main.ts", source: "broken/hooks", importedName: "useTyped" }), false);
     assert.ok(session.importedHookModuleAnalysisCache.size > 0);
     assert.ok(session.resolvedHookImportCache.size > 0);
+  });
+
+  it("isolates shared resolution caches by package-export conditions", () => {
+    const tempDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), "litsx-hook-condition-cache-"),
+    );
+
+    try {
+      const packageDir = path.join(tempDir, "node_modules", "condition-hooks");
+      fs.mkdirSync(packageDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(packageDir, "package.json"),
+        JSON.stringify({
+          name: "condition-hooks",
+          type: "module",
+          exports: {
+            ".": {
+              browser: "./browser.js",
+              default: "./default.js",
+            },
+          },
+        }),
+      );
+      fs.writeFileSync(
+        path.join(packageDir, "browser.js"),
+        'import { useState } from "@litsx/core"; export function useMode() { return useState(0); }',
+      );
+      fs.writeFileSync(
+        path.join(packageDir, "default.js"),
+        "export function useMode() { return 0; }",
+      );
+      const consumer = path.join(tempDir, "consumer.tsx");
+      fs.writeFileSync(consumer, "export {};\n");
+      const session = {
+        importedHookModuleAnalysisCache: new Map(),
+        resolvedHookImportCache: new Map(),
+      };
+      const createResolver = (customConditions) => createStructuralHookResolver({
+        __litsxCompilationSession: session,
+        compilerOptions: {
+          moduleResolution: 100,
+          module: 99,
+          allowJs: true,
+          customConditions,
+        },
+      });
+      const browserResolver = createResolver(["browser"]);
+      const defaultResolver = createResolver([]);
+      const input = {
+        filename: consumer,
+        source: "condition-hooks",
+        importedName: "useMode",
+        runtimeCustomOnly: true,
+      };
+
+      assert.equal(browserResolver(input), "runtime-custom-hook");
+      assert.equal(defaultResolver(input), "unsupported-external-hook");
+      assert.equal(session.resolvedHookImportCache.size, 2);
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
   });
 });

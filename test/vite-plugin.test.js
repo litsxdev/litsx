@@ -282,6 +282,92 @@ describe("@litsx/vite-plugin", () => {
     }
   });
 
+  it("accepts semantically verified external LitSX hooks without transforming all dependencies", async () => {
+    const tempDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), "litsx-vite-native-hook-source-"),
+    );
+
+    try {
+      const packageDir = path.join(
+        tempDir,
+        "node_modules",
+        "litsx-navigation-js",
+      );
+      const sourceDir = path.join(packageDir, "src");
+      const appDir = path.join(tempDir, "src");
+      fs.mkdirSync(sourceDir, { recursive: true });
+      fs.mkdirSync(appDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(packageDir, "package.json"),
+        JSON.stringify({
+          name: "litsx-navigation-js",
+          type: "module",
+          exports: {
+            "./navigation": {
+              browser: "./src/navigation-client.js",
+              default: "./src/navigation-server.js",
+            },
+          },
+        }),
+      );
+      fs.writeFileSync(
+        path.join(sourceDir, "navigation-client.js"),
+        [
+          'import { useHost, useState } from "@litsx/core";',
+          "export function useNavigation() {",
+          "  const host = useHost();",
+          "  return useState(host, { path: '/' })[0];",
+          "}",
+        ].join("\n"),
+      );
+      fs.writeFileSync(
+        path.join(sourceDir, "navigation-server.js"),
+        'import { useState } from "react"; export function useNavigation() { return useState(0); }',
+      );
+      const tsconfigPath = path.join(tempDir, "tsconfig.json");
+      fs.writeFileSync(
+        tsconfigPath,
+        JSON.stringify({
+          compilerOptions: {
+            module: "ESNext",
+            moduleResolution: "Bundler",
+            customConditions: ["browser"],
+            allowJs: true,
+            jsx: "react-jsx",
+            jsxImportSource: "@litsx/core",
+          },
+          include: ["src", "node_modules/litsx-navigation-js"],
+        }),
+      );
+      const filename = path.join(appDir, "NavigationConsumer.tsx");
+      const source = [
+        'import { useNavigation } from "litsx-navigation-js/navigation";',
+        "export function NavigationConsumer() {",
+        "  const navigation = useNavigation();",
+        "  return <button>{navigation.path}</button>;",
+        "}",
+      ].join("\n");
+      fs.writeFileSync(filename, source);
+      const plugin = litsx({ projectPath: tsconfigPath });
+      plugin.configResolved({ root: tempDir, cacheDir: path.join(tempDir, ".vite") });
+
+      const result = await plugin.transform(source, filename);
+      const dependencyResult = await plugin.transform(
+        fs.readFileSync(path.join(sourceDir, "navigation-client.js"), "utf8"),
+        path.join(sourceDir, "navigation-client.js"),
+      );
+
+      assert.ok(result);
+      assert.match(result.code, /renderWithHooks\(this, \(\) => \{/);
+      assert.match(result.code, /const navigation = useNavigation\(\);/);
+      assert.strictEqual(dependencyResult, null);
+      assert.strictEqual(plugin.config({}).optimizeDeps.exclude, undefined);
+      plugin.buildEnd();
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  }, 30000);
+
   it("runs react-compat for allowlisted dependencies in client and SSR pipelines", async () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-vite-react-dep-"));
     try {

@@ -87,3 +87,12 @@ automatic generated styles for light-DOM components. Authored
   directive. React's `.current`/`null` contract is confined to react-compat.
 - Native keyed identity uses Lit's `repeat()` and `keyed()` directives. Only the
   react-compat stage assigns React reconciliation meaning to JSX `key`.
+- Native custom-hook analysis is syntax-independent. Hooks without JSX remain
+  in `.js`, `.mjs`, `.ts`, or `.mts`; when those modules pass through the
+  preset, verified hooks receive `Symbol.for("litsx.hook")` metadata. Imported
+  external ESM hooks may also be classified from the exact, resolved export
+  graph when it demonstrably reaches official `@litsx/core` hooks. Arbitrary
+  `use*` exports and React hook graphs are still rejected.
+- `transformDependencies` is a React-compat migration boundary, not a native
+  package trust list and not a declaration that a dependency is precompiled.
+  Native packages should use the compiler's library build contract instead.
