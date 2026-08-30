@@ -1,5 +1,19 @@
 # @litsx/babel-preset-litsx
 
+## 1.0.0-next.9
+
+### Patch Changes
+
+- 9ee7a42: Preserve external `use*` exports as ordinary functions when their complete
+  reachable `use*` graph is analyzable and contains no LitSX or React hooks.
+  React-backed, unresolved, and opaque hook graphs remain rejected.
+- 4f2fe9c: Accept external native LitSX custom hooks published in JavaScript or TypeScript
+  modules without JSX when their resolved export graph demonstrably reaches the
+  official LitSX runtime. Library compilation continues to emit
+  `Symbol.for("litsx.hook")` metadata, package authors no longer need JSX file
+  extensions to trigger hook compilation, and opaque or React-backed external
+  hooks remain rejected.
+
 ## 1.0.0-next.8
 
 ### Patch Changes
