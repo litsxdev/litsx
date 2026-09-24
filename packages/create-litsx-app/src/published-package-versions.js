@@ -6,6 +6,6 @@ export const publishedPackageVersions = {
   "@litsx/storybook": "^1.0.0-next.4",
   "@litsx/ssr": "^1.0.0-next.5",
   "@litsx/tailwind": "^1.0.0-next.5",
-  "@litsx/unocss": "^1.0.0-next.7",
+  "@litsx/unocss": "^1.0.0-next.8",
   "@litsx/vite-plugin": "^1.0.0-next.4"
 };
