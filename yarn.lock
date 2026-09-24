@@ -1692,7 +1692,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@litsx/typescript-session@workspace:packages/typescript-session"
   peerDependencies:
-    typescript: ">=5"
+    typescript: ">=5 <7"
   languageName: unknown
   linkType: soft
 

@@ -37,6 +37,16 @@ function createInMemoryConfig() {
 }
 
 describe("@litsx/typescript-session", () => {
+  it("excludes the incompatible TypeScript 7 runtime from clean installs", () => {
+    const manifest = JSON.parse(
+      fs.readFileSync(
+        new URL("../packages/typescript-session/package.json", import.meta.url),
+        "utf8"
+      )
+    );
+    assert.strictEqual(manifest.peerDependencies.typescript, ">=5 <7");
+  });
+
   it("normalizes file paths and dirname fallbacks", () => {
     assert.strictEqual(normalizeFilePath("C:\\demo\\file.ts"), "C:/demo/file.ts");
     assert.strictEqual(normalizeFilePath(""), "");
