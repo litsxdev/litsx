@@ -1,5 +1,12 @@
 # @litsx/typescript-session
 
+## 1.0.0-next.1
+
+### Patch Changes
+
+- 91b0bf5: Prevent clean npm installs from selecting the incompatible TypeScript 7
+  runtime. LitSX compiler sessions currently support TypeScript 5.x and 6.x.
+
 ## 1.0.0-next.0
 
 ### Major Changes

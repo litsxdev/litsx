@@ -91,6 +91,7 @@
     "tailwind-shadows-scope",
     "ten-windows-invite",
     "tidy-eslint-jsx-rules",
-    "tidy-resources-hydrate"
+    "tidy-resources-hydrate",
+    "tidy-sessions-compile"
   ]
 }
