@@ -275,6 +275,60 @@ describe("neutral litsxUnoCss integration", () => {
     }
   });
 
+  it("supports inline and explicit-path config lifecycle options", async () => {
+    const inlineRoot = fs.mkdtempSync(
+      path.join(process.cwd(), "test-results", "unocss-neutral-inline-"),
+    );
+    const explicit = createFixture("unocss-neutral-explicit", "3rem");
+    const inline = await litsxUnoCss({
+      config: { rules: [["p-card", { padding: "5rem" }]] },
+      preflightOutput: "component-preflight.js",
+      globalCssOutput: "document.css",
+    }).create({
+      projectRoot: inlineRoot,
+      mode: "development",
+      identity: { id: "inline-options" },
+    });
+    const explicitInstance = await litsxUnoCss({
+      config: "uno.config.mjs",
+    }).create({
+      projectRoot: explicit.root,
+      mode: "production",
+      identity: { id: "explicit-path" },
+    });
+    try {
+      const inlinePath = path.join(inlineRoot, "card.tsx");
+      const inlineResult = await inline.processModule({
+        result: compile(inline, inlinePath), sourcePath: inlinePath,
+      });
+      assert.match(inlineResult.code, /padding:5rem/);
+      assert.deepEqual(
+        await inline.processModule({
+          result: { code: "export const untouched = true;", map: null },
+          sourcePath: path.join(inlineRoot, "plain.ts"),
+        }),
+        { dependencies: [] },
+      );
+      await inline.invalidate({ paths: null });
+      const outputs = (await inline.finalize()).outputs;
+      assert.deepEqual(
+        outputs.map(({ id }) => id),
+        ["component-preflight.js", "document.css"],
+      );
+
+      const explicitPath = path.join(explicit.root, "card.tsx");
+      const explicitResult = await explicitInstance.processModule({
+        result: compile(explicitInstance, explicitPath), sourcePath: explicitPath,
+      });
+      assert.match(explicitResult.code, /padding:3rem/);
+    } finally {
+      inline.dispose();
+      explicitInstance.dispose();
+      fs.rmSync(inlineRoot, { recursive: true, force: true });
+      fs.rmSync(explicit.root, { recursive: true, force: true });
+    }
+  });
+
   it("has no Evolit or Vite dependency in the neutral root implementation", () => {
     const source = fs.readFileSync(
       path.resolve("packages/unocss/src/index.js"),
