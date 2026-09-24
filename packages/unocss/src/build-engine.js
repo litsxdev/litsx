@@ -117,6 +117,32 @@ export function createUnoCssBuildEngine(options = {}) {
       : options.globalTokens) ?? ownedGlobalTokens;
   const dependencyImporters = new Map();
   const importerDependencies = new Map();
+  const moduleTokens = new Map();
+  const moduleGlobalTokens = new Map();
+  const collectedTokens = new Map();
+  const ownsTokenStore = options.tokens == null;
+  const ownsGlobalTokenStore = options.globalTokens == null;
+
+  function rebuildOwnedTokens() {
+    if (ownsTokenStore) {
+      ownedTokens.clear();
+      for (const tokens of collectedTokens.values()) {
+        for (const token of tokens) ownedTokens.add(token);
+      }
+      for (const tokens of moduleTokens.values()) {
+        for (const token of tokens) ownedTokens.add(token);
+      }
+    }
+    if (ownsGlobalTokenStore) {
+      ownedGlobalTokens.clear();
+      for (const tokens of collectedTokens.values()) {
+        for (const token of tokens) ownedGlobalTokens.add(token);
+      }
+      for (const tokens of moduleGlobalTokens.values()) {
+        for (const token of tokens) ownedGlobalTokens.add(token);
+      }
+    }
+  }
 
   async function ready() {
     await resolveValue(options.ready);
@@ -143,6 +169,9 @@ export function createUnoCssBuildEngine(options = {}) {
       if (importers?.size === 0) dependencyImporters.delete(dependency);
     }
     importerDependencies.delete(id);
+    moduleTokens.delete(id);
+    moduleGlobalTokens.delete(id);
+    rebuildOwnedTokens();
   }
 
   function trackModule(id, dependencies) {
@@ -168,12 +197,14 @@ export function createUnoCssBuildEngine(options = {}) {
     if (!isIncluded(code, id)) return tokenStore();
     const uno = await generator();
     const extracted = await uno.applyExtractors(code, id, new Set());
+    if (id) collectedTokens.set(id, new Set(extracted));
     for (const token of extracted) globalTokenStore().add(token);
     if (typeof options.extract === "function") {
       await options.extract(code, id, tokenStore());
       return tokenStore();
     }
     for (const token of extracted) tokenStore().add(token);
+    rebuildOwnedTokens();
     return tokenStore();
   }
 
@@ -207,6 +238,8 @@ export function createUnoCssBuildEngine(options = {}) {
     const resolvedGuards = new Map();
     const generatedCss = new Map();
     const emittedCandidates = new Map();
+    const ownedModuleTokens = new Set();
+    const ownedModuleGlobalTokens = new Set();
     let configuredSafelist;
     let transformed = code;
 
@@ -276,12 +309,14 @@ export function createUnoCssBuildEngine(options = {}) {
         transformed = transformed.replace(match[0], "");
         continue;
       }
+      for (const candidate of candidates) ownedModuleTokens.add(candidate);
       await scan(
         candidates.join(" "),
         `${id}?litsx-unocss-guard=${match.index}`,
         { global: payload.emit === "global" },
       );
       if (payload.emit === "global") {
+        for (const candidate of candidates) ownedModuleGlobalTokens.add(candidate);
         transformed = transformed.replace(match[0], "");
         continue;
       }
@@ -315,6 +350,9 @@ export function createUnoCssBuildEngine(options = {}) {
     }
 
     trackModule(id, dependencies);
+    moduleTokens.set(id, ownedModuleTokens);
+    moduleGlobalTokens.set(id, ownedModuleGlobalTokens);
+    rebuildOwnedTokens();
     return {
       code: transformed,
       map: null,

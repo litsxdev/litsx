@@ -128,6 +128,9 @@ describe("UnoCSS build helper branches", () => {
     assert.equal(globalTokens.has("grid"), true);
     assert.deepEqual([...await engine.scan("gap-6", "entry.ts", { global: false })], ["gap-6"]);
     assert.equal(globalTokens.has("gap-6"), false);
+    engine.forgetModule("entry.ts");
+    assert.equal(tokens.has("existing"), true);
+    assert.equal(globalTokens.has("grid"), true);
   });
 
   it("materializes every guard destination, deduplicates owners, and clears dependency tracking", async () => {
@@ -152,7 +155,19 @@ describe("UnoCSS build helper branches", () => {
       assert.deepEqual(engine.invalidate(dependency), [id]);
       assert.equal(engine.globalTokens.has("grid"), true);
 
+      const secondId = path.join(directory, "second.tsx");
+      await engine.materializeModule(
+        createUnoCssGuardMarker({
+          candidates: ["gap-6"],
+          dependencies: [dependency],
+        }),
+        secondId,
+      );
+      engine.forgetModule(id);
+      assert.deepEqual(engine.getImporters(dependency), [secondId]);
+
       assert.equal(await engine.materializeModule("export const value = 1", id), null);
+      engine.forgetModule(secondId);
       assert.deepEqual(engine.getImporters(dependency), []);
       engine.forgetModule("missing.ts");
     } finally {

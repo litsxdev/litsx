@@ -6,6 +6,72 @@ The package is build-tool neutral. `@litsx/unocss` contains the compiler
 contribution and the stateful generation engine; `@litsx/unocss/vite` is a
 thin adapter that maps that engine onto Vite modules and HMR.
 
+## Single-declaration host integration
+
+Frameworks with a LitSX build lifecycle can consume the neutral factory from
+the package root. The factory does not import the framework or Vite:
+
+```js
+import { litsxUnoCss } from "@litsx/unocss";
+
+export default {
+  litsx: {
+    integrations: [litsxUnoCss()],
+  },
+};
+```
+
+Each call returns a stateless descriptor. Its `create(context)` method loads
+`uno.config.*` from `context.projectRoot` through UnoCSS's official config
+loader and creates isolated generator state for that server, build, or
+runtime. An inline config or explicit config path can be supplied when config
+discovery is not desired:
+
+```js
+litsxUnoCss({
+  config: "./config/uno.config.ts",
+  integration: {
+    preflightLayers: {
+      component: ({ layer }) => layer !== "theme",
+      global: ["theme"],
+    },
+  },
+});
+```
+
+The descriptor contributes native LitSX authoring/output plugins with
+`reactCompat: false`, materializes every compiled component module, reports
+config and static-guard dependencies, and implements invalidation, module
+forgetting, finalization, and idempotent disposal. Finalization declares:
+
+- `preflight.js`, unless `integration.preflightModule` is `false`: a finalized
+  module artifact exporting component-routed preflight as a `CSSResult` used
+  inside each Shadow Root.
+- `global.css`, a document stylesheet containing globally routed preflight
+  layers, theme/custom properties, safelist output, and global Light DOM
+  utilities.
+
+Component-owned utility rules are materialized directly into the compiled
+component module, after existing `Component.styles`. The shared preflight is
+referenced before authored and generated component styles, preserving the
+established LitSX order.
+
+### Neutral host requirement for virtual modules
+
+The lifecycle is deliberately build-tool neutral. A compatible host calls the
+integration's `resolveModule({ specifier, importer, ... })` hook while compiling
+both server and browser graphs. For `virtual:@litsx/unocss/preflight`, the hook
+returns a component-safe preflight snapshot generated after that importing
+module has contributed its tokens. This keeps multi-entry production graphs
+correct without requiring an early graph-wide finalization. The host must
+invalidate resolved importers when the integration generation changes and
+link each `document: true` style output exactly once in the document.
+
+Merely writing the finalized module artifact is insufficient: the LitSX
+compiler emits its import while the graph is being discovered. Hosts without a
+neutral `resolveModule` capability need to add it; applications should not
+write adapter code or import Vite/PostCSS to compensate.
+
 ```js
 import { presetWind3 } from "unocss";
 import { defineConfig } from "vite";
