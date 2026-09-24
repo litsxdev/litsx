@@ -7,6 +7,10 @@
 
 Shared TypeScript session utilities used across the LitSX toolchain.
 
+The current compiler-session API supports TypeScript 5.x and 6.x. TypeScript
+7 exposes a different runtime API and is intentionally excluded until LitSX
+can adopt it without changing compilation semantics.
+
 ## Purpose
 
 This package centralizes the project and standalone TypeScript session logic
