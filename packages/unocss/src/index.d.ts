@@ -1,4 +1,4 @@
-import type { TransformLitsxOptions } from "@litsx/compiler";
+import type { TransformLitsxOptions, TransformLitsxResult } from "@litsx/compiler";
 import type { UnoGenerator, UserConfig } from "unocss";
 
 export type UnoCssStaticStyleSource =
@@ -15,14 +15,86 @@ declare module "@litsx/core" {
 export type LitsxUnoCssOptions = {
   /** Vite document stylesheet module. Defaults to `virtual:uno.css`; false delegates ownership. */
   globalCssModule?: string | false;
-  /** JavaScript module exporting the component-routed preflight CSSResult. */
-  preflightModule?: string;
+  /** JavaScript module exporting component preflight; false disables that module. */
+  preflightModule?: string | false;
   /** Fallback light-DOM output policy; the compiler's explicit option wins. */
   lightDomStyles?: TransformLitsxOptions["lightDomStyles"];
   /** Select which resolved UnoCSS preflight layers belong in each destination. */
   preflightLayers?: Partial<
     Record<"component" | "global", UnoCssPreflightLayerSelector>
   >;
+};
+
+export type LitsxUnoCssNeutralOptions = {
+  /** Inline UnoCSS config or a config path. Omit to discover uno.config from the host project root. */
+  config?: string | UserConfig;
+  /** Compiler/preflight routing options shared with the existing engine. */
+  integration?: LitsxUnoCssOptions;
+  /** Integration-owned module output id. */
+  preflightOutput?: string;
+  /** Integration-owned document stylesheet output id. */
+  globalCssOutput?: string;
+};
+
+export type LitsxBuildIntegrationOutput = {
+  id: string;
+  kind: "module" | "style" | "asset";
+  content: string | Uint8Array;
+  specifier?: string;
+  document?: boolean;
+};
+
+export type LitsxBuildCompilerOptions = Omit<
+  TransformLitsxOptions,
+  "filename" | "ssr" | "reactCompat"
+> & {
+  reactCompat?: false;
+};
+
+export type LitsxBuildIntegrationContribution = Partial<TransformLitsxResult> & {
+  dependencies?: string[];
+  outputs?: LitsxBuildIntegrationOutput[];
+};
+
+export type LitsxBuildIntegration = {
+  readonly name: string;
+  create(context: Readonly<{
+    projectRoot: string;
+    mode: "development" | "production";
+    identity: Readonly<{ id: string }>;
+  }>): Promise<{
+    compiler: LitsxBuildCompilerOptions;
+    resolveModule(context: Readonly<{
+      specifier: string;
+      importer: string;
+      target: "server" | "client";
+      ssr: boolean;
+      sourceMaps: boolean;
+      generation: number;
+      mode: "development" | "production";
+    }>): Promise<null | {
+      code: string;
+      dependencies?: string[];
+    }>;
+    processModule(context: Readonly<{
+      result: TransformLitsxResult;
+      sourcePath: string;
+      source: string;
+      target: "server" | "client";
+      ssr: boolean;
+      sourceMaps: boolean;
+      generation: number;
+    }>): Promise<LitsxBuildIntegrationContribution>;
+    finalize(): Promise<LitsxBuildIntegrationContribution>;
+    invalidate(context: Readonly<{
+      paths: string[] | null;
+      affected: boolean;
+      generation: number;
+      mode: "development" | "production";
+    }>): Promise<void>;
+    forget(context: Readonly<{ moduleId: string }>): void;
+    dispose(): void;
+  }>;
 };
 
 export type UnoCssPreflightDestination = "component" | "global";
@@ -159,3 +231,11 @@ export declare function withUnoCssCompiler(
   options?: TransformLitsxOptions,
   integrationOptions?: LitsxUnoCssOptions,
 ): TransformLitsxOptions;
+
+/**
+ * Single-declaration, build-tool-neutral LitSX integration.
+ * It does not import Evolit, Vite, or any other host framework.
+ */
+export declare function litsxUnoCss(
+  options?: LitsxUnoCssNeutralOptions,
+): LitsxBuildIntegration;

@@ -1,3 +1,7 @@
+import fs from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import path from "node:path";
+import { parse } from "@babel/parser";
 import {
   classPatternValues,
   collectUtilityClassCandidates,
@@ -22,6 +26,148 @@ import {
   UNO_CSS_PREFLIGHT_EXPORT,
   UNO_CSS_PREFLIGHT_MODULE_ID,
 } from "./protocol.js";
+import { loadConfig } from "@unocss/config";
+import { createUnoCssIntegration } from "./build-engine.js";
+
+const CONFIG_MODULE_EXTENSIONS = [
+  "",
+  ".mjs",
+  ".js",
+  ".mts",
+  ".ts",
+  ".cjs",
+  ".cts",
+  ".json",
+];
+
+async function existingConfigModule(specifier, importer) {
+  if (!specifier.startsWith(".")) return null;
+  const unresolved = path.resolve(path.dirname(importer), specifier);
+  for (const extension of CONFIG_MODULE_EXTENSIONS) {
+    const candidate = `${unresolved}${extension}`;
+    try {
+      if ((await fs.stat(candidate)).isFile()) return candidate;
+    } catch {}
+  }
+  for (const extension of CONFIG_MODULE_EXTENSIONS.slice(1)) {
+    const candidate = path.join(unresolved, `index${extension}`);
+    try {
+      if ((await fs.stat(candidate)).isFile()) return candidate;
+    } catch {}
+  }
+  return null;
+}
+
+async function createFreshConfigSnapshot(entryPath, identity) {
+  const records = new Map();
+  const reversePaths = new Map();
+
+  async function snapshotModule(sourcePath) {
+    const normalizedSource = path.resolve(sourcePath);
+    const existing = records.get(normalizedSource);
+    if (existing) return existing.temporaryPath;
+    const extension = path.extname(normalizedSource) || ".js";
+    const temporaryPath = path.join(
+      path.dirname(normalizedSource),
+      `.litsx-unocss-reload-${process.pid}-${identity}-${records.size}${extension}`,
+    );
+    const record = { sourcePath: normalizedSource, temporaryPath };
+    records.set(normalizedSource, record);
+    reversePaths.set(temporaryPath, normalizedSource);
+
+    let source = await fs.readFile(normalizedSource, "utf8");
+    if (extension !== ".json") {
+      const ast = parse(source, {
+        sourceType: "unambiguous",
+        plugins: ["typescript", "jsx", "importAttributes"],
+      });
+      const replacements = [];
+      const sourceNodes = [];
+      for (const statement of ast.program.body) {
+        const sourceNode =
+          statement.type === "ImportDeclaration" ||
+          statement.type === "ExportAllDeclaration" ||
+          statement.type === "ExportNamedDeclaration"
+            ? statement.source
+            : null;
+        if (sourceNode && typeof sourceNode.value === "string") {
+          sourceNodes.push(sourceNode);
+        }
+      }
+      const visited = new Set();
+      function collectStaticRequires(node) {
+        if (!node || typeof node !== "object" || visited.has(node)) return;
+        visited.add(node);
+        if (
+          node.type === "CallExpression" &&
+          node.callee?.type === "Identifier" &&
+          node.callee.name === "require" &&
+          node.arguments?.length === 1 &&
+          node.arguments[0]?.type === "StringLiteral"
+        ) {
+          sourceNodes.push(node.arguments[0]);
+        }
+        for (const value of Object.values(node)) {
+          if (Array.isArray(value)) {
+            for (const child of value) collectStaticRequires(child);
+          } else if (value && typeof value === "object") {
+            collectStaticRequires(value);
+          }
+        }
+      }
+      collectStaticRequires(ast.program);
+      for (const sourceNode of sourceNodes) {
+        const dependency = await existingConfigModule(
+          sourceNode.value,
+          normalizedSource,
+        );
+        if (!dependency) continue;
+        const temporaryDependency = await snapshotModule(dependency);
+        let relative = path.relative(
+          path.dirname(temporaryPath),
+          temporaryDependency,
+        );
+        if (!relative.startsWith("./") && !relative.startsWith("../")) {
+          relative = `./${relative}`;
+        }
+        replacements.push({
+          start: sourceNode.start,
+          end: sourceNode.end,
+          value: JSON.stringify(relative.split(path.sep).join("/")),
+        });
+      }
+      for (const replacement of replacements.sort((a, b) => b.start - a.start)) {
+        source = `${source.slice(0, replacement.start)}${replacement.value}${source.slice(replacement.end)}`;
+      }
+    }
+    await fs.writeFile(temporaryPath, source);
+    return temporaryPath;
+  }
+
+  async function cleanup() {
+    await Promise.all(
+      [...records.values()].map(({ temporaryPath }) =>
+        fs.rm(temporaryPath, { force: true }),
+      ),
+    );
+  }
+
+  let temporaryEntry;
+  try {
+    temporaryEntry = await snapshotModule(entryPath);
+  } catch (error) {
+    await cleanup();
+    throw error;
+  }
+  return {
+    entryPath: temporaryEntry,
+    sources: [...records.keys()],
+    originalPath(file) {
+      return reversePaths.get(path.resolve(file)) ?? path.resolve(file);
+    },
+    cleanup,
+  };
+}
 
 function scopeGuardMarkers(classPath, scope, t) {
   const pattern = new RegExp(UNO_CSS_GUARD_PATTERN.source, "g");
@@ -755,6 +901,190 @@ export function withUnoCssCompiler(options = {}, integrationOptions = {}) {
       createUnoCssOutputPlugin(resolvedIntegrationOptions),
     ],
   };
+}
+
+/**
+ * Create one build-tool-neutral LitSX integration descriptor.
+ *
+ * Hosts consume the descriptor structurally: they create one instance per
+ * build/runtime, merge `compiler`, process compiled modules, observe returned
+ * dependencies and publish the declared outputs at graph finalization.
+ */
+export function litsxUnoCss(options = {}) {
+  const integrationOptions = options.integration ?? {};
+  const configOrPath = options.config;
+  const preflightSpecifier =
+    integrationOptions.preflightModule ?? UNO_CSS_PREFLIGHT_MODULE_ID;
+  const preflightEnabled = preflightSpecifier !== false;
+  const preflightOutputId = options.preflightOutput ?? "preflight.js";
+  const globalCssOutputId = options.globalCssOutput ?? "global.css";
+
+  return Object.freeze({
+    name: "unocss",
+    async create(context) {
+      let disposed = false;
+      let engine;
+      let configSources = [];
+      let knownModules = new Set();
+      let primaryConfigSource = null;
+      let reloadRevision = 0;
+      const reloadIdentity = randomUUID();
+      const resolvedConfigOrPath = typeof configOrPath === "string"
+        ? path.resolve(context.projectRoot, configOrPath)
+        : configOrPath;
+
+      async function loadEngine(forceFresh = false, configPathHint = null) {
+        let snapshot = null;
+        let loaded;
+        const freshSource = primaryConfigSource ?? configPathHint;
+        if (forceFresh && freshSource) {
+          try {
+            await fs.access(freshSource);
+            snapshot = await createFreshConfigSnapshot(
+              freshSource,
+              `${reloadIdentity}-${reloadRevision++}`,
+            );
+          } catch (error) {
+            if (error?.code !== "ENOENT") throw error;
+          }
+        }
+        try {
+          loaded = snapshot || resolvedConfigOrPath != null
+            ? await loadConfig(
+              context.projectRoot,
+              snapshot?.entryPath ?? resolvedConfigOrPath,
+            )
+            : await loadConfig(context.projectRoot);
+        } finally {
+          if (snapshot) await snapshot.cleanup();
+        }
+        const loadedSources = [
+          ...(loaded.sources ?? []),
+          ...(loaded.dependencies ?? []),
+          ...(snapshot?.sources ?? []),
+        ].map((source) => snapshot?.originalPath(source) ??
+          path.resolve(context.projectRoot, source));
+        primaryConfigSource = snapshot
+          ? freshSource
+          : (loaded.sources?.[0]
+              ? path.resolve(context.projectRoot, loaded.sources[0])
+              : null);
+        configSources = [...new Set(loadedSources)];
+        engine = await createUnoCssIntegration(loaded.config, {
+          preflightLayers: integrationOptions.preflightLayers,
+        });
+      }
+
+      function assertActive() {
+        if (disposed) {
+          throw new Error("This @litsx/unocss integration instance has been disposed.");
+        }
+      }
+
+      await loadEngine();
+
+      return {
+        compiler: withUnoCssCompiler(
+          { reactCompat: false },
+          {
+            ...integrationOptions,
+            globalCssModule: false,
+            preflightModule: preflightSpecifier,
+          },
+        ),
+        async resolveModule({ specifier }) {
+          assertActive();
+          if (!preflightEnabled || specifier !== preflightSpecifier) return null;
+          return {
+            code: engine.createPreflightModuleSource(
+              await engine.generatePreflight(),
+            ),
+            dependencies: configSources,
+          };
+        },
+        async processModule({ result, sourcePath }) {
+          assertActive();
+          const materialized = await engine.materializeModule(
+            result.code,
+            sourcePath,
+          );
+          if (!materialized) return { dependencies: configSources };
+          knownModules.add(sourcePath);
+          return {
+            code: materialized.code,
+            map: materialized.map,
+            dependencies: [
+              ...new Set([...configSources, ...materialized.dependencies]),
+            ],
+          };
+        },
+        async finalize() {
+          assertActive();
+          const [preflightCss, globalCss] = await Promise.all([
+            engine.generatePreflight(),
+            engine.generateGlobalCss(),
+          ]);
+          return {
+            dependencies: configSources,
+            outputs: [
+              ...(preflightEnabled ? [{
+                id: preflightOutputId,
+                kind: "module",
+                content: engine.createPreflightModuleSource(preflightCss),
+                specifier: preflightSpecifier,
+              }] : []),
+              {
+                id: globalCssOutputId,
+                kind: "style",
+                content: globalCss,
+                document: true,
+              },
+            ],
+          };
+        },
+        async invalidate({ paths }) {
+          assertActive();
+          if (!Array.isArray(paths)) {
+            knownModules = new Set();
+            await loadEngine(true);
+            return;
+          }
+          const normalizedPaths = paths.map((file) => path.resolve(file));
+          const configPathHint = normalizedPaths.find((file) =>
+            /^(?:uno|unocss)\.config(?:\.(?:mts|cts|ts|mjs|cjs|js|json))?$/.test(
+              path.basename(file),
+            ));
+          if (
+            configPathHint ||
+            normalizedPaths.some((file) => configSources.includes(file))
+          ) {
+            knownModules = new Set();
+            await loadEngine(true, configPathHint);
+            return;
+          }
+          for (const file of normalizedPaths) {
+            for (const importer of engine.invalidate(file)) {
+              engine.forgetModule(importer);
+              knownModules.delete(importer);
+            }
+          }
+        },
+        forget({ moduleId }) {
+          assertActive();
+          engine.forgetModule(moduleId);
+          knownModules.delete(moduleId);
+        },
+        dispose() {
+          if (disposed) return;
+          disposed = true;
+          for (const moduleId of knownModules) engine.forgetModule(moduleId);
+          knownModules.clear();
+          engine = null;
+          configSources = [];
+        },
+      };
+    },
+  });
 }
 
 export {

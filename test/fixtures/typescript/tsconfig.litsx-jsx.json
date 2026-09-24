@@ -20,6 +20,7 @@
     "./litsx-static-hoists.tsx",
     "./litsx-styling.ts",
     "./litsx-styling-errors.ts",
-    "./litsx-unocss-guards.tsx"
+    "./litsx-unocss-guards.tsx",
+    "./litsx-unocss-neutral-integration.ts"
   ]
 }
