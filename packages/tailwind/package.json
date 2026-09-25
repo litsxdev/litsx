@@ -1,6 +1,6 @@
 {
   "name": "@litsx/tailwind",
-  "version": "1.0.0-next.5",
+  "version": "1.0.0-next.6",
   "description": "Bundler-neutral Tailwind CSS integration protocol for LitSX components",
   "author": "LitSX Team",
   "type": "module",

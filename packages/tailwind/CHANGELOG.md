@@ -1,5 +1,14 @@
 # @litsx/tailwind
 
+## 1.0.0-next.6
+
+### Patch Changes
+
+- f464530: Add the build-tool-neutral `litsxTailwind()` integration descriptor so Evolit
+  and other LitSX hosts can own Tailwind compilation, virtual modules, document
+  assets, graph finalization, invalidation, and isolated lifecycle state without
+  Vite or a host-specific adapter.
+
 ## 1.0.0-next.5
 
 ### Minor Changes
