@@ -46,7 +46,7 @@ export function litsxTailwind(options = {}) {
   const integrationOptions = options.integration ?? {};
   const preflightOutputId = options.preflightOutput ?? "preflight.js";
   const globalCssOutputId = options.globalCssOutput ?? "global.css";
-  const preflightSpecifier = `${TAILWIND_PREFLIGHT_MODULE_ID}?inline`;
+  const preflightSpecifier = TAILWIND_PREFLIGHT_MODULE_ID;
 
   return Object.freeze({
     name: "tailwind",
@@ -75,7 +75,7 @@ export function litsxTailwind(options = {}) {
         compiler: withTailwindCompiler(
           { reactCompat: false },
           context,
-          integrationOptions,
+          { ...integrationOptions, inlineQuery: "" },
         ),
         async resolveModule({ specifier }) {
           assertActive();
@@ -97,12 +97,6 @@ export function litsxTailwind(options = {}) {
           const payload = context.get(key);
           if (!payload) {
             throw new Error(`Missing Tailwind component metadata for ${key}.`);
-          }
-          if (!specifier.includes("?inline")) {
-            return {
-              code: "export {};\n",
-              dependencies: declaredDependencies([payload]),
-            };
           }
           const result = await engine.generateComponent(payload);
           return {

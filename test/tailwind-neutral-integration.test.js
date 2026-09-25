@@ -36,7 +36,7 @@ export const story = () => <main class="grid gap-3">Story</main>;
 
 function inlineComponentSpecifier(code) {
   return code.match(
-    /"(virtual:@litsx\/tailwind\/component\/[^"?]+\.css\?inline)"/,
+    /from "(virtual:@litsx\/tailwind\/component\/[^"?]+\.css(?:\?inline)?)"/,
   )?.[1];
 }
 
@@ -60,7 +60,8 @@ describe("neutral litsxTailwind integration", () => {
       assert.equal(instance.compiler.reactCompat, false);
       assert.equal(instance.compiler.authoringPlugins.length, 1);
       assert.equal(instance.compiler.outputPlugins.length, 1);
-      assert.match(compiled.code, /tailwind\/preflight\.css\?inline/);
+      assert.match(compiled.code, /tailwind\/preflight\.css/);
+      assert.doesNotMatch(compiled.code, /tailwind\/preflight\.css\?inline/);
       assert.match(
         compiled.code,
         /static styles = \[_litsxTailwindPreflight, super\.styles \?\? \[\], css`:host \{ display: block; \}`, _litsxTailwindStyles\]/,
@@ -99,13 +100,8 @@ describe("neutral litsxTailwind integration", () => {
       assert.match(componentCss, /aria-expanded="true"/);
       assert.match(componentCss, /prefers-color-scheme: dark/);
       assert.doesNotMatch(componentCss, /@property/);
-      const sideEffect = await instance.resolveModule({
-        specifier: specifier.replace("?inline", ""),
-      });
-      assert.equal(sideEffect.code, "export {};\n");
-
       const preflight = await instance.resolveModule({
-        specifier: `${TAILWIND_PREFLIGHT_MODULE_ID}?inline`,
+        specifier: TAILWIND_PREFLIGHT_MODULE_ID,
       });
       assert.match(moduleCss(preflight), /box-sizing: border-box/);
       assert.doesNotMatch(moduleCss(preflight), /--color-brand/);
@@ -119,7 +115,7 @@ describe("neutral litsxTailwind integration", () => {
       );
       assert.equal(
         moduleOutput.specifier,
-        `${TAILWIND_PREFLIGHT_MODULE_ID}?inline`,
+        TAILWIND_PREFLIGHT_MODULE_ID,
       );
       assert.equal(globalOutput.document, true);
       assert.match(globalOutput.content, /--color-brand: #123456/);
