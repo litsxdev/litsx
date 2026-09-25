@@ -301,6 +301,7 @@ function wildcardPattern(pattern) {
 }
 
 export function createTailwindOutputPlugin(context, options = {}) {
+  const inlineQuery = options.inlineQuery ?? "?inline";
   return function tailwindOutput(api) {
     api.assertVersion("^8.0.0");
     const t = api.types;
@@ -399,7 +400,7 @@ export function createTailwindOutputPlugin(context, options = {}) {
               imports.push(
                 t.importDeclaration(
                   [t.importDefaultSpecifier(t.cloneNode(preflightText))],
-                  t.stringLiteral(`${TAILWIND_PREFLIGHT_MODULE_ID}?inline`),
+                  t.stringLiteral(`${TAILWIND_PREFLIGHT_MODULE_ID}${inlineQuery}`),
                 ),
                 t.variableDeclaration("const", [
                   t.variableDeclarator(
@@ -473,7 +474,7 @@ export function createTailwindOutputPlugin(context, options = {}) {
                 imports.push(
                   t.importDeclaration(
                     [t.importDefaultSpecifier(t.cloneNode(cssText))],
-                    t.stringLiteral(`${moduleId}?inline`),
+                    t.stringLiteral(`${moduleId}${inlineQuery}`),
                   ),
                 );
                 classPath.insertBefore(
