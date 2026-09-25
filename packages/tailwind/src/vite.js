@@ -1,6 +1,7 @@
 import tailwindcss from "@tailwindcss/vite";
 import { litsx } from "@litsx/vite-plugin";
 import postcss from "postcss";
+import { componentCss, importDirective, infrastructureCss } from "./css.js";
 import { createTailwindContext } from "./context.js";
 import { withTailwindCompiler } from "./compiler.js";
 import {
@@ -10,46 +11,6 @@ import {
 } from "./protocol.js";
 
 const RESOLVED_PREFIX = "\0@litsx/tailwind/";
-
-function cssString(value) {
-  return String(value).replaceAll("\\", "\\\\").replaceAll('"', '\\"');
-}
-
-function referenceDirective(entry) {
-  return `@reference "${cssString(entry)}";`;
-}
-
-function importDirective(entry) {
-  return entry === "tailwindcss"
-    ? '@import "tailwindcss" source(none);'
-    : `@import "${cssString(entry)}";`;
-}
-
-function inlineSources(candidates) {
-  return candidates
-    .map((candidate) => `@source inline("${cssString(candidate)}");`)
-    .join("\n");
-}
-
-function componentCss(context, payload) {
-  const utilities = "@tailwind utilities source(none);";
-  return [
-    referenceDirective(context.entry),
-    utilities,
-    inlineSources(payload.candidates),
-  ].join("\n");
-}
-
-function infrastructureCss(context) {
-  return [
-    importDirective(context.entry),
-    referenceDirective(context.entry),
-    "#litsx-tailwind-infrastructure {",
-    "  @tailwind utilities source(none);",
-    "}",
-    ...context.sources.map((source) => `@source "${cssString(source)}";`),
-  ].join("\n");
-}
 
 function resolveVirtualId(id) {
   const queryIndex = id.indexOf("?");

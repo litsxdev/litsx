@@ -1670,6 +1670,7 @@ __metadata:
   resolution: "@litsx/tailwind@workspace:packages/tailwind"
   dependencies:
     "@litsx/compiler": "npm:^1.0.0-next.10"
+    "@tailwindcss/node": "npm:^4.3.0"
     postcss: "npm:^8.5.6"
   peerDependencies:
     "@litsx/vite-plugin": ^1.0.0-next.1
@@ -2774,7 +2775,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@tailwindcss/node@npm:4.3.3":
+"@tailwindcss/node@npm:4.3.3, @tailwindcss/node@npm:^4.3.0":
   version: 4.3.3
   resolution: "@tailwindcss/node@npm:4.3.3"
   dependencies:

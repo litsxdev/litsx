@@ -11,6 +11,7 @@ function stableHash(value) {
 
 export function createTailwindContext(options = {}) {
   const components = new Map();
+  const moduleKeys = new Map();
   const listeners = new Set();
   let root = process.cwd();
 
@@ -39,7 +40,10 @@ export function createTailwindContext(options = {}) {
       const key = stableHash(`${filename}\0${owner ?? "component"}`);
       const previous = components.get(key);
       const serialized = JSON.stringify(payload);
-      components.set(key, { ...payload, serialized });
+      components.set(key, { ...payload, filename, owner, serialized });
+      const keys = moduleKeys.get(filename) ?? new Set();
+      keys.add(key);
+      moduleKeys.set(filename, keys);
       if (previous && previous.serialized !== serialized) {
         for (const listener of listeners) listener(key);
       }
@@ -47,6 +51,29 @@ export function createTailwindContext(options = {}) {
     },
     get(key) {
       return components.get(key) ?? null;
+    },
+    entries() {
+      return [...components.entries()];
+    },
+    keys(filename) {
+      return [...(moduleKeys.get(filename) ?? [])];
+    },
+    retain(filename, retainedKeys) {
+      const retained = new Set(retainedKeys);
+      const current = moduleKeys.get(filename) ?? new Set();
+      for (const key of current) {
+        if (!retained.has(key)) components.delete(key);
+      }
+      if (retained.size > 0) moduleKeys.set(filename, retained);
+      else moduleKeys.delete(filename);
+    },
+    forget(filename) {
+      for (const key of moduleKeys.get(filename) ?? []) components.delete(key);
+      moduleKeys.delete(filename);
+    },
+    clear() {
+      components.clear();
+      moduleKeys.clear();
     },
     onChange(listener) {
       listeners.add(listener);
