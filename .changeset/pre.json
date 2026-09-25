@@ -89,6 +89,7 @@
     "strict-components-hooks",
     "style-contract-and-prop-ssr-fixes",
     "tailwind-neutral-hosts",
+    "tailwind-neutral-specifiers",
     "tailwind-shadows-scope",
     "ten-windows-invite",
     "tidy-eslint-jsx-rules",
