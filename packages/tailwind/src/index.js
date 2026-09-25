@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import path from "node:path";
 import { createTailwindBuildEngine } from "./build-engine.js";
 import { withTailwindCompiler } from "./compiler.js";
@@ -25,13 +26,25 @@ function componentKey(specifier) {
 }
 
 function normalizedDependencies(root, dependencies) {
+  let realRoot = root;
+  try {
+    realRoot = fs.realpathSync.native(root);
+  } catch {
+    // The configured root can be created after descriptor construction.
+  }
   return [
     ...new Set(
-      dependencies.map((dependency) =>
-        path.isAbsolute(dependency)
+      dependencies.map((dependency) => {
+        const absolute = path.isAbsolute(dependency)
           ? path.normalize(dependency)
-          : path.resolve(root, dependency),
-      ),
+          : path.resolve(root, dependency);
+        const relativeToRealRoot = path.relative(realRoot, absolute);
+        return relativeToRealRoot !== ".."
+          && !relativeToRealRoot.startsWith(`..${path.sep}`)
+          && !path.isAbsolute(relativeToRealRoot)
+          ? path.resolve(root, relativeToRealRoot)
+          : absolute;
+      }),
     ),
   ].sort();
 }

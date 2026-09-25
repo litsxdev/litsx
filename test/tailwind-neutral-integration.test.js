@@ -322,4 +322,33 @@ describe("neutral litsxTailwind integration", () => {
       fs.rmSync(root, { recursive: true, force: true });
     }
   });
+
+  it("reports dependencies through the host's logical project root", async () => {
+    const fixtureRoot = fixture("tailwind-neutral-logical-root");
+    const logicalRoot = `${fixtureRoot.root}-logical`;
+    fs.symlinkSync(fixtureRoot.root, logicalRoot, "dir");
+    const instance = await litsxTailwind({
+      integration: { entry: "./tailwind.css" },
+    }).create({
+      projectRoot: logicalRoot,
+      mode: "development",
+      identity: { id: "logical-root" },
+    });
+    try {
+      const finalized = await instance.finalize();
+      assert.ok(finalized.dependencies.includes(path.join(logicalRoot, "tailwind.css")));
+      assert.equal(
+        finalized.dependencies.some((dependency) => (
+          dependency === fixtureRoot.root
+          || dependency.startsWith(`${fixtureRoot.root}${path.sep}`)
+        )),
+        false,
+        JSON.stringify(finalized.dependencies),
+      );
+    } finally {
+      instance.dispose();
+      fs.rmSync(logicalRoot, { force: true });
+      fs.rmSync(fixtureRoot.root, { recursive: true, force: true });
+    }
+  });
 });
