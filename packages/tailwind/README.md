@@ -1,13 +1,18 @@
 # `@litsx/tailwind`
 
 Tailwind CSS v4 utilities for LitSX shadow DOM and light DOM components. The
-adapter uses the official `@tailwindcss/vite` plugin; it does not depend on
-Tailwind's private programmatic compiler APIs.
+root export is a build-tool-neutral LitSX integration. A separate `/vite`
+entrypoint keeps the existing adapter based on the official Vite plugin.
 
 ## Installation
 
-For the supported Vite integration, install the adapter and its optional peer
-tooling together:
+For Evolit or another neutral LitSX host:
+
+```bash
+npm install @litsx/tailwind
+```
+
+For Vite, install the optional peer tooling too:
 
 ```bash
 npm install -D @litsx/tailwind @litsx/vite-plugin \
@@ -15,8 +20,42 @@ npm install -D @litsx/tailwind @litsx/vite-plugin \
 ```
 
 The Vite adapter supports Tailwind CSS 4.3+, Vite 7.3 or 8, and LitSX 1.0.
-Consumers of the bundler-neutral root entrypoint do not need Vite or
-`@tailwindcss/vite` at runtime.
+Consumers of the neutral root entrypoint do not need Vite,
+`@tailwindcss/vite`, or an application-owned PostCSS pipeline.
+
+## Evolit quick start
+
+```js
+// evolit.config.js
+import { litsxTailwind } from "@litsx/tailwind";
+import { defineEvolitConfig } from "evolit/litsx";
+
+export default defineEvolitConfig({
+  litsx: {
+    compiler: { sourceMaps: true },
+    integrations: [
+      litsxTailwind({
+        integration: { entry: "./src/tailwind.css" },
+      }),
+    ],
+  },
+});
+```
+
+```css
+/* src/tailwind.css */
+@import "tailwindcss" source(none);
+
+@theme {
+  --color-brand: oklch(62% 0.18 255);
+}
+```
+
+This single declaration contributes the native LitSX compiler plugins,
+materializes component and preflight virtual modules, watches the Tailwind
+entry and its imports, removes stale candidates, and declares the final
+document stylesheet. Evolit runs the same instance lifecycle for development,
+SSR, hydration, production and standalone execution.
 
 ## Vite quick start
 
@@ -43,11 +82,10 @@ export default defineConfig({
 }
 ```
 
-The main `@litsx/tailwind` entrypoint is bundler-neutral. It exposes the
-compiler contribution and integration context without importing Vite,
-`@tailwindcss/vite`, PostCSS, or Tailwind itself. The `/vite` entrypoint is the
-supported CSS materializer and composes the core protocol with Tailwind's
-official Vite plugin.
+The main `@litsx/tailwind` entrypoint is build-tool-neutral and uses Tailwind's
+public Node compilation API. It does not import Evolit, Vite, or
+`@tailwindcss/vite`. The `/vite` entrypoint remains available and composes the
+same compiler protocol with Tailwind's official Vite plugin.
 
 `source(none)` is recommended because LitSX owns candidate routing. The entry
 still owns theme, preflight, plugins and custom CSS.
@@ -73,6 +111,10 @@ as Storybook does. Ordinary applications should use `litsxTailwind()`.
 
 The bundler-neutral entrypoint exposes:
 
+- `litsxTailwind(options?)`, the complete single-declaration integration for
+  Evolit and other hosts implementing the LitSX build lifecycle;
+- `createTailwindBuildEngine(context)` for lower-level neutral hosts;
+
 - `createTailwindContext(options?)` for the shared project-level candidate and
   virtual-module registry;
 - `createTailwindAuthoringPlugin(options?)` for authored class analysis;
@@ -80,8 +122,27 @@ The bundler-neutral entrypoint exposes:
 - `withTailwindCompiler(options, context, integration?)` to add both compiler
   contributions to an existing `TransformLitsxOptions` object.
 
-Framework adapters should create one context per project, configure it with the
-resolved project root, and reuse it across client, SSR, and watch transforms.
+Ordinary Evolit applications should use `litsxTailwind()`. Lower-level hosts
+must create one integration instance per server, build, or runtime. Candidate
+registries and compiler state are instance-owned, so concurrent projects and
+requests do not share mutable state.
+
+The neutral integration declares two final outputs:
+
+- `preflight.js`, a virtual JavaScript module containing Shadow Root preflight;
+- `global.css`, one document stylesheet containing theme/custom properties,
+  document preflight, Tailwind property registrations, and global utilities.
+
+Component utilities remain in their individual virtual modules. Theme rules
+are removed from the Shadow Root preflight so variables are emitted once in
+the document and inherited across the shadow boundary. `@property` rules are
+likewise hoisted once to the document output. Authored `Component.styles`
+remain between preflight and generated utilities.
+
+On invalidation the host can rebuild the affected virtual modules immediately;
+`forget` removes candidates for graph modules that disappeared, and `dispose`
+clears all instance state. Errors thrown by Tailwind retain the host's
+integration/hook/module context.
 
 ## Component ownership
 
@@ -176,20 +237,15 @@ including Firefox ESR 140.
 
 ## Options
 
-```ts
-litsxTailwind({
-  litsx: {}, // @litsx/vite-plugin options
-  tailwind: {}, // official @tailwindcss/vite options
-  integration: {
-    entry: "./src/tailwind.css",
-    sources: ["./src/**/*.{html,js,jsx,ts,tsx}"],
-    safelist: [],
-  },
-});
-```
+The root `litsxTailwind()` accepts `integration`, `preflightOutput`, and
+`globalCssOutput`. `integration` contains `entry`, `sources`, and `safelist`.
+The `/vite` function additionally accepts `litsx` and `tailwind` options for
+its two Vite plugins.
 
-`sources` feeds only the inert shared infrastructure so lazy modules have the
-required Tailwind property registrations before they are imported. It is not a
-fallback global utility scanner. Exact component utilities come exclusively
+With `/vite`, `sources` feeds the shared infrastructure so lazy modules have
+the required Tailwind property registrations before they are imported. A
+neutral graph host such as Evolit discovers those registrations from all LitSX
+modules before `finalize`, so no extra source scan is needed. `sources` is not
+a fallback global utility scanner. Exact component utilities come exclusively
 from that component's markup, finite guards and matching safelist entries;
 utilities in free light-DOM JSX are routed separately to the global sheet.
