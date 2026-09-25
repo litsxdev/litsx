@@ -88,6 +88,7 @@
     "steady-suspended-refs",
     "strict-components-hooks",
     "style-contract-and-prop-ssr-fixes",
+    "tailwind-logical-dependencies",
     "tailwind-neutral-hosts",
     "tailwind-neutral-specifiers",
     "tailwind-shadows-scope",

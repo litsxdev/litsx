@@ -1,5 +1,13 @@
 # @litsx/tailwind
 
+## 1.0.0-next.8
+
+### Patch Changes
+
+- aa4fbf9: Report Tailwind entry, config, and imported dependencies through the host's logical project root
+  when the project is reached through a symlink. Development watchers can now invalidate generated
+  component CSS consistently on platforms whose temporary or workspace roots have physical aliases.
+
 ## 1.0.0-next.7
 
 ### Patch Changes
