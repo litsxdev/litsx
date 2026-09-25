@@ -72,6 +72,23 @@ describe("neutral litsxTailwind integration", () => {
       });
       assert.ok(contribution.dependencies.includes(entry));
 
+      const infrastructure = await instance.resolveModule({
+        specifier: "virtual:@litsx/tailwind/infrastructure.css",
+      });
+      assert.equal(infrastructure.code, "export {};\n");
+      await assert.rejects(
+        instance.resolveModule({
+          specifier: "virtual:@litsx/tailwind/component/missing.css?inline",
+        }),
+        /Missing Tailwind component metadata/,
+      );
+      assert.equal(
+        await instance.resolveModule({
+          specifier: "virtual:@litsx/tailwind/component/malformed",
+        }),
+        null,
+      );
+
       const specifier = inlineComponentSpecifier(compiled.code);
       assert.ok(specifier);
       const component = await instance.resolveModule({ specifier });
@@ -82,6 +99,10 @@ describe("neutral litsxTailwind integration", () => {
       assert.match(componentCss, /aria-expanded="true"/);
       assert.match(componentCss, /prefers-color-scheme: dark/);
       assert.doesNotMatch(componentCss, /@property/);
+      const sideEffect = await instance.resolveModule({
+        specifier: specifier.replace("?inline", ""),
+      });
+      assert.equal(sideEffect.code, "export {};\n");
 
       const preflight = await instance.resolveModule({
         specifier: `${TAILWIND_PREFLIGHT_MODULE_ID}?inline`,
@@ -282,5 +303,27 @@ describe("neutral litsxTailwind integration", () => {
       "utf8",
     );
     assert.doesNotMatch(source, /from ["'](?:evolit|vite|@litsx\/vite-plugin)/);
+  });
+
+  it("honors custom output ids", async () => {
+    const { root } = fixture("tailwind-neutral-output-ids");
+    const instance = await litsxTailwind({
+      integration: { entry: "./tailwind.css" },
+      preflightOutput: "shadow-reset.js",
+      globalCssOutput: "document-tailwind.css",
+    }).create({
+      projectRoot: root,
+      mode: "production",
+      identity: { id: "outputs" },
+    });
+    try {
+      assert.deepEqual(
+        (await instance.finalize()).outputs.map(({ id }) => id),
+        ["shadow-reset.js", "document-tailwind.css"],
+      );
+    } finally {
+      instance.dispose();
+      fs.rmSync(root, { recursive: true, force: true });
+    }
   });
 });
