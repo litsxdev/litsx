@@ -28,10 +28,14 @@ The release pipeline currently publishes these workspace packages:
 - `@litsx/eslint-plugin`
 - `@litsx/prop-types`
 - `@litsx/scoped-registry-shim`
+- `@litsx/ssr`
+- `@litsx/storybook`
 - `@litsx/typescript-session`
+- `@litsx/tailwind`
+- `@litsx/unocss`
 - `@litsx/vite-plugin`
 
-The source of truth for this set is [scripts/release/release-packages.js](/Users/rafabernad/Workspace/litsx/scripts/release/release-packages.js).
+The source of truth for this set is [scripts/release/release-packages.js](scripts/release/release-packages.js).
 
 ## Contributor workflow
 
