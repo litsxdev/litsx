@@ -2,11 +2,18 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { limitGitHubReleaseBody } from "./github-release-body.js";
 import { npmReleasePackages } from "./release-packages.js";
 
-const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
+const repoRoot = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "..",
+  "..",
+);
 const requestedRefArg = process.argv.find((arg) => arg.startsWith("--ref="));
-const releaseRef = requestedRefArg ? requestedRefArg.slice("--ref=".length) : "HEAD";
+const releaseRef = requestedRefArg
+  ? requestedRefArg.slice("--ref=".length)
+  : "HEAD";
 const previousRef = `${releaseRef}^`;
 
 function readJsonAtGitRef(ref, filePath) {
@@ -149,7 +156,7 @@ const releaseData = {
   targetCommitish: releaseCommitSha,
   name: `LitSX release ${releaseCommitDate}`,
   releaseDate: releaseCommitDate,
-  body: buildReleaseBody(changes),
+  body: limitGitHubReleaseBody(buildReleaseBody(changes)),
   commitSha: releaseCommitSha,
   packages: changes.map(({ name, version, packageDir, tagName }) => ({
     name,
