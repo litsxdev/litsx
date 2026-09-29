@@ -14,6 +14,10 @@ describe("release workflow", () => {
     path.join(repoRoot, ".github", "workflows", "release.yml"),
     "utf8",
   );
+  const changesetStatusWorkflow = fs.readFileSync(
+    path.join(repoRoot, ".github", "workflows", "changeset-status.yml"),
+    "utf8",
+  );
   const publishJob = workflow.slice(workflow.indexOf("  publish:\n"));
 
   it("treats main, next, and feature branches as distinct release channels", () => {
@@ -59,5 +63,22 @@ describe("release workflow", () => {
       publishJob,
       /git push origin HEAD:\$\{\{ needs\.plan\.outputs\.release_branch \}\}/,
     );
+  });
+
+  it("exits prerelease mode before checking a next-to-main promotion", () => {
+    assert.match(
+      changesetStatusWorkflow,
+      /if: github\.base_ref == 'main' && github\.head_ref == 'next'/,
+    );
+
+    const preExit = changesetStatusWorkflow.indexOf(
+      "run: corepack yarn changeset pre exit",
+    );
+    const status = changesetStatusWorkflow.indexOf(
+      "run: corepack yarn changeset status --since=origin/main",
+    );
+
+    assert(preExit >= 0);
+    assert(status > preExit);
   });
 });
