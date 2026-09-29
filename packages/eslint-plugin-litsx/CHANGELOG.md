@@ -1,5 +1,48 @@
 # @litsx/eslint-plugin
 
+## 1.0.0
+
+### Major Changes
+
+- 28f3007: Stabilize the complete public LitSX package graph as the 1.0 release line.
+
+  This release establishes standard JSX and TSX authoring, SSR and hydration,
+  React compatibility, scoped custom-element registration, structural hooks,
+  Storybook and Vite integration, and Shadow DOM and Light DOM UnoCSS support as
+  the stable public contract.
+
+### Minor Changes
+
+- 28f3007: Centralize component-tag derivation and hook authoring diagnostics in
+  `@litsx/authoring`. Component identifiers must now map directly to a valid
+  custom-element name: LitSX no longer invents framework prefixes for short names
+  such as `Switch` or `App`, while namespace members retain mappings such as
+  `Controls.Switch` to `controls-switch`.
+
+  Use the shared hook analyzer from the compiler, direct Babel transforms and new
+  recommended ESLint rules. Report hooks in unstable control flow, async render
+  scopes, handlers, deferred `useAsyncState` actions and nested hook definitions
+  with stable diagnostic codes. Keep React-specific primitives, including Radix's
+  polymorphic `Slot`, inside the optional react-compat adapter.
+
+### Patch Changes
+
+- 28f3007: Move the compiler and lint integrations to Babel 8, ESLint 10, and Node 24 while retaining ESLint 9 compatibility. Refresh generated Storybook and Playwright versions, consume patched transitive dependencies, and support Chromium's native scoped-registry creation scope across shadow and projected light DOM.
+- 28f3007: Remove the obsolete `no-react-memo` native JSX rule now that React wrapper
+  semantics belong to the optional react-compat compiler pipeline. Drop unused
+  syntax-plugin dependencies and the unnecessary TypeScript peer, and derive the
+  ESLint plugin metadata version from its package manifest.
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+  - @litsx/authoring@1.0.0
+
 ## 1.0.0-next.2
 
 ### Minor Changes

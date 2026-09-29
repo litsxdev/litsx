@@ -1480,7 +1480,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@litsx/authoring@npm:^1.0.0-next.3, @litsx/authoring@npm:^1.0.0-next.4, @litsx/authoring@npm:^1.0.0-next.5, @litsx/authoring@workspace:packages/authoring":
+"@litsx/authoring@npm:^1.0.0, @litsx/authoring@workspace:packages/authoring":
   version: 0.0.0-use.local
   resolution: "@litsx/authoring@workspace:packages/authoring"
   dependencies:
@@ -1488,31 +1488,31 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@litsx/babel-plugin-litsx-proptypes@npm:^1.0.0-next.1, @litsx/babel-plugin-litsx-proptypes@workspace:packages/babel-plugin-litsx-proptypes":
+"@litsx/babel-plugin-litsx-proptypes@npm:^1.0.0, @litsx/babel-plugin-litsx-proptypes@workspace:packages/babel-plugin-litsx-proptypes":
   version: 0.0.0-use.local
   resolution: "@litsx/babel-plugin-litsx-proptypes@workspace:packages/babel-plugin-litsx-proptypes"
   dependencies:
     "@babel/core": "npm:^8.0.1"
     "@babel/helper-plugin-utils": "npm:^8.0.1"
-    "@litsx/prop-types": "npm:^1.0.0-next.0"
+    "@litsx/prop-types": "npm:^1.0.0"
   peerDependencies:
     "@babel/core": ^8.0.0
   languageName: unknown
   linkType: soft
 
-"@litsx/babel-plugin-shared-hooks@npm:^1.0.0-next.3, @litsx/babel-plugin-shared-hooks@workspace:packages/babel-plugin-shared-hooks":
+"@litsx/babel-plugin-shared-hooks@npm:^1.0.0, @litsx/babel-plugin-shared-hooks@workspace:packages/babel-plugin-shared-hooks":
   version: 0.0.0-use.local
   resolution: "@litsx/babel-plugin-shared-hooks@workspace:packages/babel-plugin-shared-hooks"
   dependencies:
     "@babel/core": "npm:^8.0.1"
     "@babel/helper-plugin-utils": "npm:^8.0.1"
-    "@litsx/authoring": "npm:^1.0.0-next.3"
+    "@litsx/authoring": "npm:^1.0.0"
   peerDependencies:
     "@babel/core": ^8.0.0
   languageName: unknown
   linkType: soft
 
-"@litsx/babel-plugin-transform-jsx-html-template@npm:^1.0.0-next.4, @litsx/babel-plugin-transform-jsx-html-template@npm:^1.0.0-next.6, @litsx/babel-plugin-transform-jsx-html-template@workspace:packages/babel-plugin-transform-jsx-html-template":
+"@litsx/babel-plugin-transform-jsx-html-template@npm:^1.0.0, @litsx/babel-plugin-transform-jsx-html-template@workspace:packages/babel-plugin-transform-jsx-html-template":
   version: 0.0.0-use.local
   resolution: "@litsx/babel-plugin-transform-jsx-html-template@workspace:packages/babel-plugin-transform-jsx-html-template"
   dependencies:
@@ -1522,29 +1522,29 @@ __metadata:
     "@babel/parser": "npm:^8.0.4"
     "@babel/plugin-syntax-jsx": "npm:^8.0.1"
     "@babel/types": "npm:^8.0.4"
-    "@litsx/authoring": "npm:^1.0.0-next.4"
+    "@litsx/authoring": "npm:^1.0.0"
     source-map-js: "npm:^1.2.1"
   peerDependencies:
     "@babel/core": ^8.0.0
   languageName: unknown
   linkType: soft
 
-"@litsx/babel-plugin-transform-litsx-scoped-elements@npm:^1.0.0-next.4, @litsx/babel-plugin-transform-litsx-scoped-elements@npm:^1.0.0-next.5, @litsx/babel-plugin-transform-litsx-scoped-elements@workspace:packages/babel-plugin-transform-litsx-scoped-elements":
+"@litsx/babel-plugin-transform-litsx-scoped-elements@npm:^1.0.0, @litsx/babel-plugin-transform-litsx-scoped-elements@workspace:packages/babel-plugin-transform-litsx-scoped-elements":
   version: 0.0.0-use.local
   resolution: "@litsx/babel-plugin-transform-litsx-scoped-elements@workspace:packages/babel-plugin-transform-litsx-scoped-elements"
   dependencies:
     "@babel/core": "npm:^8.0.1"
     "@babel/parser": "npm:^8.0.4"
     "@babel/plugin-syntax-jsx": "npm:^8.0.1"
-    "@litsx/authoring": "npm:^1.0.0-next.5"
-    "@litsx/babel-plugin-shared-hooks": "npm:^1.0.0-next.3"
-    "@litsx/typescript-session": "npm:^1.0.0-next.0"
+    "@litsx/authoring": "npm:^1.0.0"
+    "@litsx/babel-plugin-shared-hooks": "npm:^1.0.0"
+    "@litsx/typescript-session": "npm:^1.0.0"
   peerDependencies:
     "@babel/core": ^8.0.0
   languageName: unknown
   linkType: soft
 
-"@litsx/babel-preset-litsx@npm:^1.0.0-next.4, @litsx/babel-preset-litsx@npm:^1.0.0-next.9, @litsx/babel-preset-litsx@workspace:packages/babel-preset-litsx":
+"@litsx/babel-preset-litsx@npm:^1.0.0, @litsx/babel-preset-litsx@workspace:packages/babel-preset-litsx":
   version: 0.0.0-use.local
   resolution: "@litsx/babel-preset-litsx@workspace:packages/babel-preset-litsx"
   dependencies:
@@ -1552,34 +1552,34 @@ __metadata:
     "@babel/parser": "npm:^8.0.4"
     "@babel/plugin-syntax-jsx": "npm:^8.0.1"
     "@babel/traverse": "npm:^8.0.4"
-    "@litsx/authoring": "npm:^1.0.0-next.5"
-    "@litsx/babel-plugin-shared-hooks": "npm:^1.0.0-next.3"
-    "@litsx/babel-plugin-transform-jsx-html-template": "npm:^1.0.0-next.6"
-    "@litsx/babel-plugin-transform-litsx-scoped-elements": "npm:^1.0.0-next.5"
-    "@litsx/typescript-session": "npm:^1.0.0-next.0"
+    "@litsx/authoring": "npm:^1.0.0"
+    "@litsx/babel-plugin-shared-hooks": "npm:^1.0.0"
+    "@litsx/babel-plugin-transform-jsx-html-template": "npm:^1.0.0"
+    "@litsx/babel-plugin-transform-litsx-scoped-elements": "npm:^1.0.0"
+    "@litsx/typescript-session": "npm:^1.0.0"
   peerDependencies:
     "@babel/core": ^8.0.0
   languageName: unknown
   linkType: soft
 
-"@litsx/babel-preset-react-compat@npm:^1.0.0-next.4, @litsx/babel-preset-react-compat@workspace:packages/babel-preset-react-compat":
+"@litsx/babel-preset-react-compat@npm:^1.0.0, @litsx/babel-preset-react-compat@workspace:packages/babel-preset-react-compat":
   version: 0.0.0-use.local
   resolution: "@litsx/babel-preset-react-compat@workspace:packages/babel-preset-react-compat"
   dependencies:
     "@babel/core": "npm:^8.0.1"
     "@babel/helper-plugin-utils": "npm:^8.0.1"
     "@babel/plugin-syntax-jsx": "npm:^8.0.1"
-    "@litsx/babel-plugin-litsx-proptypes": "npm:^1.0.0-next.1"
-    "@litsx/babel-plugin-shared-hooks": "npm:^1.0.0-next.3"
-    "@litsx/babel-plugin-transform-jsx-html-template": "npm:^1.0.0-next.4"
-    "@litsx/babel-plugin-transform-litsx-scoped-elements": "npm:^1.0.0-next.4"
-    "@litsx/babel-preset-litsx": "npm:^1.0.0-next.4"
+    "@litsx/babel-plugin-litsx-proptypes": "npm:^1.0.0"
+    "@litsx/babel-plugin-shared-hooks": "npm:^1.0.0"
+    "@litsx/babel-plugin-transform-jsx-html-template": "npm:^1.0.0"
+    "@litsx/babel-plugin-transform-litsx-scoped-elements": "npm:^1.0.0"
+    "@litsx/babel-preset-litsx": "npm:^1.0.0"
   peerDependencies:
     "@babel/core": ^8.0.0
   languageName: unknown
   linkType: soft
 
-"@litsx/compiler@npm:^1.0.0-next.10, @litsx/compiler@npm:^1.0.0-next.11, @litsx/compiler@npm:^1.0.0-next.12, @litsx/compiler@npm:^1.0.0-next.13, @litsx/compiler@workspace:packages/compiler":
+"@litsx/compiler@npm:^1.0.0, @litsx/compiler@workspace:packages/compiler":
   version: 0.0.0-use.local
   resolution: "@litsx/compiler@workspace:packages/compiler"
   dependencies:
@@ -1587,23 +1587,23 @@ __metadata:
     "@babel/parser": "npm:^8.0.4"
     "@babel/plugin-transform-typescript": "npm:^8.0.1"
     "@babel/types": "npm:^8.0.4"
-    "@litsx/authoring": "npm:^1.0.0-next.5"
-    "@litsx/babel-plugin-transform-jsx-html-template": "npm:^1.0.0-next.6"
-    "@litsx/babel-preset-litsx": "npm:^1.0.0-next.9"
-    "@litsx/babel-preset-react-compat": "npm:^1.0.0-next.4"
-    "@litsx/typescript-session": "npm:^1.0.0-next.0"
+    "@litsx/authoring": "npm:^1.0.0"
+    "@litsx/babel-plugin-transform-jsx-html-template": "npm:^1.0.0"
+    "@litsx/babel-preset-litsx": "npm:^1.0.0"
+    "@litsx/babel-preset-react-compat": "npm:^1.0.0"
+    "@litsx/typescript-session": "npm:^1.0.0"
     source-map-js: "npm:^1.2.1"
   languageName: unknown
   linkType: soft
 
-"@litsx/core@npm:^1.0.0-next.7, @litsx/core@workspace:packages/core":
+"@litsx/core@npm:^1.0.0, @litsx/core@workspace:packages/core":
   version: 0.0.0-use.local
   resolution: "@litsx/core@workspace:packages/core"
   dependencies:
     "@lit-labs/ssr-client": "npm:^1.1.7"
     "@lit/context": "npm:^1.1.6"
-    "@litsx/authoring": "npm:^1.0.0-next.5"
-    "@litsx/scoped-registry-shim": "npm:^1.0.0-next.2"
+    "@litsx/authoring": "npm:^1.0.0"
+    "@litsx/scoped-registry-shim": "npm:^1.0.0"
     lit: "npm:^3.3.3"
   peerDependencies:
     lit: ">=3"
@@ -1616,19 +1616,19 @@ __metadata:
   dependencies:
     "@babel/core": "npm:^8.0.1"
     "@babel/eslint-parser": "npm:^8.0.1"
-    "@litsx/authoring": "npm:^1.0.0-next.3"
+    "@litsx/authoring": "npm:^1.0.0"
   peerDependencies:
     eslint: ^9.0.0 || ^10.0.0
   languageName: unknown
   linkType: soft
 
-"@litsx/prop-types@npm:^1.0.0-next.0, @litsx/prop-types@workspace:packages/prop-types":
+"@litsx/prop-types@npm:^1.0.0, @litsx/prop-types@workspace:packages/prop-types":
   version: 0.0.0-use.local
   resolution: "@litsx/prop-types@workspace:packages/prop-types"
   languageName: unknown
   linkType: soft
 
-"@litsx/scoped-registry-shim@npm:^1.0.0-next.2, @litsx/scoped-registry-shim@workspace:packages/scoped-registry-shim":
+"@litsx/scoped-registry-shim@npm:^1.0.0, @litsx/scoped-registry-shim@workspace:packages/scoped-registry-shim":
   version: 0.0.0-use.local
   resolution: "@litsx/scoped-registry-shim@workspace:packages/scoped-registry-shim"
   languageName: unknown
@@ -1641,8 +1641,8 @@ __metadata:
     "@lit-labs/ssr": "npm:^4.0.0"
     "@lit-labs/ssr-client": "npm:^1.1.7"
     "@lit-labs/ssr-dom-shim": "npm:^1.6.0"
-    "@litsx/compiler": "npm:^1.0.0-next.11"
-    "@litsx/core": "npm:^1.0.0-next.7"
+    "@litsx/compiler": "npm:^1.0.0"
+    "@litsx/core": "npm:^1.0.0"
     lit: "npm:^3.3.3"
   peerDependencies:
     lit: ">=3"
@@ -1653,9 +1653,9 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@litsx/storybook@workspace:packages/storybook"
   dependencies:
-    "@litsx/authoring": "npm:^1.0.0-next.5"
-    "@litsx/compiler": "npm:^1.0.0-next.12"
-    "@litsx/vite-plugin": "npm:^1.0.0-next.3"
+    "@litsx/authoring": "npm:^1.0.0"
+    "@litsx/compiler": "npm:^1.0.0"
+    "@litsx/vite-plugin": "npm:^1.0.0"
     "@storybook/web-components-vite": "npm:10.5.10"
     storybook: "npm:10.5.10"
   peerDependencies:
@@ -1669,11 +1669,11 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@litsx/tailwind@workspace:packages/tailwind"
   dependencies:
-    "@litsx/compiler": "npm:^1.0.0-next.10"
+    "@litsx/compiler": "npm:^1.0.0"
     "@tailwindcss/node": "npm:^4.3.0"
     postcss: "npm:^8.5.6"
   peerDependencies:
-    "@litsx/vite-plugin": ^1.0.0-next.1
+    "@litsx/vite-plugin": ^1.0.0
     "@tailwindcss/vite": ">=4.3 <5"
     tailwindcss: ">=4.3 <5"
     vite: ^7.3.2 || ^8.0.0
@@ -1689,7 +1689,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@litsx/typescript-session@npm:^1.0.0-next.0, @litsx/typescript-session@workspace:packages/typescript-session":
+"@litsx/typescript-session@npm:^1.0.0, @litsx/typescript-session@workspace:packages/typescript-session":
   version: 0.0.0-use.local
   resolution: "@litsx/typescript-session@workspace:packages/typescript-session"
   peerDependencies:
@@ -1702,10 +1702,10 @@ __metadata:
   resolution: "@litsx/unocss@workspace:packages/unocss"
   dependencies:
     "@babel/parser": "npm:^8.0.4"
-    "@litsx/compiler": "npm:^1.0.0-next.11"
+    "@litsx/compiler": "npm:^1.0.0"
     "@unocss/config": "npm:66.8.1"
   peerDependencies:
-    "@litsx/vite-plugin": ^1.0.0-next.2
+    "@litsx/vite-plugin": ^1.0.0
     unocss: ">=66"
     vite: ^7.3.2 || ^8.0.0
   peerDependenciesMeta:
@@ -1716,13 +1716,13 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@litsx/vite-plugin@npm:^1.0.0-next.3, @litsx/vite-plugin@workspace:packages/vite-plugin":
+"@litsx/vite-plugin@npm:^1.0.0, @litsx/vite-plugin@workspace:packages/vite-plugin":
   version: 0.0.0-use.local
   resolution: "@litsx/vite-plugin@workspace:packages/vite-plugin"
   dependencies:
-    "@litsx/compiler": "npm:^1.0.0-next.13"
+    "@litsx/compiler": "npm:^1.0.0"
   peerDependencies:
-    "@litsx/ssr": ^1.0.0-next.5
+    "@litsx/ssr": ^1.0.0
     vite: ^7.3.2 || ^8.0.0
   peerDependenciesMeta:
     "@litsx/ssr":

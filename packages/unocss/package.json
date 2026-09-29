@@ -1,6 +1,6 @@
 {
   "name": "@litsx/unocss",
-  "version": "1.0.0-next.8",
+  "version": "1.0.0",
   "description": "UnoCSS integration for LitSX component styles",
   "author": "LitSX Team",
   "type": "module",
@@ -51,7 +51,7 @@
     "directory": "packages/unocss"
   },
   "peerDependencies": {
-    "@litsx/vite-plugin": "^1.0.0-next.2",
+    "@litsx/vite-plugin": "^1.0.0",
     "unocss": ">=66",
     "vite": "^7.3.2 || ^8.0.0"
   },
@@ -65,7 +65,7 @@
   },
   "dependencies": {
     "@babel/parser": "^8.0.4",
-    "@litsx/compiler": "^1.0.0-next.11",
+    "@litsx/compiler": "^1.0.0",
     "@unocss/config": "66.8.1"
   },
   "scripts": {

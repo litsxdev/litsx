@@ -1,5 +1,166 @@
 # @litsx/babel-preset-react-compat
 
+## 1.0.0
+
+### Major Changes
+
+- 28f3007: Stabilize the complete public LitSX package graph as the 1.0 release line.
+
+  This release establishes standard JSX and TSX authoring, SSR and hydration,
+  React compatibility, scoped custom-element registration, structural hooks,
+  Storybook and Vite integration, and Shadow DOM and Light DOM UnoCSS support as
+  the stable public contract.
+
+### Minor Changes
+
+- 28f3007: Replace compiler-injected host arguments with a bounded synchronous hook render
+  context. Authored and transformed custom hooks now preserve their declared
+  signatures, `useHost()` is the only authored host-access API, and structural
+  hook readers use `use(...args)`. Move cursor preparation and structural
+  application helpers to `@litsx/core/internal`, and ensure generated component
+  refs, client rendering, SSR, suspense retries, and React compatibility all enter
+  the same `renderWithHooks()` boundary.
+
+  Structural hooks may now omit `use()` when they only install a mixin. These
+  installation-only hooks return `void`; value-producing capability surfaces
+  remain explicit readers.
+
+- 28f3007: Add the UnoCSS integration with shared project-level preflight,
+  module-local Shadow DOM utilities, client and SSR support, and generic Vite
+  plugin phases around the LitSX Storybook compiler. Add component-owned static
+  utility guards with exact export resolution, runtime-safe CSSResult
+  materialization, extensible authoring style types, and dependency-aware HMR.
+  Expose a build-tool-neutral engine for extraction, guard materialization,
+  module utility generation, preflight finalization and dependency invalidation.
+  Keep Vite lifecycle and HMR policy in the optional `/vite` adapter. Compose
+  UnoCSS's official global mode onto the same resolved context so applications
+  can import `virtual:uno.css` for page-level light DOM without a second config,
+  token store, preflight generator or UnoCSS instance.
+  Add the generic `scoped`, `global`, and `none` light-DOM style routes. UnoCSS
+  uses stable compiler-generated scope identities and CSS scope end boundaries
+  to prevent utility selectors crossing into nested light-DOM components, while
+  SSR preserves the same short opaque scope identity for hydration.
+- 28f3007: Make standard JSX and TSX the recommended LitSX authoring surface. Infer Lit attribute, boolean, and property bindings from ordinary prop names; add the explicit `on:event` listener convention for HTML and custom elements; preserve native lowercase handler properties; type published custom-event metadata; and keep React `onX` conversion isolated to react-compat.
+
+  Make standard `.jsx` and `.tsx` the only authored source formats. Generate projects with ordinary component props, `Component.styles = css\`...\``assignments, native`tsc`type-checking, standard Prettier formatting, and TSX Storybook stories. Remove the unreleased`.litsx`, prefixed binding, static-hoist, custom TypeScript, Prettier-plugin, and syntax-highlighting compatibility surfaces.
+
+  Allow React-authored hook dependencies to opt into recursive react-compat transformation. Vite now keeps selected packages out of dependency prebundling and SSR externalization, transforms their JavaScript and TypeScript modules, propagates the LitSX host through custom-hook graphs, emits compiled-hook metadata, and stops with a diagnostic at unsupported React hook boundaries.
+
+  Normalize statically analyzable output from React's classic and automatic JSX runtimes before react-compat lowering. Allowlisted compiled dependencies can now recover named components, fragments, props and spreads, children, keys, refs, minified public component aliases, and effect sequences from `createElement`, `jsx`, `jsxs`, and `jsxDEV`, while unsupported dynamic element operations stop with explicit diagnostics.
+
+  Recover effect-only React components that render `null`, trailing named component exports, namespace `useRef` calls, and statically bounded polymorphic `asChild` aliases. Resolve host-aware hooks from the ESM implementation of allowlisted dependencies, and emit valid quoted property metadata and computed instance access for hyphenated TypeScript props such as `aria-label`.
+
+  Preserve object-rest component props as one reactive forwarding bag instead of expanding utility types such as `React.ComponentProps<"button">` into the generated custom-element API. Publish a runtime rest-props contract on compiled classes and route local and third-party component inputs through it in both client rendering and SSR.
+
+  Lower native JSX refs directly to Lit's `ref()` directive and adopt Lit's `.value`/`undefined` contract throughout the core runtime, component forwarding, imperative handles, spreads, SSR, and hydration. React compatibility now creates `.current`/`null` facades over Lit refs and adapts callback and external refs at compiled React boundaries, preserving React-authored consumers without leaking React ref semantics into native LitSX.
+
+  Align native JSX types, examples, fixtures, and package documentation with the same contract. Native intrinsic elements no longer advertise React-only `className`, `htmlFor`, `onClick`, or `key` props; use `class`, `for`, `on:event`, and Lit's `repeat()`/`keyed()` directives instead. React-authored source retains those forms through react-compat.
+
+  Make light DOM the default for react-compat migrations and restore contextual scoped-element registries for light hosts. Activate the registry shim only when a component needs scoped elements, preserve initialization across nested light/shadow trees, projected renderers, asynchronous definitions, reconnects, and native/global custom-element coexistence, and retain `domMode: "shadow"` as an explicit opt-in.
+
+  Use the modern `document.importNode()` registry option as Lit's creation scope when the browser provides native scoped custom-element registries, so nested shadow components initialize without the legacy registry polyfill.
+
+  Register imported authored components after Storybook's CSF transforms so extensionless local TSX imports remain defined and initialized in both development and static Storybook builds.
+
+  Escape literal backticks and backslashes in JSX text when emitting Lit template literals, so documentation and code examples remain valid standard JSX.
+
+### Patch Changes
+
+- 28f3007: Compile `SuspenseList.revealOrder` as a property for native and React-compatible JSX, including string literals, aliases, and namespace imports. Replay properties assigned before a scoped custom element upgrade through the real class accessors so React Context providers initialize and propagate updates in light DOM.
+- 28f3007: Add phase 1 SSR support for generic custom elements across the LitSX SSR and
+  compiler pipelines.
+
+  LitSX now recognizes hydratable non-Lit custom element constructors, carries
+  their SSR metadata through compiled scoped-element registries and SSR root
+  rewrites, and supports host-only SSR plus hydration payload collection for
+  generic `HTMLElement` roots.
+
+  `@litsx/ssr` also exposes a new `renderCustomElementSsr(...)` hook so consumer
+  frameworks can take over SSR for hydratable non-Lit custom elements, contribute
+  client imports, preloads, head tags, and opaque adapter artifacts, while
+  preserving LitSX root metadata and hydration orchestration.
+
+- 28f3007: Keep React lazy loaders out of generated static elements maps. Lazy custom
+  elements are now registered only through ensureLazyElement after their loader
+  resolves, while the host retains the scoped registry required for registration.
+  Dynamic import module namespaces are unwrapped through their default export
+  before the constructor is defined. Native LitSX now exposes `lazy()` from core
+  and lowers it through the same shared transform as React compatibility.
+- 28f3007: Move the compiler and lint integrations to Babel 8, ESLint 10, and Node 24 while retaining ESLint 9 compatibility. Refresh generated Storybook and Playwright versions, consume patched transitive dependencies, and support Chromium's native scoped-registry creation scope across shadow and projected light DOM.
+- 28f3007: Infer nested LitSX light-DOM hydration boundaries in both server and browser
+  templates, including pure Lit parents authored in project-local JavaScript or
+  TypeScript modules. Hydration now adopts the server-rendered child part so
+  subsequent child updates preserve node identity, while disconnecting and
+  reconnecting the child leaves connection ownership with the parent render.
+
+  Keep statically enumerable Tailwind candidates in real Vite builds and attach
+  scoped light-DOM utilities to their owning host without leaking them into the
+  document or sibling components.
+
+  Treat pure Lit class bodies as opaque in both utility integrations. Their
+  templates and static styles remain owned by Lit; only LitSX component classes
+  and genuinely free document JSX participate in utility extraction.
+
+- 28f3007: Keep manually-authored `ensureLazyElement(...)` calls out of the generated
+  Suspense content wrapper so React-compat lazy registration preserves the
+  expected execution order during SSR and retries.
+- 28f3007: Centralize component-tag derivation and hook authoring diagnostics in
+  `@litsx/authoring`. Component identifiers must now map directly to a valid
+  custom-element name: LitSX no longer invents framework prefixes for short names
+  such as `Switch` or `App`, while namespace members retain mappings such as
+  `Controls.Switch` to `controls-switch`.
+
+  Use the shared hook analyzer from the compiler, direct Babel transforms and new
+  recommended ESLint rules. Report hooks in unstable control flow, async render
+  scopes, handlers, deferred `useAsyncState` actions and nested hook definitions
+  with stable diagnostic codes. Keep React-specific primitives, including Radix's
+  polymorphic `Slot`, inside the optional react-compat adapter.
+
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [ad185f4]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+  - @litsx/babel-plugin-transform-jsx-html-template@1.0.0
+  - @litsx/babel-plugin-transform-litsx-scoped-elements@1.0.0
+  - @litsx/babel-preset-litsx@1.0.0
+  - @litsx/babel-plugin-shared-hooks@1.0.0
+  - @litsx/babel-plugin-litsx-proptypes@1.0.0
+
 ## 1.0.0-next.4
 
 ### Patch Changes

@@ -1,5 +1,159 @@
 # @litsx/ssr
 
+## 1.0.0
+
+### Major Changes
+
+- 28f3007: Stabilize the complete public LitSX package graph as the 1.0 release line.
+
+  This release establishes standard JSX and TSX authoring, SSR and hydration,
+  React compatibility, scoped custom-element registration, structural hooks,
+  Storybook and Vite integration, and Shadow DOM and Light DOM UnoCSS support as
+  the stable public contract.
+
+### Minor Changes
+
+- 28f3007: Complete the public SSR surface with streaming metadata, hydration payload support, browser hydration coverage, and release integration for the SSR packages.
+- 28f3007: Install one shared SSR DOM identity before Lit evaluates, reexport `html` from the initialized SSR entry, and expose the synchronous `@litsx/ssr/install-dom-shim` bootstrap entry for frameworks that load application components before the main SSR runtime.
+- 28f3007: Add SSR-safe dynamic fallback rendering for the LitSX `<noscript>` intrinsic.
+- 28f3007: Add phase 1 SSR support for generic custom elements across the LitSX SSR and
+  compiler pipelines.
+
+  LitSX now recognizes hydratable non-Lit custom element constructors, carries
+  their SSR metadata through compiled scoped-element registries and SSR root
+  rewrites, and supports host-only SSR plus hydration payload collection for
+  generic `HTMLElement` roots.
+
+  `@litsx/ssr` also exposes a new `renderCustomElementSsr(...)` hook so consumer
+  frameworks can take over SSR for hydratable non-Lit custom elements, contribute
+  client imports, preloads, head tags, and opaque adapter artifacts, while
+  preserving LitSX root metadata and hydration orchestration.
+
+- 28f3007: Add a public LitSX hydration-module registration primitive in `@litsx/ssr/hydration`
+  so frameworks can import client modules and register hydratable custom elements
+  before calling `hydratePage(...)`.
+
+  Emit explicit hydratable tag metadata on compiled LitSX component classes and
+  expose the corresponding runtime symbol from `@litsx/core` so hydration module
+  registration can inspect module namespaces without relying on framework-private
+  conventions or hydration payload introspection.
+
+- 28f3007: Add `useSsrResourceSnapshot(...)` for library runtimes that need to capture a
+  request-scoped global resource cache after SSR settles and restore it
+  synchronously before hydration registration or client module loading.
+
+### Patch Changes
+
+- ad185f4: Render JSX spread attributes through an `ElementPart` in the browser while retaining regular Lit parts during SSR. Add digest reconciliation and hydration wrappers that preserve server DOM identity without patching Lit, infer third-party component properties from their constructors, and avoid redundant attribute writes during hydration.
+- 28f3007: Move the Vite-backed `createSsrDevServer` integration from `@litsx/ssr` to the
+  opt-in `@litsx/vite-plugin/ssr` entrypoint. `@litsx/ssr` now exposes a generic
+  authored-module loader contract and no longer declares, imports, or types Vite.
+  Update generated SSR projects to use the new entrypoint. This intentionally
+  removes the prerelease `createSsrDevServer` export from `@litsx/ssr`; migrate
+  imports to `@litsx/vite-plugin/ssr`.
+- 28f3007: Preserve imported component constructors across JSX lowering so direct props,
+  declared attribute aliases, and spreads resolve through one component API in
+  browser and SSR builds. Finalize Lit property metadata before runtime inference,
+  make compiled SSR spread templates explicit, and hydrate them without replacing
+  the server-rendered host or structural branch. Select the client ElementPart
+  path when SSR-transformed modules execute in a browser, keep the client marker
+  out of server-only imports, and let component defaults handle `undefined`
+  spread overrides while preserving explicit `null`. Keep virtual JSX position
+  remapping linear as complex templates add generated Lit bindings.
+- 28f3007: Simplify `@litsx/ssr/hydration` now that Lit hydration support is installed as
+  part of the module entrypoint. The public hydration helpers no longer expose
+  manual hydration-support installation hooks and rely on the entrypoint import
+  order instead.
+- 28f3007: Support forwarding standard client refs through async Server Component composition during SSR hydration.
+- 28f3007: Fix declarative-shadow-DOM hydration for nested scoped and light-DOM elements, and emit executable SSR bootstrap modules through the Vite dev asset pipeline.
+- 28f3007: Complete the supported Lit/LitSX interoperability matrix across pure Lit
+  components, standard and structural mixins, scoped light/shadow trees, SSR,
+  and hydration. Detected scoped elements now compose with inherited and authored
+  registries, hook context subscriptions initialize safely during render and
+  retry late providers, late global definitions reach unowned shadow roots, and
+  registered pure custom-element roots are enabled after hydration registration.
+- 28f3007: Render empty registered light-DOM roots during SSR so hydration adopts their
+  existing child nodes instead of creating the light tree on the client.
+- 28f3007: Expose `prepareHydrationResources(...)` for framework runtimes that apply
+  incremental SSR fragments before registering their hydratable modules.
+- 28f3007: Isolate scoped registries, hydration contexts, noscript state, and soft Suspense collectors across concurrent SSR renders. The scoped custom-element lookup bridge is now reentrant, so interleaved requests resolve their own constructors and hydration metadata without cross-request leakage.
+- 28f3007: Keep scoped LitSX children compatible with `@webcomponents/scoped-custom-element-registry` by replacing polyfilled registries with the LitSX scoped runtime, and surface SSR development logs and render failures in the browser.
+- 28f3007: Add the UnoCSS integration with shared project-level preflight,
+  module-local Shadow DOM utilities, client and SSR support, and generic Vite
+  plugin phases around the LitSX Storybook compiler. Add component-owned static
+  utility guards with exact export resolution, runtime-safe CSSResult
+  materialization, extensible authoring style types, and dependency-aware HMR.
+  Expose a build-tool-neutral engine for extraction, guard materialization,
+  module utility generation, preflight finalization and dependency invalidation.
+  Keep Vite lifecycle and HMR policy in the optional `/vite` adapter. Compose
+  UnoCSS's official global mode onto the same resolved context so applications
+  can import `virtual:uno.css` for page-level light DOM without a second config,
+  token store, preflight generator or UnoCSS instance.
+  Add the generic `scoped`, `global`, and `none` light-DOM style routes. UnoCSS
+  uses stable compiler-generated scope identities and CSS scope end boundaries
+  to prevent utility selectors crossing into nested light-DOM components, while
+  SSR preserves the same short opaque scope identity for hydration.
+- 28f3007: Add framework-level soft suspense for render hooks without an enclosing SuspenseBoundary. Compiled render methods now wrap hook execution so thrown thenables suspend the host, render `nothing`, and request an update when resolved, while preserving explicit SuspenseBoundary handling.
+
+  SSR now retries rootless soft suspensions before serializing or streaming output, recreating the SSR context for the successful pass so hydration roots and payloads are not duplicated.
+
+- 28f3007: Make `@litsx/ssr/hydration` install Lit's SSR hydration support as its first
+  top-level import so framework consumers can rely on the public hydration
+  entrypoint without manually importing
+  `@lit-labs/ssr-client/lit-element-hydrate-support.js`.
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [ad185f4]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+  - @litsx/compiler@1.0.0
+  - @litsx/core@1.0.0
+
 ## 1.0.0-next.5
 
 ### Patch Changes

@@ -1,5 +1,96 @@
 # @litsx/tailwind
 
+## 1.0.0
+
+### Minor Changes
+
+- 28f3007: Add `css`, `tailwind`, and `unocss` styling profiles to every
+  `create-litsx-app` template, including Vite, Vitest, Storybook, and SSR wiring.
+
+  Expose split Tailwind Vite composition for framework-owned plugin ordering.
+  SSR templates keep Vite orchestration in the generated application and use the
+  existing SSR rendering APIs without widening the `@litsx/ssr` contract.
+
+  Keep Storybook's structural CSF validation independent from compiler authoring
+  and output plugins so Tailwind and UnoCSS composition reaches the real LitSX
+  transform without requiring an AST runtime in the validation-only pass.
+
+- 28f3007: Expose build-tool-neutral utility-class analysis from the compiler, refactor
+  UnoCSS to consume it, and add the official Tailwind CSS v4 Vite integration.
+
+  Tailwind utilities are extracted per component from literal and finite class
+  bindings, explicit local style guards, and only matching safelist candidates.
+  Shadow components receive isolated CSSResults; light DOM supports global and
+  native `@scope` output; shared preflight, theme, and inert property
+  infrastructure cover HMR, lazy imports, SSR, hydration, and property-backed
+  utilities without leaking component selectors globally.
+
+### Patch Changes
+
+- 28f3007: Keep normalized opening and closing custom-element tags aligned, and preserve global UnoCSS and Tailwind utilities from free light-DOM templates in modules that also declare LitSX components without leaking component-only utilities.
+- 28f3007: Resolve queried Tailwind preflight virtual modules during real Vite builds, and
+  cover parallel component, client/SSR, and multi-entry style isolation alongside
+  the equivalent shared-engine UnoCSS behavior.
+- 28f3007: Infer nested LitSX light-DOM hydration boundaries in both server and browser
+  templates, including pure Lit parents authored in project-local JavaScript or
+  TypeScript modules. Hydration now adopts the server-rendered child part so
+  subsequent child updates preserve node identity, while disconnecting and
+  reconnecting the child leaves connection ownership with the parent render.
+
+  Keep statically enumerable Tailwind candidates in real Vite builds and attach
+  scoped light-DOM utilities to their owning host without leaking them into the
+  document or sibling components.
+
+  Treat pure Lit class bodies as opaque in both utility integrations. Their
+  templates and static styles remain owned by Lit; only LitSX component classes
+  and genuinely free document JSX participate in utility extraction.
+
+- 28f3007: Report Tailwind entry, config, and imported dependencies through the host's logical project root
+  when the project is reached through a symlink. Development watchers can now invalidate generated
+  component CSS consistently on platforms whose temporary or workspace roots have physical aliases.
+- 28f3007: Add the build-tool-neutral `litsxTailwind()` integration descriptor so Evolit
+  and other LitSX hosts can own Tailwind compilation, virtual modules, document
+  assets, graph finalization, invalidation, and isolated lifecycle state without
+  Vite or a host-specific adapter.
+- 28f3007: Use query-free virtual module identifiers in the build-tool-neutral integration so strict hosts
+  such as Evolit can safely materialize Shadow DOM preflight and component CSS. The Vite entrypoint
+  continues to use its existing `?inline` module convention.
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+- Updated dependencies [28f3007]
+  - @litsx/compiler@1.0.0
+  - @litsx/vite-plugin@1.0.0
+
 ## 1.0.0-next.8
 
 ### Patch Changes
