@@ -1,43 +1,15 @@
 import { LitElement, css, html } from "lit";
 
-const _litsx_static_styles = Symbol("litsx.static.styles");
-
 class MyComponent2 extends LitElement {
-  static get styles() {
-    if (!Object.prototype.hasOwnProperty.call(this, _litsx_static_styles)) {
-      const parent = Object.getPrototypeOf(this);
-      this[_litsx_static_styles] =
-        typeof css`
-          :host {
-            display: block;
-          }
-
-          p {
-            color: var(--dynamic-color, black);
-          }
-        ` === "function"
-          ? css`
-              :host {
-                display: block;
-              }
-
-              p {
-                color: var(--dynamic-color, black);
-              }
-            `(parent)
-          : css`
-              :host {
-                display: block;
-              }
-
-              p {
-                color: var(--dynamic-color, black);
-              }
-            `;
+  static styles = [super.styles ?? [], css`
+    :host {
+      display: block;
     }
 
-    return this[_litsx_static_styles];
-  }
+    p {
+      color: var(--dynamic-color, black);
+    }
+  `];
 
   updated(changedProperties) {
     // Estilo dinámico: aplica el color como variable CSS

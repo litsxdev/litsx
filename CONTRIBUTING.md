@@ -44,6 +44,8 @@ Commit style:
 - use Conventional Commits subjects for every commit
 - prefer scopes that match the affected package or area
 - do not use unscoped free-form subjects when a conventional type applies
+- install local git hooks with `yarn hooks:install`
+- the `commit-msg` hook rejects commit subjects that do not match Conventional Commits
 
 Examples:
 

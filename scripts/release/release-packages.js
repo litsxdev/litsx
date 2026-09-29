@@ -4,10 +4,8 @@ export const npmReleasePackages = [
   "packages/compiler",
   "packages/storybook",
   "packages/vite-plugin",
-  "packages/typescript",
   "packages/eslint-plugin-litsx",
   "packages/create-litsx-app",
-  "packages/prettier-plugin-litsx",
   "packages/scoped-registry-shim",
   "packages/authoring",
   "packages/prop-types",
@@ -18,8 +16,8 @@ export const npmReleasePackages = [
   "packages/babel-plugin-litsx-proptypes",
   "packages/babel-plugin-shared-hooks",
   "packages/typescript-session",
+  "packages/tailwind",
+  "packages/unocss",
 ];
 
-export const excludedPrivatePackages = [
-  "packages/shiki-languages",
-];
+export const excludedPrivatePackages = [];

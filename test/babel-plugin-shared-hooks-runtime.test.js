@@ -1,5 +1,5 @@
 import assert from "assert";
-import babelCore from "@babel/core";
+import * as babelCore from "@babel/core";
 import parser from "./helpers/litsx-parser.js";
 import { describe, it } from "vitest";
 import { createRuntimeHooksTransform } from "../packages/babel-plugin-shared-hooks/src/index.js";
@@ -15,7 +15,7 @@ function createPlugin() {
   });
 }
 
-function run(source) {
+function run(source, transformPlugin = createPlugin(), pluginOptions = {}) {
   const ast = parser.parse(source, {
     sourceType: "module",
     plugins: ["typescript"],
@@ -23,7 +23,7 @@ function run(source) {
   const result = transformFromAstSync(ast, source, {
     configFile: false,
     babelrc: false,
-    plugins: [createPlugin()],
+    plugins: [[transformPlugin, pluginOptions]],
   });
   return result.code;
 }
@@ -52,7 +52,7 @@ describe("@litsx/babel-plugin-shared-hooks createRuntimeHooksTransform", () => {
     );
   });
 
-  it("rewrites runtime helpers from namespace and default imports and injects prepareEffects", () => {
+  it("rewrites runtime helpers behind a bounded render context", () => {
     const source = `
       import runtimeDefault from "react";
       import * as runtimeNs from "@litsx/core";
@@ -69,9 +69,10 @@ describe("@litsx/babel-plugin-shared-hooks createRuntimeHooksTransform", () => {
     const code = run(source);
 
     assert.match(code, /import runtimeDefault, \* as runtimeNs from "@litsx\/core";|import \* as runtimeNs, runtimeDefault from "@litsx\/core";/);
-    assert.match(code, /prepareEffects\(this\);/);
-    assert.match(code, /runtimeDefault\.useAfterUpdate\(this, \(\) => this\.sync\(\), \[]\);/);
-    assert.match(code, /runtimeNs\.useStyle\(this, "--accent", this\.accent\);/);
+    assert.match(code, /renderWithHooks\(this, \(\) => \{/);
+    assert.match(code, /runtimeDefault\.useAfterUpdate\(\(\) => this\.sync\(\), \[]\);/);
+    assert.match(code, /runtimeNs\.useStyle\("--accent", this\.accent\);/);
+    assert.doesNotMatch(code, /prepareEffects/);
   });
 
   it("rewrites local custom hooks called from render and merges duplicate runtime imports", () => {
@@ -94,14 +95,14 @@ describe("@litsx/babel-plugin-shared-hooks createRuntimeHooksTransform", () => {
 
     const code = run(source);
 
-    assert.match(code, /import \{[^}]*useAfterUpdate[^}]*prepareEffects[^}]*useOnCommit[^}]*\} from "@litsx\/core";|import \{[^}]*useAfterUpdate[^}]*useOnCommit[^}]*prepareEffects[^}]*\} from "@litsx\/core";|import \{[^}]*prepareEffects[^}]*useAfterUpdate[^}]*useOnCommit[^}]*\} from "@litsx\/core";|import \{[^}]*useOnCommit[^}]*prepareEffects[^}]*useAfterUpdate[^}]*\} from "@litsx\/core";/);
+    assert.match(code, /import \{[^}]*useAfterUpdate[^}]*useOnCommit[^}]*renderWithHooks[^}]*\} from "@litsx\/core";/);
     assert.strictEqual((code.match(/from "@litsx\/core";/g) || []).length, 1);
-    assert.match(code, /const useCounterEffects = _host => \{/);
-    assert.match(code, /useAfterUpdate\(_host, \(\) => sideEffect\(\), \[]\);/);
-    assert.match(code, /useOnCommit\(_host, \(\) => commitEffect\(\), \[]\);/);
+    assert.match(code, /const useCounterEffects = \(\) => \{/);
+    assert.match(code, /useAfterUpdate\(\(\) => sideEffect\(\), \[]\);/);
+    assert.match(code, /useOnCommit\(\(\) => commitEffect\(\), \[]\);/);
     assert.match(code, /useCounterEffects\[Symbol\.for\("litsx\.hook"\)\] = true;/);
-    assert.match(code, /useCounterEffects\(this\);/);
-    assert.match(code, /prepareEffects\(this\);/);
+    assert.match(code, /useCounterEffects\(\);/);
+    assert.doesNotMatch(code, /prepareEffects|_host/);
   });
 
   it("marks structural custom hooks with direct structural metadata assignments", () => {
@@ -109,7 +110,7 @@ describe("@litsx/babel-plugin-shared-hooks createRuntimeHooksTransform", () => {
       pluginName: "test-shared-hooks-runtime-structural",
       runtimeModule: "@litsx/core",
       importSources: ["@litsx/core"],
-      helperNames: ["defineHook", "resolveStructuralEntry"],
+      helperNames: ["defineHook", "readStructuralHook"],
       structuralHookResolver() {
         return false;
       },
@@ -119,8 +120,8 @@ describe("@litsx/babel-plugin-shared-hooks createRuntimeHooksTransform", () => {
       import { defineHook } from "@litsx/core";
 
       const useLocale = defineHook({
-        use(_host, _state, args) {
-          return args[0];
+        use(locale) {
+          return locale;
         }
       });
 
@@ -129,7 +130,10 @@ describe("@litsx/babel-plugin-shared-hooks createRuntimeHooksTransform", () => {
       }
     `;
 
-    const ast = parser.parse(source, { sourceType: "module", plugins: ["typescript"] });
+    const ast = parser.parse(source, {
+      sourceType: "module",
+      plugins: ["typescript"],
+    });
     const result = transformFromAstSync(ast, source, {
       configFile: false,
       babelrc: false,
@@ -137,7 +141,10 @@ describe("@litsx/babel-plugin-shared-hooks createRuntimeHooksTransform", () => {
     });
     const code = result.code;
 
-    assert.match(code, /useMessage\[Symbol\.for\("litsx\.structuralHookEntries"\)\] = \[/);
+    assert.match(
+      code,
+      /useMessage\[Symbol\.for\("litsx\.structuralHooks"\)\] = \[/,
+    );
     assert.match(code, /useMessage\[Symbol\.for\("litsx\.hook"\)\] = true;/);
     assert.doesNotMatch(code, /defineStructuralHookEntries\(/);
     assert.doesNotMatch(code, /getStructuralHookEntries\(/);
@@ -145,8 +152,8 @@ describe("@litsx/babel-plugin-shared-hooks createRuntimeHooksTransform", () => {
 
   it("does not reprocess custom hooks already marked as compiled", () => {
     const source = `
-      export function useCounterEffects(_host) {
-        useAfterUpdate(_host, () => sideEffect(), []);
+      export function useCounterEffects() {
+        useAfterUpdate(() => sideEffect(), []);
       }
 
       useCounterEffects[Symbol.for("litsx.hook")] = true;
@@ -162,9 +169,8 @@ describe("@litsx/babel-plugin-shared-hooks createRuntimeHooksTransform", () => {
     const code = run(source);
 
     assert.strictEqual((code.match(/useCounterEffects\[Symbol\.for\("litsx\.hook"\)\] = true;/g) || []).length, 1);
-    assert.match(code, /export function useCounterEffects\(_host\)/);
-    assert.doesNotMatch(code, /export function useCounterEffects\(_host, _host\)/);
-    assert.match(code, /useCounterEffects\(this\);/);
+    assert.match(code, /export function useCounterEffects\(\)/);
+    assert.match(code, /useCounterEffects\(\);/);
   });
 
   it("does not reprocess classes already marked as compiled LitSX components", () => {
@@ -187,7 +193,7 @@ describe("@litsx/babel-plugin-shared-hooks createRuntimeHooksTransform", () => {
     assert.doesNotMatch(code, /prepareEffects\(this\);/);
   });
 
-  it("reuses an existing host-like first parameter in local custom hooks", () => {
+  it("treats host-like authored parameters as ordinary hook parameters", () => {
     const source = `
       import { useAfterUpdate } from "@litsx/core";
 
@@ -206,19 +212,19 @@ describe("@litsx/babel-plugin-shared-hooks createRuntimeHooksTransform", () => {
     const code = run(source);
 
     assert.match(code, /const useCounterEffects = \(host, count\) => \{/);
-    assert.match(code, /useAfterUpdate\(host, \(\) => syncCount\(count\), \[]\);/);
-    assert.match(code, /useCounterEffects\(this, this\.count\);/);
-    assert.strictEqual((code.match(/prepareEffects/g) || []).length, 2);
+    assert.match(code, /useAfterUpdate\(\(\) => syncCount\(count\), \[]\);/);
+    assert.match(code, /useCounterEffects\(this\.count\);/);
+    assert.doesNotMatch(code, /prepareEffects/);
   });
 
-  it("does not rewrite blocked custom hooks imported from react namespaces or existing host-aware calls", () => {
+  it("does not rewrite blocked custom hooks imported from React namespaces", () => {
     const source = `
       import * as ReactRuntime from "react";
       import { useAfterUpdate } from "@litsx/core";
 
       class Card {
         render() {
-          useAfterUpdate(this, () => this.sync(), []);
+          useAfterUpdate(() => this.sync(), []);
           ReactRuntime.useFancyHook(value);
           return value;
         }
@@ -227,13 +233,13 @@ describe("@litsx/babel-plugin-shared-hooks createRuntimeHooksTransform", () => {
 
     const code = run(source);
 
-    assert.match(code, /useAfterUpdate\(this, \(\) => this\.sync\(\), \[]\);/);
+    assert.match(code, /useAfterUpdate\(\(\) => this\.sync\(\), \[]\);/);
     assert.match(code, /ReactRuntime\.useFancyHook\(value\);/);
     assert.doesNotMatch(code, /ReactRuntime\.useFancyHook\(this,/);
-    assert.match(code, /prepareEffects\(this\);/);
+    assert.match(code, /renderWithHooks\(this, \(\) => \{/);
   });
 
-  it("adds a standalone prepareEffects import when the runtime is only imported as a namespace", () => {
+  it("adds a render-boundary import when the runtime is only a namespace", () => {
     const source = `
       import * as runtime from "@litsx/core";
 
@@ -248,16 +254,15 @@ describe("@litsx/babel-plugin-shared-hooks createRuntimeHooksTransform", () => {
     const code = run(source);
 
     assert.match(code, /import \* as runtime from "@litsx\/core";/);
-    assert.match(code, /import \{[^}]*prepareEffects[^}]*\} from "@litsx\/core";/);
     assert.match(code, /import \{[^}]*useStyle[^}]*\} from "@litsx\/core";/);
-    assert.match(code, /import \{[^}]*renderWithSoftSuspense[^}]*\} from "@litsx\/core";/);
-    assert.match(code, /runtime\.useStyle\(this, "--accent", this\.accent\);/);
-    assert.match(code, /prepareEffects\(this\);/);
+    assert.match(code, /import \{[^}]*renderWithHooks[^}]*\} from "@litsx\/core";/);
+    assert.match(code, /runtime\.useStyle\("--accent", this\.accent\);/);
+    assert.doesNotMatch(code, /prepareEffects/);
   });
 
-  it("does not duplicate an existing prepareEffects import", () => {
+  it("does not require the removed public prepareEffects helper", () => {
     const source = `
-      import { prepareEffects, useAfterUpdate } from "@litsx/core";
+      import { useAfterUpdate } from "@litsx/core";
 
       class Card {
         render() {
@@ -269,12 +274,10 @@ describe("@litsx/babel-plugin-shared-hooks createRuntimeHooksTransform", () => {
 
     const code = run(source);
 
-    assert.strictEqual((code.match(/prepareEffects/g) || []).length, 2);
-    assert.match(code, /import \{[^}]*prepareEffects[^}]*\} from "@litsx\/core";/);
     assert.match(code, /import \{[^}]*useAfterUpdate[^}]*\} from "@litsx\/core";/);
-    assert.match(code, /import \{[^}]*renderWithSoftSuspense[^}]*\} from "@litsx\/core";/);
-    assert.match(code, /useAfterUpdate\(this, \(\) => this\.sync\(\), \[]\);/);
-    assert.match(code, /prepareEffects\(this\);/);
+    assert.match(code, /import \{[^}]*renderWithHooks[^}]*\} from "@litsx\/core";/);
+    assert.match(code, /useAfterUpdate\(\(\) => this\.sync\(\), \[]\);/);
+    assert.doesNotMatch(code, /prepareEffects/);
   });
 
   it("handles class expressions and merges runtime imports into namespace and named groups", () => {
@@ -299,11 +302,11 @@ describe("@litsx/babel-plugin-shared-hooks createRuntimeHooksTransform", () => {
     assert.match(code, /import runtimeDefault, \* as runtimeNs from "@litsx\/core";|import \* as runtimeNs, runtimeDefault from "@litsx\/core";/);
     assert.match(
       code,
-      /import \{[^}]*prepareEffects[^}]*useAfterUpdate[^}]*useOnCommit[^}]*\} from "@litsx\/core";|import \{[^}]*useAfterUpdate[^}]*useOnCommit[^}]*prepareEffects[^}]*\} from "@litsx\/core";|import \{[^}]*useOnCommit[^}]*prepareEffects[^}]*useAfterUpdate[^}]*\} from "@litsx\/core";/
+      /import \{[^}]*useAfterUpdate[^}]*useOnCommit[^}]*renderWithHooks[^}]*\} from "@litsx\/core";/
     );
-    assert.match(code, /runtimeDefault\.useAfterUpdate\(this, \(\) => this\.sync\(\), \[]\);/);
-    assert.match(code, /runtimeNs\.useOnCommit\(this, \(\) => this\.measure\(\), \[]\);/);
-    assert.match(code, /prepareEffects\(this\);/);
+    assert.match(code, /runtimeDefault\.useAfterUpdate\(\(\) => this\.sync\(\), \[]\);/);
+    assert.match(code, /runtimeNs\.useOnCommit\(\(\) => this\.measure\(\), \[]\);/);
+    assert.doesNotMatch(code, /prepareEffects/);
   });
 
   it("collapses duplicate default and namespace runtime imports after rewriting source modules", () => {
@@ -333,7 +336,7 @@ describe("@litsx/babel-plugin-shared-hooks createRuntimeHooksTransform", () => {
     assert.doesNotMatch(code, /import \* as RuntimeNs from/);
     assert.match(
       code,
-      /import \{[^}]*prepareEffects[^}]*useAfterUpdate[^}]*useOnCommit[^}]*\} from "@litsx\/core";|import \{[^}]*useAfterUpdate[^}]*prepareEffects[^}]*useOnCommit[^}]*\} from "@litsx\/core";/
+      /import \{[^}]*useAfterUpdate[^}]*useOnCommit[^}]*renderWithHooks[^}]*\} from "@litsx\/core";/
     );
   });
 
@@ -354,14 +357,13 @@ describe("@litsx/babel-plugin-shared-hooks createRuntimeHooksTransform", () => {
     const code = run(source);
 
     assert.match(code, /import \{[^}]*useAfterUpdate[^}]*\} from "@litsx\/core";/);
-    assert.match(code, /import \{[^}]*prepareEffects[^}]*\} from "@litsx\/core";/);
-    assert.match(code, /import \{[^}]*renderWithSoftSuspense[^}]*\} from "@litsx\/core";/);
-    assert.match(code, /hooks\.useCounter\(this\);/);
-    assert.match(code, /useAfterUpdate\(this, \(\) => this\.sync\(\), \[]\);/);
-    assert.match(code, /prepareEffects\(this\);/);
+    assert.match(code, /import \{[^}]*renderWithHooks[^}]*\} from "@litsx\/core";/);
+    assert.match(code, /hooks\.useCounter\(\);/);
+    assert.match(code, /useAfterUpdate\(\(\) => this\.sync\(\), \[]\);/);
+    assert.doesNotMatch(code, /prepareEffects/);
   });
 
-  it("adds a runtime import when none exists and leaves files without render-hook usage untouched", () => {
+  it("adds a runtime import when none exists and rejects hooks outside render scope", () => {
     const hookSource = `
       import * as hooks from "./hooks";
 
@@ -374,10 +376,9 @@ describe("@litsx/babel-plugin-shared-hooks createRuntimeHooksTransform", () => {
     `;
 
     const hookCode = run(hookSource);
-    assert.match(hookCode, /import \{[^}]*prepareEffects[^}]*\} from "@litsx\/core";/);
-    assert.match(hookCode, /import \{[^}]*renderWithSoftSuspense[^}]*\} from "@litsx\/core";/);
-    assert.match(hookCode, /hooks\.useCounter\(this\);/);
-    assert.match(hookCode, /prepareEffects\(this\);/);
+    assert.match(hookCode, /import \{[^}]*renderWithHooks[^}]*\} from "@litsx\/core";/);
+    assert.match(hookCode, /hooks\.useCounter\(\);/);
+    assert.doesNotMatch(hookCode, /prepareEffects/);
 
     const untouchedSource = `
       import { useAfterUpdate } from "react";
@@ -389,13 +390,13 @@ describe("@litsx/babel-plugin-shared-hooks createRuntimeHooksTransform", () => {
       }
     `;
 
-    const untouchedCode = run(untouchedSource);
-    assert.doesNotMatch(untouchedCode, /prepareEffects/);
-    assert.match(untouchedCode, /import \{ useAfterUpdate \} from "@litsx\/core";/);
-    assert.match(untouchedCode, /useAfterUpdate\(\(\) => this\.sync\(\), \[]\);/);
+    assert.throws(
+      () => run(untouchedSource),
+      (error) => error?.code === "LITSX_HOOK_INVALID_SCOPE",
+    );
   });
 
-  it("adds prepareEffects when render only uses local custom hooks and no imports exist yet", () => {
+  it("adds a render boundary when render only uses a local custom hook", () => {
     const source = `
       function useCounterEffects() {
         return measure();
@@ -411,11 +412,10 @@ describe("@litsx/babel-plugin-shared-hooks createRuntimeHooksTransform", () => {
 
     const code = run(source);
 
-    assert.match(code, /import \{[^}]*prepareEffects[^}]*\} from "@litsx\/core";/);
-    assert.match(code, /import \{[^}]*renderWithSoftSuspense[^}]*\} from "@litsx\/core";/);
-    assert.match(code, /function useCounterEffects\(_host\) \{/);
-    assert.match(code, /useCounterEffects\(this\);/);
-    assert.match(code, /prepareEffects\(this\);/);
+    assert.match(code, /import \{[^}]*renderWithHooks[^}]*\} from "@litsx\/core";/);
+    assert.match(code, /function useCounterEffects\(\) \{/);
+    assert.match(code, /useCounterEffects\(\);/);
+    assert.doesNotMatch(code, /prepareEffects|_host/);
   });
 
   it("rewrites function-expression custom hooks declared in variable initializers", () => {
@@ -436,9 +436,9 @@ describe("@litsx/babel-plugin-shared-hooks createRuntimeHooksTransform", () => {
 
     const code = run(source);
 
-    assert.match(code, /const useCounterEffects = function \(_host\) \{/);
-    assert.match(code, /useAfterUpdate\(_host, \(\) => syncCount\(\), \[]\);/);
-    assert.match(code, /useCounterEffects\(this\);/);
+    assert.match(code, /const useCounterEffects = function \(\) \{/);
+    assert.match(code, /useAfterUpdate\(\(\) => syncCount\(\), \[]\);/);
+    assert.match(code, /useCounterEffects\(\);/);
   });
 
   it("merges rewritten runtime default and namespace imports even when no named helpers are needed", () => {
@@ -463,5 +463,183 @@ describe("@litsx/babel-plugin-shared-hooks createRuntimeHooksTransform", () => {
       /import ReactDefault, \* as ReactNs from "@litsx\/core";|import \* as ReactNs, ReactDefault from "@litsx\/core";/
     );
     assert.doesNotMatch(code, /prepareEffects/);
+  });
+
+  it("lowers local structural hooks and propagates nested structural dependencies", () => {
+    const source = `
+      import { defineHook, useStyle } from "@litsx/core";
+
+      const useTheme = defineHook({
+        mixin: (Base) => class extends Base {},
+        use(name) {
+          useStyle("--theme", name);
+          return name;
+        }
+      });
+
+      function useCardTheme(name) {
+        return useTheme(name);
+      }
+
+      class Card extends HTMLElement {
+        render() {
+          return useCardTheme(this.theme);
+        }
+      }
+    `;
+
+    const code = run(source);
+
+    assert.match(code, /readStructuralHook\(useTheme, \[name\]\)/);
+    assert.match(code, /useCardTheme\[Symbol\.for\("litsx\.structuralHooks"\)\]/);
+    assert.match(code, /class Card extends applyStructuralHooks\(HTMLElement/);
+    assert.match(code, /renderWithHooks\(this/);
+  });
+
+  it("resolves named, namespaced, and structural custom hooks from imports", () => {
+    const transformPlugin = createRuntimeHooksTransform({
+      pluginName: "test-shared-hooks-runtime-imported-structural",
+      runtimeModule: "@litsx/core",
+      importSources: ["@litsx/core"],
+      helperNames: (name) => name === "useStyle",
+    });
+    const resolver = ({ source, importedName }) => {
+      if (source !== "./hooks.js") return false;
+      if (importedName === "useLayout") return { kind: "structural-hook" };
+      if (importedName === "useCard") return "structural-custom-hook";
+      return false;
+    };
+    const source = `
+      import { useLayout, useCard } from "./hooks.js";
+      import * as hooks from "./hooks.js";
+
+      class Card extends HTMLElement {
+        render() {
+          useLayout(this.size);
+          hooks.useLayout(this.size);
+          useCard(this.value);
+          hooks.useCard(this.value);
+          return null;
+        }
+      }
+    `;
+
+    const code = run(source, transformPlugin, {
+      structuralHookResolver: resolver,
+      customHookResolver: () => true,
+    });
+
+    assert.match(code, /readStructuralHook\(useLayout, \[this\.size\]\)/);
+    assert.match(code, /readStructuralHook\(hooks\.useLayout, \[this\.size\]\)/);
+    assert.match(code, /useCard\[Symbol\.for\("litsx\.structuralHooks"\)\]/);
+    assert.match(code, /hooks\.useCard\[Symbol\.for\("litsx\.structuralHooks"\)\]/);
+    assert.match(code, /applyStructuralHooks\(HTMLElement/);
+  });
+
+  it("rejects invalid structural hook definitions, aliases, containers, and dynamic namespace access", () => {
+    const transformPlugin = createRuntimeHooksTransform({
+      pluginName: "test-shared-hooks-runtime-structural-errors",
+      runtimeModule: "@litsx/core",
+      importSources: ["@litsx/core"],
+      helperNames: ["useStyle"],
+    });
+    const options = {
+      structuralHookResolver: ({ source, importedName }) =>
+        source === "./hooks.js" && importedName === "useLayout",
+    };
+
+    assert.throws(
+      () => run(`import { defineHook } from "@litsx/core"; const useBad = defineHook({ setup() {} });`, transformPlugin),
+      /no longer accepts structural fields setup/,
+    );
+    assert.throws(
+      () => run(`import { defineHook } from "@litsx/core"; const useBad = defineHook({});`, transformPlugin),
+      /requires a mixin, a use/,
+    );
+    assert.throws(
+      () => run(`import { useLayout } from "./hooks.js"; const alias = useLayout;`, transformPlugin, options),
+      /cannot be created through an alias/,
+    );
+    assert.throws(
+      () => run(`import { useLayout } from "./hooks.js"; const hooks = { useLayout };`, transformPlugin, options),
+      /cannot be stored in object or array containers/,
+    );
+    assert.throws(
+      () => run(`import { useLayout } from "./hooks.js"; const hooks = [useLayout];`, transformPlugin, options),
+      /cannot be stored in object or array containers/,
+    );
+    assert.throws(
+      () => run(`import * as hooks from "./hooks.js"; hooks["useLayout"]();`, transformPlugin, options),
+      /must use a static property/,
+    );
+    assert.throws(
+      () => run(`import { useLayout } from "./hooks.js"; useLayout();`, transformPlugin, options),
+      /LITSX_HOOK_INVALID_SCOPE/,
+    );
+  });
+
+  it("honors imported custom-hook resolution outcomes", () => {
+    const transformPlugin = createRuntimeHooksTransform({
+      pluginName: "test-shared-hooks-runtime-custom-resolution",
+      runtimeModule: "@litsx/core",
+      importSources: ["@litsx/core"],
+      helperNames: ["useStyle"],
+    });
+    const source = `
+      import { useRemote } from "remote-hooks";
+      import * as remote from "remote-hooks";
+      class Card { render() { useRemote(); remote.useRemote(); return null; } }
+    `;
+
+    assert.throws(
+      () => run(source, transformPlugin, {
+        customHookResolver: () => "unsupported-external-hook",
+      }),
+      /Cannot compile external hook/,
+    );
+    assert.throws(
+      () => run(source, transformPlugin, {
+        customHookResolver: () => "unresolved-custom-hook",
+      }),
+      /Unable to resolve imported custom hook/,
+    );
+
+    const untouched = run(source, transformPlugin, {
+      customHookResolver: () => false,
+    });
+    assert.doesNotMatch(untouched, /renderWithHooks/);
+
+    const transformed = run(source, transformPlugin, {
+      customHookResolver: () => true,
+    });
+    assert.match(transformed, /renderWithHooks/);
+  });
+
+  it("supports preserved runtime imports and helper call metadata", () => {
+    const transformPlugin = createRuntimeHooksTransform({
+      pluginName: "test-shared-hooks-runtime-metadata",
+      runtimeModule: "@litsx/core",
+      importSources: ["react", "@litsx/core"],
+      preservedRuntimeImportSources: ["react"],
+      helperNames: (name) => name === "useStyle",
+      callMetadataByHelper: new Map([
+        ["useStyle", (_path, _state, types) => types.stringLiteral("meta")],
+      ]),
+    });
+    const source = `
+      import ReactDefault, { useStyle as style } from "react";
+      class Card {
+        render() {
+          style("--a", 1);
+          ReactDefault.useStyle("meta", "--b", 2);
+          return null;
+        }
+      }
+    `;
+
+    const code = run(source, transformPlugin);
+    assert.match(code, /from "react"/);
+    assert.match(code, /style\("meta", "--a", 1\)/);
+    assert.match(code, /ReactDefault\.useStyle\("meta", "--b", 2\)/);
   });
 });

@@ -2,12 +2,14 @@ import assert from "assert";
 import fs from "fs";
 import os from "os";
 import path from "path";
-import babelCore from "@babel/core";
+import * as babelCore from "@babel/core";
+import ts from "typescript";
 import { beforeAll, describe, it } from "vitest";
 
 import parser from "./helpers/litsx-parser.js";
 import { interopDefault } from "./helpers/interop-default.js";
 import { PLAYGROUND_TYPE_FILES } from "./helpers/playground-virtual-types.js";
+import { createProjectTsSession } from "../packages/typescript-session/src/index.js";
 
 const { transformFromAstSync } = babelCore;
 
@@ -16,20 +18,27 @@ let createLitsxPresetPlugins;
 let detectLitsxSourceFeatures;
 let isLitsxRuntimeHookName;
 
-function compileWithNativePreset(source, {
-  filename = "/virtual/test.litsx",
-  parserPlugins = [],
-  presetOptions = {},
-} = {}) {
-  return transformFromAstSync(parser.parse(source, {
-    sourceType: "module",
-    plugins: parserPlugins,
-  }), source, {
-    configFile: false,
-    babelrc: false,
-    filename,
-    presets: [[nativePreset, presetOptions]],
-  });
+function compileWithNativePreset(
+  source,
+  {
+    filename = "/virtual/test.tsx",
+    parserPlugins = [],
+    presetOptions = {},
+  } = {},
+) {
+  return transformFromAstSync(
+    parser.parse(source, {
+      sourceType: "module",
+      plugins: parserPlugins,
+    }),
+    source,
+    {
+      configFile: false,
+      babelrc: false,
+      filename,
+      presets: [[nativePreset, presetOptions]],
+    },
+  );
 }
 
 beforeAll(async () => {
@@ -45,42 +54,99 @@ beforeAll(async () => {
 });
 
 describe("@litsx/babel-preset-litsx", () => {
+  it("lowers mixed HTML and SVG with canonical attributes and SVG dynamic fragments", () => {
+    const source = [
+      "type Shape = { d: string };",
+      "type Props = { viewBox: string; strokeWidth: number; d: string; shapes: Shape[] };",
+      "export const TestSvg = ({ viewBox, strokeWidth, d, shapes }: Props) => (",
+      "  <section><svg viewBox={viewBox} strokeWidth={strokeWidth}>",
+      "    <path d={d} strokeLinecap=\"round\" />",
+      "    {shapes.map((shape) => <path d={shape.d} />)}",
+      "    <foreignObject width={20}><div>HTML</div></foreignObject>",
+      "  </svg></section>",
+      ");",
+    ].join("\n");
+
+    const result = compileWithNativePreset(source, {
+      parserPlugins: ["typescript"],
+    });
+
+    assert.match(result.code, /<svg viewBox="\$\{viewBox\}" stroke-width="\$\{strokeWidth\}">/);
+    assert.match(result.code, /<path d="\$\{d\}" stroke-linecap="round">/);
+    assert.match(result.code, /shapes\.map\(shape => svg`<path d="\$\{shape\.d\}"><\/path>`\)/);
+    assert.match(result.code, /<foreignObject width="\$\{20\}"><div>HTML<\/div><\/foreignObject>/);
+    assert.doesNotMatch(result.code, /\.viewBox=|\.strokeWidth=|\.d=/);
+  });
+
   it("defaults to final html template lowering", () => {
     const source = [
-      "export const Greeting = ({ label }) => {",
+      "export const TestGreeting = ({ label }) => {",
       "  return <button>{label}</button>;",
       "};",
     ].join("\n");
 
-    const result = transformFromAstSync(parser.parse(source, { sourceType: "module" }), source, {
-      configFile: false,
-      babelrc: false,
-      presets: [[nativePreset, {}]],
-    });
+    const result = transformFromAstSync(
+      parser.parse(source, { sourceType: "module" }),
+      source,
+      {
+        configFile: false,
+        babelrc: false,
+        presets: [[nativePreset, {}]],
+      },
+    );
 
     assert.match(result.code, /import \{ LitElement, html \} from "lit";/);
-    assert.match(result.code, /return html`<button>\$\{this\.label\}<\/button>`;/);
+    assert.match(
+      result.code,
+      /return html`<button>\$\{this\.label\}<\/button>`;/,
+    );
+  });
+
+  it("routes ordinary JSX props into local component rest bags", () => {
+    const source = [
+      "const TestAction = ({ label, ...props }) => { return <button {...props}>{label}</button>; };",
+      'export const TestScreen = () => { return <TestAction label="Save" aria-label="Save action" />; };',
+    ].join("\n");
+
+    const result = compileWithNativePreset(source);
+
+    assert.match(
+      result.code,
+      /static \[Symbol\.for\("litsx\.restProps"\)\] = \{/,
+    );
+    assert.match(
+      result.code,
+      /jsxSpreadElement\("test-action", \[\{[\s\S]*?label: "Save",[\s\S]*?"aria-label": "Save action"/,
+    );
   });
 
   it("matches the direct preset plugin factory", () => {
     const source = [
       "import FancyButton from './FancyButton.js';",
-      "export const Greeting = ({ label = 'Save' }) => {",
+      "export const TestGreeting = ({ label = 'Save' }) => {",
       "  return <FancyButton .label={label} @click={save} />;",
       "};",
     ].join("\n");
 
-    const presetResult = transformFromAstSync(parser.parse(source, { sourceType: "module" }), source, {
-      configFile: false,
-      babelrc: false,
-      presets: [[nativePreset, {}]],
-    });
+    const presetResult = transformFromAstSync(
+      parser.parse(source, { sourceType: "module" }),
+      source,
+      {
+        configFile: false,
+        babelrc: false,
+        presets: [[nativePreset, {}]],
+      },
+    );
 
-    const pluginResult = transformFromAstSync(parser.parse(source, { sourceType: "module" }), source, {
-      configFile: false,
-      babelrc: false,
-      plugins: createLitsxPresetPlugins({}),
-    });
+    const pluginResult = transformFromAstSync(
+      parser.parse(source, { sourceType: "module" }),
+      source,
+      {
+        configFile: false,
+        babelrc: false,
+        plugins: createLitsxPresetPlugins({}),
+      },
+    );
 
     assert.strictEqual(presetResult.code, pluginResult.code);
   });
@@ -98,17 +164,22 @@ describe("@litsx/babel-preset-litsx", () => {
       "}",
     ].join("\n");
 
-    const result = transformFromAstSync(parser.parse(source, { sourceType: "module" }), source, {
-      configFile: false,
-      babelrc: false,
-      filename: "/virtual/stable-ids.litsx",
-      presets: [[nativePreset, { jsxTemplate: false }]],
-    });
+    const result = transformFromAstSync(
+      parser.parse(source, { sourceType: "module" }),
+      source,
+      {
+        configFile: false,
+        babelrc: false,
+        filename: "/virtual/stable-ids.tsx",
+        presets: [[nativePreset, { jsxTemplate: false }]],
+      },
+    );
 
-    const ids = [...result.code.matchAll(/useStableId\((?:this|_host), "([^"]+)"\)/g)]
-      .map((match) => match[1]);
+    const ids = [
+      ...result.code.matchAll(/useStableId\("([^"]+)"\)/g),
+    ].map((match) => match[1]);
 
-    assert.match(result.code, /function useResourceKey\(_host\)/);
+    assert.match(result.code, /function useResourceKey\(\)/);
     assert.strictEqual(ids.length, 2);
     assert.notStrictEqual(ids[0], ids[1]);
     assert.ok(ids.every((id) => id.startsWith("litsx-stable-")));
@@ -124,1014 +195,206 @@ describe("@litsx/babel-preset-litsx", () => {
       "}",
     ].join("\n");
 
-    const firstResult = transformFromAstSync(parser.parse(source, { sourceType: "module" }), source, {
-      configFile: false,
-      babelrc: false,
-      filename: "/virtual/stable-class-ids.litsx",
-      presets: [[nativePreset, { jsxTemplate: false }]],
-    });
-    const secondResult = transformFromAstSync(parser.parse(source, { sourceType: "module" }), source, {
-      configFile: false,
-      babelrc: false,
-      filename: "/virtual/stable-class-ids.litsx",
-      presets: [[nativePreset, { jsxTemplate: false }]],
-    });
+    const firstResult = transformFromAstSync(
+      parser.parse(source, { sourceType: "module" }),
+      source,
+      {
+        configFile: false,
+        babelrc: false,
+        filename: "/virtual/stable-class-ids.tsx",
+        presets: [[nativePreset, { jsxTemplate: false }]],
+      },
+    );
+    const secondResult = transformFromAstSync(
+      parser.parse(source, { sourceType: "module" }),
+      source,
+      {
+        configFile: false,
+        babelrc: false,
+        filename: "/virtual/stable-class-ids.tsx",
+        presets: [[nativePreset, { jsxTemplate: false }]],
+      },
+    );
 
-    const firstIds = [...firstResult.code.matchAll(/\[Symbol\.for\("litsx\.hostTypeId"\)\] = "([^"]+)"/g)]
-      .map((match) => match[1]);
-    const secondIds = [...secondResult.code.matchAll(/\[Symbol\.for\("litsx\.hostTypeId"\)\] = "([^"]+)"/g)]
-      .map((match) => match[1]);
+    const firstIds = [
+      ...firstResult.code.matchAll(
+        /\[Symbol\.for\("litsx\.hostTypeId"\)\] = "([^"]+)"/g,
+      ),
+    ].map((match) => match[1]);
+    const secondIds = [
+      ...secondResult.code.matchAll(
+        /\[Symbol\.for\("litsx\.hostTypeId"\)\] = "([^"]+)"/g,
+      ),
+    ].map((match) => match[1]);
 
     assert.doesNotMatch(firstResult.code, /@litsx\/core\/elements/);
-    assert.match(firstResult.code, /static \[Symbol\.for\("litsx\.component"\)\] = true;/);
+    assert.match(
+      firstResult.code,
+      /static \[Symbol\.for\("litsx\.component"\)\] = true;/,
+    );
     assert.strictEqual(firstIds.length, 2);
     assert.deepStrictEqual(firstIds, secondIds);
     assert.notStrictEqual(firstIds[0], firstIds[1]);
     assert.ok(firstIds.every((id) => id.startsWith("litsx-host-type-")));
   });
 
-  it("compiles local structural hooks to host middleware reads", () => {
+  it("compiles structural hooks as deduplicated host capabilities", () => {
     const source = [
-      'import { defineHook } from "@litsx/core";',
-      "const useLocale = defineHook({",
-      "  use(_host, _state, args) {",
-      "    return args[0];",
-      "  },",
+      'import { defineHook, useHost } from "@litsx/core";',
+      "const CapabilityMixin = Base => class extends Base { get capability() { return 'ready'; } };",
+      "const useCapability = defineHook({",
+      "  mixin: CapabilityMixin,",
+      "  use(suffix = '') { return useHost().capability + suffix; },",
       "});",
-      "export function Greeting() {",
-      "  const locale = useLocale('en');",
-      "  return <div>{locale}</div>;",
-      "}",
-    ].join("\n");
-
-    const result = transformFromAstSync(parser.parse(source, { sourceType: "module" }), source, {
-      configFile: false,
-      babelrc: false,
-      filename: "/virtual/structural.litsx",
-      presets: [[nativePreset, { jsxTemplate: false }]],
-    });
-
-    assert.match(result.code, /import \{[^}]*defineHook[^}]*resolveStructuralEntry[^}]*HostMiddlewareMixin[^}]*\} from "@litsx\/core";|import \{[^}]*HostMiddlewareMixin[^}]*defineHook[^}]*resolveStructuralEntry[^}]*\} from "@litsx\/core";/);
-    assert.match(result.code, /class Greeting extends HostMiddlewareMixin\(LitElement\)/);
-    assert.match(result.code, /static structuralEntries = \[/);
-    assert.match(result.code, /callsiteIndex: 0/);
-    assert.match(result.code, /resolveStructuralEntry\(this, 0, "litsx-structural-[^"]+", useLocale, \['en'\]|\["en"\]/);
-    assert.match(result.code, /callsitePath: \["litsx-structural-[^"]+"\]/);
-  });
-
-  it("compiles static-only structural hooks without host lifecycle wrapping", () => {
-    const source = [
-      'import { defineHook } from "@litsx/core";',
-      "const useStaticResource = defineHook({",
-      "  static(name, meta) {",
-      "    return { key: name, path: meta.callsitePath };",
-      "  },",
-      "  use(_owner, state, _args, meta) {",
-      "    return `${state.static.key}:${meta.callsitePath.length}`;",
-      "  },",
-      "});",
-      "export function StaticCard() {",
-      "  static styles = `:host { display: block; }`;",
-      "  const value = useStaticResource('catalog');",
-      "  return <div>{value}</div>;",
-      "}",
-    ].join("\n");
-
-    const result = transformFromAstSync(parser.parse(source, { sourceType: "module" }), source, {
-      configFile: false,
-      babelrc: false,
-      filename: "/virtual/static-structural.litsx",
-      presets: [[nativePreset, { jsxTemplate: false }]],
-    });
-
-    assert.match(result.code, /import \{[^}]*resolveStructuralStaticEntry[^}]*defineHook[^}]*\} from "@litsx\/core";|import \{[^}]*defineHook[^}]*resolveStructuralStaticEntry[^}]*\} from "@litsx\/core";/);
-    assert.doesNotMatch(result.code, /HostMiddlewareMixin/);
-    assert.match(result.code, /class StaticCard extends (?:LitsxStaticHoistsMixin\(LitElement\)|LitElement)/);
-    assert.match(result.code, /static structuralStaticEntries = \[/);
-    assert.match(result.code, /args: \['catalog'\]|\["catalog"\]/);
-    assert.match(result.code, /resolveStructuralStaticEntry\(this\.constructor, 0, "litsx-structural-[^"]+", useStaticResource, \['catalog'\]|\["catalog"\]/);
-    assert.match(result.code, /static get styles\(\)/);
-  });
-
-  it("compiles mixed structural hooks through the instance middleware path", () => {
-    const source = [
-      'import { defineHook } from "@litsx/core";',
-      "const useMixedResource = defineHook({",
-      "  static(name) { return { key: name }; },",
-      "  setup(_host, args, staticState) {",
-      "    const [name] = args;",
-      "    return { label: `${staticState.key}:${name}` };",
-      "  },",
-      "  middlewares: {",
-      "    connectedCallback(_host, state, next) {",
-      "      state.instance.connected = true;",
-      "      return next();",
-      "    },",
-      "  },",
-      "  use(_host, state, args) {",
-      "    const [name] = args;",
-      "    return `${state.static.key}:${state.instance.label}:${name}`;",
-      "  },",
-      "});",
-      "export function MixedCard() {",
-      "  const value = useMixedResource('catalog');",
-      "  return <div>{value}</div>;",
-      "}",
-    ].join("\n");
-
-    const result = transformFromAstSync(parser.parse(source, { sourceType: "module" }), source, {
-      configFile: false,
-      babelrc: false,
-      filename: "/virtual/mixed-structural.litsx",
-      presets: [[nativePreset, { jsxTemplate: false }]],
-    });
-
-    assert.match(result.code, /class MixedCard extends HostMiddlewareMixin\(LitElement\)/);
-    assert.match(result.code, /static structuralEntries = \[/);
-    assert.doesNotMatch(result.code, /static structuralStaticEntries/);
-    assert.match(result.code, /resolveStructuralEntry\(this, 0, "litsx-structural-[^"]+", useMixedResource, \['catalog'\]|\["catalog"\]/);
-  });
-
-  it("compiles structural hooks used transitively through local custom hooks", () => {
-    const source = [
-      'import { defineHook } from "@litsx/core";',
-      "const useResource = defineHook({",
-      "  use(_host, _state, args) {",
-      "    return args[0];",
-      "  },",
-      "});",
-      "function useMessage(name) {",
-      "  return useResource(name);",
-      "}",
-      "export function Greeting() {",
-      "  const message = useMessage('hello');",
-      "  return <div>{message}</div>;",
-      "}",
-    ].join("\n");
-
-    const result = transformFromAstSync(parser.parse(source, { sourceType: "module" }), source, {
-      configFile: false,
-      babelrc: false,
-      filename: "/virtual/structural-custom.litsx",
-      presets: [[nativePreset, { jsxTemplate: false }]],
-    });
-
-    assert.match(result.code, /function useMessage\(_host, name\)/);
-    assert.match(result.code, /static structuralEntries = \[/);
-    assert.match(result.code, /resolveStructuralEntry\(_host, 0, "litsx-structural-[^"]+", useResource, \[name\]/);
-    assert.match(result.code, /callsitePath: \["useMessage", "litsx-structural-[^"]+"\]/);
-    assert.match(result.code, /class Greeting extends HostMiddlewareMixin\(LitElement\)/);
-    assert.match(result.code, /useMessage\(this, 'hello'\)|useMessage\(this, "hello"\)/);
-    const staticEntries = result.code.match(/static structuralEntries = \[([\s\S]*?)\];/)?.[1] ?? "";
-    assert.strictEqual([...staticEntries.matchAll(/definition: useResource/g)].length, 1);
-  });
-
-  it("compiles imported structural hooks discovered from authored modules", () => {
-    const source = [
-      'import { useLocale } from "./hooks.litsx";',
-      "export function Greeting() {",
-      "  const locale = useLocale('en');",
-      "  return <div>{locale}</div>;",
-      "}",
-    ].join("\n");
-    const hooksSource = [
-      'import { defineHook } from "@litsx/core";',
-      "export const useLocale = defineHook({",
-      "  use(_host, _state, args) {",
-      "    return args[0];",
-      "  },",
-      "});",
-    ].join("\n");
-
-    const result = transformFromAstSync(parser.parse(source, { sourceType: "module" }), source, {
-      configFile: false,
-      babelrc: false,
-      filename: "/virtual/imported-structural.litsx",
-      presets: [[nativePreset, {
-        jsxTemplate: false,
-        inMemoryFiles: {
-          "/virtual/hooks.litsx": hooksSource,
-        },
-      }]],
-    });
-
-    assert.match(result.code, /class Greeting extends HostMiddlewareMixin\(LitElement\)/);
-    assert.match(result.code, /static structuralEntries = \[/);
-    assert.match(result.code, /resolveStructuralEntry\(this, 0, "litsx-structural-[^"]+", useLocale, \['en'\]|\["en"\]/);
-  });
-
-  it("merges imported structural hook props into generated static properties", () => {
-    const source = [
-      'import { useMessages } from "./i18n-hooks.litsx";',
-      "export function Greeting({ title }: { title: string }) {",
-      "  useMessages();",
-      "  return <div>{title}</div>;",
-      "}",
-    ].join("\n");
-    const hooksSource = [
-      'import { defineHook } from "@litsx/core";',
-      "export const useMessages = defineHook({",
-      "  props(_host, _state, next) {",
-      "    return {",
-      "      ...next(),",
-      "      messages: { type: Object, attribute: false },",
-      "    };",
-      "  },",
-      "  setup() {",
-      "    return { runtimeMessages: null };",
-      "  },",
-      "  accessors(_host, state, next) {",
-      "    return {",
-      "      ...next(),",
-      "      runtimeMessages: {",
-        "        get: () => state.instance.runtimeMessages,",
-        "        set: (value) => { state.instance.runtimeMessages = value; },",
-      "      },",
-      "    };",
-      "  },",
-      "  use() {",
-      "    return null;",
-      "  },",
-      "});",
-    ].join("\n");
-
-    const result = compileWithNativePreset(source, {
-      filename: "/virtual/imported-structural-props.litsx",
-      parserPlugins: ["typescript"],
-      presetOptions: {
-        jsxTemplate: false,
-        inMemoryFiles: {
-          "/virtual/i18n-hooks.litsx": hooksSource,
-        },
-      },
-    });
-
-    assert.match(result.code, /import \{[^}]*resolveStructuralProps[^}]*\} from "@litsx\/core";/);
-    assert.match(result.code, /static get properties\(\)/);
-    assert.match(result.code, /resolveStructuralProps\(this,\s*\{/);
-    assert.match(result.code, /import \{ useMessages \} from "\.\/i18n-hooks\.litsx";/);
-    assert.match(result.code, /static structuralEntries = \[[\s\S]*definition: useMessages/s);
-  });
-
-  it("compiles structural hooks imported from @litsx/core", () => {
-    const source = [
-      'import { useElementInternals, useFormValidity, useFormValue } from "@litsx/core";',
-      "export function FormField() {",
-      "  static formAssociated = true;",
-      "  const internals = useElementInternals();",
-      "  const control = useFormValue('draft');",
-      "  const validity = useFormValidity();",
-      "  return <div>{internals.supported ? control.value : validity.validationMessage}</div>;",
-      "}",
-    ].join("\n");
-
-    const result = transformFromAstSync(parser.parse(source, { sourceType: "module" }), source, {
-      configFile: false,
-      babelrc: false,
-      filename: path.join(process.cwd(), "test", "fixtures", "imported-core-structural.litsx"),
-      presets: [[nativePreset, { jsxTemplate: false }]],
-    });
-
-    assert.match(result.code, /class FormField extends HostMiddlewareMixin\((?:LitsxStaticHoistsMixin\(LitElement\)|LitElement)\)/);
-    assert.match(result.code, /static structuralEntries = \[/);
-    assert.match(result.code, /resolveStructuralEntry\(this, 0, "litsx-structural-[^"]+", useElementInternals, \[\]/);
-    assert.match(result.code, /resolveStructuralEntry\(this, 1, "litsx-structural-[^"]+", useFormValue, \['draft'\]|\["draft"\]/);
-    assert.match(result.code, /resolveStructuralEntry\(this, 2, "litsx-structural-[^"]+", useFormValidity, \[\]/);
-  });
-
-  it("merges structural hook props into generated static properties and authored static properties", () => {
-    const baseHook = [
-      'import { defineHook } from "@litsx/core";',
-      "const useMessages = defineHook({",
-      "  props(_host, _state, next) {",
-      "    return {",
-      "      ...next(),",
-      "      messages: { type: Object, attribute: false },",
-      "    };",
-      "  },",
-      "  setup() {",
-      "    return { runtimeMessages: null };",
-      "  },",
-      "  accessors(_host, state, next) {",
-      "    return {",
-      "      ...next(),",
-      "      runtimeMessages: {",
-        "        get: () => state.instance.runtimeMessages,",
-        "        set: (value) => { state.instance.runtimeMessages = value; },",
-      "      },",
-      "    };",
-      "  },",
-      "  use() {",
-      "    return null;",
-      "  },",
-      "});",
-    ];
-    const noStaticSource = [
-      ...baseHook,
-      "export function ProductCard({ title }: { title: string }) {",
-      "  useMessages();",
-      "  return <div>{title}</div>;",
-      "}",
-    ].join("\n");
-    const authoredStaticSource = [
-      ...baseHook,
-      "export function ProductCard(props: { title: string }) {",
-      "  static properties = {",
-      "    messages: { reflect: true },",
-      "    title: { reflect: true },",
-      "  };",
-      "  useMessages();",
-      "  return <div>{props.title}</div>;",
-      "}",
-    ].join("\n");
-
-    const baseResult = compileWithNativePreset(noStaticSource, {
-      filename: "/virtual/structural-props.litsx",
-      parserPlugins: ["typescript"],
-      presetOptions: { jsxTemplate: false },
-    });
-    const mergeResult = compileWithNativePreset(authoredStaticSource, {
-      filename: "/virtual/structural-props-merge.litsx",
-      parserPlugins: ["typescript"],
-      presetOptions: { jsxTemplate: false },
-    });
-
-    assert.match(baseResult.code, /import \{[^}]*resolveStructuralProps[^}]*\} from "@litsx\/core";/);
-    assert.match(baseResult.code, /static get properties\(\)/);
-    assert.match(baseResult.code, /resolveStructuralProps\(this,\s*\{/);
-    assert.match(baseResult.code, /static structuralEntries = \[[\s\S]*definition: useMessages/s);
-
-    assert.match(mergeResult.code, /static get properties\(\)/);
-    assert.match(mergeResult.code, /resolveStructuralProps\(this,\s*this\.__litsxStatic\(_litsx_static_properties,\s*\(\)\s*=>\s*this\.__litsxMergeProperties\(/);
-    assert.match(mergeResult.code, /messages:\s*\{\s*reflect:\s*true\s*\}/s);
-    assert.match(mergeResult.code, /title:\s*\{\s*type:\s*String\s*\}/s);
-    assert.match(mergeResult.code, /title:\s*\{\s*reflect:\s*true\s*\}/s);
-  });
-
-  it("lets later structural hooks override earlier props for the same key", () => {
-    const source = [
-      'import { defineHook } from "@litsx/core";',
-      "const useBaseMessages = defineHook({",
-      "  props(_host, _state, next) {",
-      "    return {",
-      "      ...next(),",
-      "      messages: { type: Object, attribute: false },",
-      "    };",
-      "  },",
-      "  use() {",
-      "    return null;",
-      "  },",
-      "});",
-      "const usePriorityMessages = defineHook({",
-      "  props(_host, _state, next) {",
-      "    return {",
-      "      ...next(),",
-      "      messages: { reflect: true },",
-      "    };",
-      "  },",
-      "  use() {",
-      "    return null;",
-      "  },",
-      "});",
-      "export function ProductCard() {",
-      "  useBaseMessages();",
-      "  usePriorityMessages();",
-      "  return <div />;",
-      "}",
-    ].join("\n");
-
-    const result = compileWithNativePreset(source, {
-      filename: "/virtual/structural-props-precedence.litsx",
-      presetOptions: { jsxTemplate: false },
-    });
-
-    assert.match(result.code, /static structuralStaticEntries = \[/);
-    assert.match(result.code, /callsiteIndex: 0[\s\S]*definition: useBaseMessages[\s\S]*callsiteIndex: 1[\s\S]*definition: usePriorityMessages/s);
-    assert.match(result.code, /resolveStructuralStaticEntry\(this\.constructor, 0, "litsx-structural-[^"]+", useBaseMessages, \[\]/);
-    assert.match(result.code, /resolveStructuralStaticEntry\(this\.constructor, 1, "litsx-structural-[^"]+", usePriorityMessages, \[\]/);
-  });
-
-  it("emits tooling warnings when later structural hooks override earlier props keys", () => {
-    const source = [
-      'import { defineHook } from "@litsx/core";',
-      "const useBaseMessages = defineHook({",
-      "  props(_host, _state, next) {",
-      "    return {",
-      "      ...next(),",
-      "      messages: { type: Object, attribute: false },",
-      "    };",
-      "  },",
-      "  use() {",
-      "    return null;",
-      "  },",
-      "});",
-      "const usePriorityMessages = defineHook({",
-      "  props(_host, _state, next) {",
-      "    return {",
-      "      ...next(),",
-      "      messages: { reflect: true },",
-      "    };",
-      "  },",
-      "  use() {",
-      "    return null;",
-      "  },",
-      "});",
-      "export function ProductCard() {",
-      "  useBaseMessages();",
-      "  usePriorityMessages();",
-      "  return <div />;",
-      "}",
-    ].join("\n");
-
-    const result = compileWithNativePreset(source, {
-      filename: "/virtual/structural-props-overwrite-warning.litsx",
-      presetOptions: { jsxTemplate: false },
-    });
-
-    const warnings = result.metadata?.litsxWarnings || [];
-    assert.ok(warnings.some((warning) =>
-      warning.code === 91024 &&
-      /overrides props key "messages"/.test(warning.message)
-    ));
-  });
-
-  it("emits tooling warnings when later structural hooks override earlier accessors keys", () => {
-    const source = [
-      'import { defineHook } from "@litsx/core";',
-      "const useBaseAccessor = defineHook({",
-      "  accessors(_host, _state, next) {",
-      "    return {",
-      "      ...next(),",
-      "      current: {",
-      "        get: () => 'first',",
-      "      },",
-      "    };",
-      "  },",
-      "  use() {",
-      "    return null;",
-      "  },",
-      "});",
-      "const useOverrideAccessor = defineHook({",
-      "  accessors(_host, _state, next) {",
-      "    return {",
-      "      ...next(),",
-      "      current: {",
-      "        get: () => 'second',",
-      "      },",
-      "    };",
-      "  },",
-      "  use() {",
-      "    return null;",
-      "  },",
-      "});",
-      "export function ProductCard() {",
-      "  useBaseAccessor();",
-      "  useOverrideAccessor();",
-      "  return <div />;",
-      "}",
-    ].join("\n");
-
-    const result = compileWithNativePreset(source, {
-      filename: "/virtual/structural-accessors-overwrite-warning.litsx",
-      presetOptions: { jsxTemplate: false },
-    });
-
-    const warnings = result.metadata?.litsxWarnings || [];
-    assert.ok(warnings.some((warning) =>
-      warning.code === 91024 &&
-      /overrides accessors key "current"/.test(warning.message)
-    ));
-  });
-
-  it("compiles structural hooks imported through @litsx/core namespace imports", () => {
-    const source = [
-      'import * as core from "@litsx/core";',
-      "export function FormField() {",
-      "  static formAssociated = true;",
-      "  const internals = core.useElementInternals();",
-      "  const control = core.useFormValue('draft');",
-      "  const validity = core.useFormValidity();",
-      "  return <div>{internals.supported ? control.value : validity.validationMessage}</div>;",
-      "}",
-    ].join("\n");
-
-    const result = transformFromAstSync(parser.parse(source, { sourceType: "module" }), source, {
-      configFile: false,
-      babelrc: false,
-      filename: path.join(process.cwd(), "test", "fixtures", "imported-core-namespace-structural.litsx"),
-      presets: [[nativePreset, { jsxTemplate: false }]],
-    });
-
-    assert.match(result.code, /class FormField extends HostMiddlewareMixin\((?:LitsxStaticHoistsMixin\(LitElement\)|LitElement)\)/);
-    assert.match(result.code, /static structuralEntries = \[/);
-    assert.match(result.code, /resolveStructuralEntry\(this, 0, "litsx-structural-[^"]+", core\.useElementInternals, \[\]/);
-    assert.match(result.code, /resolveStructuralEntry\(this, 1, "litsx-structural-[^"]+", core\.useFormValue, \['draft'\]|\["draft"\]/);
-    assert.match(result.code, /resolveStructuralEntry\(this, 2, "litsx-structural-[^"]+", core\.useFormValidity, \[\]/);
-  });
-
-  it("compiles imported static-only structural hooks without host lifecycle wrapping", () => {
-    const source = [
-      'import { useStaticLocale } from "./hooks.litsx";',
-      "export function Greeting() {",
-      "  const locale = useStaticLocale('en');",
-      "  return <div>{locale}</div>;",
-      "}",
-    ].join("\n");
-    const hooksSource = [
-      'import { defineHook } from "@litsx/core";',
-      "export const useStaticLocale = defineHook({",
-      "  static(locale) {",
-      "    return { locale };",
-      "  },",
-      "  use(_owner, state, args) {",
-      "    const [locale] = args;",
-      "    return `${state.static.locale}:${locale}`;",
-      "  },",
-      "});",
-    ].join("\n");
-
-    const result = transformFromAstSync(parser.parse(source, { sourceType: "module" }), source, {
-      configFile: false,
-      babelrc: false,
-      filename: "/virtual/imported-static-structural.litsx",
-      presets: [[nativePreset, {
-        jsxTemplate: false,
-        inMemoryFiles: {
-          "/virtual/hooks.litsx": hooksSource,
-        },
-      }]],
-    });
-
-    assert.doesNotMatch(result.code, /HostMiddlewareMixin/);
-    assert.match(result.code, /static structuralStaticEntries = \[/);
-    assert.match(result.code, /resolveStructuralStaticEntry\(this\.constructor, 0, "litsx-structural-[^"]+", useStaticLocale, \['en'\]|\["en"\]/);
-  });
-
-  it("treats structural hooks with accessors as instance-phase hooks", () => {
-    const source = [
-      'import { defineHook } from "@litsx/core";',
-      "const useControl = defineHook({",
-      "  static(label) {",
-      "    return { label: label.toUpperCase() };",
-      "  },",
-      "  accessors(_host, state, next) {",
-      "    return {",
-      "      ...next(),",
-      "      value: {",
-      "        get: () => state.static.label,",
-      "      },",
-      "    };",
-      "  },",
-      "  use(label, state) {",
-      "    return `${state.static.label}:${label}`;",
-      "  },",
-      "});",
-      "export function Field() {",
-      "  const value = useControl('draft');",
-      "  return <div>{value}</div>;",
-      "}",
-    ].join("\n");
-
-    const result = transformFromAstSync(parser.parse(source, { sourceType: "module" }), source, {
-      configFile: false,
-      babelrc: false,
-      filename: "/virtual/structural-accessors.litsx",
-      presets: [[nativePreset, { jsxTemplate: false }]],
-    });
-
-    assert.match(result.code, /class Field extends HostMiddlewareMixin\((?:LitsxStaticHoistsMixin\(LitElement\)|LitElement)\)/);
-    assert.match(result.code, /static structuralEntries = \[/);
-    assert.match(result.code, /resolveStructuralEntry\(this, 0, "litsx-structural-[^"]+", useControl, \['draft'\]|\["draft"\]/);
-    assert.doesNotMatch(result.code, /resolveStructuralStaticEntry\(/);
-  });
-
-  it("rejects structural hooks that declare the same key in props and accessors", () => {
-    const source = [
-      'import { defineHook } from "@litsx/core";',
-      "const useMessages = defineHook({",
-      "  props(_host, _state, next) {",
-      "    return {",
-      "      ...next(),",
-      "      messages: { type: Object, attribute: false },",
-      "    };",
-      "  },",
-      "  setup() {",
-      "    return { messages: null };",
-      "  },",
-      "  accessors(_host, state, next) {",
-      "    return {",
-      "      ...next(),",
-      "      messages: {",
-      "        get: () => state.instance.messages,",
-      "      },",
-      "    };",
-      "  },",
-      "  use() {",
-      "    return null;",
-      "  },",
-      "});",
-      "export function Field() {",
-      "  useMessages();",
-      "  return <div />;",
-      "}",
-    ].join("\n");
-
-    assert.throws(
-      () => transformFromAstSync(parser.parse(source, { sourceType: "module" }), source, {
-        configFile: false,
-        babelrc: false,
-        filename: "/virtual/structural-props-accessors-collision.litsx",
-        presets: [[nativePreset, { jsxTemplate: false }]],
-      }),
-      /declares "messages" in both props and accessors/
-    );
-  });
-
-  it("compiles namespace imported structural hooks discovered from authored modules", () => {
-    const source = [
-      'import * as hooks from "./hooks.litsx";',
-      "export function Greeting() {",
-      "  const locale = hooks.useLocale('en');",
-      "  return <div>{locale}</div>;",
-      "}",
-    ].join("\n");
-    const hooksSource = [
-      'import { defineHook } from "@litsx/core";',
-      "const useLocale = defineHook({",
-      "  use(_host, _state, args) {",
-      "    return args[0];",
-      "  },",
-      "});",
-      "export { useLocale };",
-    ].join("\n");
-
-    const result = transformFromAstSync(parser.parse(source, { sourceType: "module" }), source, {
-      configFile: false,
-      babelrc: false,
-      filename: "/virtual/imported-namespace-structural.litsx",
-      presets: [[nativePreset, {
-        jsxTemplate: false,
-        inMemoryFiles: {
-          "/virtual/hooks.litsx": hooksSource,
-        },
-      }]],
-    });
-
-    assert.match(result.code, /class Greeting extends HostMiddlewareMixin\(LitElement\)/);
-    assert.match(result.code, /static structuralEntries = \[/);
-    assert.match(result.code, /resolveStructuralEntry\(this, 0, "litsx-structural-[^"]+", hooks\.useLocale, \['en'\]|\["en"\]/);
-  });
-
-  it("resolves imported structural hooks through TypeScript path aliases", () => {
-    const source = [
-      'import { useLocale } from "@/hooks.litsx";',
-      "export function Greeting() {",
-      "  const locale = useLocale('en');",
-      "  return <div>{locale}</div>;",
-      "}",
-    ].join("\n");
-    const hooksSource = [
-      'import { defineHook } from "@litsx/core";',
-      "export const useLocale = defineHook({",
-      "  use(_host, _state, args) {",
-      "    return args[0];",
-      "  },",
-      "});",
-    ].join("\n");
-
-    const result = transformFromAstSync(parser.parse(source, { sourceType: "module" }), source, {
-      configFile: false,
-      babelrc: false,
-      filename: "/virtual/src/path-alias-structural.litsx",
-      presets: [[nativePreset, {
-        jsxTemplate: false,
-        compilerOptions: {
-          baseUrl: "/virtual/src",
-          paths: {
-            "@/*": ["*"],
-          },
-        },
-        inMemoryFiles: {
-          "/virtual/src/hooks.litsx": hooksSource,
-        },
-      }]],
-    });
-
-    assert.match(result.code, /class Greeting extends HostMiddlewareMixin\(LitElement\)/);
-    assert.match(result.code, /static structuralEntries = \[/);
-    assert.match(result.code, /resolveStructuralEntry\(this, 0, "litsx-structural-[^"]+", useLocale, \['en'\]|\["en"\]/);
-  });
-
-  it("wraps hosts that call imported custom hooks containing structural hooks", () => {
-    const source = [
-      'import { useMessage } from "./hooks.litsx";',
-      "export function Greeting() {",
-      "  const message = useMessage('hello');",
-      "  return <div>{message}</div>;",
-      "}",
-    ].join("\n");
-    const hooksSource = [
-      'import { defineHook } from "@litsx/core";',
-      "const useResource = defineHook({",
-      "  use(_host, _state, args) {",
-      "    return args[0];",
-      "  },",
-      "});",
-      "export function useMessage(name) {",
-      "  return useResource(name);",
-      "}",
-    ].join("\n");
-
-    const result = transformFromAstSync(parser.parse(source, { sourceType: "module" }), source, {
-      configFile: false,
-      babelrc: false,
-      filename: "/virtual/imported-structural-custom.litsx",
-      presets: [[nativePreset, {
-        jsxTemplate: false,
-        inMemoryFiles: {
-          "/virtual/hooks.litsx": hooksSource,
-        },
-      }]],
-    });
-
-    assert.match(result.code, /class Greeting extends HostMiddlewareMixin\(LitElement\)/);
-    assert.match(result.code, /static structuralEntries = \[\s*\.\.\.\(useMessage\[Symbol\.for\("litsx\.structuralHookEntries"\)\] \|\| \[\]\)/);
-    assert.match(result.code, /useMessage\(this, 'hello'\)|useMessage\(this, "hello"\)/);
-    assert.doesNotMatch(result.code, /resolveStructuralEntry\(this, 0, "litsx-structural-[^"]+", useMessage/);
-  });
-
-  it("attaches structural metadata to custom hooks that contain structural hooks", () => {
-    const source = [
-      'import { defineHook } from "@litsx/core";',
-      "const useResource = defineHook({",
-      "  use(_host, _state, args) {",
-      "    return args[0];",
-      "  },",
-      "});",
-      "export function useMessage(name) {",
-      "  return useResource(name);",
-      "}",
-    ].join("\n");
-
-    const result = transformFromAstSync(parser.parse(source, { sourceType: "module" }), source, {
-      configFile: false,
-      babelrc: false,
-      filename: "/virtual/hooks-with-metadata.litsx",
-      presets: [[nativePreset, { jsxTemplate: false }]],
-    });
-
-    assert.match(result.code, /import \{[^}]*defineHook[^}]*resolveStructuralEntry[^}]*\} from "@litsx\/core";|import \{[^}]*resolveStructuralEntry[^}]*defineHook[^}]*\} from "@litsx\/core";/);
-    assert.match(result.code, /export function useMessage\(_host, name\)/);
-    assert.match(result.code, /useMessage\[Symbol\.for\("litsx\.structuralHookEntries"\)\] = \[/);
-    assert.match(result.code, /resolveStructuralEntry\(_host, 0, "litsx-structural-[^"]+", useResource, \[name\]/);
-  });
-
-  it("keeps structural callsite identity stable across repeated transforms", () => {
-    const source = [
-      'import { defineHook } from "@litsx/core";',
-      "const useResource = defineHook({",
-      "  use(_host, _state, args) {",
-      "    return args[0];",
-      "  },",
-      "});",
-      "export function Greeting() {",
-      "  const first = useResource('a');",
-      "  const second = useResource('b');",
+      "export function TestPanel() {",
+      "  const first = useCapability(':first');",
+      "  const second = useCapability(':second');",
       "  return <div>{first}{second}</div>;",
       "}",
     ].join("\n");
-    const options = {
-      configFile: false,
-      babelrc: false,
-      filename: "/virtual/structural-stability.litsx",
-      presets: [[nativePreset, { jsxTemplate: false }]],
-    };
 
-    const first = transformFromAstSync(parser.parse(source, { sourceType: "module" }), source, options);
-    const second = transformFromAstSync(parser.parse(source, { sourceType: "module" }), source, options);
-    const firstIds = [...first.code.matchAll(/callsiteId: "(litsx-structural-[^"]+)"/g)]
-      .map((match) => match[1]);
-    const secondIds = [...second.code.matchAll(/callsiteId: "(litsx-structural-[^"]+)"/g)]
-      .map((match) => match[1]);
-
-    assert.strictEqual(firstIds.length, 2);
-    assert.deepStrictEqual(firstIds, secondIds);
-    assert.notStrictEqual(firstIds[0], firstIds[1]);
-  });
-
-  it("keeps structural callsite identity and paths consistent for SSR and client transforms", () => {
-    const source = [
-      'import { defineHook } from "@litsx/core";',
-      "const useResource = defineHook({",
-      "  use(_host, _state, args) {",
-      "    return args[0];",
-      "  },",
-      "});",
-      "const useScoped = defineHook({",
-      "  use(_host, _state, args) {",
-      "    return useResource(`scope:${args[0]}`);",
-      "  },",
-      "});",
-      "export function Panel({ name = 'checkout' }) {",
-      "  const value = useScoped(name);",
-      "  return <div>{value}</div>;",
-      "}",
-    ].join("\n");
-    const filename = "/virtual/ssr-client-structural.litsx";
-    const transform = () => transformFromAstSync(parser.parse(source, { sourceType: "module" }), source, {
-      configFile: false,
-      babelrc: false,
-      filename,
-      presets: [[nativePreset, { jsxTemplate: false }]],
-    });
-
-    const ssr = transform();
-    const client = transform();
-    const getEntries = (code) => [...code.matchAll(/callsiteId: "(litsx-structural-[^"]+)"[\s\S]*?callsitePath: \[([^\]]+)\]/g)]
-      .map((match) => ({
-        id: match[1],
-        path: match[2],
-      }));
-
-    assert.deepStrictEqual(getEntries(ssr.code), getEntries(client.code));
-    assert.match(ssr.code, /callsitePath: \["useScoped", "use", "litsx-structural-[^"]+"\]/);
-    assert.match(ssr.code, /callsitePath: \["litsx-structural-[^"]+"\]/);
-  });
-
-  it("compiles structural hooks nested inside defineHook use readers", () => {
-    const source = [
-      'import { defineHook } from "@litsx/core";',
-      "const useInner = defineHook({",
-      "  use(_host, _state, args) {",
-      "    return args[0];",
-      "  },",
-      "});",
-      "const useOuter = defineHook({",
-      "  use(host, _state, args) {",
-      "    return useInner(args[0]);",
-      "  },",
-      "});",
-      "export function Greeting() {",
-      "  const value = useOuter('ok');",
-      "  return <div>{value}</div>;",
-      "}",
-    ].join("\n");
-
-    const result = transformFromAstSync(parser.parse(source, { sourceType: "module" }), source, {
-      configFile: false,
-      babelrc: false,
-      filename: "/virtual/nested-structural.litsx",
-      presets: [[nativePreset, { jsxTemplate: false }]],
-    });
-
-    assert.match(result.code, /use: function \(host, _state, args\)|use\(host, _state, args\)/);
-    assert.match(result.code, /static structuralEntries = \[/);
-    assert.match(result.code, /callsiteIndex: 0/);
-    assert.match(result.code, /callsiteIndex: 1/);
-    assert.match(result.code, /resolveStructuralEntry\(host, 0, "litsx-structural-[^"]+", useInner, \[args\[0\]\]/);
-    assert.match(result.code, /callsitePath: \["useOuter", "use", "litsx-structural-[^"]+"\]/);
-    assert.match(result.code, /resolveStructuralEntry\(this, 1, "litsx-structural-[^"]+", useOuter, \['ok'\]|\["ok"\]/);
-  });
-
-  it("compiles the structural hooks authoring fixture end-to-end", () => {
-    const fixturePath = path.resolve("test/fixtures/structural-hooks/consumer.litsx");
-    const hooksPath = path.resolve("test/fixtures/structural-hooks/resource-hooks.litsx");
-    const source = fs.readFileSync(fixturePath, "utf8");
-    const hooksSource = fs.readFileSync(hooksPath, "utf8");
-
-    const result = transformFromAstSync(parser.parse(source, { sourceType: "module" }), source, {
-      configFile: false,
-      babelrc: false,
-      filename: fixturePath,
-      presets: [[nativePreset, { jsxTemplate: false }]],
-    });
-    const hooksResult = transformFromAstSync(parser.parse(hooksSource, { sourceType: "module" }), hooksSource, {
-      configFile: false,
-      babelrc: false,
-      filename: hooksPath,
-      presets: [[nativePreset, { jsxTemplate: false }]],
-    });
-
-    assert.match(result.code, /import \{ useScopedResource \} from "\.\/resource-hooks\.litsx";/);
-    assert.match(result.code, /class ResourceConsumer extends HostMiddlewareMixin\(LitElement\)/);
-    assert.match(result.code, /static structuralEntries = \[\{\s*id: "litsx-structural-[^"]+"/);
-    assert.match(result.code, /definition: useScopedResource/);
-    assert.match(result.code, /resolveStructuralEntry\(this, 0, "litsx-structural-[^"]+", useScopedResource, \[this\.name\]/);
-    assert.match(hooksResult.code, /useScopedResource\[Symbol\.for\("litsx\.structuralHookEntries"\)\] = \[/);
-    assert.match(hooksResult.code, /resolveStructuralEntry\(_host, 0, "litsx-structural-[^"]+", useResource, \[`scope:\$\{args\[0\]\}`\]/);
-  });
-
-  it("rejects structural hook aliases so callsites stay static", () => {
-    const source = [
-      'import { defineHook } from "@litsx/core";',
-      "const useLocale = defineHook({",
-      "  use(_host) { return 'en'; },",
-      "});",
-      "const useAlias = useLocale;",
-      "export function Greeting() {",
-      "  return <div>{useAlias()}</div>;",
-      "}",
-    ].join("\n");
-
-    assert.throws(
-      () => transformFromAstSync(parser.parse(source, { sourceType: "module" }), source, {
+    const result = transformFromAstSync(
+      parser.parse(source, { sourceType: "module" }),
+      source,
+      {
         configFile: false,
         babelrc: false,
-        filename: "/virtual/invalid-structural.litsx",
+        filename: "/virtual/structural-mixins.tsx",
         presets: [[nativePreset, { jsxTemplate: false }]],
-      }),
-      /cannot be created through an alias/,
+      },
     );
+
+    assert.match(
+      result.code,
+      /class TestPanel extends applyStructuralHooks\(LitElement, \[/,
+    );
+    assert.strictEqual(
+      (
+        result.code.match(
+          /useCapability\[Symbol\.for\("litsx\.structuralHooks"\)\]/g,
+        ) || []
+      ).length,
+      2,
+    );
+    assert.match(
+      result.code,
+      /readStructuralHook\(useCapability, \[':first'\]|\[":first"\]/,
+    );
+    assert.match(
+      result.code,
+      /readStructuralHook\(useCapability, \[':second'\]|\[":second"\]/,
+    );
+    assert.doesNotMatch(result.code, /HostMiddleware|structuralEntries/);
   });
 
-  it("rejects dynamic structural hook selection so callsites stay static", () => {
+  it("compiles installation-only structural hooks without an implicit host result", () => {
     const source = [
       'import { defineHook } from "@litsx/core";',
-      "const useLocale = defineHook({ use(_host) { return 'en'; } });",
-      "const useTheme = defineHook({ use(_host) { return 'dark'; } });",
-      "const useSelected = ready ? useLocale : useTheme;",
-      "export function Greeting() {",
-      "  return <div>{useSelected()}</div>;",
+      "const FocusMixin = Base => class extends Base { static delegatesFocus = true; };",
+      "const useFocusCapability = defineHook({ mixin: FocusMixin });",
+      "export function TestPanel() {",
+      "  useFocusCapability();",
+      "  return <div>Ready</div>;",
       "}",
     ].join("\n");
 
-    assert.throws(
-      () => transformFromAstSync(parser.parse(source, { sourceType: "module" }), source, {
+    const result = transformFromAstSync(
+      parser.parse(source, { sourceType: "module" }),
+      source,
+      {
         configFile: false,
         babelrc: false,
-        filename: "/virtual/invalid-dynamic-structural.litsx",
+        filename: "/virtual/installation-only-mixin.tsx",
         presets: [[nativePreset, { jsxTemplate: false }]],
-      }),
-      /cannot be created through an alias/,
+      },
     );
+
+    assert.match(
+      result.code,
+      /class TestPanel extends applyStructuralHooks\(LitElement, \[/,
+    );
+    assert.match(result.code, /readStructuralHook\(useFocusCapability, \[\]\)/);
+    assert.doesNotMatch(result.code, /useHost/);
   });
 
-  it("rejects structural hooks stored in containers", () => {
-    const objectSource = [
-      'import { defineHook } from "@litsx/core";',
-      "const useLocale = defineHook({ use(_host) { return 'en'; } });",
-      "const hooks = { useLocale };",
-      "export function Greeting() { return <div />; }",
-    ].join("\n");
-    const arraySource = [
-      'import { defineHook } from "@litsx/core";',
-      "const useLocale = defineHook({ use(_host) { return 'en'; } });",
-      "const hooks = [useLocale];",
-      "export function Greeting() { return <div />; }",
-    ].join("\n");
-
-    for (const source of [objectSource, arraySource]) {
-      assert.throws(
-        () => transformFromAstSync(parser.parse(source, { sourceType: "module" }), source, {
-          configFile: false,
-          babelrc: false,
-          filename: "/virtual/invalid-container-structural.litsx",
-          presets: [[nativePreset, { jsxTemplate: false }]],
-        }),
-        /cannot be stored in object or array containers/,
-      );
-    }
-  });
-
-  it("rejects computed namespace access for imported structural hooks", () => {
+  it("propagates structural hook requirements through custom hooks", () => {
     const source = [
-      'import * as hooks from "./hooks.litsx";',
-      "const name = 'useLocale';",
-      "export function Greeting() {",
-      "  return <div>{hooks[name]('en')}</div>;",
+      'import { defineHook, useHost } from "@litsx/core";',
+      "const I18nMixin = Base => class extends Base {};",
+      "const useI18n = defineHook({ mixin: I18nMixin, use: () => useHost().i18n });",
+      "export function useTranslatedLabel(key) {",
+      "  return useI18n().t(key);",
+      "}",
+      "export function useToolbarLabel(key) {",
+      "  return useTranslatedLabel(key);",
+      "}",
+      "export function TestButton() {",
+      "  return <button>{useToolbarLabel('save')}</button>;",
       "}",
     ].join("\n");
-    const hooksSource = [
+
+    const result = transformFromAstSync(
+      parser.parse(source, { sourceType: "module" }),
+      source,
+      {
+        configFile: false,
+        babelrc: false,
+        filename: "/virtual/transitive-structural-mixins.tsx",
+        presets: [[nativePreset, { jsxTemplate: false }]],
+      },
+    );
+
+    assert.match(
+      result.code,
+      /useTranslatedLabel\[Symbol\.for\("litsx\.structuralHooks"\)\] = \[\.\.\.\(useI18n\[Symbol\.for\("litsx\.structuralHooks"\)\] \|\| \[useI18n\]\)\]/,
+    );
+    assert.match(
+      result.code,
+      /useToolbarLabel\[Symbol\.for\("litsx\.structuralHooks"\)\] = \[\.\.\.\(useI18n\[Symbol\.for\("litsx\.structuralHooks"\)\] \|\| \[useI18n\]\)\]/,
+    );
+    assert.match(
+      result.code,
+      /class TestButton extends applyStructuralHooks\(LitElement, \[/,
+    );
+    assert.match(result.code, /readStructuralHook\(useI18n, \[\]\)/);
+  });
+
+  it("rejects the removed structural middleware contract at compile time", () => {
+    const source = [
       'import { defineHook } from "@litsx/core";',
-      "export const useLocale = defineHook({ use(_host, _state, args) { return args[0]; } });",
+      "const useLegacy = defineHook({",
+      "  setup() {},",
+      "  props: { value: {} },",
+      "  use(host) { return host.value; },",
+      "});",
     ].join("\n");
 
     assert.throws(
-      () => transformFromAstSync(parser.parse(source, { sourceType: "module" }), source, {
-        configFile: false,
-        babelrc: false,
-        filename: "/virtual/invalid-computed-namespace-structural.litsx",
-        presets: [[nativePreset, {
-          jsxTemplate: false,
-          inMemoryFiles: {
-            "/virtual/hooks.litsx": hooksSource,
+      () =>
+        transformFromAstSync(
+          parser.parse(source, { sourceType: "module" }),
+          source,
+          {
+            configFile: false,
+            babelrc: false,
+            filename: "/virtual/removed-structural-contract.tsx",
+            presets: [[nativePreset, { jsxTemplate: false }]],
           },
-        }]],
-      }),
-      /must be accessed with a static property/,
+        ),
+      /no longer accepts structural fields setup, props/,
     );
   });
 
   it("detects source features so the compiler can skip unnecessary native plugin passes", () => {
     const plainSource = [
-      "export const Greeting = ({ label }) => {",
+      "export const TestGreeting = ({ label }) => {",
       "  return <button>{label}</button>;",
       "};",
     ].join("\n");
     const featureSource = [
       "import FancyButton from './FancyButton.js';",
       "import { useRef, useState } from '@litsx\/core';",
-      "export function Greeting({ label }) {",
+      "export function TestGreeting({ label }) {",
       "  const ref = useRef(null);",
       "  const [count] = useState(0);",
       "  return <FancyButton ref={ref}>{label}{count}</FancyButton>;",
@@ -1143,6 +406,7 @@ describe("@litsx/babel-preset-litsx", () => {
       domRefs: false,
       scopedElements: false,
       boundaries: false,
+      lazy: false,
     });
 
     assert.deepStrictEqual(detectLitsxSourceFeatures(featureSource, {}), {
@@ -1150,35 +414,62 @@ describe("@litsx/babel-preset-litsx", () => {
       domRefs: true,
       scopedElements: true,
       boundaries: false,
+      lazy: false,
     });
 
     assert.strictEqual(
-      detectLitsxSourceFeatures('import { useStableId } from "@litsx/core"; useStableId();', {}).hooks,
+      detectLitsxSourceFeatures(
+        'import { useStableId } from "@litsx/core"; useStableId();',
+        {},
+      ).hooks,
       true,
     );
 
     assert.strictEqual(
-      detectLitsxSourceFeatures('import { useId } from "@litsx/core"; useId();', {}).hooks,
+      detectLitsxSourceFeatures(
+        'import { useId } from "@litsx/core"; useId();',
+        {},
+      ).hooks,
       true,
     );
 
     assert.strictEqual(
-      detectLitsxSourceFeatures('import { useContext } from "@litsx/core/context"; useContext(ThemeContext);', {}).hooks,
+      detectLitsxSourceFeatures(
+        'import { useContext } from "@litsx/core/context"; useContext(ThemeContext);',
+        {},
+      ).hooks,
       true,
     );
 
     assert.strictEqual(
-      detectLitsxSourceFeatures('import { defineHook } from "@litsx/core"; defineHook({});', {}).hooks,
+      detectLitsxSourceFeatures(
+        'import { defineHook } from "@litsx/core"; defineHook({ use() {} });',
+        {},
+      ).hooks,
       true,
     );
 
     assert.strictEqual(
-      detectLitsxSourceFeatures('import { SuspenseBoundary } from "@litsx/core"; <SuspenseBoundary fallback={null} />;', {}).boundaries,
+      detectLitsxSourceFeatures(
+        'import { SuspenseBoundary } from "@litsx/core"; <SuspenseBoundary fallback={null} />;',
+        {},
+      ).boundaries,
       true,
     );
 
     assert.strictEqual(
-      detectLitsxSourceFeatures('import { ErrorBoundary } from "@litsx/core"; <ErrorBoundary fallback={null} />;', {}).boundaries,
+      detectLitsxSourceFeatures(
+        'import { ErrorBoundary } from "@litsx/core"; <ErrorBoundary fallback={null} />;',
+        {},
+      ).boundaries,
+      true,
+    );
+
+    assert.strictEqual(
+      detectLitsxSourceFeatures(
+        'import { lazy as defer } from "@litsx/core"; const TestPanel = defer(() => import("./panel.js"));',
+        {},
+      ).lazy,
       true,
     );
 
@@ -1201,8 +492,8 @@ describe("@litsx/babel-preset-litsx", () => {
     assert.strictEqual(
       detectLitsxSourceFeatures(
         [
-          'import {',
-          '  useDemo as useScopedDemo,',
+          "import {",
+          "  useDemo as useScopedDemo,",
           '} from "./use-demo";',
           "export function App() { return useScopedDemo(); }",
         ].join("\n"),
@@ -1214,7 +505,7 @@ describe("@litsx/babel-preset-litsx", () => {
     assert.strictEqual(
       detectLitsxSourceFeatures(
         [
-          'import * as sharedHooks',
+          "import * as sharedHooks",
           '  from "./use-demo";',
           "export function App() { return sharedHooks.useScopedDemo(); }",
         ].join("\n"),
@@ -1232,17 +523,29 @@ describe("@litsx/babel-preset-litsx", () => {
     );
 
     assert.strictEqual(
-      detectLitsxSourceFeatures('import type { useDemo } from "./types";', {}).hooks,
+      detectLitsxSourceFeatures('import type { useDemo } from "./types";', {})
+        .hooks,
       false,
     );
+
+    for (const source of [
+      null,
+      'import from "./empty";',
+      'import { useBroken }',
+      'import * nope from "./hooks"; nope.useFeature();',
+      'import * as from "./hooks"; hooks.useFeature();',
+      'import * as 123bad from "./hooks"; bad.useFeature();',
+    ]) {
+      assert.strictEqual(detectLitsxSourceFeatures(source, {}).hooks, false);
+    }
 
     assert.deepStrictEqual(
       detectLitsxSourceFeatures(
         [
-          "export function Greeting() {",
-          "  static lightDom = true;",
+          "export function TestGreeting() {",
           "  return <div>ready</div>;",
           "}",
+          "TestGreeting.lightDom = true;",
         ].join("\n"),
         {},
       ),
@@ -1251,16 +554,19 @@ describe("@litsx/babel-preset-litsx", () => {
         domRefs: false,
         scopedElements: true,
         boundaries: false,
+        lazy: false,
       },
     );
 
     assert.strictEqual(
-      createLitsxPresetPlugins({}, detectLitsxSourceFeatures(plainSource, {})).length,
-      3,
+      createLitsxPresetPlugins({}, detectLitsxSourceFeatures(plainSource, {}))
+        .length,
+      8,
     );
     assert.strictEqual(
-      createLitsxPresetPlugins({}, detectLitsxSourceFeatures(featureSource, {})).length,
-      6,
+      createLitsxPresetPlugins({}, detectLitsxSourceFeatures(featureSource, {}))
+        .length,
+      11,
     );
   });
 
@@ -1292,19 +598,26 @@ describe("@litsx/babel-preset-litsx", () => {
 
   it("can disable final template lowering", () => {
     const source = [
-      "export const Greeting = ({ label }) => {",
+      "export const TestGreeting = ({ label }) => {",
       "  return <button @click={save}>{label}</button>;",
       "};",
     ].join("\n");
 
-    const result = transformFromAstSync(parser.parse(source, { sourceType: "module" }), source, {
-      configFile: false,
-      babelrc: false,
-      presets: [[nativePreset, { jsxTemplate: false }]],
-    });
+    const result = transformFromAstSync(
+      parser.parse(source, { sourceType: "module" }),
+      source,
+      {
+        configFile: false,
+        babelrc: false,
+        presets: [[nativePreset, { jsxTemplate: false }]],
+      },
+    );
 
-    assert.match(result.code, /class Greeting extends LitElement/);
-    assert.match(result.code, /return <button @click=\{save\}>\{this\.label\}<\/button>;/);
+    assert.match(result.code, /class TestGreeting extends LitElement/);
+    assert.match(
+      result.code,
+      /return <button @click=\{save\}>\{this\.label\}<\/button>;/,
+    );
     assert.doesNotMatch(result.code, /html`/);
   });
 
@@ -1313,19 +626,26 @@ describe("@litsx/babel-preset-litsx", () => {
       "function renderHelperWithArgs(alpha, beta, gamma) {",
       "  return <p>{alpha}{beta}{gamma}</p>;",
       "}",
-      "export const Demo = () => {",
+      "export const TestDemo = () => {",
       "  return <section>{renderHelperWithArgs('a', 'b', 'c')}</section>;",
       "};",
     ].join("\n");
 
-    const result = transformFromAstSync(parser.parse(source, { sourceType: "module" }), source, {
-      configFile: false,
-      babelrc: false,
-      presets: [[nativePreset, {}]],
-    });
+    const result = transformFromAstSync(
+      parser.parse(source, { sourceType: "module" }),
+      source,
+      {
+        configFile: false,
+        babelrc: false,
+        presets: [[nativePreset, {}]],
+      },
+    );
 
-    assert.match(result.code, /function renderHelperWithArgs\(alpha, beta, gamma\) \{\s*return html`<p>\$\{alpha\}\$\{beta\}\$\{gamma\}<\/p>`;\s*\}/);
-    assert.match(result.code, /class Demo extends LitElement/);
+    assert.match(
+      result.code,
+      /function renderHelperWithArgs\(alpha, beta, gamma\) \{\s*return html`<p>\$\{alpha\}\$\{beta\}\$\{gamma\}<\/p>`;\s*\}/,
+    );
+    assert.match(result.code, /class TestDemo extends LitElement/);
     assert.doesNotMatch(result.code, /class renderHelperWithArgs extends/);
   });
 
@@ -1336,19 +656,26 @@ describe("@litsx/babel-preset-litsx", () => {
       "}",
     ].join("\n");
 
-    const result = transformFromAstSync(parser.parse(source, { sourceType: "module" }), source, {
-      configFile: false,
-      babelrc: false,
-      presets: [[nativePreset, {}]],
-    });
+    const result = transformFromAstSync(
+      parser.parse(source, { sourceType: "module" }),
+      source,
+      {
+        configFile: false,
+        babelrc: false,
+        presets: [[nativePreset, {}]],
+      },
+    );
 
-    assert.match(result.code, /export function renderHelper\(\) \{\s*return html`<p>ok<\/p>`;\s*\}/);
+    assert.match(
+      result.code,
+      /export function renderHelper\(\) \{\s*return html`<p>ok<\/p>`;\s*\}/,
+    );
     assert.doesNotMatch(result.code, /class renderHelper extends/);
   });
 
   it("can be consumed through createLitsxPresetPlugins directly", () => {
     const source = [
-      "export const Greeting = ({ label }) => {",
+      "export const TestGreeting = ({ label }) => {",
       "  return <button @click={save}>{label}</button>;",
       "};",
     ].join("\n");
@@ -1360,7 +687,7 @@ describe("@litsx/babel-preset-litsx", () => {
         configFile: false,
         babelrc: false,
         presets: [[nativePreset, { jsxTemplate: false }]],
-      }
+      },
     );
 
     const pluginFactoryResult = transformFromAstSync(
@@ -1370,7 +697,7 @@ describe("@litsx/babel-preset-litsx", () => {
         configFile: false,
         babelrc: false,
         plugins: createLitsxPresetPlugins({ jsxTemplate: false }),
-      }
+      },
     );
 
     assert.strictEqual(pluginFactoryResult.code, presetResult.code);
@@ -1395,24 +722,908 @@ describe("@litsx/babel-preset-litsx", () => {
         configFile: false,
         babelrc: false,
         filename: "/virtual/TypedForm.tsx",
-        presets: [[nativePreset, {}]],
-      }
+        presets: [[nativePreset, { ssr: true }]],
+      },
     );
 
-    assert.match(result.code, /class TypedForm extends ShadowDomMixin\(LitElement\)/);
     assert.match(
       result.code,
-      /static properties = \{[\s\S]*label: \{[\s\S]*type: String[\s\S]*count: \{[\s\S]*type: Number/s
+      /class TypedForm extends ShadowDomMixin\(HydrationSuspenseMixin\(LitElement\)\)/,
     );
-    assert.match(result.code, /static elements = \{\s*"fancy-button": FancyButton/s);
+    assert.match(
+      result.code,
+      /static properties = \{[\s\S]*label: \{[\s\S]*type: String[\s\S]*count: \{[\s\S]*type: Number/s,
+    );
+    assert.match(
+      result.code,
+      /static elements = \{[\s\S]*"fancy-button": annotateHydratableCustomElement\(FancyButton,\s*\{\s*tagName: "fancy-button",\s*moduleId: "\.\/FancyButton\.js"\s*\}\)/s,
+    );
     assert.match(result.code, /html`/);
+    assert.match(
+      result.code,
+      /static \[LITSX_MODULE_ID\] = "\/virtual\/TypedForm\.tsx";/,
+    );
   }, 20000);
+
+  it("rewrites renderToString roots into scoped templates", () => {
+    const source = [
+      "import { renderToString } from '@litsx/ssr';",
+      "import ProductCard from './ProductCard.js';",
+      "export async function renderProduct(product) {",
+      "  return renderToString(<ProductCard .product={product} />);",
+      "}",
+    ].join("\n");
+
+    const result = transformFromAstSync(
+      parser.parse(source, { sourceType: "module" }),
+      source,
+      {
+        configFile: false,
+        babelrc: false,
+        presets: [[nativePreset, {}]],
+      },
+    );
+
+    assert.match(
+      result.code,
+      /import \{ __litsxScopedTemplate, annotateHydratableCustomElement \} from "@litsx\/core\/elements"|import \{ annotateHydratableCustomElement, __litsxScopedTemplate \} from "@litsx\/core\/elements";/,
+    );
+    assert.match(
+      result.code,
+      /renderToString\(__litsxScopedTemplate\(html`<product-card \.product=\$\{product\}><\/product-card>`\, \{\s*"product-card": annotateHydratableCustomElement\(ProductCard,\s*\{\s*tagName: "product-card",\s*moduleId: "\.\/ProductCard\.js"\s*\}\)\s*\}\)\)/,
+    );
+  });
+
+  it("rewrites renderToStream roots into scoped templates", () => {
+    const source = [
+      "import { renderToStream } from '@litsx/ssr';",
+      "import ProductCard from './ProductCard.js';",
+      "export async function renderProduct(product) {",
+      "  return renderToStream(<ProductCard .product={product} />);",
+      "}",
+    ].join("\n");
+
+    const result = transformFromAstSync(
+      parser.parse(source, { sourceType: "module" }),
+      source,
+      {
+        configFile: false,
+        babelrc: false,
+        presets: [[nativePreset, {}]],
+      },
+    );
+
+    assert.match(
+      result.code,
+      /import \{ __litsxScopedTemplate, annotateHydratableCustomElement \} from "@litsx\/core\/elements"|import \{ annotateHydratableCustomElement, __litsxScopedTemplate \} from "@litsx\/core\/elements";/,
+    );
+    assert.match(
+      result.code,
+      /renderToStream\(__litsxScopedTemplate\(html`<product-card \.product=\$\{product\}><\/product-card>`\, \{\s*"product-card": annotateHydratableCustomElement\(ProductCard,\s*\{\s*tagName: "product-card",\s*moduleId: "\.\/ProductCard\.js"\s*\}\)\s*\}\)\)/,
+    );
+  });
+
+  it("keeps default async PascalCase exports out of the LitElement lowering path", () => {
+    const source = [
+      "export default async function ProductPage({ slug }) {",
+      "  return <main>{slug}</main>;",
+      "}",
+    ].join("\n");
+
+    const result = transformFromAstSync(
+      parser.parse(source, { sourceType: "module" }),
+      source,
+      {
+        configFile: false,
+        babelrc: false,
+        presets: [[nativePreset, {}]],
+      },
+    );
+
+    assert.doesNotMatch(result.code, /class ProductPage extends LitElement/);
+    assert.match(
+      result.code,
+      /return __litsxScopedTemplate\(html`<main>\$\{slug\}<\/main>`\, \{\}\);/,
+    );
+    assert.match(result.code, /ProductPage\[LITSX_SERVER_COMPONENT\] = true;/);
+  });
+
+  it("keeps default exports that resolve to async PascalCase bindings out of LitElement lowering", () => {
+    const source = [
+      "const ProductPage = async ({ slug }) => {",
+      "  return <main>{slug}</main>;",
+      "};",
+      "export default ProductPage;",
+    ].join("\n");
+
+    const result = transformFromAstSync(
+      parser.parse(source, { sourceType: "module" }),
+      source,
+      {
+        configFile: false,
+        babelrc: false,
+        presets: [[nativePreset, {}]],
+      },
+    );
+
+    assert.doesNotMatch(result.code, /class ProductPage extends LitElement/);
+    assert.match(
+      result.code,
+      /const ProductPage = async \(\{\s*slug\s*\}\) => \{\s*return __litsxScopedTemplate\(html`<main>\$\{slug\}<\/main>`\, \{\}\);\s*\};/,
+    );
+    assert.match(result.code, /export default ProductPage;/);
+    assert.match(result.code, /ProductPage\[LITSX_SERVER_COMPONENT\] = true;/);
+  });
+
+  it("does not treat named async exports as server-side components", () => {
+    const source = [
+      "export async function ProductPage({ slug }) {",
+      "  return <main>{slug}</main>;",
+      "}",
+    ].join("\n");
+
+    const result = transformFromAstSync(
+      parser.parse(source, { sourceType: "module" }),
+      source,
+      {
+        configFile: false,
+        babelrc: false,
+        presets: [[nativePreset, {}]],
+      },
+    );
+
+    assert.doesNotMatch(result.code, /class ProductPage extends LitElement/);
+    assert.match(
+      result.code,
+      /export async function ProductPage\(\{\s*slug\s*\}\) \{\s*return html`<main>\$\{slug\}<\/main>`;\s*\}/,
+    );
+  });
+
+  it("fails when an async PascalCase binding is used as an SSR root without being the default export", () => {
+    const source = [
+      "import { renderToString } from '@litsx/ssr';",
+      "async function ProductPage({ slug }) {",
+      "  return <main>{slug}</main>;",
+      "}",
+      "export async function renderPage(slug) {",
+      "  return renderToString(<ProductPage .slug={slug} />);",
+      "}",
+    ].join("\n");
+
+    assert.throws(
+      () =>
+        transformFromAstSync(
+          parser.parse(source, { sourceType: "module" }),
+          source,
+          {
+            configFile: false,
+            babelrc: false,
+            presets: [[nativePreset, {}]],
+          },
+        ),
+      /Server component "ProductPage" must be the module default export/,
+    );
+  });
+
+  it("fails when a server component module is imported through a non-default binding", () => {
+    const fixtureDirectory = fs.mkdtempSync(
+      path.join(os.tmpdir(), "litsx-server-invalid-import-"),
+    );
+    const importedFilename = path.join(fixtureDirectory, "ProductPage.js");
+    const entryFilename = path.join(fixtureDirectory, "entry.js");
+
+    fs.writeFileSync(
+      importedFilename,
+      [
+        "export default async function ProductPage({ slug }) {",
+        "  return <main>{slug}</main>;",
+        "}",
+      ].join("\n"),
+    );
+
+    const source = [
+      "import { renderToString } from '@litsx/ssr';",
+      "import { ProductPage } from './ProductPage.js';",
+      "export async function renderPage(slug) {",
+      "  return renderToString(<ProductPage .slug={slug} />);",
+      "}",
+    ].join("\n");
+
+    assert.throws(
+      () =>
+        transformFromAstSync(
+          parser.parse(source, { sourceType: "module" }),
+          source,
+          {
+            configFile: false,
+            babelrc: false,
+            filename: entryFilename,
+            presets: [[nativePreset, {}]],
+          },
+        ),
+      /must be imported as a default binding/,
+    );
+  });
+
+  it("does not treat default async PascalCase exports without a renderable return as server-side components", () => {
+    const source = [
+      "export default async function ProductPage({ slug }) {",
+      "  return slug.length;",
+      "}",
+    ].join("\n");
+
+    const result = transformFromAstSync(
+      parser.parse(source, { sourceType: "module" }),
+      source,
+      {
+        configFile: false,
+        babelrc: false,
+        presets: [[nativePreset, {}]],
+      },
+    );
+
+    assert.doesNotMatch(result.code, /class ProductPage extends LitElement/);
+    assert.doesNotMatch(result.code, /import \{ html \} from "lit";/);
+    assert.match(
+      result.code,
+      /export default async function ProductPage\(\{\s*slug\s*\}\) \{\s*return slug\.length;\s*\}/,
+    );
+  });
+
+  it("lowers default async PascalCase exports with scoped JSX returns into server-side components", () => {
+    const source = [
+      "import ProductCard from './ProductCard.js';",
+      "export default async function ProductPage({ product }) {",
+      "  return <main><ProductCard .product={product} /></main>;",
+      "}",
+    ].join("\n");
+
+    const result = transformFromAstSync(
+      parser.parse(source, { sourceType: "module" }),
+      source,
+      {
+        configFile: false,
+        babelrc: false,
+        presets: [[nativePreset, {}]],
+      },
+    );
+
+    assert.doesNotMatch(result.code, /class ProductPage extends LitElement/);
+    assert.match(
+      result.code,
+      /import \{[\s\S]*__litsxScopedTemplate[\s\S]*annotateHydratableCustomElement[\s\S]*LITSX_SERVER_COMPONENT[\s\S]*\} from "@litsx\/core\/elements";/,
+    );
+    assert.match(
+      result.code,
+      /return __litsxScopedTemplate\(html`<main><product-card \.product=\$\{product\}><\/product-card><\/main>`\, \{\s*"product-card": annotateHydratableCustomElement\(ProductCard,\s*\{\s*tagName: "product-card",\s*moduleId: "\.\/ProductCard\.js"\s*\}\)\s*\}\);/,
+    );
+    assert.match(result.code, /ProductPage\[LITSX_SERVER_COMPONENT\] = true;/);
+  });
+
+  it("uses Component.elements for html template returns in default async server components", () => {
+    const source = [
+      "import ProductCard from './ProductCard.js';",
+      "export default async function ProductPage({ product }) {",
+      "  return html`<main><product-card .product=${product}></product-card></main>`;",
+      "}",
+      "ProductPage.elements = {",
+      "  'product-card': ProductCard,",
+      "};",
+    ].join("\n");
+
+    const result = transformFromAstSync(
+      parser.parse(source, { sourceType: "module" }),
+      source,
+      {
+        configFile: false,
+        babelrc: false,
+        presets: [[nativePreset, {}]],
+      },
+    );
+
+    assert.doesNotMatch(result.code, /class ProductPage extends LitElement/);
+    assert.match(
+      result.code,
+      /return __litsxScopedTemplate\(html`<main><product-card \.product=\$\{product\}><\/product-card><\/main>`\, \{\s*"product-card": annotateHydratableCustomElement\(ProductCard,\s*\{\s*tagName: "product-card",\s*moduleId: "\.\/ProductCard\.js"\s*\}\)\s*\}\);/,
+    );
+    assert.match(
+      result.code,
+      /ProductPage\.elements = \{\s*'product-card': ProductCard\s*\};/,
+    );
+    assert.match(result.code, /ProductPage\[LITSX_SERVER_COMPONENT\] = true;/);
+  });
+
+  it("resolves stable const aliases inside Component.elements", () => {
+    const source = [
+      "import ProductCard from './ProductCard.js';",
+      "const TestCard = ProductCard;",
+      "export default async function ProductPage({ product }) {",
+      "  return html`<main><product-card .product=${product}></product-card></main>`;",
+      "}",
+      "ProductPage.elements = {",
+      "  'product-card': TestCard,",
+      "};",
+    ].join("\n");
+
+    const result = transformFromAstSync(
+      parser.parse(source, { sourceType: "module" }),
+      source,
+      {
+        configFile: false,
+        babelrc: false,
+        presets: [[nativePreset, {}]],
+      },
+    );
+
+    assert.match(
+      result.code,
+      /"product-card": annotateHydratableCustomElement\(ProductCard,\s*\{\s*tagName: "product-card",\s*moduleId: "\.\/ProductCard\.js"\s*\}\)/,
+    );
+  });
+
+  it("resolves stable object member entries inside Component.elements", () => {
+    const source = [
+      "import ProductCard from './ProductCard.js';",
+      "const controls = { ProductCard };",
+      "export default async function ProductPage({ product }) {",
+      "  return html`<main><product-card .product=${product}></product-card></main>`;",
+      "}",
+      "ProductPage.elements = {",
+      "  'product-card': controls.ProductCard,",
+      "};",
+    ].join("\n");
+
+    const result = transformFromAstSync(
+      parser.parse(source, { sourceType: "module" }),
+      source,
+      {
+        configFile: false,
+        babelrc: false,
+        presets: [[nativePreset, {}]],
+      },
+    );
+
+    assert.match(
+      result.code,
+      /"product-card": annotateHydratableCustomElement\(ProductCard,\s*\{\s*tagName: "product-card",\s*moduleId: "\.\/ProductCard\.js"\s*\}\)/,
+    );
+  });
+
+  it("rejects Component.elements entries that do not resolve to a single stable constructor", () => {
+    const source = [
+      "import ProductCard from './ProductCard.js';",
+      "import FallbackCard from './FallbackCard.js';",
+      "export default async function ProductPage({ product }) {",
+      "  return html`<main><product-card .product=${product}></product-card></main>`;",
+      "}",
+      "ProductPage.elements = {",
+      "  'product-card': flag ? ProductCard : FallbackCard,",
+      "};",
+    ].join("\n");
+
+    assert.throws(
+      () =>
+        transformFromAstSync(
+          parser.parse(source, { sourceType: "module" }),
+          source,
+          {
+            configFile: false,
+            babelrc: false,
+            presets: [[nativePreset, {}]],
+          },
+        ),
+      /could not resolve Component\.elements\["product-card"\] to a single stable custom element constructor/,
+    );
+  });
+
+  it("rejects dynamic Component.elements entries without explicit metadata", () => {
+    const source = [
+      "import ProductCard from './ProductCard.js';",
+      "const resolveCard = () => ProductCard;",
+      "export default async function ProductPage({ product }) {",
+      "  return html`<main><product-card .product=${product}></product-card></main>`;",
+      "}",
+      "ProductPage.elements = {",
+      "  'product-card': resolveCard(),",
+      "};",
+    ].join("\n");
+
+    assert.throws(
+      () =>
+        transformFromAstSync(
+          parser.parse(source, { sourceType: "module" }),
+          source,
+          {
+            configFile: false,
+            babelrc: false,
+            presets: [[nativePreset, {}]],
+          },
+        ),
+      /could not resolve Component\.elements\["product-card"\] to a single stable custom element constructor/,
+    );
+  });
+
+  it("rewrites renderToString server-component roots into awaited function calls", () => {
+    const source = [
+      "import { renderToString } from '@litsx/ssr';",
+      "export default async function ProductPage({ slug }) {",
+      "  return <main>{slug}</main>;",
+      "}",
+      "export async function renderPage(slug) {",
+      "  return renderToString(<ProductPage .slug={slug} />);",
+      "}",
+    ].join("\n");
+
+    const result = transformFromAstSync(
+      parser.parse(source, { sourceType: "module" }),
+      source,
+      {
+        configFile: false,
+        babelrc: false,
+        presets: [[nativePreset, {}]],
+      },
+    );
+
+    assert.match(
+      result.code,
+      /import \{[\s\S]*__litsxServerComponentCall[\s\S]*\} from "@litsx\/core\/elements";/,
+    );
+    assert.match(
+      result.code,
+      /return renderToString\(__litsxServerComponentCall\(ProductPage, \{\s*slug: slug\s*\}\)\);/,
+    );
+    assert.doesNotMatch(result.code, /renderToString\(__litsxScopedTemplate/);
+  });
+
+  it("rewrites imported server-component roots into runtime call markers", () => {
+    const fixtureDirectory = fs.mkdtempSync(
+      path.join(os.tmpdir(), "litsx-server-root-"),
+    );
+    const importedFilename = path.join(fixtureDirectory, "ProductPage.js");
+    const entryFilename = path.join(fixtureDirectory, "entry.js");
+
+    fs.writeFileSync(
+      importedFilename,
+      [
+        "export default async function ProductPage({ slug }) {",
+        "  return <main>{slug}</main>;",
+        "}",
+      ].join("\n"),
+    );
+
+    const source = [
+      "import { renderToString } from '@litsx/ssr';",
+      "import ProductPage from './ProductPage.js';",
+      "export async function renderPage(slug) {",
+      "  return renderToString(<ProductPage .slug={slug} />);",
+      "}",
+    ].join("\n");
+
+    const result = transformFromAstSync(
+      parser.parse(source, { sourceType: "module" }),
+      source,
+      {
+        configFile: false,
+        babelrc: false,
+        filename: entryFilename,
+        presets: [[nativePreset, {}]],
+      },
+    );
+
+    assert.match(
+      result.code,
+      /renderToString\(__litsxServerComponentCall\(ProductPage, \{\s*slug: slug\s*\}\)\);/,
+    );
+    assert.doesNotMatch(result.code, /renderToString\(__litsxScopedTemplate/);
+  });
+
+  it("rewrites aliased imported server-component roots through shared import resolution", () => {
+    const fixtureDirectory = fs.mkdtempSync(
+      path.join(os.tmpdir(), "litsx-server-root-alias-"),
+    );
+
+    try {
+      const srcDirectory = path.join(fixtureDirectory, "src");
+      fs.mkdirSync(path.join(srcDirectory, "pages"), { recursive: true });
+      const importedFilename = path.join(
+        srcDirectory,
+        "pages",
+        "ProductPage.js",
+      );
+      const entryFilename = path.join(srcDirectory, "entry.js");
+      const tsconfigPath = path.join(fixtureDirectory, "tsconfig.json");
+
+      fs.writeFileSync(
+        tsconfigPath,
+        JSON.stringify({
+          compilerOptions: {
+            baseUrl: ".",
+            paths: {
+              "@/*": ["src/*"],
+            },
+            allowJs: true,
+            jsx: "preserve",
+            module: "esnext",
+            target: "esnext",
+          },
+          include: ["src/**/*"],
+        }),
+      );
+
+      fs.writeFileSync(
+        importedFilename,
+        [
+          "export default async function ProductPage({ slug }) {",
+          "  return <main>{slug}</main>;",
+          "}",
+        ].join("\n"),
+      );
+
+      const source = [
+        "import { renderToString } from '@litsx/ssr';",
+        'import ProductPage from "@/pages/ProductPage.js";',
+        "export async function renderPage(slug) {",
+        "  return renderToString(<ProductPage slug={slug} />);",
+        "}",
+      ].join("\n");
+
+      const configFile = ts.readConfigFile(tsconfigPath, ts.sys.readFile);
+      const parsedCommandLine = ts.parseJsonConfigFileContent(
+        configFile.config,
+        ts.sys,
+        fixtureDirectory,
+        undefined,
+        tsconfigPath,
+      );
+      const session = createProjectTsSession({
+        typescript: ts,
+        parsedCommandLine,
+      });
+      const result = transformFromAstSync(
+        parser.parse(source, { sourceType: "module" }),
+        source,
+        {
+          configFile: false,
+          babelrc: false,
+          filename: entryFilename,
+          presets: [
+            [
+              nativePreset,
+              {
+                typescriptSession: session,
+              },
+            ],
+          ],
+        },
+      );
+
+      assert.match(
+        result.code,
+        /renderToString\(__litsxServerComponentCall\(ProductPage, \{\s*slug: slug\s*\}\)\);/,
+      );
+      assert.doesNotMatch(result.code, /renderToString\(__litsxScopedTemplate/);
+    } finally {
+      fs.rmSync(fixtureDirectory, { recursive: true, force: true });
+    }
+  });
+
+  it("dedupes scoped entries across fragment SSR roots", () => {
+    const source = [
+      "import { renderToString } from '@litsx/ssr';",
+      "import ProductCard from './ProductCard.js';",
+      "export async function renderProducts(a, b) {",
+      "  return renderToString(<>",
+      "    <main><ProductCard .product={a} /></main>",
+      "    <ProductCard .product={b} />",
+      "  </>);",
+      "}",
+    ].join("\n");
+
+    const result = transformFromAstSync(
+      parser.parse(source, { sourceType: "module" }),
+      source,
+      {
+        configFile: false,
+        babelrc: false,
+        presets: [[nativePreset, {}]],
+      },
+    );
+
+    const matches =
+      result.code.match(
+        /"product-card": annotateHydratableCustomElement\(ProductCard,/g,
+      ) || [];
+    assert.strictEqual(matches.length, 1);
+    assert.match(result.code, /renderToString\(__litsxScopedTemplate\(html`/);
+  });
+
+  it("lowers nested imported server components inside server-side component returns", () => {
+    const fixtureDirectory = fs.mkdtempSync(
+      path.join(os.tmpdir(), "litsx-server-nested-"),
+    );
+    const importedFilename = path.join(fixtureDirectory, "ProductSection.js");
+    const entryFilename = path.join(fixtureDirectory, "ProductPage.js");
+
+    fs.writeFileSync(
+      importedFilename,
+      [
+        "export default async function ProductSection({ product }) {",
+        "  return <section>{product.name}</section>;",
+        "}",
+      ].join("\n"),
+    );
+
+    const source = [
+      "import ProductSection from './ProductSection.js';",
+      "export default async function ProductPage({ product }) {",
+      "  return <main><ProductSection .product={product} /></main>;",
+      "}",
+    ].join("\n");
+
+    const result = transformFromAstSync(
+      parser.parse(source, { sourceType: "module" }),
+      source,
+      {
+        configFile: false,
+        babelrc: false,
+        filename: entryFilename,
+        presets: [[nativePreset, {}]],
+      },
+    );
+
+    assert.match(
+      result.code,
+      /import \{[\s\S]*__litsxServerComponentCall[\s\S]*\} from "@litsx\/core\/elements";/,
+    );
+    assert.match(
+      result.code,
+      /return __litsxScopedTemplate\(html`<main>\$\{__litsxServerComponentCall\(ProductSection, \{\s*product: product\s*\}\)\}<\/main>`\, \{\}\);/,
+    );
+    assert.doesNotMatch(result.code, /"product-section": ProductSection/);
+  });
+
+  it("allows nested async PascalCase bindings inside a default-export server component", () => {
+    const source = [
+      "async function ProductSection({ product }) {",
+      "  return <section>{product.name}</section>;",
+      "}",
+      "export default async function ProductPage({ product }) {",
+      "  return <main><ProductSection .product={product} /></main>;",
+      "}",
+    ].join("\n");
+
+    const result = transformFromAstSync(
+      parser.parse(source, { sourceType: "module" }),
+      source,
+      {
+        configFile: false,
+        babelrc: false,
+        presets: [[nativePreset, {}]],
+      },
+    );
+
+    assert.match(
+      result.code,
+      /return __litsxScopedTemplate\(html`<main>\$\{__litsxServerComponentCall\(ProductSection, \{\s*product: product\s*\}\)\}<\/main>`\, \{\}\);/,
+    );
+  });
+
+  it("lowers nested async PascalCase bindings inside fragment returns for default-export server components", () => {
+    const source = [
+      "async function ProductSection({ product }) {",
+      "  return <section>{product.name}</section>;",
+      "}",
+      "export default async function ProductPage({ product }) {",
+      "  return <>",
+      "    <ProductSection .product={product} />",
+      "    <footer>done</footer>",
+      "  </>;",
+      "}",
+    ].join("\n");
+
+    const result = transformFromAstSync(
+      parser.parse(source, { sourceType: "module" }),
+      source,
+      {
+        configFile: false,
+        babelrc: false,
+        presets: [[nativePreset, {}]],
+      },
+    );
+
+    assert.match(
+      result.code,
+      /return __litsxScopedTemplate\(html`\$\{__litsxServerComponentCall\(ProductSection, \{\s*product: product\s*\}\)\}<footer>done<\/footer>`\, \{\}\);/,
+    );
+  });
+
+  it("keeps nested server-component projection inside Lit component light-dom children", () => {
+    const fixtureDirectory = fs.mkdtempSync(
+      path.join(os.tmpdir(), "litsx-server-lit-projection-"),
+    );
+    const importedFilename = path.join(fixtureDirectory, "ProductActions.js");
+    const entryFilename = path.join(fixtureDirectory, "ProductPage.js");
+
+    fs.writeFileSync(
+      importedFilename,
+      [
+        "export default async function ProductActions({ product }) {",
+        "  return <p>{product.copy}</p>;",
+        "}",
+      ].join("\n"),
+    );
+
+    const source = [
+      "import ProductCard from './ProductCard.js';",
+      "import ProductActions from './ProductActions.js';",
+      "export default async function ProductPage({ product }) {",
+      "  return <ProductCard .product={product}><ProductActions .product={product} /></ProductCard>;",
+      "}",
+    ].join("\n");
+
+    const result = transformFromAstSync(
+      parser.parse(source, { sourceType: "module" }),
+      source,
+      {
+        configFile: false,
+        babelrc: false,
+        filename: entryFilename,
+        presets: [[nativePreset, {}]],
+      },
+    );
+
+    assert.match(
+      result.code,
+      /return __litsxScopedTemplate\(html`<product-card \.product=\$\{product\}>\$\{__litsxServerComponentCall\(ProductActions, \{\s*product: product\s*\}\)\}<\/product-card>`\, \{\s*"product-card": annotateHydratableCustomElement\(ProductCard,\s*\{\s*tagName: "product-card",\s*moduleId: "\.\/ProductCard\.js"\s*\}\)\s*\}\);/,
+    );
+    assert.doesNotMatch(result.code, /"product-actions": ProductActions/);
+  });
+
+  it("lowers an async server component's forwarded ref parameter to a Lit property binding", () => {
+    const source = [
+      "import ContextBar from './ContextBar.js';",
+      "export default async function Page({ params }, ref) {",
+      "  return <ContextBar ref={ref} .params={params} />;",
+      "}",
+    ].join("\n");
+
+    const result = compileWithNativePreset(source, {
+      filename: "/virtual/Page.tsx",
+    });
+
+    assert.match(
+      result.code,
+      /<context-bar \.ref=\$\{ref\} \.params=\$\{params\}><\/context-bar>/,
+    );
+    assert.doesNotMatch(result.code, /<context-bar ref=/);
+  });
+
+  it("keeps a layout's children.ref as an SSR composition binding", () => {
+    const source = [
+      "export default async function Layout({ children }) {",
+      "  return <vds-navbar-top .contextRef={children.ref}>{children}</vds-navbar-top>;",
+      "}",
+    ].join("\n");
+
+    const result = compileWithNativePreset(source, {
+      filename: "/virtual/layout.tsx",
+    });
+
+    assert.match(
+      result.code,
+      /<vds-navbar-top \.contextRef=\$\{children\.ref\}>\$\{children\}<\/vds-navbar-top>/,
+    );
+  });
+
+  it("injects SSR light DOM rendering for authored light DOM components", () => {
+    const source = [
+      "export function LightChild() {",
+      "  return <span>child</span>;",
+      "}",
+      "LightChild.lightDom = true;",
+      "export function TestParent() {",
+      "  return <LightChild />;",
+      "}",
+    ].join("\n");
+
+    const result = transformFromAstSync(
+      parser.parse(source, { sourceType: "module" }),
+      source,
+      {
+        configFile: false,
+        babelrc: false,
+        presets: [[nativePreset, { ssr: true }]],
+      },
+    );
+
+    assert.match(
+      result.code,
+      /import \{[^}]*__litsxRenderLight[^}]*\} from "@litsx\/core\/elements";/,
+    );
+    assert.match(
+      result.code,
+      /return html`<light-child>\$\{__litsxRenderLight\(\)\}<\/light-child>`;/,
+    );
+  });
+
+  it("injects SSR light DOM rendering for imported authored light DOM components", () => {
+    const fixtureDirectory = fs.mkdtempSync(
+      path.join(os.tmpdir(), "litsx-ssr-light-dom-import-"),
+    );
+    const importedFilename = path.join(fixtureDirectory, "LightChild.tsx");
+    const entryFilename = path.join(fixtureDirectory, "TestParent.tsx");
+
+    fs.writeFileSync(
+      importedFilename,
+      [
+        "export function LightChild() {",
+        "  return <span>child</span>;",
+        "}",
+        "LightChild.lightDom = true;",
+      ].join("\n"),
+    );
+
+    const source = [
+      'import { LightChild } from "./LightChild.tsx";',
+      "export function TestParent() {",
+      "  return <LightChild />;",
+      "}",
+    ].join("\n");
+
+    const result = transformFromAstSync(
+      parser.parse(source, { sourceType: "module" }),
+      source,
+      {
+        configFile: false,
+        babelrc: false,
+        filename: entryFilename,
+        presets: [[nativePreset, { ssr: true }]],
+      },
+    );
+
+    assert.match(
+      result.code,
+      /import \{[^}]*__litsxRenderLight[^}]*\} from "@litsx\/core\/elements";/,
+    );
+    assert.match(
+      result.code,
+      /return html`<light-child>\$\{__litsxRenderLight\(\)\}<\/light-child>`;/,
+    );
+  });
+
+  it("injects SSR light DOM rendering for core suspense boundaries", () => {
+    const source = [
+      'import { SuspenseBoundary } from "@litsx/core";',
+      "export function TestParent() {",
+      "  return <SuspenseBoundary fallback={<span>loading</span>}><article>ready</article></SuspenseBoundary>;",
+      "}",
+    ].join("\n");
+
+    const result = transformFromAstSync(
+      parser.parse(source, { sourceType: "module" }),
+      source,
+      {
+        configFile: false,
+        babelrc: false,
+        presets: [[nativePreset, { ssr: true }]],
+      },
+    );
+
+    assert.match(
+      result.code,
+      /import \{ renderLight \} from "@lit-labs\/ssr-client\/directives\/render-light\.js";/,
+    );
+    assert.match(
+      result.code,
+      /<suspense-boundary[\s\S]*>\$\{renderLight\(\)\}<\/suspense-boundary>/,
+    );
+  });
 
   it("does not lower React-only wrappers in the native preset", () => {
     const source = [
       "import { forwardRef, memo } from 'react';",
-      "export const Card = memo(",
-      "  forwardRef(function Card({ title }, ref) {",
+      "export const TestCard = memo(",
+      "  forwardRef(function TestCard({ title }, ref) {",
       "    return <label ref={ref}>{title}</label>;",
       "  })",
       ");",
@@ -1425,7 +1636,7 @@ describe("@litsx/babel-preset-litsx", () => {
         configFile: false,
         babelrc: false,
         presets: [[nativePreset, { jsxTemplate: false }]],
-      }
+      },
     );
 
     assert.match(result.code, /\bmemo\(/);
@@ -1436,10 +1647,10 @@ describe("@litsx/babel-preset-litsx", () => {
   it("does not lower React propTypes in the native preset anymore", () => {
     const source = [
       "import PropTypes from 'prop-types';",
-      "export function Card(props) {",
+      "export function TestCard(props) {",
       "  return <article>{props.title}</article>;",
       "}",
-      "Card.propTypes = {",
+      "TestCard.propTypes = {",
       "  title: PropTypes.string,",
       "};",
     ].join("\n");
@@ -1451,26 +1662,26 @@ describe("@litsx/babel-preset-litsx", () => {
         configFile: false,
         babelrc: false,
         presets: [[nativePreset, { jsxTemplate: false }]],
-      }
+      },
     );
 
-    assert.match(result.code, /Card\.propTypes = \{/);
+    assert.match(result.code, /TestCard\.propTypes = \{/);
     assert.match(result.code, /import PropTypes from ['"]prop-types['"]/);
     assert.doesNotMatch(result.code, /__litsx_static_properties\(/);
   });
 
-  it("covers a combined native preset path with static hoists, handlers, refs, and scoped elements", () => {
+  it("covers a combined native preset path with standard metadata, handlers, refs, and scoped elements", () => {
     const source = [
       "import FancyButton from './FancyButton.js';",
-      "import { useRef, useState } from '@litsx\/core';",
+      "import { css, useRef, useState } from '@litsx\/core';",
       "type Props = { label: string; active: boolean };",
       "export function ActionCard({ label, active }: Props) {",
       "  const buttonRef = useRef(null);",
       "  const [count, setCount] = useState(0);",
-      "  static styles = `:host { display: block; }`;",
-      "  static properties = { active: { reflect: true } };",
-      "  return <FancyButton ref={buttonRef} .label={label} @click={() => setCount(count + 1)}>{active ? count : 0}</FancyButton>;",
+      "  return <FancyButton ref={buttonRef} label={label} on:click={() => setCount(count + 1)}>{active ? count : 0}</FancyButton>;",
       "}",
+      "ActionCard.styles = css`:host { display: block; }`;",
+      "ActionCard.properties = { active: { reflect: true } };",
     ].join("\n");
 
     const result = transformFromAstSync(
@@ -1484,17 +1695,29 @@ describe("@litsx/babel-preset-litsx", () => {
         babelrc: false,
         filename: "/virtual/ActionCard.tsx",
         presets: [[nativePreset, {}]],
-      }
+      },
     );
 
-    assert.match(result.code, /extends ShadowDomMixin\(LitsxStaticHoistsMixin\(LitElement\)\)|extends LitsxStaticHoistsMixin\(ShadowDomMixin\(LitElement\)\)/);
-    assert.match(result.code, /static get styles\(\)/);
-    assert.match(result.code, /static get properties\(\)/);
+    assert.match(
+      result.code,
+      /extends ShadowDomMixin\(LitElement\)/,
+    );
+    assert.match(result.code, /static styles = \[super\.styles \?\? \[\],/);
+    assert.match(result.code, /static properties = \{/);
     assert.match(result.code, /reflect: true/);
-    assert.match(result.code, /static elements = \{\s*"fancy-button": FancyButton\s*\}/);
-    assert.match(result.code, /const buttonRef = useRef\(this, null\);/);
-    assert.match(result.code, /const \[count, setCount\] = useState\(this, 0\);/);
-    assert.match(result.code, /html`<fancy-button \.ref=\$\{buttonRef\} \.label=\$\{this\.label\} @click=\$\{\(\) => setCount\(count \+ 1\)\}>/);
+    assert.match(
+      result.code,
+      /static elements = \{\s*\.\.\.\(super\.elements \?\? \{\}\),\s*"fancy-button": FancyButton\s*\}/,
+    );
+    assert.match(result.code, /const buttonRef = useRef\(null\);/);
+    assert.match(
+      result.code,
+      /const \[count, setCount\] = useState\(0\);/,
+    );
+    assert.match(
+      result.code,
+      /html`<fancy-button \.ref=\$\{buttonRef\} \.label=\$\{this\.label\} @click=\$\{\(\) => setCount\(count \+ 1\)\}>/,
+    );
   }, 20_000);
 
   it("supports in-memory playground type resolution through the preset", () => {
@@ -1509,7 +1732,7 @@ describe("@litsx/babel-preset-litsx", () => {
         payload: BaseProps["payload"];
       };
 
-      function Card(props: CardProps) {
+      function TestCard(props: CardProps) {
         return <article>{props.title}</article>;
       }
     `;
@@ -1523,13 +1746,18 @@ describe("@litsx/babel-preset-litsx", () => {
       {
         configFile: false,
         babelrc: false,
-        filename: "/virtual/Card.tsx",
-        presets: [[nativePreset, {
-          jsxTemplate: false,
-          typeResolutionMode: "in-memory",
-          inMemoryFiles: PLAYGROUND_TYPE_FILES,
-        }]],
-      }
+        filename: "/virtual/TestCard.tsx",
+        presets: [
+          [
+            nativePreset,
+            {
+              jsxTemplate: false,
+              typeResolutionMode: "in-memory",
+              inMemoryFiles: PLAYGROUND_TYPE_FILES,
+            },
+          ],
+        ],
+      },
     );
 
     assert.match(result.code, /title: \{\s*type: String\s*\}/);
@@ -1540,7 +1768,7 @@ describe("@litsx/babel-preset-litsx", () => {
   it("lowers native useState through the canonical preset", () => {
     const source = [
       "import { useState } from '@litsx\/core';",
-      "export function Counter() {",
+      "export function TestCounter() {",
       "  const [count, setCount] = useState(1);",
       "  return <button @click={() => setCount(count + 1)}>{count}</button>;",
       "}",
@@ -1553,23 +1781,29 @@ describe("@litsx/babel-preset-litsx", () => {
         configFile: false,
         babelrc: false,
         presets: [[nativePreset, { jsxTemplate: false }]],
-      }
+      },
     );
 
-    assert.match(result.code, /class Counter extends LitElement/);
+    assert.match(result.code, /class TestCounter extends LitElement/);
     assert.match(
       result.code,
-      /import \{[^}]*useState[^}]*prepareEffects[^}]*\} from ['"]@litsx\/core['"]|import \{[^}]*prepareEffects[^}]*useState[^}]*\} from ['"]@litsx\/core['"]/
+      /import \{[^}]*useState[^}]*renderWithHooks[^}]*\} from ['"]@litsx\/core['"]/,
     );
-    assert.match(result.code, /prepareEffects\(this\);/);
-    assert.match(result.code, /const \[count, setCount\] = useState\(this, 1\);/);
-    assert.match(result.code, /return <button @click=\{\(\) => setCount\(count \+ 1\)\}>\{count\}<\/button>;/);
+    assert.doesNotMatch(result.code, /prepareEffects/);
+    assert.match(
+      result.code,
+      /const \[count, setCount\] = useState\(1\);/,
+    );
+    assert.match(
+      result.code,
+      /return <button @click=\{\(\) => setCount\(count \+ 1\)\}>\{count\}<\/button>;/,
+    );
   });
 
   it("preserves sibling declarators around native useState through the preset", () => {
     const source = [
       "import { useState } from '@litsx\/core';",
-      "export function Counter() {",
+      "export function TestCounter() {",
       "  const label = 'ok', [count, setCount] = useState(0);",
       "  setCount(count + 1);",
       "  return <div>{label}: {count}</div>;",
@@ -1583,20 +1817,23 @@ describe("@litsx/babel-preset-litsx", () => {
         configFile: false,
         babelrc: false,
         presets: [[nativePreset, { jsxTemplate: false }]],
-      }
+      },
     );
 
-    assert.match(result.code, /const label = 'ok',\s*\[count, setCount\] = useState\(this, 0\);/);
+    assert.match(
+      result.code,
+      /const label = 'ok',\s*\[count, setCount\] = useState\(0\);/,
+    );
   });
 
-  it("threads host through local custom hooks that call native useState", () => {
+  it("preserves local custom hook signatures that call native useState", () => {
     const source = [
       "import { useState } from '@litsx\/core';",
       "function useCounter(initial) {",
       "  const [value, setValue] = useState(initial);",
       "  return [value, setValue];",
       "}",
-      "export function Counter() {",
+      "export function TestCounter() {",
       "  const [value, setValue] = useCounter(0);",
       "  return <button @click={() => setValue(value + 1)}>{value}</button>;",
       "}",
@@ -1609,19 +1846,25 @@ describe("@litsx/babel-preset-litsx", () => {
         configFile: false,
         babelrc: false,
         presets: [[nativePreset, { jsxTemplate: false }]],
-      }
+      },
     );
 
-    assert.match(result.code, /function useCounter\(_[A-Za-z0-9]+, initial\)/);
-    assert.match(result.code, /const \[value, setValue\] = useState\(_[A-Za-z0-9]+, initial\);/);
-    assert.match(result.code, /prepareEffects\(this\);/);
-    assert.match(result.code, /const \[value, setValue\] = useCounter\(this, 0\);/);
+    assert.match(result.code, /function useCounter\(initial\)/);
+    assert.match(
+      result.code,
+      /const \[value, setValue\] = useState\(initial\);/,
+    );
+    assert.doesNotMatch(result.code, /prepareEffects|_host/);
+    assert.match(
+      result.code,
+      /const \[value, setValue\] = useCounter\(0\);/,
+    );
   });
 
-  it("injects prepareEffects and host args for native effect hooks through the preset", () => {
+  it("runs native effect hooks inside the generated render boundary", () => {
     const source = [
       "import { useAfterUpdate } from '@litsx\/core';",
-      "export function Counter() {",
+      "export function TestCounter() {",
       "  useAfterUpdate(() => {",
       "    this.flag = true;",
       "  }, []);",
@@ -1636,18 +1879,21 @@ describe("@litsx/babel-preset-litsx", () => {
         configFile: false,
         babelrc: false,
         presets: [[nativePreset, { jsxTemplate: false }]],
-      }
+      },
     );
 
     assert.match(
       result.code,
-      /import \{[^}]*useAfterUpdate[^}]*prepareEffects[^}]*\} from ['"]@litsx\/core['"]|import \{[^}]*prepareEffects[^}]*useAfterUpdate[^}]*\} from ['"]@litsx\/core['"]/
+      /import \{[^}]*useAfterUpdate[^}]*renderWithHooks[^}]*\} from ['"]@litsx\/core['"]/,
     );
-    assert.match(result.code, /prepareEffects\(this\);/);
-    assert.match(result.code, /useAfterUpdate\(this, \(\) => \{\s*this\.flag = true;\s*}, \[]\);/s);
+    assert.doesNotMatch(result.code, /prepareEffects/);
+    assert.match(
+      result.code,
+      /useAfterUpdate\(\(\) => \{\s*this\.flag = true;\s*}, \[]\);/s,
+    );
   });
 
-  it("threads host through native custom hooks in the preset", () => {
+  it("preserves native custom hook signatures in the preset", () => {
     const source = [
       "import { useStableCallback, useAfterUpdate } from '@litsx\/core';",
       "function useCustom(flag) {",
@@ -1655,7 +1901,7 @@ describe("@litsx/babel-preset-litsx", () => {
       "  useAfterUpdate(() => flag && callback(), [flag, callback]);",
       "  return callback;",
       "}",
-      "export function Counter() {",
+      "export function TestCounter() {",
       "  const value = useCustom(this.flag);",
       "  return <button>{String(value && value())}</button>;",
       "}",
@@ -1668,20 +1914,26 @@ describe("@litsx/babel-preset-litsx", () => {
         configFile: false,
         babelrc: false,
         presets: [[nativePreset, { jsxTemplate: false }]],
-      }
+      },
     );
 
-    assert.match(result.code, /function useCustom\(_host, flag\)/);
-    assert.match(result.code, /const callback = useStableCallback\(_host, \(\) => flag, \[flag\]\);/);
-    assert.match(result.code, /useAfterUpdate\(_host, \(\) => flag && callback\(\), \[flag, callback\]\);/);
-    assert.match(result.code, /prepareEffects\(this\);/);
-    assert.match(result.code, /const value = useCustom\(this, this\.flag\);/);
+    assert.match(result.code, /function useCustom\(flag\)/);
+    assert.match(
+      result.code,
+      /const callback = useStableCallback\(\(\) => flag, \[flag\]\);/,
+    );
+    assert.match(
+      result.code,
+      /useAfterUpdate\(\(\) => flag && callback\(\), \[flag, callback\]\);/,
+    );
+    assert.doesNotMatch(result.code, /prepareEffects|_host/);
+    assert.match(result.code, /const value = useCustom\(this\.flag\);/);
   });
 
-  it("injects host for native useEmit through the preset", () => {
+  it("resolves native useEmit from the render context", () => {
     const source = [
       "import { useEmit } from '@litsx\/core';",
-      "export function Counter() {",
+      "export function TestCounter() {",
       "  const emit = useEmit();",
       "  emit('change', this.value, { cancelable: true });",
       "  return <div>{this.value}</div>;",
@@ -1695,18 +1947,106 @@ describe("@litsx/babel-preset-litsx", () => {
         configFile: false,
         babelrc: false,
         presets: [[nativePreset, { jsxTemplate: false }]],
-      }
+      },
     );
 
-    assert.match(result.code, /prepareEffects\(this\);/);
-    assert.match(result.code, /const emit = useEmit\(this\);/);
-    assert.match(result.code, /emit\('change', this\.value, \{\s*cancelable: true\s*\}\);/);
+    assert.doesNotMatch(result.code, /prepareEffects/);
+    assert.match(result.code, /const emit = useEmit\(\);/);
+    assert.match(
+      result.code,
+      /emit\('change', this\.value, \{\s*cancelable: true\s*\}\);/,
+    );
+    assert.match(
+      result.code,
+      /static \[Symbol\.for\("litsx\.events"\)\] = \{\s*events: \["change"\],\s*complete: true\s*\};/,
+    );
+    assert.match(
+      result.code,
+      /static events = \{\s*events: \["change"\],\s*complete: true\s*\};/,
+    );
+    assert.deepStrictEqual(result.metadata.litsxComponentEvents.TestCounter, {
+      events: ["change"],
+      complete: true,
+    });
+  });
+
+  it("discovers events through aliased and namespace useEmit imports", () => {
+    const source = [
+      "import { useEmit as createEmitter } from '@litsx/core';",
+      "import * as core from '@litsx/core';",
+      "export function TestAliased() {",
+      "  const emit = createEmitter();",
+      "  emit('primary-action');",
+      "  return <button />;",
+      "}",
+      "export function TestNamespaced() {",
+      "  const emit = core.useEmit();",
+      "  emit('url-change');",
+      "  return <button />;",
+      "}",
+    ].join("\n");
+
+    const result = transformFromAstSync(
+      parser.parse(source, { sourceType: "module" }),
+      source,
+      {
+        configFile: false,
+        babelrc: false,
+        presets: [[nativePreset, { jsxTemplate: false }]],
+      },
+    );
+
+    assert.deepStrictEqual(result.metadata.litsxComponentEvents.TestAliased, {
+      events: ["primary-action"],
+      complete: true,
+    });
+    assert.deepStrictEqual(result.metadata.litsxComponentEvents.TestNamespaced, {
+      events: ["url-change"],
+      complete: true,
+    });
+  });
+
+  it("preserves explicit public event metadata as the component contract", () => {
+    const source = [
+      "import { useEmit } from '@litsx/core';",
+      "export function TestCounter() {",
+      "  const emit = useEmit();",
+      "  emit(this.eventName);",
+      "  return <button />;",
+      "}",
+      "TestCounter.events = { events: ['primary-action'], complete: true };",
+    ].join("\n");
+
+    const result = transformFromAstSync(
+      parser.parse(source, { sourceType: "module" }),
+      source,
+      {
+        configFile: false,
+        babelrc: false,
+        presets: [[nativePreset, { jsxTemplate: false }]],
+      },
+    );
+
+    assert.match(
+      result.code,
+      /static \[Symbol\.for\("litsx\.events"\)\] = \{\s*events: \["primary-action"\],\s*complete: true\s*\};/,
+    );
+    assert.doesNotMatch(result.code, /static events =/);
+    assert.match(
+      result.code,
+      /TestCounter\.events = \{\s*events: \['primary-action'\],\s*complete: true\s*\};/,
+    );
+    assert.deepStrictEqual(result.metadata.litsxComponentEvents.TestCounter, {
+      events: ["primary-action"],
+      complete: true,
+      explicit: true,
+    });
   });
 
   it("lowers native useRef DOM bindings through the canonical preset", () => {
     const source = [
       "import { useRef } from '@litsx\/core';",
-      "export function Counter() {",
+      "export function TestCounter() {",
       "  const buttonRef = useRef(null);",
       "  return <button ref={buttonRef}>Click</button>;",
       "}",
@@ -1719,26 +2059,30 @@ describe("@litsx/babel-preset-litsx", () => {
         configFile: false,
         babelrc: false,
         presets: [[nativePreset, { jsxTemplate: false }]],
-      }
+      },
     );
 
-    assert.match(result.code, /import \{[^}]*useRef[^}]*\} from ['"]@litsx\/core['"]/);
-    assert.match(result.code, /import \{[^}]*useCallbackRef[^}]*\} from ['"]@litsx\/core['"]/);
-    assert.match(result.code, /import \{[^}]*prepareEffects[^}]*\} from ['"]@litsx\/core['"]/);
-    assert.match(result.code, /prepareEffects\(this\);/);
-    assert.match(result.code, /const buttonRef = useRef\(this, null\);/);
-    assert.match(result.code, /useCallbackRef\(this, \(\) => this\._buttonRefElement, node => buttonRef\.current = node\);/);
-    assert.match(result.code, /get _buttonRefElement\(\)/);
-    assert.match(result.code, /data-ref="_buttonRefElement"/);
+    assert.match(
+      result.code,
+      /import \{[^}]*useRef[^}]*\} from ['"]@litsx\/core['"]/,
+    );
+    assert.match(result.code, /renderWithHooks\(this, \(\) => \{/);
+    assert.doesNotMatch(result.code, /prepareEffects/);
+    assert.match(result.code, /const buttonRef = useRef\(null\);/);
+    assert.match(result.code, /<button ref=\{buttonRef\}>Click<\/button>/);
+    assert.doesNotMatch(
+      result.code,
+      /data-ref|querySelector|_buttonRefElement/,
+    );
   });
 
   it("keeps non-DOM native useRef bindings as mutable refs through the preset", () => {
     const source = [
       "import { useRef } from '@litsx\/core';",
-      "export function Counter() {",
+      "export function TestCounter() {",
       "  const workerRef = useRef(null);",
-      "  workerRef.current = 'ok';",
-      "  return <div>{workerRef.current}</div>;",
+      "  workerRef.value = 'ok';",
+      "  return <div>{workerRef.value}</div>;",
       "}",
     ].join("\n");
 
@@ -1749,11 +2093,11 @@ describe("@litsx/babel-preset-litsx", () => {
         configFile: false,
         babelrc: false,
         presets: [[nativePreset, { jsxTemplate: false }]],
-      }
+      },
     );
 
-    assert.match(result.code, /const workerRef = useRef\(this, null\);/);
-    assert.match(result.code, /workerRef\.current = 'ok';/);
+    assert.match(result.code, /const workerRef = useRef\(null\);/);
+    assert.match(result.code, /workerRef\.value = 'ok';/);
     assert.doesNotMatch(result.code, /get workerRef\(\)/);
     assert.doesNotMatch(result.code, /data-ref="/);
   });
@@ -1761,7 +2105,7 @@ describe("@litsx/babel-preset-litsx", () => {
   it("does not follow external playground imports when using in-memory mode", () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-playground-"));
     const typesPath = path.join(tempDir, "types.ts");
-    const componentPath = path.join(tempDir, "Card.tsx");
+    const componentPath = path.join(tempDir, "TestCard.tsx");
 
     fs.writeFileSync(
       typesPath,
@@ -1770,12 +2114,12 @@ describe("@litsx/babel-preset-litsx", () => {
         "  title: string;",
         "  active: boolean;",
         "}",
-      ].join("\n")
+      ].join("\n"),
     );
 
     const source = [
       "import type { CardProps } from './types';",
-      "function Card({ title, active }: CardProps) {",
+      "function TestCard({ title, active }: CardProps) {",
       "  return <article>{title} {active ? 'on' : 'off'}</article>;",
       "}",
     ].join("\n");
@@ -1790,12 +2134,17 @@ describe("@litsx/babel-preset-litsx", () => {
         configFile: false,
         babelrc: false,
         filename: componentPath,
-        presets: [[nativePreset, {
-          jsxTemplate: false,
-          typeResolutionMode: "in-memory",
-          inMemoryFiles: PLAYGROUND_TYPE_FILES,
-        }]],
-      }
+        presets: [
+          [
+            nativePreset,
+            {
+              jsxTemplate: false,
+              typeResolutionMode: "in-memory",
+              inMemoryFiles: PLAYGROUND_TYPE_FILES,
+            },
+          ],
+        ],
+      },
     );
 
     assert.match(result.code, /title: \{\s*type: String\s*\}/);

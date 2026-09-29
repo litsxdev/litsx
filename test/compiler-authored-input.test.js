@@ -15,9 +15,29 @@ import {
 import { createLitsxCompilationSession, transformLitsx } from "../packages/compiler/src/index.js";
 
 describe("compiler authored input helpers", () => {
+  it("rejects removed authored binding syntax", () => {
+    for (const source of [
+      "const view = <button @click={handler} />;",
+      "const view = <input .value={value} />;",
+      "const view = <input ?disabled={disabled} />;",
+      "function View() { static styles = `:host {}`; return <div />; }",
+      "function View() { staticProps({ title: String }); return <div />; }",
+      "function View() { staticStyles(`:host {}`); return <div />; }",
+      "function View() { __litsx_static_properties({ title: String }); return <div />; }",
+    ]) {
+      assert.throws(() => prepareLitsxAuthoredInput(source, {
+        filename: "/virtual/View.tsx",
+      }));
+    }
+  });
+
   it("normalizes parser plugins from filenames and JSX requirements", () => {
     assert.deepStrictEqual(
       ensureLitsxParserPlugins("/virtual/File.tsx"),
+      ["typescript"]
+    );
+    assert.deepStrictEqual(
+      ensureLitsxParserPlugins("/virtual/File.ts"),
       ["typescript"]
     );
     assert.deepStrictEqual(
@@ -35,6 +55,45 @@ describe("compiler authored input helpers", () => {
         requireJsx: true,
       }),
       ["typescript", "jsx"]
+    );
+    assert.deepStrictEqual(
+      ensureLitsxParserPlugins("/virtual/File.litsx"),
+      []
+    );
+  });
+
+  it("parses TypeScript-only module ids without enabling JSX", () => {
+    const source = "export const deepFreeze = <T>(value: T): T => value;";
+
+    for (const filename of [
+      "/virtual/module.ts",
+      "/virtual/module.mts?import",
+      "/virtual/module.cts?v=123",
+    ]) {
+      const result = prepareLitsxAuthoredInput(source, { filename });
+      assert.strictEqual(result.moduleAnalysis.exports[0]?.exportName, "deepFreeze");
+    }
+  });
+
+  it("keeps JSX parsing for JSX extensions and explicit overrides", () => {
+    for (const filename of [
+      "/virtual/TestView.jsx",
+      "/virtual/TestView.tsx",
+      "/virtual/TestView.mtsx?import",
+      "/virtual/TestView.ctsx?v=1",
+    ]) {
+      assert.doesNotThrow(() =>
+        prepareLitsxAuthoredInput(
+          "export const TestView = () => <div />;",
+          { filename },
+        ),
+      );
+    }
+    assert.doesNotThrow(() =>
+      prepareLitsxAuthoredInput(
+        "export const TestView = () => <div />;",
+        { filename: "/virtual/TestView.ts", requireJsx: true },
+      ),
     );
   });
 
@@ -65,7 +124,7 @@ describe("compiler authored input helpers", () => {
   it("collects generic module analysis facts from authored input", () => {
     const source = [
       'import type { StoryObj } from "storybook";',
-      'import { VdsButton } from "./vds-button.litsx";',
+      'import { VdsButton } from "./vds-button.tsx";',
       "const localMeta = { title: 'Components/Button' };",
       "const LocalStory = () => <VdsButton label={'Save'} />;",
       "export default localMeta;",
@@ -76,7 +135,7 @@ describe("compiler authored input helpers", () => {
     ].join("\n");
 
     const result = prepareLitsxAuthoredInput(source, {
-      filename: "/virtual/vds-button.stories.litsx",
+      filename: "/virtual/vds-button.stories.tsx",
     });
 
     assert.deepStrictEqual(result.moduleAnalysis.imports, [
@@ -86,7 +145,7 @@ describe("compiler authored input helpers", () => {
         specifiers: [{ importedName: "StoryObj", localName: "StoryObj", kind: "type" }],
       },
       {
-        source: "./vds-button.litsx",
+        source: "./vds-button.tsx",
         kind: "value",
         specifiers: [{ importedName: "VdsButton", localName: "VdsButton", kind: "value" }],
       },
@@ -106,7 +165,7 @@ describe("compiler authored input helpers", () => {
         localName: "VdsButton",
         tagName: "vds-button",
         source: "imported-authored-module",
-        importSource: "./vds-button.litsx",
+        importSource: "./vds-button.tsx",
       },
       {
         localName: "LocalStory",
@@ -118,7 +177,7 @@ describe("compiler authored input helpers", () => {
   });
 
   it("applies authoring plugins through the provided runtime transform", () => {
-    const source = "export const Example = () => <x-box />;";
+    const source = "export const TestExample = () => <x-box />;";
     let transformCalls = 0;
 
     const renameIntrinsicPlugin = ({ types: t }) => ({
@@ -134,7 +193,7 @@ describe("compiler authored input helpers", () => {
     const result = prepareLitsxAuthoredInput(
       source,
       {
-        filename: "/virtual/Example.jsx",
+        filename: "/virtual/TestExample.jsx",
         authoringPlugins: [renameIntrinsicPlugin],
       },
       {
@@ -157,30 +216,30 @@ describe("compiler authored input helpers", () => {
   it("throws when authoring plugins are provided without a sync transform runtime", () => {
     assert.throws(
       () =>
-        prepareLitsxAuthoredInput("export const Example = () => <div />;", {
-          filename: "/virtual/Example.jsx",
+        prepareLitsxAuthoredInput("export const TestExample = () => <div />;", {
+          filename: "/virtual/TestExample.jsx",
           authoringPlugins: [() => ({ visitor: {} })],
         }),
       /requires runtime\.transformFromAstSync/
     );
   });
 
-  it("builds compiler config with virtualization sourcemaps and normalized output plugins", () => {
-    const source = "export const Example = () => <button class='cta'>Save</button>;";
+  it("builds compiler config with standard parsing and normalized output plugins", () => {
+    const source = "export const TestExample = () => <button class='cta'>Save</button>;";
     const result = createLitsxTransformConfig(source, {
-      filename: "/virtual/Example.jsx",
+      filename: "/virtual/TestExample.jsx",
       sourceMaps: true,
       outputPlugins: null,
     });
 
     assert.ok(result.inputAst);
-    assert.strictEqual(result.babelOptions.inputSourceMap, undefined);
+    assert.ok(!Object.hasOwn(result.babelOptions, "inputSourceMap"));
     assert.strictEqual(result.babelOptions.sourceMaps, true);
     assert.ok(Array.isArray(result.babelOptions.plugins));
   });
 
   it("reuses feature and authored-input caches inside a compilation session", () => {
-    const source = "export const Example = () => <button class='cta'>Save</button>;";
+    const source = "export const TestExample = () => <button class='cta'>Save</button>;";
     const session = createLitsxCompilationSession({
       transformOptions: {
         jsxTemplate: false,
@@ -189,11 +248,11 @@ describe("compiler authored input helpers", () => {
 
     try {
       const first = createLitsxTransformConfig(source, {
-        filename: "/virtual/Example.jsx",
+        filename: "/virtual/TestExample.jsx",
         __litsxCompilationSession: session,
       });
       const second = createLitsxTransformConfig(source, {
-        filename: "/virtual/Example.jsx",
+        filename: "/virtual/TestExample.jsx",
         __litsxCompilationSession: session,
       });
 
@@ -205,17 +264,60 @@ describe("compiler authored input helpers", () => {
     }
   });
 
+  it("keeps explicit JSX overrides isolated in compilation-session caches", () => {
+    const source = "export const identity = <T>(value: T): T => value;";
+    const session = createLitsxCompilationSession({
+      transformOptions: { jsxTemplate: false },
+    });
+
+    try {
+      assert.doesNotThrow(() =>
+        createLitsxTransformConfig(source, {
+          filename: "/virtual/identity.ts",
+          requireJsx: false,
+          __litsxCompilationSession: session,
+        }),
+      );
+      assert.throws(() =>
+        createLitsxTransformConfig(source, {
+          filename: "/virtual/identity.ts",
+          requireJsx: true,
+          __litsxCompilationSession: session,
+        }),
+      );
+    } finally {
+      session.dispose();
+    }
+  });
+
   it("runs the async compiler path without the final template pass", async () => {
     const result = await transformLitsx(
-      "export const Example = () => <button>Save</button>;",
+      "export const TestExample = () => <button>Save</button>;",
       {
-        filename: "/virtual/Example.jsx",
+        filename: "/virtual/TestExample.jsx",
         jsxTemplate: false,
       }
     );
 
-    assert.match(result.code, /export const Example = \(\) => <button>Save<\/button>;/);
+    assert.match(result.code, /export const TestExample = \(\) => <button>Save<\/button>;/);
     assert.strictEqual(result.map, null);
+  });
+
+  it("parses TypeScript-only imports in authored .ts modules", async () => {
+    const result = await transformLitsx(
+      [
+        'import type { ItemId } from "./item-id.js";',
+        'import { getItem, type Item } from "./items.js";',
+        "export const item: Item = getItem({} as ItemId);",
+      ].join("\n"),
+      {
+        filename: "/virtual/src/models/items.ts",
+        jsxTemplate: false,
+      }
+    );
+
+    assert.match(result.code, /import \{ getItem \} from "\.\/items\.js";/);
+    assert.match(result.code, /export const item = getItem\(\{\}\);/);
   });
 
   it("creates project-backed compilation sessions and defaults getTypecheckSession to the project path", () => {
@@ -239,8 +341,7 @@ describe("compiler authored input helpers", () => {
       });
 
       try {
-        const typecheck = session.getTypecheckSession();
-        assert.strictEqual(typecheck.projectSession, session.typescriptSession);
+        assert.strictEqual(session.typescriptSession.kind, "project");
         assert.strictEqual(session.projectPath, tsconfigPath);
       } finally {
         session.dispose();
@@ -251,9 +352,9 @@ describe("compiler authored input helpers", () => {
   });
 
   it("builds final-template plugin arrays when jsx template options are provided", () => {
-    const source = "export const Example = () => <button class='cta'>Save</button>;";
+    const source = "export const TestExample = () => <button class='cta'>Save</button>;";
     const config = createLitsxTransformConfig(source, {
-      filename: "/virtual/Example.jsx",
+      filename: "/virtual/TestExample.jsx",
       jsxTemplateOptions: { preserveComments: true },
       outputPlugins: [() => ({ visitor: {} })],
     });

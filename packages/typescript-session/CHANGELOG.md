@@ -1,5 +1,28 @@
 # @litsx/typescript-session
 
+## 1.0.0-next.1
+
+### Patch Changes
+
+- 91b0bf5: Prevent clean npm installs from selecting the incompatible TypeScript 7
+  runtime. LitSX compiler sessions currently support TypeScript 5.x and 6.x.
+
+## 1.0.0-next.0
+
+### Major Changes
+
+- 83d757e: Stabilize the complete public LitSX package graph as the 1.0 release line.
+
+  This release establishes standard JSX and TSX authoring, SSR and hydration,
+  React compatibility, scoped custom-element registration, structural hooks,
+  Storybook and Vite integration, and Shadow DOM and Light DOM UnoCSS support as
+  the stable public contract.
+
+### Patch Changes
+
+- 354dac9: Normalize dot segments in cached TypeScript project paths so equivalent paths
+  reuse the same session and file overlays.
+
 ## 0.2.4
 
 ### Patch Changes

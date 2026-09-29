@@ -1,5 +1,5 @@
 import assert from "assert";
-import babelCore from "@babel/core";
+import * as babelCore from "@babel/core";
 import parser from "./helpers/litsx-parser.js";
 import { beforeAll } from 'vitest';
 import { interopDefault } from "./helpers/interop-default.js";
@@ -37,7 +37,7 @@ describe("integration: parser + all plugins", () => {
         label: PropTypes.string,
       };
 
-      export const Alert = (message) => {
+      export const TestAlert = (message) => {
         const lower = message.toLowerCase();
         return <p>{lower}</p>;
       };
@@ -51,16 +51,16 @@ describe("integration: parser + all plugins", () => {
       generatorOpts: { decoratorsBeforeExport: true },
     });
 
-    assert.match(code, /import \{[^}]*prepareEffects[^}]*useAfterUpdate[^}]*\} from "@litsx\/core";/);
-    assert.match(code, /class FancyForm extends ShadowDomMixin\(LitsxStaticHoistsMixin\(LitElement\)\)/);
+    assert.match(code, /import \{[^}]*renderWithHooks[^}]*useAfterUpdate[^}]*\} from "@litsx\/core";/);
+    assert.match(code, /class FancyForm extends LightDomMixin\(LitElement\)/);
     assert.match(code, /static elements = {/);
     assert.match(code, /<fancy-button \.ref=\{buttonRef\} \.label=\{this\.label\} \/>/);
     assert.doesNotMatch(code, /data-ref="_buttonRefElement"/);
     assert.doesNotMatch(code, /get _buttonRefElement\(\)/);
-    assert.match(code, /prepareEffects\(this\);/);
-    assert.match(code, /useAfterUpdate\(this, \(\) => {\s*buttonRef\.current\.focus\(\);/s);
-    assert.match(code, /static get properties\(\)/);
-    assert.match(code, /class Alert extends LitElement/);
+    assert.doesNotMatch(code, /prepareEffects/);
+    assert.match(code, /useAfterUpdate\(\(\) => {\s*buttonRef\.current\.focus\(\);/s);
+    assert.match(code, /static properties = {/);
+    assert.match(code, /class TestAlert extends LightDomMixin\(LitElement\)/);
     assert.doesNotMatch(code, /PropTypes|\.propTypes\s*=/);
   });
 
@@ -95,12 +95,12 @@ describe("integration: parser + all plugins", () => {
       generatorOpts: { decoratorsBeforeExport: true },
     });
 
-    assert.match(code, /class TypedForm extends ShadowDomMixin\(LitElement\)/);
+    assert.match(code, /class TypedForm extends LightDomMixin\(LitElement\)/);
     assert.match(code, /static properties = {\s*label: {\s*type: String\s*},\s*count: {\s*type: Number\s*}\s*};/s);
-    assert.match(code, /<fancy-button \.ref=\{buttonRef\} \.label=\{this\.label\} mode=\{"primary" as ButtonMode\}>/);
+    assert.match(code, /<fancy-button \.ref=\{buttonRef\} \.label=\{this\.label\} \.mode=\{"primary" as ButtonMode\}>/);
     assert.doesNotMatch(code, /data-ref="_buttonRefElement"/);
     assert.doesNotMatch(code, /get _buttonRefElement\(\)/);
-    assert.match(code, /static elements = {\s*"fancy-button": FancyButton\s*};/);
+    assert.match(code, /static elements = {\s*\.\.\.\(super\.elements \?\? {}\),\s*"fancy-button": FancyButton\s*};/);
   });
 
   it("rewrites React useState calls inside existing Lit classes", () => {
@@ -132,8 +132,9 @@ describe("integration: parser + all plugins", () => {
 
     assert.match(code, /static properties = {\s*foo:/s);
     assert.match(code, /items: {\s*attribute: false\s*}/s);
-    assert.match(code, /prepareEffects\(this\);/);
-    assert.match(code, /const \[count, setCount\] = useState\(this, \(\) => 1\);/);
+    assert.match(code, /renderWithHooks\(this, \(\) => \{/);
+    assert.doesNotMatch(code, /prepareEffects/);
+    assert.match(code, /const \[count, setCount\] = useState\(\(\) => 1\);/);
     assert.match(code, /setCount\(prev => prev \+ this\.items\.length\);/);
   });
 
@@ -213,7 +214,7 @@ describe("integration: parser + all plugins", () => {
       generatorOpts: { decoratorsBeforeExport: true },
     });
 
-    assert.match(code, /class CardShell extends LitElement/);
+    assert.match(code, /class CardShell extends LightDomMixin\(LitElement\)/);
     assert.match(code, /\bref\b/);
     assert.doesNotMatch(code, /React\.memo|memo\(/);
     assert.doesNotMatch(code, /React\.forwardRef|forwardRef\(/);
@@ -225,7 +226,7 @@ describe("integration: parser + all plugins", () => {
 
       const LazyCard = lazy(() => import("./LazyCard.js"));
 
-      export const Screen = () => {
+      export const TestScreen = () => {
         return (
           <Suspense fallback={<span>Loading</span>}>
             <LazyCard />
@@ -256,8 +257,8 @@ describe("integration: parser + all plugins", () => {
 
       const ResultsPanel = lazy(() => import("./ResultsPanel.js"));
 
-      export const Demo = memo(
-        forwardRef(function Demo({ value }, ref) {
+      export const TestDemo = memo(
+        forwardRef(function TestDemo({ value }, ref) {
           return (
             <ErrorBoundary fallback={<p>Oops</p>}>
               <Suspense fallback={<p>Loading</p>}>
@@ -279,7 +280,7 @@ describe("integration: parser + all plugins", () => {
       generatorOpts: { decoratorsBeforeExport: true },
     });
 
-    assert.match(code, /export class Demo extends ShadowDomMixin\(LitElement\)/);
+    assert.match(code, /export class TestDemo extends LightDomMixin\(LitElement\)/);
     assert.match(code, /const ResultsPanel = \(\) => import\("\.\/ResultsPanel\.js"\);/);
     assert.match(code, /ensureLazyElement/);
     assert.match(code, /SuspenseBoundary/);
@@ -290,7 +291,7 @@ describe("integration: parser + all plugins", () => {
     assert.doesNotMatch(code, /<ErrorBoundary/);
   });
 
-  it("rejects forced light DOM output when scoped elements are required", () => {
+  it("emits contextual scoped elements for forced light DOM output", () => {
     const source = `
       import FancyButton from './FancyButton.js';
 
@@ -305,25 +306,24 @@ describe("integration: parser + all plugins", () => {
 
     const ast = parser.parse(source, { sourceType: "module" });
 
-    assert.throws(
-      () =>
-        transformFromAstSync(ast, source, {
-          configFile: false,
-          babelrc: false,
-          presets: [[REACT_COMPAT_PRESET, { domMode: "light", jsxTemplate: false }]],
-          generatorOpts: { decoratorsBeforeExport: true },
-        }),
-      /does not support scoped elements in light DOM/
-    );
+    const { code } = transformFromAstSync(ast, source, {
+      configFile: false,
+      babelrc: false,
+      presets: [[REACT_COMPAT_PRESET, { domMode: "light", jsxTemplate: false }]],
+      generatorOpts: { decoratorsBeforeExport: true },
+    });
+    assert.match(code, /class LightForm extends LightDomMixin\(LitElement\)/);
+    assert.match(code, /"fancy-button": FancyButton/);
   });
 
   it("ignores shadowRootOptions when forcing light DOM", () => {
     const source = `
       export const ConflictingPanel = () => {
-        static shadowRootOptions = { delegatesFocus: true };
-        static lightDom = true;
         return <div>ready</div>;
       };
+
+      ConflictingPanel.shadowRootOptions = { delegatesFocus: true };
+      ConflictingPanel.lightDom = true;
     `;
 
     const ast = parser.parse(source, { sourceType: "module" });
@@ -369,11 +369,12 @@ describe("integration: parser + all plugins", () => {
       generatorOpts: { decoratorsBeforeExport: true },
     });
 
-    assert.match(code, /useDeferredValue\(this, this\.query, \{\s*timeout: 200\s*\}\)/);
-    assert.match(code, /useMemoValue\(this, \(\) => deferredQuery\.trim\(\), \[deferredQuery\]\)/);
-    assert.match(code, /useExpose\(this, this\.expose, \(\) => \(\{/);
-    assert.match(code, /useTransition\(this\)/);
-    assert.match(code, /data-ref="_apiRefElement"/);
-    assert.match(code, /<input data-ref="_apiRefElement" \.value=\{summary\} data-pending=\{isPending\} \/>/);
+    assert.match(code, /useDeferredValue\(this\.query, \{\s*timeout: 200\s*\}\)/);
+    assert.match(code, /useMemoValue\(\(\) => deferredQuery\.trim\(\), \[deferredQuery\]\)/);
+    assert.match(code, /useExpose\(toLitRef\(this\.expose\), \(\) => \(\{/);
+    assert.match(code, /useTransition\(\)/);
+    assert.match(code, /useReactRef as useRef/);
+    assert.match(code, /<input ref=\{apiRef\} \.value=\{summary\} data-pending=\{isPending\} \/>/);
+    assert.doesNotMatch(code, /data-ref|querySelector/);
   });
 });

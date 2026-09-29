@@ -1,5 +1,5 @@
 import assert from "assert";
-import babelCore from "@babel/core";
+import * as babelCore from "@babel/core";
 import parser from "./helpers/litsx-parser.js";
 import { beforeAll, describe, it } from "vitest";
 import { interopDefault } from "./helpers/interop-default.js";
@@ -33,7 +33,7 @@ describe("react compat internal lazy", () => {
       "",
       "const FancyButton = lazy(() => import('./FancyButton.js'));",
       "",
-      "export const Screen = () => {",
+      "export const TestScreen = () => {",
       "  return <FancyButton label='Save' />;",
       "};",
     ].join("\n");
@@ -42,9 +42,9 @@ describe("react compat internal lazy", () => {
 
     assert.match(
       code,
-      /import \{[^}]*ShadowDomMixin[^}]*\} from "@litsx\/core\/elements";/
+      /import \{[^}]*LightDomMixin[^}]*\} from "@litsx\/core\/elements";/
     );
-    assert.match(code, /class Screen extends ShadowDomMixin\(LitElement\)/);
+    assert.match(code, /class TestScreen extends LightDomMixin\(LitElement\)/);
     assert.match(
       code,
       /import \{[^}]*ensureLazyElement[^}]*\} from "@litsx\/core";/
@@ -58,6 +58,8 @@ describe("react compat internal lazy", () => {
       /ensureLazyElement\(this,\s*"fancy-button",\s*FancyButton\);/
     );
     assert.match(code, /return <fancy-button label=['"]Save['"] \/>;/);
+    assert.match(code, /static elements = \{\s*\.\.\.\(super\.elements \?\? \{\}\)\s*\};/);
+    assert.doesNotMatch(code, /"fancy-button": FancyButton/);
     assert.doesNotMatch(code, /const FancyButton = lazy/);
   });
 
@@ -68,7 +70,7 @@ describe("react compat internal lazy", () => {
       "const FancyButton = lazy(() => import('./FancyButton.js'));",
       "const PrimaryAction = FancyButton;",
       "",
-      "export const Screen = () => {",
+      "export const TestScreen = () => {",
       "  return <PrimaryAction />;",
       "};",
     ].join("\n");
@@ -93,7 +95,7 @@ describe("react compat internal lazy", () => {
       "",
       "const FancyButton = lazy(() => import('./FancyButton.js'));",
       "",
-      "export const Screen = () => {",
+      "export const TestScreen = () => {",
       "  return (",
       "    <Suspense fallback={<span>loading</span>}>",
       "      <FancyButton label='Save' />",
@@ -104,7 +106,7 @@ describe("react compat internal lazy", () => {
 
     const code = run(source);
 
-    assert.match(code, /class Screen extends ShadowDomMixin\(LitElement\)/);
+    assert.match(code, /class TestScreen extends LightDomMixin\(LitElement\)/);
     assert.match(
       code,
       /import \{[^}]*ensureLazyElement[^}]*\} from "@litsx\/core";/
@@ -129,7 +131,7 @@ describe("react compat internal lazy", () => {
       "",
       "const FancyButton = lazy(() => import('./buttons.js').then((mod) => mod.FancyButton));",
       "",
-      "export const Screen = () => {",
+      "export const TestScreen = () => {",
       "  return <FancyButton />;",
       "};",
     ].join("\n");
@@ -160,7 +162,7 @@ describe("react compat internal lazy", () => {
       "",
       "const PrimaryAction = lazy(resolveImport(role));",
       "",
-      "export const Screen = () => {",
+      "export const TestScreen = () => {",
       "  return <PrimaryAction />;",
       "};",
     ].join("\n");
@@ -181,7 +183,7 @@ describe("react compat internal lazy", () => {
       "",
       "const FancyButton = lazy(() => import('./FancyButton.js'));",
       "",
-      "export const Screen = () => {",
+      "export const TestScreen = () => {",
       "  const PrimaryAction = FancyButton;",
       "  return <PrimaryAction />;",
       "};",
@@ -216,7 +218,7 @@ describe("react compat internal lazy", () => {
       "  }",
       "}",
       "",
-      "export const Screen = ({ role }) => {",
+      "export const TestScreen = ({ role }) => {",
       "  const PrimaryAction = resolveButton(role);",
       "  return <PrimaryAction />;",
       "};",
@@ -253,7 +255,7 @@ describe("react compat internal lazy", () => {
       "  return lazy(() => import('./DefaultButton.js'));",
       "}",
       "",
-      "export const Screen = ({ role }) => {",
+      "export const TestScreen = ({ role }) => {",
       "  const PrimaryAction = resolveButton(role);",
       "  return <PrimaryAction />;",
       "};",
@@ -276,7 +278,7 @@ describe("react compat internal lazy", () => {
       "  FancyButton: lazy(() => import('./FancyButton.js'))",
       "};",
       "",
-      "export const Screen = () => {",
+      "export const TestScreen = () => {",
       "  return <controls.FancyButton />;",
       "};",
     ].join("\n");
@@ -289,9 +291,9 @@ describe("react compat internal lazy", () => {
     );
     assert.match(
       code,
-      /ensureLazyElement\(this,\s*"fancy-button",\s*controls\.FancyButton\);/
+      /ensureLazyElement\(this,\s*"controls-fancy-button",\s*controls\.FancyButton\);/
     );
-    assert.match(code, /return <fancy-button \/>;/);
+    assert.match(code, /return <controls-fancy-button \/>;/);
   });
 
   it("leaves computed member expressions untouched when they cannot be resolved statically", () => {
@@ -302,7 +304,7 @@ describe("react compat internal lazy", () => {
       "  FancyButton: lazy(() => import('./FancyButton.js'))",
       "};",
       "",
-      "export const Screen = ({ kind }) => {",
+      "export const TestScreen = ({ kind }) => {",
       "  const PrimaryAction = controls[kind];",
       "  return <PrimaryAction />;",
       "};",
@@ -322,7 +324,7 @@ describe("react compat internal lazy", () => {
       "",
       "const FancyButton = React.lazy(() => import('./FancyButton.js'));",
       "",
-      "export const Screen = () => {",
+      "export const TestScreen = () => {",
       "  return <FancyButton />;",
       "};",
     ].join("\n");
@@ -347,7 +349,7 @@ describe("react compat internal lazy", () => {
       "const PrimaryAction = lazy(() => import('./PrimaryAction.js'));",
       "const SecondaryAction = lazy(() => import('./SecondaryAction.js'));",
       "",
-      "export const Screen = () => {",
+      "export const TestScreen = () => {",
       "  return (",
       "    <div>",
       "      <PrimaryAction />",
@@ -387,7 +389,7 @@ describe("react compat internal lazy", () => {
       "const PrimaryAction = FancyButton;",
       "const SecondaryAction = FancyButton;",
       "",
-      "export const Screen = () => {",
+      "export const TestScreen = () => {",
       "  return (",
       "    <div>",
       "      <PrimaryAction />",
@@ -424,7 +426,7 @@ describe("react compat internal lazy", () => {
       "const AlphaPanel = lazy(() => import('./AlphaPanel.js'));",
       "const BetaPanel = lazy(() => import('./BetaPanel.js'));",
       "",
-      "export const Screen = () => {",
+      "export const TestScreen = () => {",
       "  return (",
       "    <SuspenseList revealOrder='forwards'>",
       "      <Suspense fallback={<span>One</span>}>",
@@ -442,7 +444,7 @@ describe("react compat internal lazy", () => {
 
     assert.match(
       code,
-      /<suspense-list revealOrder=['"]forwards['"]>/
+      /<suspense-list \.revealOrder=['"]forwards['"]>/
     );
     assert.match(
       code,
@@ -460,7 +462,7 @@ describe("react compat internal lazy", () => {
       "",
       "const PrimaryAction = lazy(() => import('./PrimaryAction.js'));",
       "",
-      "export const Screen = () => {",
+      "export const TestScreen = () => {",
       "  return (",
       "    <div>",
       "      <PrimaryAction />",
@@ -496,7 +498,7 @@ describe("react compat internal lazy", () => {
       "",
       "const resolveButton = (enabled) => lazy(enabled ? () => import('./FancyButton.js') : null);",
       "",
-      "export const Screen = ({ enabled }) => {",
+      "export const TestScreen = ({ enabled }) => {",
       "  const PrimaryAction = resolveButton(enabled);",
       "  return <PrimaryAction />;",
       "};",
@@ -529,7 +531,7 @@ describe("react compat internal lazy", () => {
       "  return lazy(() => import('./FancyButton.js'));",
       "};",
       "",
-      "export const Screen = ({ mode }) => {",
+      "export const TestScreen = ({ mode }) => {",
       "  const PrimaryAction = resolveButton(mode);",
       "  return <PrimaryAction />;",
       "};",
@@ -563,7 +565,7 @@ describe("react compat internal lazy", () => {
       "  return lazy(() => import('./FancyButton.js'));",
       "};",
       "",
-      "export const Screen = ({ mode }) => {",
+      "export const TestScreen = ({ mode }) => {",
       "  const PrimaryAction = resolveButton(mode);",
       "  return (",
       "    <Suspense fallback={<span>loading</span>}>",
@@ -592,7 +594,7 @@ describe("react compat internal lazy", () => {
       "",
       "const FancyButton = lazy(() => import('./FancyButton.js'));",
       "",
-      "export const Screen = () => {",
+      "export const TestScreen = () => {",
       "  return <FancyButton />;",
       "};",
     ].join("\n");
@@ -613,7 +615,7 @@ describe("react compat internal lazy", () => {
       "",
       "const FancyButton = lazy(() => import('./FancyButton.js'));",
       "",
-      "export const Screen = () => {",
+      "export const TestScreen = () => {",
       "  return <FancyButton />;",
       "};",
     ].join("\n");
@@ -625,7 +627,7 @@ describe("react compat internal lazy", () => {
     assert.match(code, /ensureLazyElement\(this,\s*"fancy-button",\s*FancyButton\);/);
   });
 
-  it("rejects light DOM classes that would need scoped lazy components", () => {
+  it("creates a contextual registry for light DOM classes with lazy components", () => {
     const source = [
       "import { lazy } from 'react';",
       "import { LightDomMixin } from '@litsx/core/elements';",
@@ -633,17 +635,17 @@ describe("react compat internal lazy", () => {
       "",
       "const FancyButton = lazy(() => import('./FancyButton.js'));",
       "",
-      "export class Screen extends LightDomMixin(LitElement) {",
+      "export class TestScreen extends LightDomMixin(LitElement) {",
       "  render() {",
       "    return <FancyButton />;",
       "  }",
       "}",
     ].join("\n");
 
-    assert.throws(
-      () => run(source),
-      /does not support scoped elements in light DOM/
-    );
+    const code = run(source);
+    assert.match(code, /class TestScreen extends LightDomMixin\(LitElement\)/);
+    assert.match(code, /static elements = \{\s*\.\.\.\(super\.elements \?\? \{\}\)\s*\};/);
+    assert.match(code, /ensureLazyElement\(this, "fancy-button", FancyButton\)/);
   });
 
   it("rewrites special member attributes and preserves registration before the return", () => {
@@ -654,15 +656,15 @@ describe("react compat internal lazy", () => {
       "  FancyButton: lazy(() => import('./FancyButton.js'))",
       "};",
       "",
-      "export const Screen = () => {",
+      "export const TestScreen = () => {",
       "  return <controls .FancyButton />;",
       "};",
     ].join("\n");
 
     const code = run(source);
 
-    assert.match(code, /ensureLazyElement\(this,\s*"fancy-button",\s*controls\.FancyButton\);/);
-    assert.match(code, /return <fancy-button \/>;/);
+    assert.match(code, /ensureLazyElement\(this,\s*"controls-fancy-button",\s*controls\.FancyButton\);/);
+    assert.match(code, /return <controls-fancy-button \/>;/);
     assert.doesNotMatch(code, /<controls \.FancyButton/);
   });
 
@@ -674,15 +676,15 @@ describe("react compat internal lazy", () => {
       "  FancyButton: lazy(() => import('./FancyButton.js'))",
       "};",
       "",
-      "export const Screen = () => {",
+      "export const TestScreen = () => {",
       "  return <controls.FancyButton><span>Save</span></controls.FancyButton>;",
       "};",
     ].join("\n");
 
     const code = run(source);
 
-    assert.match(code, /ensureLazyElement\(this,\s*"fancy-button",\s*controls\.FancyButton\);/);
-    assert.match(code, /return <fancy-button><span>Save<\/span><\/fancy-button>;/);
+    assert.match(code, /ensureLazyElement\(this,\s*"controls-fancy-button",\s*controls\.FancyButton\);/);
+    assert.match(code, /return <controls-fancy-button><span>Save<\/span><\/controls-fancy-button>;/);
     assert.doesNotMatch(code, /<controls\.FancyButton|<\/controls\.FancyButton>/);
   });
 
@@ -694,15 +696,15 @@ describe("react compat internal lazy", () => {
       "  FancyButton: lazy(() => import('./FancyButton.js'))",
       "};",
       "",
-      "export const Screen = () => {",
+      "export const TestScreen = () => {",
       "  return <controls .FancyButton><span>Save</span></controls>;",
       "};",
     ].join("\n");
 
     const code = run(source);
 
-    assert.match(code, /ensureLazyElement\(this,\s*"fancy-button",\s*controls\.FancyButton\);/);
-    assert.match(code, /return <fancy-button><span>Save<\/span><\/fancy-button>;/);
+    assert.match(code, /ensureLazyElement\(this,\s*"controls-fancy-button",\s*controls\.FancyButton\);/);
+    assert.match(code, /return <controls-fancy-button><span>Save<\/span><\/controls-fancy-button>;/);
     assert.doesNotMatch(code, /<controls \.FancyButton/);
     assert.doesNotMatch(code, /<\/controls>/);
   });
@@ -713,7 +715,7 @@ describe("react compat internal lazy", () => {
       "",
       "const FancyButton = lazy(() => import('./FancyButton.js'));",
       "",
-      "export const Screen = () => {",
+      "export const TestScreen = () => {",
       "  return <ui:panel><FancyButton /></ui:panel>;",
       "};",
     ].join("\n");
@@ -731,7 +733,7 @@ describe("react compat internal lazy", () => {
       "",
       "const FancyButton = React.lazy();",
       "",
-      "export const Screen = () => {",
+      "export const TestScreen = () => {",
       "  return <div>{String(FancyButton)}</div>;",
       "};",
     ].join("\n");
@@ -742,7 +744,7 @@ describe("react compat internal lazy", () => {
     assert.doesNotMatch(code, /ensureLazyElement\(/);
   });
 
-  it("rejects extending existing elements imports when a light-dom class needs lazy elements", () => {
+  it("reuses light-dom imports when a class needs lazy elements", () => {
     const source = [
       "import React from 'react';",
       "import { LightDomMixin } from '@litsx/core/elements';",
@@ -750,16 +752,16 @@ describe("react compat internal lazy", () => {
       "",
       "const FancyButton = React.lazy(() => import('./FancyButton.js'));",
       "",
-      "export class Screen extends LightDomMixin(LitElement) {",
+      "export class TestScreen extends LightDomMixin(LitElement) {",
       "  render() {",
       "    return <FancyButton />;",
       "  }",
       "}",
     ].join("\n");
 
-    assert.throws(
-      () => run(source),
-      /does not support scoped elements in light DOM/
-    );
+    const code = run(source);
+    assert.strictEqual((code.match(/LightDomMixin/g) || []).length, 2);
+    assert.match(code, /static elements = \{\s*\.\.\.\(super\.elements \?\? \{\}\)\s*\};/);
+    assert.match(code, /ensureLazyElement\(this, "fancy-button", FancyButton\)/);
   });
 });

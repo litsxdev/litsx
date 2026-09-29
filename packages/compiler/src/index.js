@@ -1,17 +1,18 @@
-import babelCore from "@babel/core";
+import * as babelCore from "@babel/core";
 import * as babelParser from "@babel/parser";
 import * as babelTypes from "@babel/types";
 import transformTypescript from "@babel/plugin-transform-typescript";
 import transformJsxHtmlTemplate from "@litsx/babel-plugin-transform-jsx-html-template";
-import { decodeVirtualAttributeName } from "@litsx/authoring";
+import { componentNameToTagName, decodeVirtualAttributeName } from "@litsx/authoring";
 import {
   createLitsxPresetPlugins,
   detectLitsxSourceFeatures,
 } from "@litsx/babel-preset-litsx";
+import { createReactCompatPresetPlugins } from "@litsx/babel-preset-react-compat";
 import { ensureTypescriptModule } from "@litsx/babel-preset-litsx/internal/transform-litsx-properties";
-import { parseWithLitsxVirtualization } from "@litsx/authoring/parser";
-import { createLitsxTypecheckSession } from "@litsx/typescript/typecheck";
+import { parseWithLitsxVirtualization } from "@litsx/authoring/internal/parser";
 import {
+  createProjectTsSession,
   createStandaloneTsSession,
   normalizeFilePath,
 } from "@litsx/typescript-session";
@@ -23,6 +24,7 @@ import {
   ensureLitsxParserPlugins,
   prepareLitsxAuthoredInput,
 } from "./authored-input.js";
+import { resolveLitsxRequireJsx } from "./filename-syntax.js";
 import { mergeLitsxWarnings } from "./warnings.js";
 export {
   ensureLitsxParserPlugins,
@@ -34,7 +36,7 @@ const PROFILE_ENABLED = process.env.LITSX_PROFILE === "1";
 const PRESET_PLUGIN_CACHE = new WeakMap();
 const DEFAULT_PRESET_PLUGIN_CACHE = new Map();
 
-function createStandaloneTsCompilerOptions(ts) {
+export function createStandaloneTsCompilerOptions(ts) {
   return {
     target: ts.ScriptTarget.ESNext,
     module: ts.ModuleKind.ESNext,
@@ -50,7 +52,7 @@ function createStandaloneTsCompilerOptions(ts) {
   };
 }
 
-function getSourceFeaturesCacheKey(sourceFeatures) {
+export function getSourceFeaturesCacheKey(sourceFeatures) {
   if (!sourceFeatures) {
     return "all";
   }
@@ -62,7 +64,7 @@ function getSourceFeaturesCacheKey(sourceFeatures) {
   ].join("");
 }
 
-function profilePhase(name, callback, profile = null) {
+export function profilePhase(name, callback, profile = null) {
   if (!PROFILE_ENABLED) {
     return callback();
   }
@@ -86,28 +88,33 @@ function profilePhase(name, callback, profile = null) {
   }
 }
 
-function normalizePluginList(plugins) {
+export function normalizePluginList(plugins) {
   return Array.isArray(plugins) ? plugins : [];
 }
 
-function shouldStripTypescriptSyntax(filename = "") {
-  return /\.(?:ts|tsx|litsx)$/.test(filename) || filename.endsWith(".litsx.jsx");
+export function shouldStripTypescriptSyntax(filename = "") {
+  return /\.(?:[cm]?ts|[cm]?tsx)$/.test(String(filename).split(/[?#]/, 1)[0]);
 }
 
-function reparseTemplateLoweringAst(source, options = {}) {
+export function reparseTemplateLoweringAst(source, options = {}) {
   return parseWithLitsxVirtualization(babelParser.parse, source, {
     sourceType: "module",
     plugins: ensureLitsxParserPlugins(
       options.filename,
       options.parserPlugins,
-      { requireJsx: true },
+      {
+        requireJsx: resolveLitsxRequireJsx(
+          options.filename,
+          options.requireJsx,
+        ),
+      },
     ),
     sourceFileName: options.filename,
     litsxSourceMap: false,
   });
 }
 
-function collectAuthoredTemplateAttributeMappings(
+export function collectAuthoredTemplateAttributeMappings(
   node,
   mappings = [],
   options = {},
@@ -135,6 +142,7 @@ function collectAuthoredTemplateAttributeMappings(
           ? ` ${generatedName}=`
           : ` ${generatedName}`,
         generatedOffset: 1,
+        generatedScope: "html-template",
         source: sourceLocation?.filename ?? options.sourceFileName ?? null,
         line: sourceLocation?.start?.line ?? null,
         column: sourceLocation?.start?.column ?? null,
@@ -162,7 +170,149 @@ function collectAuthoredTemplateAttributeMappings(
   return mappings;
 }
 
-function remapTemplateAttributeMappings(mappings = [], inputSourceMap = null) {
+export function jsxTagName(name) {
+  if (name?.type !== "JSXIdentifier") {
+    return null;
+  }
+
+  return /^[A-Z]/.test(name.name)
+    ? componentNameToTagName(name.name)
+    : name.name;
+}
+
+export function isChildrenExpression(node) {
+  return node?.type === "MemberExpression" &&
+    node.computed !== true &&
+    node.property?.type === "Identifier" &&
+    node.property.name === "children";
+}
+
+export function componentNameFromFunctionNode(node) {
+  if (
+    node?.type === "FunctionDeclaration" &&
+    node.id?.type === "Identifier" &&
+    /^[A-Z]/.test(node.id.name)
+  ) {
+    return node.id.name;
+  }
+
+  return null;
+}
+
+export function componentNameFromVariableNode(node) {
+  if (
+    node?.type === "VariableDeclarator" &&
+    node.id?.type === "Identifier" &&
+    (node.init?.type === "ArrowFunctionExpression" || node.init?.type === "FunctionExpression") &&
+    /^[A-Z]/.test(node.id.name)
+  ) {
+    return node.id.name;
+  }
+
+  return null;
+}
+
+// The component lowering pass creates a class around the authored function.
+// Preserve direct anchors for the user-authored render boundary and template
+// nodes, because generated class members intentionally have no source location.
+export function collectAuthoredRenderSourcemapMappings(
+  node,
+  mappings = [],
+  options = {},
+  context = { componentRender: false },
+) {
+  if (!node || typeof node !== "object") {
+    return mappings;
+  }
+
+  if (node.type === "ReturnStatement" && node.argument?.type === "JSXElement") {
+    const returnLocation = node.loc;
+    mappings.push({
+      generatedNeedle: "return html`",
+      generatedScope: "render-return",
+      source: returnLocation?.filename ?? options.sourceFileName ?? null,
+      line: returnLocation?.start?.line ?? null,
+      column: returnLocation?.start?.column ?? null,
+    });
+    if (context.componentRender) {
+      mappings.push({
+        generatedNeedle: "render()",
+        generatedScope: "render",
+        source: returnLocation?.filename ?? options.sourceFileName ?? null,
+        line: returnLocation?.start?.line ?? null,
+        column: returnLocation?.start?.column ?? null,
+      });
+    }
+  }
+
+  const componentName =
+    componentNameFromFunctionNode(node) ?? componentNameFromVariableNode(node);
+  if (componentName) {
+    const componentLocation = node.loc;
+    mappings.push({
+      generatedNeedle: `class ${componentName}`,
+      generatedScope: "class",
+      componentName,
+      source: componentLocation?.filename ?? options.sourceFileName ?? null,
+      line: componentLocation?.start?.line ?? null,
+      column: componentLocation?.start?.column ?? null,
+    });
+  }
+
+  if (node.type === "JSXElement") {
+    const tagName = jsxTagName(node.openingElement?.name);
+    const tagLocation = node.openingElement?.name?.loc ?? node.openingElement?.loc;
+    if (tagName) {
+      mappings.push({
+        generatedNeedle: `<${tagName}`,
+        generatedScope: "html-template",
+        source: tagLocation?.filename ?? options.sourceFileName ?? null,
+        line: tagLocation?.start?.line ?? null,
+        column: tagLocation?.start?.column ?? null,
+      });
+    }
+  }
+
+  if (node.type === "JSXExpressionContainer" && isChildrenExpression(node.expression)) {
+    const expressionLocation = node.expression.loc ?? node.loc;
+    mappings.push({
+      generatedNeedle: "<slot",
+      generatedScope: "html-template",
+      source: expressionLocation?.filename ?? options.sourceFileName ?? null,
+      line: expressionLocation?.start?.line ?? null,
+      column: expressionLocation?.start?.column ?? null,
+    });
+  }
+
+  const visitorKeys = babelTypes.VISITOR_KEYS?.[node.type];
+  if (!visitorKeys) {
+    return mappings;
+  }
+
+  const nextContext = babelTypes.isFunction(node)
+    ? { componentRender: context.componentFunctionRoot === true || componentName !== null }
+    : context;
+
+  for (const key of visitorKeys) {
+    const value = node[key];
+    const childContext =
+      componentNameFromVariableNode(node) !== null && key === "init"
+        ? { componentRender: true, componentFunctionRoot: true }
+        : nextContext;
+    if (Array.isArray(value)) {
+      for (const child of value) {
+        collectAuthoredRenderSourcemapMappings(child, mappings, options, childContext);
+      }
+      continue;
+    }
+
+    collectAuthoredRenderSourcemapMappings(value, mappings, options, childContext);
+  }
+
+  return mappings;
+}
+
+export function remapTemplateAttributeMappings(mappings = [], inputSourceMap = null) {
   if (!Array.isArray(mappings) || mappings.length === 0 || !inputSourceMap) {
     return mappings;
   }
@@ -196,7 +346,7 @@ function remapTemplateAttributeMappings(mappings = [], inputSourceMap = null) {
   }
 }
 
-function mergeTemplateLoweringMetadata(
+export function mergeTemplateLoweringMetadata(
   firstPassMetadata = {},
   secondPassMetadata = {},
   firstPassMap = null,
@@ -206,10 +356,23 @@ function mergeTemplateLoweringMetadata(
     secondPassMetadata.litsxTemplateAttributeMappings || [],
     firstPassMap,
   );
-  const templateAttributeMappings =
-    authoredTemplateAttributeMappings.length > 0
-      ? authoredTemplateAttributeMappings
-      : remappedTemplateAttributeMappings;
+  const templateAttributeMappings = authoredTemplateAttributeMappings.length > 0
+    ? authoredTemplateAttributeMappings.map((mapping, index) => {
+        // The first pass can rename an authored JSX attribute (`on:click` ->
+        // `@click`, or react-compat's `onClick` -> `@click`) while retaining its
+        // position in traversal order. Babel's
+        // intermediate map points generated attribute names at the preceding
+        // token in some JSX shapes, so location matching is not reliable here.
+        const generated = remappedTemplateAttributeMappings[index];
+        return generated
+          ? {
+              ...mapping,
+              generatedNeedle: generated.generatedNeedle,
+              generatedOffset: generated.generatedOffset,
+            }
+          : mapping;
+      })
+    : remappedTemplateAttributeMappings;
 
   return {
     ...firstPassMetadata,
@@ -230,14 +393,31 @@ function getStandaloneTsSessionKey(filename = "", ts = ensureTypescriptModule())
 }
 
 function getMemoizedPresetPlugins(options, sourceFeatures = null, session = null) {
-  const featureKey = getSourceFeaturesCacheKey(sourceFeatures);
+  const reactCompatOptions = options?.reactCompat === true
+    ? {}
+    : options?.reactCompat && typeof options.reactCompat === "object"
+      ? options.reactCompat
+      : null;
+  const featureKey = reactCompatOptions == null
+    ? getSourceFeaturesCacheKey(sourceFeatures)
+    : "react-compat";
+  const createPlugins = () => {
+    if (reactCompatOptions == null) {
+      return createLitsxPresetPlugins(options || {}, sourceFeatures);
+    }
+    const { reactCompat: _reactCompat, ...baseOptions } = options || {};
+    return createReactCompatPresetPlugins({
+      ...baseOptions,
+      ...reactCompatOptions,
+    });
+  };
   if (session) {
     const cache = session.presetPluginsByOptions;
     const optionsKey = options && typeof options === "object" ? options : null;
 
     if (!optionsKey) {
       if (!cache.default.has(featureKey)) {
-        cache.default.set(featureKey, createLitsxPresetPlugins({}, sourceFeatures));
+        cache.default.set(featureKey, createPlugins());
       }
       return cache.default.get(featureKey);
     }
@@ -253,7 +433,7 @@ function getMemoizedPresetPlugins(options, sourceFeatures = null, session = null
       return cachedPlugins;
     }
 
-    const plugins = createLitsxPresetPlugins(options, sourceFeatures);
+    const plugins = createPlugins();
     cachedPluginsByFeature.set(featureKey, plugins);
     return plugins;
   }
@@ -262,7 +442,7 @@ function getMemoizedPresetPlugins(options, sourceFeatures = null, session = null
     if (!DEFAULT_PRESET_PLUGIN_CACHE.has(featureKey)) {
       DEFAULT_PRESET_PLUGIN_CACHE.set(
         featureKey,
-        createLitsxPresetPlugins({}, sourceFeatures),
+        createPlugins(),
       );
     }
     return DEFAULT_PRESET_PLUGIN_CACHE.get(featureKey);
@@ -279,26 +459,91 @@ function getMemoizedPresetPlugins(options, sourceFeatures = null, session = null
     return cachedPlugins;
   }
 
-  const plugins = createLitsxPresetPlugins(options, sourceFeatures);
+  const plugins = createPlugins();
   cachedPluginsByFeature.set(featureKey, plugins);
   return plugins;
 }
 
-function getSessionFeatureCacheKey(source, options = {}) {
-  return `${options.filename || ""}:${source}`;
+export function getSessionFeatureCacheKey(source, options = {}) {
+  const requireJsx = resolveLitsxRequireJsx(
+    options.filename,
+    options.requireJsx,
+  );
+  return `${options.filename || ""}:${requireJsx ? "jsx" : "no-jsx"}:${source}`;
 }
 
-function createCompilerCaches() {
+export function createCompilerCaches() {
   return {
     sourceFeatures: new Map(),
     authoredInput: new Map(),
     importedModuleAnalyses: new Map(),
     importedHookModuleAnalyses: new Map(),
     resolvedImports: new Map(),
+    resolvedHookImports: new Map(),
     presetPluginsByOptions: {
       default: new Map(),
       byOptions: new WeakMap(),
     },
+  };
+}
+
+export function normalizeFinalSourceMap(map, source, options = {}) {
+  if (!map || typeof map !== "object") {
+    return map ?? null;
+  }
+
+  const filename = typeof options.filename === "string" && options.filename.length > 0
+    ? options.filename
+    : null;
+
+  if (!filename || typeof source !== "string") {
+    return map;
+  }
+
+  const sources = Array.isArray(map.sources) ? [...map.sources] : [];
+  if (sources.length === 0) {
+    return map;
+  }
+
+  const sourcesContent = Array.isArray(map.sourcesContent)
+    ? [...map.sourcesContent]
+    : new Array(sources.length).fill(null);
+
+  let changed = false;
+  let matched = false;
+
+  for (let index = 0; index < sources.length; index += 1) {
+    if (sources[index] !== filename) {
+      continue;
+    }
+
+    matched = true;
+    if (sourcesContent[index] !== source) {
+      sourcesContent[index] = source;
+      changed = true;
+    }
+  }
+
+  if (!matched && sources.length === 1) {
+    matched = true;
+    if (sources[0] !== filename) {
+      sources[0] = filename;
+      changed = true;
+    }
+    if (sourcesContent[0] !== source) {
+      sourcesContent[0] = source;
+      changed = true;
+    }
+  }
+
+  if (!changed) {
+    return map;
+  }
+
+  return {
+    ...map,
+    sources,
+    sourcesContent,
   };
 }
 
@@ -311,6 +556,37 @@ function createStandaloneCompilerTsSession(options = {}) {
   });
 }
 
+function createProjectCompilerTsSession(projectPath, typescriptModule = ensureTypescriptModule()) {
+  const configFile = typescriptModule.readConfigFile(projectPath, typescriptModule.sys.readFile);
+  if (configFile.error) {
+    throw new Error(typescriptModule.flattenDiagnosticMessageText(configFile.error.messageText, "\n"));
+  }
+
+  const normalizedProjectPath = normalizeFilePath(projectPath);
+  const lastSlash = normalizedProjectPath.lastIndexOf("/");
+  const basePath = lastSlash > 0 ? normalizedProjectPath.slice(0, lastSlash) : ".";
+  const parsedCommandLine = typescriptModule.parseJsonConfigFileContent(
+    configFile.config,
+    typescriptModule.sys,
+    basePath,
+    undefined,
+    normalizedProjectPath,
+  );
+  const configErrors = (parsedCommandLine.errors || [])
+    .filter((diagnostic) => diagnostic.code !== 18003);
+  if (configErrors.length) {
+    throw new Error(configErrors
+      .map((diagnostic) => typescriptModule.flattenDiagnosticMessageText(diagnostic.messageText, "\n"))
+      .join("\n"));
+  }
+
+  return createProjectTsSession({
+    sessionKey: `project:${normalizedProjectPath}`,
+    typescript: typescriptModule,
+    parsedCommandLine,
+  });
+}
+
 export function createLitsxCompilationSession(sessionOptions = {}) {
   const caches = createCompilerCaches();
   const session = {
@@ -318,7 +594,10 @@ export function createLitsxCompilationSession(sessionOptions = {}) {
     transformOptions: sessionOptions.transformOptions || {},
     typescriptSession:
       sessionOptions.projectPath
-        ? createLitsxTypecheckSession(["--project", sessionOptions.projectPath]).projectSession
+        ? createProjectCompilerTsSession(
+            sessionOptions.projectPath,
+            sessionOptions.typescriptModule,
+          )
         : createStandaloneCompilerTsSession({
             filename: sessionOptions.transformOptions?.filename,
             typescriptModule: sessionOptions.typescriptModule,
@@ -329,6 +608,7 @@ export function createLitsxCompilationSession(sessionOptions = {}) {
     importedModuleAnalysisCache: caches.importedModuleAnalyses,
     importedHookModuleAnalysisCache: caches.importedHookModuleAnalyses,
     resolvedImportCache: caches.resolvedImports,
+    resolvedHookImportCache: caches.resolvedHookImports,
     transform(source, options = {}) {
       return transformLitsx(source, {
         ...this.transformOptions,
@@ -345,11 +625,6 @@ export function createLitsxCompilationSession(sessionOptions = {}) {
         __litsxCompilationSession: this,
       });
     },
-    getTypecheckSession(rawArgs = this.projectPath ? ["--project", this.projectPath] : []) {
-      return createLitsxTypecheckSession(rawArgs, {
-        projectSession: this.typescriptSession,
-      });
-    },
     invalidate(files = null) {
       if (!files || files.length === 0) {
         this.sourceFeaturesCache.clear();
@@ -357,6 +632,7 @@ export function createLitsxCompilationSession(sessionOptions = {}) {
         this.importedModuleAnalysisCache.clear();
         this.importedHookModuleAnalysisCache.clear();
         this.resolvedImportCache.clear();
+        this.resolvedHookImportCache.clear();
         this.typescriptSession?.invalidate?.({ host: true });
         return;
       }
@@ -380,7 +656,12 @@ export function createLitsxCompilationSession(sessionOptions = {}) {
             this.resolvedImportCache.delete(key);
           }
         }
-        if (/\.(jsx|tsx|js|ts|litsx)$/.test(file) || file.endsWith(".litsx.jsx")) {
+        for (const key of [...this.resolvedHookImportCache.keys()]) {
+          if (key.startsWith(`${normalizedFile}::`)) {
+            this.resolvedHookImportCache.delete(key);
+          }
+        }
+        if (/\.[cm]?[jt]sx?$/.test(file)) {
           this.typescriptSession?.invalidate?.();
         }
       }
@@ -412,7 +693,7 @@ export function createLitsxTransformConfig(source, options = {}) {
     profile,
   );
   const authoredInputCacheKey = featureCacheKey;
-  const { filename, virtualization, inputAst, authoredWarnings, moduleAnalysis } = profilePhase(
+  const { filename, inputAst, authoredWarnings, moduleAnalysis } = profilePhase(
     "authored-input",
     () => {
       if (compilationSession?.authoredInputCache?.has(authoredInputCacheKey)) {
@@ -446,20 +727,32 @@ export function createLitsxTransformConfig(source, options = {}) {
 
   const finalTemplatePlugins = shouldRunFinalTemplatePass
     ? [
-        ...(options.jsxTemplateOptions && Object.keys(options.jsxTemplateOptions).length > 0
-          ? [[transformJsxHtmlTemplate, options.jsxTemplateOptions]]
-          : [transformJsxHtmlTemplate]),
+        [transformJsxHtmlTemplate, {
+          ssr: options.ssr === true,
+          componentAttributeFallback: false,
+          componentRestProps: true,
+          importedComponentRestProps: options.reactCompat != null && options.reactCompat !== false,
+          ...(options.jsxTemplateOptions || {}),
+        }],
         ...outputPlugins,
         ...(shouldStripTypescriptSyntax(filename)
-          ? [[transformTypescript, { isTSX: true, allowDeclareFields: true }]]
+          ? [[transformTypescript, {
+              isTSX: resolveLitsxRequireJsx(filename, options.requireJsx),
+              allowDeclareFields: true,
+            }]]
           : []),
       ]
     : [];
   const authoredTemplateAttributeMappings =
     shouldRunFinalTemplatePass && options.sourceMaps === true
-      ? collectAuthoredTemplateAttributeMappings(inputAst.program, [], {
-          sourceFileName: filename,
-        })
+      ? [
+          ...collectAuthoredTemplateAttributeMappings(inputAst.program, [], {
+            sourceFileName: filename,
+          }),
+          ...collectAuthoredRenderSourcemapMappings(inputAst.program, [], {
+            sourceFileName: filename,
+          }),
+        ]
       : [];
 
   return {
@@ -476,8 +769,6 @@ export function createLitsxTransformConfig(source, options = {}) {
       sourceFileName: filename,
       configFile: false,
       babelrc: false,
-      inputSourceMap:
-        options.sourceMaps === true ? virtualization?.map ?? undefined : undefined,
       sourceMaps: options.sourceMaps === true,
       plugins: shouldRunFinalTemplatePass
         ? [...presetPlugins]
@@ -485,7 +776,10 @@ export function createLitsxTransformConfig(source, options = {}) {
             ...presetPlugins,
             ...outputPlugins,
             ...(shouldStripTypescriptSyntax(filename)
-              ? [[transformTypescript, { isTSX: true, allowDeclareFields: true }]]
+              ? [[transformTypescript, {
+                  isTSX: resolveLitsxRequireJsx(filename, options.requireJsx),
+                  allowDeclareFields: true,
+                }]]
               : []),
           ],
     },
@@ -494,6 +788,7 @@ export function createLitsxTransformConfig(source, options = {}) {
 
 function finalizeTransformResult(
   result,
+  source,
   options,
   authoredWarnings = [],
   moduleAnalysis = null,
@@ -531,9 +826,9 @@ function finalizeTransformResult(
   const map =
     options.sourceMaps === true
       ? options.jsxTemplate === false
-        ? result.map ?? null
+        ? normalizeFinalSourceMap(result.map ?? null, source, options)
         : templateAttributeMappings.length === 0
-          ? result.map ?? null
+          ? normalizeFinalSourceMap(result.map ?? null, source, options)
           : profilePhase(
             "sourcemap-patching",
             () => patchLitAttributeSourcemap(
@@ -544,10 +839,14 @@ function finalizeTransformResult(
             profile,
           )
       : null;
+  const normalizedMap =
+    options.sourceMaps === true
+      ? normalizeFinalSourceMap(map, source, options)
+      : null;
 
   return {
     code: result.code || "",
-    map,
+    map: normalizedMap,
     metadata,
   };
 }
@@ -617,7 +916,14 @@ export async function transformLitsx(source, options = {}) {
           profile,
         )
       : firstPassResult;
-    return finalizeTransformResult(result, nextOptions, authoredWarnings, moduleAnalysis, profile);
+    return finalizeTransformResult(
+      result,
+      source,
+      nextOptions,
+      authoredWarnings,
+      moduleAnalysis,
+      profile,
+    );
   }
 
   const {
@@ -675,7 +981,14 @@ export async function transformLitsx(source, options = {}) {
         profile,
       )
     : firstPassResult;
-  return finalizeTransformResult(result, options, authoredWarnings, moduleAnalysis, profile);
+  return finalizeTransformResult(
+    result,
+    source,
+    options,
+    authoredWarnings,
+    moduleAnalysis,
+    profile,
+  );
 }
 
 export function transformLitsxSync(source, options = {}) {
@@ -742,7 +1055,14 @@ export function transformLitsxSync(source, options = {}) {
           profile,
         )
       : firstPassResult;
-    return finalizeTransformResult(result, nextOptions, authoredWarnings, moduleAnalysis, profile);
+    return finalizeTransformResult(
+      result,
+      source,
+      nextOptions,
+      authoredWarnings,
+      moduleAnalysis,
+      profile,
+    );
   }
 
   const {
@@ -799,7 +1119,14 @@ export function transformLitsxSync(source, options = {}) {
         profile,
       )
     : firstPassResult;
-  return finalizeTransformResult(result, options, authoredWarnings, moduleAnalysis, profile);
+  return finalizeTransformResult(
+    result,
+    source,
+    options,
+    authoredWarnings,
+    moduleAnalysis,
+    profile,
+  );
 }
 
 export default transformLitsx;

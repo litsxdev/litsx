@@ -3,9 +3,16 @@ import * as t from "@babel/types";
 import babelTraverse from "@babel/traverse";
 import parser from "./helpers/litsx-parser.js";
 import {
+  bindingFunctionReferencesThisProp,
   createComponentInstanceRefSyncStatement,
+  createForwardedTargetRefSyncStatement,
+  createManagedRefLookupExpression,
+  createThisMemberExpression,
   hasExplicitRefForwarding,
   hasRefProp,
+  isComponentJsxName,
+  isRefAttributeOnStandardElement,
+  isStandardElementJsxName,
   lowerForwardedElementRefs,
   setRefsBabelTypes,
 } from "../packages/babel-preset-litsx/src/internal/transform-litsx-refs.js";
@@ -66,7 +73,7 @@ describe("native refs internals", () => {
     assert.strictEqual(hasRefProp(noRef), false);
   });
 
-  it("lowers only standard forwarded element refs and leaves other ref shapes untouched", () => {
+  it("leaves native refs for the Lit directive and routes component refs as properties", () => {
     const functionPath = getFunctionPath(`
       function Card() {
         return (
@@ -82,16 +89,7 @@ describe("native refs internals", () => {
     `);
 
     const statements = lowerForwardedElementRefs(functionPath, "ref");
-    assert.strictEqual(statements.length, 2);
-
-    const callbackCalls = statements.map((statement) => statement.expression);
-    assert.ok(
-      callbackCalls.every(
-        (call) =>
-          call.callee.name === "useCallbackRef" &&
-          call.arguments[0].type === "ThisExpression"
-      )
-    );
+    assert.strictEqual(statements.length, 0);
 
     const attributes = functionPath.node.body.body[0].argument.children
       .filter((child) => child.type === "JSXElement")
@@ -100,18 +98,20 @@ describe("native refs internals", () => {
         attrs: element.openingElement.attributes,
       }));
 
-    const inputRef = attributes[0].attrs.find((attr) => attr.name.name === "data-ref");
-    const textareaRef = attributes[1].attrs.find((attr) => attr.name.name === "data-ref");
-    assert.ok(inputRef.value.value.startsWith("_refElement"));
-    assert.ok(textareaRef.value.value.startsWith("_refElement"));
-    assert.notStrictEqual(inputRef.value.value, textareaRef.value.value);
-
     assert.strictEqual(
-      attributes[2].attrs.some((attr) => attr.name.name === "ref"),
+      attributes[0].attrs.some((attr) => attr.name.name === "ref"),
       true
     );
     assert.strictEqual(
-      attributes[3].attrs.some((attr) => attr.name.name === "ref"),
+      attributes[1].attrs.some((attr) => attr.name.name === "ref"),
+      true
+    );
+    assert.strictEqual(
+      attributes[2].attrs.some((attr) => attr.name.name === ".ref"),
+      true
+    );
+    assert.strictEqual(
+      attributes[3].attrs.some((attr) => attr.name.name === ".ref"),
       true
     );
     assert.strictEqual(
@@ -135,7 +135,7 @@ describe("native refs internals", () => {
           if (typeof this.ref === "function") {
             this.ref(node);
           } else if (this.ref) {
-            this.ref.current = node;
+            this.ref.value = node;
           }
         };
         return <form ref={setFormNode} />;
@@ -173,8 +173,55 @@ describe("native refs internals", () => {
     const statement = createComponentInstanceRefSyncStatement();
     const call = statement.expression;
     assert.strictEqual(call.callee.name, "useCallbackRef");
-    assert.strictEqual(call.arguments[1].body.type, "ThisExpression");
-    assert.strictEqual(call.arguments[2].body.body[0].declarations[0].init.property.name, "ref");
-    assert.strictEqual(call.arguments[3].elements[0].property.name, "ref");
+    assert.strictEqual(call.arguments[0].body.type, "ThisExpression");
+    assert.strictEqual(call.arguments[1].body.body[0].declarations[0].init.property.name, "ref");
+    assert.strictEqual(call.arguments[2].elements[0].property.name, "ref");
+  });
+
+  it("classifies standard, component, and ref attribute node shapes", () => {
+    assert.strictEqual(isStandardElementJsxName(t.jsxIdentifier("input")), true);
+    assert.strictEqual(isStandardElementJsxName(t.jsxIdentifier("Input")), false);
+    assert.strictEqual(isStandardElementJsxName(t.jsxIdentifier("my-input")), false);
+    assert.strictEqual(isStandardElementJsxName(t.jsxIdentifier("")), false);
+    assert.strictEqual(isStandardElementJsxName(t.stringLiteral("input")), false);
+    assert.strictEqual(isComponentJsxName(t.jsxIdentifier("Input")), true);
+    assert.strictEqual(isComponentJsxName(t.jsxIdentifier("my-input")), true);
+    assert.strictEqual(isComponentJsxName(t.jsxIdentifier("input")), false);
+    assert.strictEqual(isComponentJsxName(t.jsxMemberExpression(t.jsxIdentifier("UI"), t.jsxIdentifier("Input"))), true);
+    assert.strictEqual(isComponentJsxName(t.stringLiteral("Input")), false);
+
+    const functionPath = getFunctionPath(`function Card() { return <input ref={value} title="x" />; }`);
+    let refPath;
+    let titlePath;
+    functionPath.traverse({ JSXAttribute(path) {
+      if (path.node.name.name === "ref") refPath = path;
+      if (path.node.name.name === "title") titlePath = path;
+    } });
+    assert.strictEqual(isRefAttributeOnStandardElement(refPath), true);
+    assert.strictEqual(isRefAttributeOnStandardElement(titlePath), false);
+    assert.strictEqual(isRefAttributeOnStandardElement(null), false);
+  });
+
+  it("builds computed ref expressions and handles unsupported binding shapes", () => {
+    assert.strictEqual(createThisMemberExpression("ref").computed, false);
+    assert.strictEqual(createThisMemberExpression("forwarded-ref").computed, true);
+    const lookup = createManagedRefLookupExpression("target");
+    assert.strictEqual(lookup.operator, "??");
+    assert.match(lookup.left.arguments[0].value, /data-ref="target"/);
+    const statement = createForwardedTargetRefSyncStatement("forwarded-ref", "target");
+    assert.strictEqual(statement.expression.arguments[2].elements[0].computed, true);
+    assert.strictEqual(bindingFunctionReferencesThisProp(null, "ref"), false);
+    assert.strictEqual(bindingFunctionReferencesThisProp({ path: {} }, "ref"), false);
+    assert.strictEqual(bindingFunctionReferencesThisProp({ path: {} }, null), false);
+  });
+
+  it("rejects unsupported ref parameter and forwarding shapes", () => {
+    assert.strictEqual(hasRefProp(getFunctionPath(`function Card() { return null; }`)), false);
+    assert.strictEqual(hasRefProp(getFunctionPath(`function Card([ref]) { return ref; }`)), false);
+    assert.strictEqual(hasRefProp(getFunctionPath(`function Card({ value, ...rest }) { return value; }`)), false);
+    assert.strictEqual(hasExplicitRefForwarding(getFunctionPath(`function Card() { return <input />; }`), null), false);
+    assert.strictEqual(hasExplicitRefForwarding(getFunctionPath(`function Card() { return <input ref="literal" />; }`), "ref"), false);
+    assert.strictEqual(hasExplicitRefForwarding(getFunctionPath(`function Card() { return <input ref={this["ref"]} />; }`), "ref"), false);
+    assert.strictEqual(hasExplicitRefForwarding(getFunctionPath(`function Card() { return <Widget ref={callback} />; }`), "ref"), false);
   });
 });

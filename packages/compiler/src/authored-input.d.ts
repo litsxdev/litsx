@@ -72,10 +72,6 @@ export function prepareLitsxAuthoredInput(
   }
 ): {
   filename?: string;
-  virtualization: {
-    code?: string;
-    map?: object | null;
-  } | null;
   inputAst: object;
   authoredWarnings: unknown[];
   moduleAnalysis: LitsxModuleAnalysis;

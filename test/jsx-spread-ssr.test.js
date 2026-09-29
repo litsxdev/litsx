@@ -3,12 +3,31 @@ import { render } from "@lit-labs/ssr";
 import { html, LitElement } from "lit";
 import { describe, it } from "vitest";
 import { jsxSpreadElement } from "../packages/core/src/jsx-spread.js";
+import { toLitRef } from "../packages/core/src/react-compat.js";
 
 function renderToString(value) {
   return Array.from(render(value)).join("");
 }
 
 describe("jsxSpreadElement SSR", () => {
+  it("honors an explicit server template after client hydration state was loaded", () => {
+    const clientRuntime = Symbol.for("@litsx/ssr/client-runtime");
+    const previous = globalThis[clientRuntime];
+    globalThis[clientRuntime] = true;
+    try {
+      const output = renderToString(jsxSpreadElement(
+        "button",
+        [{ "data-case": "server", disabled: true }],
+        { server: true },
+      ));
+      assert.match(output, /data-case="server"/);
+      assert.match(output, /disabled(?:=""|\s|>)/);
+    } finally {
+      if (previous === undefined) delete globalThis[clientRuntime];
+      else globalThis[clientRuntime] = previous;
+    }
+  });
+
   it("serializes inferred native bindings and ordered overrides", () => {
     const output = renderToString(
       jsxSpreadElement(
@@ -28,6 +47,44 @@ describe("jsxSpreadElement SSR", () => {
     assert.match(output, /<button[^>]*data-id="ready"/);
     assert.doesNotMatch(output, /onClick|onclick|@click/);
     assert.match(output, /Continue/);
+  });
+
+  it("serializes camelCase, dashed, custom, and nullish spread style properties", () => {
+    const output = renderToString(jsxSpreadElement("div", [{
+      style: {
+        backgroundColor: "tomato",
+        "border-top": "1px solid black",
+        "--accent": "gold",
+        opacity: 0.5,
+        color: null,
+        width: undefined,
+      },
+    }]));
+
+    assert.match(output, /style="[^"]*background-color:tomato;/);
+    assert.match(output, /style="[^"]*border-top:1px solid black;/);
+    assert.match(output, /style="[^"]*--accent:gold;/);
+    assert.match(output, /style="[^"]*opacity:0.5;/);
+    assert.doesNotMatch(output, /color:null|width:undefined/);
+  });
+
+  it("omits bindings overridden with undefined", () => {
+    const output = renderToString(jsxSpreadElement("button", [
+      { title: "earlier", disabled: true, style: { color: "red" } },
+      { title: undefined, disabled: undefined, style: undefined },
+    ]));
+    assert.doesNotMatch(output, /title=/);
+    assert.doesNotMatch(output, /disabled(?:=|\s|>)/);
+    assert.doesNotMatch(output, /style=/);
+  });
+
+  it("lets later CSS text override an earlier style map", () => {
+    const output = renderToString(jsxSpreadElement("div", [
+      { style: { color: "red", backgroundColor: "tomato" } },
+      { style: "color: purple" },
+    ]));
+    assert.match(output, /style="color: purple"/);
+    assert.doesNotMatch(output, /tomato/);
   });
 
   it("passes inferred custom-element properties into SSR rendering", () => {
@@ -60,15 +117,154 @@ describe("jsxSpreadElement SSR", () => {
     assert.doesNotMatch(output, /payload="/);
   });
 
+  it("keeps declared property names and attribute aliases coherent during SSR", () => {
+    const tagName = "litsx-jsx-spread-ssr-alias";
+    if (!customElements.get(tagName)) {
+      customElements.define(tagName, class extends LitElement {
+        static properties = {
+          iconOnly: {
+            type: Boolean,
+            reflect: true,
+            attribute: "icon-only",
+          },
+          ariaLabel: {
+            type: String,
+            reflect: true,
+            attribute: "aria-label",
+          },
+        };
+
+        render() {
+          return this.iconOnly
+            ? html`<span data-branch="icon">${this.ariaLabel}</span>`
+            : html`<span data-branch="label">Label</span>`;
+        }
+      });
+    }
+    const component = customElements.get(tagName);
+
+    const propertyOutput = renderToString(jsxSpreadElement(tagName, [{
+      iconOnly: true,
+      ariaLabel: "Open menu",
+    }], { component }));
+    assert.match(propertyOutput, /icon-only(?:=""|\s|>)/);
+    assert.match(propertyOutput, /aria-label="Open menu"/);
+    assert.match(propertyOutput, /data-branch="icon"/);
+    assert.doesNotMatch(propertyOutput, /icononly|arialabel/);
+
+    const attributeOutput = renderToString(jsxSpreadElement(tagName, [{
+      "icon-only": false,
+      "aria-label": "Text label",
+    }], { component }));
+    assert.doesNotMatch(attributeOutput, /\sicon-only(?:=|\s|>)/);
+    assert.match(attributeOutput, /aria-label="Text label"/);
+    assert.match(attributeOutput, /data-branch="label"/);
+  });
+
+  it("keeps standard SSR host attributes outside component rest props", () => {
+    const tagName = "litsx-jsx-spread-ssr-rest";
+    if (!customElements.get(tagName)) {
+      customElements.define(tagName, class extends LitElement {
+        static [Symbol.for("litsx.restProps")] = { property: "__litsxRestProps" };
+        static properties = {
+          label: { type: String },
+          __litsxRestProps: { type: Object, attribute: false },
+        };
+
+        render() {
+          return jsxSpreadElement("button", [this.__litsxRestProps], {}, this.label);
+        }
+      });
+    }
+
+    const output = renderToString(jsxSpreadElement(tagName, [
+      { class: "first", title: "removed" },
+      {
+        label: "Save",
+        class: "last",
+        "aria-label": "Save action",
+        "data-state": "ready",
+        disabled: true,
+      },
+      { title: undefined },
+    ], { component: customElements.get(tagName) }));
+
+    assert.match(
+      output,
+      new RegExp(`<${tagName}[^>]*aria-label="Save action"`),
+    );
+    assert.match(output, new RegExp(`<${tagName}[^>]*class="last"`));
+    assert.match(output, new RegExp(`<${tagName}[^>]*data-state="ready"`));
+    assert.match(output, new RegExp(`<${tagName}[^>]*disabled(?:\\s|>)`));
+    assert.doesNotMatch(output, new RegExp(`<${tagName}[^>]*title=`));
+    assert.doesNotMatch(output, /<button[^>]*aria-label=/);
+    assert.doesNotMatch(output, /<button[^>]*disabled(?:\s|>)/);
+    assert.match(output, />Save</);
+  });
+
+  it("keeps declared callback props and custom-event listeners out of SSR markup", () => {
+    const tagName = "litsx-jsx-spread-ssr-events";
+    if (!customElements.get(tagName)) {
+      customElements.define(tagName, class extends LitElement {
+        static properties = {
+          onCallback: { attribute: false },
+        };
+
+        render() {
+          return html`<strong>${typeof this.onCallback}</strong>`;
+        }
+      });
+    }
+
+    const output = renderToString(jsxSpreadElement(tagName, [{
+      onCallback: () => {},
+      onclick: () => {},
+      "on:primary-action": () => {},
+    }]));
+
+    assert.match(output, /<strong[^>]*>[\s\S]*function/);
+    assert.doesNotMatch(output, /onCallback|onPrimaryAction|onclick|primary-action/);
+  });
+
   it("renders React inner HTML and keeps refs out of server markup", () => {
     const output = renderToString(
       jsxSpreadElement("section", [{
         ref: { current: null },
         dangerouslySetInnerHTML: { __html: "<em>trusted fixture</em>" },
-      }])
+      }], { refAdapter: toLitRef })
     );
 
     assert.match(output, /<em>trusted fixture<\/em>/);
     assert.doesNotMatch(output, /dangerouslySetInnerHTML|\sref=/);
+  });
+
+  it("serializes false for boolean-valued enumerated HTML attributes", () => {
+    const output = renderToString(jsxSpreadElement("div", [{
+      draggable: false,
+      spellCheck: false,
+      contentEditable: false,
+    }]));
+
+    assert.match(output, /draggable="false"/);
+    assert.match(output, /spellcheck="false"/);
+    assert.match(output, /contenteditable="false"/);
+
+    const svgOutput = renderToString(jsxSpreadElement(
+      "circle",
+      [{ focusable: false, strokeWidth: 2, strokeLinejoin: "round" }],
+      { namespace: "svg" },
+    ));
+    assert.match(svgOutput, /focusable="false"/);
+    assert.match(svgOutput, /stroke-width="2"/);
+    assert.match(svgOutput, /stroke-linejoin="round"/);
+    assert.doesNotMatch(svgOutput, /strokeWidth/);
+
+    const reactSvgOutput = renderToString(jsxSpreadElement(
+      "use",
+      [{ xlinkHref: "#shape", xmlLang: "en" }],
+      { namespace: "svg", reactCompatEvents: true },
+    ));
+    assert.match(reactSvgOutput, /xlink:href="#shape"/);
+    assert.match(reactSvgOutput, /xml:lang="en"/);
   });
 });

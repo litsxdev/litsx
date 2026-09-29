@@ -1,14 +1,38 @@
 // @vitest-environment happy-dom
 
 import assert from "assert";
-import { LitElement, html } from "lit";
+import { LitElement, html, render } from "lit";
+import { html as staticHtml, unsafeStatic } from "lit/static-html.js";
 import { describe, it } from "vitest";
 import { connectLightDomRegistry } from "../packages/scoped-registry-shim/src/index.js";
-import { prepareEffects, useOnConnect, useState } from "../packages/core/src/index.js";
 import {
+  renderWithHooks,
+  useOnConnect,
+  useState,
+} from "../packages/core/src/index.js";
+import {
+  __isLitsxScopedTemplate,
+  __isLitsxServerComponentCall,
+  __getLitsxForwardedRefId,
+  __isLitsxForwardedRef,
+  __litsxForwardedRef,
+  __litsxScopedTemplate,
+  __litsxServerComponentCall,
+  annotateHydratableCustomElement,
+  LITSX_MODULE_ID,
+  LITSX_SCOPED_TEMPLATE,
+  LITSX_SERVER_COMPONENT_CALL,
+  LITSX_SERVER_COMPONENT,
+  LITSX_SSR_CONTEXT,
+  HydrationSuspenseMixin,
+  __litsxAdoptLightDom,
+  isCustomElementClass,
+  isHydratableCustomElementClass,
+  isLitsxComponentClass,
+  LITSX_COMPONENT,
+  LITSX_HYDRATABLE_TAG,
   LightDomMixin,
-  LightDomMixin,
-  LitsxStaticHoistsMixin,
+  mergePropertyDeclarations,
   ShadowDomMixin,
 } from "../packages/core/src/elements/index.js";
 
@@ -27,17 +51,125 @@ function defineTestElement(tagName, ctor) {
 }
 
 describe("litsx elements runtime", () => {
-  it("dedupes static hoist mixins and merges nested property metadata", () => {
-    class Base extends HTMLElement {}
+  it("leaves adopted light-DOM part connection ownership with the parent", async () => {
+    const tagName = nextTag("litsx-runtime-adopted-light-child");
+    const staticTag = unsafeStatic(tagName);
 
-    const MixedOnce = LitsxStaticHoistsMixin(Base);
-    const MixedTwice = LitsxStaticHoistsMixin(MixedOnce);
+    class AdoptedLightChild extends LightDomMixin(LitElement) {
+      constructor() {
+        super();
+        this.label = "initial";
+      }
 
-    assert.strictEqual(MixedTwice, MixedOnce);
-    assert.equal(MixedOnce.__litsxStatic("__cache", () => 3), 3);
-    assert.equal(MixedOnce.__litsxStatic("__cache", () => 9), 3);
+      render() {
+        return html`<span data-label>${this.label}</span>`;
+      }
+    }
+
+    customElements.define(tagName, AdoptedLightChild);
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    render(
+      staticHtml`<${staticTag}>${__litsxAdoptLightDom()}</${staticTag}>`,
+      container,
+    );
+
+    const host = container.querySelector(tagName);
+    await host.updateComplete;
+    assert.strictEqual(host.querySelector("[data-label]")?.textContent, "initial");
+
+    host.label = "before reconnect";
+    host.requestUpdate();
+    await host.updateComplete;
+    assert.strictEqual(
+      host.querySelector("[data-label]")?.textContent,
+      "before reconnect",
+    );
+
+    host.remove();
+    container.appendChild(host);
+    host.label = "updated";
+    host.requestUpdate();
+    await host.updateComplete;
+
+    assert.strictEqual(host.querySelector("[data-label]")?.textContent, "updated");
+    container.remove();
+  });
+
+  it("contains hydration-only suspensions at the generated host boundary", async () => {
+    const suspension = Promise.resolve();
+    class Base {
+      scheduleUpdate() {
+        throw suspension;
+      }
+    }
+    const Host = HydrationSuspenseMixin(Base);
+    const host = new Host();
+    host[Symbol.for("litsx.hydrationSuspension")] = suspension;
+
+    assert.strictEqual(await host.scheduleUpdate(), undefined);
+    host[Symbol.for("litsx.hydrationSuspension")] = null;
+    assert.throws(() => host.scheduleUpdate(), (error) => error === suspension);
+  });
+
+  it("exposes SSR metadata symbols and scoped-template helpers", () => {
+    const template = { strings: ["<div></div>"] };
+    class DemoCard {}
+    const scoped = __litsxScopedTemplate(template, { "demo-card": DemoCard });
+
+    assert.strictEqual(LITSX_SCOPED_TEMPLATE, Symbol.for("litsx.scopedTemplate"));
+    assert.strictEqual(LITSX_MODULE_ID, Symbol.for("litsx.moduleId"));
+    assert.strictEqual(LITSX_SSR_CONTEXT, Symbol.for("litsx.ssrContext"));
+    assert.strictEqual(LITSX_SERVER_COMPONENT, Symbol.for("litsx.serverComponent"));
+    assert.strictEqual(LITSX_SERVER_COMPONENT_CALL, Symbol.for("litsx.serverComponentCall"));
+    assert.strictEqual(__isLitsxScopedTemplate(scoped), true);
+    assert.strictEqual(__isLitsxScopedTemplate(template), false);
+    assert.strictEqual(scoped[LITSX_SCOPED_TEMPLATE], true);
+    assert.strictEqual(scoped.template, template);
+    assert.deepStrictEqual(scoped.elements, { "demo-card": DemoCard });
+    assert.deepStrictEqual(__litsxScopedTemplate(template).elements, {});
+
+    const call = __litsxServerComponentCall(DemoCard, { slug: "x" });
+    assert.strictEqual(__isLitsxServerComponentCall(call), true);
+    assert.strictEqual(__isLitsxServerComponentCall(template), false);
+    assert.strictEqual(call[LITSX_SERVER_COMPONENT_CALL], true);
+    assert.strictEqual(call.component, DemoCard);
+    assert.deepStrictEqual(call.props, { slug: "x" });
+  });
+
+  it("validates component constructors, hydration metadata, and forwarded refs", () => {
+    assert.strictEqual(isCustomElementClass(null), false);
+    assert.strictEqual(isCustomElementClass(() => {}), false);
+    assert.strictEqual(isHydratableCustomElementClass(class {}), false);
+    assert.strictEqual(isLitsxComponentClass(class {}), false);
+
+    class DemoElement extends HTMLElement {}
+    DemoElement[LITSX_COMPONENT] = true;
+    assert.strictEqual(isCustomElementClass(DemoElement), true);
+    assert.strictEqual(isLitsxComponentClass(DemoElement), true);
+    assert.throws(() => annotateHydratableCustomElement({}), /custom element constructor/);
+    assert.strictEqual(annotateHydratableCustomElement(DemoElement, {
+      tagName: "  demo-element  ",
+      moduleId: "  /demo.js  ",
+    }), DemoElement);
+    assert.strictEqual(DemoElement[LITSX_HYDRATABLE_TAG], "demo-element");
+    assert.strictEqual(isHydratableCustomElementClass(DemoElement), true);
+    annotateHydratableCustomElement(DemoElement, { tagName: "ignored-element", moduleId: "/ignored.js" });
+    assert.strictEqual(DemoElement[LITSX_HYDRATABLE_TAG], "demo-element");
+
+    assert.throws(() => __litsxForwardedRef(null), /non-empty id/);
+    assert.throws(() => __litsxForwardedRef("   "), /non-empty id/);
+    const forwarded = __litsxForwardedRef(" target ");
+    assert.strictEqual(__isLitsxForwardedRef(forwarded), true);
+    assert.strictEqual(__isLitsxForwardedRef(null), false);
+    assert.strictEqual(__getLitsxForwardedRefId(forwarded), "target");
+    assert.strictEqual(__getLitsxForwardedRefId({}), null);
+    assert.deepStrictEqual(__litsxServerComponentCall(DemoElement).props, {});
+  });
+
+  it("merges inferred and authored property declarations when spreads require runtime resolution", () => {
     assert.deepStrictEqual(
-      MixedOnce.__litsxMergeProperties(
+      mergePropertyDeclarations(
         { count: { type: Number, reflect: false }, label: { type: String } },
         { count: { reflect: true }, active: { type: Boolean } },
       ),
@@ -47,11 +179,10 @@ describe("litsx elements runtime", () => {
         active: { type: Boolean },
       },
     );
-    assert.strictEqual(MixedOnce.__litsxResolveStaticValue("ok"), "ok");
     const fallbackBase = { count: { type: Number } };
-    assert.strictEqual(MixedOnce.__litsxMergeProperties(fallbackBase, null), fallbackBase);
+    assert.strictEqual(mergePropertyDeclarations(fallbackBase, null), fallbackBase);
     assert.deepStrictEqual(
-      MixedOnce.__litsxMergeProperties(
+      mergePropertyDeclarations(
         { count: { type: Number, reflect: false } },
         { count: new Date(0) },
       ),
@@ -177,7 +308,7 @@ describe("litsx elements runtime", () => {
     }
   });
 
-  it("rejects scoped elements on LightDomMixin hosts", () => {
+  it("connects and disconnects contextual registries on LightDomMixin hosts", () => {
     const childTag = nextTag("litsx-runtime-child");
     const hostTag = nextTag("litsx-runtime-elements-host");
 
@@ -191,7 +322,16 @@ describe("litsx elements runtime", () => {
       }
     }
 
-    class ChildElement extends HTMLElement {}
+    class ChildElement extends HTMLElement {
+      constructor() {
+        super();
+        this.initialized = true;
+      }
+
+      connectedCallback() {
+        this.childConnected = true;
+      }
+    }
 
     class HostElement extends LightDomMixin(Base) {
       static elements = {
@@ -199,10 +339,52 @@ describe("litsx elements runtime", () => {
       };
     }
 
-    assert.throws(
-      () => defineTestElement(hostTag, HostElement),
-      /cannot use static elements with LightDomMixin/
-    );
+    const host = defineTestElement(hostTag, HostElement);
+    assert.strictEqual(host.registry?.get(childTag), ChildElement);
+    assert.strictEqual(host.connected, undefined);
+
+    host.innerHTML = `<${childTag}></${childTag}>`;
+    document.body.appendChild(host);
+    host.update?.();
+
+    const child = host.querySelector(childTag);
+    assert.strictEqual(Object.getPrototypeOf(child), ChildElement.prototype);
+    assert.strictEqual(child.initialized, true);
+    assert.strictEqual(child.childConnected, true);
+    assert.strictEqual(host.connected, true);
+
+    const registry = host.registry;
+    host.remove();
+    assert.strictEqual(host.disconnected, true);
+    assert.strictEqual(host.registry, null);
+
+    document.body.appendChild(host);
+    assert.strictEqual(host.registry, registry);
+    host.remove();
+  });
+
+  it("supports light-dom hosts that declare scoped elements", async () => {
+    const childTag = nextTag("litsx-runtime-light-upgrade-child");
+    const hostTag = nextTag("litsx-runtime-light-upgrade-host");
+
+    class Base extends HTMLElement {}
+
+    class ChildElement extends HTMLElement {
+      connectedCallback() {
+        this.setAttribute("data-upgraded", "yes");
+      }
+    }
+
+    class HostElement extends LightDomMixin(Base) {
+      static elements = {
+        [childTag]: ChildElement,
+      };
+    }
+
+    customElements.define(hostTag, HostElement);
+
+    const host = document.createElement(hostTag);
+    assert.strictEqual(host.registry?.get(childTag), ChildElement);
   });
 
   it("dedupes repeated light-dom element mixin applications", () => {
@@ -311,7 +493,7 @@ describe("litsx elements runtime", () => {
     }
   });
 
-  it("falls back to shimmed shadow registries once the light-dom runtime is active", () => {
+  it("still prefers native shadow registries when available after the light-dom runtime is active", () => {
     const originalCustomElementRegistry = globalThis.CustomElementRegistry;
     const originalAttachShadow = Element.prototype.attachShadow;
 
@@ -363,8 +545,8 @@ describe("litsx elements runtime", () => {
       const host = new Host();
       const shadowRoot = host.createRenderRoot();
 
-      assert.notStrictEqual(host.registry?.constructor, FakeRegistry);
-      assert.strictEqual(typeof host.registry?._getDefinition, "function");
+      assert.strictEqual(host.registry?.constructor, FakeRegistry);
+      assert.strictEqual(typeof host.registry?.get, "function");
       assert.strictEqual(host.renderOptions.creationScope, shadowRoot);
     } finally {
       globalThis.CustomElementRegistry = originalCustomElementRegistry;
@@ -435,6 +617,54 @@ describe("litsx elements runtime", () => {
     } finally {
       Element.prototype.attachShadow = originalAttachShadow;
     }
+  });
+
+  it("passes a scoped creationScope to Lit for native shadow registries", () => {
+    const importedNodes = [];
+    const registry = {
+      define() {},
+      get() {
+        return undefined;
+      },
+      initialize() {},
+    };
+    const shadowRoot = {
+      registry,
+      firstChild: null,
+      ownerDocument: {
+        importNode(node, options) {
+          importedNodes.push({ node, options });
+          return node;
+        },
+      },
+    };
+
+    class Base {
+      constructor() {
+        this.shadowRoot = shadowRoot;
+        this.renderOptions = {};
+        this.registry = registry;
+      }
+
+      static finalize() {}
+    }
+
+    const Host = ShadowDomMixin(Base);
+    const host = new Host();
+
+    assert.strictEqual(host.createRenderRoot(), shadowRoot);
+    assert.notStrictEqual(host.renderOptions.creationScope, shadowRoot);
+    const node = {};
+    assert.strictEqual(host.renderOptions.creationScope.importNode(node, true), node);
+    assert.deepStrictEqual(importedNodes, [
+      {
+        node,
+        options: {
+          customElementRegistry: registry,
+          selfOnly: false,
+        },
+      },
+    ]);
   });
 
   it("defines scoped elements on reused shadow roots when the host already owns the registry", () => {
@@ -844,7 +1074,7 @@ describe("litsx elements runtime", () => {
     }
   });
 
-  it("falls back to LitSX shadow registries when scoped registry support is polyfilled", () => {
+  it("delegates shadow registries to a polyfilled platform provider", () => {
     const shadowHostTag = nextTag("litsx-runtime-polyfilled-shadow-host");
     const originalCustomElementRegistry = globalThis.CustomElementRegistry;
     const originalAttachShadow = Element.prototype.attachShadow;
@@ -895,7 +1125,7 @@ describe("litsx elements runtime", () => {
       const shadowHost = document.createElement(shadowHostTag);
       const root = shadowHost.createRenderRoot();
 
-      assert.notStrictEqual(shadowHost.registry.constructor, PolyfilledRegistry);
+      assert.strictEqual(shadowHost.registry.constructor, PolyfilledRegistry);
       assert.strictEqual(root.registry, shadowHost.registry);
       assert.strictEqual(shadowHost.registry.get("polyfilled-shadow-child"), ShadowChild);
     } finally {
@@ -904,7 +1134,75 @@ describe("litsx elements runtime", () => {
     }
   });
 
-  it("falls back to LitSX shadow registries when the platform exposes registry aliases but does not upgrade with them", () => {
+  it("preserves a polyfilled registry already assigned to a host", () => {
+    const shadowHostTag = nextTag("litsx-runtime-polyfilled-existing-registry-host");
+    const childTag = nextTag("litsx-runtime-polyfilled-existing-registry-child");
+    const originalCustomElementRegistry = globalThis.CustomElementRegistry;
+    const originalAttachShadow = Element.prototype.attachShadow;
+
+    class PolyfilledRegistry {
+      constructor() {
+        this.definitions = new Map();
+      }
+
+      define(tagName, elementClass) {
+        this.definitions.set(tagName, elementClass);
+      }
+
+      get(tagName) {
+        return this.definitions.get(tagName);
+      }
+
+      _getDefinition() {
+        return undefined;
+      }
+    }
+
+    globalThis.CustomElementRegistry = PolyfilledRegistry;
+    Element.prototype.attachShadow = function attachShadow(init) {
+      const shadowRoot = document.createElement("div");
+      shadowRoot.registry = init.registry ?? null;
+      shadowRoot.customElements = shadowRoot.registry;
+      shadowRoot.customElementRegistry = shadowRoot.registry;
+      Object.defineProperty(this, "shadowRoot", {
+        configurable: true,
+        value: shadowRoot,
+      });
+      return shadowRoot;
+    };
+
+    try {
+      class ScopedChild extends LitElement {}
+
+      class ShadowBase extends HTMLElement {
+        constructor() {
+          super();
+          this.registry = new PolyfilledRegistry();
+        }
+
+        static elements = {
+          [childTag]: ScopedChild,
+        };
+      }
+
+      const ShadowHost = ShadowDomMixin(ShadowBase);
+      if (!customElements.get(shadowHostTag)) {
+        customElements.define(shadowHostTag, ShadowHost);
+      }
+      const shadowHost = document.createElement(shadowHostTag);
+      const root = shadowHost.createRenderRoot();
+
+      assert.strictEqual(shadowHost.registry.constructor, PolyfilledRegistry);
+      assert.strictEqual(shadowHost.registry.get(childTag), ScopedChild);
+      assert.strictEqual(root.registry, shadowHost.registry);
+      assert.strictEqual(customElements.get(childTag), undefined);
+    } finally {
+      globalThis.CustomElementRegistry = originalCustomElementRegistry;
+      Element.prototype.attachShadow = originalAttachShadow;
+    }
+  });
+
+  it("trusts the scoped-registry provider instead of probing its implementation", () => {
     const shadowHostTag = nextTag("litsx-runtime-alias-only-shadow-host");
     const originalCustomElementRegistry = globalThis.CustomElementRegistry;
     const originalAttachShadow = Element.prototype.attachShadow;
@@ -974,8 +1272,7 @@ describe("litsx elements runtime", () => {
       const shadowHost = document.createElement(shadowHostTag);
       const root = shadowHost.createRenderRoot();
 
-      assert.notStrictEqual(shadowHost.registry.constructor, AliasOnlyRegistry);
-      assert.strictEqual(typeof shadowHost.registry?._getDefinition, "function");
+      assert.strictEqual(shadowHost.registry.constructor, AliasOnlyRegistry);
       assert.strictEqual(root.registry, shadowHost.registry);
       assert.strictEqual(shadowHost.registry.get("alias-only-shadow-child"), ShadowChild);
     } finally {
@@ -1017,7 +1314,7 @@ describe("litsx elements runtime", () => {
     host.remove();
   });
 
-  it("lets shadow-dom and light-dom registries coexist in the same runtime", () => {
+  it("lets native shadow registries coexist with light-dom registries in the same runtime", () => {
     const lightChildTag = nextTag("litsx-runtime-light-child");
     const shadowChildTag = nextTag("litsx-runtime-shadow-child");
     const originalCustomElementRegistry = globalThis.CustomElementRegistry;
@@ -1102,10 +1399,10 @@ describe("litsx elements runtime", () => {
       const shadowHost = new ShadowHost();
       shadowHost.createRenderRoot();
 
-      assert.notStrictEqual(shadowHost.registry?.constructor, FakeRegistry);
-      assert.strictEqual(typeof shadowHost.registry?._getDefinition, "function");
+      assert.strictEqual(shadowHost.registry?.constructor, FakeRegistry);
+      assert.strictEqual(typeof shadowHost.registry?.get, "function");
       assert.strictEqual(shadowHost.registry.get(shadowChildTag), ShadowChild);
-      assert.strictEqual(shadowHost.registry.get(lightChildTag), null);
+      assert.strictEqual(shadowHost.registry.get(lightChildTag), undefined);
       assert.strictEqual(lightHost.registry.get(shadowChildTag), null);
 
       lightHost.remove();
@@ -1225,18 +1522,19 @@ describe("litsx elements runtime", () => {
         };
 
         render() {
-          prepareEffects(this);
-          const [connectCount, setConnectCount] = useState(this, 0);
+          return renderWithHooks(this, () => {
+            const [connectCount, setConnectCount] = useState(0);
 
-          useOnConnect(this, () => {
-            setConnectCount((count) => count + 1);
-          }, []);
+            useOnConnect(() => {
+              setConnectCount((count) => count + 1);
+            }, []);
 
-          return html`
-            <section data-connect-count=${String(connectCount)}>
-              <litsx-runtime-reconnect-shadow-child></litsx-runtime-reconnect-shadow-child>
-            </section>
-          `;
+            return html`
+              <section data-connect-count=${String(connectCount)}>
+                <litsx-runtime-reconnect-shadow-child></litsx-runtime-reconnect-shadow-child>
+              </section>
+            `;
+          });
         }
       }
 

@@ -1,40 +1,22 @@
-import { ensurePrepareEffectsCall } from "./prepare-effects.js";
 import { assertNoReactEventAttributes } from "./react-event-attributes.js";
+import { ensureHooksRenderWrapper } from "./render-boundary.js";
+import { ensureRuntimeNamedImports } from "./runtime-imports.js";
 import {
-  HOST_TYPE_RENDER,
+  findCurrentCallPath,
   resolveHostInfo,
 } from "./custom-hook-host.js";
 const RUNTIME_MODULE = "@litsx/core";
 
 function transformUseStateCall(path, state, hostInfo, t) {
   const existingArgs = path.node.arguments;
-  const hostExprClone = t.cloneNode(hostInfo.expression, true);
-
   const runtimeCallee = t.identifier(state.runtimeLocalName || state.hookName);
-
-  if (
-    existingArgs.length > 0 &&
-    t.isNodesEquivalent(existingArgs[0], hostExprClone)
-  ) {
-    state.runtimeNeeded = true;
-    state.prepareImportNeeded = true;
-    if (hostInfo.type === HOST_TYPE_RENDER) {
-      state.renderMethodsNeedingPrepare.add(hostInfo.functionPath);
-    }
-    return;
-  }
-
-  const nextArgs = [hostExprClone, ...existingArgs.map((arg) => t.cloneNode(arg, true))];
+  const nextArgs = existingArgs.map((arg) => t.cloneNode(arg, true));
   const runtimeCall = t.callExpression(runtimeCallee, nextArgs);
 
   path.replaceWith(runtimeCall);
   path.skip();
 
   state.runtimeNeeded = true;
-  state.prepareImportNeeded = true;
-  if (hostInfo.type === HOST_TYPE_RENDER) {
-    state.renderMethodsNeedingPrepare.add(hostInfo.functionPath);
-  }
 }
 
 function processPendingCalls(state, t) {
@@ -42,8 +24,10 @@ function processPendingCalls(state, t) {
     return;
   }
 
-  for (const callPath of state.pendingCalls) {
-    if (!callPath.node) continue;
+  for (const pendingPath of state.pendingCalls) {
+    if (!pendingPath.node) continue;
+    const callPath = findCurrentCallPath(state.programPath, pendingPath);
+    if (!callPath) continue;
     const hostInfo = resolveHostInfo(callPath, t);
     if (!hostInfo) {
       throw callPath.buildCodeFrameError(
@@ -72,7 +56,7 @@ export function createUseStateTransform({
   }
 
   return function useStateTransform(api, options = {}) {
-    api.assertVersion(7);
+    api.assertVersion("^8.0.0");
     const t = api.types;
 
     return {
@@ -90,12 +74,34 @@ export function createUseStateTransform({
             state.reactHookLocals = new Map();
             state.reactNamespaceBindings = new Set();
             state.runtimeNeeded = false;
-            state.prepareImportNeeded = false;
-            state.renderMethodsNeedingPrepare = new WeakSet();
             state.pendingCalls = [];
           },
           exit(programPath, state) {
             processPendingCalls(state, t);
+
+            if (state.runtimeNeeded) {
+              let wrappedRender = false;
+              programPath.traverse({
+                ClassMethod(methodPath) {
+                  if (
+                    methodPath.node.kind === "method" &&
+                    t.isIdentifier(methodPath.node.key, { name: "render" })
+                  ) {
+                    wrappedRender =
+                      ensureHooksRenderWrapper(methodPath, t) ||
+                      wrappedRender;
+                  }
+                },
+              });
+              if (wrappedRender) {
+                ensureRuntimeNamedImports(
+                  programPath,
+                  RUNTIME_MODULE,
+                  ["renderWithHooks"],
+                  t,
+                );
+              }
+            }
 
             programPath.scope.crawl();
 
@@ -133,11 +139,6 @@ export function createUseStateTransform({
             const requiredSpecifiers = [
               t.importSpecifier(runtimeIdentifier, t.identifier("useState")),
             ];
-            if (state.prepareImportNeeded) {
-              requiredSpecifiers.push(
-                t.importSpecifier(t.identifier("prepareEffects"), t.identifier("prepareEffects"))
-              );
-            }
 
             if (existingImport) {
               const hasNamespaceSpecifier = existingImport.node.specifiers.some((spec) =>
@@ -158,7 +159,7 @@ export function createUseStateTransform({
                 const otherNamedSpecifiers = existingImport.node.specifiers.filter((spec) => {
                   if (!t.isImportSpecifier(spec)) return false;
                   const importedName = spec.imported.name;
-                  return importedName !== "useState" && importedName !== "prepareEffects";
+                  return importedName !== "useState";
                 });
 
                 existingImport.node.specifiers = [
@@ -184,7 +185,6 @@ export function createUseStateTransform({
             }
 
             let hasUseStateImport = false;
-            let hasPrepareImport = false;
             programPath.get("body").forEach((child) => {
               if (!child.isImportDeclaration()) return;
               if (child.node.source.value !== RUNTIME_MODULE) return;
@@ -196,15 +196,6 @@ export function createUseStateTransform({
                 )
               ) {
                 hasUseStateImport = true;
-              }
-              if (
-                child.node.specifiers.some(
-                  (spec) =>
-                    t.isImportSpecifier(spec) &&
-                    t.isIdentifier(spec.imported, { name: "prepareEffects" })
-                )
-              ) {
-                hasPrepareImport = true;
               }
             });
 
@@ -227,24 +218,6 @@ export function createUseStateTransform({
               }
             }
 
-            if (!hasPrepareImport) {
-              const specifier = t.importSpecifier(
-                t.identifier("prepareEffects"),
-                t.identifier("prepareEffects")
-              );
-              const fallbackImport = t.importDeclaration(
-                [specifier],
-                t.stringLiteral(RUNTIME_MODULE)
-              );
-              const firstImport = programPath
-                .get("body")
-                .find((child) => child.isImportDeclaration());
-              if (firstImport) {
-                firstImport.insertBefore(fallbackImport);
-              } else {
-                programPath.unshiftContainer("body", fallbackImport);
-              }
-            }
           },
         },
         ImportDeclaration(path, state) {
@@ -270,18 +243,7 @@ export function createUseStateTransform({
               assertNoReactEventAttributes(path, t, eventAttributeErrorMessage);
             }
           },
-          exit(path, state) {
-            if (
-              path.isClassMethod({ kind: "method" }) &&
-              t.isIdentifier(path.node.key, { name: "render" }) &&
-              state.renderMethodsNeedingPrepare.has(path)
-            ) {
-              const inserted = ensurePrepareEffectsCall(path, t);
-              if (inserted) {
-                state.prepareImportNeeded = true;
-              }
-            }
-          },
+          exit() {},
         },
         CallExpression(path, state) {
           const callee = path.get("callee");

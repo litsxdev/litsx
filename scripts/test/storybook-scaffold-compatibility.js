@@ -7,7 +7,8 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { createProject } from "../../packages/create-litsx-app/src/index.js";
 
-const supportedVersions = ["10.4.6", "10.5.6"];
+const supportedVersions = ["10.4.6", "10.5.10"];
+const stylingOptions = ["css", "tailwind", "unocss"];
 const requestedVersions = process.argv.slice(2);
 const versions =
   requestedVersions.length > 0 ? requestedVersions : supportedVersions;
@@ -71,7 +72,7 @@ const contentTypes = new Map([
   [".svg", "image/svg+xml"],
 ]);
 
-async function assertBuiltStoryRuntime(fixtureDir) {
+async function assertBuiltStoryRuntime(fixtureDir, styling) {
   const chromium = await loadFixtureChromium(fixtureDir);
   const staticRoot = path.join(fixtureDir, "storybook-static");
   const server = createServer(async (request, response) => {
@@ -118,14 +119,35 @@ async function assertBuiltStoryRuntime(fixtureDir) {
       `http://127.0.0.1:${address.port}/iframe.html?id=components-litsxbutton--primary&viewMode=story`,
       { waitUntil: "networkidle" },
     );
-    await page.waitForFunction(() => {
-      const element = document.querySelector("litsx-button");
-      return Boolean(
-        customElements.get("litsx-button") &&
-        element?.shadowRoot?.querySelector("button")?.textContent?.trim() ===
-          "Getting Started",
+    try {
+      await page.waitForFunction((selectedStyling) => {
+        const element = document.querySelector("litsx-button");
+        const renderRoot = element?.shadowRoot ?? element;
+        const button = renderRoot?.querySelector("button");
+        return Boolean(
+          customElements.get("litsx-button") &&
+          button?.textContent?.trim() === "Getting Started" &&
+          (selectedStyling === "css" ||
+            getComputedStyle(button).fontWeight === "700"),
+        );
+      }, styling);
+    } catch (error) {
+      const runtimeState = await page.evaluate(() => {
+        const element = document.querySelector("litsx-button");
+        return {
+          url: location.href,
+          title: document.title,
+          bodyText: document.body.textContent?.trim().slice(0, 500),
+          registered: Boolean(customElements.get("litsx-button")),
+          element: element?.outerHTML,
+          shadowText: element?.shadowRoot?.textContent?.trim().slice(0, 500),
+        };
+      });
+      throw new Error(
+        `Storybook story did not render:\n${JSON.stringify(runtimeState, null, 2)}\n${runtimeErrors.join("\n")}`,
+        { cause: error },
       );
-    });
+    }
 
     if (runtimeErrors.length > 0) {
       throw new Error(
@@ -147,46 +169,86 @@ for (const version of versions) {
     );
   }
 
-  const tempRoot = fs.mkdtempSync(
-    path.join(os.tmpdir(), `litsx-storybook-${version}-`),
-  );
-  const fixtureDir = path.join(tempRoot, "generated-design-system");
-  const cacheDir = path.join(os.tmpdir(), "litsx-storybook-npm-cache");
-
-  try {
-    createProject(fixtureDir, { template: "design-system" });
-    const packagePath = path.join(fixtureDir, "package.json");
-    const packageJson = JSON.parse(fs.readFileSync(packagePath, "utf8"));
-
-    packageJson.devDependencies["@litsx/storybook"] =
-      `file:${path.join(repoRoot, "packages", "storybook")}`;
-    for (const packageName of [
-      "storybook",
-      "@storybook/addon-a11y",
-      "@storybook/addon-docs",
-      "@storybook/web-components-vite",
-    ]) {
-      packageJson.devDependencies[packageName] = version;
-    }
-    fs.writeFileSync(
-      packagePath,
-      `${JSON.stringify(packageJson, null, 2)}\n`,
-      "utf8",
+  for (const styling of stylingOptions) {
+    const tempRoot = fs.mkdtempSync(
+      path.join(os.tmpdir(), `litsx-storybook-${version}-${styling}-`),
     );
+    const fixtureDir = path.join(tempRoot, "generated-design-system");
+    const cacheDir = path.join(os.tmpdir(), "litsx-storybook-npm-cache");
+    let passed = false;
 
-    console.log(`\n[storybook ${version}] install generated fixture`);
-    runNpm(fixtureDir, ["install", "--loglevel=error"], cacheDir);
-    console.log(`\n[storybook ${version}] install fixture Playwright Chromium`);
-    installFixtureChromium(fixtureDir, cacheDir);
-    for (const script of ["build", "typecheck", "test", "build-storybook"]) {
-      console.log(`\n[storybook ${version}] npm run ${script}`);
-      runNpm(fixtureDir, ["run", script], cacheDir);
+    try {
+      createProject(fixtureDir, { template: "design-system", styling });
+      const packagePath = path.join(fixtureDir, "package.json");
+      const packageJson = JSON.parse(fs.readFileSync(packagePath, "utf8"));
+
+      const localLitsxPackages = {
+        "@litsx/authoring": "authoring",
+        "@litsx/babel-plugin-shared-hooks": "babel-plugin-shared-hooks",
+        "@litsx/babel-plugin-transform-jsx-html-template":
+          "babel-plugin-transform-jsx-html-template",
+        "@litsx/babel-plugin-transform-litsx-scoped-elements":
+          "babel-plugin-transform-litsx-scoped-elements",
+        "@litsx/babel-preset-litsx": "babel-preset-litsx",
+        "@litsx/compiler": "compiler",
+        "@litsx/core": "core",
+        "@litsx/eslint-plugin": "eslint-plugin-litsx",
+        "@litsx/scoped-registry-shim": "scoped-registry-shim",
+        "@litsx/storybook": "storybook",
+        "@litsx/tailwind": "tailwind",
+        "@litsx/typescript-session": "typescript-session",
+        "@litsx/unocss": "unocss",
+        "@litsx/vite-plugin": "vite-plugin",
+      };
+      for (const [packageName, directory] of Object.entries(
+        localLitsxPackages,
+      )) {
+        packageJson.devDependencies[packageName] =
+          `file:${path.join(repoRoot, "packages", directory)}`;
+      }
+      for (const packageName of [
+        "storybook",
+        "@storybook/addon-a11y",
+        "@storybook/addon-docs",
+        "@storybook/web-components-vite",
+      ]) {
+        packageJson.devDependencies[packageName] = version;
+      }
+      fs.writeFileSync(
+        packagePath,
+        `${JSON.stringify(packageJson, null, 2)}\n`,
+        "utf8",
+      );
+
+      console.log(
+        `\n[storybook ${version} / ${styling}] install generated fixture`,
+      );
+      runNpm(fixtureDir, ["install", "--loglevel=error"], cacheDir);
+      console.log(
+        `\n[storybook ${version} / ${styling}] install fixture Playwright Chromium`,
+      );
+      installFixtureChromium(fixtureDir, cacheDir);
+      for (const script of ["build", "typecheck", "test", "build-storybook"]) {
+        console.log(`\n[storybook ${version} / ${styling}] npm run ${script}`);
+        runNpm(fixtureDir, ["run", script], cacheDir);
+      }
+      console.log(
+        `\n[storybook ${version} / ${styling}] validate registered story runtime`,
+      );
+      await assertBuiltStoryRuntime(fixtureDir, styling);
+      passed = true;
+    } finally {
+      if (passed) {
+        fs.rmSync(tempRoot, { recursive: true, force: true });
+      } else {
+        console.error(
+          `Storybook fixture preserved for inspection: ${tempRoot}`,
+        );
+      }
     }
-    console.log(`\n[storybook ${version}] validate registered story runtime`);
-    await assertBuiltStoryRuntime(fixtureDir);
-  } finally {
-    fs.rmSync(tempRoot, { recursive: true, force: true });
   }
 }
 
-console.log(`Storybook scaffold compatibility passed: ${versions.join(", ")}`);
+console.log(
+  `Storybook scaffold compatibility passed: ${versions.join(", ")} × ${stylingOptions.join(", ")}`,
+);

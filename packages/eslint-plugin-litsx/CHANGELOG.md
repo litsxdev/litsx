@@ -1,5 +1,47 @@
 # @litsx/eslint-plugin
 
+## 1.0.0-next.2
+
+### Minor Changes
+
+- 7cd6053: Centralize component-tag derivation and hook authoring diagnostics in
+  `@litsx/authoring`. Component identifiers must now map directly to a valid
+  custom-element name: LitSX no longer invents framework prefixes for short names
+  such as `Switch` or `App`, while namespace members retain mappings such as
+  `Controls.Switch` to `controls-switch`.
+
+  Use the shared hook analyzer from the compiler, direct Babel transforms and new
+  recommended ESLint rules. Report hooks in unstable control flow, async render
+  scopes, handlers, deferred `useAsyncState` actions and nested hook definitions
+  with stable diagnostic codes. Keep React-specific primitives, including Radix's
+  polymorphic `Slot`, inside the optional react-compat adapter.
+
+### Patch Changes
+
+- 9f92913: Remove the obsolete `no-react-memo` native JSX rule now that React wrapper
+  semantics belong to the optional react-compat compiler pipeline. Drop unused
+  syntax-plugin dependencies and the unnecessary TypeScript peer, and derive the
+  ESLint plugin metadata version from its package manifest.
+- Updated dependencies [7cd6053]
+  - @litsx/authoring@1.0.0-next.3
+
+## 1.0.0-next.1
+
+### Patch Changes
+
+- 4b34759: Move the compiler and lint integrations to Babel 8, ESLint 10, and Node 24 while retaining ESLint 9 compatibility. Refresh generated Storybook and Playwright versions, consume patched transitive dependencies, and support Chromium's native scoped-registry creation scope across shadow and projected light DOM.
+
+## 1.0.0-next.0
+
+### Major Changes
+
+- 83d757e: Stabilize the complete public LitSX package graph as the 1.0 release line.
+
+  This release establishes standard JSX and TSX authoring, SSR and hydration,
+  React compatibility, scoped custom-element registration, structural hooks,
+  Storybook and Vite integration, and Shadow DOM and Light DOM UnoCSS support as
+  the stable public contract.
+
 ## 0.3.7
 
 ### Patch Changes

@@ -7,6 +7,7 @@ import {
   createLightDomRegistry,
   disconnectLightDomRegistry,
   ensureLightDomProxy,
+  isLightDomRegistryRuntimeActive,
   upgradeScopedRegistryTree,
   withLightDomCreationContext,
 } from "../packages/scoped-registry-shim/src/index.js";
@@ -20,6 +21,10 @@ function nextTag(prefix = "litsx-light-test") {
 }
 
 describe("@litsx/scoped-registry-shim shim runtime", () => {
+  it("reports an active browser registry runtime", () => {
+    ensureLightDomProxy(nextTag("litsx-runtime-active"));
+    assert.equal(isLightDomRegistryRuntimeActive(), true);
+  });
   it("registers a stand-in once per base tag and reuses it", () => {
     const tagName = nextTag();
 
@@ -211,6 +216,51 @@ describe("@litsx/scoped-registry-shim shim runtime", () => {
     assert.equal(pending.connected, true);
 
     host.remove();
+  });
+
+  it("replays properties assigned before upgrade through definition accessors", () => {
+    const tagName = nextTag();
+    const host = document.createElement("section");
+    ensureLightDomProxy(tagName);
+    const registry = createLightDomRegistry(host, {});
+
+    host.innerHTML = `<${tagName}></${tagName}>`;
+    const pending = host.firstElementChild;
+    pending.context = "theme";
+    pending.value = "violet";
+
+    class ProviderLikeElement extends HTMLElement {
+      constructor() {
+        super();
+        this.received = [];
+      }
+
+      set context(value) {
+        this.received.push(["context", value]);
+      }
+
+      get context() {
+        return this.received.at(-1)?.[1];
+      }
+
+      set value(value) {
+        this.received.push(["value", value]);
+      }
+
+      get value() {
+        return this.received.at(-1)?.[1];
+      }
+    }
+
+    registry.define(tagName, ProviderLikeElement);
+    upgradeScopedRegistryTree(host, registry);
+
+    assert.strictEqual(Object.hasOwn(pending, "context"), false);
+    assert.strictEqual(Object.hasOwn(pending, "value"), false);
+    assert.deepStrictEqual(pending.received, [
+      ["context", "theme"],
+      ["value", "violet"],
+    ]);
   });
 
   it("reuses existing definitions when reconnecting the same host mapping", () => {
@@ -698,6 +748,182 @@ describe("@litsx/scoped-registry-shim shim runtime", () => {
     host.remove();
   });
 
+  it("delegates stand-in form lifecycles only after a form-aware definition exists", () => {
+    const formTag = nextTag();
+    const plainTag = nextTag();
+    const formHost = document.createElement("section");
+    const plainHost = document.createElement("section");
+    const calls = [];
+    const formStandIn = ensureLightDomProxy(formTag);
+    const plainStandIn = ensureLightDomProxy(plainTag);
+
+    class FormElement extends HTMLElement {
+      static formAssociated = true;
+      formAssociatedCallback(value) { calls.push(["associated", value]); }
+      formDisabledCallback(value) { calls.push(["disabled", value]); }
+      formResetCallback() { calls.push(["reset"]); }
+      formStateRestoreCallback(value, mode) { calls.push(["restore", value, mode]); }
+    }
+    class PlainElement extends HTMLElement {}
+
+    const formRegistry = connectLightDomRegistry(formHost, { [formTag]: FormElement });
+    const plainRegistry = connectLightDomRegistry(plainHost, { [plainTag]: PlainElement });
+    document.body.append(formHost, plainHost);
+    formHost.innerHTML = `<${formTag}></${formTag}>`;
+    plainHost.innerHTML = `<${plainTag}></${plainTag}>`;
+    const formElement = formHost.firstElementChild;
+    const plainElement = plainHost.firstElementChild;
+    upgradeScopedRegistryTree(formElement, formRegistry);
+    upgradeScopedRegistryTree(plainElement, plainRegistry);
+
+    formStandIn.prototype.formAssociatedCallback.call(formElement, "form");
+    formStandIn.prototype.formDisabledCallback.call(formElement, true);
+    formStandIn.prototype.formResetCallback.call(formElement);
+    formStandIn.prototype.formStateRestoreCallback.call(formElement, "state", "restore");
+    plainStandIn.prototype.formAssociatedCallback.call(plainElement, "ignored");
+    plainStandIn.prototype.formDisabledCallback.call(plainElement, false);
+    plainStandIn.prototype.formResetCallback.call(plainElement);
+    plainStandIn.prototype.formStateRestoreCallback.call(plainElement, "ignored", "restore");
+
+    assert.deepStrictEqual(calls, [
+      ["associated", "form"],
+      ["disabled", true],
+      ["reset"],
+      ["restore", "state", "restore"],
+    ]);
+    formHost.remove();
+    plainHost.remove();
+  });
+
+  it("defensively ignores invalid retarget and upgrade requests", () => {
+    const runtime = window[RUNTIME_KEY];
+    const host = document.createElement("section");
+    const registry = createLightDomRegistry(host, {});
+    assert.doesNotThrow(() => runtime.retargetPendingTree(null, registry, registry));
+    assert.doesNotThrow(() => runtime.retargetPendingTree(host, null, registry));
+    assert.doesNotThrow(() => runtime.retargetPendingTree(host, registry, null));
+    assert.doesNotThrow(() => runtime.retargetPendingTree(host, registry, registry));
+    assert.doesNotThrow(() => runtime.upgradeTree(null, registry));
+    assert.doesNotThrow(() => runtime.upgradeTree({ nodeType: Node.TEXT_NODE }, registry));
+    assert.equal(runtime.withCreationContext(null, () => "ready"), "ready");
+  });
+
+  it("upgrades detached document fragments and traverses defensive retarget trees", () => {
+    const tagName = nextTag();
+    const host = document.createElement("section");
+    const registry = createLightDomRegistry(host, {});
+    class FragmentElement extends HTMLElement {
+      constructor() {
+        super();
+        this.fragmentUpgraded = true;
+      }
+    }
+    registry.define(tagName, FragmentElement);
+
+    const fragment = document.createDocumentFragment();
+    const target = document.createElement(tagName);
+    fragment.appendChild(target);
+    upgradeScopedRegistryTree(document.createTextNode("ignored"), registry);
+    upgradeScopedRegistryTree(fragment, registry);
+    assert.strictEqual(Object.getPrototypeOf(target), FragmentElement.prototype);
+    assert.equal(target.fragmentUpgraded, true);
+
+    const runtime = window[RUNTIME_KEY];
+    const nextRegistry = runtime.createRegistry(document.createElement("aside"));
+    assert.doesNotThrow(() => runtime.retargetPendingTree(fragment, registry, nextRegistry));
+  });
+
+  it("retargets an unresolved stand-in directly to a defined registry", () => {
+    const tagName = nextTag();
+    const runtime = window[RUNTIME_KEY];
+    const host = document.createElement("section");
+    const fromRegistry = runtime.createRegistry(host);
+    host.registry = fromRegistry;
+    const standIn = ensureLightDomProxy(tagName);
+    const target = withLightDomCreationContext(
+      fromRegistry,
+      () => document.createElement(tagName),
+    );
+    host.appendChild(target);
+    standIn.prototype.connectedCallback.call(target);
+
+    const toRegistry = runtime.createRegistry(host);
+    class RetargetedElement extends HTMLElement {
+      constructor() {
+        super();
+        this.retargeted = true;
+      }
+    }
+    toRegistry.define(tagName, RetargetedElement);
+    runtime.retargetPendingTree(host, fromRegistry, toRegistry);
+
+    assert.strictEqual(Object.getPrototypeOf(target), RetargetedElement.prototype);
+    assert.equal(target.retargeted, true);
+  });
+
+  it("moves a connected unresolved stand-in to a registry awaiting its definition", () => {
+    const tagName = nextTag();
+    const runtime = window[RUNTIME_KEY];
+    const host = document.createElement("section");
+    const fromRegistry = runtime.createRegistry(host);
+    host.registry = fromRegistry;
+    const standIn = ensureLightDomProxy(tagName);
+    const target = withLightDomCreationContext(
+      fromRegistry,
+      () => document.createElement(tagName),
+    );
+    host.appendChild(target);
+    document.body.appendChild(host);
+    standIn.prototype.connectedCallback.call(target);
+
+    const toRegistry = runtime.createRegistry(host);
+    runtime.retargetPendingTree(host, fromRegistry, toRegistry);
+    class LateRetargetedElement extends HTMLElement {
+      constructor() {
+        super();
+        this.lateRetargeted = true;
+      }
+    }
+    toRegistry.define(tagName, LateRetargetedElement);
+
+    assert.strictEqual(Object.getPrototypeOf(target), LateRetargetedElement.prototype);
+    assert.equal(target.lateRetargeted, true);
+    host.remove();
+  });
+
+  it("handles null and fragment insertions through patched shadow-root methods", () => {
+    const host = document.createElement("section");
+    const shadowRoot = host.attachShadow({ mode: "open" });
+    const runtime = window[RUNTIME_KEY];
+    const registry = runtime.createRegistry(host);
+    shadowRoot.registry = registry;
+    assert.throws(() => shadowRoot.appendChild(null));
+    const fragment = document.createDocumentFragment();
+    fragment.appendChild(document.createElement("span"));
+    shadowRoot.appendChild(fragment);
+    assert.equal(shadowRoot.firstElementChild.localName, "span");
+    assert.doesNotThrow(() => shadowRoot.importNode(document.createTextNode("text"), true));
+    assert.throws(() => shadowRoot.appendChild({ nodeType: Node.DOCUMENT_FRAGMENT_NODE }));
+
+    const fakeElement = {
+      nodeType: Node.ELEMENT_NODE,
+      localName: "unknown-element",
+      isConnected: false,
+      children: [],
+    };
+    runtime.withCreationContext({ getRootNode: () => document }, () => {
+      runtime.upgradeTree(fakeElement, registry);
+    });
+    runtime.withCreationContext({}, () => {
+      runtime.upgradeTree(fakeElement, registry);
+    });
+    assert.doesNotThrow(() => runtime.retargetPendingTree(
+      { nodeType: Node.TEXT_NODE },
+      registry,
+      runtime.createRegistry(null),
+    ));
+  });
+
   it("returns null names for unknown constructors and resolves pending whenDefined only once", async () => {
     const tagName = nextTag();
     const host = document.createElement("section");
@@ -954,7 +1180,7 @@ describe("@litsx/scoped-registry-shim shim runtime", () => {
     host.remove();
   });
 
-  it("falls back to shadowRoot.host.registry when the shadow root does not expose registry fields", () => {
+  it("does not leak a light-dom registry through an unowned shadow root", () => {
     const tagName = nextTag();
     const host = document.createElement("section");
     const shadowRoot = host.attachShadow({ mode: "open" });
@@ -974,13 +1200,13 @@ describe("@litsx/scoped-registry-shim shim runtime", () => {
 
     const element = shadowRoot.querySelector(tagName);
     assert(element);
-    assert.strictEqual(Object.getPrototypeOf(element), ScopedElement.prototype);
-    assert.equal(element.connected, true);
+    assert.notStrictEqual(Object.getPrototypeOf(element), ScopedElement.prototype);
+    assert.notEqual(element.connected, true);
 
     host.remove();
   });
 
-  it("upgrades stand-ins that are created before they are connected to a scoped shadow root", () => {
+  it("does not retarget pending light-dom stand-ins across an unowned shadow boundary", () => {
     const tagName = nextTag();
     const host = document.createElement("section");
     const shadowRoot = host.attachShadow({ mode: "open" });
@@ -1001,8 +1227,8 @@ describe("@litsx/scoped-registry-shim shim runtime", () => {
     shadowRoot.appendChild(element);
     document.body.appendChild(host);
 
-    assert.strictEqual(Object.getPrototypeOf(element), ScopedElement.prototype);
-    assert.equal(element.connected, true);
+    assert.notStrictEqual(Object.getPrototypeOf(element), ScopedElement.prototype);
+    assert.notEqual(element.connected, true);
 
     host.remove();
   });
@@ -1068,6 +1294,34 @@ describe("@litsx/scoped-registry-shim shim runtime", () => {
 
     host.remove();
     globalElement.remove();
+  });
+
+  it("upgrades an existing global stand-in inside an unowned shadow root after a late definition", () => {
+    const tagName = nextTag();
+    const host = document.createElement("section");
+    const shadowRoot = host.attachShadow({ mode: "open" });
+
+    ensureLightDomProxy(tagName);
+    shadowRoot.innerHTML = `<${tagName}></${tagName}>`;
+    document.body.appendChild(host);
+
+    const element = shadowRoot.querySelector(tagName);
+    assert(element);
+    assert.strictEqual(Object.getPrototypeOf(element), HTMLElement.prototype);
+
+    class GlobalElement extends HTMLElement {
+      connectedCallback() {
+        this.connected = true;
+      }
+    }
+
+    customElements.define(tagName, GlobalElement);
+
+    assert.strictEqual(element, shadowRoot.querySelector(tagName));
+    assert.strictEqual(Object.getPrototypeOf(element), GlobalElement.prototype);
+    assert.equal(element.connected, true);
+
+    host.remove();
   });
 
   it("keeps scoped hosts isolated after a global definition claims the same tag", () => {

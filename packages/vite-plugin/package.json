@@ -1,6 +1,6 @@
 {
   "name": "@litsx/vite-plugin",
-  "version": "0.3.2",
+  "version": "1.0.0-next.4",
   "description": "Official Vite plugin for LitSX compilation",
   "author": "LitSX Team",
   "type": "module",
@@ -13,6 +13,12 @@
       "import": "./src/index.js",
       "require": "./dist/index.cjs",
       "default": "./src/index.js"
+    },
+    "./ssr": {
+      "types": "./src/ssr.d.ts",
+      "import": "./src/ssr.js",
+      "require": "./dist/ssr.cjs",
+      "default": "./src/ssr.js"
     }
   },
   "files": [
@@ -42,10 +48,16 @@
     "directory": "packages/vite-plugin"
   },
   "peerDependencies": {
+    "@litsx/ssr": "^1.0.0-next.5",
     "vite": "^7.3.2 || ^8.0.0"
   },
+  "peerDependenciesMeta": {
+    "@litsx/ssr": {
+      "optional": true
+    }
+  },
   "dependencies": {
-    "@litsx/compiler": "^0.10.0"
+    "@litsx/compiler": "^1.0.0-next.13"
   },
   "scripts": {
     "build": "../../node_modules/.bin/rollup --config rollup.config.js",

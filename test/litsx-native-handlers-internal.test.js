@@ -98,6 +98,18 @@ describe("native handlers internals", () => {
     assert.deepStrictEqual(handlerInfos.map((entry) => entry.name), []);
   });
 
+  it("creates identifier-safe methods for explicit custom event handlers", () => {
+    const functionPath = getFunctionPath(`
+      function Card() {
+        return <action-button on:primary-action={() => save()} />;
+      }
+    `);
+
+    const handlerInfos = processHandlers(functionPath, new Set());
+
+    assert.deepStrictEqual(handlerInfos.map((entry) => entry.name), ["handlePrimaryAction"]);
+  });
+
   it("collects className warnings only for native intrinsic JSX and preserves missing locations", () => {
     const source = `
       function Card() {
@@ -128,6 +140,21 @@ describe("native handlers internals", () => {
     assert.strictEqual(warnings[0].tagName, "button");
     assert.strictEqual(warnings[0].line, null);
     assert.strictEqual(warnings[0].column, null);
+  });
+
+  it("suppresses className warnings on request independently of style bindings", () => {
+    const functionPath = getFunctionPath(`
+      function Card({ enabled }) {
+        const style = enabled ? ({ color: "red" } as const) : null;
+        return <button className="cta" style={style} />;
+      }
+    `, ["jsx", "typescript"]);
+
+    const warnings = [];
+    collectNativeClassNameWarnings(functionPath, (warning) => warnings.push(warning), {
+      suppressNativeClassNameWarning: true,
+    });
+    assert.deepStrictEqual(warnings, []);
   });
 
   it("builds handler class members with async and generator flags", () => {

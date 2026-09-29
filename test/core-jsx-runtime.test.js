@@ -81,6 +81,8 @@ describe("litsx jsx runtime", () => {
     const elementsSource = fs.readFileSync(new URL("../packages/core/src/elements/index.js", import.meta.url), "utf8");
 
     assert.match(rootSource, /from "\.\/hook-metadata\.js"/);
+    assert.match(rootSource, /LITSX_EVENTS/);
+    assert.match(elementsSource, /Symbol\.for\("litsx\.events"\)/);
     assert.match(rootSource, /from "\.\/elements\/index\.js"/);
     assert.match(hookMetadataSource, /Symbol\.for\("litsx\.hook"\)/);
     assert.match(elementsSource, /Symbol\.for\("litsx\.component"\)/);
@@ -90,8 +92,8 @@ describe("litsx jsx runtime", () => {
   it("types useEmit as a hook that returns an emit function", () => {
     const declarations = fs.readFileSync(new URL("../packages/core/src/index.d.ts", import.meta.url), "utf8");
 
-    assert.match(declarations, /export declare function useEmit\(\): <T = undefined>\(/);
-    assert.doesNotMatch(declarations, /export declare function useEmit<T = undefined>\(/);
+    assert.match(declarations, /export declare function useEmit<[\s\S]*Events extends Record<string, unknown>/);
+    assert.match(declarations, /LitsxTypedEmit<Events> : LitsxEmit/);
   });
 
   it("publishes transition helpers with accurate return types", () => {

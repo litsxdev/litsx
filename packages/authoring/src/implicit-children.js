@@ -14,12 +14,20 @@ function walk(node, visitor, parent = null, context = { nestedFunctionDepth: 0 }
     return;
   }
 
-  const shouldContinue = visitor(node, parent, context);
+  let currentContext = context;
+  if (node.type === "ReturnStatement") {
+    currentContext = { ...currentContext, projectionRoot: node };
+  }
+  if (isDirectJsxChildExpression(node, parent)) {
+    currentContext = { ...currentContext, jsxChildExpression: node };
+  }
+
+  const shouldContinue = visitor(node, parent, currentContext);
   if (shouldContinue === false) {
     return;
   }
 
-  let nextContext = context;
+  let nextContext = currentContext;
   if (
     parent &&
     (node.type === "FunctionDeclaration" ||
@@ -27,8 +35,8 @@ function walk(node, visitor, parent = null, context = { nestedFunctionDepth: 0 }
       node.type === "ArrowFunctionExpression")
   ) {
     nextContext = {
-      ...context,
-      nestedFunctionDepth: context.nestedFunctionDepth + 1,
+      ...currentContext,
+      nestedFunctionDepth: currentContext.nestedFunctionDepth + 1,
     };
   }
 
@@ -215,54 +223,41 @@ export function collectImplicitChildrenProjectionIssues(ast) {
       continue;
     }
 
-    let projectionCount = 0;
+    const projectionCounts = new Map();
 
-    walk(functionNode.body, (node, parent) => {
+    walk(functionNode.body, (node, parent, context) => {
       if (
-        isDirectJsxChildExpression(node, parent) &&
-        (
-          isChildrenIdentifierReference(node.expression, node, bindings) ||
-          isChildrenMemberExpression(node.expression, bindings)
-        )
+        isChildrenIdentifierReference(node, parent, bindings) ||
+        isChildrenMemberExpression(node, bindings)
       ) {
-        projectionCount += 1;
+        if (!context.jsxChildExpression) {
+          issues.push({
+            kind: "implicit-children-unsupported",
+            severity: "error",
+            code: LITSX_IMPLICIT_CHILDREN_UNSUPPORTED_CODE,
+            message: LITSX_IMPLICIT_CHILDREN_UNSUPPORTED_MESSAGE,
+            start: node.start ?? 0,
+            length: Math.max(0, (node.end ?? node.start ?? 0) - (node.start ?? 0)),
+            node,
+          });
+          return false;
+        }
+
+        const projectionRoot = context.projectionRoot ?? functionNode;
+        const projectionCount = (projectionCounts.get(projectionRoot) ?? 0) + 1;
+        projectionCounts.set(projectionRoot, projectionCount);
         if (projectionCount > 1) {
           issues.push({
             kind: "implicit-children-duplicate",
             severity: "error",
             code: LITSX_IMPLICIT_CHILDREN_DUPLICATE_CODE,
             message: LITSX_IMPLICIT_CHILDREN_DUPLICATE_MESSAGE,
-            start: node.expression.start ?? node.start ?? 0,
-            length: Math.max(0, (node.expression.end ?? node.end ?? node.start ?? 0) - (node.expression.start ?? node.start ?? 0)),
-            node: node.expression,
+            start: node.start ?? 0,
+            length: Math.max(0, (node.end ?? node.start ?? 0) - (node.start ?? 0)),
+            node,
           });
         }
         return false;
-      }
-
-      if (isChildrenMemberExpression(node, bindings)) {
-        issues.push({
-          kind: "implicit-children-unsupported",
-          severity: "error",
-          code: LITSX_IMPLICIT_CHILDREN_UNSUPPORTED_CODE,
-          message: LITSX_IMPLICIT_CHILDREN_UNSUPPORTED_MESSAGE,
-          start: node.start ?? 0,
-          length: Math.max(0, (node.end ?? node.start ?? 0) - (node.start ?? 0)),
-          node,
-        });
-        return false;
-      }
-
-      if (isChildrenIdentifierReference(node, parent, bindings)) {
-        issues.push({
-          kind: "implicit-children-unsupported",
-          severity: "error",
-          code: LITSX_IMPLICIT_CHILDREN_UNSUPPORTED_CODE,
-          message: LITSX_IMPLICIT_CHILDREN_UNSUPPORTED_MESSAGE,
-          start: node.start ?? 0,
-          length: Math.max(0, (node.end ?? node.start ?? 0) - (node.start ?? 0)),
-          node,
-        });
       }
 
       return true;

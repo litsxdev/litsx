@@ -1,5 +1,16 @@
 const lazyElementCache = new WeakMap();
 
+/**
+ * Authored marker consumed by the LitSX compiler. The runtime identity keeps
+ * direct evaluation predictable, while generated code owns host registration.
+ */
+export function lazy(loader) {
+  if (typeof loader !== "function") {
+    throw new TypeError("lazy requires a loader function.");
+  }
+  return loader;
+}
+
 function isUsableRegistry(registry) {
   return Boolean(
     registry &&
@@ -76,6 +87,14 @@ function resolveLazyLoaderResult(registry, tag, result) {
     return null;
   }
 
+  if (
+    typeof result === "object" &&
+    result !== null &&
+    Object.prototype.hasOwnProperty.call(result, "default")
+  ) {
+    result = result.default;
+  }
+
   if (!isCustomElementConstructor(result)) {
     throw new TypeError(
       `ensureLazyElement expected "${tag}" to resolve to a custom element constructor.`
@@ -84,6 +103,15 @@ function resolveLazyLoaderResult(registry, tag, result) {
 
   return defineScopedElement(registry, tag, result);
 }
+
+export {
+  defineScopedElement,
+  getElementRegistry,
+  getElementRegistryFromRoot,
+  isCustomElementConstructor,
+  isUsableRegistry,
+  resolveLazyLoaderResult,
+};
 
 export function ensureLazyElement(host, tag, value) {
   if (typeof tag !== "string" || tag.length === 0) {

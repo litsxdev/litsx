@@ -51,7 +51,7 @@ function createScenario() {
   });
 
   fs.writeFileSync(
-    path.join(componentsDir, "litsx-button.litsx"),
+    path.join(componentsDir, "litsx-button.tsx"),
     [
       "export const LitsxButton = ({ label = '' }) => {",
       "  return <button>{label}</button>;",
@@ -63,7 +63,7 @@ function createScenario() {
   fs.writeFileSync(
     path.join(srcDir, "deep-renderers.js"),
     [
-      "import { LitsxButton } from '@/components/litsx-button.litsx';",
+      "import { LitsxButton } from '@/components/litsx-button.tsx';",
       "export const wrapHeader = () => renderHeader();",
       "function renderHeader() {",
       "  return <LitsxButton label='Bench' />;",
@@ -78,7 +78,7 @@ function createScenario() {
     "utf8",
   );
 
-  const rootFile = path.join(srcDir, "demo.litsx");
+  const rootFile = path.join(srcDir, "demo.tsx");
   const source = [
     "import { wrapHeader } from './renderers.js';",
     "export const Demo = () => {",

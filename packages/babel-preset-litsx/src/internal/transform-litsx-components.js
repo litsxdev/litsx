@@ -1,4 +1,6 @@
 import jsxSyntaxPlugin from "@babel/plugin-syntax-jsx";
+import { componentNameToTagName } from "@litsx/authoring";
+import { normalizeFilePath } from "@litsx/typescript-session";
 import {
   createTypeResolver,
   ensureTypescriptModule,
@@ -55,10 +57,19 @@ import {
   setProgramBabelTypes,
 } from "./transform-litsx-program.js";
 import { createStableIdentity } from "./stable-identity.js";
+import {
+  isDefaultExportServerComponentPath,
+  isServerComponentBindingName,
+  setServerComponentBabelTypes,
+} from "./transform-litsx-server-components.js";
 
 let t;
 
-function isCapitalizedComponentName(name) {
+export function setComponentBabelTypes(nextTypes) {
+  t = nextTypes;
+}
+
+export function isCapitalizedComponentName(name) {
   if (typeof name !== "string" || name.length === 0) {
     return false;
   }
@@ -83,6 +94,7 @@ export function createTransformFunctionToClassPlugin(defaultPluginOptions = {}) 
     setStaticIrBabelTypes(t);
     setRenderBodyBabelTypes(t);
     setProgramBabelTypes(t);
+    setServerComponentBabelTypes(t);
     const resolvedPluginOptions = {
       ...defaultPluginOptions,
       ...pluginOptions,
@@ -100,9 +112,11 @@ export function createTransformFunctionToClassPlugin(defaultPluginOptions = {}) 
         this.__litsxTransformCount = 0;
         this.__litsxNeedsCss = false;
         this.__litsxNeedsUnsafeCss = false;
-        this.__litsxNeedsStaticHoistsMixin = false;
+        this.__litsxNeedsPropertyDeclarationMerge = false;
         this.__litsxNeedsLightDomMixin = false;
+        this.__litsxNeedsHydrationSuspenseMixin = false;
         this.__litsxNeedsCallbackRef = false;
+        this.__litsxNeedsModuleIdMetadata = false;
         this.__litsxNeedsRendererCallImport = false;
         this.__litsxWarnings = [];
         this.__litsxResolvedPluginOptions = resolvedPluginOptions;
@@ -142,6 +156,10 @@ export function createTransformFunctionToClassPlugin(defaultPluginOptions = {}) 
           });
         },
         ExportDefaultDeclaration(exportPath) {
+          if (isDefaultExportServerComponentPath(exportPath)) {
+            return;
+          }
+
           handlePotentialComponentExport({
             exportPath,
             state: this,
@@ -179,11 +197,21 @@ export function createTransformFunctionToClassPlugin(defaultPluginOptions = {}) 
           if (
             initPath &&
             initPath.isArrowFunctionExpression() &&
+            initPath.node.async !== true &&
             !isInsideFunctionOrClass(varPath) &&
             t.isIdentifier(varPath.node.id) &&
             isCapitalizedComponentName(varPath.node.id.name)
           ) {
             const programPath = varPath.findParent((p) => p.isProgram());
+            if (
+              isServerComponentBindingName(programPath, varPath.node.id.name, {
+                ...resolvedPluginOptions,
+                filename: this.file?.opts?.filename || "",
+              })
+            ) {
+              return;
+            }
+
             const classNode = transformFunction(
               initPath,
               programPath,
@@ -211,6 +239,7 @@ export function createTransformFunctionToClassPlugin(defaultPluginOptions = {}) 
         },
         FunctionDeclaration(funcPath) {
           if (
+            funcPath.node.async !== true &&
             !funcPath.parentPath?.isExportNamedDeclaration?.() &&
             !funcPath.parentPath?.isExportDefaultDeclaration?.() &&
             !isInsideFunctionOrClass(funcPath) &&
@@ -218,6 +247,15 @@ export function createTransformFunctionToClassPlugin(defaultPluginOptions = {}) 
             isCapitalizedComponentName(funcPath.node.id.name)
           ) {
             const programPath = funcPath.findParent((p) => p.isProgram());
+            if (
+              isServerComponentBindingName(programPath, funcPath.node.id.name, {
+                ...resolvedPluginOptions,
+                filename: this.file?.opts?.filename || "",
+              })
+            ) {
+              return;
+            }
+
             const classNode = transformFunction(
               funcPath,
               programPath,
@@ -248,32 +286,6 @@ export function createTransformFunctionToClassPlugin(defaultPluginOptions = {}) 
 }
 
 export default createTransformFunctionToClassPlugin();
-export { isCapitalizedComponentName };
-
-function getOrCreateModuleStaticHoistSymbol(programPath, hoistName) {
-  let symbolMap = programPath.getData("__litsxStaticHoistSymbols");
-  if (!symbolMap) {
-    symbolMap = new Map();
-    programPath.setData("__litsxStaticHoistSymbols", symbolMap);
-  }
-
-  if (symbolMap.has(hoistName)) {
-    return symbolMap.get(hoistName);
-  }
-
-  const symbolId = programPath.scope.generateUidIdentifier(`litsx_static_${hoistName}`);
-  const declaration = t.variableDeclaration("const", [
-    t.variableDeclarator(
-      symbolId,
-      t.callExpression(t.identifier("Symbol"), [t.stringLiteral(`litsx.static.${hoistName}`)])
-    ),
-  ]);
-
-  const entry = { symbolId, declaration };
-  symbolMap.set(hoistName, entry);
-  return entry;
-}
-
 
 function updateTransformState(state, classNode) {
   if (!state || !classNode) {
@@ -283,23 +295,34 @@ function updateTransformState(state, classNode) {
   state.__litsxTransformCount = (state.__litsxTransformCount || 0) + 1;
   state.__litsxNeedsCss ||= Boolean(classNode._needsCss);
   state.__litsxNeedsUnsafeCss ||= Boolean(classNode._needsUnsafeCss);
-  state.__litsxNeedsStaticHoistsMixin ||= Boolean(
-    classNode._needsStaticHoistsMixin
+  state.__litsxNeedsPropertyDeclarationMerge ||= Boolean(
+    classNode._needsPropertyDeclarationMerge
   );
   state.__litsxNeedsLightDomMixin ||= Boolean(
     classNode._needsLightDomMixin
   );
+  state.__litsxNeedsHydrationSuspenseMixin ||= Boolean(
+    classNode._needsHydrationSuspenseMixin
+  );
   state.__litsxNeedsCallbackRef ||= Boolean(
     classNode._needsCallbackRef
+  );
+  state.__litsxNeedsRenderWithHooks ||= Boolean(
+    classNode._needsRenderWithHooks
+  );
+  state.__litsxNeedsModuleIdMetadata ||= Boolean(
+    classNode._needsModuleIdMetadata
   );
 }
 
 // Verifica si el nodo está dentro de otra función o clase
-function isInsideFunctionOrClass(path) {
+export function isInsideComponentFunctionOrClass(path) {
   return path.findParent(
     (p) => p.isFunctionDeclaration() || p.isFunctionExpression() || p.isArrowFunctionExpression() || p.isClassDeclaration()
   );
 }
+
+const isInsideFunctionOrClass = isInsideComponentFunctionOrClass;
 
 function getOrCreateTypeResolver(state) {
   if (state.__litsxTypeResolver !== undefined) {
@@ -314,7 +337,7 @@ function getOrCreateTypeResolver(state) {
   return state.__litsxTypeResolver;
 }
 
-function fileLikelyNeedsTypeResolver(state) {
+export function fileLikelyNeedsTypeResolver(state) {
   const filename = state?.file?.opts?.filename || "";
   if (/\.(?:[cm]?ts|tsx)$/i.test(filename)) {
     return true;
@@ -324,7 +347,7 @@ function fileLikelyNeedsTypeResolver(state) {
   return /\b(?:type|interface|enum)\b/.test(source);
 }
 
-function functionNeedsTypeResolver(functionPath, state) {
+export function functionNeedsTypeResolver(functionPath, state) {
   const params = functionPath.get("params");
   if (!Array.isArray(params) || params.length === 0) {
     return false;
@@ -337,7 +360,7 @@ function functionNeedsTypeResolver(functionPath, state) {
   return params.some((paramPath) => containsTypeResolutionSyntax(paramPath));
 }
 
-function containsTypeResolutionSyntax(path) {
+export function containsTypeResolutionSyntax(path) {
   if (!path?.node) {
     return false;
   }
@@ -387,14 +410,148 @@ function getTypeResolverForFunction(functionPath, state) {
   return getOrCreateTypeResolver(state);
 }
 
+export function isUseEmitCall(callPath) {
+  const calleePath = callPath.get("callee");
+  if (calleePath.isMemberExpression?.() && !calleePath.node.computed) {
+    const objectPath = calleePath.get("object");
+    const propertyPath = calleePath.get("property");
+    if (!objectPath.isIdentifier() || !propertyPath.isIdentifier({ name: "useEmit" })) return false;
+    const binding = callPath.scope.getBinding(objectPath.node.name);
+    const importDeclaration = binding?.path?.findParent((path) => path.isImportDeclaration?.());
+    return binding?.path?.isImportNamespaceSpecifier?.() && importDeclaration?.node?.source?.value === "@litsx/core";
+  }
+  if (!calleePath.isIdentifier()) return false;
+  const binding = callPath.scope.getBinding(calleePath.node.name);
+  if (!binding) return calleePath.node.name === "useEmit";
+  if (!binding.path.isImportSpecifier?.()) return false;
+  const imported = binding.path.node.imported;
+  const importedName = imported?.name ?? imported?.value;
+  const importDeclaration = binding.path.findParent((path) => path.isImportDeclaration?.());
+  const source = importDeclaration?.node?.source?.value;
+  return importedName === "useEmit" && source === "@litsx/core";
+}
+
+export function getEventMapNames(typeNode, programPath, seen = new Set()) {
+  if (!typeNode) return [];
+  if (t.isTSTypeLiteral(typeNode)) {
+    return typeNode.members
+      .filter((member) => t.isTSPropertySignature(member))
+      .map((member) => member.key?.name ?? member.key?.value)
+      .filter((name) => typeof name === "string");
+  }
+  if (t.isTSTypeReference(typeNode) && t.isIdentifier(typeNode.typeName)) {
+    if (seen.has(typeNode.typeName.name)) return [];
+    seen.add(typeNode.typeName.name);
+    for (const statement of programPath.node.body ?? []) {
+      const declaration = statement.type === "ExportNamedDeclaration" ? statement.declaration : statement;
+      if (t.isTSTypeAliasDeclaration(declaration) && declaration.id.name === typeNode.typeName.name) {
+        return getEventMapNames(declaration.typeAnnotation, programPath, seen);
+      }
+      if (t.isTSInterfaceDeclaration(declaration) && declaration.id.name === typeNode.typeName.name) {
+        return getEventMapNames(t.tsTypeLiteral(declaration.body.body), programPath, seen);
+      }
+    }
+  }
+  return [];
+}
+
+export function readExplicitEventMetadata(node) {
+  let value = node;
+  if (t.isTSAsExpression(value) || t.isTSTypeAssertion(value)) value = value.expression;
+  if (!t.isObjectExpression(value)) return null;
+  let events = null;
+  let complete = null;
+  for (const property of value.properties) {
+    if (!t.isObjectProperty(property)) continue;
+    const name = property.key?.name ?? property.key?.value;
+    if (name === "events" && t.isArrayExpression(property.value)) {
+      events = property.value.elements
+        .filter((entry) => t.isStringLiteral(entry))
+        .map((entry) => entry.value);
+    }
+    if (name === "complete" && t.isBooleanLiteral(property.value)) complete = property.value.value;
+  }
+  return events && typeof complete === "boolean"
+    ? { events: events.sort(), complete, explicit: true }
+    : null;
+}
+
+function collectComponentEventMetadata(functionPath, programPath, componentName) {
+  const emitBindings = new Set();
+  const events = new Set();
+  let complete = true;
+  let typed = false;
+
+  functionPath.traverse({
+    VariableDeclarator(path) {
+      if (
+        path.get("id").isIdentifier() &&
+        path.get("init").isCallExpression() &&
+        isUseEmitCall(path.get("init"))
+      ) {
+        emitBindings.add(path.node.id.name);
+        const typeNode = path.node.init.typeParameters?.params?.[0] ?? path.node.init.typeArguments?.params?.[0];
+        const typedNames = getEventMapNames(typeNode, programPath);
+        if (typedNames.length > 0) {
+          typed = true;
+          for (const name of typedNames) events.add(name);
+        }
+      }
+    },
+  });
+
+  let explicitMetadata = null;
+  for (const statement of programPath.node.body ?? []) {
+    const expression = statement?.type === "ExpressionStatement" ? statement.expression : null;
+    if (
+      t.isAssignmentExpression(expression, { operator: "=" }) &&
+      t.isMemberExpression(expression.left) &&
+      t.isIdentifier(expression.left.object, { name: componentName }) &&
+      (
+        (!expression.left.computed && t.isIdentifier(expression.left.property, { name: "events" })) ||
+        (expression.left.computed && t.isStringLiteral(expression.left.property, { value: "events" }))
+      )
+    ) {
+      explicitMetadata = readExplicitEventMetadata(expression.right);
+      break;
+    }
+  }
+
+  if (explicitMetadata) return explicitMetadata;
+  if (emitBindings.size === 0) return null;
+
+  functionPath.traverse({
+    CallExpression(path) {
+      const callee = path.get("callee");
+      if (!callee.isIdentifier() || !emitBindings.has(callee.node.name)) return;
+      const binding = path.scope.getBinding(callee.node.name);
+      if (!binding || binding.path.node.type !== "VariableDeclarator") return;
+      const firstArgument = path.node.arguments[0];
+      if (t.isStringLiteral(firstArgument)) events.add(firstArgument.value);
+      else complete = false;
+    },
+  });
+
+  return { events: [...events].sort(), complete: typed ? true : complete };
+}
+
 function transformFunction(functionPath, programPath, className, options = {}) {
   const { node } = functionPath;
   const elementCandidates = getAnnotatedElementCandidates(functionPath, programPath, options);
   const importedElementCandidates = getAnnotatedImportedElementCandidates(functionPath, programPath, options);
+  // JSX nested under <noscript> is compiled into an SSR-only fallback. Its
+  // constructors are supplied to that fallback's ephemeral registry and must
+  // never leak into the host's static elements (or create a declaration-order
+  // dependency on a sibling component).
+  const noscriptOnlyCandidates = collectNoscriptOnlyElementCandidates(functionPath);
+  noscriptOnlyCandidates.forEach((candidate) => elementCandidates.delete(candidate));
+  const hostImportedElementCandidates = importedElementCandidates.filter((candidate) => (
+    !noscriptOnlyCandidates.has(candidate.localName)
+  ));
   const staticIr = collectStaticIr({
     functionPath,
     elementCandidates,
-    importedElementCandidates,
+    importedElementCandidates: hostImportedElementCandidates,
   });
   let resolvedName = className;
   if (!resolvedName && node && node.id && t.isIdentifier(node.id)) {
@@ -405,6 +562,15 @@ function transformFunction(functionPath, programPath, className, options = {}) {
   }
 
   className = resolvedName;
+  const eventMetadata = collectComponentEventMetadata(functionPath, programPath, className);
+
+  if (eventMetadata && (eventMetadata.events.length > 0 || eventMetadata.complete === false)) {
+    if (options.state?.file) {
+      options.state.file.metadata ||= {};
+      const componentEvents = options.state.file.metadata.litsxComponentEvents ||= {};
+      componentEvents[className] = eventMetadata;
+    }
+  }
 
   const {
     properties: propertiesStatic,
@@ -412,6 +578,7 @@ function transformFunction(functionPath, programPath, className, options = {}) {
     bindings,
     defaults,
     nestedInitializers,
+    restProps,
   } = extractProperties(
     functionPath,
     programPath,
@@ -459,8 +626,7 @@ function transformFunction(functionPath, programPath, className, options = {}) {
   const {
     lightDomRequested,
     hoistMembers,
-    hoistSymbolDeclarations,
-    needsStaticHoistsMixin,
+    needsPropertyDeclarationMerge,
     needsCss,
     needsUnsafeCss,
   } = processStaticHoists({
@@ -471,7 +637,6 @@ function transformFunction(functionPath, programPath, className, options = {}) {
     staticIr,
     classMembers,
     options,
-    getOrCreateModuleStaticHoistSymbol,
   });
 
   buildClassMembers({
@@ -480,19 +645,37 @@ function transformFunction(functionPath, programPath, className, options = {}) {
     renderStatements,
     handlerInfos,
     createHandlerClassMember,
+    wrapRender: needsCallbackRef,
   });
+
+  const lightDomStyleStrategy =
+    options.lightDomStyles?.strategy ?? options.lightDomStyles ?? "scoped";
+  if (!["scoped", "global", "none"].includes(lightDomStyleStrategy)) {
+    throw functionPath.buildCodeFrameError(
+      `lightDomStyles must be "scoped", "global", or "none"; received ${JSON.stringify(lightDomStyleStrategy)}.`,
+    );
+  }
 
   const classNode = createComponentClass({
     className,
+    tagName: componentNameToTagName(resolvedName),
     classMembers,
     hoistMembers,
-    hoistSymbolDeclarations,
     hostTypeId: createStableIdentity("litsx-host-type-", functionPath, options.state || {}),
-    needsStaticHoistsMixin,
+    eventMetadata,
+    needsPropertyDeclarationMerge,
     lightDomRequested,
+    lightDomStyleStrategy,
     needsCss,
     needsUnsafeCss,
     needsCallbackRef,
+    restProps,
+    needsModuleIdMetadata: options?.ssr === true,
+    needsHydrationSuspenseMixin: options?.ssr === true,
+    moduleId:
+      options?.ssr === true
+        ? normalizeFilePath(programPath.hub.file?.opts?.filename || "")
+        : null,
   });
 
   attachStaticIr(classNode, {
@@ -503,7 +686,40 @@ function transformFunction(functionPath, programPath, className, options = {}) {
   return classNode;
 }
 
-function ensureClassIdentifier(classNode, fallbackName) {
+export function collectNoscriptOnlyElementCandidates(functionPath) {
+  const source = functionPath.hub?.file?.code;
+  const { start, end } = functionPath.node || {};
+  if (
+    typeof source === "string" &&
+    Number.isInteger(start) &&
+    Number.isInteger(end) &&
+    !/<\s*noscript\b/.test(source.slice(start, end))
+  ) {
+    return new Set();
+  }
+
+  const nested = new Set();
+  const regular = new Set();
+
+  functionPath.traverse({
+    JSXOpeningElement(path) {
+      const name = path.node.name;
+      if (!t.isJSXIdentifier(name) || !isCapitalizedComponentName(name.name)) {
+        return;
+      }
+
+      const isNestedInNoscript = Boolean(path.findParent((parent) => (
+        parent.isJSXElement?.() &&
+        t.isJSXIdentifier(parent.node.openingElement.name, { name: "noscript" })
+      )));
+      (isNestedInNoscript ? nested : regular).add(name.name);
+    },
+  });
+
+  return new Set([...nested].filter((candidate) => !regular.has(candidate)));
+}
+
+export function ensureClassIdentifier(classNode, fallbackName) {
   if (classNode.id && t.isIdentifier(classNode.id)) {
     return classNode.id;
   }

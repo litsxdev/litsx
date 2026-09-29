@@ -1,5 +1,5 @@
 import assert from "assert";
-import babelCore from "@babel/core";
+import * as babelCore from "@babel/core";
 import parser from "./helpers/litsx-parser.js";
 import { beforeAll, describe, it } from "vitest";
 import { interopDefault } from "./helpers/interop-default.js";
@@ -52,7 +52,7 @@ describe("@litsx/babel-preset-react-compat suspense boundaries", () => {
     const source = [
       "import { Suspense } from 'react';",
       "",
-      "export const Screen = () => {",
+      "export const TestScreen = () => {",
       "  return (",
       "    <Suspense fallback={<span>loading</span>}>",
       "      <div>ready</div>",
@@ -63,7 +63,7 @@ describe("@litsx/babel-preset-react-compat suspense boundaries", () => {
 
     const code = run(source);
 
-    assert.match(code, /class Screen extends ShadowDomMixin\(LitElement\)/);
+    assert.match(code, /class TestScreen extends LightDomMixin\(LitElement\)/);
     assert.match(code, /import \{[^}]*SuspenseBoundary[^}]*\} from ["']@litsx\/core["']/);
     assert.match(code, /static elements = \{[\s\S]*"suspense-boundary": SuspenseBoundary[\s\S]*\}/);
     assert.match(code, /<suspense-boundary/);
@@ -76,7 +76,7 @@ describe("@litsx/babel-preset-react-compat suspense boundaries", () => {
     const source = [
       "import React, { Suspense, SuspenseList } from 'react';",
       "",
-      "export const Screen = () => {",
+      "export const TestScreen = () => {",
       "  return (",
       "    <SuspenseList revealOrder='forwards'>",
       "      <Suspense fallback={<span>One</span>}>",
@@ -97,7 +97,7 @@ describe("@litsx/babel-preset-react-compat suspense boundaries", () => {
       code,
       /static elements = \{[\s\S]*"suspense-boundary": SuspenseBoundary[\s\S]*"suspense-list": SuspenseList[\s\S]*\}|static elements = \{[\s\S]*"suspense-list": SuspenseList[\s\S]*"suspense-boundary": SuspenseBoundary[\s\S]*\}/
     );
-    assert.match(code, /<suspense-list revealOrder=['"]forwards['"]>/);
+    assert.match(code, /<suspense-list \.revealOrder=['"]forwards['"]>/);
     const boundaryMatches = code.match(/<suspense-boundary/g) || [];
     assert.strictEqual(boundaryMatches.length, 2);
     assert.doesNotMatch(code, /suspenseBoundaryList\(/);
@@ -109,7 +109,7 @@ describe("@litsx/babel-preset-react-compat suspense boundaries", () => {
       "",
       "const FancyButton = lazy(() => import('./FancyButton.js'));",
       "",
-      "export const Screen = () => {",
+      "export const TestScreen = () => {",
       "  return (",
       "    <Suspense fallback={<span>loading</span>}>",
       "      <FancyButton />",
@@ -137,7 +137,7 @@ describe("@litsx/babel-preset-react-compat suspense boundaries", () => {
       "const AlphaPanel = lazy(() => import('./AlphaPanel.js'));",
       "const BetaPanel = lazy(() => import('./BetaPanel.js'));",
       "",
-      "export const Screen = () => {",
+      "export const TestScreen = () => {",
       "  return (",
       "    <SuspenseList revealOrder='forwards'>",
       "      <Suspense fallback={<span>One</span>}>",
@@ -167,7 +167,7 @@ describe("@litsx/babel-preset-react-compat suspense boundaries", () => {
     const source = [
       "import * as React from 'react';",
       "",
-      "export const Screen = () => {",
+      "export const TestScreen = () => {",
       "  return (",
       "    <React.SuspenseList revealOrder='forwards'>",
       "      <React.Suspense fallback={<span>loading</span>}>",
@@ -184,17 +184,52 @@ describe("@litsx/babel-preset-react-compat suspense boundaries", () => {
       code,
       /import \{[^}]*SuspenseList[^}]*SuspenseBoundary[^}]*\} from ["']@litsx\/core["']|import \{[^}]*SuspenseBoundary[^}]*SuspenseList[^}]*\} from ["']@litsx\/core["']/
     );
-    assert.match(code, /<suspense-list revealOrder=['"]forwards['"]>/);
+    assert.match(code, /<suspense-list \.revealOrder=['"]forwards['"]>/);
     assert.match(code, /<suspense-boundary/);
     assert.doesNotMatch(code, /<React\.Suspense/);
     assert.doesNotMatch(code, /<React\.SuspenseList/);
+  });
+
+  it("keeps native @litsx/core SuspenseList props as property bindings in react-compat", () => {
+    const cases = [
+      {
+        importLine: 'import { SuspenseList } from "@litsx/core";',
+        tag: "SuspenseList",
+      },
+      {
+        importLine: 'import { SuspenseList as RevealList } from "@litsx/core";',
+        tag: "RevealList",
+      },
+      {
+        importLine: 'import * as LitSX from "@litsx/core";',
+        tag: "LitSX.SuspenseList",
+      },
+    ];
+
+    for (const { importLine, tag } of cases) {
+      const source = [
+        importLine,
+        'const order = "backwards";',
+        `export const TestScreen = () => <>`,
+        `  <${tag} revealOrder="forwards" tail="hidden" />`,
+        `  <${tag} revealOrder={"together"} tail="collapsed" />`,
+        `  <${tag} revealOrder={order} />`,
+        `</>;`,
+      ].join("\n");
+
+      const code = run(source);
+      assert.match(code, /\.revealOrder="forwards" tail="hidden"/);
+      assert.match(code, /\.revealOrder=\{"together"\} tail="collapsed"/);
+      assert.match(code, /\.revealOrder=\{order\}/);
+      assert.doesNotMatch(code, /(?:^|\s)revealOrder=/);
+    }
   });
 
   it("emits null renderers when suspense has no fallback or content", () => {
     const source = [
       "import { Suspense } from 'react';",
       "",
-      "export const Screen = () => {",
+      "export const TestScreen = () => {",
       "  return <Suspense />;",
       "};",
     ].join("\n");
@@ -210,7 +245,7 @@ describe("@litsx/babel-preset-react-compat suspense boundaries", () => {
     const source = [
       "import { Suspense } from 'react';",
       "",
-      "export const Screen = () => {",
+      "export const TestScreen = () => {",
       "  return (",
       "    <Suspense fallback={<span>loading</span>}>",
       "      <>",
@@ -231,7 +266,7 @@ describe("@litsx/babel-preset-react-compat suspense boundaries", () => {
     const source = [
       "import { Suspense as Wait } from 'react';",
       "",
-      "export const Screen = ({ readyView }) => {",
+      "export const TestScreen = ({ readyView }) => {",
       "  return <Wait fallback>{readyView}</Wait>;",
       "};",
     ].join("\n");
@@ -247,7 +282,7 @@ describe("@litsx/babel-preset-react-compat suspense boundaries", () => {
     const source = [
       "import { Suspense } from 'react';",
       "",
-      "export const Screen = () => {",
+      "export const TestScreen = () => {",
       "  return <Suspense fallback=\"loading\">ready</Suspense>;",
       "};",
     ].join("\n");
@@ -262,7 +297,7 @@ describe("@litsx/babel-preset-react-compat suspense boundaries", () => {
     const source = [
       "import { Suspense } from 'react';",
       "",
-      "export const Screen = () => {",
+      "export const TestScreen = () => {",
       "  return <Suspense fallback={true}><div>ready</div></Suspense>;",
       "};",
     ].join("\n");
@@ -277,18 +312,19 @@ describe("@litsx/babel-preset-react-compat suspense boundaries", () => {
     assert.match(code, /\.content=\{\(\)\s*=>\s*<div>ready<\/div>\}/);
   });
 
-  it("leaves non-React namespace suspense lookalikes untouched", () => {
+  it("registers non-React namespace suspense components without treating them as boundaries", () => {
     const source = [
       "import * as UI from 'ui-kit';",
       "",
-      "export const Screen = () => {",
+      "export const TestScreen = () => {",
       "  return <UI.Suspense fallback=\"loading\"><div>ready</div></UI.Suspense>;",
       "};",
     ].join("\n");
 
     const code = run(source);
 
-    assert.match(code, /<UI\.Suspense fallback="loading"><div>ready<\/div><\/UI\.Suspense>/);
+    assert.match(code, /<ui-suspense fallback="loading"><div>ready<\/div><\/ui-suspense>/);
+    assert.match(code, /static elements = \{[\s\S]*"ui-suspense": UI\.Suspense/);
     assert.doesNotMatch(code, /<suspense-boundary/);
   });
 
@@ -296,7 +332,7 @@ describe("@litsx/babel-preset-react-compat suspense boundaries", () => {
     const source = [
       "import { Suspense as Wait, SuspenseList as Queue } from 'react';",
       "",
-      "export const Screen = () => {",
+      "export const TestScreen = () => {",
       "  return (",
       "    <Queue key=\"outer\" revealOrder=\"forwards\">",
       "      <Wait fallback={<span>One</span>}>",
@@ -309,7 +345,7 @@ describe("@litsx/babel-preset-react-compat suspense boundaries", () => {
 
     const code = run(source);
 
-    assert.match(code, /<suspense-list revealOrder=\"forwards\">/);
+    assert.match(code, /<suspense-list \.revealOrder=\"forwards\">/);
     assert.doesNotMatch(code, /key=\"outer\"/);
     assert.match(code, /<suspense-boundary/);
   });
@@ -318,7 +354,7 @@ describe("@litsx/babel-preset-react-compat suspense boundaries", () => {
     const source = [
       "import { Suspense } from 'react';",
       "",
-      "export const Screen = () => {",
+      "export const TestScreen = () => {",
       "  return <Suspense fallback={404}>{/* empty */}</Suspense>;",
       "};",
     ].join("\n");
@@ -337,7 +373,7 @@ describe("@litsx/babel-preset-react-compat suspense boundaries", () => {
       "const AlphaPanel = () => null;",
       "const BetaPanel = () => null;",
       "",
-      "export const Screen = () => {",
+      "export const TestScreen = () => {",
       "  ensureLazyElement(this, 'alpha-panel', AlphaPanel);",
       "  ensureLazyElement(this, 'beta-panel', BetaPanel);",
       "  return (",
@@ -368,7 +404,7 @@ describe("@litsx/babel-preset-react-compat suspense boundaries", () => {
     const source = [
       "import { Suspense, SuspenseList } from 'react';",
       "",
-      "export const Screen = () => {",
+      "export const TestScreen = () => {",
       "  return (",
       "    <SuspenseList revealOrder='forwards'>",
       "      <Suspense fallback={<span>One</span>}>",
@@ -389,7 +425,7 @@ describe("@litsx/babel-preset-react-compat suspense boundaries", () => {
     const source = [
       "import { Suspense } from 'react';",
       "",
-      "export const Screen = () => {",
+      "export const TestScreen = () => {",
       "  return (",
       "    <Suspense fallback={<span>loading</span>}>",
       "      <div>ready</div>",
@@ -409,7 +445,7 @@ describe("@litsx/babel-preset-react-compat suspense boundaries", () => {
     const source = [
       "import { Suspense } from 'react';",
       "",
-      "export const Screen = () => {",
+      "export const TestScreen = () => {",
       "  return (",
       "    <Suspense fallback={<span>loading</span>}>",
       "      <div>ready</div>",
@@ -421,7 +457,7 @@ describe("@litsx/babel-preset-react-compat suspense boundaries", () => {
     const code = runFinal(source);
 
     assert.match(code, /import \{[^}]*SuspenseBoundary[^}]*ErrorBoundary[^}]*\} from "@litsx\/core"|import \{[^}]*ErrorBoundary[^}]*SuspenseBoundary[^}]*\} from "@litsx\/core"/);
-    assert.match(code, /import \{[^}]*ShadowDomMixin[^}]*\} from "@litsx\/core\/elements";/);
+    assert.match(code, /import \{[^}]*LightDomMixin[^}]*\} from "@litsx\/core\/elements";/);
     assert.match(code, /return html`<suspense-boundary \.fallback=\$\{\(\) => html`<span>loading<\/span>`\} \.content=\$\{\(\) => html`<div>ready<\/div>`\}><\/suspense-boundary>`;/);
     assert.doesNotMatch(code, /<Suspense/);
   });
@@ -433,7 +469,7 @@ describe("@litsx/babel-preset-react-compat suspense boundaries", () => {
       "",
       "const AlphaPanel = lazy(() => import('./AlphaPanel.js'));",
       "",
-      "export const Screen = () => {",
+      "export const TestScreen = () => {",
       "  return (",
       "    <ErrorBoundary fallback={<p>outer-fallback</p>}>",
       "      <section>",
@@ -458,10 +494,10 @@ describe("@litsx/babel-preset-react-compat suspense boundaries", () => {
       /import \{[^}]*ensureLazyElement[^}]*ErrorBoundary[^}]*SuspenseBoundary[^}]*SuspenseList[^}]*\} from "@litsx\/core"|import \{[^}]*ensureLazyElement[^}]*ErrorBoundary[^}]*SuspenseList[^}]*SuspenseBoundary[^}]*\} from "@litsx\/core"|import \{[^}]*ErrorBoundary[^}]*SuspenseBoundary[^}]*SuspenseList[^}]*ensureLazyElement[^}]*\} from "@litsx\/core"/
     );
     assert.match(code, /import \{ LitElement, html \} from "lit";/);
-    assert.match(code, /import \{[^}]*ShadowDomMixin[^}]*\} from "@litsx\/core\/elements";/);
+    assert.match(code, /import \{[^}]*LightDomMixin[^}]*\} from "@litsx\/core\/elements";/);
     assert.match(code, /ensureLazyElement\(this, "alpha-panel", AlphaPanel\);/);
     assert.match(code, /<error-boundary/);
-    assert.match(code, /<suspense-list revealOrder="forwards">/);
+    assert.match(code, /<suspense-list \.revealOrder=\$\{"forwards"\}>/);
 
     const boundaryMatches = code.match(/<suspense-boundary/g) || [];
     assert.strictEqual(boundaryMatches.length, 2);

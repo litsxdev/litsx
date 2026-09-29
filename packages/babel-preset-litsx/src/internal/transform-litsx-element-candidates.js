@@ -1,8 +1,10 @@
-import helperPluginUtils from "@babel/helper-plugin-utils";
+import { declare } from "@babel/helper-plugin-utils";
 import * as babelParser from "@babel/parser";
 import babelTraverse from "@babel/traverse";
 import jsxSyntaxPlugin from "@babel/plugin-syntax-jsx";
-import { parseWithLitsxVirtualization } from "@litsx/authoring/parser";
+import {
+  componentNameToTagName,
+} from "@litsx/authoring";
 import fs from "node:fs";
 import path from "node:path";
 import { normalizeFilePath } from "@litsx/typescript-session";
@@ -12,14 +14,17 @@ import {
   setStaticIrBabelTypes,
 } from "./transform-litsx-static-ir.js";
 
-const { declare } = helperPluginUtils;
 const traverse = babelTraverse.default || babelTraverse;
 const IMPORT_RESOLUTION_EXTENSIONS = [
-  ".litsx",
-  ".litsx.jsx",
-  ".jsx",
-  ".js",
   ".tsx",
+  ".mtsx",
+  ".ctsx",
+  ".jsx",
+  ".mjs",
+  ".cjs",
+  ".js",
+  ".mts",
+  ".cts",
   ".ts",
 ];
 const DEFAULT_MODULE_RESOLUTION_OPTIONS = {
@@ -34,12 +39,28 @@ const DEFAULT_MODULE_RESOLUTION_OPTIONS = {
 };
 let t;
 
+const NOSCRIPT_COMPONENT_ATTRIBUTE = "data-litsx-noscript-component";
+function isLitElementModule(sourceSpecifier) {
+  return (
+    sourceSpecifier === "lit" ||
+    sourceSpecifier === "lit-element" ||
+    sourceSpecifier === "lit-element/lit-element.js"
+  );
+}
+
+export function isInsideNoscriptFallback(path) {
+  return Boolean(path.findParent((parent) =>
+    parent.isJSXElement?.() &&
+    t.isJSXIdentifier(parent.node.openingElement.name, { name: "noscript" }),
+  ));
+}
+
 export function setElementCandidatesBabelTypes(nextTypes) {
   t = nextTypes;
   setStaticIrBabelTypes(nextTypes);
 }
 
-function isInsideFunctionOrClass(path) {
+export function isInsideFunctionOrClass(path) {
   return path.findParent(
     (p) =>
       p.isFunctionDeclaration() ||
@@ -49,7 +70,7 @@ function isInsideFunctionOrClass(path) {
   );
 }
 
-function isRelativeSpecifier(value) {
+export function isRelativeSpecifier(value) {
   return typeof value === "string" && (
     value.startsWith("./") ||
     value.startsWith("../") ||
@@ -57,28 +78,28 @@ function isRelativeSpecifier(value) {
   );
 }
 
-function createEmptyCandidateResult() {
+export function createEmptyCandidateResult() {
   return {
     localCandidates: new Set(),
     importedCandidates: new Map(),
   };
 }
 
-function annotateElementCandidates(node, result) {
+export function annotateElementCandidates(node, result) {
   if (!node) return;
   const staticIr = ensureStaticIr(node);
   staticIr.elements.localCandidates = [...result.localCandidates];
   staticIr.elements.importedCandidates = [...result.importedCandidates.values()];
 }
 
-function cloneCandidateResult(result) {
+export function cloneCandidateResult(result) {
   return {
     localCandidates: new Set(result?.localCandidates || []),
     importedCandidates: new Map(result?.importedCandidates || []),
   };
 }
 
-function mergeCandidateResults(target, source) {
+export function mergeCandidateResults(target, source) {
   source.localCandidates.forEach((candidate) => target.localCandidates.add(candidate));
   source.importedCandidates.forEach((candidate, key) => {
     if (!target.importedCandidates.has(key)) {
@@ -87,11 +108,11 @@ function mergeCandidateResults(target, source) {
   });
 }
 
-function toImportRecordKey(record) {
+export function toImportRecordKey(record) {
   return `${record.sourceFile}:${record.importedName}:${record.tagName}`;
 }
 
-function toRelativeModuleSpecifier(fromFilename, targetFilename) {
+export function toRelativeModuleSpecifier(fromFilename, targetFilename) {
   const fromDir = path.dirname(fromFilename);
   let relativePath = normalizeFilePath(path.relative(fromDir, targetFilename));
 
@@ -102,11 +123,11 @@ function toRelativeModuleSpecifier(fromFilename, targetFilename) {
   return relativePath;
 }
 
-function hasSupportedExtension(filePath) {
+export function hasSupportedExtension(filePath) {
   return IMPORT_RESOLUTION_EXTENSIONS.some((extension) => filePath.endsWith(extension));
 }
 
-function resolveImportSource(fromFilename, sourceValue, context) {
+export function resolveImportSource(fromFilename, sourceValue, context) {
   const cacheKey = `${normalizeFilePath(fromFilename)}::${sourceValue}`;
   if (context.resolvedImportCache.has(cacheKey)) {
     return context.resolvedImportCache.get(cacheKey);
@@ -240,7 +261,7 @@ function resolveImportSource(fromFilename, sourceValue, context) {
   return resolved;
 }
 
-function createCompilerContextResolver(options = {}) {
+export function createCompilerContextResolver(options = {}) {
   const providedTypescriptSession =
     options?.typescriptSession?.projectSession || options?.typescriptSession || null;
 
@@ -294,7 +315,7 @@ function createCompilerContextResolver(options = {}) {
   };
 }
 
-function getOrCreateAvailableNames(programPath) {
+export function getOrCreateAvailableNames(programPath) {
   const cached = programPath.getData("__litsxAvailableNames");
   if (cached) {
     return cached;
@@ -365,7 +386,7 @@ function getOrCreateAvailableNames(programPath) {
   return availableNames;
 }
 
-function getOrCreateHelperPaths(programPath) {
+export function getOrCreateHelperPaths(programPath) {
   const cached = programPath.getData("__litsxHelperPaths");
   if (cached) {
     return cached;
@@ -429,18 +450,27 @@ function getOrCreateHelperPaths(programPath) {
   return helperPaths;
 }
 
-function buildModuleAnalysis(programPath, filename, context) {
+export function buildModuleAnalysis(programPath, filename, context) {
   const availableNames = getOrCreateAvailableNames(programPath);
   const helperPaths = getOrCreateHelperPaths(programPath);
   const importBindings = new Map();
   const exportBindings = new Map();
+  const exportAllRecords = [];
   const componentMarkerLocals = new Set();
   const compiledComponentLocals = new Set();
+  const lightDomComponentLocals = new Set();
+  const classBindings = new Map();
 
-  const markCompiledClassIfNeeded = (classPath) => {
-    if (!classPath?.isClassDeclaration?.() || !classPath.node.id?.name) {
+  const recordClass = (classPath, bindingName = classPath?.node?.id?.name) => {
+    if (
+      !classPath ||
+      (!classPath.isClassDeclaration?.() && !classPath.isClassExpression?.()) ||
+      !bindingName
+    ) {
       return;
     }
+
+    classBindings.set(bindingName, classPath);
 
     const hasCompiledMarker = classPath.get("body.body").some((memberPath) => {
       if (!memberPath.isClassProperty()) {
@@ -456,7 +486,26 @@ function buildModuleAnalysis(programPath, filename, context) {
     });
 
     if (hasCompiledMarker) {
-      compiledComponentLocals.add(classPath.node.id.name);
+      compiledComponentLocals.add(bindingName);
+    }
+
+    const hasLightDomMarker = classPath.get("body.body").some((memberPath) => (
+      memberPath.isClassProperty() &&
+      memberPath.node.static === true &&
+      (
+        (
+          memberPath.node.computed === true &&
+          isSymbolForMarker(memberPath.node.key, "litsx.lightDom")
+        ) ||
+        (
+          memberPath.node.computed !== true &&
+          t.isIdentifier(memberPath.node.key, { name: "lightDom" })
+        )
+      ) &&
+      t.isBooleanLiteral(memberPath.node.value, { value: true })
+    ));
+    if (hasLightDomMarker) {
+      lightDomComponentLocals.add(bindingName);
     }
   };
 
@@ -498,13 +547,23 @@ function buildModuleAnalysis(programPath, filename, context) {
     }
 
     if (nodePath.isClassDeclaration()) {
-      markCompiledClassIfNeeded(nodePath);
+      recordClass(nodePath);
+    }
+
+    if (nodePath.isVariableDeclaration()) {
+      nodePath.get("declarations").forEach((declaratorPath) => {
+        const localName = declaratorPath.node.id?.name;
+        const initPath = declaratorPath.get("init");
+        if (localName && initPath?.isClassExpression?.()) {
+          recordClass(initPath, localName);
+        }
+      });
     }
 
     if (nodePath.isExportNamedDeclaration()) {
       const declarationPath = nodePath.get("declaration");
       if (declarationPath?.isClassDeclaration?.()) {
-        markCompiledClassIfNeeded(declarationPath);
+        recordClass(declarationPath);
       }
       if (declarationPath?.node) {
         if (declarationPath.isFunctionDeclaration() || declarationPath.isClassDeclaration()) {
@@ -517,6 +576,10 @@ function buildModuleAnalysis(programPath, filename, context) {
             const localName = declaratorPath.node.id?.name;
             if (localName) {
               exportBindings.set(localName, { localName });
+              const initPath = declaratorPath.get("init");
+              if (initPath?.isClassExpression?.()) {
+                recordClass(initPath, localName);
+              }
             }
           });
         }
@@ -535,6 +598,7 @@ function buildModuleAnalysis(programPath, filename, context) {
             specifierPath.node.local?.name ?? specifierPath.node.local?.value ?? exportedName;
           exportBindings.set(exportedName, {
             reexportSource: resolveImportSource(filename, sourceValue, context),
+            reexportSourceValue: sourceValue,
             importedName: localName === "default" ? "default" : localName,
           });
           return;
@@ -547,6 +611,15 @@ function buildModuleAnalysis(programPath, filename, context) {
         }
       });
 
+      return;
+    }
+
+    if (nodePath.isExportAllDeclaration()) {
+      const sourceValue = nodePath.node.source?.value;
+      if (sourceValue) {
+        const resolvedSource = resolveImportSource(filename, sourceValue, context);
+        exportAllRecords.push({ sourceValue, resolvedSource });
+      }
       return;
     }
 
@@ -564,6 +637,9 @@ function buildModuleAnalysis(programPath, filename, context) {
       declarationPath.isFunctionDeclaration() ||
       declarationPath.isClassDeclaration()
     ) {
+      if (declarationPath.isClassDeclaration()) {
+        recordClass(declarationPath);
+      }
       const localName = declarationPath.node.id?.name;
       if (localName) {
         exportBindings.set("default", { localName });
@@ -575,7 +651,8 @@ function buildModuleAnalysis(programPath, filename, context) {
 
     if (
       declarationPath.isArrowFunctionExpression() ||
-      declarationPath.isFunctionExpression()
+      declarationPath.isFunctionExpression() ||
+      declarationPath.isClassExpression()
     ) {
       exportBindings.set("default", { path: declarationPath });
     }
@@ -588,12 +665,15 @@ function buildModuleAnalysis(programPath, filename, context) {
     helperPaths,
     importBindings,
     exportBindings,
+    exportAllRecords,
     compatPascalNames: new Set(),
     compiledComponentLocals,
+    lightDomComponentLocals,
+    classBindings,
   };
 }
 
-function isCompiledComponentExport(moduleAnalysis, importedName, context, seen = new Set()) {
+export function isCompiledComponentExport(moduleAnalysis, importedName, context, seen = new Set()) {
   if (!moduleAnalysis || !importedName) {
     return false;
   }
@@ -607,7 +687,15 @@ function isCompiledComponentExport(moduleAnalysis, importedName, context, seen =
 
   const exportInfo = moduleAnalysis.exportBindings.get(importedName);
   if (!exportInfo) {
-    return false;
+    return (moduleAnalysis.exportAllRecords || []).some(({ resolvedSource }) =>
+      resolvedSource &&
+      isCompiledComponentExport(
+        getOrCreateModuleAnalysis(resolvedSource, context),
+        importedName,
+        context,
+        nextSeen,
+      )
+    );
   }
 
   if (exportInfo.localName) {
@@ -642,7 +730,243 @@ function isCompiledComponentExport(moduleAnalysis, importedName, context, seen =
   return false;
 }
 
-function isExternalCompilationImport(requirement) {
+function isOfficialLitElementImport(importInfo, importedName = importInfo?.importedName) {
+  return (
+    importedName === "LitElement" &&
+    isLitElementModule(importInfo?.sourceValue)
+  );
+}
+
+function getMemberPropertyName(node) {
+  if (!t.isMemberExpression(node)) {
+    return null;
+  }
+  if (!node.computed && t.isIdentifier(node.property)) {
+    return node.property.name;
+  }
+  if (node.computed && t.isStringLiteral(node.property)) {
+    return node.property.value;
+  }
+  return null;
+}
+
+function isLitElementSuperClass(superClass, moduleAnalysis, context, seen) {
+  const expression = unwrapNamespaceAliasExpression(superClass);
+  if (!expression) {
+    return false;
+  }
+
+  if (t.isCallExpression(expression)) {
+    return Boolean(
+      expression.arguments[0] &&
+      isLitElementSuperClass(expression.arguments[0], moduleAnalysis, context, seen)
+    );
+  }
+
+  if (t.isMemberExpression(expression)) {
+    const object = unwrapNamespaceAliasExpression(expression.object);
+    const propertyName = getMemberPropertyName(expression);
+    if (!t.isIdentifier(object) || !propertyName) {
+      return false;
+    }
+    const importInfo = moduleAnalysis.importBindings.get(object.name);
+    if (importInfo?.importedName !== "*") {
+      return false;
+    }
+    if (propertyName === "LitElement" && isLitElementModule(importInfo.sourceValue)) {
+      return true;
+    }
+    return importInfo.resolvedSource
+      ? isLitComponentExport(
+          getOrCreateModuleAnalysis(importInfo.resolvedSource, context),
+          propertyName,
+          context,
+          seen,
+        )
+      : false;
+  }
+
+  if (!t.isIdentifier(expression)) {
+    return false;
+  }
+
+  const importInfo = moduleAnalysis.importBindings.get(expression.name);
+  if (importInfo) {
+    if (isOfficialLitElementImport(importInfo)) {
+      return true;
+    }
+    if (importInfo.resolvedSource && importInfo.importedName !== "*") {
+      return isLitComponentExport(
+        getOrCreateModuleAnalysis(importInfo.resolvedSource, context),
+        importInfo.importedName,
+        context,
+        seen,
+      );
+    }
+    return false;
+  }
+
+  const localClassPath = moduleAnalysis.classBindings?.get(expression.name);
+  return localClassPath
+    ? isLitComponentClass(localClassPath, moduleAnalysis, context, seen)
+    : false;
+}
+
+function isLitComponentClass(classPath, moduleAnalysis, context, seen) {
+  const localName = classPath?.node?.id?.name ?? "default";
+  const visitKey = `lit-class:${moduleAnalysis.filename}:${localName}`;
+  if (seen.has(visitKey)) {
+    return false;
+  }
+  const nextSeen = new Set(seen);
+  nextSeen.add(visitKey);
+  return isLitElementSuperClass(
+    classPath?.node?.superClass,
+    moduleAnalysis,
+    context,
+    nextSeen,
+  );
+}
+
+export function isLitComponentExport(moduleAnalysis, importedName, context, seen = new Set()) {
+  if (!moduleAnalysis || !importedName) {
+    return false;
+  }
+
+  const visitKey = `lit-export:${moduleAnalysis.filename}:${importedName}`;
+  if (seen.has(visitKey)) {
+    return false;
+  }
+  const nextSeen = new Set(seen);
+  nextSeen.add(visitKey);
+
+  const exportInfo = moduleAnalysis.exportBindings.get(importedName);
+  if (!exportInfo) {
+    return (moduleAnalysis.exportAllRecords || []).some((record) => {
+      if (importedName === "LitElement" && isLitElementModule(record.sourceValue)) {
+        return true;
+      }
+      return Boolean(
+        record.resolvedSource &&
+        isLitComponentExport(
+          getOrCreateModuleAnalysis(record.resolvedSource, context),
+          importedName,
+          context,
+          nextSeen,
+        )
+      );
+    });
+  }
+
+  if (
+    exportInfo.path?.isClassDeclaration?.() ||
+    exportInfo.path?.isClassExpression?.()
+  ) {
+    return isLitComponentClass(exportInfo.path, moduleAnalysis, context, nextSeen);
+  }
+
+  if (exportInfo.localName) {
+    const localClassPath = moduleAnalysis.classBindings?.get(exportInfo.localName);
+    if (localClassPath) {
+      return isLitComponentClass(localClassPath, moduleAnalysis, context, nextSeen);
+    }
+
+    const importInfo = moduleAnalysis.importBindings.get(exportInfo.localName);
+    if (isOfficialLitElementImport(importInfo)) {
+      return true;
+    }
+    if (importInfo?.resolvedSource && importInfo.importedName !== "*") {
+      return isLitComponentExport(
+        getOrCreateModuleAnalysis(importInfo.resolvedSource, context),
+        importInfo.importedName,
+        context,
+        nextSeen,
+      );
+    }
+    return false;
+  }
+
+  if (
+    exportInfo.importedName === "LitElement" &&
+    isLitElementModule(exportInfo.reexportSourceValue)
+  ) {
+    return true;
+  }
+
+  if (exportInfo.reexportSource && exportInfo.importedName) {
+    return isLitComponentExport(
+      getOrCreateModuleAnalysis(exportInfo.reexportSource, context),
+      exportInfo.importedName,
+      context,
+      nextSeen,
+    );
+  }
+
+  return false;
+}
+
+export function isProvableComponentExport(moduleAnalysis, importedName, context) {
+  return (
+    isCompiledComponentExport(moduleAnalysis, importedName, context) ||
+    isLitComponentExport(moduleAnalysis, importedName, context)
+  );
+}
+
+export function isLightDomComponentExport(moduleAnalysis, importedName, context, seen = new Set()) {
+  if (!moduleAnalysis || !importedName) {
+    return false;
+  }
+
+  const visitKey = `light-dom-export:${moduleAnalysis.filename}:${importedName}`;
+  if (seen.has(visitKey)) {
+    return false;
+  }
+  const nextSeen = new Set(seen);
+  nextSeen.add(visitKey);
+
+  const exportInfo = moduleAnalysis.exportBindings.get(importedName);
+  if (!exportInfo) {
+    return (moduleAnalysis.exportAllRecords || []).some(({ resolvedSource }) => (
+      resolvedSource &&
+      isLightDomComponentExport(
+        getOrCreateModuleAnalysis(resolvedSource, context),
+        importedName,
+        context,
+        nextSeen,
+      )
+    ));
+  }
+
+  if (exportInfo.localName) {
+    if (moduleAnalysis.lightDomComponentLocals?.has(exportInfo.localName)) {
+      return true;
+    }
+    const importInfo = moduleAnalysis.importBindings.get(exportInfo.localName);
+    return Boolean(
+      importInfo?.resolvedSource &&
+      importInfo.importedName !== "*" &&
+      isLightDomComponentExport(
+        getOrCreateModuleAnalysis(importInfo.resolvedSource, context),
+        importInfo.importedName,
+        context,
+        nextSeen,
+      )
+    );
+  }
+
+  if (exportInfo.reexportSource && exportInfo.importedName) {
+    return isLightDomComponentExport(
+      getOrCreateModuleAnalysis(exportInfo.reexportSource, context),
+      exportInfo.importedName,
+      context,
+      nextSeen,
+    );
+  }
+
+  return false;
+}
+
+export function isExternalCompilationImport(requirement) {
   if (!requirement?.sourceFile || !requirement?.sourceSpecifier) {
     return false;
   }
@@ -650,7 +974,7 @@ function isExternalCompilationImport(requirement) {
   return normalizeFilePath(requirement.sourceFile).includes("/node_modules/");
 }
 
-function warnExternalPascalComponentInference(candidateName, requirement, moduleAnalysis, context, jsxPath) {
+export function warnExternalPascalComponentInference(candidateName, requirement, moduleAnalysis, context, jsxPath) {
   if (typeof context.options?.warn !== "function") {
     return;
   }
@@ -664,7 +988,7 @@ function warnExternalPascalComponentInference(candidateName, requirement, module
   }
 
   const importedModule = getOrCreateModuleAnalysis(requirement.sourceFile, context);
-  if (isCompiledComponentExport(importedModule, requirement.importedName, context)) {
+  if (isProvableComponentExport(importedModule, requirement.importedName, context)) {
     return;
   }
 
@@ -689,7 +1013,7 @@ function warnExternalPascalComponentInference(candidateName, requirement, module
   });
 }
 
-function getOrCreateModuleAnalysis(filename, context) {
+export function getOrCreateModuleAnalysis(filename, context) {
   const normalizedFilename = normalizeFilePath(filename);
   if (!normalizedFilename) {
     return null;
@@ -708,7 +1032,7 @@ function getOrCreateModuleAnalysis(filename, context) {
 
   let programPath = null;
   try {
-    const ast = parseWithLitsxVirtualization(babelParser.parse, source, {
+    const ast = babelParser.parse(source, {
       sourceType: "module",
       plugins: getParserPluginsForModule(normalizedFilename, source),
     });
@@ -733,7 +1057,7 @@ function getOrCreateModuleAnalysis(filename, context) {
   return analysis;
 }
 
-function isCapitalizedName(name) {
+export function isCapitalizedName(name) {
   if (typeof name !== "string" || name.length === 0) {
     return false;
   }
@@ -742,11 +1066,11 @@ function isCapitalizedName(name) {
   return first === first.toUpperCase() && first !== first.toLowerCase();
 }
 
-function isProgramLevelBinding(binding) {
+export function isProgramLevelBinding(binding) {
   return binding?.scope?.path?.isProgram?.() === true;
 }
 
-function validateComponentName(nameNode, pathForErrors, context) {
+export function validateComponentName(nameNode, pathForErrors, context) {
   if (!nameNode || nameNode.type !== "JSXIdentifier") return null;
   const originalName = nameNode.__scopedOriginal || nameNode.name;
   if (!isCapitalizedName(originalName)) return null;
@@ -776,7 +1100,7 @@ function validateComponentName(nameNode, pathForErrors, context) {
   return originalName;
 }
 
-function resolveImportedHelper(moduleAnalysis, helperName, context, seen = new Set()) {
+export function resolveImportedHelper(moduleAnalysis, helperName, context, seen = new Set()) {
   const importInfo = moduleAnalysis.importBindings.get(helperName);
   if (!importInfo?.resolvedSource || importInfo.importedName === "*") {
     return null;
@@ -797,7 +1121,7 @@ function resolveImportedHelper(moduleAnalysis, helperName, context, seen = new S
   return resolveExportedHelper(importedModule, importInfo.importedName, context, nextSeen);
 }
 
-function resolveExportedHelper(moduleAnalysis, exportedName, context, seen = new Set()) {
+export function resolveExportedHelper(moduleAnalysis, exportedName, context, seen = new Set()) {
   const exportInfo = moduleAnalysis.exportBindings.get(exportedName);
   if (!exportInfo) {
     return null;
@@ -840,19 +1164,19 @@ function resolveExportedHelper(moduleAnalysis, exportedName, context, seen = new
   return null;
 }
 
-function getParserPluginsForModule(filename, source) {
+export function getParserPluginsForModule(filename, source) {
   if (/\.(?:[cm]?ts|tsx|litsx)$/i.test(filename)) {
-    return ["typescript"];
+    return ["jsx", "typescript"];
   }
 
   if (/\b(?:as|satisfies)\s+[^;,)]+/.test(source)) {
-    return ["typescript"];
+    return ["jsx", "typescript"];
   }
 
-  return [];
+  return ["jsx"];
 }
 
-function isSymbolForMarker(node, markerKey) {
+export function isElementCandidateSymbolForMarker(node, markerKey) {
   return (
     t.isCallExpression(node) &&
     t.isMemberExpression(node.callee) &&
@@ -864,7 +1188,9 @@ function isSymbolForMarker(node, markerKey) {
   );
 }
 
-function unwrapNamespaceAliasExpression(node) {
+const isSymbolForMarker = isElementCandidateSymbolForMarker;
+
+export function unwrapNamespaceAliasExpression(node) {
   let current = node;
   while (
     t.isTSAsExpression(current) ||
@@ -877,7 +1203,7 @@ function unwrapNamespaceAliasExpression(node) {
   return current;
 }
 
-function getNamespaceMemberAliasInfo(candidateName, moduleAnalysis) {
+export function getNamespaceMemberAliasInfo(candidateName, moduleAnalysis) {
   const binding = moduleAnalysis.programPath.scope.getBinding(candidateName);
   if (!binding || !isProgramLevelBinding(binding)) {
     return null;
@@ -919,7 +1245,7 @@ function getNamespaceMemberAliasInfo(candidateName, moduleAnalysis) {
   };
 }
 
-function resolveImportedElementRequirement(candidateName, moduleAnalysis, context, rootFilename) {
+export function resolveImportedElementRequirement(candidateName, moduleAnalysis, context, rootFilename) {
   const binding = moduleAnalysis.programPath.scope.getBinding(candidateName);
   if (!binding || !isProgramLevelBinding(binding)) {
     return null;
@@ -941,8 +1267,9 @@ function resolveImportedElementRequirement(candidateName, moduleAnalysis, contex
         : importInfo.sourceValue,
       importedName: importInfo.importedName,
       originalName: candidateName,
-      tagName: candidateName.replace(/([a-z])([A-Z])/g, "$1-$2").toLowerCase(),
+      tagName: componentNameToTagName(candidateName),
       rootFilename,
+      lightDom: importedBindingHasLightDomHoist(importInfo, context),
     };
   }
 
@@ -955,7 +1282,7 @@ function resolveImportedElementRequirement(candidateName, moduleAnalysis, contex
         : namespaceAliasInfo.sourceValue,
       importedName: namespaceAliasInfo.importedName,
       originalName: candidateName,
-      tagName: candidateName.replace(/([a-z])([A-Z])/g, "$1-$2").toLowerCase(),
+      tagName: componentNameToTagName(candidateName),
       rootFilename,
     };
   }
@@ -986,12 +1313,13 @@ function resolveImportedElementRequirement(candidateName, moduleAnalysis, contex
     sourceSpecifier: null,
     importedName,
     originalName: candidateName,
-    tagName: candidateName.replace(/([a-z])([A-Z])/g, "$1-$2").toLowerCase(),
+    tagName: componentNameToTagName(candidateName),
     rootFilename,
+    lightDom: helperPathHasLightDomHoist(moduleAnalysis.helperPaths.get(candidateName)),
   };
 }
 
-function resolveDirectImportRequirement(candidateName, moduleAnalysis, context, rootFilename) {
+export function resolveDirectImportRequirement(candidateName, moduleAnalysis, context, rootFilename) {
   const binding = moduleAnalysis.programPath.scope.getBinding(candidateName);
   if (!binding || !isProgramLevelBinding(binding)) {
     return null;
@@ -1013,7 +1341,7 @@ function resolveDirectImportRequirement(candidateName, moduleAnalysis, context, 
         : importInfo.sourceValue,
       importedName: importInfo.importedName,
       originalName: candidateName,
-      tagName: candidateName.replace(/([a-z])([A-Z])/g, "$1-$2").toLowerCase(),
+      tagName: componentNameToTagName(candidateName),
       rootFilename,
     };
   }
@@ -1030,15 +1358,59 @@ function resolveDirectImportRequirement(candidateName, moduleAnalysis, context, 
       : namespaceAliasInfo.sourceValue,
     importedName: namespaceAliasInfo.importedName,
     originalName: candidateName,
-    tagName: candidateName.replace(/([a-z])([A-Z])/g, "$1-$2").toLowerCase(),
+    tagName: componentNameToTagName(candidateName),
     rootFilename,
   };
+}
+
+export function helperPathHasLightDomHoist(helperPath) {
+  const body = helperPath?.node?.body?.body;
+  if (!Array.isArray(body)) {
+    return false;
+  }
+
+  return body.some((statement) => (
+    t.isExpressionStatement(statement) &&
+    t.isCallExpression(statement.expression) &&
+    t.isIdentifier(statement.expression.callee, { name: "__litsx_static_lightDom" })
+  ));
+}
+
+export function importedBindingHasLightDomHoist(importInfo, context) {
+  if (!importInfo?.resolvedSource || importInfo.importedName === "*") {
+    return false;
+  }
+
+  const importedModule = getOrCreateModuleAnalysis(importInfo.resolvedSource, context);
+  if (!importedModule) {
+    return false;
+  }
+
+  const exportInfo = importedModule.exportBindings.get(importInfo.importedName);
+  const localName = exportInfo?.localName ?? (
+    importInfo.importedName === "default" ? "default" : importInfo.importedName
+  );
+
+  if (exportInfo?.path) {
+    return (
+      helperPathHasLightDomHoist(exportInfo.path) ||
+      isLightDomComponentExport(importedModule, importInfo.importedName, context)
+    );
+  }
+
+  return (
+    helperPathHasLightDomHoist(importedModule.helperPaths.get(localName)) ||
+    isLightDomComponentExport(importedModule, importInfo.importedName, context)
+  );
 }
 
 function collectCandidateResult(functionPath, programPath, options = {}) {
   const result = createEmptyCandidateResult();
   if (!programPath || !functionPath?.node) return result;
-  programPath.scope.crawl();
+  // Babel's recrawl currently treats a legal TypeScript type/value namespace
+  // pair (for example `import type { Row }; function Row() {}`) as a duplicate
+  // block-scoped declaration. The initial program scope already contains the
+  // bindings needed by this analysis, so avoid invalidating it here.
   const compilationSession = options.__litsxCompilationSession || null;
 
   const rootFilename = normalizeFilePath(
@@ -1141,6 +1513,13 @@ function collectCandidateResult(functionPath, programPath, options = {}) {
       JSXOpeningElement(jsxPath) {
         const candidate = validateComponentName(jsxPath.node.name, jsxPath, scanContext);
         if (candidate) {
+          if (isInsideNoscriptFallback(jsxPath)) {
+            jsxPath.node.attributes.push(t.jsxAttribute(
+              t.jsxIdentifier(NOSCRIPT_COMPONENT_ATTRIBUTE),
+              t.jsxExpressionContainer(t.identifier(candidate)),
+            ));
+            return;
+          }
           if (moduleAnalysis.filename === context.rootFilename) {
             const directImportRequirement = resolveDirectImportRequirement(
               candidate,
@@ -1261,7 +1640,6 @@ export function importedBindingNeedsRendererContext(programPath, localName, opti
     return false;
   }
 
-  programPath.scope.crawl();
   const compilationSession = options.__litsxCompilationSession || null;
   const rootFilename = normalizeFilePath(
     options.filename || programPath.hub.file?.opts?.filename || ""
@@ -1430,8 +1808,67 @@ export function importedBindingNeedsRendererContext(programPath, localName, opti
   return scanFunction(resolvedHelper.path, resolvedHelper.moduleAnalysis);
 }
 
+export function getImportedBindingModuleAnalysis(programPath, localName, options = {}) {
+  if (!programPath?.node || !localName) {
+    return null;
+  }
+
+  programPath.scope.crawl();
+  const compilationSession = options.__litsxCompilationSession || null;
+  const rootFilename = normalizeFilePath(
+    options.filename || programPath.hub.file?.opts?.filename || ""
+  );
+  const moduleAnalysisCache =
+    compilationSession?.importedModuleAnalysisCache ||
+    programPath.getData("__litsxImportedModuleAnalyses") ||
+    new Map();
+  programPath.setData("__litsxImportedModuleAnalyses", moduleAnalysisCache);
+  const resolvedImportCache =
+    compilationSession?.resolvedImportCache ||
+    programPath.getData("__litsxResolvedImports") ||
+    new Map();
+  programPath.setData("__litsxResolvedImports", resolvedImportCache);
+
+  const binding = programPath.scope.getBinding(localName);
+  if (!binding?.path?.node) {
+    return null;
+  }
+
+  if (
+    !binding.path.isImportSpecifier?.() &&
+    !binding.path.isImportDefaultSpecifier?.() &&
+    !binding.path.isImportNamespaceSpecifier?.()
+  ) {
+    return null;
+  }
+
+  const sourceValue = binding.path.parent?.source?.value ?? null;
+  const context = {
+    rootFilename,
+    moduleAnalysisCache,
+    resolvedImportCache,
+    ...createCompilerContextResolver(options),
+  };
+  const resolvedSource = resolveImportSource(rootFilename, sourceValue, context);
+  if (!resolvedSource) {
+    return null;
+  }
+
+  return {
+    localName,
+    sourceValue,
+    resolvedSource,
+    importedName: binding.path.isImportDefaultSpecifier()
+      ? "default"
+      : binding.path.isImportNamespaceSpecifier()
+        ? "*"
+        : binding.path.node.imported?.name ?? binding.path.node.imported?.value ?? null,
+    moduleAnalysis: getOrCreateModuleAnalysis(resolvedSource, context),
+  };
+}
+
 export default declare((api) => {
-  api.assertVersion(7);
+  api.assertVersion("^8.0.0");
   t = api.types;
 
   return {

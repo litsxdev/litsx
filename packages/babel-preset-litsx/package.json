@@ -1,6 +1,6 @@
 {
   "name": "@litsx/babel-preset-litsx",
-  "version": "0.15.0",
+  "version": "1.0.0-next.9",
   "description": "Canonical native Babel preset for LitSX-authored source",
   "author": "LitSX Team",
   "type": "module",
@@ -42,10 +42,35 @@
       "require": "./dist/internal/transform-litsx-properties.cjs",
       "default": "./src/internal/transform-litsx-properties.js"
     },
+    "./internal/transform-litsx-jsx-bindings": {
+      "import": "./src/internal/transform-litsx-jsx-bindings.js",
+      "require": "./dist/internal/transform-litsx-jsx-bindings.cjs",
+      "default": "./src/internal/transform-litsx-jsx-bindings.js"
+    },
+    "./internal/transform-litsx-static-assignments": {
+      "import": "./src/internal/transform-litsx-static-assignments.js",
+      "require": "./dist/internal/transform-litsx-static-assignments.cjs",
+      "default": "./src/internal/transform-litsx-static-assignments.js"
+    },
     "./internal/transform-litsx-static-ir": {
       "import": "./src/internal/transform-litsx-static-ir.js",
       "require": "./dist/internal/transform-litsx-static-ir.cjs",
       "default": "./src/internal/transform-litsx-static-ir.js"
+    },
+    "./internal/transform-litsx-lazy": {
+      "import": "./src/internal/transform-litsx-lazy.js",
+      "require": "./dist/internal/transform-litsx-lazy.cjs",
+      "default": "./src/internal/transform-litsx-lazy.js"
+    },
+    "./internal/transform-litsx-lazy-analysis": {
+      "import": "./src/internal/transform-litsx-lazy-analysis.js",
+      "require": "./dist/internal/transform-litsx-lazy-analysis.cjs",
+      "default": "./src/internal/transform-litsx-lazy-analysis.js"
+    },
+    "./internal/transform-typescript-namespace-collisions": {
+      "import": "./src/internal/transform-typescript-namespace-collisions.js",
+      "require": "./dist/internal/transform-typescript-namespace-collisions.cjs",
+      "default": "./src/internal/transform-typescript-namespace-collisions.js"
     }
   },
   "files": [
@@ -60,6 +85,9 @@
     "lit"
   ],
   "license": "Apache-2.0",
+  "engines": {
+    "node": "^22.18.0 || >=24.11.0"
+  },
   "homepage": "https://litsx.dev/",
   "bugs": {
     "url": "https://github.com/litsxdev/litsx/issues"
@@ -74,18 +102,18 @@
     "directory": "packages/babel-preset-litsx"
   },
   "peerDependencies": {
-    "@babel/core": ">=7"
+    "@babel/core": "^8.0.0"
   },
   "dependencies": {
-    "@babel/helper-plugin-utils": "^7.28.6",
-    "@babel/parser": "^7.29.3",
-    "@babel/plugin-syntax-jsx": "^7.28.6",
-    "@babel/traverse": "^7.28.5",
-    "@litsx/authoring": "^0.5.0",
-    "@litsx/babel-plugin-shared-hooks": "^0.8.0",
-    "@litsx/babel-plugin-transform-jsx-html-template": "^0.3.6",
-    "@litsx/babel-plugin-transform-litsx-scoped-elements": "^0.4.9",
-    "@litsx/typescript-session": "^0.2.3"
+    "@babel/helper-plugin-utils": "^8.0.1",
+    "@babel/parser": "^8.0.4",
+    "@babel/plugin-syntax-jsx": "^8.0.1",
+    "@babel/traverse": "^8.0.4",
+    "@litsx/authoring": "^1.0.0-next.5",
+    "@litsx/babel-plugin-shared-hooks": "^1.0.0-next.3",
+    "@litsx/babel-plugin-transform-jsx-html-template": "^1.0.0-next.6",
+    "@litsx/babel-plugin-transform-litsx-scoped-elements": "^1.0.0-next.5",
+    "@litsx/typescript-session": "^1.0.0-next.0"
   },
   "scripts": {
     "build": "../../node_modules/.bin/rollup --config rollup.config.js",

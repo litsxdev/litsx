@@ -1,13 +1,76 @@
 import {
-  ContextConsumer,
+  ContextEvent,
   ContextProvider,
+  ContextRoot,
   createContext as createLitContext,
 } from "@lit/context";
 import { useHost } from "./host-hooks.js";
+import { getCurrentSsrCustomElementInstanceStack } from "./runtime-ssr-state.js";
 
 const REACT_CONTEXT_MARK = Symbol("litsx.reactContext");
 const REACT_CONTEXT_KEY = Symbol("litsx.reactContext.key");
 const HOST_CONTEXT_CONSUMERS = Symbol("litsx.reactContextConsumers");
+const CONTEXT_ROOTS = Symbol.for("litsx.contextRoots");
+const LitsxContextProviderElementBase = globalThis.HTMLElement ?? class {};
+
+function ensureDocumentContextRoot() {
+  const documentRef = globalThis.document;
+  if (!documentRef || typeof documentRef.addEventListener !== "function") {
+    return null;
+  }
+
+  const roots = globalThis[CONTEXT_ROOTS] ??= new WeakMap();
+  let root = roots.get(documentRef);
+  if (!root) {
+    root = new ContextRoot();
+    root.attach(documentRef);
+    roots.set(documentRef, root);
+  }
+  return root;
+}
+
+class HookContextConsumer {
+  constructor(host, context, callback) {
+    this.host = host;
+    this.context = context;
+    this.callback = callback;
+    this.provided = false;
+    this.value = undefined;
+    this.unsubscribe = undefined;
+    this.initializing = true;
+    this.onValue = (value, unsubscribe) => {
+      if (this.unsubscribe && this.unsubscribe !== unsubscribe) {
+        this.unsubscribe();
+        this.provided = false;
+      }
+
+      const changed = !this.provided || !Object.is(this.value, value);
+      this.provided = true;
+      this.value = value;
+      this.unsubscribe = unsubscribe;
+      this.callback(value);
+
+      if (!this.initializing && changed) {
+        this.host.requestUpdate?.();
+      }
+    };
+
+    this.host.addController(this);
+    this.initializing = false;
+  }
+
+  hostConnected() {
+    this.host.dispatchEvent(
+      new ContextEvent(this.context, this.host, this.onValue, true)
+    );
+  }
+
+  hostDisconnected() {
+    this.unsubscribe?.();
+    this.unsubscribe = undefined;
+    this.provided = false;
+  }
+}
 
 function createContextSentinel(context, kind) {
   return Object.freeze({
@@ -34,6 +97,29 @@ function getHostContextConsumerCache(host) {
   return host[HOST_CONTEXT_CONSUMERS];
 }
 
+function getSsrProvidedContextValue(record) {
+  const stack = getCurrentSsrCustomElementInstanceStack();
+  if (!stack) {
+    return null;
+  }
+
+  for (let index = stack.length - 1; index >= 0; index -= 1) {
+    const element = stack[index]?.element;
+    if (!(element instanceof LitsxContextProviderElement)) {
+      continue;
+    }
+
+    if (element.context === record) {
+      return {
+        provided: true,
+        value: element.value,
+      };
+    }
+  }
+
+  return null;
+}
+
 export function createContext(defaultValue) {
   const record = {
     defaultValue,
@@ -57,13 +143,17 @@ export function createContext(defaultValue) {
   return Object.freeze(record);
 }
 
-export function useContext(hostOrContext, maybeContext) {
-  const hasExplicitHost = arguments.length > 1;
-  const resolvedHost = hasExplicitHost ? useHost(hostOrContext) : useHost();
+export function useContext(context) {
+  ensureDocumentContextRoot();
+  const resolvedHost = useHost();
   const record = getReactContextRecord(
-    hasExplicitHost ? maybeContext : hostOrContext,
+    context,
     "useContext"
   );
+  const ssrValue = getSsrProvidedContextValue(record);
+  if (ssrValue) {
+    return ssrValue.value;
+  }
   const cache = getHostContextConsumerCache(resolvedHost);
 
   let entry = cache.get(record);
@@ -73,16 +163,18 @@ export function useContext(hostOrContext, maybeContext) {
       value: undefined,
       consumer: null,
     };
-    entry.consumer = new ContextConsumer(
+    cache.set(record, entry);
+  }
+
+  if (!entry.consumer) {
+    entry.consumer = new HookContextConsumer(
       resolvedHost,
       record[REACT_CONTEXT_KEY],
       (value) => {
         entry.provided = true;
         entry.value = value;
-      },
-      true
+      }
     );
-    cache.set(record, entry);
   }
 
   return entry.provided
@@ -90,23 +182,26 @@ export function useContext(hostOrContext, maybeContext) {
     : record.defaultValue;
 }
 
-export function renderContext(host, context, render) {
+export function renderContext(context, render) {
   if (typeof render !== "function") {
     throw new TypeError(
       "renderContext requires a function child."
     );
   }
 
-  return render(useContext(host, context));
+  return render(useContext(context));
 }
 
-export class LitsxContextProviderElement extends HTMLElement {
+export class LitsxContextProviderElement extends LitsxContextProviderElementBase {
+  static observedAttributes = [];
+
   constructor() {
     super();
     this._context = undefined;
     this._value = undefined;
     this._provider = null;
     this._connected = false;
+    this._providerConnected = false;
   }
 
   get context() {
@@ -133,6 +228,7 @@ export class LitsxContextProviderElement extends HTMLElement {
 
     this._context = record;
     this._ensureProvider();
+    this._connectProvider();
   }
 
   get value() {
@@ -147,18 +243,26 @@ export class LitsxContextProviderElement extends HTMLElement {
   }
 
   connectedCallback() {
+    ensureDocumentContextRoot();
     this._connected = true;
-    const provider = this._ensureProvider();
-    provider?.hostConnected?.();
+    this._ensureProvider();
+    this._connectProvider();
   }
 
   disconnectedCallback() {
     this._connected = false;
-    this._provider?.hostDisconnected?.();
+    if (this._providerConnected) {
+      this._provider?.hostDisconnected?.();
+      this._providerConnected = false;
+    }
   }
 
   _ensureProvider() {
     if (!this._context) {
+      return null;
+    }
+
+    if (typeof this.addEventListener !== "function") {
       return null;
     }
 
@@ -172,10 +276,15 @@ export class LitsxContextProviderElement extends HTMLElement {
 
     this._provider.setValue(this._value);
 
-    if (this._connected) {
-      this._provider.hostConnected?.();
+    return this._provider;
+  }
+
+  _connectProvider() {
+    if (!this._connected || !this._provider || this._providerConnected) {
+      return;
     }
 
-    return this._provider;
+    this._provider.hostConnected?.();
+    this._providerConnected = true;
   }
 }

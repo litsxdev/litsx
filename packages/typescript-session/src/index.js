@@ -6,21 +6,8 @@ const SESSION_CACHE_LIMIT = 50;
 const DISK_SOURCE_TEXT_CACHE = new Map();
 const DISK_SOURCE_FILE_CACHE = new Map();
 const DISK_FILE_CACHE_LIMIT = 500;
-const EXTRA_FILE_EXTENSIONS = [
-  {
-    extension: ".litsx",
-    isMixedContent: false,
-    scriptKind: 4,
-  },
-  {
-    extension: ".litsx.jsx",
-    isMixedContent: false,
-    scriptKind: 2,
-  },
-];
+const EXTRA_FILE_EXTENSIONS = [];
 const SUPPORTED_SOURCE_EXTENSIONS = [
-  ".litsx.jsx",
-  ".litsx",
   ".tsx",
   ".ts",
   ".jsx",
@@ -50,7 +37,7 @@ function getNodeFs() {
   }
 }
 
-function trimCacheToLimit(cache, limit) {
+export function trimCacheToLimit(cache, limit) {
   while (cache.size > limit) {
     const oldestKey = cache.keys().next().value;
     if (oldestKey == null) break;
@@ -60,7 +47,27 @@ function trimCacheToLimit(cache, limit) {
 
 function normalizeFilePath(value) {
   if (!value) return "";
-  return String(value).replace(/\\/g, "/").replace(/\/+/g, "/");
+  const normalized = String(value).replace(/\\/g, "/").replace(/\/+/g, "/");
+  const isAbsolute = normalized.startsWith("/");
+  const segments = [];
+
+  for (const segment of normalized.split("/")) {
+    if (!segment || segment === ".") {
+      continue;
+    }
+    if (segment === "..") {
+      if (segments.length > 0 && segments.at(-1) !== "..") {
+        segments.pop();
+      } else if (!isAbsolute) {
+        segments.push(segment);
+      }
+      continue;
+    }
+    segments.push(segment);
+  }
+
+  const result = segments.join("/");
+  return isAbsolute ? `/${result}` : result;
 }
 
 function dirname(filePath) {
@@ -72,16 +79,8 @@ function dirname(filePath) {
   return normalized.slice(0, lastSlash);
 }
 
-function inferScriptKind(ts, filePath) {
+export function inferScriptKind(ts, filePath) {
   const normalized = normalizeFilePath(filePath);
-
-  if (normalized.endsWith(".litsx")) {
-    return ts.ScriptKind.TSX;
-  }
-
-  if (normalized.endsWith(".litsx.jsx")) {
-    return ts.ScriptKind.JSX;
-  }
 
   if (normalized.endsWith(".tsx")) {
     return ts.ScriptKind.TSX;
@@ -102,14 +101,14 @@ function inferScriptKind(ts, filePath) {
   return undefined;
 }
 
-function getModuleExtension(ts, fileName) {
+export function getModuleExtension(ts, fileName) {
   const normalized = normalizeFilePath(fileName);
 
-  if (normalized.endsWith(".litsx.jsx") || normalized.endsWith(".jsx")) {
+  if (normalized.endsWith(".jsx")) {
     return ts.Extension.Jsx;
   }
 
-  if (normalized.endsWith(".litsx") || normalized.endsWith(".tsx")) {
+  if (normalized.endsWith(".tsx")) {
     return ts.Extension.Tsx;
   }
 
@@ -120,11 +119,11 @@ function getModuleExtension(ts, fileName) {
   return ts.Extension.Js;
 }
 
-function isPathLikeModuleName(moduleName) {
+export function isPathLikeModuleName(moduleName) {
   return moduleName.startsWith("./") || moduleName.startsWith("../") || moduleName.startsWith("/");
 }
 
-function getTransparentResolutionCandidates(modulePath) {
+export function getTransparentResolutionCandidates(modulePath) {
   const requestedExtension = SUPPORTED_SOURCE_EXTENSIONS.find((extension) => modulePath.endsWith(extension)) ?? null;
 
   if (requestedExtension) {
@@ -140,7 +139,7 @@ function getTransparentResolutionCandidates(modulePath) {
   ];
 }
 
-function createResolvedModule(ts, resolvedFileName) {
+export function createResolvedModule(ts, resolvedFileName) {
   return {
     resolvedFileName: normalizeFilePath(resolvedFileName),
     extension: getModuleExtension(ts, resolvedFileName),
@@ -148,7 +147,7 @@ function createResolvedModule(ts, resolvedFileName) {
   };
 }
 
-function resolveTransparentModuleName(ts, moduleName, containingFile, fileExists) {
+export function resolveTransparentModuleName(ts, moduleName, containingFile, fileExists) {
   if (!isPathLikeModuleName(moduleName)) {
     return null;
   }
@@ -167,7 +166,7 @@ function resolveTransparentModuleName(ts, moduleName, containingFile, fileExists
   return null;
 }
 
-function installTransparentModuleResolution(host, ts, compilerOptions, fileExists, readFile) {
+export function installTransparentModuleResolution(host, ts, compilerOptions, fileExists, readFile) {
   function resolveModule(moduleName, containingFile) {
     const resolved = ts.resolveModuleName(
       moduleName,
@@ -214,7 +213,7 @@ function defaultFileExists(filePath) {
   return fs.existsSync(filePath);
 }
 
-function getDiskFileVersion(filePath) {
+export function getDiskFileVersion(filePath) {
   const fs = getNodeFs();
   if (!fs) {
     return null;
@@ -227,7 +226,7 @@ function getDiskFileVersion(filePath) {
   }
 }
 
-function getCachedDiskSourceText(filePath, readFile = defaultReadFile) {
+export function getCachedDiskSourceText(filePath, readFile = defaultReadFile) {
   const normalizedPath = normalizeFilePath(filePath);
   const version = getDiskFileVersion(filePath);
   if (!version) {
@@ -254,7 +253,7 @@ function getCachedDiskSourceText(filePath, readFile = defaultReadFile) {
   return sourceText;
 }
 
-function getCachedDiskSourceFile(
+export function getCachedDiskSourceFile(
   filePath,
   languageVersion,
   createSourceFile,
@@ -303,7 +302,7 @@ function createSourceFileCache() {
   return new Map();
 }
 
-function createSessionBase({
+export function createSessionBase({
   kind,
   key,
   typescript,
@@ -363,7 +362,7 @@ function createSessionBase({
   };
 }
 
-function getCachedSourceText(session, fileName, sourceText, transformKey, transform) {
+export function getCachedSourceText(session, fileName, sourceText, transformKey, transform) {
   const normalizedFileName = normalizeFilePath(fileName);
   const cacheKey = `${normalizedFileName}:${transformKey}`;
   const cached = session.sourceTextCache.get(cacheKey);
@@ -378,7 +377,7 @@ function getCachedSourceText(session, fileName, sourceText, transformKey, transf
   return transformedText;
 }
 
-function getCachedSourceFile(session, fileName, sourceText, languageVersion, scriptKind, transformKey, transform) {
+export function getCachedSourceFile(session, fileName, sourceText, languageVersion, scriptKind, transformKey, transform) {
   const normalizedFileName = normalizeFilePath(fileName);
   const transformedText = getCachedSourceText(
     session,
@@ -410,7 +409,7 @@ function getCachedSourceFile(session, fileName, sourceText, languageVersion, scr
   return sourceFile;
 }
 
-function attachSourceFileVersion(sourceFile, version) {
+export function attachSourceFileVersion(sourceFile, version) {
   if (!sourceFile || typeof sourceFile !== "object") {
     return sourceFile;
   }
@@ -681,7 +680,7 @@ function createInMemoryHost(session, config) {
   return host;
 }
 
-function createProjectProgramKey(parsedCommandLine) {
+export function createProjectProgramKey(parsedCommandLine) {
   return JSON.stringify({
     options: parsedCommandLine.options,
     fileNames: parsedCommandLine.fileNames,
@@ -690,7 +689,7 @@ function createProjectProgramKey(parsedCommandLine) {
   });
 }
 
-function createProjectHostKey(config) {
+export function createProjectHostKey(config) {
   return JSON.stringify({
     options: config.parsedCommandLine.options,
     fileNames: config.parsedCommandLine.fileNames,
@@ -698,14 +697,14 @@ function createProjectHostKey(config) {
   });
 }
 
-function createStandaloneProgramKey(config, entryFileName) {
+export function createStandaloneProgramKey(config, entryFileName) {
   return JSON.stringify({
     options: config.compilerOptions,
     entryFileName,
   });
 }
 
-function createInMemoryProgramKey(config, sourceText) {
+export function createInMemoryProgramKey(config, sourceText) {
   return JSON.stringify({
     options: config.compilerOptions,
     sourceFilename: config.sourceFilename,

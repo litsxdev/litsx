@@ -1,3 +1,17 @@
+// `css` is the canonical LitSX component-style authoring primitive. Re-export
+// the original Lit binding so component modules can keep their common imports
+// on one line without introducing a parallel styling abstraction.
+export { css } from "lit";
+
+/**
+ * Mark a component stylesheet as a complete replacement for inherited styles.
+ * The compiler consumes this marker while the runtime behavior stays an
+ * ordinary CSSResultGroup identity.
+ */
+export function replaceStyles(styles) {
+  return styles;
+}
+
 export {
   ErrorBoundary,
   ErrorBoundaryElement,
@@ -14,28 +28,35 @@ export {
 export { EffectsController } from "./effects-controller.js";
 export {
   collectSoftSuspenseThenables,
-  renderWithSoftSuspense,
+  renderWithHooks,
 } from "./runtime-suspense.js";
+export {
+  __getLitsxNoscriptFactory,
+  __litsxNoscript,
+} from "./noscript.js";
+export {
+  createExecutionContextKey,
+  getCurrentExecutionContext,
+} from "./execution-context.js";
+export { useSsrResourceSnapshot } from "./ssr-resource-snapshot.js";
 export {
   LITSX_HOOK,
   isLitsxHook,
 } from "./hook-metadata.js";
 export {
   LITSX_COMPONENT,
+  LITSX_HYDRATABLE_TAG,
+  LITSX_EVENTS,
   LITSX_HOST_TYPE_ID,
+  LITSX_LIGHT_DOM,
+  LITSX_LIGHT_DOM_STYLE_SCOPE,
   isLitsxComponentClass,
 } from "./elements/index.js";
 export {
-  STRUCTURAL_HOOK_ENTRIES,
+  applyStructuralHooks,
   defineHook,
-  HostMiddlewareMixin,
-  HostMiddlewareRuntime,
-  createHostMiddlewareRuntime,
-  isStructuralHook,
-  resolveStructuralProps,
-  resolveStructuralEntry,
-  resolveStructuralStaticEntry,
-} from "./host-middleware-runtime.js";
+  readStructuralHook,
+} from "./structural-hooks-runtime.js";
 export {
   useElementInternals,
   useFormValidity,
@@ -43,8 +64,8 @@ export {
 } from "./form-hooks.js";
 
 export {
-  prepareEffects,
   ensureLazyElement,
+  lazy,
   useAfterUpdate,
   useOnCommit,
   useOnConnect,
@@ -82,3 +103,5 @@ export {
 } from "./state-hooks.js";
 
 export { jsxSpreadElement } from "./jsx-spread.js";
+export { resolveStyle } from "./style.js";
+export { createRef, ref } from "lit/directives/ref.js";

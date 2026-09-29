@@ -1,6 +1,4 @@
-import helperPluginUtils from "@babel/helper-plugin-utils";
-
-const { declare } = helperPluginUtils;
+import { declare } from "@babel/helper-plugin-utils";
 const EVENT_ALIASES = new Map([
   ["doubleclick", { name: "dblclick" }],
   ["focus", { name: "focusin", capture: true }],
@@ -17,6 +15,12 @@ function normalizeEventName(name, { lowercaseEventNames = true } = {}) {
   }
 
   return camelToLower(name);
+}
+
+function isComponentName(name, t) {
+  return t.isJSXMemberExpression(name) || (
+    t.isJSXIdentifier(name) && /^[A-Z]/.test(name.name)
+  );
 }
 
 function resolveEventDescriptor(name, opts) {
@@ -117,6 +121,16 @@ function transformAttribute(attrPath, opts, t) {
   return true;
 }
 
+function transformComponentCallbackAttribute(attrPath, t) {
+  if (!attrPath.isJSXAttribute()) return false;
+  const { node } = attrPath;
+  if (!t.isJSXIdentifier(node.name) || !/^on[A-Z]/.test(node.name.name)) {
+    return false;
+  }
+  node.name = t.jsxIdentifier(`.${node.name.name}`);
+  return true;
+}
+
 function transformTemplateLiteral(quasi, opts, t) {
   const { quasis, expressions } = quasi;
 
@@ -128,7 +142,9 @@ function transformTemplateLiteral(quasi, opts, t) {
     const rawHead = head.value.raw;
     const cookedHead = head.value.cooked;
 
-    const match = rawHead.match(/(\s*)(on)([A-Z][A-Za-z0-9]*?)(Capture)?="$/);
+    // Requiring attribute whitespace also prevents an already inferred Lit
+    // property such as `.onAction` from being reinterpreted as a React event.
+    const match = rawHead.match(/(\s+)(on)([A-Z][A-Za-z0-9]*?)(Capture)?="$/);
     if (!match) continue;
 
     const [, leading, , eventBase, captureSuffix] = match;
@@ -153,13 +169,21 @@ function transformTemplateLiteral(quasi, opts, t) {
 }
 
 export default declare((api, options) => {
-  api.assertVersion(7);
+  api.assertVersion("^8.0.0");
   const t = api.types;
 
   return {
     name: "@litsx/babel-plugin-transform-react-events",
     visitor: {
       JSXOpeningElement(path) {
+        // React passes `onX` through to components as an ordinary prop. Event
+        // interpretation only applies to host/custom-element tags here.
+        if (isComponentName(path.node.name, t)) {
+          path.get("attributes").forEach((attrPath) => {
+            transformComponentCallbackAttribute(attrPath, t);
+          });
+          return;
+        }
         path.get("attributes").forEach((attrPath) => {
           transformAttribute(attrPath, options || {}, t);
         });

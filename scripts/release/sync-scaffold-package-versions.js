@@ -3,17 +3,25 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createCaretVersionMap } from "./package-version-map.js";
 
-const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
-const targetFile = path.join(repoRoot, "packages/create-litsx-app/src/published-package-versions.js");
+const repoRoot = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "..",
+  "..",
+);
+const targetFile = path.join(
+  repoRoot,
+  "packages/create-litsx-app/src/published-package-versions.js",
+);
 
 const versionMap = createCaretVersionMap([
   "@litsx/compiler",
   "@litsx/core",
   "@litsx/eslint-plugin",
   "@litsx/storybook",
-  "@litsx/typescript",
+  "@litsx/ssr",
+  "@litsx/tailwind",
+  "@litsx/unocss",
   "@litsx/vite-plugin",
-  "prettier-plugin-litsx",
 ]);
 
 const nextSource = [

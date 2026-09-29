@@ -32,12 +32,14 @@ describe("litsx runtime transitions", () => {
 
   beforeAll(async () => {
     const mod = await import("../packages/core/src/index.js");
-    ({
-      prepareEffects,
-      startTransition,
-      useTransition,
-      useDeferredValue,
-    } = mod);
+    const runtime = await import("../packages/core/src/runtime-controller.js");
+    prepareEffects = runtime.prepareEffects;
+    startTransition = (host, ...args) =>
+      runtime.runWithHookHost(host, () => mod.startTransition(...args));
+    useTransition = (host) =>
+      runtime.runWithHookHost(host, () => mod.useTransition());
+    useDeferredValue = (host, ...args) =>
+      runtime.runWithHookHost(host, () => mod.useDeferredValue(...args));
 
     globalThis.requestAnimationFrame = (cb) => {
       cb(0);

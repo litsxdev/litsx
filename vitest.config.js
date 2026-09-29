@@ -1,5 +1,4 @@
 import { defineConfig } from 'vitest/config';
-import babel from 'vite-plugin-babel';
 import TransformReporter from './test/helpers/reporter/vitest-transform-reporter.js';
 import { LOG_TRANSFORM_MARKER } from './test/helpers/reporter/log-transform.js';
 

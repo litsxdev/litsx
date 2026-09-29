@@ -24,7 +24,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: 20
+          node-version: 24
           package-manager-cache: false
 
       - name: Enable Yarn
@@ -44,6 +44,10 @@ jobs:
 
       - name: Install dependencies
         run: corepack yarn install --immutable
+
+      - name: Exit prerelease mode for stable promotion
+        if: github.base_ref == 'main' && github.head_ref == 'next'
+        run: corepack yarn changeset pre exit
 
       - name: Check changeset status
         run: corepack yarn changeset status --since=origin/main

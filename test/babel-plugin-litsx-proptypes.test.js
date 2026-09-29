@@ -1,5 +1,5 @@
 import assert from "assert";
-import babelCore from "@babel/core";
+import * as babelCore from "@babel/core";
 import parser from "./helpers/litsx-parser.js";
 import { beforeAll } from "vitest";
 import { interopDefault } from "./helpers/interop-default.js";
@@ -48,6 +48,16 @@ describe("@litsx/babel-plugin-litsx-proptypes", function () {
     assert.doesNotMatch(code, /PropTypes/);
   });
 
+  it("falls back to Object for unknown direct prop-types validators", () => {
+    const code = run(`
+      import PropTypes from "prop-types";
+      export function ExtensionPoint() { return <slot />; }
+      ExtensionPoint.propTypes = { extension: PropTypes.customValidator };
+    `);
+
+    assert.match(code, /extension: \{\s*type: Object\s*\}/);
+  });
+
   it("uses runtime helpers for structured and validated React propTypes", () => {
     const source = `
       import PropTypes from "prop-types";
@@ -87,13 +97,13 @@ describe("@litsx/babel-plugin-litsx-proptypes", function () {
       import PropTypes from "prop-types";
 
       export function SearchCard(props) {
-        static properties = {
-          title: { reflect: true },
-          onSelect: { attribute: false },
-        };
-
         return <article>{props.title}</article>;
       }
+
+      SearchCard.properties = {
+        title: { reflect: true },
+        onSelect: { attribute: false },
+      };
 
       SearchCard.propTypes = {
         title: PropTypes.string,
@@ -306,14 +316,14 @@ describe("@litsx/babel-plugin-litsx-proptypes", function () {
       import PropTypes from "prop-types";
 
       export function SearchCard(props) {
-        static properties = {
-          ...sharedProperties,
-          subtitle: { reflect: true },
-          title: { reflect: true },
-        };
-
         return <article>{props.title}</article>;
       }
+
+      SearchCard.properties = {
+        ...sharedProperties,
+        subtitle: { reflect: true },
+        title: { reflect: true },
+      };
 
       SearchCard.propTypes = {
         title: PropTypes.string,
@@ -378,13 +388,13 @@ describe("@litsx/babel-plugin-litsx-proptypes", function () {
       import PropTypes from "prop-types";
 
       export function SearchCard(props) {
-        static properties = {
-          title: forwardedTitle,
-          [dynamicKey]: runtimeDescriptor,
-        };
-
         return <article>{props.title}</article>;
       }
+
+      SearchCard.properties = {
+        title: forwardedTitle,
+        [dynamicKey]: runtimeDescriptor,
+      };
 
       SearchCard.propTypes = {
         title: PropTypes.string,

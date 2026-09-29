@@ -9,6 +9,12 @@ import {
   renderContext,
   useContext,
 } from "../packages/core/src/context.js";
+import { renderWithHooks } from "../packages/core/src/index.js";
+import { runWithHookHost } from "../packages/core/src/runtime-controller.js";
+import {
+  createLightDomRegistry,
+  ensureLightDomProxy,
+} from "../packages/scoped-registry-shim/src/index.js";
 
 let tagCounter = 0;
 
@@ -42,7 +48,10 @@ describe("react context compat runtime", () => {
 
     class ContextReader extends LitElement {
       render() {
-        return html`<span>${useContext(this, ThemeContext)}</span>`;
+        return renderWithHooks(
+          this,
+          () => html`<span>${useContext(ThemeContext)}</span>`,
+        );
       }
     }
 
@@ -72,7 +81,10 @@ describe("react context compat runtime", () => {
 
     class ContextReader extends LitElement {
       render() {
-        return html`<span>${useContext(this, ThemeContext)}</span>`;
+        return renderWithHooks(
+          this,
+          () => html`<span>${useContext(ThemeContext)}</span>`,
+        );
       }
     }
 
@@ -110,6 +122,38 @@ describe("react context compat runtime", () => {
     assert.match(nestedReader.shadowRoot.textContent, /contrast/);
   });
 
+  it("retries subscribed consumers when a connected provider initializes late", async () => {
+    ensureProviderElement();
+    const ThemeContext = createContext("light");
+    const readerTag = nextTag("litsx-context-reader");
+
+    class ContextReader extends LitElement {
+      render() {
+        return renderWithHooks(
+          this,
+          () => html`<span>${useContext(ThemeContext)}</span>`,
+        );
+      }
+    }
+
+    defineElement(readerTag, ContextReader);
+
+    const provider = document.createElement("litsx-context-provider");
+    const reader = document.createElement(readerTag);
+    provider.appendChild(reader);
+    document.body.appendChild(provider);
+
+    await reader.updateComplete;
+    assert.match(reader.shadowRoot.textContent, /light/);
+
+    provider.value = "late";
+    provider.context = ThemeContext;
+    await flush();
+    await reader.updateComplete;
+
+    assert.match(reader.shadowRoot.textContent, /late/);
+  });
+
   it("supports renderContext and rejects context changes after initialization", async () => {
     ensureProviderElement();
     const ThemeContext = createContext("light");
@@ -118,11 +162,10 @@ describe("react context compat runtime", () => {
 
     class ConsumerView extends LitElement {
       render() {
-        return html`${renderContext(
-          this,
+        return renderWithHooks(this, () => html`${renderContext(
           ThemeContext,
           (theme) => html`<strong>${theme}</strong>`
-        )}`;
+        )}`);
       }
     }
 
@@ -154,11 +197,11 @@ describe("react context compat runtime", () => {
     };
 
     assert.throws(
-      () => useContext(host, {}),
+      () => runWithHookHost(host, () => useContext({})),
       /requires a context created by createContext/
     );
     assert.throws(
-      () => renderContext({}, createContext("light"), "not-a-function"),
+      () => renderContext(createContext("light"), "not-a-function"),
       /requires a function child/
     );
   });
@@ -187,5 +230,63 @@ describe("react context compat runtime", () => {
       provider.connectedCallback();
       provider.disconnectedCallback();
     });
+  });
+
+  it("propagates scoped light-DOM provider values assigned before upgrade", async () => {
+    const ThemeContext = createContext("default");
+    const providerTag = nextTag("litsx-context-provider-scoped");
+    const readerTag = nextTag("litsx-context-reader-scoped");
+
+    class ContextReader extends LitElement {
+      render() {
+        return renderWithHooks(
+          this,
+          () => html`<span>${useContext(ThemeContext)}</span>`,
+        );
+      }
+    }
+
+    defineElement(readerTag, ContextReader);
+    ensureLightDomProxy(providerTag);
+
+    const host = document.createElement("section");
+    const registry = createLightDomRegistry(host, {});
+    host.innerHTML = `<${providerTag}></${providerTag}>`;
+    const provider = host.firstElementChild;
+
+    // This is the order produced when Lit commits bindings before the light
+    // host has finished installing its scoped definitions.
+    provider.context = ThemeContext;
+    provider.value = "violet";
+    const reader = document.createElement(readerTag);
+    provider.appendChild(reader);
+    document.body.appendChild(host);
+
+    registry.define(providerTag, LitsxContextProviderElement);
+    await reader.updateComplete;
+
+    assert.ok(provider._provider);
+    assert.strictEqual(Object.hasOwn(provider, "context"), false);
+    assert.strictEqual(Object.hasOwn(provider, "value"), false);
+    assert.match(reader.shadowRoot.textContent, /violet/);
+
+    for (const value of ["coral", false, 0, "", null, "violet"]) {
+      provider.value = value;
+      await flush();
+      await reader.updateComplete;
+      assert.strictEqual(
+        reader.shadowRoot.querySelector("span").textContent,
+        value == null ? "" : String(value),
+      );
+    }
+
+    host.remove();
+    document.body.appendChild(host);
+    provider.value = "reconnected";
+    await flush();
+    await reader.updateComplete;
+    assert.match(reader.shadowRoot.textContent, /reconnected/);
+
+    host.remove();
   });
 });

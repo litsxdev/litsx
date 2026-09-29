@@ -1,5 +1,5 @@
 import assert from "assert";
-import babelTypes from "@babel/types";
+import * as babelTypes from "@babel/types";
 import traverseModule from "@babel/traverse";
 import { beforeAll } from "vitest";
 import parser from "./helpers/litsx-parser.js";
@@ -231,12 +231,12 @@ describe("native properties internals", () => {
 
     const propertyNames = [...result.propertyNames].sort();
     assert.deepStrictEqual(propertyNames, [
+      "__litsxRestProps",
       "data-id",
       "forwardedRef",
       "list",
       "nested",
       "ready",
-      "restProps",
       "title",
     ]);
 
@@ -244,6 +244,9 @@ describe("native properties internals", () => {
     assert.strictEqual(bindings.get("props").kind, "alias");
     assert.strictEqual(bindings.get("dataId"), "data-id");
     assert.strictEqual(bindings.get("ref"), "forwardedRef");
+    assert.strictEqual(bindings.get("restProps").kind, "rest-alias");
+    assert.strictEqual(bindings.get("restProps").propertyName, "__litsxRestProps");
+    assert.deepStrictEqual(result.restProps, { propertyName: "__litsxRestProps" });
 
     const defaults = result.defaults;
     assert(defaults.has("list"));
@@ -610,7 +613,7 @@ describe("native properties internals", () => {
         },
         props
       ) {
-        return <article>{first}{second}{aliasOne}{aliasTwo}{ref?.current}{props.title}</article>;
+        return <article>{first}{second}{aliasOne}{aliasTwo}{ref?.value}{props.title}</article>;
       }
     `;
 
@@ -746,5 +749,35 @@ describe("native properties internals", () => {
     assert.strictEqual(aliasEntries.title.type, "String");
     assert.strictEqual(aliasEntries.ready.type, "Boolean");
     assert.strictEqual(mapEntries.meta.type, "String");
+  });
+
+  it("infers opaque prop aliases with defaults and nested destructuring", () => {
+    const source = `
+      function OpaqueCard(props) {
+        const alias = props;
+        const aliasAgain = alias;
+        const [ignored] = aliasAgain;
+        const {
+          title,
+          "label": renamed,
+          count = 1,
+          nested: { value },
+          list: [first],
+          [dynamic]: computed,
+          ...rest
+        } = aliasAgain;
+        return <article>{title}{renamed}{count}{value}{first}{computed}{rest.extra}</article>;
+      }
+    `;
+    const { functionPath, programPath } = getFunctionAndProgramPaths(source, ["jsx"]);
+    const result = extractProperties(functionPath, programPath, {});
+    const names = result.properties.map((property) => property.key.name ?? property.key.value);
+    assert.ok(names.includes("title"));
+    assert.ok(names.includes("label"));
+    assert.ok(names.includes("count"));
+    assert.ok(names.includes("nested"));
+    assert.ok(names.includes("list"));
+    assert.strictEqual(result.defaults.get("count").value, 1);
+    assert.ok(result.nestedInitializers.length >= 2);
   });
 });

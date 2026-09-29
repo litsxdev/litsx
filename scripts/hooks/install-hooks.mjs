@@ -3,11 +3,15 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
-const sourcePath = path.join(repoRoot, "scripts/hooks/pre-push");
-const targetPath = path.join(repoRoot, ".git/hooks/pre-push");
+const hooks = ["commit-msg", "pre-push"];
 
-fs.mkdirSync(path.dirname(targetPath), { recursive: true });
-fs.copyFileSync(sourcePath, targetPath);
-fs.chmodSync(targetPath, 0o755);
+for (const hookName of hooks) {
+  const sourcePath = path.join(repoRoot, "scripts/hooks", hookName);
+  const targetPath = path.join(repoRoot, ".git/hooks", hookName);
 
-console.log(`installed pre-push hook at ${targetPath}`);
+  fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+  fs.copyFileSync(sourcePath, targetPath);
+  fs.chmodSync(targetPath, 0o755);
+
+  console.log(`installed ${hookName} hook at ${targetPath}`);
+}

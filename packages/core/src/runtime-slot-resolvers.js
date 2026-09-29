@@ -119,7 +119,7 @@ export function resolveMutableRef(controller, initialValue) {
 
   if (!slot) {
     slot = controller.mutableRefs[index] = {
-      ref: { current: initialValue },
+      ref: { value: initialValue },
     };
   }
 

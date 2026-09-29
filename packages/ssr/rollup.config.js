@@ -5,7 +5,9 @@ const packageDir = fileURLToPath(new URL(".", import.meta.url));
 
 export default createPackageRollupConfig({
   packageDir,
-  input: { index: "src/index.js", client: "src/client.js" },
+  input: {
+    "install-dom-shim.browser": "src/install-dom-shim.browser.js",
+  },
   esmOutputs: true,
   copyDeclarations: true,
 });

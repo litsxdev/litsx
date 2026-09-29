@@ -34,8 +34,8 @@ import {
  * @param {unknown} [initialValue] Value returned on the first render before any previous value exists.
  * @returns {unknown} The previous render's value, or initialValue on the first render.
  */
-export function usePrevious(host, value, initialValue) {
-  return getController(host).resolvePrevious(value, initialValue);
+export function usePrevious(value, initialValue) {
+  return getController().resolvePrevious(value, initialValue);
 }
 
 /**
@@ -63,8 +63,8 @@ export function usePrevious(host, value, initialValue) {
  * @param {(arg: any) => any} [init] Optional initializer that derives the starting state from initialArg.
  * @returns {[any, (action: any) => void]} The current state and a dispatch function that sends actions to the reducer.
  */
-export function useReducedState(host, reducer, initialArg, init) {
-  return getController(host).resolveReducer(reducer, initialArg, init);
+export function useReducedState(reducer, initialArg, init) {
+  return getController().resolveReducer(reducer, initialArg, init);
 }
 
 /**
@@ -86,12 +86,11 @@ export function useReducedState(host, reducer, initialArg, init) {
  * @param {any | (() => any)} initialState Initial state value, or a function that lazily computes it once.
  * @returns {[any, (next: any | ((value: any) => any)) => void]} The current state and a setter for the next value.
  */
-export function useState(host, initialState) {
+export function useState(initialState) {
   const hasInitializer = typeof initialState === "function";
   const reducer = (prev, action) =>
     typeof action === "function" ? action(prev) : action;
   const [value, dispatch] = useReducedState(
-    host,
     reducer,
     initialState,
     hasInitializer ? (initializer) => initializer() : undefined
@@ -121,12 +120,12 @@ export function useState(host, initialState) {
  * @param {{ value?: any, defaultValue?: any, onChange?: (value: any) => void }} options
  * @returns {[any, (next: any | ((value: any) => any)) => void]}
  */
-export function useControlledState(host, options) {
+export function useControlledState(options) {
   const isControlled = options.value !== undefined;
-  const [internalValue, setInternalValue] = useState(host, options.defaultValue);
+  const [internalValue, setInternalValue] = useState(options.defaultValue);
   const currentValue = isControlled ? options.value : internalValue;
 
-  const setValue = useEvent(host, (next) => {
+  const setValue = useEvent((next) => {
     if (isControlled) {
       const resolvedValue = typeof next === "function"
         ? next(currentValue)
@@ -183,9 +182,8 @@ export function useControlledState(host, options) {
  * @param {(state: any, ...args: any[]) => any | Promise<any>} action
  * @returns {[any, (...args: any[]) => Promise<any>, { pending: boolean, error: unknown | null, reset: () => void }]}
  */
-export function useAsyncState(host, initialState, action) {
+export function useAsyncState(initialState, action) {
   return useAsyncStateImpl(
-    host,
     initialState,
     action,
     useState,
@@ -218,8 +216,8 @@ export function useAsyncState(host, initialState, action) {
  * @param {(state: any, optimisticValue: any) => any} [updateFn]
  * @returns {[any, (value: any) => void, () => void]}
  */
-export function useOptimistic(host, state, updateFn) {
-  return useOptimisticImpl(host, state, updateFn, useRef, useState);
+export function useOptimistic(state, updateFn) {
+  return useOptimisticImpl(state, updateFn, useRef, useState);
 }
 
 /**
@@ -242,8 +240,8 @@ export function useOptimistic(host, state, updateFn) {
  * @param {import('lit').ReactiveControllerHost} host
  * @returns {[boolean, (callback: () => any) => any]} A pending flag and a function that schedules non-urgent work.
  */
-export function useTransition(host) {
-  return useTransitionImpl(host);
+export function useTransition() {
+  return useTransitionImpl();
 }
 
 /**
@@ -252,8 +250,8 @@ export function useTransition(host) {
  * @param {() => any} callback
  * @returns {any}
  */
-export function startTransition(host, callback) {
-  return startTransitionImpl(host, callback);
+export function startTransition(callback) {
+  return startTransitionImpl(callback);
 }
 
 /**
@@ -276,33 +274,33 @@ export function startTransition(host, callback) {
  * @param {{ timeout?: number }} [options] Optional timing hints for how long the deferred value may lag behind.
  * @returns {any} The deferred value currently exposed to render logic.
  */
-export function useDeferredValue(host, value, options) {
-  return useDeferredValueImpl(host, value, options);
+export function useDeferredValue(value, options) {
+  return useDeferredValueImpl(value, options);
 }
 
 /**
  * Store a mutable value across renders without causing updates.
  * @usage Use useRef for stable mutable cells such as timers, previous snapshots, and imperative handles.
  * @usage Attach a ref created by useRef to JSX `ref=...` when it should point at a rendered element or component instance.
- * @behavior The ref object exposes a mutable current property.
- * @behavior When attached to an intrinsic element, the Lit<sup>sx</sup> transform layer keeps current synchronized with that rendered element.
+ * @behavior The ref object exposes Lit's mutable value property.
+ * @behavior When attached to an intrinsic element, Lit's ref directive keeps value synchronized with that rendered element.
  * @behavior When attached to a component tag, the ref resolves to the component instance by default.
  * @behavior Components can override that default target by explicitly forwarding the incoming ref to another element or child component.
  * @behavior When used as plain mutable storage, the ref persists across renders without causing updates on writes.
  * @mentalModel useRef is the single mutable ref primitive in Lit<sup>sx</sup>, whether the ref stores arbitrary data, tracks a rendered DOM node, or points at a component instance.
- * @pitfall Do not read ref.current as a source of truth for render decisions if that value can change outside the current render pass.
+ * @pitfall Do not read ref.value as a source of truth for render decisions if that value can change outside the current render pass.
  * @pitfall Prefer state hooks when a change should trigger an update. Refs are for persistence and imperative coordination.
  * @example
- * const inputRef = useRef(null);
+ * const inputRef = useRef();
  *
  * useOnCommit(() => {
- *   inputRef.current?.focus();
+ *   inputRef.value?.focus();
  * }, []);
  * @param {import('lit').ReactiveControllerHost} host
  * @param {any} [initialValue]
  */
-export function useRef(host, initialValue) {
-  return useRefImpl(host, initialValue);
+export function useRef(initialValue) {
+  return useRefImpl(getController().host, initialValue);
 }
 
 /**
@@ -328,8 +326,8 @@ export function useRef(host, initialValue) {
  * @param {import('lit').ReactiveControllerHost} host
  * @returns {string}
  */
-export function useId(host) {
-  return useIdImpl(host);
+export function useId() {
+  return useIdImpl(getController().host);
 }
 
 /**
@@ -343,8 +341,8 @@ export function useId(host) {
  * @param {string} [callsiteId]
  * @returns {string}
  */
-export function useStableId(host, callsiteId) {
-  return useStableIdImpl(host, callsiteId);
+export function useStableId(callsiteId) {
+  return useStableIdImpl(getController().host, callsiteId);
 }
 
 /**
@@ -354,8 +352,8 @@ export function useStableId(host, callsiteId) {
  * @param {(node: Element | null) => void} callback
  * @param {ReadonlyArray<unknown>} [deps]
  */
-export function useCallbackRef(host, getTarget, callback, deps) {
-  return useCallbackRefImpl(host, getTarget, callback, deps);
+export function useCallbackRef(getTarget, callback, deps) {
+  return useCallbackRefImpl(getController().host, getTarget, callback, deps);
 }
 
 /**
@@ -375,7 +373,7 @@ export function useCallbackRef(host, getTarget, callback, deps) {
  * @example
  * useExpose(() => ({
  *   focus() {
- *     inputRef.current?.focus();
+ *     inputRef.value?.focus();
  *   },
  *   clear() {
  *     setValue("");
@@ -384,18 +382,18 @@ export function useCallbackRef(host, getTarget, callback, deps) {
  *
  * useExpose(forwardedRef, () => ({
  *   focus() {
- *     innerRef.current?.focus();
+ *     innerRef.value?.focus();
  *   },
  * }), [forwardedRef, innerRef]);
  * @param {import('lit').ReactiveControllerHost} host
- * @param {{ current: Record<string, Function> | null } | ((value: Record<string, Function> | null) => void) | (() => Record<string, Function>)} refOrCreateHandle
+ * @param {{ value: Record<string, Function> | undefined } | ((value: Record<string, Function> | undefined) => void) | (() => Record<string, Function>)} refOrCreateHandle
  * Either the target ref that should receive the exposed methods, or the handle factory when targeting the host instance directly.
  * @param {(() => Record<string, Function>) | ReadonlyArray<unknown>} [createHandleOrDeps]
  * Handle factory for the ref-targeted signature, or dependency list for the host-targeted signature.
  * @param {ReadonlyArray<unknown>} [deps] Reactive values that control when the exposed method implementations should be refreshed.
  */
-export function useExpose(host, refOrCreateHandle, createHandleOrDeps, deps) {
-  return useExposeImpl(host, refOrCreateHandle, createHandleOrDeps, deps);
+export function useExpose(refOrCreateHandle, createHandleOrDeps, deps) {
+  return useExposeImpl(getController().host, refOrCreateHandle, createHandleOrDeps, deps);
 }
 
 /**
@@ -423,6 +421,6 @@ export function useExpose(host, refOrCreateHandle, createHandleOrDeps, deps) {
  * @param {() => any} [getServerSnapshot] Optional snapshot getter for server rendering scenarios.
  * @returns {any} The latest snapshot currently exposed by the external store.
  */
-export function useExternalStore(host, subscribe, getSnapshot, getServerSnapshot) {
-  return useExternalStoreImpl(host, subscribe, getSnapshot, getServerSnapshot);
+export function useExternalStore(subscribe, getSnapshot, getServerSnapshot) {
+  return useExternalStoreImpl(getController().host, subscribe, getSnapshot, getServerSnapshot);
 }

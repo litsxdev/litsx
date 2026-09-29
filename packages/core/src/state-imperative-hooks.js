@@ -42,7 +42,7 @@ export function useCallbackRefImpl(host, getTarget, callback, deps) {
 
   getController(host).registerImperative(
     boundCallback,
-    () => getTarget.call(host) ?? null,
+    () => getTarget.call(host) ?? undefined,
     deps
   );
 }

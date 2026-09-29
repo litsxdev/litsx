@@ -1,4 +1,4 @@
-import helperPluginUtils from "@babel/helper-plugin-utils";
+import { declare } from "@babel/helper-plugin-utils";
 import jsxSyntaxPlugin from "@babel/plugin-syntax-jsx";
 import {
   addNamedImport,
@@ -10,10 +10,9 @@ import {
   setReactCompatSharedBabelTypes,
 } from "./react-compat-shared.js";
 
-const { declare } = helperPluginUtils;
 
 export default declare((api) => {
-  api.assertVersion(7);
+  api.assertVersion("^8.0.0");
   const t = api.types;
 
   function getSuspenseKind(nameNode, state) {
@@ -104,6 +103,7 @@ export default declare((api) => {
 
   function isEnsureLazyCall(statement) {
     return (
+      statement?.__litsxAutoEnsureLazyElement === true &&
       t.isExpressionStatement(statement) &&
       t.isCallExpression(statement.expression) &&
       t.isIdentifier(statement.expression.callee, {
@@ -122,13 +122,32 @@ export default declare((api) => {
     const bodyPath = renderMethod.get("body");
     if (!bodyPath.isBlockStatement()) return [];
 
+    let statementContainer = bodyPath;
+    const renderStatements = bodyPath.get("body");
+    const soleStatement = renderStatements.length === 1 ? renderStatements[0] : null;
+    if (
+      soleStatement?.isReturnStatement() &&
+      soleStatement.get("argument").isCallExpression()
+    ) {
+      const callPath = soleStatement.get("argument");
+      const callbackPath = callPath.get("arguments").find((argumentPath) =>
+        argumentPath.isArrowFunctionExpression() || argumentPath.isFunctionExpression()
+      );
+      if (callbackPath) {
+        const callbackBody = callbackPath.get("body");
+        if (callbackBody.isBlockStatement()) {
+          statementContainer = callbackBody;
+        }
+      }
+    }
+
     const renderedTags = collectRenderedTags(path);
     if (renderedTags.size === 0) return [];
 
     const taken = [];
     const remaining = [];
 
-    for (const statement of bodyPath.node.body) {
+    for (const statement of statementContainer.node.body) {
       if (!isEnsureLazyCall(statement)) {
         remaining.push(statement);
         continue;
@@ -143,7 +162,7 @@ export default declare((api) => {
       taken.push(t.cloneNode(statement, true));
     }
 
-    bodyPath.node.body = remaining;
+    statementContainer.node.body = remaining;
 
     return taken;
   }
@@ -192,9 +211,20 @@ export default declare((api) => {
         )
     );
 
+    const normalizedAttributes = attributes.map((attr) => {
+      const cloned = t.cloneNode(attr, true);
+      if (
+        t.isJSXAttribute(cloned) &&
+        t.isJSXIdentifier(cloned.name, { name: "revealOrder" })
+      ) {
+        cloned.name = t.jsxIdentifier(".revealOrder");
+      }
+      return cloned;
+    });
+
     return createComponentElement(
       "SuspenseList",
-      attributes.map((attr) => t.cloneNode(attr, true)),
+      normalizedAttributes,
       node.children.map((child) => t.cloneNode(child, true)),
       "_litsxSuspenseTransformed"
     );

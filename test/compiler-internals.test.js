@@ -7,17 +7,20 @@ const patchLitAttributeSourcemap = vi.fn();
 const createLitsxPresetPlugins = vi.fn();
 const detectLitsxSourceFeatures = vi.fn();
 const prepareLitsxAuthoredInput = vi.fn();
+const resolveLitsxRequireJsx = vi.fn((filename, override) =>
+  typeof override === "boolean"
+    ? override
+    : !/\.(?:ts|mts|cts)(?:[?#]|$)/.test(filename ?? ""),
+);
 const mergeLitsxWarnings = vi.fn();
 const ensureTypescriptModule = vi.fn();
-const createLitsxTypecheckSession = vi.fn();
+const createProjectTsSession = vi.fn();
 const createStandaloneTsSession = vi.fn();
 const normalizeFilePath = vi.fn((value = "") => String(value).replace(/\\/g, "/"));
 
 vi.mock("@babel/core", () => ({
-  default: {
-    transformFromAstAsync,
-    transformFromAstSync,
-  },
+  transformFromAstAsync,
+  transformFromAstSync,
 }));
 
 vi.mock("@litsx/babel-plugin-transform-jsx-html-template", () => ({
@@ -34,11 +37,8 @@ vi.mock("@litsx/babel-preset-litsx/internal/transform-litsx-properties", () => (
   ensureTypescriptModule,
 }));
 
-vi.mock("@litsx/typescript/typecheck", () => ({
-  createLitsxTypecheckSession,
-}));
-
 vi.mock("@litsx/typescript-session", () => ({
+  createProjectTsSession,
   createStandaloneTsSession,
   normalizeFilePath,
 }));
@@ -46,6 +46,10 @@ vi.mock("@litsx/typescript-session", () => ({
 vi.mock("../packages/compiler/src/authored-input.js", () => ({
   ensureLitsxParserPlugins: vi.fn(),
   prepareLitsxAuthoredInput,
+}));
+
+vi.mock("../packages/compiler/src/filename-syntax.js", () => ({
+  resolveLitsxRequireJsx,
 }));
 
 vi.mock("../packages/compiler/src/warnings.js", () => ({
@@ -69,12 +73,10 @@ describe("compiler internals", () => {
       clearOverlayFiles: vi.fn(),
     });
 
-    createLitsxTypecheckSession.mockImplementation((args, options = {}) => ({
-      projectSession: options.projectSession || {
-        invalidate: vi.fn(),
-        clearOverlayFiles: vi.fn(),
-      },
-    }));
+    createProjectTsSession.mockReturnValue({
+      invalidate: vi.fn(),
+      clearOverlayFiles: vi.fn(),
+    });
 
     detectLitsxSourceFeatures.mockReturnValue({
       hooks: false,
@@ -84,7 +86,6 @@ describe("compiler internals", () => {
 
     prepareLitsxAuthoredInput.mockReturnValue({
       filename: "/virtual/Example.jsx",
-      virtualization: { map: { version: 3 } },
       inputAst: { type: "File" },
       authoredWarnings: [{ code: "WARN" }],
       moduleAnalysis: { imports: [], exports: [], declarations: [], jsxReferences: [] },
@@ -211,14 +212,43 @@ describe("compiler internals", () => {
     delete process.env.LITSX_PROFILE;
   });
 
-  it("uses session-level typecheck sessions when a compilation session is project-backed", async () => {
+  it("normalizes final sourcemap sourcesContent back to the authored source", async () => {
+    transformFromAstSync.mockReturnValue({
+      code: "compiled-output",
+      map: {
+        version: 3,
+        sources: ["/virtual/Example.tsx"],
+        sourcesContent: ["const compiled = true;"],
+        names: [],
+        mappings: "",
+      },
+      metadata: {},
+    });
+
+    const mod = await import("../packages/compiler/src/index.js");
+    const source = "export const Example = () => <div />;";
+    const result = mod.transformLitsxSync(source, {
+      filename: "/virtual/Example.tsx",
+      jsxTemplate: false,
+      sourceMaps: true,
+    });
+
+    assert.deepStrictEqual(result.map.sources, ["/virtual/Example.tsx"]);
+    assert.deepStrictEqual(result.map.sourcesContent, [source]);
+  });
+
+  it("uses a project TypeScript session when a compilation session is project-backed", async () => {
     const projectSession = {
       invalidate: vi.fn(),
       clearOverlayFiles: vi.fn(),
     };
-    createLitsxTypecheckSession.mockImplementation((args, options = {}) => ({
-      projectSession: options.projectSession || projectSession,
-    }));
+    ensureTypescriptModule.mockReturnValueOnce({
+      readConfigFile: vi.fn(() => ({ config: {} })),
+      parseJsonConfigFileContent: vi.fn(() => ({ errors: [], fileNames: [], options: {} })),
+      flattenDiagnosticMessageText: vi.fn((value) => String(value)),
+      sys: { readFile: vi.fn() },
+    });
+    createProjectTsSession.mockReturnValueOnce(projectSession);
 
     const mod = await import("../packages/compiler/src/index.js");
     const session = mod.createLitsxCompilationSession({
@@ -226,8 +256,10 @@ describe("compiler internals", () => {
     });
 
     try {
-      const wrapped = session.getTypecheckSession(["--project", "/virtual/tsconfig.json"]);
-      assert.strictEqual(wrapped.projectSession, session.typescriptSession);
+      assert.strictEqual(session.typescriptSession, projectSession);
+      expect(createProjectTsSession).toHaveBeenCalledWith(expect.objectContaining({
+        sessionKey: "project:/virtual/tsconfig.json",
+      }));
     } finally {
       session.dispose();
     }
@@ -242,17 +274,11 @@ describe("compiler internals", () => {
 
     const mod = await import("../packages/compiler/src/index.js");
     const session = mod.createLitsxCompilationSession({
-      transformOptions: { filename: "Component.litsx.jsx" },
+      transformOptions: { filename: "Component.tsx" },
     });
 
     try {
-      const wrapped = session.getTypecheckSession();
-      expect(createLitsxTypecheckSession).toHaveBeenLastCalledWith([], {
-        projectSession: session.typescriptSession,
-      });
-      assert.strictEqual(wrapped.projectSession, session.typescriptSession);
-
-      session.invalidate(["/virtual/Component.litsx.jsx"]);
+      session.invalidate(["/virtual/Component.tsx"]);
       expect(standaloneSession.invalidate).toHaveBeenCalled();
     } finally {
       session.dispose();

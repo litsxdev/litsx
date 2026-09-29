@@ -1,4 +1,8 @@
-import type { LitElement, ReactiveElement } from "lit";
+import type { CSSResultGroup, LitElement, ReactiveElement, TemplateResult } from "lit";
+import type { DirectiveResult } from "lit/directive.js";
+import type { Ref } from "lit/directives/ref.js";
+export { css } from "lit";
+export { ref } from "lit/directives/ref.js";
 
 export interface LitsxJsxNode {
   $$typeof: symbol;
@@ -11,6 +15,8 @@ export interface LitsxJsxNode {
 
 export type LitsxRenderable =
   | LitsxJsxNode
+  | TemplateResult
+  | DirectiveResult
   | string
   | number
   | boolean
@@ -18,19 +24,116 @@ export type LitsxRenderable =
   | undefined
   | Iterable<unknown>;
 
-export type LitsxRef<T> = T | ((value: T | null) => void) | null;
+/** Property map accepted by Lit's styleMap directive in JSX style bindings. */
+export type LitsxStyleInfo = Readonly<
+  Record<string, string | number | null | undefined>
+>;
+
+declare const LITSX_REF_TARGET: unique symbol;
+
+/** Write capability carried by LitSX-created ref objects for safe JSX assignment. */
+interface LitsxRefTarget<T> {
+  readonly [LITSX_REF_TARGET]: (value: T | undefined) => void;
+}
+
+/** A Lit ref object whose public value is updated by the JSX ref directive. */
+export interface LitsxRefObject<T> extends LitsxRefTarget<T> {
+  readonly value?: T;
+}
+
+/** A mutable ref object returned by `useRef`. */
+export interface LitsxMutableRef<T> extends LitsxRefTarget<T> {
+  value: T | undefined;
+}
+
+/** Create a Lit-native object ref with a target-aware JSX write contract. */
+export declare function createRef<T = Element>(): LitsxRefObject<T>;
+
+/** A Lit-native ref. Assignment uses `.value`; cleanup publishes `undefined`. */
+export type LitsxRef<T> =
+  | (Ref<T> & { readonly [LITSX_REF_TARGET]?: never })
+  | LitsxRefTarget<T>
+  | {
+      bivarianceHack(value: T | undefined): void;
+    }["bivarianceHack"];
+export interface ExecutionContextKey<T> {
+  readonly __brand?: T;
+}
+export interface LitsxExecutionContext {
+  get<T>(key: ExecutionContextKey<T>): T | undefined;
+  set<T>(key: ExecutionContextKey<T>, value: T): void;
+  has<T>(key: ExecutionContextKey<T>): boolean;
+}
+export type JsonSerializable =
+  | null
+  | boolean
+  | number
+  | string
+  | JsonSerializable[]
+  | { [key: string]: JsonSerializable };
+
+export interface SsrResourceSnapshotOptions {
+  /** Stable library-owned identity for the global resource cache. */
+  key: string;
+  /** Read the completed cache after the final SSR render pass. */
+  capture: () => JsonSerializable;
+  /** Restore the cache synchronously before hydration modules render. */
+  restore: (snapshot: JsonSerializable) => void;
+}
+
+/**
+ * Register or restore a library-owned global SSR resource cache.
+ *
+ * This hook is inert outside an active LitSX SSR render or hydration payload.
+ * Library runtimes should expose higher-level hooks rather than asking
+ * applications to call this API or install hydration bootstrap code.
+ */
+export declare function useSsrResourceSnapshot(
+  options: SsrResourceSnapshotOptions,
+): void;
 export declare const LITSX_HOOK: unique symbol;
 export declare const LITSX_COMPONENT: unique symbol;
+export declare const LITSX_EVENTS: unique symbol;
 export declare const LITSX_HOST_TYPE_ID: unique symbol;
-export declare const STRUCTURAL_HOOK_ENTRIES: unique symbol;
+export declare const LITSX_LIGHT_DOM: unique symbol;
+export declare const LITSX_LIGHT_DOM_STYLE_SCOPE: unique symbol;
+export declare const LITSX_HYDRATABLE_TAG: unique symbol;
 export interface LitsxHook {
   readonly [LITSX_HOOK]: true;
 }
-export interface LitsxComponentStatic {
+export interface LitsxEventMetadata {
+  readonly events: readonly string[];
+  readonly complete: boolean;
+}
+export interface LitsxEventDeclaration<
+  Events extends Record<string, unknown>,
+  Complete extends boolean = boolean,
+> extends LitsxEventMetadata {
+  readonly complete: Complete;
+  readonly __types?: Events;
+}
+export interface LitsxComponentStatic<Events extends Record<string, unknown> = Record<string, unknown>> {
   readonly [LITSX_COMPONENT]: true;
+  readonly [LITSX_LIGHT_DOM]?: true;
+  readonly [LITSX_EVENTS]?: LitsxEventDeclaration<Events, boolean>;
+  readonly events?: LitsxEventDeclaration<Events, boolean>;
+}
+
+/**
+ * Extension point for compile-time-only Component.styles sources. Packages
+ * augment this registry without widening Lit's runtime CSSResultGroup.
+ */
+export interface LitsxStyleSourceRegistry {}
+export type LitsxAuthoringStyle =
+  | CSSResultGroup
+  | LitsxStyleSourceRegistry[keyof LitsxStyleSourceRegistry]
+  | readonly LitsxAuthoringStyle[];
+export interface LitsxHydratableComponentStatic extends LitsxComponentStatic {
+  readonly [LITSX_HYDRATABLE_TAG]: string;
 }
 export interface LitsxHostTypeIdStatic extends LitsxComponentStatic {
   readonly [LITSX_HOST_TYPE_ID]: string;
+  readonly [LITSX_LIGHT_DOM_STYLE_SCOPE]?: string;
 }
 export declare function isLitsxHook(value: unknown): value is LitsxHook;
 export declare function isLitsxComponentClass(
@@ -39,16 +142,67 @@ export declare function isLitsxComponentClass(
 export declare function jsxSpreadElement(
   tagName: string,
   sources: ReadonlyArray<Record<string, unknown> | null | undefined>,
-  options?: { component?: boolean | CustomElementConstructor; void?: boolean },
+  options?: {
+    component?: boolean | CustomElementConstructor;
+    void?: boolean;
+    namespace?: "html" | "svg";
+    refAdapter?: (value: unknown) => unknown;
+  },
   children?: unknown
 ): import("lit").TemplateResult;
+export declare function resolveStyle(
+  value: string | null | undefined,
+): string | null | undefined;
+export declare function resolveStyle(value: LitsxStyleInfo): DirectiveResult;
+export declare function resolveStyle(value: DirectiveResult): DirectiveResult;
+
+/** @internal Compiler/runtime bridge for dynamic <noscript> fallback markup. */
+export declare function __litsxNoscript(
+  factory: () => unknown,
+  elements?: Record<string, unknown> | null,
+): unknown;
+/** @internal SSR-only accessor for __litsxNoscript records. */
+export declare function __getLitsxNoscriptFactory(value: unknown): {
+  factory: () => unknown;
+  elements: Record<string, unknown> | null;
+} | null;
 
 export interface LitsxBaseAttributes {
-  key?: string | number;
+  id?: string;
   slot?: string;
   class?: string;
+  accesskey?: string;
+  autocapitalize?: string;
+  autofocus?: boolean;
+  contenteditable?: boolean | "true" | "false" | "plaintext-only";
+  dir?: "ltr" | "rtl" | "auto";
+  draggable?: boolean;
+  enterkeyhint?: string;
+  hidden?: boolean | "until-found";
+  inert?: boolean;
+  inputmode?: string;
+  is?: string;
+  itemid?: string;
+  itemprop?: string;
+  itemref?: string;
+  itemscope?: boolean;
+  itemtype?: string;
+  lang?: string;
+  nonce?: string;
+  popover?: boolean | "" | "auto" | "manual" | "hint";
+  role?: string;
+  tabindex?: string | number;
+  title?: string;
+  translate?: boolean | "yes" | "no";
+  virtualkeyboardpolicy?: "auto" | "manual";
+  writingsuggestions?: boolean | "true" | "false";
+  autoFocus?: boolean;
+  spellCheck?: boolean;
+  spellcheck?: boolean;
   part?: string;
-  style?: string | Partial<CSSStyleDeclaration>;
+  exportparts?: string;
+  /** Inline CSS text or a property map applied through Lit's styleMap directive. */
+  style?: string | LitsxStyleInfo | null;
   /**
    * Authored child content passed between component tags.
    * LitSX treats this as projected content for the default slot.
@@ -67,61 +221,106 @@ export type LitsxEventHandler<TEvent extends Event = Event> = {
   bivarianceHack(event: TEvent): unknown;
 }["bivarianceHack"];
 
-export type LitsxKnownDomEventAttributes<Target = EventTarget> = {
-  [EventName in keyof GlobalEventHandlersEventMap as `__litsx_event_${EventName & string}`]?: LitsxEventHandler<
-    GlobalEventHandlersEventMap[EventName] & CustomEvent<any> & { currentTarget: Target }
+export type LitsxEventListener<TEvent extends Event = Event> =
+  | LitsxEventHandler<TEvent>
+  | {
+      handleEvent: LitsxEventHandler<TEvent>;
+      capture?: boolean;
+      once?: boolean;
+      passive?: boolean;
+    };
+
+/** React-style DOM event props used by the optional compatibility surface. */
+export type LitsxStandardDomEventAttributes<Target = EventTarget> = {
+  [EventName in keyof GlobalEventHandlersEventMap as `on${Capitalize<EventName & string>}`]?: LitsxEventHandler<
+    GlobalEventHandlersEventMap[EventName] & { currentTarget: Target }
+  >;
+} & {
+  [EventName in keyof GlobalEventHandlersEventMap as `on${Capitalize<EventName & string>}Capture`]?: LitsxEventHandler<
+    GlobalEventHandlersEventMap[EventName] & { currentTarget: Target }
+  >;
+} & {
+  onDoubleClick?: LitsxEventHandler<MouseEvent & { currentTarget: Target }>;
+  onDoubleClickCapture?: LitsxEventHandler<MouseEvent & { currentTarget: Target }>;
+  onMouseDown?: LitsxEventHandler<MouseEvent & { currentTarget: Target }>;
+  onMouseDownCapture?: LitsxEventHandler<MouseEvent & { currentTarget: Target }>;
+  onMouseUp?: LitsxEventHandler<MouseEvent & { currentTarget: Target }>;
+  onMouseUpCapture?: LitsxEventHandler<MouseEvent & { currentTarget: Target }>;
+  onMouseMove?: LitsxEventHandler<MouseEvent & { currentTarget: Target }>;
+  onMouseMoveCapture?: LitsxEventHandler<MouseEvent & { currentTarget: Target }>;
+  onMouseEnter?: LitsxEventHandler<MouseEvent & { currentTarget: Target }>;
+  onMouseLeave?: LitsxEventHandler<MouseEvent & { currentTarget: Target }>;
+  onPointerDown?: LitsxEventHandler<PointerEvent & { currentTarget: Target }>;
+  onPointerDownCapture?: LitsxEventHandler<PointerEvent & { currentTarget: Target }>;
+  onPointerUp?: LitsxEventHandler<PointerEvent & { currentTarget: Target }>;
+  onPointerUpCapture?: LitsxEventHandler<PointerEvent & { currentTarget: Target }>;
+  onPointerMove?: LitsxEventHandler<PointerEvent & { currentTarget: Target }>;
+  onPointerMoveCapture?: LitsxEventHandler<PointerEvent & { currentTarget: Target }>;
+  onPointerEnter?: LitsxEventHandler<PointerEvent & { currentTarget: Target }>;
+  onPointerLeave?: LitsxEventHandler<PointerEvent & { currentTarget: Target }>;
+  onPointerCancel?: LitsxEventHandler<PointerEvent & { currentTarget: Target }>;
+  onKeyDown?: LitsxEventHandler<KeyboardEvent & { currentTarget: Target }>;
+  onKeyDownCapture?: LitsxEventHandler<KeyboardEvent & { currentTarget: Target }>;
+  onKeyUp?: LitsxEventHandler<KeyboardEvent & { currentTarget: Target }>;
+  onKeyUpCapture?: LitsxEventHandler<KeyboardEvent & { currentTarget: Target }>;
+  onTouchStart?: LitsxEventHandler<TouchEvent & { currentTarget: Target }>;
+  onTouchStartCapture?: LitsxEventHandler<TouchEvent & { currentTarget: Target }>;
+  onTouchMove?: LitsxEventHandler<TouchEvent & { currentTarget: Target }>;
+  onTouchMoveCapture?: LitsxEventHandler<TouchEvent & { currentTarget: Target }>;
+  onTouchEnd?: LitsxEventHandler<TouchEvent & { currentTarget: Target }>;
+  onTouchEndCapture?: LitsxEventHandler<TouchEvent & { currentTarget: Target }>;
+  onDragStart?: LitsxEventHandler<DragEvent & { currentTarget: Target }>;
+  onDragEnd?: LitsxEventHandler<DragEvent & { currentTarget: Target }>;
+  onDragEnter?: LitsxEventHandler<DragEvent & { currentTarget: Target }>;
+  onDragLeave?: LitsxEventHandler<DragEvent & { currentTarget: Target }>;
+  onDragOver?: LitsxEventHandler<DragEvent & { currentTarget: Target }>;
+  onAnimationStart?: LitsxEventHandler<AnimationEvent & { currentTarget: Target }>;
+  onAnimationEnd?: LitsxEventHandler<AnimationEvent & { currentTarget: Target }>;
+  onAnimationIteration?: LitsxEventHandler<AnimationEvent & { currentTarget: Target }>;
+  onTransitionEnd?: LitsxEventHandler<TransitionEvent & { currentTarget: Target }>;
+};
+
+export type LitsxExplicitDomEventAttributes<Target = EventTarget> = {
+  [EventName in keyof GlobalEventHandlersEventMap as `on:${EventName & string}`]?: LitsxEventListener<
+    GlobalEventHandlersEventMap[EventName] & { currentTarget: Target }
   >;
 };
 
-export type LitsxFormEventAttributes<Target = EventTarget> =
-  Target extends HTMLFormElement
-    ? {
-        __litsx_event_reset?: LitsxEventHandler<Event & { currentTarget: Target }>;
-        __litsx_event_formdata?: LitsxEventHandler<FormDataEvent & { currentTarget: Target }>;
-      }
-    : {};
-
-export type LitsxCustomEventAttributes = {
-  [attributeName: `__litsx_event_${string}-${string}`]: LitsxEventHandler<CustomEvent<any>> | undefined;
+/** Explicit JSX event channel for custom-element events. */
+export type LitsxExplicitCustomEventAttributes = {
+  [Name in `on:${string}`]?: LitsxEventListener<any>;
 };
 
-export type LitsxAnyEventAttributes = {
-  /**
-   * Last-resort fallback for authored event names that do not have a reliable DOM event map entry.
-   * All authored events also accept CustomEvent handlers; this escape stays intentionally
-   * broad so the catch-all index does not over-constrain known DOM or custom events when
-   * intersected with narrower maps.
-   */
-  [attributeName: `__litsx_event_${string}`]: LitsxEventHandler<any> | undefined;
+/** @deprecated Use LitsxExplicitCustomEventAttributes. */
+export type LitsxStandardCustomEventAttributes<Props = {}> = LitsxExplicitCustomEventAttributes;
+
+type LitsxStandardRepresentableEventName<Name extends string> =
+  Name extends Lowercase<Name>
+    ? Name extends `${string}:${string}` | `${string}.${string}`
+      ? never
+      : Name
+    : never;
+
+export type LitsxTypedCustomEventAttributes<
+  Events extends Record<string, unknown>,
+  Target = EventTarget,
+> = {
+  [Name in Extract<keyof Events, string> as LitsxStandardRepresentableEventName<Name> extends never
+    ? never
+    : `on:${Name}`]?: LitsxEventListener<
+    CustomEvent<Events[Name]> & { currentTarget: Target }
+  >;
 };
 
 export type LitsxDomAttributes<Target = EventTarget> =
-  & LitsxKnownDomEventAttributes<Target>
-  & LitsxFormEventAttributes<Target>
-  & LitsxCustomEventAttributes
-  & LitsxAnyEventAttributes
+  & LitsxExplicitDomEventAttributes<Target>
   & {
-    /**
-     * Reserved for future JSX-authored event typing.
-     * LitSX currently treats Lit listener syntax (`@event`) as a parser-level feature,
-     * so the public JSX type surface intentionally avoids React-style `onClick` props.
-     */
     _currentTarget?: Target | undefined;
-    /**
-     * Tooling virtualizes authored `.prop` bindings to `__litsx_prop_*` attributes
-     * while preserving the original source spans for editor features.
-     */
-    [attributeName: `__litsx_prop_${string}`]: unknown;
-    /**
-     * Tooling virtualizes authored `?attr` bindings to `__litsx_bool_*` attributes
-     * while preserving the original source spans for editor features.
-     */
-    [attributeName: `__litsx_bool_${string}`]: boolean | undefined;
   };
 
 export type LitsxHostElementProps<TElement> = Omit<
   Partial<TElement>,
-  "children" | "style" | "part" | "slot" | "className"
+  "children" | "style" | "part" | "slot" | "className" | "htmlFor"
 >;
 
 export type LitsxNativeAttributeAliases<TElement> =
@@ -137,10 +336,138 @@ export type LitsxNativeAttributeAliases<TElement> =
     : {};
 
 export type LitsxElementProps<TElement = HTMLElement> =
-  & LitsxBaseAttributes
+  & Omit<LitsxBaseAttributes, "ref">
   & LitsxDomAttributes<TElement>
   & LitsxNativeAttributeAliases<TElement>
-  & LitsxHostElementProps<TElement>;
+  & LitsxHostElementProps<TElement>
+  & { ref?: LitsxRef<TElement> };
+
+export type LitsxSvgLength = string | number;
+
+/** JSX-friendly SVG presentation attributes serialized with native SVG names. */
+export interface LitsxSvgPresentationAttributes {
+  clipPath?: string;
+  clipRule?: "nonzero" | "evenodd" | "inherit";
+  color?: string;
+  colorInterpolation?: string;
+  colorInterpolationFilters?: string;
+  cursor?: string;
+  display?: string;
+  dominantBaseline?: string;
+  fill?: string;
+  fillOpacity?: string | number;
+  fillRule?: "nonzero" | "evenodd" | "inherit";
+  filter?: string;
+  floodColor?: string;
+  floodOpacity?: string | number;
+  fontFamily?: string;
+  fontSize?: LitsxSvgLength;
+  fontWeight?: string | number;
+  markerEnd?: string;
+  markerMid?: string;
+  markerStart?: string;
+  mask?: string;
+  opacity?: string | number;
+  pointerEvents?: string;
+  shapeRendering?: string;
+  stopColor?: string;
+  stopOpacity?: string | number;
+  stroke?: string;
+  strokeDasharray?: string | number;
+  strokeDashoffset?: LitsxSvgLength;
+  strokeLinecap?: "butt" | "round" | "square" | "inherit";
+  strokeLinejoin?: "arcs" | "bevel" | "miter" | "miter-clip" | "round" | "inherit";
+  strokeMiterlimit?: string | number;
+  strokeOpacity?: string | number;
+  strokeWidth?: LitsxSvgLength;
+  textAnchor?: "start" | "middle" | "end" | "inherit";
+  transform?: string;
+  vectorEffect?: string;
+  visibility?: string;
+}
+
+export interface LitsxSvgViewportAttributes {
+  x?: LitsxSvgLength;
+  y?: LitsxSvgLength;
+  width?: LitsxSvgLength;
+  height?: LitsxSvgLength;
+}
+
+export type LitsxSvgSpecificAttributes<TagName extends keyof SVGElementTagNameMap> =
+  TagName extends "svg" ? LitsxSvgViewportAttributes & {
+    viewBox?: string;
+    preserveAspectRatio?: string;
+    xmlns?: string;
+  } :
+  TagName extends "path" ? {
+    d?: string;
+    pathLength?: string | number;
+  } :
+  TagName extends "circle" ? {
+    cx?: LitsxSvgLength;
+    cy?: LitsxSvgLength;
+    r?: LitsxSvgLength;
+    pathLength?: string | number;
+  } :
+  TagName extends "ellipse" ? {
+    cx?: LitsxSvgLength;
+    cy?: LitsxSvgLength;
+    rx?: LitsxSvgLength;
+    ry?: LitsxSvgLength;
+    pathLength?: string | number;
+  } :
+  TagName extends "line" ? {
+    x1?: LitsxSvgLength;
+    x2?: LitsxSvgLength;
+    y1?: LitsxSvgLength;
+    y2?: LitsxSvgLength;
+    pathLength?: string | number;
+  } :
+  TagName extends "polygon" | "polyline" ? {
+    points?: string;
+    pathLength?: string | number;
+  } :
+  TagName extends "rect" ? LitsxSvgViewportAttributes & {
+    rx?: LitsxSvgLength;
+    ry?: LitsxSvgLength;
+    pathLength?: string | number;
+  } :
+  TagName extends "use" ? LitsxSvgViewportAttributes & {
+    href?: string;
+  } :
+  TagName extends "foreignObject" ? LitsxSvgViewportAttributes :
+  TagName extends "clipPath" ? {
+    clipPathUnits?: "userSpaceOnUse" | "objectBoundingBox";
+  } :
+  TagName extends "mask" ? LitsxSvgViewportAttributes & {
+    maskUnits?: "userSpaceOnUse" | "objectBoundingBox";
+    maskContentUnits?: "userSpaceOnUse" | "objectBoundingBox";
+  } :
+  {};
+
+export type LitsxSvgElementProps<
+  TagName extends keyof SVGElementTagNameMap,
+  TElement extends SVGElement = SVGElementTagNameMap[TagName],
+> =
+  & Omit<LitsxBaseAttributes, "ref">
+  & LitsxDomAttributes<TElement>
+  & LitsxSvgPresentationAttributes
+  & LitsxSvgSpecificAttributes<TagName>
+  & { ref?: LitsxRef<TElement> };
+
+type LitsxOverlappingIntrinsicElementProps<
+  TagName extends keyof HTMLElementTagNameMap & keyof SVGElementTagNameMap,
+> =
+  & Omit<
+      LitsxElementProps<HTMLElementTagNameMap[TagName]>,
+      keyof LitsxDomAttributes<HTMLElementTagNameMap[TagName]> | "ref"
+    >
+  & LitsxDomAttributes<HTMLElementTagNameMap[TagName]>
+  & LitsxSvgPresentationAttributes
+  & LitsxSvgSpecificAttributes<TagName>
+  // TypeScript resolves intrinsic names without JSX parent-namespace context.
+  // Follow the platform's HTML JSX convention for overlapping names such as `a`.
+  & { ref?: LitsxRef<HTMLElementTagNameMap[TagName]> };
 
 export type LitsxErrorBoundaryElementProps =
   & LitsxBaseAttributes
@@ -156,7 +483,6 @@ export type LitsxSuspenseBoundaryElementProps =
 
 export type LitsxCustomElementProps =
   & LitsxBaseAttributes
-  & LitsxDomAttributes<EventTarget>
   & {
     [attributeName: string]: unknown;
   };
@@ -167,23 +493,31 @@ export type LitsxReservedIntrinsicElementName =
   | "suspense-list";
 
 export type LitsxCustomIntrinsicElements = {
-  [TagName in `${string}-${string}` as TagName extends LitsxReservedIntrinsicElementName
-    ? never
-    : TagName]: LitsxCustomElementProps;
+  [TagName in `${string}-${string}`]:
+    TagName extends "error-boundary" ? LitsxErrorBoundaryElementProps :
+    TagName extends "suspense-boundary" ? LitsxSuspenseBoundaryElementProps :
+    TagName extends "suspense-list" ? LitsxElementProps<SuspenseList> & SuspenseListProps :
+    LitsxCustomElementProps;
 };
 
 export type LitsxIntrinsicElements = {
-  [TagName in keyof HTMLElementTagNameMap]: LitsxElementProps<
-    HTMLElementTagNameMap[TagName]
-  >;
-} & LitsxCustomIntrinsicElements & {
-  "error-boundary": LitsxErrorBoundaryElementProps;
-  "suspense-boundary": LitsxSuspenseBoundaryElementProps;
-  "suspense-list": LitsxElementProps<SuspenseList> & SuspenseListProps;
-};
+  [TagName in keyof HTMLElementTagNameMap | keyof SVGElementTagNameMap]:
+    TagName extends keyof HTMLElementTagNameMap
+      ? TagName extends keyof SVGElementTagNameMap
+        ? LitsxOverlappingIntrinsicElementProps<TagName>
+        : LitsxElementProps<HTMLElementTagNameMap[TagName]>
+      : TagName extends keyof SVGElementTagNameMap
+        ? LitsxSvgElementProps<TagName>
+        : never;
+} & LitsxCustomIntrinsicElements;
 
-export type LitsxComponent<Props = Record<string, unknown>> =
-  (props: Props) => LitsxRenderable;
+export type LitsxComponent<
+  Props = Record<string, unknown>,
+  Events extends Record<string, unknown> = Record<string, unknown>,
+> = ((props: Props) => LitsxRenderable) & {
+  readonly events?: LitsxEventDeclaration<Events, boolean>;
+  styles?: LitsxAuthoringStyle;
+};
 
 export interface SuspenseBoundaryProps {
   /**
@@ -231,6 +565,7 @@ export interface SuspenseListProps {
  */
 export declare class ErrorBoundary extends LitElement {
   static readonly [LITSX_COMPONENT]: true;
+  static readonly [LITSX_LIGHT_DOM]: true;
   failed: boolean;
   error: unknown;
   onError: ((error: unknown) => void) | null;
@@ -249,6 +584,7 @@ export declare class ErrorBoundary extends LitElement {
  */
 export declare class SuspenseBoundary extends LitElement {
   static readonly [LITSX_COMPONENT]: true;
+  static readonly [LITSX_LIGHT_DOM]: true;
   pending: boolean;
   resolved: boolean;
   showing: string;
@@ -268,6 +604,7 @@ export declare class SuspenseBoundary extends LitElement {
  */
 export declare class SuspenseList extends ReactiveElement {
   static readonly [LITSX_COMPONENT]: true;
+  static readonly [LITSX_LIGHT_DOM]: true;
   revealOrder: "forwards" | "backwards" | "together";
   tail: "collapsed" | "hidden";
 }
@@ -276,7 +613,7 @@ export { ErrorBoundary as ErrorBoundaryElement };
 export { SuspenseBoundary as SuspenseBoundaryElement };
 export { SuspenseList as SuspenseListElement };
 
-export declare function renderWithSoftSuspense<T>(
+export declare function renderWithHooks<T>(
   host: object,
   render: () => T
 ): T;
@@ -286,323 +623,76 @@ export declare function collectSoftSuspenseThenables<T>(
   render: () => T
 ): T;
 
-export type LitsxHostMiddlewareLifecycleMethod =
-  | "connectedCallback"
-  | "disconnectedCallback"
-  | "attributeChangedCallback"
-  | "formAssociatedCallback"
-  | "formDisabledCallback"
-  | "formResetCallback"
-  | "formStateRestoreCallback"
-  | "scheduleUpdate"
-  | "shouldUpdate"
-  | "willUpdate"
-  | "update"
-  | "updated"
-  | "firstUpdated"
-  | "getUpdateComplete";
+/** Return a CSSResultGroup that replaces, rather than extends, inherited styles. */
+export declare function replaceStyles(styles: CSSResultGroup): CSSResultGroup;
 
-export type LitsxHostMiddlewareNext<TResult = unknown> = () => TResult;
+export declare function createExecutionContextKey<T>(
+  description?: string
+): ExecutionContextKey<T>;
 
-/**
- * Compiler-provided metadata for one authored structural-hook callsite.
- *
- * `callsitePath` is the stable public field. It can be used for resource
- * identity, diagnostics, SSR records, and debug tooling. Other fields are
- * informational unless documented by LitSX.
- */
-export interface LitsxStructuralMeta {
-  /**
-   * Stable authored expansion path for this structural callsite.
-   */
-  callsitePath: string[];
-  [key: string]: unknown;
-}
+export declare function getCurrentExecutionContext():
+  | LitsxExecutionContext
+  | null;
 
-/**
- * Lifecycle middleware for a structural hook.
- *
- * Middleware wraps the host lifecycle method in structural entry order.
- * `next()` invokes the next middleware and eventually the host base
- * implementation. Middleware may run logic before `next()`, after `next()`,
- * or both. Calling `next()` more than once is an error.
- */
-export interface LitsxStructuralState<TStaticState = undefined, TInstanceState = undefined> {
-  /**
-   * Class/type-phase state produced by `static(...)`.
-   */
-  static: TStaticState;
-  /**
-   * Per-host-instance state produced by `setup(...)`.
-   */
-  instance: TInstanceState;
-}
-
-export type LitsxHostMiddleware<
-  TResult = unknown,
-  TStaticState = undefined,
-  TInstanceState = undefined
-> = (
-  host: unknown,
-  state: LitsxStructuralState<TStaticState, TInstanceState>,
-  next: LitsxHostMiddlewareNext<TResult>,
-  args: unknown[],
-  meta: LitsxStructuralMeta,
-  entry: LitsxStructuralEntry
-) => TResult;
-
-export type LitsxHostMiddlewareMap<TStaticState = undefined, TInstanceState = undefined> = Partial<
-  Record<LitsxHostMiddlewareLifecycleMethod, LitsxHostMiddleware<unknown, TStaticState, TInstanceState>>
->;
-
-export interface LitsxHostAccessorDescriptor<TValue = unknown> {
-  get?: () => TValue;
-  set?: {
-    bivarianceHack(value: TValue): void;
-  }["bivarianceHack"];
-}
-
-export type LitsxHostAccessorMap = Record<string, LitsxHostAccessorDescriptor<unknown>>;
-export type LitsxStructuralPropMap = Record<string, unknown>;
-export type LitsxStructuralPropsNext = () => LitsxStructuralPropMap | null | undefined;
-export type LitsxStructuralAccessorsNext = () => LitsxHostAccessorMap | null | undefined;
-
-/**
- * Public structural-hook definition.
- *
- * Structural hooks are consumed like ordinary hooks:
- *
- * ```tsx
- * const value = useSomething(args);
- * ```
- *
- * The LitSX compiler rewrites that authored callsite to the host middleware
- * runtime. Component authors do not manually register structural entries.
- *
- * `setup(host, args, staticState, meta, entry)` creates persistent mutable
- * instance state for one structural callsite in one host instance. The state
- * is retained across updates and is exposed as `state.instance` to `use`,
- * accessors, and lifecycle middleware. Use it for cached resources,
- * host-linked handles, lifecycle coordination, or derived persistent data.
- *
- * `use(host, state, args, meta, entry)` is the render-time hook reader. It may call normal hooks and
- * structural hooks transitively, subject to the same static hook-order rules as
- * ordinary hooks. Dynamic structural-hook lookup is not supported: aliases,
- * object/array containers, runtime selection, and computed namespace access are
- * build-time errors.
- *
- * `middlewares` wraps host lifecycle methods through `next()`. The host
- * middleware runtime intentionally does not deduplicate entries: every authored
- * callsite gets its own state and middleware entry. Resource dedupe belongs in
- * hook-specific runtimes.
- *
- * `props(host, state, next)` publishes structural host
- * property metadata into the component's merged `static properties` surface as
- * a composition middleware.
- *
- * `accessors(host, state, next)` publishes host instance
- * accessors such as readonly platform-facing getters or low-level
- * form/control properties as a composition middleware. These accessors are
- * installed on the host instance itself as part of the structural runtime,
- * not through the imperative `useExpose()` method surface.
- */
-export interface LitsxStructuralDefinition<
-  TArgs extends unknown[] = unknown[],
-  TResult = unknown,
-  TStaticState = undefined,
-  TInstanceState = undefined
-> {
-  /**
-   * Class/type structural phase. It does not participate in host instance
-   * lifecycle and is not wired through lifecycle middleware.
-   */
-  static?: (
-    ...argsAndMeta: [...TArgs, meta: LitsxStructuralMeta, entry: LitsxStructuralEntry]
-  ) => TStaticState;
-  props?:
-    | LitsxStructuralPropMap
-    | ((
-      host: unknown,
-      state: LitsxStructuralState<TStaticState, TInstanceState>,
-      next: LitsxStructuralPropsNext
-    ) => LitsxStructuralPropMap | null | undefined);
-  use?: (
-    host: unknown,
-    state: LitsxStructuralState<TStaticState, TInstanceState>,
-    args: TArgs,
-    meta: LitsxStructuralMeta,
-    entry: LitsxStructuralEntry
-  ) => TResult;
-  createState?: (
-    host: unknown,
-    args: TArgs,
-    staticState: TStaticState,
-    meta: LitsxStructuralMeta,
-    entry: LitsxStructuralEntry
-  ) => TInstanceState;
-  setup?: (
-    host: unknown,
-    args: TArgs,
-    staticState: TStaticState,
-    meta: LitsxStructuralMeta,
-    entry: LitsxStructuralEntry
-  ) => TInstanceState;
-  middlewares?: LitsxHostMiddlewareMap<TStaticState, TInstanceState>;
-  accessors?: (
-    host: unknown,
-    state: LitsxStructuralState<TStaticState, TInstanceState>,
-    next: LitsxStructuralAccessorsNext
-  ) => LitsxHostAccessorMap;
-}
-
-/**
- * Callable hook value returned by `defineHook`.
- *
- * The value is a normal callable hook from the author's point of view. LitSX
- * attaches hidden compiler/runtime metadata to the function; that metadata is
- * not public API. Calling this function without the LitSX transform is an error
- * because structural hooks require compiled host wiring.
- */
-export type LitsxStructuralHook<TArgs extends unknown[] = unknown[], TResult = unknown> = (
-  ...args: TArgs
-) => TResult;
-
-export interface LitsxStructuralEntry {
-  /**
-   * Backwards-compatible stable identifier for this authored callsite.
-   * Prefer `callsiteId` in newly generated code.
-   */
-  id: string;
-  /**
-   * Stable local index for runtime reads such as `runtime.read(index)`.
-   */
-  callsiteIndex: number;
-  /**
-   * Stable serializable identifier for diagnostics, SSR metadata, or hook-level
-   * resource runtimes. Entries are not deduplicated by this id.
-   */
-  callsiteId: string;
-  /**
-   * Stable authored expansion path for nested structural hook usage.
-   */
-  callsitePath: string[];
-  definition: LitsxStructuralDefinition | unknown;
-  args: unknown[];
-  meta: LitsxStructuralMeta;
-  state: unknown;
-  staticState?: unknown;
-  middlewares?: LitsxHostMiddlewareMap | null;
-}
-
-export interface LitsxStructuralEntryInput {
-  id?: string;
-  callsiteIndex?: number;
-  callsiteId?: string;
-  callsitePath?: string[];
-  path?: string[];
-  definition?: LitsxStructuralDefinition | unknown;
-  args?: unknown[];
-  meta?: Record<string, unknown>;
-  state?: unknown;
-  staticState?: unknown;
-  middlewares?: LitsxHostMiddlewareMap | null;
-}
-
-export declare class HostMiddlewareRuntime {
+export declare class SsrEffectsController {
   constructor(
-    host: unknown,
-    entries?: LitsxStructuralEntryInput[] | ((host: unknown) => LitsxStructuralEntryInput[])
+    host: object,
+    ssrContext?: { idPrefix?: string; currentInstanceId?: string },
   );
-  readonly host: unknown;
-  readonly entries: LitsxStructuralEntry[];
-  getEntry(index: number): LitsxStructuralEntry | null;
-  ensureEntry(index: number, entry: LitsxStructuralEntryInput): LitsxStructuralEntry;
-  read(index: number, args?: unknown[] | null, meta?: Record<string, unknown> | null): unknown;
-  run(methodName: LitsxHostMiddlewareLifecycleMethod, base: () => unknown): unknown;
-  run(methodName: LitsxHostMiddlewareLifecycleMethod, args: unknown[], base: () => unknown): unknown;
-  connectedCallback(base: () => unknown): unknown;
-  connectedCallback(args: unknown[], base: () => unknown): unknown;
-  disconnectedCallback(base: () => unknown): unknown;
-  disconnectedCallback(args: unknown[], base: () => unknown): unknown;
-  attributeChangedCallback(args: unknown[], base: () => unknown): unknown;
-  formAssociatedCallback(args: unknown[], base: () => unknown): unknown;
-  formDisabledCallback(args: unknown[], base: () => unknown): unknown;
-  formResetCallback(base: () => unknown): unknown;
-  formResetCallback(args: unknown[], base: () => unknown): unknown;
-  formStateRestoreCallback(args: unknown[], base: () => unknown): unknown;
-  scheduleUpdate(base: () => unknown): unknown;
-  scheduleUpdate(args: unknown[], base: () => unknown): unknown;
-  shouldUpdate(args: unknown[], base: () => unknown): unknown;
-  willUpdate(args: unknown[], base: () => unknown): unknown;
-  update(args: unknown[], base: () => unknown): unknown;
-  updated(args: unknown[], base: () => unknown): unknown;
-  firstUpdated(args: unknown[], base: () => unknown): unknown;
-  getUpdateComplete(base: () => unknown): unknown;
-  getUpdateComplete(args: unknown[], base: () => unknown): unknown;
+  prepare(): void;
 }
 
-export type LitsxStructuralHostConstructor<TInstance = object> = abstract new (
-  ...args: any[]
-) => TInstance;
-
-export interface LitsxStructuralHostInstance {
-  __litsxHostMiddlewareRuntime: HostMiddlewareRuntime;
-  __litsxReadStructuralEntry(
-    index: number,
-    args?: unknown[] | null,
-    meta?: Record<string, unknown> | null
-  ): unknown;
-}
-
-/**
- * Define a structural hook.
- *
- * The locked public authoring surface is `defineHook({ static, setup,
- * middlewares, accessors, use })`. The returned value remains callable like a
- * normal hook, while the compiler/runtime metadata bridge is carried
- * internally on the function.
- */
-export declare function defineHook<
+export type LitsxStructuralHook<
   TArgs extends unknown[] = unknown[],
   TResult = unknown,
-  TStaticState = undefined,
-  TInstanceState = undefined
+> = (...args: TArgs) => TResult;
+
+export type LitsxStructuralMixin<THost extends object = object> = (
+  Base: any,
+) => abstract new (...args: any[]) => THost;
+
+export interface LitsxStructuralDefinition<
+  THost extends object = object,
+  TArgs extends unknown[] = unknown[],
+  TResult = unknown,
+> {
+  /** Host capability installed once per distinct mixin. */
+  mixin?: LitsxStructuralMixin<THost>;
+  /** Render-time reader. Call useHost() when the capability needs its host. */
+  use(...args: TArgs): TResult;
+}
+
+export interface LitsxStructuralMixinDefinition<
+  THost extends object = object,
+> {
+  /** Host capability installed once per distinct mixin. */
+  mixin: LitsxStructuralMixin<THost>;
+  /** Omit the reader for an installation-only structural hook. */
+  use?: never;
+}
+
+/** Define an installation-only hook that requests a host capability. */
+export declare function defineHook<THost extends object = object>(
+  definition: LitsxStructuralMixinDefinition<THost>,
+): LitsxStructuralHook<[], void>;
+
+/** Define a hook that requests and reads a host capability. */
+export declare function defineHook<
+  THost extends object = object,
+  TArgs extends unknown[] = unknown[],
+  TResult = unknown,
 >(
-  definition: LitsxStructuralDefinition<TArgs, TResult, TStaticState, TInstanceState>
+  definition: LitsxStructuralDefinition<THost, TArgs, TResult>,
 ): LitsxStructuralHook<TArgs, TResult>;
 
-export declare function isStructuralHook(value: unknown): value is LitsxStructuralHook;
-export declare function resolveStructuralProps(
-  owner: unknown,
-  base?: Record<PropertyKey, unknown> | null
-): Record<PropertyKey, unknown>;
+export declare function readStructuralHook<TArgs extends unknown[], TResult>(
+  hook: LitsxStructuralHook<TArgs, TResult>,
+  args?: TArgs,
+): TResult;
 
-export declare function resolveStructuralEntry(
-  host: unknown,
-  callsiteIndex: number,
-  callsiteId: string,
-  definition: unknown,
-  args?: unknown[],
-  meta?: Record<string, unknown>
-): unknown;
-
-export declare function resolveStructuralStaticEntry(
-  owner: unknown,
-  callsiteIndex: number,
-  callsiteId: string,
-  definition: unknown,
-  args?: unknown[],
-  meta?: Record<string, unknown>
-): unknown;
-
-export declare function HostMiddlewareMixin<TBase extends LitsxStructuralHostConstructor>(
-  Base: TBase
-): LitsxStructuralHostConstructor<InstanceType<TBase> & LitsxStructuralHostInstance>;
-
-export declare function createHostMiddlewareRuntime(
-  host: unknown,
-  entries?: LitsxStructuralEntryInput[] | ((host: unknown) => LitsxStructuralEntryInput[])
-): HostMiddlewareRuntime;
+export declare function applyStructuralHooks<
+  TBase extends abstract new (...args: any[]) => object,
+>(Base: TBase, hooks?: readonly LitsxStructuralHook[]): TBase;
 
 export type LitsxFormSubmitValue = string | File | FormData | null;
 
@@ -729,15 +819,30 @@ export declare function useEvent<T extends (...args: never[]) => unknown>(
 /**
  * Emit a CustomEvent from the current host.
  */
-export declare function useEmit(): <T = undefined>(
+export type LitsxEmitOptions = {
+  bubbles?: boolean;
+  composed?: boolean;
+  cancelable?: boolean;
+};
+
+export type LitsxEmit = <T = undefined>(
   type: string,
   detail?: T,
-  options?: {
-    bubbles?: boolean;
-    composed?: boolean;
-    cancelable?: boolean;
-  }
+  options?: LitsxEmitOptions
 ) => boolean;
+
+export type LitsxTypedEmit<Events extends Record<string, unknown>> = <
+  Name extends Extract<keyof Events, string>,
+>(
+  type: Name,
+  ...args: undefined extends Events[Name]
+    ? [detail?: Events[Name], options?: LitsxEmitOptions]
+    : [detail: Events[Name], options?: LitsxEmitOptions]
+) => boolean;
+
+export declare function useEmit<
+  Events extends Record<string, unknown> | undefined = undefined,
+>(): Events extends Record<string, unknown> ? LitsxTypedEmit<Events> : LitsxEmit;
 /**
  * Read the value from the previous render.
  */
@@ -820,11 +925,13 @@ export declare function useStyle(
     | [compute: LitsxStyleFactory, deps: unknown[]]
 ): void;
 /**
- * Store a mutable value across renders without causing updates.
+ * Store a Lit-native mutable value across renders without causing updates.
+ * The returned object exposes `.value`; an attached JSX ref is cleared with
+ * `undefined` when its target disconnects.
  */
 export declare function useRef<T>(
   initialValue?: T
-): { current: T | undefined };
+): LitsxMutableRef<T>;
 /**
  * Generate a stable id for the current component instance.
  */
@@ -851,8 +958,8 @@ export declare function useStableId(): string;
  * Run a callback ref through the component lifecycle.
  */
 export declare function useCallbackRef(
-  getTarget: () => Element | null,
-  callback: (node: Element | null) => void,
+  getTarget: () => Element | undefined,
+  callback: (node: Element | undefined) => void,
   deps?: unknown[]
 ): void;
 /**
@@ -864,7 +971,7 @@ export declare function useExpose<T extends Record<string, (...args: any[]) => u
   deps?: unknown[]
 ): void;
 export declare function useExpose<T extends Record<string, (...args: any[]) => unknown>>(
-  ref: { current: T | null } | ((value: T | null) => void),
+  ref: { value: T | undefined } | ((value: T | undefined) => void),
   createHandle: () => T,
   deps?: unknown[]
 ): void;
@@ -881,3 +988,12 @@ export declare function ensureLazyElement(
   tagName: string,
   value: unknown
 ): void;
+/**
+ * Declare a lazily imported LitSX component. The compiler lowers usages to a
+ * scoped ensureLazyElement registration and preserves the component's props.
+ */
+export declare function lazy<
+  TComponent extends (...args: any[]) => unknown,
+>(
+  loader: () => Promise<TComponent | { default: TComponent }>,
+): TComponent;

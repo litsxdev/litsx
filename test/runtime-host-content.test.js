@@ -61,4 +61,31 @@ describe("runtime host content", () => {
     assert.strictEqual(isSameHostContentSnapshot(empty, differentSlot), false);
     assert.strictEqual(isSameHostContentSnapshot(empty, differentNodes), false);
   });
+
+  it("covers empty slot metadata, array children, and every snapshot mismatch", () => {
+    const text = { nodeType: 3, textContent: null, slot: "", getAttribute: () => "" };
+    const element = { textContent: "element" };
+    const snapshot = createHostContentSnapshot({ childNodes: [text, element] });
+    assert.strictEqual(snapshot.text, "element");
+    assert.strictEqual(snapshot.hasContent, true);
+    assert.deepStrictEqual(snapshot.slots.default, [text, element]);
+    assert.deepStrictEqual(createHostContentSnapshot(null), {
+      text: "",
+      nodes: [],
+      hasContent: false,
+      slots: { default: [] },
+    });
+    assert.strictEqual(createHostContentSnapshot({ childNodes: ["text"] }).hasContent, false);
+
+    const base = { text: "x", hasContent: true, nodes: [text], slots: { default: [text] } };
+    assert.strictEqual(isSameHostContentSnapshot(base, { ...base, text: "y" }), false);
+    assert.strictEqual(isSameHostContentSnapshot(base, { ...base, hasContent: false }), false);
+    assert.strictEqual(isSameHostContentSnapshot(base, { ...base, nodes: [] }), false);
+    assert.strictEqual(isSameHostContentSnapshot(base, { ...base, slots: { default: [text], extra: [] } }), false);
+    assert.strictEqual(isSameHostContentSnapshot(base, { ...base, slots: { default: [] } }), false);
+    assert.strictEqual(
+      isSameHostContentSnapshot(base, { ...base, slots: { default: [{}] } }),
+      false,
+    );
+  });
 });

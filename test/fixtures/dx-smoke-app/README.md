@@ -6,7 +6,7 @@ Generated with `create-litsx-app --template app`.
 
 1. `npm install`
 2. `npm run dev`
-3. Open the local Vite URL and edit `src/dx-smoke-app.jsx`
+3. Open the local Vite URL and edit `src/dx-smoke-app.tsx`
 
 ## Scripts
 
@@ -18,7 +18,7 @@ Generated with `create-litsx-app --template app`.
 
 ## What This Template Shows
 
-- authored LitSX JSX
-- `@click` event binding
+- standard LitSX TSX
+- explicit `on:click` event binding
 - local state with `useState(...)`
-- component-owned styling with `static styles = ...`
+- component-owned styling with `Component.styles = css\`...\``

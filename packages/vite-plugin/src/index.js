@@ -1,5 +1,72 @@
 import fs from "fs/promises";
 import { createLitsxCompilationSession } from "@litsx/compiler";
+import { realpathSync } from "node:fs";
+import path from "node:path";
+
+function normalizeSlashes(value) {
+  return String(value).replaceAll("\\", "/");
+}
+
+function normalizeBase(base = "/") {
+  if (!base) {
+    return "/";
+  }
+
+  const prefixed = base.startsWith("/") ? base : `/${base}`;
+  return prefixed.endsWith("/") ? prefixed : `${prefixed}/`;
+}
+
+function toProjectRelativeModuleId(moduleId, root) {
+  if (typeof moduleId !== "string" || !moduleId) {
+    return null;
+  }
+
+  const normalizedRoot = normalizeSlashes(path.resolve(root));
+  const normalizedModuleId = normalizeSlashes(
+    moduleId.startsWith("file://")
+      ? new URL(moduleId).pathname
+      : path.resolve(moduleId),
+  );
+
+  if (!normalizedModuleId.startsWith(normalizedRoot)) {
+    return null;
+  }
+
+  return normalizeSlashes(path.relative(normalizedRoot, normalizedModuleId));
+}
+
+/**
+ * Create an asset resolver suitable for `@litsx/ssr` results in Vite
+ * environments.
+ *
+ * In dev it converts source module ids under `root` into browser-facing module
+ * URLs such as `/src/components/ProductCard.tsx`. In build it can map those
+ * module ids through a Vite manifest to the emitted asset file.
+ */
+export function createLitsxViteAssetResolver({
+  root = process.cwd(),
+  manifest = null,
+  base = "/",
+} = {}) {
+  const normalizedBase = normalizeBase(base);
+
+  return (moduleId) => {
+    const relativeModuleId = toProjectRelativeModuleId(moduleId, root);
+    if (!relativeModuleId) {
+      return null;
+    }
+
+    if (manifest && typeof manifest === "object") {
+      const manifestEntry = manifest[relativeModuleId] ?? manifest[`./${relativeModuleId}`];
+      const file = manifestEntry?.file;
+      if (typeof file === "string" && file) {
+        return `${normalizedBase}${file}`.replace(/\/{2,}/g, "/");
+      }
+    }
+
+    return `${normalizedBase}${relativeModuleId}`.replace(/\/{2,}/g, "/");
+  };
+}
 
 const LIT_DEDUPE_PACKAGES = [
   "lit",
@@ -9,7 +76,72 @@ const LIT_DEDUPE_PACKAGES = [
   "@lit/context",
 ];
 
-function shouldTransform(id, include) {
+function getNodeModulesPackageName(id) {
+  const filename = String(id || "").split("?", 1)[0].replaceAll("\\", "/");
+  const marker = "/node_modules/";
+  const searchableFilename = filename.startsWith("/") ? filename : `/${filename}`;
+  const markerIndex = searchableFilename.lastIndexOf(marker);
+  if (markerIndex === -1) return null;
+  const segments = searchableFilename.slice(markerIndex + marker.length).split("/");
+  if (segments[0]?.startsWith("@")) {
+    return segments.length >= 2 ? `${segments[0]}/${segments[1]}` : null;
+  }
+  return segments[0] || null;
+}
+
+function shouldTransformOptimizeDeps(id, include, root, cacheDir) {
+  if (typeof id !== "string" || !id || id.startsWith("\0")) return false;
+  if (getNodeModulesPackageName(id)) return false;
+  if (cacheDir && isInsideProjectRoot(id, cacheDir)) return false;
+  if (root && !isInsideProjectRoot(id, root)) return false;
+
+  if (typeof include === "function") return include(id);
+  if (include instanceof RegExp) return include.test(id);
+  return /\.[cm]?[jt]sx?(?:\?|$)/.test(id);
+}
+
+function getTransformDependencies(options = {}) {
+  const value = options.reactCompat;
+  if (!value || typeof value !== "object") return [];
+  return Array.from(new Set(
+    (value.transformDependencies || [])
+      .filter((entry) => typeof entry === "string" && entry.length > 0),
+  ));
+}
+
+function isInsideProjectRoot(id, root) {
+  if (!root) return true;
+  const filename = String(id || "").split("?", 1)[0];
+  const canonicalize = (value) => {
+    const resolved = path.resolve(value);
+    try {
+      return realpathSync.native(resolved);
+    } catch {
+      return resolved;
+    }
+  };
+  const relative = path.relative(canonicalize(root), canonicalize(filename));
+  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+}
+
+function shouldTransform(
+  id,
+  include,
+  transformDependencies = [],
+  root = null,
+  cacheDir = null,
+) {
+  if (cacheDir && isInsideProjectRoot(id, cacheDir)) {
+    return false;
+  }
+  const packageName = getNodeModulesPackageName(id);
+  if (packageName) {
+    return (
+      transformDependencies.includes(packageName) &&
+      /\.[cm]?[jt]sx?(?:\?|$)/.test(id)
+    );
+  }
+
   if (typeof include === "function") {
     return include(id);
   }
@@ -18,7 +150,10 @@ function shouldTransform(id, include) {
     return include.test(id);
   }
 
-  return /\.(jsx|tsx|litsx)$/.test(id) || id.endsWith(".litsx.jsx");
+  return (
+    isInsideProjectRoot(id, root) &&
+    /\.[cm]?[jt]sx?(?:\?|$)/.test(id)
+  );
 }
 
 function formatWarningLocation(warning) {
@@ -108,11 +243,31 @@ function withoutRollupOptimizeDepsOptions(optimizeDeps = {}) {
   return nextOptimizeDeps;
 }
 
+function mergeArray(existing, additions) {
+  return Array.from(new Set([
+    ...(Array.isArray(existing) ? existing : []),
+    ...additions,
+  ]));
+}
+
+function mergeNoExternal(existing, additions) {
+  if (existing === true) return true;
+  const entries = existing == null || existing === false
+    ? []
+    : Array.isArray(existing)
+      ? existing
+      : [existing];
+  return mergeArray(entries, additions);
+}
+
 export function litsx(options = {}) {
   const {
     include,
     ...compilerOptions
   } = options;
+  const transformDependencies = getTransformDependencies(options);
+  let projectRoot = null;
+  let projectCacheDir = null;
   let session = null;
   const warnedEntries = new Set();
 
@@ -130,7 +285,12 @@ export function litsx(options = {}) {
     return {
       name: "litsx-optimize-deps",
       async load(filePath) {
-        if (!shouldTransform(filePath, include)) {
+        if (!shouldTransformOptimizeDeps(
+          filePath,
+          include,
+          projectRoot,
+          projectCacheDir,
+        )) {
           return null;
         }
 
@@ -153,11 +313,16 @@ export function litsx(options = {}) {
   return {
     name: "litsx",
     enforce: "pre",
+    configResolved(config) {
+      projectRoot = config.root;
+      projectCacheDir = config.cacheDir;
+    },
     config(userConfig) {
       const optimizeDeps = withoutRollupOptimizeDepsOptions(userConfig.optimizeDeps);
       const rolldownOptions = optimizeDeps.rolldownOptions ?? {};
       const existingPlugins = rolldownOptions.plugins ?? [];
       const existingResolve = userConfig.resolve ?? {};
+      const existingSsr = userConfig.ssr ?? {};
 
       return {
         resolve: {
@@ -166,20 +331,36 @@ export function litsx(options = {}) {
         },
         optimizeDeps: {
           ...optimizeDeps,
+          ...(transformDependencies.length > 0
+            ? { exclude: mergeArray(optimizeDeps.exclude, transformDependencies) }
+            : {}),
           rolldownOptions: {
             ...rolldownOptions,
             plugins: [...existingPlugins, createOptimizeDepsRolldownPlugin()],
           },
         },
+        ...(transformDependencies.length > 0
+          ? {
+              ssr: {
+                ...existingSsr,
+                noExternal: mergeNoExternal(existingSsr.noExternal, transformDependencies),
+              },
+            }
+          : {}),
       };
     },
     async transform(code, id) {
-      if (!shouldTransform(id, include)) {
+      if (!shouldTransform(
+        id,
+        include,
+        transformDependencies,
+        projectRoot,
+        projectCacheDir,
+      )) {
         return null;
       }
 
       let result;
-
       try {
         result = await getSession().transform(code, {
           ...compilerOptions,

@@ -6,82 +6,252 @@
 [![Docs](https://img.shields.io/badge/docs-litsx.dev-0a7ea4)](https://litsx.dev/)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](./LICENSE)
 
-LitSX is a Lit-first compiler and tooling workspace for authoring web components with modern JSX, static hoists, and an optional React-compat migration layer.
+LitSX is a Lit-first framework and compiler toolchain for authoring web
+components with ordinary JSX and TypeScript. It combines Lit's rendering and
+web-component model with compiler-driven bindings, functional components,
+hooks, scoped custom-element registries, SSR and hydration, and build-tool
+integrations.
 
-This repository contains the runtime, Babel presets, authoring support, editor tooling, and scaffolding packages that make up the LitSX toolchain.
+Source stays standard `.jsx` or `.tsx`; the LitSX compiler turns it into Lit
+elements and templates. There is no custom file format or authored `.property`,
+`?boolean`, or `@event` syntax.
 
-The documentation site lives at [`litsx.dev`](https://litsx.dev/) and is maintained from the separate [`litsxdev/litsx.dev`](https://github.com/litsxdev/litsx.dev) repository.
-The VS Code extension lives in the separate [`litsxdev/vscode-litsx`](https://github.com/litsxdev/vscode-litsx) repository.
+## Quick start
 
-## Authored model
-
-LitSX source is not just generic TSX with helper imports. The authored model includes:
-
-- Lit-flavoured JSX bindings such as `@event`, `.prop`, and `?attr`
-- static hoists such as `static styles = ...`, `static properties = ...`, `static shadowRootOptions = ...`, and other direct `static name = ...` declarations
-- `static expose = ...` for static class methods
-
-Generic `static name = ...` hoists lower to memoized static getters on the generated class. `static expose = ...` is the exception: it lowers to real static methods.
-
-Because plain `tsc` does not parse this authored syntax directly, editor support comes from `@litsx/typescript` and CLI type-checking comes from `litsx-tsc`.
-
-## Workspace layout
-
-### Core public packages
-
-- [`packages/core`](./packages/core): main runtime package, JSX runtime entrypoints, async boundaries, elements, and rendering helpers
-- [`packages/compiler`](./packages/compiler): public programmatic compilation facade
-- [`packages/create-litsx-app`](./packages/create-litsx-app): project scaffolder
-- [`packages/eslint-plugin-litsx`](./packages/eslint-plugin-litsx): official ESLint integration for LitSX-authored source
-- [`packages/prettier-plugin-litsx`](./packages/prettier-plugin-litsx): official Prettier integration for `.litsx` and `.litsx.jsx`
-- [`packages/typescript`](./packages/typescript): TypeScript language-service support and `litsx-tsc` for LitSX-authored JSX
-- [`packages/authoring`](./packages/authoring): shared authored JSX language model and parser helpers
-- [`packages/babel-parser-litsx`](./packages/babel-parser-litsx): Babel parser adapter for LitSX-authored JSX
-- [`packages/scoped-registry-shim`](./packages/scoped-registry-shim): internal shimmed scoped-registry runtime used by shadow hosts and renderer mounts
-- [`packages/vite-plugin`](./packages/vite-plugin): Vite integration
-
-### Babel toolchain
-
-- [`packages/babel-preset-litsx`](./packages/babel-preset-litsx): native LitSX lowering pipeline
-- [`packages/babel-preset-react-compat`](./packages/babel-preset-react-compat): React compatibility lowering pipeline
-- [`packages/babel-plugin-transform-litsx-scoped-elements`](./packages/babel-plugin-transform-litsx-scoped-elements): scoped elements transform that remains public as a standalone plugin
-- [`packages/babel-plugin-transform-jsx-html-template`](./packages/babel-plugin-transform-jsx-html-template): JSX to Lit `html` template lowering
-- [`packages/babel-plugin-litsx-proptypes`](./packages/babel-plugin-litsx-proptypes): React `prop-types` compat lowering to native property hoists
-
-### Additional public tooling
-
-- [`packages/babel-plugin-shared-hooks`](./packages/babel-plugin-shared-hooks): shared transform helpers consumed by the public Babel packages
-- [`packages/typescript-session`](./packages/typescript-session): shared TypeScript session plumbing used by editor and type-check tooling
-
-## Development
-
-Install dependencies:
+Create a Vite application with the supported TypeScript, ESLint, and LitSX
+configuration:
 
 ```sh
+npx create-litsx-app my-app --template app
+cd my-app
+npm install
+npm run dev
+```
+
+The scaffolder also provides `component`, `design-system`, and `ssr` templates,
+plus optional Storybook visual tests for design-system projects. See
+[`create-litsx-app`](./packages/create-litsx-app/README.md) for the complete
+matrix.
+
+## Authoring LitSX
+
+Configure TypeScript to use the LitSX JSX runtime:
+
+```json
+{
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "jsxImportSource": "@litsx/core"
+  }
+}
+```
+
+Then author normal TSX:
+
+```tsx
+import { css, useEmit, useState } from "@litsx/core";
+
+type CounterButtonProps = {
+  initialValue?: number;
+  label: string;
+};
+
+type CounterButtonEvents = {
+  "value-change": { value: number };
+};
+
+export function CounterButton({ initialValue = 0, label }: CounterButtonProps) {
+  const [value, setValue] = useState(initialValue);
+  const emit = useEmit<CounterButtonEvents>();
+
+  const increment = () => {
+    const nextValue = value + 1;
+    setValue(nextValue);
+    emit("value-change", { value: nextValue });
+  };
+
+  return (
+    <button class="counter" on:click={increment}>
+      {label}: {value}
+    </button>
+  );
+}
+
+CounterButton.styles = css`
+  .counter {
+    color: var(--counter-color, currentColor);
+  }
+`;
+```
+
+Use the component with ordinary prop names and the explicit `on:event` channel:
+
+```tsx
+<CounterButton
+  initialValue={2}
+  label="Count"
+  on:value-change={(event) => console.log(event.detail.value)}
+/>
+```
+
+The compiler inspects the destination contract and chooses the correct Lit
+attribute, boolean-attribute, property, event, style, spread, and ref binding.
+Objects, arrays, callbacks, camel-case props, and `{ attribute: false }`
+declarations remain JavaScript properties; HTML, `aria-*`, and `data-*` names
+retain platform attribute semantics.
+
+The full source-language contract lives in [`AUTHORING.md`](./AUTHORING.md). It
+is the canonical reference for components, bindings, events, spreads, refs,
+identity, metadata, styles, light DOM, and compiler behavior.
+
+## What the framework includes
+
+- Functional JSX/TSX components compiled to Lit-backed custom elements.
+- Native hooks for state, effects, refs, context, async work, transitions,
+  imperative handles, host content, and external stores.
+- Typed custom events through `useEmit<EventMap>()` and published component
+  event metadata.
+- Shadow DOM by default, explicit light DOM, scoped element registries, and
+  stable component identity.
+- Form-associated custom-element primitives based on `ElementInternals`.
+- Suspense, error boundaries, lazy components, request-local resource state,
+  and streaming SSR.
+- Declarative shadow DOM, document rendering, hydration, module preloads, and
+  Vite asset resolution.
+- Isolated Tailwind CSS and UnoCSS output for shadow and scoped/global light-DOM
+  components, including parallel build isolation.
+- Storybook, ESLint, Vite, compiler, and project-scaffolding integrations.
+- A separate React-compat compilation pipeline for migrating compatible
+  React-authored source without changing native LitSX semantics.
+
+## Recommended entry points
+
+| Package                                                     | Use it for                                                                           |
+| ----------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| [`@litsx/core`](./packages/core/README.md)                  | JSX runtime, components, hooks, events, refs, forms, styles, and runtime primitives. |
+| [`@litsx/vite-plugin`](./packages/vite-plugin/README.md)    | The default compilation integration for Vite applications and libraries.             |
+| [`@litsx/compiler`](./packages/compiler/README.md)          | Programmatic compilation outside the supported Vite path.                            |
+| [`@litsx/ssr`](./packages/ssr/README.md)                    | Scoped server rendering, streaming documents, resources, and hydration.              |
+| [`create-litsx-app`](./packages/create-litsx-app/README.md) | New app, component library, design system, SSR, and visual-test projects.            |
+
+Most applications should begin with `create-litsx-app` and should not need to
+configure the Babel packages directly.
+
+## Integrations
+
+| Package                                                                    | Scope                                                                           |
+| -------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| [`@litsx/eslint-plugin`](./packages/eslint-plugin-litsx/README.md)         | Framework-aware ESLint rules and the recommended flat config.                   |
+| [`@litsx/storybook`](./packages/storybook/README.md)                       | LitSX CSF/MDX indexing and Storybook's Vite web-components builder.             |
+| [`@litsx/tailwind`](./packages/tailwind/README.md)                         | Tailwind CSS v4 component collection and the official Vite adapter.             |
+| [`@litsx/unocss`](./packages/unocss/README.md)                             | UnoCSS generation, document/component style routing, and Vite integration.      |
+| [`@litsx/scoped-registry-shim`](./packages/scoped-registry-shim/README.md) | Scoped custom-element registry support used by LitSX hosts and renderer mounts. |
+
+## Compiler and compatibility packages
+
+The monorepo contains 19 workspaces. The lower-level packages below are public
+for advanced integrations and for composition inside the official toolchain:
+
+| Package                                                                                                                    | Responsibility                                                    |
+| -------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| [`@litsx/authoring`](./packages/authoring/README.md)                                                                       | Shared standard-JSX semantics and generated-template encoding.    |
+| [`@litsx/typescript-session`](./packages/typescript-session/README.md)                                                     | TypeScript sessions used for destination and component inference. |
+| [`@litsx/babel-preset-litsx`](./packages/babel-preset-litsx/README.md)                                                     | Canonical native LitSX lowering pipeline.                         |
+| [`@litsx/babel-preset-react-compat`](./packages/babel-preset-react-compat/README.md)                                       | Bounded React-source migration pipeline.                          |
+| [`@litsx/babel-plugin-transform-jsx-html-template`](./packages/babel-plugin-transform-jsx-html-template/README.md)         | JSX-to-`lit-html` template lowering.                              |
+| [`@litsx/babel-plugin-transform-litsx-scoped-elements`](./packages/babel-plugin-transform-litsx-scoped-elements/README.md) | Scoped-element metadata transform.                                |
+| [`@litsx/babel-plugin-litsx-proptypes`](./packages/babel-plugin-litsx-proptypes/README.md)                                 | React `propTypes` compatibility lowering.                         |
+| [`@litsx/babel-plugin-shared-hooks`](./packages/babel-plugin-shared-hooks/README.md)                                       | Shared transform helpers for the Babel package family.            |
+| [`@litsx/prop-types`](./packages/prop-types/README.md)                                                                     | Runtime support for `propTypes` compatibility.                    |
+
+The React-compat preset is a migration tool, not the native authoring model. It
+adapts supported React conventions and rejects unsupported hooks or private
+React behavior rather than silently approximating them.
+
+## SSR and hydration
+
+`@litsx/ssr` renders LitSX component trees without globally registering scoped
+children. For most applications, `renderDocument(...)` is the server entry
+point and `@litsx/ssr/hydration` reconnects the existing server DOM in the
+browser. Vite-backed SSR development is an opt-in adapter at
+`@litsx/vite-plugin/ssr`; the SSR package itself has no Vite dependency.
+
+```tsx
+import { renderDocument } from "@litsx/ssr";
+import { ProductPage } from "./ProductPage.tsx";
+
+const result = await renderDocument(<ProductPage product={product} />, {
+  title: product.name,
+  clientEntry: "/src/client.ts",
+});
+
+return result.document;
+```
+
+The v1 SSR guarantee is centered on LitSX-authored component trees. Generic Lit
+templates can be rendered, but arbitrary third-party Lit components do not
+automatically acquire LitSX's scoped SSR and hydration semantics. See the
+[`@litsx/ssr` documentation](./packages/ssr/README.md) for the precise boundary.
+
+## Web-component interoperability
+
+Compiled LitSX components expose the standard custom-element boundary:
+attributes, properties, `CustomEvent`s, slots, element methods, and refs. Host
+frameworks can consume that platform API without understanding LitSX template
+syntax.
+
+Generated framework-specific adapters and coordinated host-framework SSR are
+not part of the 1.0 scope. Future React, Angular, Vue, Svelte, Solid, Preact, and
+other integration work is tracked in the
+[`Framework interoperability`](https://github.com/litsxdev/litsx/milestone/1)
+milestone.
+
+## Documentation
+
+- [Documentation site](https://litsx.dev/)
+- [Native authoring contract](./AUTHORING.md)
+- [Release and npm channel guide](./RELEASING.md)
+- [SSR starter example](./examples/ssr-starter/README.md)
+- Package-specific guides under [`packages/`](./packages)
+
+The website is maintained in the separate
+[`litsxdev/litsx.dev`](https://github.com/litsxdev/litsx.dev) repository. Package
+README files are also published to npm; the npm page follows the contents of the
+version installed under the selected dist-tag.
+
+## Developing the monorepo
+
+Requirements:
+
+- Node.js `^22.18.0 || >=24.11.0`
+- Corepack
+- Yarn `4.10.3`
+
+Install the workspace and run the main checks:
+
+```sh
+corepack enable
 yarn install
-```
-
-Run the test suite:
-
-```sh
 yarn test
-```
-
-Build the workspace:
-
-```sh
+yarn coverage
 yarn build
 ```
 
-## Focus
+Additional release and integration gates:
 
-The workspace focuses on:
+```sh
+yarn test:ssr:browser
+yarn test:storybook-compat
+yarn release:check
+yarn release:smoke:scaffolds
+yarn release:test
+```
 
-- native LitSX JSX ergonomics
-- React compatibility as a separate transform layer
-- authored syntax support for Lit-flavoured JSX and static hoists
-- editor support through `@litsx/typescript`
-- CLI type-checking through `litsx-tsc`
-- scaffolding and editor tooling
+`yarn coverage` enforces the global coverage policy and reports package-level
+coverage. Browser hydration, Storybook compatibility, generated scaffolds,
+package surfaces, Lit runtime deduplication, and SSR performance have dedicated
+gates because unit tests alone do not cover those contracts.
 
-Each package directory contains its own `README.md` with package-specific details.
+## License
+
+LitSX is licensed under the [Apache License 2.0](./LICENSE).

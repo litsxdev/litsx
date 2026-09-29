@@ -7,6 +7,10 @@
 
 Shared TypeScript session utilities used across the LitSX toolchain.
 
+The current compiler-session API supports TypeScript 5.x and 6.x. TypeScript
+7 exposes a different runtime API and is intentionally excluded until LitSX
+can adopt it without changing compilation semantics.
+
 ## Purpose
 
 This package centralizes the project and standalone TypeScript session logic
@@ -14,16 +18,14 @@ used by:
 
 - `@litsx/compiler`
 - `@litsx/babel-preset-litsx`
-- `@litsx/typescript`
-- editor-facing LitSX tooling
 
 It exists so those packages do not each reimplement:
 
-- extra file extension registration for `.litsx` and `.litsx.jsx`
+- standard `.jsx`/`.tsx` project sessions
 - session caching
 - overlay file support
 - disk-backed and in-memory source-file loading
-- `ScriptKind` inference for LitSX-authored files
+- `ScriptKind` inference for standard JavaScript and TypeScript files
 
 ## Intended Audience
 
@@ -34,11 +36,7 @@ It is primarily useful for:
 - LitSX maintainers
 - advanced tooling authors integrating with the same TypeScript session model
 
-Application authors should normally use the higher-level public surfaces instead:
-
-- `@litsx/compiler`
-- `@litsx/typescript`
-- `litsx-tsc`
+Application authors should normally use `@litsx/compiler` or `@litsx/vite-plugin` instead.
 
 ## Stability
 

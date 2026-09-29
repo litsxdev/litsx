@@ -18,7 +18,12 @@ export function setRenderBodyBabelTypes(nextTypes) {
 }
 
 function createThisMemberExpression(propName) {
-  return t.memberExpression(t.thisExpression(), t.identifier(propName));
+  const computed = !t.isValidIdentifier(propName);
+  return t.memberExpression(
+    t.thisExpression(),
+    computed ? t.stringLiteral(propName) : t.identifier(propName),
+    computed,
+  );
 }
 
 function createNestedInitializerStatement(pattern, root, defaultValue) {
@@ -65,7 +70,15 @@ function isRenderableJsx(node) {
   return t.isJSXElement(node) || t.isJSXFragment(node);
 }
 
-function collectReturnStatement(functionPath, bindings, state) {
+function isStoryModule(options) {
+  const filename = options.state?.file?.opts?.filename;
+  return (
+    typeof filename === "string" &&
+    /\.stories\.[cm]?[jt]sx?$/i.test(filename.split(/[?#]/, 1)[0])
+  );
+}
+
+function collectReturnStatement(functionPath, bindings, state, allowNullRender = false) {
   let returnStatement = null;
 
   functionPath.traverse({
@@ -74,10 +87,15 @@ function collectReturnStatement(functionPath, bindings, state) {
         return;
       }
 
-      if (isRenderableJsx(returnPath.node.argument)) {
+      if (
+        isRenderableJsx(returnPath.node.argument) ||
+        (allowNullRender && t.isNullLiteral(returnPath.node.argument))
+      ) {
         returnStatement = returnPath.node;
-        transformJSXRendererCalls(returnPath, bindings, state);
-        transformJSXExpressions(returnPath, bindings, state);
+        if (isRenderableJsx(returnPath.node.argument)) {
+          transformJSXRendererCalls(returnPath, bindings, state);
+          transformJSXExpressions(returnPath, bindings, state);
+        }
       }
     },
   });
@@ -88,10 +106,27 @@ function collectReturnStatement(functionPath, bindings, state) {
 export function prepareComponentRender(functionPath, node, propertyNames, bindings, nestedInitializers, options = {}) {
   throwFirstImplicitChildrenProjectionIssue(functionPath);
 
+  // Babel does not expose a ReturnStatement for expression-bodied arrows.
+  // Story modules commonly use that form for local PascalCase preview hosts,
+  // but promoting it globally would change the meaning of ordinary helpers.
+  if (
+    isStoryModule(options) &&
+    t.isArrowFunctionExpression(node) &&
+    !t.isBlockStatement(node.body) &&
+    (
+      isRenderableJsx(node.body) ||
+      (options.allowNullRender === true && t.isNullLiteral(node.body))
+    )
+  ) {
+    node.body = t.blockStatement([t.returnStatement(node.body)]);
+    node.expression = false;
+  }
+
   const returnStatement = collectReturnStatement(
     functionPath,
     bindings,
-    options.state ?? null
+    options.state ?? null,
+    options.allowNullRender === true,
   );
 
   if (!returnStatement) {

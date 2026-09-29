@@ -7,9 +7,9 @@ import {
   hasLazyOrigin,
   isLazyCallee,
   resolveValueNode,
-  setReactLazyAnalysisBabelTypes,
+  setLitsxLazyAnalysisBabelTypes,
   trackLazyUsage,
-} from "../packages/babel-preset-react-compat/src/internal/react-lazy-analysis.js";
+} from "../packages/babel-preset-litsx/src/internal/transform-litsx-lazy-analysis.js";
 
 const traverse = babelTraverse.default || babelTraverse;
 
@@ -42,7 +42,7 @@ function getPaths(source) {
 
 describe("react compat lazy analysis internals", () => {
   beforeAll(() => {
-    setReactLazyAnalysisBabelTypes(t);
+setLitsxLazyAnalysisBabelTypes(t);
   });
 
   it("detects identifier and namespace lazy callees", () => {
@@ -61,8 +61,8 @@ describe("react compat lazy analysis internals", () => {
     };
 
     assert.strictEqual(isLazyCallee(callPaths[0], state), true);
-    assert.strictEqual(isLazyCallee(callPaths[2], state), true);
-    assert.strictEqual(isLazyCallee(callPaths[4], state), false);
+    assert.strictEqual(isLazyCallee(callPaths[1], state), true);
+    assert.strictEqual(isLazyCallee(callPaths[2], state), false);
   });
 
   it("resolves classes, missing bindings, cycles, and invalid conditional branches", () => {
@@ -170,9 +170,9 @@ describe("react compat lazy analysis internals", () => {
     trackLazyUsage(jsxPaths[0], state, () => requirements);
 
     assert.strictEqual(hasLazyOrigin(t.memberExpression(t.identifier("Controls"), t.identifier("PrimaryAction")), jsxPaths[0].scope, state), true);
-    assert.strictEqual(jsxPaths[0].node.openingElement.name.name, "primary-action");
+    assert.strictEqual(jsxPaths[0].node.openingElement.name.name, "controls-primary-action");
     assert.deepStrictEqual(jsxPaths[0].node.openingElement.attributes, []);
-    assert.deepStrictEqual([...requirements.keys()], ["primary-action:Controls.PrimaryAction"]);
+    assert.deepStrictEqual([...requirements.keys()], ["controls-primary-action:Controls.PrimaryAction"]);
   });
 
   it("recognizes member, conditional, and loader-like lazy origins", () => {
@@ -353,9 +353,9 @@ describe("react compat lazy analysis internals", () => {
 
     trackLazyUsage(jsxPaths[0], state, () => requirements);
 
-    assert.strictEqual(jsxPaths[0].node.openingElement.name.name, "fancy-button");
-    assert.strictEqual(jsxPaths[0].node.closingElement.name.name, "fancy-button");
-    assert.deepStrictEqual([...requirements.keys()], ["fancy-button:controls.FancyButton"]);
+    assert.strictEqual(jsxPaths[0].node.openingElement.name.name, "controls-fancy-button");
+    assert.strictEqual(jsxPaths[0].node.closingElement.name.name, "controls-fancy-button");
+    assert.deepStrictEqual([...requirements.keys()], ["controls-fancy-button:controls.FancyButton"]);
   });
 
   it("skips invalid special-member rewrites", () => {

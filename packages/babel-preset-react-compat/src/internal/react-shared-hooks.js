@@ -15,4 +15,7 @@ export const reactUseRef = createUseRefTransform({
   hookName: "useRef",
   pluginName: "transform-react-useref",
   pendingPropertyKey: "_litsxPendingRefs",
+  useLitDirectiveRefs: true,
+  runtimeModule: "@litsx/core/react-compat",
+  runtimeHookName: "useReactRef",
 });

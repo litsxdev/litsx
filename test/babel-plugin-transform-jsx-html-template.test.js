@@ -1,5 +1,5 @@
 import assert from "assert";
-import babelCore from "@babel/core";
+import * as babelCore from "@babel/core";
 import { TraceMap, originalPositionFor } from "@jridgewell/trace-mapping";
 import parser, {
   getLitsxVirtualizationMetadata,
@@ -62,6 +62,76 @@ describe("@litsx/babel-plugin-transform-jsx-html-template", () => {
     assert.match(code, /const view = html`/);
     assert.match(code, /<button .label=\$\{text\}>/);
     assert.match(code, /\$\{count\}/);
+  });
+
+  it("escapes template syntax in JSX text emitted inside Lit templates", () => {
+    const source =
+      'const view = <code>Component.styles = css`...`; C:\\\\styles</code>;';
+    const ast = parser.parse(source, { sourceType: "module" });
+    const { code } = transformFromAstSync(ast, source, {
+      configFile: false,
+      babelrc: false,
+      plugins: [plugin],
+    });
+
+    assert.match(
+      code,
+      /html`<code>Component\.styles = css\\`\.\.\.\\`; C:\\\\\\\\styles<\/code>`/
+    );
+    assert.doesNotThrow(() => parser.parse(code, { sourceType: "module" }));
+  });
+
+  it("lowers native JSX refs to Lit ref directives without DOM markers", () => {
+    const source = `const inputRef = createRef(); const view = <input ref={inputRef} />;`;
+    const ast = parser.parse(source, { sourceType: "module" });
+    const { code } = transformFromAstSync(ast, source, {
+      configFile: false,
+      babelrc: false,
+      plugins: [plugin],
+    });
+
+    assert.match(code, /import \{ ref \} from "@litsx\/core";/);
+    assert.match(code, /html`<input \$\{ref\(inputRef\)\}>`/);
+    assert.doesNotMatch(code, /data-ref/);
+  });
+
+  it("adapts React refs at native, component, and spread boundaries", () => {
+    const source = `
+      const view = <section>
+        <input ref={inputRef} />
+        <x-field ref={fieldRef} />
+        <button {...props} />
+      </section>;
+    `;
+    const ast = parser.parse(source, { sourceType: "module" });
+    const { code } = transformFromAstSync(ast, source, {
+      configFile: false,
+      babelrc: false,
+      plugins: [[plugin, { reactCompatRefs: true }]],
+    });
+
+    assert.match(code, /from "@litsx\/core\/react-compat"/);
+    assert.match(code, /ref\(toLitRef\(inputRef\)\)/);
+    assert.match(code, /<x-field \.ref=\$\{toLitRef\(fieldRef\)\}>/);
+    assert.match(code, /refAdapter: toLitRef/);
+  });
+
+  it("aliases the generated ref helpers when authoring bindings use their names", () => {
+    const source = `
+      const ref = "local";
+      const toLitRef = "local";
+      const view = <input ref={inputRef} />;
+    `;
+    const ast = parser.parse(source, { sourceType: "module" });
+    const { code } = transformFromAstSync(ast, source, {
+      configFile: false,
+      babelrc: false,
+      plugins: [[plugin, { reactCompatRefs: true }]],
+    });
+
+    assert.match(code, /ref as _litsxRef/);
+    assert.match(code, /toLitRef as _toLitRef/);
+    assert.match(code, /_litsxRef\(_toLitRef\(inputRef\)\)/);
   });
 
   it("keeps Lit-style listener attributes intact", () => {
@@ -234,6 +304,29 @@ describe("@litsx/babel-plugin-transform-jsx-html-template", () => {
     );
   });
 
+  it("uses the normalized opening name for PascalCase component closing tags", () => {
+    const source = `
+      const view = (
+        <QuartzCard heading="Preset">
+          <span>Demo</span>
+        </QuartzCard>
+      );
+    `;
+
+    const ast = parser.parse(source, { sourceType: "module" });
+    const { code } = transformFromAstSync(ast, source, {
+      configFile: false,
+      babelrc: false,
+      plugins: [plugin],
+    });
+
+    assert.match(
+      code,
+      /html`<quartz-card heading="Preset"><span>Demo<\/span><\/quartz-card>`/
+    );
+    assert.doesNotMatch(code, /<\/QuartzCard>/);
+  });
+
   it("keeps Lit-style prefixed attributes on kebab-case custom elements", () => {
     const source = `
       const view = (
@@ -331,6 +424,42 @@ describe("@litsx/babel-plugin-transform-jsx-html-template", () => {
       code,
       /jsxSpreadElement\("div", \[\{\s*title: "before"\s*\}, first, \{\s*id: "fixed",\s*disabled: active\s*\}, second, \{\s*hidden: true\s*\}\], \{\s*component: false,\s*void: false\s*\}/
     );
+  });
+
+  it("marks SVG spread namespaces and returns to HTML inside foreignObject", () => {
+    const source = `const x = <svg><circle {...shape} /><foreignObject><div {...htmlProps} /></foreignObject></svg>;`;
+    const ast = parser.parse(source, { sourceType: "module" });
+
+    const { code } = transformFromAstSync(ast, source, {
+      configFile: false,
+      babelrc: false,
+      plugins: [plugin],
+    });
+
+    assert.match(code, /jsxSpreadElement\("circle", \[shape\], \{[\s\S]*namespace: "svg"/);
+    assert.match(code, /jsxSpreadElement\("div", \[htmlProps\], \{\s*component: false,\s*void: false\s*\}/);
+  });
+
+  it("uses svg templates for JSX nested in SVG expressions and html inside foreignObject", () => {
+    const source = `
+      const x = <main>
+        <svg viewBox={viewBox}>
+          {shapes.map((shape) => <path d={shape.d} />)}
+          <foreignObject>{htmlNodes.map((node) => <div>{node.label}</div>)}</foreignObject>
+        </svg>
+      </main>;
+    `;
+    const ast = parser.parse(source, { sourceType: "module" });
+
+    const { code } = transformFromAstSync(ast, source, {
+      configFile: false,
+      babelrc: false,
+      plugins: [plugin],
+    });
+
+    assert.match(code, /import \{ (?:html, svg|svg, html) \} from "lit"/);
+    assert.match(code, /shapes\.map\(shape => svg`<path d="\$\{shape\.d\}"><\/path>`\)/);
+    assert.match(code, /htmlNodes\.map\(node => html`<div>\$\{node\.label\}<\/div>`\)/);
   });
 
   it("passes an authored component constructor for spread prop inference", () => {

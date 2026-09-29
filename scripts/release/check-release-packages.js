@@ -188,24 +188,6 @@ for (const packageDir of excludedPrivatePackages) {
   }
 }
 
-const prettierManifest = readJson("packages/prettier-plugin-litsx/package.json");
-if (!prettierManifest.peerDependencies?.prettier) {
-  fail("packages/prettier-plugin-litsx must keep prettier as a peer dependency");
-}
-if (prettierManifest.dependencies?.prettier) {
-  fail("packages/prettier-plugin-litsx must not depend on prettier directly");
-}
-
-const tsManifest = readJson("packages/typescript/package.json");
-if (!tsManifest.bin?.["litsx-tsc"]) {
-  fail("packages/typescript must expose litsx-tsc");
-}
-
-const prettierReadme = fs.readFileSync(path.join(repoRoot, "packages/prettier-plugin-litsx/README.md"), "utf8");
-if (!prettierReadme.includes("It does **not** claim plain `*.tsx` or `*.jsx` formatting.")) {
-  fail("packages/prettier-plugin-litsx/README.md must keep the tsx/jsx limitation explicit");
-}
-
 if (process.exitCode) {
   process.exit(process.exitCode);
 }

@@ -1,6 +1,4 @@
-import helperPluginUtils from "@babel/helper-plugin-utils";
-
-const { declare } = helperPluginUtils;
+import { declare } from "@babel/helper-plugin-utils";
 
 const PROP_TYPES_MODULE = "prop-types";
 const PROP_TYPES_RUNTIME_MODULE = "@litsx/prop-types/runtime";
@@ -529,8 +527,40 @@ function findExistingPropertiesHoist(bodyPath, t) {
   }) || null;
 }
 
+function findExistingPropertiesAssignment(programPath, componentName, t) {
+  return programPath.get("body").find((statementPath) => {
+    if (!statementPath.isExpressionStatement()) return false;
+    const expression = statementPath.node.expression;
+    return (
+      t.isAssignmentExpression(expression, { operator: "=" }) &&
+      t.isMemberExpression(expression.left) &&
+      !expression.left.computed &&
+      t.isIdentifier(expression.left.object, { name: componentName }) &&
+      t.isIdentifier(expression.left.property, { name: "properties" }) &&
+      t.isObjectExpression(expression.right)
+    );
+  }) || null;
+}
+
+export {
+  buildGeneratedPropertiesObject,
+  buildPropertyDescriptor,
+  buildRuntimeValidatorExpression,
+  ensureBlockBody,
+  extractPropTypeComponents,
+  findExistingPropertiesAssignment,
+  findExistingPropertiesHoist,
+  getImportSource,
+  getOrCreateRuntimeImport,
+  getPropertyKeyName,
+  inferOneOfType,
+  isPropTypesReference,
+  mergePropertiesObjects,
+  unwrapComponentFunction,
+};
+
 export default declare((api) => {
-  api.assertVersion(7);
+  api.assertVersion("^8.0.0");
   const t = api.types;
 
   return {
@@ -569,6 +599,11 @@ export default declare((api) => {
 
               const generatedProperties = buildGeneratedPropertiesObject(path.node.right.properties, state);
               const existingHoistPath = findExistingPropertiesHoist(bodyPath, t);
+              const existingAssignmentPath = findExistingPropertiesAssignment(
+                programPath,
+                componentName,
+                t
+              );
 
               if (existingHoistPath) {
                 const existingObject = existingHoistPath.node.expression.arguments[0];
@@ -578,12 +613,20 @@ export default declare((api) => {
                   t
                 );
               } else {
+                const mergedProperties = existingAssignmentPath
+                  ? mergePropertiesObjects(
+                      generatedProperties,
+                      existingAssignmentPath.node.expression.right,
+                      t
+                    )
+                  : generatedProperties;
                 bodyPath.unshiftContainer(
                   "body",
                   t.expressionStatement(
-                    t.callExpression(t.identifier("__litsx_static_properties"), [generatedProperties])
+                    t.callExpression(t.identifier("__litsx_static_properties"), [mergedProperties])
                   )
                 );
+                existingAssignmentPath?.remove();
               }
 
               if (path.parentPath.isExpressionStatement()) {

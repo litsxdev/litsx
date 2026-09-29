@@ -1,6 +1,6 @@
 {
   "name": "@litsx/compiler",
-  "version": "0.10.0",
+  "version": "1.0.0-next.13",
   "description": "Build-facing LitSX compilation facade with correct parser and sourcemap handling",
   "author": "LitSX Team",
   "type": "module",
@@ -19,6 +19,12 @@
       "import": "./src/authored-input.js",
       "require": "./dist/authored-input.cjs",
       "default": "./src/authored-input.js"
+    },
+    "./utility-css": {
+      "types": "./src/utility-css.d.ts",
+      "import": "./src/utility-css.js",
+      "require": "./dist/utility-css.cjs",
+      "default": "./src/utility-css.js"
     }
   },
   "files": [
@@ -34,6 +40,9 @@
     "jsx"
   ],
   "license": "Apache-2.0",
+  "engines": {
+    "node": "^22.18.0 || >=24.11.0"
+  },
   "homepage": "https://litsx.dev/",
   "bugs": {
     "url": "https://github.com/litsxdev/litsx/issues"
@@ -48,15 +57,15 @@
     "directory": "packages/compiler"
   },
   "dependencies": {
-    "@babel/core": "^7.29.6",
-    "@babel/parser": "^7.29.3",
-    "@babel/plugin-transform-typescript": "^7.28.5",
-    "@babel/types": "^7.29.0",
-    "@litsx/authoring": "^0.5.0",
-    "@litsx/babel-plugin-transform-jsx-html-template": "^0.3.5",
-    "@litsx/babel-preset-litsx": "^0.15.0",
-    "@litsx/typescript": "^0.9.0",
-    "@litsx/typescript-session": "^0.2.1",
+    "@babel/core": "^8.0.1",
+    "@babel/parser": "^8.0.4",
+    "@babel/plugin-transform-typescript": "^8.0.1",
+    "@babel/types": "^8.0.4",
+    "@litsx/authoring": "^1.0.0-next.5",
+    "@litsx/babel-plugin-transform-jsx-html-template": "^1.0.0-next.6",
+    "@litsx/babel-preset-litsx": "^1.0.0-next.9",
+    "@litsx/babel-preset-react-compat": "^1.0.0-next.4",
+    "@litsx/typescript-session": "^1.0.0-next.0",
     "source-map-js": "^1.2.1"
   },
   "scripts": {

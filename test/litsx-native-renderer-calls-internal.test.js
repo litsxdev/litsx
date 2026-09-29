@@ -102,4 +102,40 @@ describe("native renderer-call internals", () => {
     assert.strictEqual(expressions[0].name, "title");
     assert.strictEqual(expressions[1].type, "BinaryExpression");
   });
+
+  it("only lowers renderer calls in child expressions, never in bindings", () => {
+    const jsxPath = getJSXPath(`
+      function Card() {
+        return (
+          <child-element
+            .items={itemsFactory()}
+            .config={resolveConfig()}
+            .onNavigate={createNavigateHandler()}
+            title={formatTitle()}
+          >
+            {renderContent()}
+          </child-element>
+        );
+      }
+    `);
+    const state = {};
+    transformJSXRendererCalls(jsxPath, new Map([
+      ["itemsFactory", "itemsFactory"],
+      ["resolveConfig", "resolveConfig"],
+      ["createNavigateHandler", "createNavigateHandler"],
+      ["formatTitle", "formatTitle"],
+      ["renderContent", "renderContent"],
+    ]), state);
+
+    const attributes = jsxPath.node.openingElement.attributes;
+    for (const attribute of attributes) {
+      assert.strictEqual(attribute.value.expression.type, "CallExpression");
+      assert.notStrictEqual(attribute.value.expression.callee.name, "renderRendererCall");
+    }
+    const childExpression = jsxPath.node.children.find(
+      (child) => child.type === "JSXExpressionContainer"
+    ).expression;
+    assert.strictEqual(childExpression.callee.name, "renderRendererCall");
+    assert.strictEqual(state.__litsxNeedsRendererCallImport, true);
+  });
 });

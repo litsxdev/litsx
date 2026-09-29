@@ -7,7 +7,7 @@ export function EdgePanel(props: EdgeCaseProps) {
       <p>{props.mode}</p>
       <p>{props.retryPolicy}</p>
       <p>{props.mixed}</p>
-      <button onClick={() => props.onRetry()}>retry</button>
+      <button on:click={() => props.onRetry()}>retry</button>
     </section>
   );
 }

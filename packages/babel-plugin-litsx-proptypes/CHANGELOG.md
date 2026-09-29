@@ -1,5 +1,27 @@
 # @litsx/babel-plugin-litsx-proptypes
 
+## 1.0.0-next.1
+
+### Patch Changes
+
+- 4b34759: Move the compiler and lint integrations to Babel 8, ESLint 10, and Node 24 while retaining ESLint 9 compatibility. Refresh generated Storybook and Playwright versions, consume patched transitive dependencies, and support Chromium's native scoped-registry creation scope across shadow and projected light DOM.
+
+## 1.0.0-next.0
+
+### Major Changes
+
+- 83d757e: Stabilize the complete public LitSX package graph as the 1.0 release line.
+
+  This release establishes standard JSX and TSX authoring, SSR and hydration,
+  React compatibility, scoped custom-element registration, structural hooks,
+  Storybook and Vite integration, and Shadow DOM and Light DOM UnoCSS support as
+  the stable public contract.
+
+### Patch Changes
+
+- Updated dependencies [83d757e]
+  - @litsx/prop-types@1.0.0-next.0
+
 ## 0.2.4
 
 ### Patch Changes

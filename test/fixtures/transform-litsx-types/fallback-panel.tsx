@@ -6,7 +6,7 @@ export function FallbackPanel(props: FallbackBaseProps) {
       <p>{props.envelope.data.items.length}</p>
       <p>{props.flags.alpha ? "a" : "b"}</p>
       <p>{typeof props.displayValue}</p>
-      <button onClick={() => props.onCommit("ok")}>commit</button>
+      <button on:click={() => props.onCommit("ok")}>commit</button>
     </section>
   );
 }

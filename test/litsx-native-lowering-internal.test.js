@@ -2,7 +2,7 @@ import assert from "assert";
 import fs from "fs";
 import os from "os";
 import path from "path";
-import babelCore from "@babel/core";
+import * as babelCore from "@babel/core";
 import parser from "./helpers/litsx-parser.js";
 import { beforeAll, describe, it } from 'vitest';
 import { interopDefault } from "./helpers/interop-default.js";
@@ -39,7 +39,7 @@ describe("@litsx/babel-preset-litsx native lowering internals", () => {
       code,
       /static properties = \{[\s\S]*title: \{[\s\S]*type: String[\s\S]*ref: \{[\s\S]*type: Object[\s\S]*attribute: false/s
     );
-    assert.match(code, /useCallbackRef\(this, \(\) => this,/);
+    assert.match(code, /useCallbackRef\(\(\) => this,/);
     assert.doesNotMatch(code, /data-ref="_refElement"/);
   });
 
@@ -58,31 +58,31 @@ describe("@litsx/babel-preset-litsx native lowering internals", () => {
 
     assert.match(code, /class SearchField extends LitElement/);
     assert.match(code, /class SearchShell extends (?:ShadowDomMixin\(LitElement\)|LitElement)/);
-    assert.match(code, /<input data-ref="_refElement" \/>/);
-    assert.match(code, /useCallbackRef\(this, \(\) => this\.renderRoot\?\./);
-    assert.doesNotMatch(code, /useCallbackRef\(this, \(\) => this,/);
+    assert.match(code, /<input ref=\{this\.ref\} \/>/);
+    assert.doesNotMatch(code, /data-ref=/);
+    assert.doesNotMatch(code, /useCallbackRef\(\(\) => this,/);
     assert.match(code, /<(?:search-field|SearchField) \.ref=\{this\.ref\} \/>/);
   });
 
   it("keeps forwarded refs live when a child component relies on the default instance target", () => {
     const source = [
-      "const Leaf = () => {",
+      "const TestLeaf = () => {",
       "  return <div>leaf</div>;",
       "};",
       "",
-      "const Parent = ({ ref }) => {",
-      "  return <Leaf ref={ref} />;",
+      "const TestParent = ({ ref }) => {",
+      "  return <TestLeaf ref={ref} />;",
       "};",
     ].join("\n");
 
     const { code } = transformWithNativePreset(source);
 
-    assert.match(code, /class Leaf extends LitElement/);
-    assert.match(code, /class Parent extends (?:ShadowDomMixin\(LitElement\)|LitElement)/);
-    assert.match(code, /<(?:leaf|Leaf) \.ref=\{this\.ref\} \/>/);
+    assert.match(code, /class TestLeaf extends LitElement/);
+    assert.match(code, /class TestParent extends (?:ShadowDomMixin\(LitElement\)|LitElement)/);
+    assert.match(code, /<test-leaf \.ref=\{this\.ref\} \/>/);
     assert.match(
       code,
-      /class Leaf extends LitElement \{[\s\S]*useCallbackRef\(this, \(\) => this,/
+      /class TestLeaf extends LitElement \{[\s\S]*useCallbackRef\(\(\) => this,/
     );
   });
 
@@ -95,8 +95,8 @@ describe("@litsx/babel-preset-litsx native lowering internals", () => {
 
     const { code } = transformWithNativePreset(source);
 
-    assert.match(code, /<form data-ref="_refElement"><\/form>/);
-    assert.match(code, /useCallbackRef\(this, \(\) => this\.renderRoot\?\./);
+    assert.match(code, /<form ref=\{this\.ref\}><\/form>/);
+    assert.doesNotMatch(code, /data-ref=/);
     assert.doesNotMatch(code, /useCallbackRef\(this, \(\) => this,/);
   });
 
@@ -106,11 +106,11 @@ describe("@litsx/babel-preset-litsx native lowering internals", () => {
       "const MyForm = ({ ref }) => {",
       "  const internalRef = useRef();",
       "  const setFormNode = (node) => {",
-      "    internalRef.current = node;",
+      "    internalRef.value = node;",
       "    if (typeof ref === 'function') {",
       "      ref(node);",
       "    } else if (ref) {",
-      "      ref.current = node;",
+      "      ref.value = node;",
       "    }",
       "  };",
       "  return <form ref={setFormNode}></form>;",
@@ -119,10 +119,33 @@ describe("@litsx/babel-preset-litsx native lowering internals", () => {
 
     const { code } = transformWithNativePreset(source);
 
-    assert.match(code, /const internalRef = useRef\(this\);/);
-    assert.match(code, /<form data-ref="_ref\d*"><\/form>/);
-    assert.match(code, /useCallbackRef\(this, \(\) => this\._ref\d*, setFormNode\);/);
-    assert.doesNotMatch(code, /useCallbackRef\(this, \(\) => this,/);
+    assert.match(code, /const internalRef = useRef\(\);/);
+    assert.match(code, /<form ref=\{setFormNode\}><\/form>/);
+    assert.doesNotMatch(code, /data-ref=/);
+    assert.doesNotMatch(code, /useCallbackRef\(\(\) => this,/);
+  });
+
+  it("preserves native member and aliased refs for Lit directive lowering", () => {
+    const source = [
+      "const AddressForm = ({ formState }) => {",
+      "  const localRef = formState.ref;",
+      "  return (",
+      "    <section>",
+      "      <form ref={formState.ref}></form>",
+      "      <input ref={localRef} />",
+      "    </section>",
+      "  );",
+      "};",
+    ].join("\n");
+
+    const { code } = transformWithNativePreset(source);
+
+    // The component instance keeps its own ref lifecycle channel, while refs
+    // authored on native elements remain available to the Lit ref directive.
+    assert.strictEqual((code.match(/useCallbackRef\(\(\) =>/g) || []).length, 1);
+    assert.doesNotMatch(code, /data-ref=/);
+    assert.match(code, /<form ref=\{this\.formState\.ref\}><\/form>/);
+    assert.match(code, /<input ref=\{localRef\} \/>/);
   });
 
   it("detects native ref props through defaulted destructuring and string keys", () => {
@@ -135,9 +158,12 @@ describe("@litsx/babel-preset-litsx native lowering internals", () => {
     const { code } = transformWithNativePreset(source);
 
     assert.match(code, /class SearchPanel extends LitElement/);
-    assert.match(code, /prepareEffects\(this\);/);
-    assert.match(code, /useCallbackRef\(this, \(\) => this,/);
-    assert.match(code, /return <input ref=\{forwardedRef\} aria-label=\{title\} \/>;/);
+    assert.match(code, /static properties = \{[\s\S]*title: \{[\s\S]*ref: \{[\s\S]*attribute: false/s);
+    assert.doesNotMatch(code, /prepareEffects\(this\);/);
+    assert.doesNotMatch(code, /useCallbackRef\(this,/);
+    assert.doesNotMatch(code, /data-ref=/);
+    assert.match(code, /return <input ref=\{this\.ref\} aria-label=\{this\.title\} \/>;/);
+    assert.doesNotMatch(code, /forwardedRef/);
   });
 
   it("detects native ref props through identifier props access and skips non-standard tags", () => {
@@ -160,9 +186,8 @@ describe("@litsx/babel-preset-litsx native lowering internals", () => {
       /static properties = \{[\s\S]*ref: \{[\s\S]*type: String[\s\S]*attribute: false/s
     );
     assert.match(code, /<widget-box \.ref=\{this\.ref\} \/>/);
-    assert.match(code, /<input data-ref="_refElement" \/>/);
-    const useCallbackRefMatches = code.match(/useCallbackRef\(this, \(\) => this\.renderRoot\?\./g) || [];
-    assert.strictEqual(useCallbackRefMatches.length, 1);
+    assert.match(code, /<input ref=\{this\.ref\} \/>/);
+    assert.doesNotMatch(code, /data-ref=/);
     assert.doesNotMatch(code, /useCallbackRef\(this, \(\) => this,/);
   });
 
@@ -172,7 +197,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
 
   it("converts arrow functions into LitElement classes", () => {
     const source = `
-      const Greeting = ({ name, count }) => {
+      const TestGreeting = ({ name, count }) => {
         const doubled = count * 2;
         return <p>{name} {doubled}</p>;
       };
@@ -310,7 +335,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
         tags: string[];
       }
 
-      function Card(props: CardProps) {
+      function TestCard(props: CardProps) {
         return <article>{props.title} {props.active ? "on" : "off"} {props.tags.length}</article>;
       }
     `;
@@ -341,7 +366,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
         active: boolean;
       }
 
-      function Card(props: CardProps = {} as CardProps) {
+      function TestCard(props: CardProps = {} as CardProps) {
         return <article>{props.title} {props.active ? "on" : "off"}</article>;
       }
     `;
@@ -372,7 +397,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
         active: boolean;
       }
 
-      function Card(props: CardProps = {} as CardProps) {
+      function TestCard(props: CardProps = {} as CardProps) {
         const { title, active } = props;
         return <article>{title} {active ? "on" : "off"}</article>;
       }
@@ -404,8 +429,8 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
         onSelect: (id: string) => void;
       };
 
-      function Card(props: CardProps) {
-        return <button onClick={() => props.onSelect(props.title)}>{props.title}</button>;
+      function TestCard(props: CardProps) {
+        return <button on:click={() => props.onSelect(props.title)}>{props.title}</button>;
       }
     `;
 
@@ -432,15 +457,15 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
         onSelect: (id: string) => void;
       };
 
-      function Card(props: CardProps) {
-        static properties = {
-          active: { reflect: true },
-          payload: { attribute: false },
-          onSelect: { attribute: false }
-        };
-
+      function TestCard(props: CardProps) {
         return <article>{props.title}</article>;
       }
+
+      TestCard.properties = {
+        active: { reflect: true },
+        payload: { attribute: false },
+        onSelect: { attribute: false }
+      };
     `;
 
     const inputAst = parser.parse(source, {
@@ -454,33 +479,28 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
     });
 
     assert.match(code, /title: \{\s*type: String\s*\}/);
-    assert.match(code, /active: \{\s*type: Boolean\s*\}/s);
-    assert.match(code, /payload: \{\s*type: Object\s*\}/s);
+    assert.match(code, /active: \{\s*type: Boolean,\s*reflect: true\s*\}/s);
+    assert.match(code, /payload: \{\s*type: Object,\s*attribute: false\s*\}/s);
     assert.match(code, /onSelect: \{\s*type: Object,\s*attribute: false\s*\}/s);
     assert.match(code, /reflect: true/);
-    assert.match(code, /payload: \{\s*attribute: false\s*\}/s);
-    assert.match(code, /static get properties\(\)/);
-    assert.match(code, /from "@litsx\/core\/elements"/);
-    assert.match(code, /extends LitsxStaticHoistsMixin\(LitElement\)/);
-    assert.match(code, /this\.__litsxMergeProperties\(/);
-    assert.match(code, /this\.__litsxStatic\(_litsx_static_properties,\s*\(\)\s*=>/);
-    assert.doesNotMatch(code, /static properties = \{/);
+    assert.match(code, /static properties = \{/);
+    assert.doesNotMatch(code, /LitsxStaticHoistsMixin|__litsxMergeProperties|__litsxStatic|litsx\.static\.properties/);
   });
 
-  it("hoists static properties into a memoized static getter that merges inferred props", () => {
+  it("merges authored property options into inferred declarations at compile time", () => {
     const source = `
       type CardProps = {
         title: string;
         active: boolean;
       };
 
-      function Card(props: CardProps) {
-        static properties = {
-          active: { reflect: true },
-        };
-
+      function TestCard(props: CardProps) {
         return <article>{props.title}</article>;
       }
+
+      TestCard.properties = {
+        active: { reflect: true },
+      };
     `;
 
     const inputAst = parser.parse(source, {
@@ -493,15 +513,10 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
       presets: [[nativePreset, { jsxTemplate: false }]],
     });
 
-    assert.match(code, /const _litsx_static_properties = Symbol\("litsx\.static\.properties"\);/);
-    assert.match(code, /static get properties\(\)/);
-    assert.match(code, /from "@litsx\/core\/elements"/);
-    assert.match(code, /extends LitsxStaticHoistsMixin\(LitElement\)/);
-    assert.match(code, /this\.__litsxStatic\(_litsx_static_properties,\s*\(\)\s*=>/);
-    assert.match(code, /this\.__litsxMergeProperties\(/);
+    assert.match(code, /static properties = \{/);
     assert.match(code, /title: \{\s*type: String\s*\}/);
-    assert.match(code, /active: \{\s*type: Boolean\s*\}/);
-    assert.match(code, /reflect: true/);
+    assert.match(code, /active: \{\s*type: Boolean,\s*reflect: true\s*\}/s);
+    assert.doesNotMatch(code, /LitsxStaticHoistsMixin|__litsxMergeProperties|__litsxStatic|litsx\.static\.properties/);
   });
 
   it("uses a virtual TypeScript checker program for inline utility types", () => {
@@ -516,7 +531,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
         payload: BaseProps["payload"];
       };
 
-      function Card(props: CardProps) {
+      function TestCard(props: CardProps) {
         return <article>{props.title} {props.active ? "on" : "off"}</article>;
       }
     `;
@@ -539,7 +554,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
   it("resolves imported TypeScript prop types with the checker when filename is available", () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-transform-"));
     const typesPath = path.join(tempDir, "types.ts");
-    const componentPath = path.join(tempDir, "Card.tsx");
+    const componentPath = path.join(tempDir, "TestCard.tsx");
 
     fs.writeFileSync(
       typesPath,
@@ -556,7 +571,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
 
     const source = [
       "import type { CardProps } from './types';",
-      "function Card(props: CardProps) {",
+      "function TestCard(props: CardProps) {",
       "  return <article>{props.title} {props.active ? 'on' : 'off'} {props.tags.length}</article>;",
       "}",
     ].join("\n");
@@ -583,9 +598,10 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
 
   it("supports object rest properties in parameter destructuring", () => {
     const source = `
-      const List = ({ items = [], title, ...restProps }) => {
+      const TestList = ({ items = [], title, ...restProps }) => {
         const count = items.length;
         const extra = restProps.subtitle;
+        const dynamic = restProps["data-id"];
 
         return (
           <ul>
@@ -595,6 +611,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
             ))}
             <li>Total: {count}</li>
             <li>{extra}</li>
+            <li>{dynamic}</li>
           </ul>
         );
       };
@@ -609,10 +626,12 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
 
     assert.match(
       code,
-      /static properties = {\s*items: {\s*type: Array\s*},\s*title: {\s*type: String\s*},\s*restProps: {\s*type: Object\s*}\s*};/s,
+      /static properties = {\s*items: {\s*type: Array\s*},\s*title: {\s*type: String\s*},\s*__litsxRestProps: {\s*type: Object,\s*attribute: false\s*}\s*};/s,
     );
+    assert.match(code, /static \[Symbol\.for\("litsx\.restProps"\)\] = {\s*property: "__litsxRestProps"\s*};/s);
     assert.match(code, /const count = this\.items\.length;/);
-    assert.match(code, /this\.restProps\.subtitle/);
+    assert.match(code, /this\.__litsxRestProps\.subtitle/);
+    assert.match(code, /this\.__litsxRestProps\["data-id"\]/);
     assert.match(
       code,
       new RegExp(String.raw`<li>\{this\.title\}<\/li>`)
@@ -621,8 +640,8 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
 
   it("hoists inline event handlers into class methods", () => {
     const source = `
-      const Button = ({ label }) => {
-        return <button onClick={() => console.log(label)}>{label}</button>;
+      const TestButton = ({ label }) => {
+        return <button on:click={() => console.log(label)}>{label}</button>;
       };
     `;
 
@@ -633,15 +652,15 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
       presets: [[nativePreset, { jsxTemplate: false }]],
     });
 
-    assert.match(code, /onClick=\{this\.handleClick\}/);
-    assert.doesNotMatch(code, /onClick=\{\(.*=>/);
+    assert.match(code, /@click=\{this\.handleClick\}/);
+    assert.doesNotMatch(code, /@click=\{\(.*=>/);
 
     const ast = parser.parse(code, { sourceType: "module" });
     const classDecl = ast.program.body.find(
-      (node) => node.type === "ClassDeclaration" && node.id.name === "Button"
+      (node) => node.type === "ClassDeclaration" && node.id.name === "TestButton"
     );
 
-    assert(classDecl, "expected Button class declaration");
+    assert(classDecl, "expected TestButton class declaration");
 
     const hasHandlerMethod = classDecl.body.body.some(
       (member) => member.type === "ClassMethod" && member.key.name === "handleClick"
@@ -652,12 +671,12 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
 
   it("hoists declared handlers into class methods", () => {
     const source = `
-      const Button = ({ label }) => {
+      const TestButton = ({ label }) => {
         const handleClick = (event) => {
           console.log(label, event.type);
         };
 
-        return <button onClick={handleClick}>{label}</button>;
+        return <button on:click={handleClick}>{label}</button>;
       };
     `;
 
@@ -669,14 +688,14 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
     });
 
     assert.doesNotMatch(code, /const handleClick/);
-    assert.match(code, /onClick=\{this\.handleClick\}/);
+    assert.match(code, /@click=\{this\.handleClick\}/);
 
     const ast = parser.parse(code, { sourceType: "module" });
     const classDecl = ast.program.body.find(
-      (node) => node.type === "ClassDeclaration" && node.id.name === "Button"
+      (node) => node.type === "ClassDeclaration" && node.id.name === "TestButton"
     );
 
-    assert(classDecl, "expected Button class declaration");
+    assert(classDecl, "expected TestButton class declaration");
 
     const handlerMethod = classDecl.body.body.find(
       (member) => member.type === "ClassMethod" && member.key.name === "handleClick"
@@ -688,9 +707,9 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
 
   it("keeps inline handlers that capture local bindings", () => {
     const source = `
-      const Button = ({ label }) => {
+      const TestButton = ({ label }) => {
         const prefix = '>>>';
-        return <button onClick={() => console.log(prefix, label)}>{prefix}{label}</button>;
+        return <button on:click={() => console.log(prefix, label)}>{prefix}{label}</button>;
       };
     `;
 
@@ -701,11 +720,11 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
       presets: [[nativePreset, { jsxTemplate: false }]],
     });
 
-    assert.match(code, /onClick=\{\(.*=>/);
+    assert.match(code, /@click=\{\(.*=>/);
 
     const ast = parser.parse(code, { sourceType: "module" });
     const classDecl = ast.program.body.find(
-      (node) => node.type === "ClassDeclaration" && node.id.name === "Button"
+      (node) => node.type === "ClassDeclaration" && node.id.name === "TestButton"
     );
 
     const handlerMethods = classDecl.body.body.filter(
@@ -725,7 +744,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
         metadata: Record<string, unknown>;
       };
 
-      const Logger = (entries: LogEntry[]) => {
+      const TestLogger = (entries: LogEntry[]) => {
         const first = entries[0];
 
         return (
@@ -758,9 +777,9 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
     });
 
     const classDecl = ast.program.body.find(
-      (node) => node.type === "ClassDeclaration" && node.id.name === "Logger"
+      (node) => node.type === "ClassDeclaration" && node.id.name === "TestLogger"
     );
-    assert(classDecl, "expected a Logger class declaration");
+    assert(classDecl, "expected a TestLogger class declaration");
 
     const propertiesField = classDecl.body.body.find(
       (member) => member.type === "ClassProperty" && member.key.name === "properties"
@@ -792,7 +811,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
         metadata: Record<string, unknown>;
       };
 
-      const Logger = (entry: LogEntry) => {
+      const TestLogger = (entry: LogEntry) => {
         const extra = entry.metadata.details;
 
         return (
@@ -827,9 +846,9 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
     });
 
     const classDecl = ast.program.body.find(
-      (node) => node.type === "ClassDeclaration" && node.id.name === "Logger"
+      (node) => node.type === "ClassDeclaration" && node.id.name === "TestLogger"
     );
-    assert(classDecl, "expected Logger class declaration");
+    assert(classDecl, "expected TestLogger class declaration");
 
     const propertiesField = classDecl.body.body.find(
       (member) => member.type === "ClassProperty" && member.key.name === "properties"
@@ -888,7 +907,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
   it("preserves existing LitElement imports", () => {
     const source = `
       import { LitElement } from 'lit';
-      const Button = ({ label }) => {
+      const TestButton = ({ label }) => {
         return <button>{label}</button>;
       };
     `;
@@ -906,7 +925,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
   it("adds LitElement import when lit is namespaced imported", () => {
     const source = `
       import * as lit from 'lit';
-      const Button = ({ label }) => {
+      const TestButton = ({ label }) => {
         return <button>{label}</button>;
       };
     `;
@@ -950,14 +969,14 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
 
   it("rewrites props member access to component properties when static properties declares them", () => {
     const source = `
-      export function Playground(props) {
-        static properties = {
-          source: String,
-          exportName: String,
-        };
-
+      export function TestPlayground(props) {
         return <section>{props.source} {props.exportName}</section>;
       }
+
+      TestPlayground.properties = {
+        source: String,
+        exportName: String,
+      };
     `;
 
     const inputAst = parser.parse(source, { sourceType: "module" });
@@ -976,7 +995,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
 
   it("converts default exported named function declarations when the name is capitalized", () => {
     const source = `
-      export default function Greeting({ message }) {
+      export default function TestGreeting({ message }) {
         return <div>{message}</div>;
       }
     `;
@@ -987,14 +1006,33 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
       presets: [[nativePreset, { jsxTemplate: false }]],
     });
 
-    assert.match(code, /export default class Greeting extends LitElement/);
+    assert.match(code, /export default class TestGreeting extends LitElement/);
     assert.match(code, /static properties = \{[\s\S]*message: \{\s*type: String\s*\}[\s\S]*\};/);
+  });
+
+  it("does not convert default exported async PascalCase functions into LitElement classes", () => {
+    const source = `
+      export default async function ProductPage({ message }) {
+        return <div>{message}</div>;
+      }
+    `;
+    const inputAst = parser.parse(source, { sourceType: "module" });
+    const { code } = transformFromAstSync(inputAst, source, {
+      configFile: false,
+      babelrc: false,
+      presets: [[nativePreset, { jsxTemplate: false }]],
+    });
+
+    assert.doesNotMatch(code, /export default class ProductPage extends LitElement/);
+    assert.match(code, /export default async function ProductPage\(\{\s*message\s*\}\) \{/);
+    assert.match(code, /return __litsxScopedTemplate\(<div>\{message\}<\/div>, \{\}\);/);
+    assert.match(code, /ProductPage\[LITSX_SERVER_COMPONENT\] = true;/);
   });
 
   it("uses namespace import when LitElement is not directly imported", () => {
     const source = `
       import * as lit from 'lit';
-      const Button = ({ label }) => {
+      const TestButton = ({ label }) => {
         return <button>{label}</button>;
       };
     `;
@@ -1006,7 +1044,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
     });
 
     assert.match(code, /import \{ LitElement \} from ['"]lit['"];?/);
-    assert.match(code, /class Button extends LitElement/);
+    assert.match(code, /class TestButton extends LitElement/);
   });
 
   it("handles function with non-JSX return statement", () => {
@@ -1029,7 +1067,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
   it("preserves LitElement when already imported from lit", () => {
     const source = `
       import { LitElement, html } from 'lit';
-      const Button = ({ label }) => {
+      const TestButton = ({ label }) => {
         return <button>{label}</button>;
       };
     `;
@@ -1042,12 +1080,12 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
 
     const litImports = (code.match(/import \{[^}]*LitElement[^}]*\} from ['"]lit['"];?/g) || []);
     assert.strictEqual(litImports.length, 1);
-    assert.match(code, /class Button extends LitElement/);
+    assert.match(code, /class TestButton extends LitElement/);
   });
 
   it("handles parameter without direct binding references", () => {
     const source = `
-      const Component = ({ unused }) => {
+      const TestComponent = ({ unused }) => {
         return <div>static content</div>;
       };
     `;
@@ -1059,7 +1097,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
     });
 
     assert.match(code, /static properties = \{[\s\S]*unused:/);
-    assert.match(code, /class Component extends LitElement/);
+    assert.match(code, /class TestComponent extends LitElement/);
   });
 
   it("infers array type from default value without type annotation", () => {
@@ -1126,7 +1164,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
         mapping: Record<string, number>;
       };
 
-      export const Viewer = ({ entries, mapping }: Config) => {
+      export const TestViewer = ({ entries, mapping }: Config) => {
         return (
           <section>
             <p>{entries.length}</p>
@@ -1305,7 +1343,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
 
   it("converts named exported arrow functions", () => {
     const source = `
-      export const Banner = ({ title }) => {
+      export const TestBanner = ({ title }) => {
         return <section>{title}</section>;
       };
     `;
@@ -1317,13 +1355,13 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
       presets: [[nativePreset, { jsxTemplate: false }]],
     });
 
-    assert.match(code, /export class Banner extends LitElement/);
+    assert.match(code, /export class TestBanner extends LitElement/);
     assert.match(code, /this\.title/);
   });
 
   it("infers String properties from opaque props member access", () => {
     const source = `
-      export function Banner(props) {
+      export function TestBanner(props) {
         return <section>{props.title} {props.count}</section>;
       }
     `;
@@ -1342,7 +1380,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
 
   it("emits warnings when opaque props access falls back to String metadata", () => {
     const source = `
-      export function Banner(props) {
+      export function TestBanner(props) {
         return <section>{props.title}</section>;
       }
     `;
@@ -1363,7 +1401,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
 
   it("emits warnings when native className is authored", () => {
     const source = `
-      export function Banner() {
+      export function TestBanner() {
         return <section className="panel">panel</section>;
       }
     `;
@@ -1384,7 +1422,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
 
   it("rewrites shorthand object properties and JSX attribute bindings", () => {
     const source = `
-      const Card = ({ label, info }) => {
+      const TestCard = ({ label, info }) => {
         const payload = { label, info };
         return <child-card title={label} payload={payload}>{info.value}</child-card>;
       };
@@ -1405,7 +1443,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
 
   it("captures prop references for nested non-arrow functions", () => {
     const source = `
-      function Worker({ filename }) {
+      function TestWorker({ filename }) {
         function compile() {
           return { filename };
         }
@@ -1428,7 +1466,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
 
   it("propagates local aliases of props into nested non-arrow functions", () => {
     const source = `
-      function Worker({ filename }) {
+      function TestWorker({ filename }) {
         const outputFilename = filename;
 
         function compile() {
@@ -1453,7 +1491,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
 
   it("rewrites prop shorthands inside object literals", () => {
     const source = `
-      function Worker({ filename, exportName }) {
+      function TestWorker({ filename, exportName }) {
         const message = {
           filename,
           exportName,
@@ -1480,7 +1518,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
 
   it("supports typed rest parameters", () => {
     const source = `
-      const Collector = (...entries: string[]) => {
+      const TestCollector = (...entries: string[]) => {
         return <p>{entries.length}</p>;
       };
     `;
@@ -1495,17 +1533,17 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
       presets: [[nativePreset, { jsxTemplate: false }]],
     });
 
-    assert.match(code, /class Collector extends LitElement/);
+    assert.match(code, /class TestCollector extends LitElement/);
     assert.match(code, /entries: \{\s*type: Array\s*\}/);
     assert.match(code, /this\.entries\.length/);
   });
 
   it("creates unique handler names when a method name already exists", () => {
     const source = `
-      const Button = ({ label }) => {
+      const TestButton = ({ label }) => {
         const handleClick = () => console.log('declared');
         return (
-          <button onClick={() => console.log('inline')}>
+          <button on:click={() => console.log('inline')}>
             {label}
           </button>
         );
@@ -1521,26 +1559,28 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
 
     assert.match(code, /handleClick\(\)/);
     assert.match(code, /handleClick2\(\)/);
-    assert.match(code, /onClick=\{this\.handleClick2\}/);
+    assert.match(code, /@click=\{this\.handleClick2\}/);
   });
 
   it("lifts static styles into a static Lit stylesheet", () => {
     const source = `
-      const Panel = ({ accent }) => {
-        static styles = \`
-          :host {
-            display: block;
-          }
+      import { css } from "@litsx/core";
 
-          .panel {
-            color: var(--accent);
-          }
-        \`;
-
+      const TestPanel = ({ accent }) => {
         useStyle("--accent", accent);
 
         return <section class="panel">panel</section>;
       };
+
+      TestPanel.styles = css\`
+        :host {
+          display: block;
+        }
+
+        .panel {
+          color: var(--accent);
+        }
+      \`;
     `;
 
     const inputAst = parser.parse(source, { sourceType: "module" });
@@ -1550,30 +1590,33 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
       presets: [[nativePreset, { jsxTemplate: false }]],
     });
 
-    assert.match(code, /import \{[^}]*LitElement[^}]*css[^}]*\} from ['"]lit['"]/);
-    assert.match(code, /static get styles\(\)/);
+    assert.match(code, /import \{[^}]*LitElement[^}]*\} from ['"]lit['"]/);
+    assert.match(code, /import \{[^}]*css[^}]*\} from ['"]@litsx\/core['"]/);
+    assert.match(code, /static styles = \[super\.styles \?\? \[\], css`/);
     assert.match(code, /css`[\s\S]*:host \{[\s\S]*display: block;[\s\S]*\.panel \{[\s\S]*color: var\(--accent\);[\s\S]*`/);
-    assert.doesNotMatch(code, /static styles = /);
-    assert.match(code, /useStyle\(this, "--accent", this\.accent\);/);
+    assert.doesNotMatch(code, /LitsxStaticHoistsMixin|__litsxStatic|litsx\.static\.styles/);
+    assert.match(code, /useStyle\("--accent", this\.accent\);/);
   });
 
-  it("hoists static styles into a memoized static getter", () => {
+  it("lowers static styles into an inherited Lit CSSResultGroup", () => {
     const source = `
-      const Panel = ({ accent }) => {
-        static styles = \`
-          :host {
-            display: block;
-          }
+      import { css } from "@litsx/core";
 
-          .panel {
-            color: var(--accent);
-          }
-        \`;
-
+      const TestPanel = ({ accent }) => {
         useStyle("--accent", accent);
 
         return <section class="panel">panel</section>;
       };
+
+      TestPanel.styles = css\`
+        :host {
+          display: block;
+        }
+
+        .panel {
+          color: var(--accent);
+        }
+      \`;
     `;
 
     const inputAst = parser.parse(source, { sourceType: "module" });
@@ -1583,21 +1626,20 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
       presets: [[nativePreset, { jsxTemplate: false }]],
     });
 
-    assert.match(code, /const _litsx_static_styles = Symbol\("litsx\.static\.styles"\);/);
-    assert.match(code, /static get styles\(\)/);
+    assert.match(code, /static styles = \[super\.styles \?\? \[\], css`/);
     assert.match(code, /css`[\s\S]*display: block;[\s\S]*color: var\(--accent\);[\s\S]*`/);
-    assert.doesNotMatch(code, /static styles = /);
+    assert.doesNotMatch(code, /LitsxStaticHoistsMixin|__litsxStatic|litsx\.static\.styles/);
   });
 
-  it("hoists arbitrary static name assignments into memoized static getters", () => {
+  it("lowers Lit shadow root options into a direct static field", () => {
     const source = `
-      function Card() {
-        static shadowRootOptions = {
-          delegatesFocus: true,
-        };
-
+      function TestCard() {
         return <div>ready</div>;
       }
+
+      TestCard.shadowRootOptions = {
+        delegatesFocus: true,
+      };
     `;
 
     const inputAst = parser.parse(source, { sourceType: "module", plugins: ["typescript"] });
@@ -1607,20 +1649,18 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
       presets: [[nativePreset, { jsxTemplate: false }]],
     });
 
-    assert.match(code, /const _litsx_static_shadowRootOptions = Symbol\("litsx\.static\.shadowRootOptions"\);/);
-    assert.match(code, /static get shadowRootOptions\(\)/);
-    assert.match(code, /extends LitsxStaticHoistsMixin\(LitElement\)/);
-    assert.match(code, /this\.__litsxStatic\(_litsx_static_shadowRootOptions,\s*\(\)\s*=>/);
+    assert.match(code, /static shadowRootOptions = \{/);
+    assert.doesNotMatch(code, /LitsxStaticHoistsMixin|__litsxStatic|litsx\.static\.shadowRootOptions/);
     assert.match(code, /delegatesFocus: true/);
   });
 
   it("lowers static lightDom to LightDomMixin", () => {
     const source = `
-      function Card() {
-        static lightDom = true;
-
+      function TestCard() {
         return <div>ready</div>;
       }
+
+      TestCard.lightDom = true;
     `;
 
     const inputAst = parser.parse(source, { sourceType: "module", plugins: ["typescript"] });
@@ -1631,7 +1671,7 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
     });
 
     assert.match(code, /import \{[^}]*LightDomMixin[^}]*\} from "@litsx\/core\/elements";/);
-    assert.match(code, /class Card extends LightDomMixin\(LitElement\)/);
+    assert.match(code, /class TestCard extends LightDomMixin\(LitElement\)/);
     assert.doesNotMatch(code, /createRenderRoot\(\)\s*\{\s*return this;\s*\}/s);
     assert.doesNotMatch(code, /static get lightDom\(\)/);
     assert.doesNotMatch(code, /static get elements\(\)/);
@@ -1639,73 +1679,73 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
 
   it("uses ShadowDomMixin when static elements is authored explicitly", () => {
     const source = `
-      import { FancyButton } from "./fancy-button.litsx";
+      import { FancyButton } from "./fancy-button.tsx";
 
-      function Card() {
-        static elements = {
-          "fancy-button": FancyButton,
-        };
-
+      function TestCard() {
         return <section>ready</section>;
       }
+
+      TestCard.elements = {
+        "fancy-button": FancyButton,
+      };
     `;
 
     const { code } = transformWithNativePreset(source);
 
     assert.match(code, /import \{[^}]*ShadowDomMixin[^}]*\} from "@litsx\/core\/elements";/);
-    assert.match(code, /class Card extends ShadowDomMixin\(LitsxStaticHoistsMixin\(LitElement\)\)|class Card extends LitsxStaticHoistsMixin\(ShadowDomMixin\(LitElement\)\)/);
-    assert.match(code, /static get elements\(\)/);
+    assert.match(code, /class TestCard extends ShadowDomMixin\(LitElement\)/);
+    assert.match(code, /static elements = \{\s*\.\.\.\(super\.elements \?\? \{\}\),/);
   });
 
   it("does not overwrite authored static elements when JSX also contains component candidates", () => {
     const source = `
-      import { ChildOne } from "./child-one.litsx";
-      import { ChildTwo } from "./child-two.litsx";
+      import { ChildOne } from "./child-one.tsx";
+      import { ChildTwo } from "./child-two.tsx";
 
-      function Wrapper() {
-        static elements = {
-          "child-one": ChildOne,
-        };
-
+      function TestWrapper() {
         return <ChildTwo />;
       }
+
+      TestWrapper.elements = {
+        "child-one": ChildOne,
+      };
     `;
 
     const { code } = transformWithNativePreset(source);
 
-    assert.match(code, /class Wrapper extends ShadowDomMixin\(LitsxStaticHoistsMixin\(LitElement\)\)|class Wrapper extends LitsxStaticHoistsMixin\(ShadowDomMixin\(LitElement\)\)/);
-    assert.match(code, /static get elements\(\)/);
+    assert.match(code, /class TestWrapper extends ShadowDomMixin\(LitElement\)/);
+    assert.match(code, /static elements = \{\s*\.\.\.\(super\.elements \?\? \{\}\),/);
     assert.match(code, /"child-one": ChildOne/);
     assert.doesNotMatch(code, /static elements = \{\s*"child-two": ChildTwo\s*\}/);
   });
 
-  it("rejects static elements when static lightDom is authored explicitly", () => {
+  it("supports static elements when static lightDom is authored explicitly", () => {
     const source = `
-      import { FancyButton } from "./fancy-button.litsx";
+      import { FancyButton } from "./fancy-button.tsx";
 
-      function Card() {
-        static lightDom = true;
-        static elements = {
-          "fancy-button": FancyButton,
-        };
-
+      function TestCard() {
         return <section>ready</section>;
       }
+
+      TestCard.lightDom = true;
+      TestCard.elements = {
+        "fancy-button": FancyButton,
+      };
     `;
 
-    assert.throws(
-      () => transformWithNativePreset(source),
-      /does not support scoped elements in light DOM/
-    );
+    const { code } = transformWithNativePreset(source);
+    assert.match(code, /class TestCard extends LightDomMixin\(LitElement\)/);
+    assert.match(code, /static elements = \{\s*\.\.\.\(super\.elements \?\? \{\}\),/);
+    assert.match(code, /"fancy-button": FancyButton/);
   });
 
-  it("rejects repeated light-dom scoped element passes", () => {
+  it("preserves existing light-dom scoped element infrastructure", () => {
     const source = `
       import { LightDomMixin } from "@litsx/core/elements";
       import { LitElement } from "lit";
-      import { FancyButton } from "./fancy-button.litsx";
+      import { FancyButton } from "./fancy-button.tsx";
 
-      class Card extends LightDomMixin(LitElement) {
+      class TestCard extends LightDomMixin(LitElement) {
         render() {
           return <section>ready</section>;
         }
@@ -1716,20 +1756,19 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
       }
     `;
 
-    assert.throws(
-      () => transformWithNativePreset(source),
-      /does not support scoped elements in light DOM/
-    );
+    const { code } = transformWithNativePreset(source);
+    assert.strictEqual((code.match(/LightDomMixin\(/g) || []).length, 1);
+    assert.match(code, /static elements = \{\s*"fancy-button": FancyButton\s*\}/);
   });
 
   it("ignores static shadowRootOptions when static lightDom is present", () => {
     const source = `
-      function Card() {
-        static lightDom = true;
-        static shadowRootOptions = { delegatesFocus: true };
-
+      function TestCard() {
         return <div>ready</div>;
       }
+
+      TestCard.lightDom = true;
+      TestCard.shadowRootOptions = { delegatesFocus: true };
     `;
 
     const inputAst = parser.parse(source, { sourceType: "module", plugins: ["typescript"] });
@@ -1740,25 +1779,25 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
       presets: [[nativePreset, { jsxTemplate: false }]],
     });
 
-    assert.match(code, /class Card extends LightDomMixin\(LitElement\)/);
+    assert.match(code, /class TestCard extends LightDomMixin\(LitElement\)/);
     assert.doesNotMatch(code, /static get shadowRootOptions\(\)/);
     assert.doesNotMatch(code, /_litsx_static_shadowRootOptions/);
   });
 
   it("lowers static expose object literals into static class methods", () => {
     const source = `
-      function Registry() {
-        static expose = {
-          canHandle(type) {
-            return type === "dialog";
-          },
-          createConfig() {
-            return { modal: true };
-          },
-        };
-
+      function TestRegistry() {
         return <div>ready</div>;
       }
+
+      TestRegistry.expose = {
+        canHandle(type) {
+          return type === "dialog";
+        },
+        createConfig() {
+          return { modal: true };
+        },
+      };
     `;
 
     const inputAst = parser.parse(source, { sourceType: "module", plugins: ["typescript"] });
@@ -1780,15 +1819,15 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
 
   it("rejects parent-based static expose factories", () => {
     const source = `
-      function Registry() {
-        static expose = ((parent) => ({
-          canHandle(type) {
-            return parent.canHandle?.(type) || type === "dialog";
-          },
-        }));
-
+      function TestRegistry() {
         return <div>ready</div>;
       }
+
+      TestRegistry.expose = ((parent) => ({
+        canHandle(type) {
+          return parent.canHandle?.(type) || type === "dialog";
+        },
+      }));
     `;
 
     const inputAst = parser.parse(source, { sourceType: "module", plugins: ["typescript"] });
@@ -1799,18 +1838,19 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
         babelrc: false,
         presets: [[nativePreset, { jsxTemplate: false }]],
       });
-    }, /static expose = \.\.\. only accepts an object literal\./);
+    }, /Component\.expose = \.\.\. only accepts an object literal\./);
   });
 
   it("rejects parent-based generic hoist factories", () => {
     const source = `
-      function Card() {
-        static shadowRootOptions = ((parent) => ({
-          ...parent.shadowRootOptions,
-          delegatesFocus: true,
-        }));
+      function TestCard() {
         return <div>ready</div>;
       }
+
+      TestCard.shadowRootOptions = ((parent) => ({
+        ...parent.shadowRootOptions,
+        delegatesFocus: true,
+      }));
     `;
 
     const inputAst = parser.parse(source, { sourceType: "module", plugins: ["typescript"] });
@@ -1821,78 +1861,27 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
         babelrc: false,
         presets: [[nativePreset, { jsxTemplate: false }]],
       });
-    }, /static shadowRootOptions = \.\.\. only accepts a direct static value\./);
+    }, /Component\.shadowRootOptions = \.\.\. only accepts a direct static value\./);
   });
 
-  it("does not require static hoists to be imported from litsx", () => {
+  it("collects standard component metadata assignments without extra imports", () => {
     const source = `
-      import { useState } from "@litsx/core";
+      import { css, useState } from "@litsx/core";
 
-      export function Card() {
-        static properties = {
-          title: String,
-        };
-
-        static styles = \`
-          :host {
-            display: block;
-          }
-        \`;
-
+      export function TestCard() {
         const [count] = useState(0);
         return <div>{count}</div>;
       }
-    `;
 
-    const inputAst = parser.parse(source, { sourceType: "module" });
-    const { code } = transformFromAstSync(inputAst, source, {
-      configFile: false,
-      babelrc: false,
-      presets: [[nativePreset, { jsxTemplate: false }]],
-    });
+      TestCard.properties = {
+        title: String,
+      };
 
-    assert.doesNotMatch(code, /static properties = \{/);
-    assert.doesNotMatch(code, /static styles = /);
-    assert.match(code, /import \{[^}]*useState[^}]*\} from ['"]@litsx\/core['"]/);
-  });
-
-  it("rejects static hoists outside top-level component statements", () => {
-    const source = `
-      function Card({ ready }) {
-        if (ready) {
-          static styles = \`:host { display: block; }\`;
+      TestCard.styles = css\`
+        :host {
+          display: block;
         }
-
-        return <div>ready</div>;
-      }
-    `;
-
-    const inputAst = parser.parse(source, { sourceType: "module", plugins: ["typescript"] });
-
-    assert.throws(() => {
-      transformFromAstSync(inputAst, source, {
-        configFile: false,
-        babelrc: false,
-        presets: [[nativePreset, { jsxTemplate: false }]],
-      });
-    }, /static styles = \.\.\. must appear as a top-level statement in the component body\./);
-  });
-
-  it("preserves static module-level interpolations inside css tagged styles", () => {
-    const source = `
-      const radius = "12px";
-      const borderRule = "1px solid var(--border-color)";
-
-      const Panel = () => {
-        static styles = \`
-          .panel {
-            border-radius: \${radius};
-            border: \${borderRule};
-          }
-        \`;
-
-        return <section class="panel">panel</section>;
-      };
+      \`;
     `;
 
     const inputAst = parser.parse(source, { sourceType: "module" });
@@ -1902,166 +1891,10 @@ describe("@litsx/babel-preset-litsx native authored coverage", () => {
       presets: [[nativePreset, { jsxTemplate: false }]],
     });
 
-    assert.match(code, /import \{[^}]*unsafeCSS[^}]*\} from ['"]lit['"]/);
-    assert.match(code, /static get styles\(\)/);
-    assert.match(code, /border-radius: \$\{unsafeCSS\(radius\)\};[\s\S]*border: \$\{unsafeCSS\(borderRule\)\};/);
-  });
-
-  it("wraps static alias interpolations as css fragments", () => {
-    const source = `
-      import { gap } from "./styles";
-
-      const hostStyles = \`gap: \${gap};\`;
-
-      const Card = () => {
-        static styles = \`:host { \${hostStyles} }\`;
-        return <section>card</section>;
-      };
-    `;
-
-    const inputAst = parser.parse(source, { sourceType: "module" });
-    const { code } = transformFromAstSync(inputAst, source, {
-      configFile: false,
-      babelrc: false,
-      presets: [[nativePreset, { jsxTemplate: false }]],
-    });
-
-    assert.match(code, /import \{[^}]*unsafeCSS[^}]*\} from ['"]lit['"]/);
-    assert.match(code, /static get styles\(\)/);
-    assert.match(code, /css`:host \{ \$\{unsafeCSS\(hostStyles\)\} \}`/);
-  });
-
-  it("rejects static styles interpolations that depend on component scope", () => {
-    const source = `
-      const Panel = ({ accent }) => {
-        const borderRule = accent;
-
-        static styles = \`
-          .panel {
-            color: \${accent};
-            border-color: \${borderRule};
-          }
-        \`;
-
-        return <section class="panel">panel</section>;
-      };
-    `;
-
-    const inputAst = parser.parse(source, { sourceType: "module" });
-
-    assert.throws(() => {
-      transformFromAstSync(inputAst, source, {
-        configFile: false,
-        babelrc: false,
-        presets: [[nativePreset, { jsxTemplate: false }]],
-      });
-    }, /static styles = \.\.\. only accepts static values/);
-  });
-
-  it("rejects tagged template static styles hoists in authored components", () => {
-    const source = `
-      import { css } from "lit";
-
-      const Panel = () => {
-        static styles = css\`
-          :host {
-            display: block;
-          }
-        \`;
-
-        return <section>panel</section>;
-      };
-    `;
-
-    const inputAst = parser.parse(source, { sourceType: "module" });
-
-    assert.throws(() => {
-      transformFromAstSync(inputAst, source, {
-        configFile: false,
-        babelrc: false,
-        presets: [[nativePreset, { jsxTemplate: false }]],
-      });
-    }, /must use a direct template literal[\s\S]*css`/);
-  });
-
-  it("rejects static styles interpolations that read props members directly", () => {
-    const source = `
-      export function Panel(props) {
-        static properties = {
-          accent: String,
-        };
-
-        static styles = \`
-          .panel {
-            color: \${props.accent};
-          }
-        \`;
-
-        return <section class="panel">{props.accent}</section>;
-      }
-    `;
-
-    const inputAst = parser.parse(source, { sourceType: "module" });
-
-    assert.throws(() => {
-      transformFromAstSync(inputAst, source, {
-        configFile: false,
-        babelrc: false,
-        presets: [[nativePreset, { jsxTemplate: false }]],
-      });
-    }, /static styles = \.\.\. only accepts static values/);
-  });
-
-  it("rejects static styles interpolations that read aliases from props members", () => {
-    const source = `
-      export function Panel(props) {
-        const accentColor = props.accent;
-
-        static styles = \`
-          .panel {
-            color: \${accentColor};
-          }
-        \`;
-
-        return <section class="panel">{props.accent}</section>;
-      }
-    `;
-
-    const inputAst = parser.parse(source, { sourceType: "module" });
-
-    assert.throws(() => {
-      transformFromAstSync(inputAst, source, {
-        configFile: false,
-        babelrc: false,
-        presets: [[nativePreset, { jsxTemplate: false }]],
-      });
-    }, /static styles = \.\.\. only accepts static values/);
-  });
-
-  it("rejects locally constant aliases declared inside the component body", () => {
-    const source = `
-      const Panel = ({ radius }) => {
-        const localRadius = \`\${radius}px\`;
-
-        static styles = \`
-          .panel {
-            border-radius: \${localRadius};
-          }
-        \`;
-
-        return <section class="panel">panel</section>;
-      };
-    `;
-
-    const inputAst = parser.parse(source, { sourceType: "module" });
-
-    assert.throws(() => {
-      transformFromAstSync(inputAst, source, {
-        configFile: false,
-        babelrc: false,
-        presets: [[nativePreset, { jsxTemplate: false }]],
-      });
-    }, /static styles = \.\.\. only accepts static values/);
+    assert.match(code, /static properties = \{/);
+    assert.match(code, /static styles = \[super\.styles \?\? \[\], css`/);
+    assert.match(code, /import \{[^}]*useState[^}]*\} from ['"]@litsx\/core['"]/);
+    assert.doesNotMatch(code, /LitsxStaticHoistsMixin|__litsxStatic/);
   });
 
 });

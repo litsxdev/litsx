@@ -1,6 +1,6 @@
 let t;
 
-function isPropsAliasBinding(bindingInfo) {
+export function isPropsAliasBinding(bindingInfo) {
   return Boolean(
     bindingInfo &&
     typeof bindingInfo === "object" &&
@@ -12,7 +12,7 @@ export function setParamRewriteBabelTypes(nextTypes) {
   t = nextTypes;
 }
 
-function getBoundPropName(bindingInfo) {
+export function getBoundPropName(bindingInfo) {
   if (typeof bindingInfo === "string") {
     return bindingInfo;
   }
@@ -24,7 +24,7 @@ function getBoundPropName(bindingInfo) {
   return null;
 }
 
-function createDefaultSlotElement() {
+export function createDefaultSlotElement() {
   return t.jsxElement(
     t.jsxOpeningElement(t.jsxIdentifier("slot"), [], false),
     t.jsxClosingElement(t.jsxIdentifier("slot")),
@@ -33,14 +33,14 @@ function createDefaultSlotElement() {
   );
 }
 
-function isDirectJsxChildExpression(expressionPath) {
+export function isDirectJsxChildExpression(expressionPath) {
   return (
     expressionPath.listKey === "children" &&
     (expressionPath.parentPath?.isJSXElement() || expressionPath.parentPath?.isJSXFragment())
   );
 }
 
-function isImplicitChildrenExpression(node, bindings) {
+export function isImplicitChildrenExpression(node, bindings) {
   if (t.isIdentifier(node)) {
     return getBoundPropName(bindings.get(node.name)) === "children";
   }
@@ -57,7 +57,7 @@ function isImplicitChildrenExpression(node, bindings) {
   return false;
 }
 
-function isJsxContainerChildPath(path) {
+export function isJsxContainerChildPath(path) {
   return (
     path?.parentPath?.isJSXExpressionContainer() &&
     path.parentPath.listKey === "children" &&
@@ -65,7 +65,7 @@ function isJsxContainerChildPath(path) {
   );
 }
 
-function isSupportedImplicitChildrenReference(refPath, bindingInfo) {
+export function isSupportedImplicitChildrenReference(refPath, bindingInfo) {
   if (typeof bindingInfo === "string") {
     return bindingInfo === "children" && isJsxContainerChildPath(refPath);
   }
@@ -85,11 +85,20 @@ function isSupportedImplicitChildrenReference(refPath, bindingInfo) {
   return false;
 }
 
-function createThisMemberExpression(propName) {
-  return t.memberExpression(t.thisExpression(), t.identifier(propName));
+export function createThisMemberExpression(propName) {
+  const computed = !t.isValidIdentifier(propName);
+  return t.memberExpression(
+    t.thisExpression(),
+    computed ? t.stringLiteral(propName) : t.identifier(propName),
+    computed,
+  );
 }
 
-function createPropsObjectExpression(bindingInfo, propertyMap = new Map()) {
+export function createPropsObjectExpression(bindingInfo, propertyMap = new Map()) {
+  if (bindingInfo?.kind === "rest-alias" && bindingInfo.propertyName) {
+    return createThisMemberExpression(bindingInfo.propertyName);
+  }
+
   if (
     bindingInfo &&
     typeof bindingInfo !== "object" &&
@@ -119,7 +128,7 @@ function createPropsObjectExpression(bindingInfo, propertyMap = new Map()) {
   return t.objectExpression(properties);
 }
 
-function isObjectDestructuringInitializer(refPath) {
+export function isObjectDestructuringInitializer(refPath) {
   return (
     refPath.parentPath?.isVariableDeclarator() &&
     refPath.parentKey === "init" &&
@@ -132,29 +141,38 @@ export function transformJSXExpressions(jsxPath, bindings, state = null) {
 
   jsxPath.traverse({
     JSXExpressionContainer(expressionPath) {
-      if (
-        isDirectJsxChildExpression(expressionPath) &&
-        isImplicitChildrenExpression(expressionPath.node.expression, bindings)
-      ) {
-        expressionPath.replaceWith(createDefaultSlotElement());
-        return;
+      if (isDirectJsxChildExpression(expressionPath)) {
+        if (isImplicitChildrenExpression(expressionPath.node.expression, bindings)) {
+          expressionPath.replaceWith(createDefaultSlotElement());
+          return;
+        }
+
+        expressionPath.get("expression").traverse({
+          MemberExpression(memberPath) {
+            if (!isImplicitChildrenExpression(memberPath.node, bindings)) return;
+            memberPath.replaceWith(createDefaultSlotElement());
+            memberPath.skip();
+          },
+          Identifier(identifierPath) {
+            if (!isImplicitChildrenExpression(identifierPath.node, bindings)) return;
+            identifierPath.replaceWith(createDefaultSlotElement());
+            identifierPath.skip();
+          },
+        });
       }
 
       if (t.isIdentifier(expressionPath.node.expression)) {
         const name = expressionPath.node.expression.name;
         if (localNames.includes(name)) {
           const propName = bindings.get(name) || name;
-          expressionPath.node.expression = t.memberExpression(
-            t.thisExpression(),
-            t.identifier(propName)
-          );
+          expressionPath.node.expression = createThisMemberExpression(propName);
         }
       }
     },
   });
 }
 
-function registerLocalPropAliases(functionPath, bindings) {
+export function registerLocalPropAliases(functionPath, bindings) {
   let changed = true;
 
   while (changed) {
@@ -214,7 +232,7 @@ function registerLocalPropAliases(functionPath, bindings) {
   }
 }
 
-function shouldCapturePropReference(refPath, functionPath) {
+export function shouldCapturePropReference(refPath, functionPath) {
   const functionParent = refPath.getFunctionParent();
   if (!functionParent || functionParent === functionPath) {
     return false;
@@ -238,7 +256,7 @@ export function replaceParamReferences(functionPath, bindings, propertyMap = new
       return t.cloneNode(aliasId);
     }
 
-    return t.memberExpression(t.thisExpression(), t.identifier(propName));
+    return createThisMemberExpression(propName);
   }
 
   bindings.forEach((bindingInfo, localName) => {
@@ -250,11 +268,29 @@ export function replaceParamReferences(functionPath, bindings, propertyMap = new
       if (!refPath.node) return;
 
       if (
+        bindingInfo?.kind === "rest-alias" &&
+        bindingInfo.propertyName &&
+        refPath.parentPath?.isMemberExpression() &&
+        refPath.parentKey === "object"
+      ) {
+        refPath.replaceWith(getReplacementForProp(bindingInfo.propertyName, refPath));
+        return;
+      }
+
+      if (
         bindingInfo &&
         typeof bindingInfo === "object" &&
         isPropsAliasBinding(bindingInfo) &&
         (!refPath.parentPath || !refPath.parentPath.isMemberExpression())
       ) {
+        if (
+          bindingInfo.kind === "rest-alias" &&
+          bindingInfo.propertyName &&
+          shouldCapturePropReference(refPath, functionPath)
+        ) {
+          refPath.replaceWith(getReplacementForProp(bindingInfo.propertyName, refPath));
+          return;
+        }
         if (shouldCapturePropReference(refPath, functionPath)) {
           return;
         }
@@ -360,6 +396,11 @@ export function replaceParamReferences(functionPath, bindings, propertyMap = new
       }
 
       if (localName === "props") {
+        if (isObjectDestructuringInitializer(refPath)) {
+          refPath.replaceWith(t.thisExpression());
+          return;
+        }
+
         const propsObject = createPropsObjectExpression(bindingInfo, propertyMap);
         if (propsObject) {
           refPath.replaceWith(propsObject);

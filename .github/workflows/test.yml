@@ -23,7 +23,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: 20
+          node-version: 24
           package-manager-cache: false
 
       - name: Enable Yarn
@@ -43,6 +43,9 @@ jobs:
 
       - name: Install dependencies
         run: corepack yarn install --immutable
+
+      - name: Check Lit dependency deduplication
+        run: corepack yarn check:lit-dedupe
 
       - name: Run test suite with coverage
         run: corepack yarn coverage
@@ -64,7 +67,7 @@ jobs:
       matrix:
         storybook:
           - "10.4.6"
-          - "10.5.6"
+          - "10.5.10"
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -72,7 +75,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: 20
+          node-version: 24
           package-manager-cache: false
 
       - name: Enable Yarn
@@ -85,3 +88,40 @@ jobs:
 
       - name: Validate generated Storybook project
         run: node scripts/test/storybook-scaffold-compatibility.js ${{ matrix.storybook }}
+
+  ssr-browser:
+    name: SSR browser tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          package-manager-cache: false
+
+      - name: Enable Yarn
+        run: |
+          corepack enable
+          corepack prepare yarn@4.10.3 --activate
+
+      - name: Cache Yarn state
+        uses: actions/cache@v5
+        with:
+          path: |
+            .yarn/install-state.gz
+            .yarn-cache
+          key: ${{ runner.os }}-yarn4-${{ hashFiles('yarn.lock', '.yarnrc.yml', 'package.json') }}
+          restore-keys: |
+            ${{ runner.os }}-yarn4-
+
+      - name: Install dependencies
+        run: corepack yarn install --immutable
+
+      - name: Install Chromium for Playwright
+        run: corepack yarn playwright install --with-deps chromium
+
+      - name: Run SSR browser tests
+        run: corepack yarn test:ssr:browser

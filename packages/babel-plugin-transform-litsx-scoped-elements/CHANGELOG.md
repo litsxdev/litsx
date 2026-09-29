@@ -1,5 +1,124 @@
 # @litsx/babel-plugin-transform-litsx-scoped-elements
 
+## 1.0.0-next.5
+
+### Patch Changes
+
+- 2e50e3a: Replace the Core framework-component allowlist with class-owned metadata. Core light-DOM primitives now declare and type `LITSX_LIGHT_DOM`, while compiler and scoped-element analysis follow component and light-DOM metadata through package exports and barrels, including dependencies in `node_modules`. Package metadata analysis resolves authored `import` targets without requiring `require` build artifacts to exist. Opaque packages are no longer trusted merely because an export has the same name as a Core primitive.
+- ae3e94c: Recognize official framework JSX components such as `SuspenseBoundary` by their exported symbol and `@litsx/core` module identity. This prevents external PascalCase inference warnings when bundlers expose Core through artifacts whose runtime component metadata cannot be inspected, while preserving warnings for same-named exports from unrelated packages.
+- Updated dependencies [2e50e3a]
+- Updated dependencies [ae3e94c]
+  - @litsx/authoring@1.0.0-next.5
+
+## 1.0.0-next.4
+
+### Patch Changes
+
+- 613492d: Complete the supported Lit/LitSX interoperability matrix across pure Lit
+  components, standard and structural mixins, scoped light/shadow trees, SSR,
+  and hydration. Detected scoped elements now compose with inherited and authored
+  registries, hook context subscriptions initialize safely during render and
+  retry late providers, late global definitions reach unowned shadow roots, and
+  registered pure custom-element roots are enabled after hydration registration.
+- c16b18d: Infer nested LitSX light-DOM hydration boundaries in both server and browser
+  templates, including pure Lit parents authored in project-local JavaScript or
+  TypeScript modules. Hydration now adopts the server-rendered child part so
+  subsequent child updates preserve node identity, while disconnecting and
+  reconnecting the child leaves connection ownership with the parent render.
+
+  Keep statically enumerable Tailwind candidates in real Vite builds and attach
+  scoped light-DOM utilities to their owning host without leaking them into the
+  document or sibling components.
+
+  Treat pure Lit class bodies as opaque in both utility integrations. Their
+  templates and static styles remain owned by Lit; only LitSX component classes
+  and genuinely free document JSX participate in utility extraction.
+
+## 1.0.0-next.3
+
+### Patch Changes
+
+- f720ee5: Keep normalized opening and closing custom-element tags aligned, and preserve global UnoCSS and Tailwind utilities from free light-DOM templates in modules that also declare LitSX components without leaking component-only utilities.
+
+## 1.0.0-next.2
+
+### Patch Changes
+
+- 7cd6053: Centralize component-tag derivation and hook authoring diagnostics in
+  `@litsx/authoring`. Component identifiers must now map directly to a valid
+  custom-element name: LitSX no longer invents framework prefixes for short names
+  such as `Switch` or `App`, while namespace members retain mappings such as
+  `Controls.Switch` to `controls-switch`.
+
+  Use the shared hook analyzer from the compiler, direct Babel transforms and new
+  recommended ESLint rules. Report hooks in unstable control flow, async render
+  scopes, handlers, deferred `useAsyncState` actions and nested hook definitions
+  with stable diagnostic codes. Keep React-specific primitives, including Radix's
+  polymorphic `Slot`, inside the optional react-compat adapter.
+
+- Updated dependencies [7cd6053]
+  - @litsx/authoring@1.0.0-next.3
+  - @litsx/babel-plugin-shared-hooks@1.0.0-next.3
+
+## 1.0.0-next.1
+
+### Patch Changes
+
+- 4321108: Compose function-authored component styles with structural-mixin styles by
+  default, add `replaceStyles()` for explicit isolation, preserve inherited
+  scoped-element maps, and rely on Lit's native property inheritance. Generated
+  classes now use direct static fields instead of the removed static-hoist runtime
+  getter and symbol machinery. UnoCSS keeps its preflight and generated utilities
+  in the resulting style chain, including components that replace inherited
+  styles.
+- 4b34759: Move the compiler and lint integrations to Babel 8, ESLint 10, and Node 24 while retaining ESLint 9 compatibility. Refresh generated Storybook and Playwright versions, consume patched transitive dependencies, and support Chromium's native scoped-registry creation scope across shadow and projected light DOM.
+- Updated dependencies [4321108]
+- Updated dependencies [4b34759]
+  - @litsx/babel-plugin-shared-hooks@1.0.0-next.1
+
+## 1.0.0-next.0
+
+### Major Changes
+
+- 83d757e: Stabilize the complete public LitSX package graph as the 1.0 release line.
+
+  This release establishes standard JSX and TSX authoring, SSR and hydration,
+  React compatibility, scoped custom-element registration, structural hooks,
+  Storybook and Vite integration, and Shadow DOM and Light DOM UnoCSS support as
+  the stable public contract.
+
+### Minor Changes
+
+- 92e1dbe: Add phase 1 SSR support for generic custom elements across the LitSX SSR and
+  compiler pipelines.
+
+  LitSX now recognizes hydratable non-Lit custom element constructors, carries
+  their SSR metadata through compiled scoped-element registries and SSR root
+  rewrites, and supports host-only SSR plus hydration payload collection for
+  generic `HTMLElement` roots.
+
+  `@litsx/ssr` also exposes a new `renderCustomElementSsr(...)` hook so consumer
+  frameworks can take over SSR for hydratable non-Lit custom elements, contribute
+  client imports, preloads, head tags, and opaque adapter artifacts, while
+  preserving LitSX root metadata and hydration orchestration.
+
+### Patch Changes
+
+- 53939a2: Add SSR-safe dynamic fallback rendering for the LitSX `<noscript>` intrinsic.
+- 31ae393: Replace the deprecated `@litsx/babel-parser` runtime import with the
+  `@litsx/authoring/parser` + `@babel/parser` pipeline and declare the runtime
+  dependencies needed by the published scoped-elements transform package.
+- Updated dependencies [92e1dbe]
+- Updated dependencies [60b2e98]
+- Updated dependencies [354dac9]
+- Updated dependencies [0ae3bc9]
+- Updated dependencies [83d757e]
+- Updated dependencies [accc7aa]
+- Updated dependencies [c9ae368]
+  - @litsx/babel-plugin-shared-hooks@1.0.0-next.0
+  - @litsx/typescript-session@1.0.0-next.0
+  - @litsx/authoring@1.0.0-next.0
+
 ## 0.4.9
 
 ### Patch Changes

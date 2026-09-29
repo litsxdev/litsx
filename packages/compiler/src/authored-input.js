@@ -1,24 +1,23 @@
 import * as babelParser from "@babel/parser";
 import {
+  collectComponentNameDiagnostics,
+  collectHookDiagnostics,
   collectNativeClassNameWarnings,
   collectReactMemoWarnings,
 } from "@litsx/authoring";
-import {
-  getLitsxVirtualizationMetadata,
-  parseWithLitsxVirtualization,
-} from "@litsx/authoring/parser";
 import { analyzeLitsxModule } from "./module-analysis.js";
 import { mergeLitsxWarnings } from "./warnings.js";
+import {
+  normalizeLitsxSyntaxFilename,
+  resolveLitsxRequireJsx,
+} from "./filename-syntax.js";
 
 function normalizeParserPlugins(filename, parserPlugins = []) {
   if (Array.isArray(parserPlugins) && parserPlugins.length > 0) {
     return parserPlugins;
   }
 
-  if (typeof filename === "string" && (
-    filename.endsWith(".tsx") ||
-    filename.endsWith(".litsx")
-  )) {
+  if (/\.(?:[cm]?ts|[cm]?tsx)$/.test(normalizeLitsxSyntaxFilename(filename))) {
     return ["typescript"];
   }
 
@@ -27,6 +26,53 @@ function normalizeParserPlugins(filename, parserPlugins = []) {
 
 function normalizePluginList(plugins) {
   return Array.isArray(plugins) ? plugins : [];
+}
+
+function assertNoRemovedAuthoringCalls(ast) {
+  function visit(node) {
+    if (!node || typeof node !== "object") return;
+
+    if (
+      node.type === "CallExpression" &&
+      node.callee?.type === "Identifier" &&
+      (
+        node.callee.name === "staticProps" ||
+        node.callee.name === "staticStyles" ||
+        node.callee.name.startsWith("__litsx_static_")
+      )
+    ) {
+      throw new SyntaxError(
+        `LitSX no longer accepts ${node.callee.name}(...) in authored source. ` +
+        "Assign metadata with Component.properties, Component.styles, or the corresponding Component field.",
+      );
+    }
+
+    for (const value of Object.values(node)) {
+      if (Array.isArray(value)) {
+        value.forEach(visit);
+      } else if (value && typeof value === "object") {
+        visit(value);
+      }
+    }
+  }
+
+  visit(ast?.program ?? ast);
+}
+
+function assertNoAuthoringErrors(ast) {
+  const diagnostics = [
+    ...collectComponentNameDiagnostics(ast),
+    ...collectHookDiagnostics(ast),
+  ].sort((left, right) => (left.start ?? 0) - (right.start ?? 0));
+  const diagnostic = diagnostics.find((entry) => entry.severity === "error");
+  if (!diagnostic) return;
+
+  const error = new SyntaxError(`[${diagnostic.code}] ${diagnostic.message}`);
+  error.code = diagnostic.code;
+  if (typeof diagnostic.line === "number" && typeof diagnostic.column === "number") {
+    error.loc = { line: diagnostic.line, column: diagnostic.column };
+  }
+  throw error;
 }
 
 export function ensureLitsxParserPlugins(filename, parserPlugins = [], { requireJsx = false } = {}) {
@@ -56,28 +102,27 @@ export function prepareLitsxAuthoredInput(
     ...runtime,
   };
   const filename = options.filename;
-  const sourceMaps = options.sourceMaps === true;
   const parserPlugins = ensureLitsxParserPlugins(filename, options.parserPlugins, {
-    requireJsx: options.requireJsx === true,
+    requireJsx: resolveLitsxRequireJsx(filename, options.requireJsx),
   });
-  const virtualizedAst = parseWithLitsxVirtualization(runtimeImpl.parse, source, {
+  const parsedAst = runtimeImpl.parse(source, {
     sourceType: "module",
     plugins: parserPlugins,
     sourceFileName: filename,
-    litsxSourceMap: sourceMaps,
   });
-  const virtualization = getLitsxVirtualizationMetadata(virtualizedAst);
+  assertNoRemovedAuthoringCalls(parsedAst);
+  assertNoAuthoringErrors(parsedAst);
   const authoredWarnings = mergeLitsxWarnings(
-    collectNativeClassNameWarnings(virtualizedAst).map((warning) => ({
+    collectNativeClassNameWarnings(parsedAst).map((warning) => ({
       ...warning,
       code: "LITSX_NATIVE_CLASSNAME",
     })),
-    collectReactMemoWarnings(virtualizedAst),
+    collectReactMemoWarnings(parsedAst),
     { filename }
   );
   const authoringPlugins = normalizePluginList(options.authoringPlugins);
 
-  let inputAst = virtualizedAst;
+  let inputAst = parsedAst;
   if (authoringPlugins.length > 0) {
     if (typeof runtimeImpl.transformFromAstSync !== "function") {
       throw new Error(
@@ -85,7 +130,7 @@ export function prepareLitsxAuthoredInput(
       );
     }
 
-    const authoringPass = runtimeImpl.transformFromAstSync(virtualizedAst, source, {
+    const authoringPass = runtimeImpl.transformFromAstSync(parsedAst, source, {
       filename,
       sourceFileName: filename,
       configFile: false,
@@ -96,12 +141,11 @@ export function prepareLitsxAuthoredInput(
       plugins: authoringPlugins,
     });
 
-    inputAst = authoringPass?.ast ?? virtualizedAst;
+    inputAst = authoringPass?.ast ?? parsedAst;
   }
 
   return {
     filename,
-    virtualization,
     inputAst,
     authoredWarnings,
     moduleAnalysis: analyzeLitsxModule(inputAst),

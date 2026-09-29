@@ -6,4 +6,5 @@ export default createUseRefTransform({
   pluginName: "transform-litsx-dom-refs",
   pendingPropertyKey: "_litsxPendingElements",
   onlyManagedDomRefs: true,
+  useLitDirectiveRefs: true,
 });

@@ -3,9 +3,13 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 import { describe, it, vi } from "vitest";
+import { build } from "vite";
 import packageJson from "../packages/vite-plugin/package.json" with { type: "json" };
 
-import { litsx } from "../packages/vite-plugin/src/index.js";
+import {
+  createLitsxViteAssetResolver,
+  litsx,
+} from "../packages/vite-plugin/src/index.js";
 import * as compilerModule from "../packages/compiler/src/index.js";
 
 describe("@litsx/vite-plugin", () => {
@@ -17,48 +21,422 @@ describe("@litsx/vite-plugin", () => {
     assert.deepStrictEqual(packageJson.files, ["dist", "src", "README.md"]);
   });
 
+  it("creates a dev asset resolver from the Vite project root", () => {
+    const resolver = createLitsxViteAssetResolver({
+      root: "/repo",
+    });
+
+    assert.strictEqual(
+      resolver("/repo/src/components/ProductCard.tsx"),
+      "/src/components/ProductCard.tsx",
+    );
+  });
+
+  it("resolves build assets through a Vite manifest", () => {
+    const resolver = createLitsxViteAssetResolver({
+      root: "/repo",
+      base: "/app/",
+      manifest: {
+        "src/components/ProductCard.tsx": {
+          file: "assets/ProductCard.abcd1234.js",
+        },
+      },
+    });
+
+    assert.strictEqual(
+      resolver("/repo/src/components/ProductCard.tsx"),
+      "/app/assets/ProductCard.abcd1234.js",
+    );
+  });
+
+  it("resolves manifest entries with dot-prefixed keys and normalized base paths", () => {
+    const resolver = createLitsxViteAssetResolver({
+      root: "/repo",
+      base: "nested/app",
+      manifest: {
+        "./src/components/ProductCard.tsx": {
+          file: "assets/ProductCard.abcd1234.js",
+        },
+      },
+    });
+
+    assert.strictEqual(
+      resolver("/repo/src/components/ProductCard.tsx"),
+      "/nested/app/assets/ProductCard.abcd1234.js",
+    );
+  });
+
+  it("returns null for LitSX SSR assets outside the Vite root", () => {
+    const resolver = createLitsxViteAssetResolver({
+      root: "/repo",
+    });
+
+    assert.strictEqual(
+      resolver("/external/ProductCard.tsx"),
+      null,
+    );
+  });
+
+  it("resolves file URL module ids for SSR asset collection", () => {
+    const resolver = createLitsxViteAssetResolver({
+      root: "/repo",
+      base: "/",
+    });
+
+    assert.strictEqual(
+      resolver("file:///repo/src/components/ProductCard.tsx"),
+      "/src/components/ProductCard.tsx",
+    );
+  });
+
+  it("rejects malformed asset ids and falls back from incomplete manifests", () => {
+    const resolver = createLitsxViteAssetResolver({
+      root: "/repo",
+      base: "",
+      manifest: {
+        "src/empty.ts": { file: "" },
+        "src/non-string.ts": { file: 42 },
+      },
+    });
+    assert.strictEqual(resolver(null), null);
+    assert.strictEqual(resolver(""), null);
+    assert.strictEqual(resolver("/repo"), null);
+    assert.strictEqual(resolver("/repo/src/empty.ts"), "/src/empty.ts");
+    assert.strictEqual(resolver("/repo/src/non-string.ts"), "/src/non-string.ts");
+    assert.strictEqual(createLitsxViteAssetResolver()({}), null);
+  });
+
   it("transforms jsx and returns code with a sourcemap", async () => {
     const plugin = litsx({ sourceMaps: true });
     const source = [
-      "export const Counter = () => {",
-      "  return <button @click={save}>Hi</button>;",
+      "export const TestCounter = () => {",
+      "  return <button on:click={save}>Hi</button>;",
       "};",
     ].join("\n");
 
-    const result = await plugin.transform(source, "/virtual/Counter.jsx");
+    const result = await plugin.transform(source, "/virtual/TestCounter.jsx");
 
     assert.ok(result);
     assert.match(result.code, /html`/);
     assert.ok(result.map);
   }, 30000);
 
-  it("transforms .litsx files and returns code with a sourcemap", async () => {
+  it("transforms .tsx files and returns code with a sourcemap", async () => {
     const plugin = litsx({ sourceMaps: true });
     const source = [
-      "export const Counter = ({ label }: { label: string }) => {",
-      "  return <button @click={save}>{label}</button>;",
+      "export const TestCounter = ({ label }: { label: string }) => {",
+      "  return <button on:click={save}>{label}</button>;",
       "};",
     ].join("\n");
 
-    const result = await plugin.transform(source, "/virtual/Counter.litsx");
+    const result = await plugin.transform(source, "/virtual/TestCounter.tsx");
 
     assert.ok(result);
     assert.match(result.code, /html`/);
     assert.ok(result.map);
   }, 30000);
 
-  it("ignores non-matching files by default", async () => {
-    const plugin = litsx();
-    const result = await plugin.transform("export const value = 1;", "/virtual/value.js");
+  it("does not surface external-component warnings for Core primitives with metadata", async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-vite-core-boundary-"));
+    const coreDir = path.join(tempDir, "node_modules", "@litsx", "core");
+    const filename = path.join(tempDir, "Example.stories.tsx");
+    const warn = vi.fn();
 
-    assert.strictEqual(result, null);
+    try {
+      fs.mkdirSync(coreDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(coreDir, "package.json"),
+        JSON.stringify({ name: "@litsx/core", type: "module", exports: "./index.js" }),
+      );
+      fs.writeFileSync(
+        path.join(coreDir, "index.js"),
+        [
+          "export class SuspenseBoundary extends HTMLElement {",
+          '  static [Symbol.for("litsx.component")] = true;',
+          '  static [Symbol.for("litsx.lightDom")] = true;',
+          "}",
+        ].join("\n"),
+      );
+      const source = [
+        'import { SuspenseBoundary as AsyncBoundary } from "@litsx/core";',
+        "export const TestStory = () => (",
+        '  <AsyncBoundary fallback="Loading">Content</AsyncBoundary>',
+        ");",
+      ].join("\n");
+      fs.writeFileSync(filename, source);
+
+      const plugin = litsx({ jsxTemplate: false });
+      plugin.configResolved({ root: tempDir, cacheDir: path.join(tempDir, ".vite") });
+      const result = await plugin.transform.call(
+        { warn },
+        source,
+        filename,
+      );
+
+      assert.ok(result);
+      assert.deepStrictEqual(warn.mock.calls, []);
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  }, 30000);
+
+  it("does not surface external-component warnings for verifiable Lit dependencies", async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-vite-lit-component-"));
+    const packageDir = path.join(tempDir, "node_modules", "plain-lit-package");
+    const filename = path.join(tempDir, "Example.stories.tsx");
+    const warn = vi.fn();
+
+    try {
+      fs.mkdirSync(packageDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(packageDir, "package.json"),
+        JSON.stringify({ name: "plain-lit-package", type: "module", exports: "./index.js" }),
+      );
+      fs.writeFileSync(
+        path.join(packageDir, "index.js"),
+        [
+          'import { LitElement as LitBase } from "lit";',
+          "export class PlainLitCard extends LitBase {}",
+        ].join("\n"),
+      );
+      const source = [
+        'import { PlainLitCard as StoryCard } from "plain-lit-package";',
+        "export const TestStory = () => <StoryCard />;",
+      ].join("\n");
+      fs.writeFileSync(filename, source);
+
+      const plugin = litsx({ jsxTemplate: false });
+      plugin.configResolved({ root: tempDir, cacheDir: path.join(tempDir, ".vite") });
+      const result = await plugin.transform.call({ warn }, source, filename);
+
+      assert.ok(result);
+      assert.deepStrictEqual(warn.mock.calls, []);
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  }, 30000);
+
+  it("transforms project JavaScript and TypeScript but ignores files outside the Vite root", async () => {
+    const plugin = litsx();
+    plugin.configResolved({ root: "/virtual", cacheDir: "/virtual/.vite-cache" });
+
+    const javascript = await plugin.transform(
+      "export const value = 1;",
+      "/virtual/value.js",
+    );
+    const typescript = await plugin.transform(
+      "export const value: number = 1;",
+      "/virtual/value.ts",
+    );
+    const external = await plugin.transform(
+      "export const value = 1;",
+      "/workspace/runtime.js",
+    );
+    const dependency = await plugin.transform(
+      "export const value = 1;",
+      "/virtual/node_modules/plain-package/index.js",
+    );
+    const optimizedDependency = await plugin.transform(
+      "export const value = 1;",
+      "/virtual/.vite-cache/deps/lit.js?v=abc123",
+    );
+
+    assert.ok(javascript);
+    assert.ok(typescript);
+    assert.strictEqual(external, null);
+    assert.strictEqual(dependency, null);
+    assert.strictEqual(optimizedDependency, null);
   });
+
+  it("transforms generic TypeScript module ids with Vite query strings", async () => {
+    const plugin = litsx();
+    const result = await plugin.transform(
+      "export const deepFreeze = <T>(value: T): T => value;",
+      "/virtual/module.ts?import",
+    );
+
+    assert.ok(result);
+    assert.match(result.code, /const deepFreeze = value => value/);
+  });
+
+  it("transforms generic TypeScript during optimize-deps scanning", async () => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-vite-ts-scan-"));
+    const filename = path.join(directory, "module.ts");
+    fs.writeFileSync(
+      filename,
+      "export const deepFreeze = <T>(value: T): T => value;",
+      "utf8",
+    );
+    const plugin = litsx();
+    plugin.configResolved({ root: directory, cacheDir: path.join(directory, ".vite") });
+    const config = plugin.config({ optimizeDeps: { rolldownOptions: {} } });
+    const scanPlugin = config.optimizeDeps.rolldownOptions.plugins.at(-1);
+
+    try {
+      const result = await scanPlugin.load(filename);
+      assert.ok(result);
+      assert.match(result.code, /const deepFreeze = value => value/);
+    } finally {
+      plugin.buildEnd();
+      fs.rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("accepts semantically verified external LitSX hooks without transforming all dependencies", async () => {
+    const tempDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), "litsx-vite-native-hook-source-"),
+    );
+
+    try {
+      const packageDir = path.join(
+        tempDir,
+        "node_modules",
+        "litsx-navigation-js",
+      );
+      const sourceDir = path.join(packageDir, "src");
+      const appDir = path.join(tempDir, "src");
+      fs.mkdirSync(sourceDir, { recursive: true });
+      fs.mkdirSync(appDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(packageDir, "package.json"),
+        JSON.stringify({
+          name: "litsx-navigation-js",
+          type: "module",
+          exports: {
+            "./navigation": {
+              browser: "./src/navigation-client.js",
+              default: "./src/navigation-server.js",
+            },
+          },
+        }),
+      );
+      fs.writeFileSync(
+        path.join(sourceDir, "navigation-client.js"),
+        [
+          'import { useHost, useState } from "@litsx/core";',
+          "export function useNavigation() {",
+          "  const host = useHost();",
+          "  return useState(host, { path: '/' })[0];",
+          "}",
+        ].join("\n"),
+      );
+      fs.writeFileSync(
+        path.join(sourceDir, "navigation-server.js"),
+        'import { useState } from "react"; export function useNavigation() { return useState(0); }',
+      );
+      const tsconfigPath = path.join(tempDir, "tsconfig.json");
+      fs.writeFileSync(
+        tsconfigPath,
+        JSON.stringify({
+          compilerOptions: {
+            module: "ESNext",
+            moduleResolution: "Bundler",
+            customConditions: ["browser"],
+            allowJs: true,
+            jsx: "react-jsx",
+            jsxImportSource: "@litsx/core",
+          },
+          include: ["src", "node_modules/litsx-navigation-js"],
+        }),
+      );
+      const filename = path.join(appDir, "NavigationConsumer.tsx");
+      const source = [
+        'import { useNavigation } from "litsx-navigation-js/navigation";',
+        "export function NavigationConsumer() {",
+        "  const navigation = useNavigation();",
+        "  return <button>{navigation.path}</button>;",
+        "}",
+      ].join("\n");
+      fs.writeFileSync(filename, source);
+      const plugin = litsx({ projectPath: tsconfigPath });
+      plugin.configResolved({ root: tempDir, cacheDir: path.join(tempDir, ".vite") });
+
+      const result = await plugin.transform(source, filename);
+      const dependencyResult = await plugin.transform(
+        fs.readFileSync(path.join(sourceDir, "navigation-client.js"), "utf8"),
+        path.join(sourceDir, "navigation-client.js"),
+      );
+
+      assert.ok(result);
+      assert.match(result.code, /renderWithHooks\(this, \(\) => \{/);
+      assert.match(result.code, /const navigation = useNavigation\(\);/);
+      assert.strictEqual(dependencyResult, null);
+      assert.strictEqual(plugin.config({}).optimizeDeps.exclude, undefined);
+      plugin.buildEnd();
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  }, 30000);
+
+  it("runs react-compat for allowlisted dependencies in client and SSR pipelines", async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-vite-react-dep-"));
+    try {
+      const packageDir = path.join(tempDir, "node_modules", "resize-hooks");
+      fs.mkdirSync(packageDir, { recursive: true });
+      fs.writeFileSync(path.join(packageDir, "package.json"), JSON.stringify({
+        name: "resize-hooks",
+        type: "module",
+        exports: "./index.js",
+      }));
+      const hookFilename = path.join(packageDir, "index.js");
+      const hookSource = `
+        import { useEffect } from "react";
+        export function useWindowResize(listener) {
+          useEffect(() => () => listener(), [listener]);
+        }
+      `;
+      fs.writeFileSync(hookFilename, hookSource);
+      const plugin = litsx({
+        reactCompat: {
+          transformDependencies: ["resize-hooks"],
+        },
+      });
+      const config = plugin.config({
+        optimizeDeps: { exclude: ["existing-dependency"] },
+        ssr: { noExternal: ["existing-ssr-dependency"] },
+      });
+
+      assert.deepStrictEqual(config.optimizeDeps.exclude, [
+        "existing-dependency",
+        "resize-hooks",
+      ]);
+      assert.deepStrictEqual(config.ssr.noExternal, [
+        "existing-ssr-dependency",
+        "resize-hooks",
+      ]);
+
+      const result = await plugin.transform(hookSource, hookFilename);
+      assert.ok(result);
+      assert.match(result.code, /function useWindowResize\(listener\)/);
+      assert.doesNotMatch(result.code, /function useWindowResize\(.*host/);
+      assert.match(result.code, /useAfterUpdate\(/);
+      assert.match(result.code, /Symbol\.for\("litsx\.hook"\)/);
+
+      const componentDir = path.join(tempDir, "src");
+      fs.mkdirSync(componentDir, { recursive: true });
+      const componentFilename = path.join(componentDir, "ResizePanel.tsx");
+      const componentSource = `
+        import { useWindowResize } from "resize-hooks";
+        export function ResizePanel() {
+          useWindowResize(() => {});
+          return <section>Ready</section>;
+        }
+      `;
+      fs.writeFileSync(componentFilename, componentSource);
+      const componentResult = await plugin.transform(componentSource, componentFilename);
+      assert.match(componentResult.code, /useWindowResize\(\(\) => \{\}\)/);
+      assert.doesNotMatch(componentResult.code, /useWindowResize\(this,/);
+      assert.match(componentResult.code, /html`<section>Ready<\/section>`/);
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  }, 30000);
 
   it("supports custom include filters", async () => {
     const plugin = litsx({
       include: (id) => id.endsWith(".demo"),
     });
-    const source = "export const Counter = () => <button @click={save}>Hi</button>;";
+    const source = "export const TestCounter = () => <button on:click={save}>Hi</button>;";
 
     const transformed = await plugin.transform(source, "/virtual/example.demo");
     const ignored = await plugin.transform(source, "/virtual/example.jsx");
@@ -72,7 +450,7 @@ describe("@litsx/vite-plugin", () => {
     const plugin = litsx({
       include: /\.demo$/,
     });
-    const source = "export const Counter = () => <button @click={save}>Hi</button>;";
+    const source = "export const TestCounter = () => <button on:click={save}>Hi</button>;";
 
     const transformed = await plugin.transform(source, "/virtual/example.demo");
     const ignored = await plugin.transform(source, "/virtual/example.jsx");
@@ -84,10 +462,10 @@ describe("@litsx/vite-plugin", () => {
 
   it("adds an optimizeDeps rolldown plugin that compiles LitSX-authored jsx during dependency scanning", async () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "litsx-vite-optimize-deps-"));
-    const sourcePath = path.join(tempDir, "Counter.jsx");
+    const sourcePath = path.join(tempDir, "TestCounter.jsx");
     fs.writeFileSync(
       sourcePath,
-      'export const Counter = () => { static styles = `:host { display: block; }`; return <button @click={save}>Hi</button>; };',
+      'export const TestCounter = () => { static styles = `:host { display: block; }`; return <button on:click={save}>Hi</button>; };',
       "utf8",
     );
 
@@ -148,6 +526,65 @@ describe("@litsx/vite-plugin", () => {
     ]);
   });
 
+  it("bundles one production Lit runtime for consumer builds", async () => {
+    const previousNodeEnv = process.env.NODE_ENV;
+    const tempRoot = path.join(process.cwd(), "test-results");
+    fs.mkdirSync(tempRoot, { recursive: true });
+    const tempDir = fs.mkdtempSync(
+      path.join(tempRoot, "litsx-vite-production-lit-"),
+    );
+    const entry = path.join(tempDir, "consumer-card.tsx");
+    fs.writeFileSync(
+      entry,
+      `
+export function ConsumerCard({ label = "Ready" }) {
+  return <article>{label}</article>;
+}
+`,
+      "utf8",
+    );
+
+    try {
+      // Vite's CLI sets NODE_ENV=production for `vite build`. Vitest sets it to
+      // `test`, so mirror the consumer build environment for this programmatic
+      // build instead of exercising Lit's development export condition.
+      process.env.NODE_ENV = "production";
+      const result = await build({
+        configFile: false,
+        root: tempDir,
+        logLevel: "silent",
+        plugins: [litsx()],
+        build: {
+          write: false,
+          minify: false,
+          lib: {
+            entry,
+            formats: ["es"],
+            fileName: "consumer-card",
+          },
+        },
+      });
+      const outputs = Array.isArray(result)
+        ? result.flatMap((buildResult) => buildResult.output)
+        : result.output;
+      const code = outputs
+        .filter((output) => output.type === "chunk")
+        .map((output) => output.code)
+        .join("\n");
+
+      assert.doesNotMatch(code, /Lit is in dev mode|litIssuedWarnings/);
+      assert.strictEqual(code.match(/litHtmlVersions/g)?.length ?? 0, 1);
+      assert.strictEqual(code.match(/reactiveElementVersions/g)?.length ?? 0, 1);
+    } finally {
+      if (previousNodeEnv === undefined) {
+        delete process.env.NODE_ENV;
+      } else {
+        process.env.NODE_ENV = previousNodeEnv;
+      }
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  }, 30000);
+
   it("drops legacy optimizeDeps rollupOptions when adding rolldown options", () => {
     const existingRolldownPlugin = { name: "existing-rolldown-plugin" };
     const plugin = litsx();
@@ -173,6 +610,43 @@ describe("@litsx/vite-plugin", () => {
       config.optimizeDeps.rolldownOptions.plugins.at(-1).name,
       "litsx-optimize-deps",
     );
+  });
+
+  it("normalizes sparse Vite config and every SSR noExternal shape", () => {
+    const plugin = litsx({
+      reactCompat: {
+        transformDependencies: ["runtime-kit", "", 42, "runtime-kit"],
+      },
+    });
+    const sparse = plugin.config({});
+    assert.deepEqual(sparse.resolve.dedupe, [
+      "lit",
+      "lit-html",
+      "lit-element",
+      "@lit/reactive-element",
+      "@lit/context",
+    ]);
+    assert.deepEqual(sparse.optimizeDeps.exclude, ["runtime-kit"]);
+    assert.deepEqual(sparse.ssr.noExternal, ["runtime-kit"]);
+
+    assert.strictEqual(plugin.config({ ssr: { noExternal: true } }).ssr.noExternal, true);
+    assert.deepEqual(plugin.config({ ssr: { noExternal: false } }).ssr.noExternal, ["runtime-kit"]);
+    assert.deepEqual(plugin.config({ ssr: { noExternal: "existing" } }).ssr.noExternal, ["existing", "runtime-kit"]);
+    assert.deepEqual(plugin.config({ resolve: { dedupe: "invalid" } }).resolve.dedupe, sparse.resolve.dedupe);
+
+    const plain = litsx();
+    assert.strictEqual(plain.config({}).ssr, undefined);
+    plain.handleHotUpdate({ file: "/virtual/not-started.ts" });
+    plain.buildEnd();
+  });
+
+  it("rejects malformed optimize-deps ids before reading the filesystem", async () => {
+    const plugin = litsx({ include: (id) => id.endsWith(".allowed") });
+    plugin.configResolved({ root: "/project", cacheDir: "/project/.vite" });
+    const scanPlugin = plugin.config({}).optimizeDeps.rolldownOptions.plugins.at(-1);
+    for (const id of [null, "", "\0virtual.allowed", "/project/.vite/cache.allowed", "/outside/file.allowed", "/project/node_modules/pkg/file.allowed", "/project/file.ts"] ) {
+      assert.strictEqual(await scanPlugin.load(id), null, String(id));
+    }
   });
 
   it("skips optimizeDeps transforms for files outside the include filter", async () => {
@@ -203,6 +677,42 @@ describe("@litsx/vite-plugin", () => {
     }
   });
 
+  it("never compiles dependency or prebundled chunks during optimizeDeps scanning", async () => {
+    const transformSync = vi.fn();
+    const session = {
+      transform: vi.fn(),
+      transformSync,
+      getTypecheckSession: vi.fn(),
+      invalidate: vi.fn(),
+      dispose: vi.fn(),
+    };
+    const sessionSpy = vi
+      .spyOn(compilerModule, "createLitsxCompilationSession")
+      .mockReturnValue(session);
+    const plugin = litsx();
+    const config = plugin.config({ optimizeDeps: { rolldownOptions: {} } });
+    const scanPlugin = config.optimizeDeps.rolldownOptions.plugins.at(-1);
+    plugin.configResolved({
+      root: "/project",
+      cacheDir: "/project/node_modules/.vite",
+    });
+
+    try {
+      for (const id of [
+        "/project/node_modules/minified-dep/index.tsx",
+        "node_modules/minified-dep/index.tsx",
+        "/project/node_modules/.vite/deps/chunk-ABCD.tsx",
+        "/outside/generated/chunk-ABCD.tsx",
+        "\0virtual:generated.tsx",
+      ]) {
+        assert.strictEqual(await scanPlugin.load(id), null, id);
+      }
+      assert.strictEqual(transformSync.mock.calls.length, 0);
+    } finally {
+      sessionSpy.mockRestore();
+    }
+  });
+
   it("supports custom function-based include filters", async () => {
     const plugin = litsx({
       include(id) {
@@ -210,7 +720,7 @@ describe("@litsx/vite-plugin", () => {
       },
       sourceMaps: true,
     });
-    const source = "export const Counter = () => <button @click={save}>Hi</button>;";
+    const source = "export const TestCounter = () => <button on:click={save}>Hi</button>;";
 
     const transformed = await plugin.transform(
       source,
@@ -351,6 +861,30 @@ describe("@litsx/vite-plugin", () => {
     }
   });
 
+  it("formats completely opaque warnings without inventing a location", async () => {
+    const transform = vi.fn(async () => ({
+      code: "export const value = 1;",
+      map: null,
+      metadata: { litsxWarnings: [{}] },
+    }));
+    const sessionSpy = vi
+      .spyOn(compilerModule, "createLitsxCompilationSession")
+      .mockReturnValue({
+        transform,
+        transformSync: vi.fn(),
+        invalidate: vi.fn(),
+        dispose: vi.fn(),
+      });
+    const warn = vi.fn();
+    try {
+      const plugin = litsx();
+      await plugin.transform.call({ warn }, "export const value = 1;", "/virtual/opaque.jsx");
+      assert.equal(warn.mock.calls[0][0], "[LITSX_WARNING] /virtual/opaque.jsx LitSX emitted a warning during compilation.");
+    } finally {
+      sessionSpy.mockRestore();
+    }
+  });
+
   it("dedupes repeated LitSX warnings within the same plugin session", async () => {
     const transform = vi.fn(async () => ({
       code: "export const value = 1;",
@@ -414,7 +948,7 @@ describe("@litsx/vite-plugin", () => {
       const plugin = litsx();
       const result = await plugin.transform.call(
         { error },
-        "export const Broken = () => <button @click=>Hi</button>;",
+        "export const Broken = () => <button on:click=>Hi</button>;",
         "/virtual/Broken.jsx"
       );
 
@@ -456,7 +990,7 @@ describe("@litsx/vite-plugin", () => {
       const plugin = litsx();
 
       await assert.rejects(
-        () => plugin.transform("export const Broken = () => <button @click=>Hi</button>;", "/virtual/Broken.jsx"),
+        () => plugin.transform("export const Broken = () => <button on:click=>Hi</button>;", "/virtual/Broken.jsx"),
         (error) => {
           assert.match(error.message, /LitSX compilation failed in \/virtual\/Broken\.jsx/);
           assert.strictEqual(error.plugin, "litsx");
@@ -502,6 +1036,27 @@ describe("@litsx/vite-plugin", () => {
       assert.strictEqual(result.loc, undefined);
       assert.strictEqual(result.frame, undefined);
       assert.match(result.message, /plain failure/);
+    } finally {
+      sessionSpy.mockRestore();
+    }
+  });
+
+  it("normalizes opaque compiler failures and out-of-range source locations", async () => {
+    const transform = vi.fn(async () => {
+      throw { message: "", loc: { line: 99, column: -4 }, stack: "", code: "" };
+    });
+    const sessionSpy = vi
+      .spyOn(compilerModule, "createLitsxCompilationSession")
+      .mockReturnValue({ transform, transformSync: vi.fn(), invalidate: vi.fn(), dispose: vi.fn() });
+    const error = vi.fn((value) => value);
+    try {
+      const plugin = litsx();
+      const result = await plugin.transform.call({ error }, "one line", "/virtual/Opaque.jsx");
+      assert.match(result.message, /Unknown compiler error/);
+      assert.deepEqual(result.loc, { file: "/virtual/Opaque.jsx", line: 99, column: -4 });
+      assert.equal(result.frame, undefined);
+      assert.equal(result.stack, undefined);
+      assert.equal(result.code, undefined);
     } finally {
       sessionSpy.mockRestore();
     }

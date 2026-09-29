@@ -1,11 +1,19 @@
-import { adoptStyles } from "@lit/reactive-element";
-import { nothing } from "lit";
+import { adoptStyles, nothing } from "lit";
+import { isTemplateResult } from "lit/directive-helpers.js";
 import { render as renderLightDom } from "lit/html.js";
 import { Directive, PartType, directive } from "lit/directive.js";
 import {
   createLightDomRegistry,
+  upgradeScopedRegistryTree,
   withLightDomCreationContext,
 } from "@litsx/scoped-registry-shim";
+import {
+  __isLitsxScopedTemplate,
+  __isLitsxServerComponentCall,
+  LITSX_SSR_CONTEXT,
+} from "./elements/index.js";
+import { withSuspenseCapture } from "./runtime-suspense.js";
+import { getCurrentSsrCustomElementInstanceStack } from "./runtime-ssr-state.js";
 
 /**
  * Rendering helpers used by LitSX transforms when authored JSX passes renderer
@@ -23,23 +31,66 @@ const RENDERER_MOUNT_ROOT = Symbol("litsx.rendererMountRoot");
 const RENDERER_MOUNT_ELEMENTS = Symbol("litsx.rendererMountElements");
 const RENDERER_SHADOW_CONTAINER = Symbol("litsx.rendererShadowContainer");
 const PROJECTED_LIGHT_DOM_ATTRIBUTE = "data-litsx-projected-root";
-let rendererRegistryAttachKey;
-let rendererRegistryAttachShadowRef;
-let rendererRegistryCtorRef;
-let rendererRegistryNativeSupport;
 
-function getElementAttachShadowRef() {
-  return typeof Element !== "undefined" ? Element.prototype.attachShadow : undefined;
-}
+const RENDERER_SSR_VALUE_ERROR =
+  "SSR renderer props must return a renderable TemplateResult, not a server component call or scoped template.";
 
-function isShadowRootContainer(value) {
+export function isShadowRootContainer(value) {
   return (
     (typeof ShadowRoot !== "undefined" && value instanceof ShadowRoot) ||
     value?.[RENDERER_SHADOW_CONTAINER] === true
   );
 }
 
-function captureCreationScope(host) {
+export function resolveStrictSyncSsrRenderableValue(value) {
+  if (__isLitsxServerComponentCall(value) || __isLitsxScopedTemplate(value)) {
+    throw new Error(RENDERER_SSR_VALUE_ERROR);
+  }
+
+  if (isTemplateResult(value)) {
+    return {
+      ...value,
+      values: value.values.map((entry) => resolveStrictSyncSsrRenderableValue(entry)),
+    };
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((entry) => resolveStrictSyncSsrRenderableValue(entry));
+  }
+
+  return value;
+}
+
+// Renderer props remain a synchronous projection mechanism in SSR.
+// They may return normal renderable values such as TemplateResult trees,
+// but not async server-component calls or scoped-template envelopes.
+function resolveRendererSsrValue(value) {
+  return resolveStrictSyncSsrRenderableValue(value);
+}
+
+export function resolveRendererSsrValueWithContext(value, ssrContext) {
+  if (!ssrContext) {
+    return value;
+  }
+
+  if (isTemplateResult(value)) {
+    const values = value.values.map((entry) =>
+      resolveRendererSsrValueWithContext(entry, ssrContext)
+    );
+    return {
+      ...value,
+      values,
+    };
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((entry) => resolveRendererSsrValueWithContext(entry, ssrContext));
+  }
+
+  return resolveRendererSsrValue(value);
+}
+
+export function captureCreationScope(host) {
   if (!host || typeof host !== "object") {
     return null;
   }
@@ -55,7 +106,7 @@ function captureCreationScope(host) {
   return null;
 }
 
-function getContextualElements(context) {
+export function getContextualElements(context) {
   const ctor = context?.host?.constructor;
   if (!ctor || typeof ctor !== "function") {
     return null;
@@ -65,12 +116,12 @@ function getContextualElements(context) {
   return elements && typeof elements === "object" ? elements : null;
 }
 
-function getContextualStyles(context) {
+export function getContextualStyles(context) {
   const styles = context?.host?.constructor?.elementStyles;
   return Array.isArray(styles) ? styles : [];
 }
 
-function hasSameElementDefinitions(previousElements, nextElements) {
+export function hasSameElementDefinitions(previousElements, nextElements) {
   const previousEntries = Object.entries(previousElements || {});
   const nextEntries = Object.entries(nextElements || {});
   if (previousEntries.length !== nextEntries.length) {
@@ -80,76 +131,39 @@ function hasSameElementDefinitions(previousElements, nextElements) {
   return nextEntries.every(([tagName, ctor]) => previousElements?.[tagName] === ctor);
 }
 
-function getRendererRegistryAttachKey() {
-  if (
-    rendererRegistryAttachKey !== undefined &&
-    rendererRegistryAttachShadowRef === getElementAttachShadowRef() &&
-    rendererRegistryCtorRef === globalThis.CustomElementRegistry &&
-    rendererRegistryNativeSupport !== undefined
-  ) {
-    return rendererRegistryAttachKey;
-  }
-
-  if (
-    typeof document === "undefined" ||
-    typeof CustomElementRegistry !== "function" ||
-    typeof Element === "undefined"
-  ) {
-    rendererRegistryAttachKey = null;
-    rendererRegistryAttachShadowRef = getElementAttachShadowRef();
-    rendererRegistryCtorRef = globalThis.CustomElementRegistry;
-    rendererRegistryNativeSupport = false;
+export function createPlatformScopedRegistry() {
+  if (typeof CustomElementRegistry !== "function") {
     return null;
   }
 
-  let registry;
   try {
-    registry = new CustomElementRegistry();
+    return new CustomElementRegistry();
   } catch {
-    rendererRegistryAttachKey = null;
-    rendererRegistryAttachShadowRef = getElementAttachShadowRef();
-    rendererRegistryCtorRef = globalThis.CustomElementRegistry;
-    rendererRegistryNativeSupport = false;
     return null;
   }
-
-  for (const key of ["registry", "customElements", "customElementRegistry"]) {
-    const host = document.createElement("div");
-    try {
-      const shadowRoot = host.attachShadow({
-        mode: "open",
-        [key]: registry,
-      });
-      if (shadowRoot?.[key] === registry) {
-        const supportKey = `litsx-renderer-support-${Math.random().toString(36).slice(2)}`;
-        class SupportElement extends HTMLElement {}
-        try {
-          registry.define(supportKey, SupportElement);
-          shadowRoot.innerHTML = `<${supportKey}></${supportKey}>`;
-          const upgraded = shadowRoot.querySelector(supportKey);
-          rendererRegistryNativeSupport = Object.getPrototypeOf(upgraded) === SupportElement.prototype;
-        } catch {
-          rendererRegistryNativeSupport = false;
-        }
-
-        rendererRegistryAttachKey = rendererRegistryNativeSupport ? key : null;
-        rendererRegistryAttachShadowRef = getElementAttachShadowRef();
-        rendererRegistryCtorRef = globalThis.CustomElementRegistry;
-        return rendererRegistryAttachKey;
-      }
-    } catch {
-      // Try the next known attach option.
-    }
-  }
-
-  rendererRegistryAttachKey = null;
-  rendererRegistryAttachShadowRef = getElementAttachShadowRef();
-  rendererRegistryCtorRef = globalThis.CustomElementRegistry;
-  rendererRegistryNativeSupport = false;
-  return null;
 }
 
-function defineScopedElements(registry, elements = {}) {
+export function attachRendererShadowRoot(host, registry) {
+  if (!registry) {
+    return host.attachShadow({ mode: "open" });
+  }
+
+  const hasCurrentApi =
+    typeof ShadowRoot !== "undefined" &&
+    "customElementRegistry" in ShadowRoot.prototype;
+  if (hasCurrentApi) {
+    return host.attachShadow({ mode: "open", customElementRegistry: registry });
+  }
+
+  // The published Web Components polyfill predates the current option name.
+  return host.attachShadow({
+    mode: "open",
+    customElements: registry,
+    registry,
+  });
+}
+
+export function defineScopedElements(registry, elements = {}) {
   for (const [tagName, elementClass] of Object.entries(elements)) {
     if (!tagName || typeof elementClass !== "function") {
       continue;
@@ -170,7 +184,7 @@ function defineScopedElements(registry, elements = {}) {
   }
 }
 
-function assignShadowRootRegistry(shadowRoot, registry) {
+export function assignShadowRootRegistry(shadowRoot, registry) {
   for (const key of ["registry", "customElements", "customElementRegistry"]) {
     try {
       shadowRoot[key] = registry;
@@ -181,26 +195,16 @@ function assignShadowRootRegistry(shadowRoot, registry) {
 }
 
 function createRendererMount(host, context) {
-  const attachKey = getRendererRegistryAttachKey();
   const elements = getContextualElements(context) ?? {};
   const hasScopedElements = Object.keys(elements).length > 0;
   const mountHost = host.ownerDocument.createElement("div");
   mountHost.style.display = "contents";
 
-  let registry = null;
-  const useNativeScopedRegistry =
-    hasScopedElements &&
-    Boolean(attachKey) &&
-    typeof CustomElementRegistry === "function";
-
-  const shadowRoot = mountHost.attachShadow({
-    mode: "open",
-    ...(useNativeScopedRegistry ? { [attachKey]: new CustomElementRegistry() } : {}),
-  });
+  let registry = hasScopedElements ? createPlatformScopedRegistry() : null;
+  const shadowRoot = attachRendererShadowRoot(mountHost, registry);
   shadowRoot[RENDERER_SHADOW_CONTAINER] = true;
 
-  if (useNativeScopedRegistry) {
-    registry = shadowRoot[attachKey] ?? null;
+  if (registry) {
     defineScopedElements(registry, elements);
     assignShadowRootRegistry(shadowRoot, registry);
   } else if (hasScopedElements) {
@@ -255,7 +259,7 @@ function clearRendererMount(host) {
   host[RENDERER_MOUNT_HOST] = null;
 }
 
-function getScopedRegistry(scope) {
+export function getScopedRegistry(scope) {
   for (const key of ["registry", "customElements", "customElementRegistry"]) {
     const registry = scope?.[key];
     if (
@@ -270,7 +274,7 @@ function getScopedRegistry(scope) {
   return null;
 }
 
-function resolveContextCreationScope(context) {
+export function resolveContextCreationScope(context) {
   if (!context?.host) {
     return null;
   }
@@ -286,16 +290,16 @@ function resolveContextCreationScope(context) {
   return creationScope;
 }
 
-function hasExternalScopedRegistry(scope) {
+export function hasExternalScopedRegistry(scope) {
   const registry = getScopedRegistry(scope);
   return Boolean(registry && typeof registry._getDefinition !== "function");
 }
 
-function prefersDirectProjectedLightDom(host) {
+export function prefersDirectProjectedLightDom(host) {
   return host?.getAttribute?.(PROJECTED_LIGHT_DOM_ATTRIBUTE) === "light";
 }
 
-function shouldUseProjectedLightDom(host, context) {
+export function shouldUseProjectedLightDom(host, context) {
   if (!context?.projected) {
     return false;
   }
@@ -369,6 +373,22 @@ export function invokeRenderer(renderer, ...args) {
   };
 }
 
+export function resolveRenderedValueForSsr(rendered) {
+  if (!rendered) {
+    return nothing;
+  }
+
+  const currentSsrEntry = getCurrentSsrCustomElementInstanceStack()?.at(-1) ?? null;
+  const currentSsrHost = currentSsrEntry?.element ?? currentSsrEntry ?? null;
+  const ssrContext = currentSsrHost?.[LITSX_SSR_CONTEXT]?.context ?? null;
+
+  return resolveRendererSsrValueWithContext(rendered.value ?? nothing, ssrContext);
+}
+
+export function withRendererSsrSuspenseCapture(capture, render) {
+  return withSuspenseCapture(capture ?? null, render);
+}
+
 export function renderWithRendererContext(render, container, value, context, options = {}) {
   const resolvedRenderMode = isShadowRootContainer(container) ? "shadow" : "light";
 
@@ -384,22 +404,25 @@ export function renderWithRendererContext(render, container, value, context, opt
   const projectedCreationHost = context?.projected
     ? options.creationContextHost ?? null
     : null;
+  const useExternalCreationScope = hasExternalScopedRegistry(creationScope);
   const { creationContextHost, ...renderOptions } = options;
   const renderValue = () =>
     render(value, container, {
       ...renderOptions,
       renderMode: resolvedRenderMode,
       ...(context?.host ? { host: context.host } : {}),
-      ...(creationScope && !projectedCreationHost ? { creationScope } : {}),
+      ...(creationScope && (!projectedCreationHost || useExternalCreationScope)
+        ? { creationScope }
+        : {}),
     });
 
   return !context?.host
     ? renderValue()
-    : projectedCreationHost
+    : projectedCreationHost && !useExternalCreationScope
       ? withLightDomCreationContext(projectedCreationHost, renderValue)
-    : hasExternalScopedRegistry(creationScope)
-      ? renderValue()
-      : withLightDomCreationContext(context?.host ?? null, renderValue);
+      : hasExternalScopedRegistry(creationScope)
+        ? renderValue()
+        : withLightDomCreationContext(context?.host ?? null, renderValue);
 }
 
 export function syncRendererHost(
@@ -443,6 +466,10 @@ export function syncRendererHost(
     rendered?.context ?? null,
     { creationContextHost },
   );
+  const contextualRegistry = rendered?.context?.host?.registry ?? null;
+  if (typeof contextualRegistry?._getDefinition === "function") {
+    upgradeScopedRegistryTree(rendererRoot ?? host, contextualRegistry);
+  }
   host[RENDERER_HOST_INITIALIZED] = true;
 }
 
@@ -456,19 +483,27 @@ class RendererCallDirective extends Directive {
   }
 
   render() {
-    return nothing;
+    const [renderer, ...args] = arguments;
+    const rendered = invokeRenderer(renderer, ...args);
+    const currentSsrEntry = getCurrentSsrCustomElementInstanceStack()?.at(-1) ?? null;
+    const currentSsrHost = currentSsrEntry?.element ?? currentSsrEntry ?? null;
+    const ssrContext = currentSsrHost?.[LITSX_SSR_CONTEXT]?.context ?? null;
+
+    return resolveRendererSsrValueWithContext(rendered.value, ssrContext);
   }
 
   update(part, [renderer, ...args]) {
     if (!this._host) {
-      const documentRef =
-        part?.options?.host?.ownerDocument ??
-        globalThis.document;
+      const documentRef = part?.options?.host?.ownerDocument ?? null;
       if (!documentRef || typeof documentRef.createElement !== "function") {
         return nothing;
       }
 
       this._host = documentRef.createElement("div");
+      if (!this._host || typeof this._host !== "object") {
+        return nothing;
+      }
+      this._host.style ??= {};
       this._host.style.display = "contents";
     }
 
