@@ -23,6 +23,7 @@ import {
   resolveStandardJsxEventName,
   remapVirtualText,
   remapTextSpanToOriginal,
+  toKebabEventName,
   toStandardJsxEventPropName,
   toExplicitJsxEventAttributeName,
 } from "../packages/authoring/src/index.js";
@@ -65,6 +66,13 @@ describe("@litsx/authoring", () => {
     assert.strictEqual(toStandardJsxEventPropName("primary-action"), "onPrimaryAction");
     assert.strictEqual(toStandardJsxEventPropName("primary-action-capture"), null);
     assert.strictEqual(toStandardJsxEventPropName("menu:open"), null);
+    assert.strictEqual(toKebabEventName("PrimaryAction"), "primary-action");
+    assert.strictEqual(toKebabEventName("URLChange"), "url-change");
+    assert.strictEqual(toKebabEventName("XMLHTTPResponse"), "xmlhttp-response");
+    assert.strictEqual(
+      toKebabEventName(`${"A".repeat(100_000)}Change`),
+      `${"a".repeat(100_000)}-change`,
+    );
     const special = createVirtualLitsxJsxSource("<widget-box @menu:open={handler} @state.change={handler} />");
     assert.match(special.code, /__litsx_event_encoded_/);
     assert.deepStrictEqual(

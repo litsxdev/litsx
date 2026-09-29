@@ -66,10 +66,33 @@ export function isNativeDomEventHandlerPropertyName(name) {
 }
 
 export function toKebabEventName(name) {
-  return String(name)
-    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1-$2")
-    .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
-    .toLowerCase();
+  const input = String(name);
+  const normalized = [];
+
+  for (let index = 0; index < input.length; index += 1) {
+    const current = input.charCodeAt(index);
+    const previous = index > 0 ? input.charCodeAt(index - 1) : -1;
+    const next = index + 1 < input.length ? input.charCodeAt(index + 1) : -1;
+    const currentIsUppercase = current >= 65 && current <= 90;
+    const previousIsUppercase = previous >= 65 && previous <= 90;
+    const previousIsLowercase = previous >= 97 && previous <= 122;
+    const previousIsDigit = previous >= 48 && previous <= 57;
+    const nextIsLowercase = next >= 97 && next <= 122;
+
+    if (
+      index > 0 &&
+      currentIsUppercase &&
+      (previousIsLowercase ||
+        previousIsDigit ||
+        (previousIsUppercase && nextIsLowercase))
+    ) {
+      normalized.push("-");
+    }
+
+    normalized.push(input[index].toLowerCase());
+  }
+
+  return normalized.join("");
 }
 
 export function resolveStandardJsxEventName(rawName, { customElement = false } = {}) {

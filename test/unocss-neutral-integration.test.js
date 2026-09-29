@@ -23,9 +23,9 @@ function createFixture(name, padding = "1rem") {
   return { root, configPath };
 }
 
-function compile(instance, sourcePath, className = "p-card") {
+function compile(instance, sourcePath) {
   return transformLitsxSync(
-    `export function NeutralCard() { return <article class=${JSON.stringify(className)}>Card</article>; }`,
+    'export function NeutralCard() { return <article class="p-card">Card</article>; }',
     { ...instance.compiler, filename: sourcePath, sourceMaps: true },
   );
 }
