@@ -55,6 +55,27 @@ try {
             `${variant} prerender did not materialize component utility CSS`,
           );
         }
+        const hydrationMatch = document.match(
+          /<script type="application\/json" id="__LITSX_HYDRATION__">([^<]+)<\/script>/u,
+        );
+        if (!hydrationMatch) {
+          throw new Error(`${variant} prerender did not emit hydration data`);
+        }
+        const hydrationData = JSON.parse(hydrationMatch[1]);
+        if (hydrationData.clientImports.includes("@litsx/core")) {
+          throw new Error(
+            `${variant} prerender emitted @litsx/core as a browser client import`,
+          );
+        }
+        if (
+          hydrationData.clientImports.some((moduleId) =>
+            moduleId.startsWith(targetDir),
+          )
+        ) {
+          throw new Error(
+            `${variant} prerender emitted absolute local client imports`,
+          );
+        }
       } else {
         run(executable("vite"), ["build"], targetDir);
         if (!fs.existsSync(path.join(targetDir, "dist", "index.html"))) {

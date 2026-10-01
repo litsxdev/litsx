@@ -21,6 +21,23 @@ describe("@litsx/vite-plugin", () => {
     assert.deepStrictEqual(packageJson.files, ["dist", "src", "README.md"]);
   });
 
+  it("keeps the documented asset resolver example valid authored TSX", () => {
+    const readme = fs.readFileSync(
+      path.join(process.cwd(), "packages/vite-plugin/README.md"),
+      "utf8",
+    );
+    const example = readme.match(
+      /### `createLitsxViteAssetResolver\(options\?\)`[\s\S]*?```tsx\n([\s\S]*?)\n```/,
+    );
+
+    assert.ok(example, "expected a TSX asset resolver example in the README");
+    assert.doesNotThrow(() =>
+      compilerModule.transformLitsxSync(example[1], {
+        filename: "/virtual/vite-plugin-readme.tsx",
+      }),
+    );
+  });
+
   it("creates a dev asset resolver from the Vite project root", () => {
     const resolver = createLitsxViteAssetResolver({
       root: "/repo",

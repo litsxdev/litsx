@@ -98,8 +98,8 @@ Creates an `assetResolver(moduleId)` function suitable for passing to
 
 Use it when SSR output needs stable client module URLs:
 
-```js
-import { createLitsxViteAssetResolver, litsx } from "@litsx/vite-plugin";
+```tsx
+import { createLitsxViteAssetResolver } from "@litsx/vite-plugin";
 import { renderToString } from "@litsx/ssr";
 
 const assetResolver = createLitsxViteAssetResolver({
@@ -108,7 +108,7 @@ const assetResolver = createLitsxViteAssetResolver({
   base: "/",
 });
 
-const result = await renderToString(<ProductCard .product={product} />, {
+const result = await renderToString(<ProductCard product={product} />, {
   assetResolver,
 });
 ```

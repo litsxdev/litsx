@@ -1474,6 +1474,8 @@ function createSsrProfileFiles(packageName, className, styling) {
   const devStyleOptions = styling === "css" ? "" : "\n  ...styling,";
 
   files.delete("vite.config.js");
+  files.delete("src/components/starter-guide.tsx");
+  files.delete("src/components/guide-card.tsx");
   files.set(
     "index.html",
     `<!doctype html>
@@ -1543,8 +1545,28 @@ function createSsrProfileFiles(packageName, className, styling) {
   "include": [
     "src",
     "dev.mjs",
-    "render.mjs"
+    "render.mjs",
+    "ssr-assets.mjs"
   ]
+}
+`,
+  );
+  files.set(
+    "ssr-assets.mjs",
+    `import { createLitsxViteAssetResolver } from "@litsx/vite-plugin";
+
+export function createSsrAssetResolver(root) {
+  const resolveViteAsset = createLitsxViteAssetResolver({ root });
+
+  return (moduleId) => {
+    // Authored modules already load the LitSX runtime through the client entry.
+    // Keeping this bare specifier would make hydration request /@litsx/core.
+    if (moduleId === "@litsx/core") {
+      return "";
+    }
+
+    return resolveViteAsset(moduleId);
+  };
 }
 `,
   );
@@ -1585,9 +1607,11 @@ describe("${className}", () => {
     await host.updateComplete;
 
     const root = host.shadowRoot;
+    const hero = root?.querySelector("litsx-hero");
+    const heroRoot = hero?.shadowRoot;
 
     expect(root?.querySelector("main.shell")).toBeTruthy();
-    expect(root?.textContent ?? "").toContain("SSR for authored web components");
+    expect(heroRoot?.textContent ?? "").toContain("SSR for authored web components");
   });
 });
 `,
@@ -1596,7 +1620,6 @@ describe("${className}", () => {
     `src/${packageName}.tsx`,
     `import { css } from "@litsx/core";
 import { LitsxHero } from "./components/litsx-hero";
-import { StarterGuide } from "./components/starter-guide";
 
 export function ${className}({
   eyebrow = "SSR starter",
@@ -1618,7 +1641,15 @@ export function ${className}({
           window.open("https://github.com/litsxdev/litsx", "_blank", "noopener,noreferrer");
         }}
       />
-      <StarterGuide />
+      <section class="${styleClasses(styling, "ssr-guide", "mx-6 rounded-3xl border border-solid border-slate-200 bg-white p-8 shadow-sm")}" aria-labelledby="ssr-flow-title">
+        <p class="guide-eyebrow">Hydration flow</p>
+        <h2 id="ssr-flow-title">One authored tree, from server to browser</h2>
+        <ol>
+          <li><strong>Server render.</strong> <code>render.mjs</code> writes the initial document and hydration payload.</li>
+          <li><strong>Client registration.</strong> <code>src/main.js</code> registers the same authored elements.</li>
+          <li><strong>Browser hydration.</strong> Lit adopts the declarative shadow roots without replacing them.</li>
+        </ol>
+      </section>
     </main>
   );
 }
@@ -1635,6 +1666,43 @@ ${className}.styles = css\`
     padding-bottom: 28px;
     position: relative;
   }
+
+  .ssr-guide {
+    margin: 0 24px 32px;
+    border: 1px solid rgba(29, 35, 31, 0.12);
+    border-radius: 24px;
+    padding: 28px;
+    background: rgba(255, 255, 255, 0.72);
+    box-shadow: 0 20px 55px rgba(35, 25, 18, 0.08);
+  }
+
+  .guide-eyebrow {
+    margin: 0 0 8px;
+    color: #75512c;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  h2 {
+    margin: 0;
+    font-size: clamp(24px, 4vw, 34px);
+    line-height: 1.1;
+  }
+
+  ol {
+    display: grid;
+    gap: 12px;
+    margin: 24px 0 0;
+    padding-left: 22px;
+    color: #4f5b53;
+    line-height: 1.6;
+  }
+
+  strong {
+    color: #1d231f;
+  }
 \`;
 
 export function defineAppElements() {
@@ -1647,15 +1715,31 @@ export function defineAppElements() {
   files.set(
     "dev.mjs",
     `import { createSsrDevServer } from "@litsx/vite-plugin/ssr";
+import { createSsrAssetResolver } from "./ssr-assets.mjs";
 ${styleImport}${styleSetup}
 
+const exampleDir = new URL(".", import.meta.url).pathname;
+
 const server = await createSsrDevServer({
-  root: new URL(".", import.meta.url).pathname,
+  root: exampleDir,
   template: "./index.html",
   clientEntry: "./src/main.js",
+  assetResolver: createSsrAssetResolver(exampleDir),
   host: "127.0.0.1",
   port: 5177,
   logLevel: "info",${devStyleOptions}
+  vite: {
+    optimizeDeps: {
+      include: [
+        "@lit-labs/ssr-client/directives/render-light.js",
+        "@litsx/core",
+        "@litsx/core/elements",
+        "@litsx/core/rendering",
+        "@litsx/ssr/hydration",
+        "lit",
+      ],
+    },
+  },
   elements(loader) {
     return {
       "${tagName}": async () =>
@@ -1683,6 +1767,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { html, renderDocument } from "@litsx/ssr";
 import { createSsrDevServer } from "@litsx/vite-plugin/ssr";
+import { createSsrAssetResolver } from "./ssr-assets.mjs";
 ${styleImport}${styleSetup}
 
 const exampleDir = path.dirname(fileURLToPath(import.meta.url));
@@ -1708,6 +1793,7 @@ export async function renderAppDocument() {
       ></${tagName}>\`,
       {
         clientEntry: "/src/main.js",
+        assetResolver: createSsrAssetResolver(exampleDir),
         elements: { "${tagName}": ${className} },
         template({ bootstrap, head, html, hydrationScript, modulePreloads }) {
           return template
@@ -1766,7 +1852,7 @@ Run \`npm run render\` when you want a prerendered document in \`dist/index.html
 - local SSR development with \`createSsrDevServer(...)\` from \`@litsx/vite-plugin/ssr\`
 - automatic hydration bootstrap through \`clientEntry\`
 - a shared \`index.html\` shell for dev SSR and static prerender output
-- the same hero and guide components as the standard app scaffold
+- an SSR-safe onboarding guide that renders identically on server and client
 - SSR-specific copy, routes, and entrypoints
 - standard JSX authoring in \`src/${packageName}.tsx\`
 `,
