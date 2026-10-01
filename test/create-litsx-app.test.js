@@ -442,6 +442,7 @@ describe("create-litsx-app", () => {
     const indexHtml = result.files.get("index.html");
     const devSource = result.files.get("dev.mjs");
     const renderSource = result.files.get("render.mjs");
+    const ssrAssetsSource = result.files.get("ssr-assets.mjs");
     const readme = result.files.get("README.md");
 
     assert.strictEqual(result.template, "ssr");
@@ -454,12 +455,15 @@ describe("create-litsx-app", () => {
     assert.ok(!("preview" in packageJson.scripts));
     assert.ok(result.files.has("index.html"));
     assert.ok(!result.files.has("vite.config.js"));
+    assert.ok(!result.files.has("src/components/starter-guide.tsx"));
+    assert.ok(!result.files.has("src/components/guide-card.tsx"));
     assert.match(indexHtml, /<!--app-head-->/);
     assert.match(indexHtml, /<!--app-html-->/);
     assert.match(indexHtml, /<!--app-bootstrap-->/);
     assert.match(jsconfig, /"include": \[/);
     assert.match(jsconfig, /"dev\.mjs"/);
     assert.match(jsconfig, /"render\.mjs"/);
+    assert.match(jsconfig, /"ssr-assets\.mjs"/);
     assert.doesNotMatch(mainSource, /hydratePage/);
     assert.match(mainSource, /defineAppElements/);
     assert.match(mainSource, /defineAppElements/);
@@ -469,10 +473,7 @@ describe("create-litsx-app", () => {
       appSource,
       /import \{ LitsxHero \} from "\.\/components\/litsx-hero";/,
     );
-    assert.match(
-      appSource,
-      /import \{ StarterGuide \} from "\.\/components\/starter-guide";/,
-    );
+    assert.doesNotMatch(appSource, /components\/starter-guide/);
     assert.match(
       appSource,
       /customElements\.define\("my-litsx-app", MyLitsxApp as any\)/,
@@ -482,7 +483,10 @@ describe("create-litsx-app", () => {
     assert.match(appSource, /primaryLabel = "SSR docs"/);
     assert.match(appSource, /https:\/\/litsx\.dev\/guides\/ssr/);
     assert.match(appSource, /<LitsxHero/);
-    assert.match(appSource, /<StarterGuide/);
+    assert.doesNotMatch(appSource, /StarterGuide/);
+    assert.match(appSource, /<section class="ssr-guide"/);
+    assert.match(appSource, /Server render/);
+    assert.match(appSource, /Browser hydration/);
     assert.match(appSource, /MyLitsxApp\.styles = css`/);
     assert.match(appSource, /on:primary-action=/);
     assert.match(appSource, /on:secondary-action=/);
@@ -492,11 +496,33 @@ describe("create-litsx-app", () => {
       /renders the SSR starter shell in a real browser DOM/,
     );
     assert.match(
+      appTestSource,
+      /const hero = root\?\.querySelector\("litsx-hero"\);/,
+    );
+    assert.match(appTestSource, /const heroRoot = hero\?\.shadowRoot;/);
+    assert.match(
+      appTestSource,
+      /expect\(heroRoot\?\.textContent \?\? ""\)\.toContain/,
+    );
+    assert.match(
       devSource,
       /import \{ createSsrDevServer \} from "@litsx\/vite-plugin\/ssr";/,
     );
+    assert.match(
+      devSource,
+      /import \{ createSsrAssetResolver \} from "\.\/ssr-assets\.mjs";/,
+    );
     assert.match(devSource, /template: "\.\/index\.html"/);
     assert.match(devSource, /clientEntry: "\.\/src\/main\.js"/);
+    assert.match(
+      devSource,
+      /assetResolver: createSsrAssetResolver\(exampleDir\)/,
+    );
+    assert.match(devSource, /"@litsx\/ssr\/hydration"/);
+    assert.match(
+      devSource,
+      /"@lit-labs\/ssr-client\/directives\/render-light\.js"/,
+    );
     assert.doesNotMatch(devSource, /scopedTemplate/);
     assert.match(devSource, /elements\(loader\) \{/);
     assert.match(devSource, /loader\("\.\/src\/my-litsx-app\.tsx"\)/);
@@ -512,6 +538,10 @@ describe("create-litsx-app", () => {
       renderSource,
       /import \{ createSsrDevServer \} from "@litsx\/vite-plugin\/ssr";/,
     );
+    assert.match(
+      renderSource,
+      /import \{ createSsrAssetResolver \} from "\.\/ssr-assets\.mjs";/,
+    );
     assert.match(renderSource, /viteServer\.ssrLoadModule/);
     assert.match(renderSource, /renderDocument\(/);
     assert.doesNotMatch(renderSource, /createServer/);
@@ -526,6 +556,10 @@ describe("create-litsx-app", () => {
       /const outputPath = path\.join\(outputDir, "index\.html"\);/,
     );
     assert.match(renderSource, /clientEntry: "\/src\/main\.js"/);
+    assert.match(
+      renderSource,
+      /assetResolver: createSsrAssetResolver\(exampleDir\)/,
+    );
     assert.match(renderSource, /elements: \{ "my-litsx-app": MyLitsxApp \}/);
     assert.match(renderSource, /viteServer\.transformIndexHtml/);
     assert.match(renderSource, /await viteServer\.close\(\)/);
@@ -536,12 +570,15 @@ describe("create-litsx-app", () => {
     assert.match(readme, /@litsx\/vite-plugin\/ssr/);
     assert.match(readme, /dist\/index\.html/);
     assert.match(readme, /automatic hydration bootstrap through `clientEntry`/);
-    assert.match(
-      readme,
-      /same hero and guide components as the standard app scaffold/,
-    );
+    assert.match(readme, /SSR-safe onboarding guide/);
     assert.match(readme, /shared `index\.html` shell/i);
     assert.match(readme, /standard JSX authoring in `src\/my-litsx-app\.tsx`/);
+    assert.match(
+      ssrAssetsSource,
+      /import \{ createLitsxViteAssetResolver \} from "@litsx\/vite-plugin";/,
+    );
+    assert.match(ssrAssetsSource, /moduleId === "@litsx\/core"/);
+    assert.match(ssrAssetsSource, /return "";/);
   });
 
   it("emits standard static assignments without legacy hoists", () => {

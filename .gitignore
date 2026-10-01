@@ -97,8 +97,6 @@ out
 .nuxt
 dist
 packages/*/dist/
-packages/react/*/dist/
-packages/shared/*/dist/
 
 # Gatsby files
 .cache/

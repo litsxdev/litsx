@@ -6,10 +6,12 @@ LitSX releases are managed with Changesets.
 
 - package versioning is independent
 - stable npm releases publish from `main`
-- branch pushes can publish automatic snapshot prereleases
+- curated prereleases publish from `next` under the `next` dist-tag
+- other branch pushes can publish automatic snapshot prereleases
 - npm publication is gated by the `npm-release` GitHub environment
 - stable releases create version/changelog commits, tags, and GitHub Releases
-- branch prereleases do not persist changelog edits, do not create tags, and do not create GitHub Releases
+- `next` releases persist prerelease version/changelog commits but do not create stable git tags or GitHub Releases
+- snapshot releases do not persist version or changelog edits and do not create tags or GitHub Releases
 
 ## Public npm packages
 
@@ -68,6 +70,7 @@ Useful release commands:
 yarn changeset
 yarn changeset:status
 yarn changeset:version
+yarn changeset:version:next
 yarn changeset:version:snapshot
 yarn release:publish
 ```
@@ -86,9 +89,25 @@ When pending changesets exist, that workflow:
 - pushes git tags
 - creates a GitHub Release
 
-## Branch prereleases
+## Next prereleases
 
-Non-`main` branch pushes can publish automatic snapshot prereleases.
+Curated prereleases come from `next` through the same `Release` workflow.
+
+When pending changesets exist, that workflow:
+
+- enters or reuses Changesets prerelease mode with the `next` tag
+- runs `yarn changeset:version:next`
+- validates packages and generated scaffolds
+- commits version and changelog updates back to `next`
+- publishes packages under the `next` npm dist-tag without stable git tags
+
+Manual dispatch is supported on `main` and `next`, but it bypasses the automatic
+same-SHA wait for `Test` and `Release Validate`. Prefer the automatic path or
+verify both workflows on the selected SHA before dispatching manually.
+
+## Snapshot prereleases
+
+Branches other than `main` and `next` can publish automatic snapshot prereleases.
 
 Properties of that flow:
 
@@ -101,7 +120,7 @@ Properties of that flow:
 - it does **not** create git tags
 - it does **not** create GitHub Releases
 
-This flow is meant for unstable validation builds, not for a curated “next” channel.
+This flow is meant for unstable validation builds, not for the curated `next` channel.
 
 ## GitHub workflows
 
@@ -127,15 +146,11 @@ This flow is meant for unstable validation builds, not for a curated “next” 
 
 ### `Release`
 
-- runs from `main`
-- publishes stable npm releases
-- creates version/changelog commits, tags, and GitHub Releases
-
-### `Branch Prerelease`
-
-- runs automatically after `Release Validate` for successful non-`main` branch pushes
-- publishes snapshot npm builds under branch-specific `canary-...` dist-tags
-- skips release commits, tags, and GitHub Releases
+- runs automatically after `Release Validate` for successful pushes whose matching `Test` workflow also passed
+- publishes stable releases from `main`
+- publishes curated prereleases from `next`
+- publishes snapshot builds from other branches under branch-specific `canary-...` dist-tags
+- supports manual dispatch on `main` and `next`
 
 ### `Backfill GitHub Releases`
 
@@ -146,6 +161,8 @@ This flow is meant for unstable validation builds, not for a curated “next” 
 
 - environment: `npm-release`
   - secret: `NPM_TOKEN`
+- repository variable: `LITSX_APP_CLIENT_ID`
+- repository secret: `LITSX_APP_PRIVATE_KEY`
 
 Recommended repository setup:
 
@@ -161,6 +178,7 @@ Recommended repository setup:
 Those ranges are synchronized during:
 
 - `yarn changeset:version`
+- `yarn changeset:version:next`
 - `yarn changeset:version:snapshot`
 
 so generated apps stay aligned with the versions that the release pipeline has just materialized.

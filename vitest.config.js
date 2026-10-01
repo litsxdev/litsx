@@ -18,7 +18,7 @@ export default defineConfig({
       : ['default'],
     coverage: {
       reporter: ['text', 'html', 'json-summary', 'json'],
-      include: ['packages/*/src/**', 'packages/react/*/src/**', 'packages/shared/*/src/**'],
+      include: ['packages/*/src/**'],
       exclude: [
         '**/node_modules/**',
         '**/test/**',
@@ -26,15 +26,9 @@ export default defineConfig({
         '**/*.d.ts',
         '**/*.png',
         'test/fixtures/dx-smoke-app/src/**',
-        'packages/babel-parser-litsx/src/cli.js',
         'packages/create-litsx-app/src/cli.js',
         'packages/babel-plugin-shared-hooks/src/index.js',
         'packages/babel-preset-litsx/src/internal/transform-litsx-dom-refs.js',
-        'packages/vitepress/src/**',
-        'packages/litsx-playground/src/LitsxPlayground.tsx',
-        'packages/litsx-playground/src/index.js',
-        'packages/litsx-playground/src/playground-runtime.js',
-        'packages/litsx-playground/src/preview-runtime/**',
       ],
     },
     onConsoleLog(log) {
