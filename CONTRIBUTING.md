@@ -33,10 +33,8 @@ Use the changeset to declare:
 - whether each should get a `patch`, `minor`, or `major` bump
 - a short human summary for changelogs and GitHub Releases
 
-Packages outside npm publication do not need changesets:
+Changes limited to repository-only fixtures or documentation do not need changesets:
 
-- `vscode-litsx`
-- `@litsx/vitepress`
 - `test/fixtures/dx-smoke-app`
 
 Commit style:
@@ -49,7 +47,7 @@ Commit style:
 
 Examples:
 
-- `feat(vscode): improve LitSX diagnostics`
+- `docs(contributing): clarify release validation`
 - `fix(compiler): preserve empty jsx comments in compat transforms`
 - `chore(release): update workspace release tooling`
 
@@ -62,17 +60,18 @@ Examples:
   - pushes to `main`
   - pull requests
   - it validates the publishable surface and uploads preview artifacts on `main`
-- npm release automation runs through the `Release` workflow on `main`
-- `changesets/action` creates or updates the release PR and publishes changed packages after that PR is merged
-- VS Code Marketplace publication stays manual through `Publish VS Code Extension`
+- `Changeset Status` checks pull requests for required package changesets
+- `Release` waits for successful `Test` and `Release Validate` runs on the same pushed SHA, then publishes:
+  - stable releases from `main`
+  - `next` prereleases from `next`
+  - branch-specific snapshot releases from other branches
 
 Maintainers should install the `changeset-bot` GitHub App so pull requests get a bot reminder when a public-package change is missing a changeset.
 
 ## Release-related changes
 
-If a pull request changes package publishing, scaffolding, or Marketplace packaging, make sure:
+If a pull request changes package publishing or scaffolding, make sure:
 
 - `RELEASING.md` still matches the actual workflow
 - package manifests stay publishable
 - generated scaffolds still reference the correct package versions
-- `vscode-litsx` packaging still works through `yarn release:vscode:package`
