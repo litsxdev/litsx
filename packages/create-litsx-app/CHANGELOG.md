@@ -1,5 +1,11 @@
 # create-litsx-app
 
+## 1.0.1
+
+### Patch Changes
+
+- 993ac45: Fix the generated SSR starter so its browser test, client module URLs, and first hydration run complete without errors.
+
 ## 1.0.0
 
 ### Major Changes
