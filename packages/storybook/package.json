@@ -52,8 +52,8 @@
     "@litsx/vite-plugin": "^1.0.0"
   },
   "devDependencies": {
-    "@storybook/web-components-vite": "10.5.10",
-    "storybook": "10.5.10"
+    "@storybook/web-components-vite": "10.6.1",
+    "storybook": "10.6.1"
   },
   "scripts": {
     "build": "../../node_modules/.bin/rollup --config rollup.config.js",
