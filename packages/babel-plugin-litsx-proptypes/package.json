@@ -48,7 +48,7 @@
     "@litsx/prop-types": "^1.0.0"
   },
   "devDependencies": {
-    "@babel/core": "^8.0.1"
+    "@babel/core": "^8.0.6"
   },
   "scripts": {
     "build": "../../node_modules/.bin/rollup --config rollup.config.js",

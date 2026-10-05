@@ -44,16 +44,16 @@
     "@babel/core": "^8.0.0"
   },
   "dependencies": {
-    "@babel/generator": "^8.0.0",
+    "@babel/generator": "^8.0.6",
     "@babel/helper-plugin-utils": "^8.0.1",
-    "@babel/parser": "^8.0.4",
+    "@babel/parser": "^8.0.6",
     "@babel/plugin-syntax-jsx": "^8.0.1",
-    "@babel/types": "^8.0.4",
+    "@babel/types": "^8.0.6",
     "@litsx/authoring": "^1.0.0",
-    "source-map-js": "^1.2.1"
+    "source-map-js": "^1.2.2"
   },
   "devDependencies": {
-    "@babel/core": "^8.0.1"
+    "@babel/core": "^8.0.6"
   },
   "scripts": {
     "build": "../../node_modules/.bin/rollup --config rollup.config.js",

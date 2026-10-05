@@ -57,16 +57,16 @@
     "directory": "packages/compiler"
   },
   "dependencies": {
-    "@babel/core": "^8.0.1",
-    "@babel/parser": "^8.0.4",
-    "@babel/plugin-transform-typescript": "^8.0.1",
-    "@babel/types": "^8.0.4",
+    "@babel/core": "^8.0.6",
+    "@babel/parser": "^8.0.6",
+    "@babel/plugin-transform-typescript": "^8.0.6",
+    "@babel/types": "^8.0.6",
     "@litsx/authoring": "^1.0.0",
     "@litsx/babel-plugin-transform-jsx-html-template": "^1.0.0",
     "@litsx/babel-preset-litsx": "^1.0.0",
     "@litsx/babel-preset-react-compat": "^1.0.0",
     "@litsx/typescript-session": "^1.0.0",
-    "source-map-js": "^1.2.1"
+    "source-map-js": "^1.2.2"
   },
   "scripts": {
     "build": "../../node_modules/.bin/rollup --config rollup.config.js",
